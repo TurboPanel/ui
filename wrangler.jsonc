@@ -17,7 +17,7 @@
   },
   "env": {
     "testing": {
-      "name": "turbopanel-ui-testing",
+      "name": "turbopanel-ui",
       "route": {
         "pattern": "testing.turbopanel.dev",
         "custom_domain": true
