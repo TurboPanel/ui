@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import {
@@ -24,8 +25,16 @@ import {
 
 const POLL_MS = 2_000
 const ALL_TARGET = '__all__'
+const DESKTOP_BREAKPOINT = 768
+const MOBILE_PANEL_MAX_WIDTH = 520
+const DESKTOP_PANEL_MAX_WIDTH = 1400
+const DESKTOP_PANEL_GUTTER = 64
 
 export function DaemonTestPanel() {
+  const { width } = useWindowDimensions()
+  const panelMaxWidth = width >= DESKTOP_BREAKPOINT
+    ? Math.min(DESKTOP_PANEL_MAX_WIDTH, width - DESKTOP_PANEL_GUTTER)
+    : MOBILE_PANEL_MAX_WIDTH
   const [healthOk, setHealthOk] = useState<boolean | null>(null)
   const [connections, setConnections] = useState<DaemonConnection[]>([])
   const [events, setEvents] = useState<DaemonEvent[]>([])
@@ -109,7 +118,7 @@ export function DaemonTestPanel() {
   const canRun = !running && healthOk === true && connections.length > 0
 
   return (
-    <View style={styles.panel}>
+    <View style={[styles.panel, { maxWidth: panelMaxWidth }]}>
       <Text style={styles.panelTitle}>Admin control panel</Text>
       <Text style={styles.panelHint}>Temporary dev-only console · no auth</Text>
 
@@ -253,7 +262,6 @@ function CommandRow({ result }: { result: CommandResult }) {
 const styles = StyleSheet.create({
   panel: {
     width: '100%',
-    maxWidth: 520,
     marginTop: 32,
     padding: 16,
     borderRadius: 12,
