@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "turbopanel-ui",
+    "slug": "turbopanel-ui",
+    "version": "1.0.0",
+    "web": {
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
