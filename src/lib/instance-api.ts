@@ -1,6 +1,45 @@
 export type DaemonConnection = {
   id: string
   connectedAt: string
+  hostname: string | null
+  nodeId: string | null
+  remoteAddress: string | null
+}
+
+function fleetKey(conn: DaemonConnection): string {
+  const address = conn.remoteAddress?.trim()
+  return conn.hostname?.trim() ||
+    conn.nodeId?.trim() ||
+    (address && address !== '__direct__' ? address : '') ||
+    conn.id
+}
+
+/** One entry per physical host — keeps the newest socket when duplicates exist. */
+export function uniqueFleetConnections(
+  connections: DaemonConnection[],
+): DaemonConnection[] {
+  const byKey = new Map<string, DaemonConnection>()
+  for (const conn of connections) {
+    const key = fleetKey(conn)
+    const existing = byKey.get(key)
+    if (!existing || conn.connectedAt > existing.connectedAt) {
+      byKey.set(key, conn)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.connectedAt.localeCompare(b.connectedAt))
+}
+
+/** Display label for a daemon — hostname, then IP, then internal connection id. */
+export function daemonLabel(
+  daemonId: string,
+  connections: DaemonConnection[],
+): string {
+  const conn = connections.find((entry) => entry.id === daemonId)
+  const hostname = conn?.hostname?.trim()
+  if (hostname) return hostname
+  const address = conn?.remoteAddress?.trim()
+  if (address) return address
+  return daemonId
 }
 
 export type DaemonEvent =
@@ -108,13 +147,19 @@ export async function fetchInstanceAddresses(): Promise<{
 
 export async function fetchDaemonAddresses(
   daemonId: string,
-): Promise<{ ok: boolean; daemonId: string; addresses: ServerAddresses }> {
+): Promise<{
+  ok: boolean
+  daemonId: string
+  hostname: string | null
+  addresses: ServerAddresses
+}> {
   return await apiFetch(`/api/daemon/${encodeURIComponent(daemonId)}/addresses`)
 }
 
 export async function fetchAllDaemonAddresses(): Promise<{
   servers: Array<{
     daemonId: string
+    hostname: string | null
     addresses?: ServerAddresses
     error?: string
   }>
@@ -122,13 +167,17 @@ export async function fetchAllDaemonAddresses(): Promise<{
   return await apiFetch('/api/daemon/addresses')
 }
 
-export function formatEvent(event: DaemonEvent): string {
+export function formatEvent(
+  event: DaemonEvent,
+  connections: DaemonConnection[] = [],
+): string {
   const time = new Date(event.at).toLocaleTimeString()
+  const label = (daemonId: string) => daemonLabel(daemonId, connections)
   switch (event.kind) {
     case 'connected':
-      return `${time}  ${event.daemonId} connected`
+      return `${time}  ${label(event.daemonId)} connected`
     case 'disconnected':
-      return `${time}  ${event.daemonId} disconnected`
+      return `${time}  ${label(event.daemonId)} disconnected`
     case 'broadcast':
       return `${time}  broadcast sent=${event.sent} ${JSON.stringify(event.payload)}`
     case 'message': {
@@ -136,7 +185,7 @@ export function formatEvent(event: DaemonEvent): string {
       const detail = event.message.type === 'echo'
         ? JSON.stringify(event.message.payload)
         : event.message.type
-      return `${time}  ${event.daemonId} ${arrow} ${detail}`
+      return `${time}  ${label(event.daemonId)} ${arrow} ${detail}`
     }
   }
 }

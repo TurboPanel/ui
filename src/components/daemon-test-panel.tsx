@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -18,6 +18,8 @@ import {
   fetchDaemonEvents,
   fetchHealth,
   fetchInstanceAddresses,
+  daemonLabel,
+  uniqueFleetConnections,
   formatEvent,
   runCommand,
   runCommandOnAll,
@@ -34,6 +36,14 @@ const MOBILE_PANEL_MAX_WIDTH = 520
 const DESKTOP_PANEL_MAX_WIDTH = 1400
 const DESKTOP_PANEL_GUTTER = 64
 
+type DiagnosticTab = 'network' | 'shell' | 'connectivity'
+
+const DIAGNOSTIC_TABS: { id: DiagnosticTab; label: string; hint: string }[] = [
+  { id: 'network', label: 'Network', hint: 'Interface addresses on physical NICs' },
+  { id: 'shell', label: 'Shell', hint: 'Run commands on selected servers' },
+  { id: 'connectivity', label: 'Connectivity', hint: 'WebSocket echo and traffic log' },
+]
+
 export function DaemonTestPanel() {
   const { width } = useWindowDimensions()
   const panelMaxWidth = width >= DESKTOP_BREAKPOINT
@@ -44,6 +54,7 @@ export function DaemonTestPanel() {
   const [events, setEvents] = useState<DaemonEvent[]>([])
   const [commands, setCommands] = useState<CommandResult[]>([])
   const [target, setTarget] = useState<string>(ALL_TARGET)
+  const [activeTab, setActiveTab] = useState<DiagnosticTab>('network')
   const [command, setCommand] = useState('uname -a')
   const [echo, setEcho] = useState('Hello from UI')
   const [running, setRunning] = useState(false)
@@ -79,9 +90,11 @@ export function DaemonTestPanel() {
     return () => clearInterval(timer)
   }, [refresh])
 
+  const fleet = useMemo(() => uniqueFleetConnections(connections), [connections])
+
   const targetExists = useMemo(
-    () => target === ALL_TARGET || connections.some((c) => c.id === target),
-    [target, connections],
+    () => target === ALL_TARGET || fleet.some((c) => c.id === target),
+    [target, fleet],
   )
 
   useEffect(() => {
@@ -136,7 +149,8 @@ export function DaemonTestPanel() {
         })
         for (const server of daemons.servers) {
           results.push({
-            source: server.daemonId,
+            source: server.hostname?.trim() ||
+              daemonLabel(server.daemonId, connections),
             addresses: server.addresses,
             error: server.error,
           })
@@ -144,7 +158,8 @@ export function DaemonTestPanel() {
       } else {
         const response = await fetchDaemonAddresses(target)
         results.push({
-          source: response.daemonId,
+          source: response.hostname?.trim() ||
+            daemonLabel(target, connections),
           addresses: response.addresses,
         })
       }
@@ -158,131 +173,190 @@ export function DaemonTestPanel() {
     }
   }
 
-  const targetLabel = target === ALL_TARGET ? 'all servers' : target
-  const canRun = !running && healthOk === true && connections.length > 0
+  const targetLabel = target === ALL_TARGET
+    ? 'all servers'
+    : daemonLabel(target, connections)
+  const canRun = !running && healthOk === true && fleet.length > 0
   const canFetchAddresses = !fetchingAddresses && healthOk === true &&
-    (target === ALL_TARGET || connections.some((c) => c.id === target))
+    (target === ALL_TARGET || fleet.some((c) => c.id === target))
+  const activeTabMeta = DIAGNOSTIC_TABS.find((tab) => tab.id === activeTab)!
+  const staleCount = connections.length - fleet.length
 
   return (
     <View style={[styles.panel, { maxWidth: panelMaxWidth }]}>
       <Text style={styles.panelTitle}>Admin control panel</Text>
       <Text style={styles.panelHint}>Temporary dev-only console · no auth</Text>
 
-      <View style={styles.row}>
-        <View style={[styles.dot, healthOk ? styles.dotOk : styles.dotBad]} />
-        <Text style={styles.rowText}>
-          API {healthOk === null ? 'checking…' : healthOk ? 'healthy' : 'unreachable'}
-        </Text>
-      </View>
+      <DiagnosticArea title="Fleet" hint="Instance health and target selection for diagnostics below">
+        <View style={styles.row}>
+          <View style={[styles.dot, healthOk ? styles.dotOk : styles.dotBad]} />
+          <Text style={styles.rowText}>
+            API {healthOk === null ? 'checking…' : healthOk ? 'healthy' : 'unreachable'}
+          </Text>
+          <Text style={styles.fleetCount}>
+            {fleet.length} server{fleet.length === 1 ? '' : 's'}
+            {staleCount > 0 ? ` (${staleCount} stale sockets clearing…)` : ''}
+          </Text>
+        </View>
 
-      <Text style={styles.sectionLabel}>Connected daemons ({connections.length})</Text>
-      <View style={styles.targets}>
-        <TargetChip
-          label="All"
-          active={target === ALL_TARGET}
-          onPress={() => setTarget(ALL_TARGET)}
-        />
-        {connections.map((conn) => (
+        <Text style={styles.inlineLabel}>Target</Text>
+        <View style={styles.targets}>
           <TargetChip
-            key={conn.id}
-            label={conn.id}
-            active={target === conn.id}
-            onPress={() => setTarget(conn.id)}
+            label="All"
+            active={target === ALL_TARGET}
+            onPress={() => setTarget(ALL_TARGET)}
           />
-        ))}
-      </View>
-      {connections.length === 0 ? (
-        <Text style={styles.muted}>No daemon connected yet</Text>
-      ) : null}
-
-      <Text style={styles.sectionLabel}>Network addresses → {targetLabel}</Text>
-      <Pressable
-        style={[styles.buttonSecondary, !canFetchAddresses && styles.buttonDisabled]}
-        onPress={() => void onFetchAddresses()}
-        disabled={!canFetchAddresses}
-      >
-        {fetchingAddresses ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonSecondaryText}>Get IP addresses</Text>
-        )}
-      </Pressable>
-      {addressResults ? (
-        <View style={styles.addressResults}>
-          {addressResults.map((entry) => (
-            <AddressCard key={entry.source} entry={entry} />
+          {fleet.map((conn) => (
+            <TargetChip
+              key={conn.id}
+              label={daemonLabel(conn.id, connections)}
+              active={target === conn.id}
+              onPress={() => setTarget(conn.id)}
+            />
           ))}
         </View>
-      ) : (
-        <Text style={styles.muted}>Reads IPs assigned to physical interfaces only</Text>
-      )}
-
-      <Text style={styles.sectionLabel}>Run command → {targetLabel}</Text>
-      <TextInput
-        value={command}
-        onChangeText={setCommand}
-        style={styles.input}
-        placeholderTextColor="#666"
-        placeholder="Shell command, e.g. ls -la"
-        autoCapitalize="none"
-        autoCorrect={false}
-        onSubmitEditing={() => void onRunCommand()}
-      />
-      <Pressable
-        style={[styles.button, !canRun && styles.buttonDisabled]}
-        onPress={() => void onRunCommand()}
-        disabled={!canRun}
-      >
-        {running ? (
-          <ActivityIndicator color="#000" />
+        {fleet.length === 0 ? (
+          <Text style={styles.muted}>No daemon connected yet</Text>
         ) : (
-          <Text style={styles.buttonText}>Run on {targetLabel}</Text>
+          <Text style={styles.muted}>Diagnostics run against: {targetLabel}</Text>
         )}
-      </Pressable>
+      </DiagnosticArea>
 
-      <Text style={styles.sectionLabel}>Command results</Text>
-      <ScrollView style={styles.results} nestedScrollEnabled>
-        {commands.length === 0 ? (
-          <Text style={styles.muted}>No commands run yet</Text>
-        ) : (
-          [...commands].reverse().map((result) => <CommandRow key={result.id} result={result} />)
-        )}
-      </ScrollView>
-
-      <Text style={styles.sectionLabel}>Send echo (connectivity test)</Text>
-      <TextInput
-        value={echo}
-        onChangeText={setEcho}
-        style={styles.input}
-        placeholderTextColor="#666"
-        placeholder="Message to broadcast"
-      />
-      <Pressable
-        style={[styles.buttonSecondary, sending && styles.buttonDisabled]}
-        onPress={() => void onBroadcast()}
-        disabled={sending || !healthOk}
-      >
-        {sending ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonSecondaryText}>Broadcast echo</Text>
-        )}
-      </Pressable>
-
-      <Text style={styles.sectionLabel}>Activity</Text>
-      <ScrollView style={styles.log} nestedScrollEnabled>
-        {events.length === 0 ? (
-          <Text style={styles.muted}>Waiting for websocket traffic…</Text>
-        ) : (
-          [...events].reverse().map((event, index) => (
-            <Text key={`${event.at}-${index}`} style={styles.logLine}>
-              {formatEvent(event)}
+      <Text style={styles.diagnosticsHeading}>Diagnostics</Text>
+      <View style={styles.tabBar}>
+        {DIAGNOSTIC_TABS.map((tab) => (
+          <Pressable
+            key={tab.id}
+            style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+            onPress={() => setActiveTab(tab.id)}
+          >
+            <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
+              {tab.label}
             </Text>
-          ))
-        )}
-      </ScrollView>
+          </Pressable>
+        ))}
+      </View>
+
+      {activeTab === 'network' ? (
+        <DiagnosticArea title="Network" hint={activeTabMeta.hint}>
+          <Pressable
+            style={[styles.buttonSecondary, !canFetchAddresses && styles.buttonDisabled]}
+            onPress={() => void onFetchAddresses()}
+            disabled={!canFetchAddresses}
+          >
+            {fetchingAddresses ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonSecondaryText}>Get IP addresses</Text>
+            )}
+          </Pressable>
+          {addressResults ? (
+            <View style={styles.addressResults}>
+              {addressResults.map((entry) => (
+                <AddressCard key={entry.source} entry={entry} />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.muted}>Reads IPs assigned to physical interfaces only</Text>
+          )}
+        </DiagnosticArea>
+      ) : null}
+
+      {activeTab === 'shell' ? (
+        <DiagnosticArea title="Shell" hint={activeTabMeta.hint}>
+          <TextInput
+            value={command}
+            onChangeText={setCommand}
+            style={styles.input}
+            placeholderTextColor="#666"
+            placeholder="Shell command, e.g. ls -la"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={() => void onRunCommand()}
+          />
+          <Pressable
+            style={[styles.button, !canRun && styles.buttonDisabled]}
+            onPress={() => void onRunCommand()}
+            disabled={!canRun}
+          >
+            {running ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.buttonText}>Run on {targetLabel}</Text>
+            )}
+          </Pressable>
+
+          <Text style={styles.inlineLabel}>Results</Text>
+          <ScrollView style={styles.results} nestedScrollEnabled>
+            {commands.length === 0 ? (
+              <Text style={styles.muted}>No commands run yet</Text>
+            ) : (
+              [...commands].reverse().map((result) => (
+                <CommandRow key={result.id} result={result} connections={connections} />
+              ))
+            )}
+          </ScrollView>
+        </DiagnosticArea>
+      ) : null}
+
+      {activeTab === 'connectivity' ? (
+        <DiagnosticArea title="Connectivity" hint={activeTabMeta.hint}>
+          <Text style={styles.inlineLabel}>Broadcast echo</Text>
+          <TextInput
+            value={echo}
+            onChangeText={setEcho}
+            style={styles.input}
+            placeholderTextColor="#666"
+            placeholder="Message to broadcast"
+          />
+          <Pressable
+            style={[styles.buttonSecondary, sending && styles.buttonDisabled]}
+            onPress={() => void onBroadcast()}
+            disabled={sending || !healthOk}
+          >
+            {sending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonSecondaryText}>Broadcast to all daemons</Text>
+            )}
+          </Pressable>
+
+          <Text style={styles.inlineLabel}>Activity</Text>
+          <ScrollView style={styles.log} nestedScrollEnabled>
+            {events.length === 0 ? (
+              <Text style={styles.muted}>Waiting for websocket traffic…</Text>
+            ) : (
+              [...events].reverse().map((event, index) => (
+                <Text key={`${event.at}-${index}`} style={styles.logLine}>
+                  {formatEvent(event, connections)}
+                </Text>
+              ))
+            )}
+          </ScrollView>
+        </DiagnosticArea>
+      ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  )
+}
+
+function DiagnosticArea({
+  title,
+  hint,
+  children,
+}: {
+  title: string
+  hint?: string
+  children: ReactNode
+}) {
+  return (
+    <View style={styles.area}>
+      <View style={styles.areaHeader}>
+        <Text style={styles.areaTitle}>{title}</Text>
+        {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
+      </View>
+      <View style={styles.areaBody}>{children}</View>
     </View>
   )
 }
@@ -335,7 +409,13 @@ function AddressLine({ label, values }: { label: string; values: string[] }) {
   )
 }
 
-function CommandRow({ result }: { result: CommandResult }) {
+function CommandRow({
+  result,
+  connections,
+}: {
+  result: CommandResult
+  connections: DaemonConnection[]
+}) {
   const pending = result.status === 'pending'
   const failed = !pending && result.exitCode !== 0
   return (
@@ -348,7 +428,7 @@ function CommandRow({ result }: { result: CommandResult }) {
           ]}
         />
         <Text style={styles.resultMeta}>
-          {result.daemonId}
+          {daemonLabel(result.daemonId, connections)}
           {pending ? ' · running…' : ` · exit ${result.exitCode}`}
         </Text>
       </View>
@@ -380,10 +460,73 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 16,
   },
+  diagnosticsHeading: {
+    color: '#666',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    backgroundColor: '#111',
+    alignItems: 'center',
+  },
+  tabActive: {
+    borderColor: '#3dd68c',
+    backgroundColor: '#10241a',
+  },
+  tabText: {
+    color: '#888',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#3dd68c',
+  },
+  area: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+    backgroundColor: '#080808',
+    overflow: 'hidden',
+  },
+  areaHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+    backgroundColor: '#0d0d0d',
+  },
+  areaTitle: {
+    color: '#ddd',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  areaHint: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  areaBody: {
+    padding: 14,
+    gap: 8,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   dot: {
     width: 8,
@@ -400,14 +543,20 @@ const styles = StyleSheet.create({
   rowText: {
     color: '#ccc',
     fontSize: 14,
+    flex: 1,
   },
-  sectionLabel: {
-    color: '#888',
+  fleetCount: {
+    color: '#666',
     fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  inlineLabel: {
+    color: '#777',
+    fontSize: 11,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: 16,
-    marginBottom: 6,
+    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 4,
   },
   muted: {
     color: '#555',
@@ -450,14 +599,14 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   button: {
-    marginTop: 10,
+    marginTop: 2,
     backgroundColor: '#fff',
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
   },
   buttonSecondary: {
-    marginTop: 10,
+    marginTop: 2,
     backgroundColor: '#1a1a1a',
     borderWidth: 1,
     borderColor: '#333',
@@ -479,7 +628,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   results: {
-    maxHeight: 240,
+    maxHeight: 280,
     marginTop: 4,
     padding: 10,
     borderRadius: 8,
@@ -536,7 +685,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   log: {
-    maxHeight: 160,
+    maxHeight: 280,
     marginTop: 4,
     padding: 10,
     borderRadius: 8,
@@ -556,7 +705,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   addressResults: {
-    marginTop: 10,
+    marginTop: 4,
     gap: 8,
   },
   addressCard: {
