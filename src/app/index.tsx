@@ -1,20 +1,34 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { DaemonTestPanel } from '@/components/daemon-test-panel'
 
 export default function ComingSoon() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>TurboPanel</Text>
-      <Text style={styles.subtitle}>Coming Soon</Text>
-    </View>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>TurboPanel</Text>
+        <Text style={styles.subtitle}>Coming Soon</Text>
+        <DaemonTestPanel />
+      </ScrollView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
+    backgroundColor: '#000',
+  },
+  container: {
+    flexGrow: 1,
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 32,
   },
   title: {
     fontSize: 32,
