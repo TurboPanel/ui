@@ -11,16 +11,20 @@ import {
 } from 'react-native'
 import {
   broadcastToDaemon,
+  fetchAllDaemonAddresses,
   fetchCommandResults,
+  fetchDaemonAddresses,
   fetchDaemonConnections,
   fetchDaemonEvents,
   fetchHealth,
+  fetchInstanceAddresses,
   formatEvent,
   runCommand,
   runCommandOnAll,
   type CommandResult,
   type DaemonConnection,
   type DaemonEvent,
+  type ServerAddressEntry,
 } from '@/lib/instance-api'
 
 const POLL_MS = 2_000
@@ -44,6 +48,8 @@ export function DaemonTestPanel() {
   const [echo, setEcho] = useState('Hello from UI')
   const [running, setRunning] = useState(false)
   const [sending, setSending] = useState(false)
+  const [fetchingAddresses, setFetchingAddresses] = useState(false)
+  const [addressResults, setAddressResults] = useState<ServerAddressEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -114,8 +120,48 @@ export function DaemonTestPanel() {
     }
   }
 
-  const targetLabel = target === ALL_TARGET ? 'all daemons' : target
+  const onFetchAddresses = async () => {
+    setFetchingAddresses(true)
+    try {
+      const results: ServerAddressEntry[] = []
+
+      if (target === ALL_TARGET) {
+        const [instance, daemons] = await Promise.all([
+          fetchInstanceAddresses(),
+          fetchAllDaemonAddresses(),
+        ])
+        results.push({
+          source: instance.source,
+          addresses: instance.addresses,
+        })
+        for (const server of daemons.servers) {
+          results.push({
+            source: server.daemonId,
+            addresses: server.addresses,
+            error: server.error,
+          })
+        }
+      } else {
+        const response = await fetchDaemonAddresses(target)
+        results.push({
+          source: response.daemonId,
+          addresses: response.addresses,
+        })
+      }
+
+      setAddressResults(results)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch addresses')
+    } finally {
+      setFetchingAddresses(false)
+    }
+  }
+
+  const targetLabel = target === ALL_TARGET ? 'all servers' : target
   const canRun = !running && healthOk === true && connections.length > 0
+  const canFetchAddresses = !fetchingAddresses && healthOk === true &&
+    (target === ALL_TARGET || connections.some((c) => c.id === target))
 
   return (
     <View style={[styles.panel, { maxWidth: panelMaxWidth }]}>
@@ -148,6 +194,28 @@ export function DaemonTestPanel() {
       {connections.length === 0 ? (
         <Text style={styles.muted}>No daemon connected yet</Text>
       ) : null}
+
+      <Text style={styles.sectionLabel}>Network addresses → {targetLabel}</Text>
+      <Pressable
+        style={[styles.buttonSecondary, !canFetchAddresses && styles.buttonDisabled]}
+        onPress={() => void onFetchAddresses()}
+        disabled={!canFetchAddresses}
+      >
+        {fetchingAddresses ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonSecondaryText}>Get IP addresses</Text>
+        )}
+      </Pressable>
+      {addressResults ? (
+        <View style={styles.addressResults}>
+          {addressResults.map((entry) => (
+            <AddressCard key={entry.source} entry={entry} />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.muted}>Reads IPs assigned to physical interfaces only</Text>
+      )}
 
       <Text style={styles.sectionLabel}>Run command → {targetLabel}</Text>
       <TextInput
@@ -232,6 +300,38 @@ function TargetChip({
     <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </Pressable>
+  )
+}
+
+function AddressCard({ entry }: { entry: ServerAddressEntry }) {
+  if (entry.error) {
+    return (
+      <View style={styles.addressCard}>
+        <Text style={styles.addressSource}>{entry.source}</Text>
+        <Text style={styles.resultErr}>{entry.error}</Text>
+      </View>
+    )
+  }
+
+  if (!entry.addresses) return null
+
+  return (
+    <View style={styles.addressCard}>
+      <Text style={styles.addressSource}>{entry.source}</Text>
+      <AddressLine label="Private IPv4" values={entry.addresses.privateIpv4} />
+      <AddressLine label="Private IPv6" values={entry.addresses.privateIpv6} />
+      <AddressLine label="Public IPv4" values={entry.addresses.publicIpv4} />
+      <AddressLine label="Public IPv6" values={entry.addresses.publicIpv6} />
+    </View>
+  )
+}
+
+function AddressLine({ label, values }: { label: string; values: string[] }) {
+  return (
+    <Text style={styles.addressLine}>
+      <Text style={styles.addressLabel}>{label}: </Text>
+      {values.length > 0 ? values.join(', ') : '—'}
+    </Text>
   )
 }
 
@@ -454,5 +554,31 @@ const styles = StyleSheet.create({
     color: '#ff8a8a',
     fontSize: 12,
     marginTop: 10,
+  },
+  addressResults: {
+    marginTop: 10,
+    gap: 8,
+  },
+  addressCard: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#050505',
+    borderWidth: 1,
+    borderColor: '#1a1a1a',
+  },
+  addressSource: {
+    color: '#3dd68c',
+    fontSize: 12,
+    fontFamily: 'monospace',
+    marginBottom: 6,
+  },
+  addressLine: {
+    color: '#cfd3d6',
+    fontSize: 12,
+    fontFamily: 'monospace',
+    marginBottom: 2,
+  },
+  addressLabel: {
+    color: '#888',
   },
 })

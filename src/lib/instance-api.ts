@@ -27,6 +27,19 @@ export type CommandResult = {
   finishedAt?: string
 }
 
+export type ServerAddresses = {
+  privateIpv4: string[]
+  privateIpv6: string[]
+  publicIpv4: string[]
+  publicIpv6: string[]
+}
+
+export type ServerAddressEntry = {
+  source: string
+  addresses?: ServerAddresses
+  error?: string
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -83,6 +96,30 @@ export async function runCommandOnAll(
     method: 'POST',
     body: JSON.stringify({ command }),
   })
+}
+
+export async function fetchInstanceAddresses(): Promise<{
+  ok: boolean
+  source: string
+  addresses: ServerAddresses
+}> {
+  return await apiFetch('/api/instance/addresses')
+}
+
+export async function fetchDaemonAddresses(
+  daemonId: string,
+): Promise<{ ok: boolean; daemonId: string; addresses: ServerAddresses }> {
+  return await apiFetch(`/api/daemon/${encodeURIComponent(daemonId)}/addresses`)
+}
+
+export async function fetchAllDaemonAddresses(): Promise<{
+  servers: Array<{
+    daemonId: string
+    addresses?: ServerAddresses
+    error?: string
+  }>
+}> {
+  return await apiFetch('/api/daemon/addresses')
 }
 
 export function formatEvent(event: DaemonEvent): string {
