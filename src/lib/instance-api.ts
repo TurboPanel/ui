@@ -167,6 +167,12 @@ export async function fetchAllDaemonAddresses(): Promise<{
   return await apiFetch('/api/daemon/addresses')
 }
 
+export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> {
+  return await apiFetch('/api/system/upgrade', {
+    method: 'POST',
+  })
+}
+
 export function formatEvent(
   event: DaemonEvent,
   connections: DaemonConnection[] = [],
