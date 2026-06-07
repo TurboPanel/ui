@@ -225,8 +225,53 @@ export async function fetchDrizzleStudioStatus(): Promise<DrizzleStudioStatus> {
   return await apiFetch(`${DEVELOPER_API}/database/studio`)
 }
 
-export async function startDrizzleStudio(): Promise<{ ok: boolean; browserUrl: string }> {
+export async function startDrizzleStudio(): Promise<{
+  ok: boolean
+  browserUrl: string
+  port: number
+}> {
   return await apiFetch(`${DEVELOPER_API}/database/studio`, { method: 'POST' })
+}
+
+export const DRIZZLE_STUDIO_PROXY_PORT = 8444
+
+/**
+ * Drizzle Studio UI URL for local.drizzle.studio.
+ * LAN access uses Caddy on :8444 (?host=&port=). localhost uses forwarded :4983 (?port=).
+ */
+export function drizzleStudioOpenUrl(opts?: {
+  hostname?: string
+  localPort?: number
+  proxyPort?: number
+}): string {
+  const base = 'https://local.drizzle.studio'
+  const hostname = opts?.hostname ?? (typeof window !== 'undefined' ? window.location.hostname : '')
+  const proxyPort = opts?.proxyPort ?? DRIZZLE_STUDIO_PROXY_PORT
+  const localPort = opts?.localPort ?? 4983
+
+  if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    const params = new URLSearchParams({ host: hostname, port: String(proxyPort) })
+    return `${base}?${params.toString()}`
+  }
+
+  if (localPort !== 4983) {
+    return `${base}?port=${localPort}`
+  }
+  return base
+}
+
+const DRIZZLE_LOCAL_PORT_KEY = 'turbopanel:drizzle-studio-local-port'
+
+export function loadDrizzleLocalPort(): number {
+  if (typeof window === 'undefined') return 4983
+  const raw = window.localStorage.getItem(DRIZZLE_LOCAL_PORT_KEY)
+  const parsed = raw ? Number.parseInt(raw, 10) : 4983
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 4983
+}
+
+export function saveDrizzleLocalPort(port: number): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(DRIZZLE_LOCAL_PORT_KEY, String(port))
 }
 
 export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> {

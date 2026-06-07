@@ -1,11 +1,22 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { SectionPanel } from '@/components/developer/section-panel'
 import { developerStyles } from '@/components/developer/developer-styles'
 import { useDeveloper } from '@/lib/developer-context'
 import {
+  DRIZZLE_STUDIO_PROXY_PORT,
+  drizzleStudioOpenUrl,
   fetchDatabaseStatus,
   fetchDrizzleStudioStatus,
+  loadDrizzleLocalPort,
+  saveDrizzleLocalPort,
   startDrizzleStudio,
   type DatabaseStatus,
 } from '@/lib/instance-api'
@@ -24,9 +35,33 @@ export function DatabaseSection() {
   const { healthOk } = useDeveloper()
   const [status, setStatus] = useState<DatabaseStatus | null>(null)
   const [studioRunning, setStudioRunning] = useState(false)
+  const [remoteStudioPort, setRemoteStudioPort] = useState(4983)
+  const [browserHostname, setBrowserHostname] = useState('')
+  const [localPortInput, setLocalPortInput] = useState(String(loadDrizzleLocalPort()))
   const [testing, setTesting] = useState(false)
   const [openingStudio, setOpeningStudio] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBrowserHostname(window.location.hostname)
+    }
+  }, [])
+
+  const localPort = useMemo(() => {
+    const parsed = Number.parseInt(localPortInput.trim(), 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 4983
+  }, [localPortInput])
+
+  const usesLanProxy =
+    browserHostname !== '' &&
+    browserHostname !== 'localhost' &&
+    browserHostname !== '127.0.0.1'
+
+  const studioOpenUrl = useMemo(
+    () => drizzleStudioOpenUrl({ hostname: browserHostname, localPort }),
+    [browserHostname, localPort],
+  )
 
   const refresh = useCallback(async () => {
     try {
@@ -36,6 +71,7 @@ export function DatabaseSection() {
       ])
       setStatus(dbStatus)
       setStudioRunning(studioStatus.running)
+      setRemoteStudioPort(studioStatus.port)
     } catch (err) {
       setStatus(null)
       setStudioRunning(false)
@@ -51,6 +87,10 @@ export function DatabaseSection() {
     const timer = setInterval(() => void refresh(), 2000)
     return () => clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    if (!usesLanProxy) saveDrizzleLocalPort(localPort)
+  }, [localPort, usesLanProxy])
 
   const onTest = async () => {
     setTesting(true)
@@ -87,16 +127,18 @@ export function DatabaseSection() {
     try {
       const result = await startDrizzleStudio()
       setStudioRunning(true)
-      openStudioUrl(result.browserUrl)
       setMessage({
         ok: true,
-        text:
-          'Drizzle Studio opened at local.drizzle.studio. If it cannot connect, allow local network access in your browser or SSH-tunnel port 4983 from this host.',
+        text: usesLanProxy
+          ? `API running. Open ${studioOpenUrl} — connects to ${browserHostname}:${DRIZZLE_STUDIO_PROXY_PORT} via Caddy.`
+          : `API running. Forward port ${remoteStudioPort} in Cursor Ports, then open ${studioOpenUrl}.`,
       })
+      openStudioUrl(studioOpenUrl)
     } catch (err) {
+      const errText = err instanceof Error ? err.message : 'Failed to start Drizzle Studio'
       setMessage({
         ok: false,
-        text: err instanceof Error ? err.message : 'Failed to start Drizzle Studio',
+        text: errText,
       })
     } finally {
       setOpeningStudio(false)
@@ -158,10 +200,40 @@ export function DatabaseSection() {
 
       <Text style={developerStyles.inlineLabel}>Drizzle Studio</Text>
       <Text style={developerStyles.muted}>
-        Opens local.drizzle.studio against this host's studio server (port 4983). Read-only browse —
-        no migrations or schema push. When developing remotely, tunnel port 4983 over SSH first.
-        {studioRunning ? ' Studio server is running.' : ''}
+        1. Click “Start API &amp; open studio” (API listens on 127.0.0.1:{remoteStudioPort} on the
+        host).
+        {studioRunning ? ' API is running.' : ''}
       </Text>
+      {usesLanProxy ? (
+        <Text style={developerStyles.muted}>
+          2. Caddy proxies the API on port {DRIZZLE_STUDIO_PROXY_PORT} at this host ({browserHostname}
+          ) — no Cursor port forwarding needed.
+        </Text>
+      ) : (
+        <>
+          <Text style={developerStyles.muted}>
+            2. Forward port {remoteStudioPort} in Cursor (Ports → + → {remoteStudioPort}).
+          </Text>
+          <Text style={developerStyles.inlineLabel}>Local forwarded port</Text>
+          <TextInput
+            style={developerStyles.input}
+            value={localPortInput}
+            onChangeText={setLocalPortInput}
+            keyboardType="number-pad"
+            placeholder={String(remoteStudioPort)}
+            placeholderTextColor={colors.textMuted}
+          />
+        </>
+      )}
+
+      <Text style={developerStyles.inlineLabel}>Studio UI link</Text>
+      <Pressable onPress={() => openStudioUrl(studioOpenUrl)}>
+        <Text style={styles.studioLink}>{studioOpenUrl}</Text>
+      </Pressable>
+      <Text style={developerStyles.muted}>
+        Read-only browse — no migrations or schema push.
+      </Text>
+
       <Pressable
         style={[developerStyles.button, !canOpenStudio && developerStyles.buttonDisabled]}
         onPress={() => void onOpenStudio()}
@@ -173,7 +245,7 @@ export function DatabaseSection() {
             <Text style={developerStyles.buttonText}>Starting…</Text>
           </View>
         ) : (
-          <Text style={developerStyles.buttonText}>Open Drizzle Studio</Text>
+          <Text style={developerStyles.buttonText}>Start API &amp; open studio</Text>
         )}
       </Pressable>
 
@@ -185,3 +257,14 @@ export function DatabaseSection() {
     </SectionPanel>
   )
 }
+
+const styles = StyleSheet.create({
+  studioLink: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+})
