@@ -25,6 +25,12 @@ export const DEVELOPER_SECTIONS = [
     path: '/developer/connectivity',
     hint: 'WebSocket echo and traffic log',
   },
+  {
+    id: 'database',
+    label: 'Database',
+    path: '/developer/database',
+    hint: 'Postgres connection test and Drizzle Studio',
+  },
 ] as const
 
 export type DeveloperSectionId = (typeof DEVELOPER_SECTIONS)[number]['id']

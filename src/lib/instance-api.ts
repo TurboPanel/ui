@@ -201,6 +201,34 @@ export async function fetchUpgradeStatus(): Promise<UpgradeStatus> {
   return await apiFetch(`${DEVELOPER_API}/system/upgrade-status`)
 }
 
+export type DatabaseStatus = {
+  configured: boolean
+  connected: boolean
+  transport: 'socket' | 'tcp' | null
+  user: string | null
+  database: string | null
+  version: string | null
+  error: string | null
+}
+
+export async function fetchDatabaseStatus(): Promise<DatabaseStatus> {
+  return await apiFetch(`${DEVELOPER_API}/database/status`)
+}
+
+export type DrizzleStudioStatus = {
+  running: boolean
+  publicPath: string
+  port: number
+}
+
+export async function fetchDrizzleStudioStatus(): Promise<DrizzleStudioStatus> {
+  return await apiFetch(`${DEVELOPER_API}/database/studio`)
+}
+
+export async function startDrizzleStudio(): Promise<{ ok: boolean; publicPath: string }> {
+  return await apiFetch(`${DEVELOPER_API}/database/studio`, { method: 'POST' })
+}
+
 export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> {
   return await apiFetch(`${DEVELOPER_API}/system/upgrade`, {
     method: 'POST',

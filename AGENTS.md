@@ -33,6 +33,7 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 | `/developer/network` | `network-section.tsx` | Interface IP addresses |
 | `/developer/shell` | `shell-section.tsx` | Remote commands |
 | `/developer/connectivity` | `connectivity-section.tsx` | Echo broadcast + websocket log |
+| `/developer/database` | `database-section.tsx` | Postgres connection test + Drizzle Studio |
 
 `DeveloperProvider` polls every 2s: `/api/health`, `/api/developer/v1/daemon/connections`, `/api/developer/v1/daemon/events`, `/api/developer/v1/daemon/commands`. Target selection (`__all__` or per-daemon id) lives in the header and is shared across Network and Shell.
 
