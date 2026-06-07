@@ -100,7 +100,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    throw new Error(`${path} failed: HTTP ${response.status}`)
+    let detail = `HTTP ${response.status}`
+    try {
+      const body = await response.json() as { error?: string }
+      if (body.error) detail = body.error
+    } catch {
+      // Non-JSON error body — keep the status-only message.
+    }
+    throw new Error(`${path} failed: ${detail}`)
   }
 
   return await response.json() as T
