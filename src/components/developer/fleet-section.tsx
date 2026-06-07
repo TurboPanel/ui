@@ -85,24 +85,16 @@ export function FleetSection() {
   const onUpgrade = async () => {
     setUpgrading(true)
     setUpgradeResult(null)
-    const restartBefore = await fetch('/api/health').then((r) => r.ok).catch(() => false)
     try {
       const result = await upgradeSystem()
-      // #region agent log
-      fetch('http://localhost:7686/ingest/1326dc58-69fc-4780-871a-d504ad5cb2c6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf61d3'},body:JSON.stringify({sessionId:'bf61d3',location:'fleet-section.tsx:onUpgrade-ok',message:'upgrade fetch succeeded',data:{commit:result.commit},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       setUpgradeResult({
         ok: true,
         message: `Upgrade started at commit ${result.commit}. This instance will restart shortly and connected agents will update.`,
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upgrade failed'
-      // #region agent log
-      fetch('http://localhost:7686/ingest/1326dc58-69fc-4780-871a-d504ad5cb2c6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf61d3'},body:JSON.stringify({sessionId:'bf61d3',location:'fleet-section.tsx:onUpgrade-err',message:'upgrade fetch failed',data:{error:message,restartBefore},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       setUpgradeResult({
         ok: false,
-        message,
+        message: err instanceof Error ? err.message : 'Upgrade failed',
       })
     } finally {
       setUpgrading(false)
