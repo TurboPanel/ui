@@ -38,7 +38,7 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 The fleet section also exposes operator actions (no auto-update — everything is operator-driven):
 
-- **Upgrade System** — `POST /api/developer/v1/system/upgrade`
+- **Upgrade System** — `POST /api/developer/v1/system/upgrade` (disabled while `GET …/system/upgrade-status` reports dirty instance, daemon, or UI checkouts)
 - **Sync Dev Build** — `POST /api/developer/v1/daemon/sync-dev`; the instance tars its local daemon checkout and pushes it to all agents over the websocket (no git push/pull), which restart.
 - **Save Tunnel Token** — `POST /api/developer/v1/instance/tunnel-token`; sets/clears the instance's Cloudflare tunnel token so the co-located daemon runs cloudflared.
 

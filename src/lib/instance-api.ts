@@ -185,6 +185,22 @@ export async function fetchAllDaemonAddresses(): Promise<{
   return await apiFetch(`${DEVELOPER_API}/daemon/addresses`)
 }
 
+export type DirtyRepo = {
+  repo: string
+  path: string
+  changes: number
+}
+
+export type UpgradeStatus = {
+  ok: boolean
+  canUpgrade: boolean
+  dirty: DirtyRepo[]
+}
+
+export async function fetchUpgradeStatus(): Promise<UpgradeStatus> {
+  return await apiFetch(`${DEVELOPER_API}/system/upgrade-status`)
+}
+
 export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> {
   return await apiFetch(`${DEVELOPER_API}/system/upgrade`, {
     method: 'POST',

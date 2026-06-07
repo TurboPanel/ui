@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SectionPanel } from '@/components/developer/section-panel'
 import { developerStyles } from '@/components/developer/developer-styles'
@@ -7,7 +7,9 @@ import {
   daemonLabel,
   setInstanceTunnelToken,
   syncDevToAllDaemons,
+  fetchUpgradeStatus,
   upgradeSystem,
+  type DirtyRepo,
 } from '@/lib/instance-api'
 import { DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
 import { colors } from '@/lib/theme'
@@ -21,6 +23,7 @@ export function FleetSection() {
     ok: boolean
     message: string
   } | null>(null)
+  const [dirtyRepos, setDirtyRepos] = useState<DirtyRepo[]>([])
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{
     ok: boolean
@@ -34,7 +37,25 @@ export function FleetSection() {
     message: string
   } | null>(null)
 
-  const canUpgrade = !upgrading && healthOk === true
+  const canUpgrade = !upgrading && healthOk === true && dirtyRepos.length === 0
+
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const status = await fetchUpgradeStatus()
+        if (!cancelled) setDirtyRepos(status.dirty)
+      } catch {
+        if (!cancelled) setDirtyRepos([])
+      }
+    }
+    void poll()
+    const timer = setInterval(() => void poll(), 2000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [])
   const canSync = !syncing && healthOk === true && fleet.length > 0
   const canSaveToken = !savingToken && healthOk === true
 
@@ -117,7 +138,15 @@ export function FleetSection() {
       <Text style={developerStyles.inlineLabel}>System upgrade</Text>
       <Text style={developerStyles.muted}>
         Fetch origin/trunk, notify connected agents to update, and restart this instance.
+        Requires a clean working tree in the instance, daemon, and UI checkouts.
       </Text>
+      {dirtyRepos.length > 0 ? (
+        <Text style={developerStyles.error}>
+          Uncommitted changes block upgrade:{' '}
+          {dirtyRepos.map((entry) => `${entry.repo} (${entry.changes})`).join(', ')}. Commit or
+          stash before upgrading.
+        </Text>
+      ) : null}
       <Pressable
         style={[developerStyles.button, !canUpgrade && developerStyles.buttonDisabled]}
         onPress={() => void onUpgrade()}
