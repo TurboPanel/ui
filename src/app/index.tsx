@@ -1,7 +1,7 @@
 import { Link } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 
 export default function LandingPage() {
   return (
@@ -9,11 +9,14 @@ export default function LandingPage() {
       <View style={styles.container}>
         <Text style={styles.title}>TurboPanel</Text>
         <Text style={styles.subtitle}>Coming Soon</Text>
-        <Link href="/admin/fleet" asChild>
-          <Pressable style={styles.button}>
-            <Text style={styles.buttonText}>Open admin console</Text>
-          </Pressable>
-        </Link>
+        {/* The developer console is a dev-only surface. */}
+        {__DEV__ ? (
+          <Link href="/developer/fleet" asChild>
+            <Pressable style={styles.button}>
+              <Text style={styles.buttonText}>Open developer console</Text>
+            </Pressable>
+          </Link>
+        ) : null}
       </View>
     </SafeAreaView>
   )

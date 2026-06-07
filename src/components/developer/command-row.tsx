@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 import { daemonLabel, type CommandResult, type DaemonConnection } from '@/lib/instance-api'
 
 export function CommandRow({

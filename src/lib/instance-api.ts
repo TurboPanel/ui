@@ -80,12 +80,15 @@ export type ServerAddressEntry = {
 }
 
 /**
- * Versioned API surface for the admin UI. The instance also exposes
+ * Versioned API surface for the developer console. The instance also exposes
  * `/api/client/v1` (end-user UI) and `/api/daemon/v1` (agents); everything the
- * admin console calls lives under `/api/admin/v1`. `/api/health` is the single
- * unversioned probe.
+ * developer console calls lives under `/api/developer/v1`. `/api/health` is the
+ * single unversioned probe.
+ *
+ * The developer surface is dev-only — the instance serves it only when not in a
+ * production build (see the instance `src/dev-mode.ts`).
  */
-const ADMIN_API = '/api/admin/v1'
+const DEVELOPER_API = '/api/developer/v1'
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -108,29 +111,29 @@ export async function fetchHealth(): Promise<{ ok: boolean }> {
 }
 
 export async function fetchDaemonConnections(): Promise<{ connections: DaemonConnection[] }> {
-  return await apiFetch(`${ADMIN_API}/daemon/connections`)
+  return await apiFetch(`${DEVELOPER_API}/daemon/connections`)
 }
 
 export async function fetchDaemonEvents(limit = 40): Promise<{ events: DaemonEvent[] }> {
-  return await apiFetch(`${ADMIN_API}/daemon/events?limit=${limit}`)
+  return await apiFetch(`${DEVELOPER_API}/daemon/events?limit=${limit}`)
 }
 
 export async function broadcastToDaemon(payload: unknown): Promise<{ ok: boolean; sent: number }> {
-  return await apiFetch(`${ADMIN_API}/daemon/broadcast`, {
+  return await apiFetch(`${DEVELOPER_API}/daemon/broadcast`, {
     method: 'POST',
     body: JSON.stringify({ payload }),
   })
 }
 
 export async function fetchCommandResults(limit = 25): Promise<{ commands: CommandResult[] }> {
-  return await apiFetch(`${ADMIN_API}/daemon/commands?limit=${limit}`)
+  return await apiFetch(`${DEVELOPER_API}/daemon/commands?limit=${limit}`)
 }
 
 export async function runCommand(
   daemonId: string,
   command: string,
 ): Promise<{ ok: boolean; commandId: string }> {
-  return await apiFetch(`${ADMIN_API}/daemon/${encodeURIComponent(daemonId)}/command`, {
+  return await apiFetch(`${DEVELOPER_API}/daemon/${encodeURIComponent(daemonId)}/command`, {
     method: 'POST',
     body: JSON.stringify({ command }),
   })
@@ -139,7 +142,7 @@ export async function runCommand(
 export async function runCommandOnAll(
   command: string,
 ): Promise<{ ok: boolean; sent: number; commandIds: string[] }> {
-  return await apiFetch(`${ADMIN_API}/daemon/command`, {
+  return await apiFetch(`${DEVELOPER_API}/daemon/command`, {
     method: 'POST',
     body: JSON.stringify({ command }),
   })
@@ -150,7 +153,7 @@ export async function fetchInstanceAddresses(): Promise<{
   source: string
   addresses: ServerAddresses
 }> {
-  return await apiFetch(`${ADMIN_API}/instance/addresses`)
+  return await apiFetch(`${DEVELOPER_API}/instance/addresses`)
 }
 
 export async function fetchDaemonAddresses(
@@ -161,7 +164,7 @@ export async function fetchDaemonAddresses(
   hostname: string | null
   addresses: ServerAddresses
 }> {
-  return await apiFetch(`${ADMIN_API}/daemon/${encodeURIComponent(daemonId)}/addresses`)
+  return await apiFetch(`${DEVELOPER_API}/daemon/${encodeURIComponent(daemonId)}/addresses`)
 }
 
 export async function fetchAllDaemonAddresses(): Promise<{
@@ -172,11 +175,11 @@ export async function fetchAllDaemonAddresses(): Promise<{
     error?: string
   }>
 }> {
-  return await apiFetch(`${ADMIN_API}/daemon/addresses`)
+  return await apiFetch(`${DEVELOPER_API}/daemon/addresses`)
 }
 
 export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> {
-  return await apiFetch(`${ADMIN_API}/system/upgrade`, {
+  return await apiFetch(`${DEVELOPER_API}/system/upgrade`, {
     method: 'POST',
   })
 }
@@ -185,7 +188,7 @@ export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> 
 export async function syncDevToDaemon(
   daemonId: string,
 ): Promise<{ ok: boolean; daemonId: string; error?: string }> {
-  return await apiFetch(`${ADMIN_API}/daemon/${encodeURIComponent(daemonId)}/sync-dev`, {
+  return await apiFetch(`${DEVELOPER_API}/daemon/${encodeURIComponent(daemonId)}/sync-dev`, {
     method: 'POST',
   })
 }
@@ -195,7 +198,7 @@ export async function syncDevToAllDaemons(): Promise<{
   ok: boolean
   results: Array<{ daemonId: string; ok: boolean; error?: string }>
 }> {
-  return await apiFetch(`${ADMIN_API}/daemon/sync-dev`, {
+  return await apiFetch(`${DEVELOPER_API}/daemon/sync-dev`, {
     method: 'POST',
   })
 }
@@ -204,7 +207,7 @@ export async function syncDevToAllDaemons(): Promise<{
 export async function setInstanceTunnelToken(
   token: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  return await apiFetch(`${ADMIN_API}/instance/tunnel-token`, {
+  return await apiFetch(`${DEVELOPER_API}/instance/tunnel-token`, {
     method: 'POST',
     body: JSON.stringify({ token }),
   })

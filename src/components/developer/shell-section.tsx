@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput } from 'react-native'
-import { CommandRow } from '@/components/admin/command-row'
-import { SectionPanel } from '@/components/admin/section-panel'
-import { adminStyles } from '@/components/admin/admin-styles'
-import { useAdmin } from '@/lib/admin-context'
-import { ALL_TARGET, ADMIN_SECTIONS } from '@/lib/admin-navigation'
+import { CommandRow } from '@/components/developer/command-row'
+import { SectionPanel } from '@/components/developer/section-panel'
+import { developerStyles } from '@/components/developer/developer-styles'
+import { useDeveloper } from '@/lib/developer-context'
+import { ALL_TARGET, DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
 import { runCommand, runCommandOnAll } from '@/lib/instance-api'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 
-const section = ADMIN_SECTIONS.find((s) => s.id === 'shell')!
+const section = DEVELOPER_SECTIONS.find((s) => s.id === 'shell')!
 
 export function ShellSection() {
   const {
@@ -20,7 +20,7 @@ export function ShellSection() {
     targetLabel,
     refresh,
     setError,
-  } = useAdmin()
+  } = useDeveloper()
   const [command, setCommand] = useState('uname -a')
   const [running, setRunning] = useState(false)
 
@@ -50,7 +50,7 @@ export function ShellSection() {
       <TextInput
         value={command}
         onChangeText={setCommand}
-        style={adminStyles.input}
+        style={developerStyles.input}
         placeholderTextColor={colors.textDim}
         placeholder="Shell command, e.g. ls -la"
         autoCapitalize="none"
@@ -58,21 +58,21 @@ export function ShellSection() {
         onSubmitEditing={() => void onRunCommand()}
       />
       <Pressable
-        style={[adminStyles.button, !canRun && adminStyles.buttonDisabled]}
+        style={[developerStyles.button, !canRun && developerStyles.buttonDisabled]}
         onPress={() => void onRunCommand()}
         disabled={!canRun}
       >
         {running ? (
           <ActivityIndicator color={colors.buttonText} />
         ) : (
-          <Text style={adminStyles.buttonText}>Run on {targetLabel}</Text>
+          <Text style={developerStyles.buttonText}>Run on {targetLabel}</Text>
         )}
       </Pressable>
 
-      <Text style={adminStyles.inlineLabel}>Results</Text>
-      <ScrollView style={adminStyles.scrollInset} nestedScrollEnabled>
+      <Text style={developerStyles.inlineLabel}>Results</Text>
+      <ScrollView style={developerStyles.scrollInset} nestedScrollEnabled>
         {commands.length === 0 ? (
-          <Text style={adminStyles.muted}>No commands run yet</Text>
+          <Text style={developerStyles.muted}>No commands run yet</Text>
         ) : (
           [...commands].reverse().map((result) => (
             <CommandRow key={result.id} result={result} connections={connections} />

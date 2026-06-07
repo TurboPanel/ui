@@ -9,17 +9,17 @@ import {
 } from 'react-native'
 import { Slot } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { AdminHeader } from '@/components/admin/admin-header'
-import { AdminSidebar } from '@/components/admin/admin-sidebar'
-import { adminStyles } from '@/components/admin/admin-styles'
-import { useAdmin } from '@/lib/admin-context'
-import { colors, layout } from '@/lib/admin-theme'
+import { DeveloperHeader } from '@/components/developer/developer-header'
+import { DeveloperSidebar } from '@/components/developer/developer-sidebar'
+import { developerStyles } from '@/components/developer/developer-styles'
+import { useDeveloper } from '@/lib/developer-context'
+import { colors, layout } from '@/lib/theme'
 
-export function AdminShell() {
+export function DeveloperShell() {
   const { width } = useWindowDimensions()
   const isDesktop = width >= layout.desktopBreakpoint
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const { error } = useAdmin()
+  const { error } = useDeveloper()
 
   const contentMaxWidth = Math.min(
     layout.contentMaxWidth,
@@ -29,7 +29,7 @@ export function AdminShell() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.root}>
-        {isDesktop ? <AdminSidebar /> : null}
+        {isDesktop ? <DeveloperSidebar /> : null}
 
         {!isDesktop && drawerOpen ? (
           <>
@@ -38,13 +38,13 @@ export function AdminShell() {
               onPress={() => setDrawerOpen(false)}
             />
             <View style={styles.drawer}>
-              <AdminSidebar onNavigate={() => setDrawerOpen(false)} />
+              <DeveloperSidebar onNavigate={() => setDrawerOpen(false)} />
             </View>
           </>
         ) : null}
 
         <View style={styles.main}>
-          <AdminHeader
+          <DeveloperHeader
             onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
           />
           <ScrollView
@@ -56,7 +56,7 @@ export function AdminShell() {
             keyboardShouldPersistTaps="handled"
           >
             <Slot />
-            {error ? <Text style={adminStyles.error}>{error}</Text> : null}
+            {error ? <Text style={developerStyles.error}>{error}</Text> : null}
           </ScrollView>
         </View>
       </View>

@@ -18,11 +18,11 @@ import {
   type DaemonConnection,
   type DaemonEvent,
 } from '@/lib/instance-api'
-import { ALL_TARGET } from '@/lib/admin-navigation'
+import { ALL_TARGET } from '@/lib/developer-navigation'
 
 const POLL_MS = 2_000
 
-type AdminContextValue = {
+type DeveloperContextValue = {
   healthOk: boolean | null
   connections: DaemonConnection[]
   events: DaemonEvent[]
@@ -37,9 +37,9 @@ type AdminContextValue = {
   refresh: () => Promise<void>
 }
 
-const AdminContext = createContext<AdminContextValue | null>(null)
+const DeveloperContext = createContext<DeveloperContextValue | null>(null)
 
-export function AdminProvider({ children }: { children: ReactNode }) {
+export function DeveloperProvider({ children }: { children: ReactNode }) {
   const [healthOk, setHealthOk] = useState<boolean | null>(null)
   const [connections, setConnections] = useState<DaemonConnection[]>([])
   const [events, setEvents] = useState<DaemonEvent[]>([])
@@ -91,7 +91,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   const staleCount = connections.length - fleet.length
 
-  const value = useMemo<AdminContextValue>(
+  const value = useMemo<DeveloperContextValue>(
     () => ({
       healthOk,
       connections,
@@ -120,13 +120,13 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
+  return <DeveloperContext.Provider value={value}>{children}</DeveloperContext.Provider>
 }
 
-export function useAdmin() {
-  const context = useContext(AdminContext)
+export function useDeveloper() {
+  const context = useContext(DeveloperContext)
   if (!context) {
-    throw new Error('useAdmin must be used within AdminProvider')
+    throw new Error('useDeveloper must be used within DeveloperProvider')
   }
   return context
 }

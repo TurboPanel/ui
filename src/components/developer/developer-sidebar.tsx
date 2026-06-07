@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter } from 'expo-router'
-import { ADMIN_SECTIONS } from '@/lib/admin-navigation'
-import { colors, layout } from '@/lib/admin-theme'
+import { DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
+import { colors, layout } from '@/lib/theme'
 
-export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function DeveloperSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -11,11 +11,11 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
     <View style={styles.sidebar}>
       <View style={styles.brand}>
         <Text style={styles.brandTitle}>TurboPanel</Text>
-        <Text style={styles.brandHint}>Admin console · no auth</Text>
+        <Text style={styles.brandHint}>Developer console · dev only</Text>
       </View>
 
       <View style={styles.nav}>
-        {ADMIN_SECTIONS.map((section) => {
+        {DEVELOPER_SECTIONS.map((section) => {
           const active = pathname === section.path
           return (
             <Pressable

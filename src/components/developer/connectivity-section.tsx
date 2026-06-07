@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput } from 'react-native'
-import { SectionPanel } from '@/components/admin/section-panel'
-import { adminStyles } from '@/components/admin/admin-styles'
-import { useAdmin } from '@/lib/admin-context'
-import { ADMIN_SECTIONS } from '@/lib/admin-navigation'
+import { SectionPanel } from '@/components/developer/section-panel'
+import { developerStyles } from '@/components/developer/developer-styles'
+import { useDeveloper } from '@/lib/developer-context'
+import { DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
 import { broadcastToDaemon, formatEvent } from '@/lib/instance-api'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 
-const section = ADMIN_SECTIONS.find((s) => s.id === 'connectivity')!
+const section = DEVELOPER_SECTIONS.find((s) => s.id === 'connectivity')!
 
 export function ConnectivitySection() {
-  const { healthOk, connections, events, refresh, setError } = useAdmin()
+  const { healthOk, connections, events, refresh, setError } = useDeveloper()
   const [echo, setEcho] = useState('Hello from UI')
   const [sending, setSending] = useState(false)
 
@@ -29,33 +29,33 @@ export function ConnectivitySection() {
 
   return (
     <SectionPanel title={section.label} hint={section.hint}>
-      <Text style={adminStyles.inlineLabel}>Broadcast echo</Text>
+      <Text style={developerStyles.inlineLabel}>Broadcast echo</Text>
       <TextInput
         value={echo}
         onChangeText={setEcho}
-        style={adminStyles.input}
+        style={developerStyles.input}
         placeholderTextColor={colors.textDim}
         placeholder="Message to broadcast"
       />
       <Pressable
-        style={[adminStyles.buttonSecondary, sending && adminStyles.buttonDisabled]}
+        style={[developerStyles.buttonSecondary, sending && developerStyles.buttonDisabled]}
         onPress={() => void onBroadcast()}
         disabled={sending || !healthOk}
       >
         {sending ? (
           <ActivityIndicator color={colors.text} />
         ) : (
-          <Text style={adminStyles.buttonSecondaryText}>Broadcast to all daemons</Text>
+          <Text style={developerStyles.buttonSecondaryText}>Broadcast to all daemons</Text>
         )}
       </Pressable>
 
-      <Text style={adminStyles.inlineLabel}>Activity</Text>
-      <ScrollView style={adminStyles.scrollInset} nestedScrollEnabled>
+      <Text style={developerStyles.inlineLabel}>Activity</Text>
+      <ScrollView style={developerStyles.scrollInset} nestedScrollEnabled>
         {events.length === 0 ? (
-          <Text style={adminStyles.muted}>Waiting for websocket traffic…</Text>
+          <Text style={developerStyles.muted}>Waiting for websocket traffic…</Text>
         ) : (
           [...events].reverse().map((event, index) => (
-            <Text key={`${event.at}-${index}`} style={adminStyles.logLine}>
+            <Text key={`${event.at}-${index}`} style={developerStyles.logLine}>
               {formatEvent(event, connections)}
             </Text>
           ))

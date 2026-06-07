@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ALL_TARGET } from '@/lib/admin-navigation'
-import { useAdmin } from '@/lib/admin-context'
+import { ALL_TARGET } from '@/lib/developer-navigation'
+import { useDeveloper } from '@/lib/developer-context'
 import { daemonLabel } from '@/lib/instance-api'
-import { colors } from '@/lib/admin-theme'
-import { TargetChip } from '@/components/admin/target-chip'
-import { adminStyles } from '@/components/admin/admin-styles'
+import { colors } from '@/lib/theme'
+import { TargetChip } from '@/components/developer/target-chip'
+import { developerStyles } from '@/components/developer/developer-styles'
 
-export function AdminHeader({ onMenuPress }: { onMenuPress?: () => void }) {
+export function DeveloperHeader({ onMenuPress }: { onMenuPress?: () => void }) {
   const {
     healthOk,
     connections,
@@ -15,7 +15,7 @@ export function AdminHeader({ onMenuPress }: { onMenuPress?: () => void }) {
     setTarget,
     targetLabel,
     staleCount,
-  } = useAdmin()
+  } = useDeveloper()
 
   return (
     <View style={styles.header}>
@@ -25,20 +25,20 @@ export function AdminHeader({ onMenuPress }: { onMenuPress?: () => void }) {
             <Text style={styles.menuIcon}>☰</Text>
           </Pressable>
         ) : null}
-        <View style={adminStyles.row}>
-          <View style={[adminStyles.dot, healthOk ? adminStyles.dotOk : adminStyles.dotBad]} />
-          <Text style={adminStyles.rowText}>
+        <View style={developerStyles.row}>
+          <View style={[developerStyles.dot, healthOk ? developerStyles.dotOk : developerStyles.dotBad]} />
+          <Text style={developerStyles.rowText}>
             API {healthOk === null ? 'checking…' : healthOk ? 'healthy' : 'unreachable'}
           </Text>
-          <Text style={adminStyles.fleetCount}>
+          <Text style={developerStyles.fleetCount}>
             {fleet.length} server{fleet.length === 1 ? '' : 's'}
             {staleCount > 0 ? ` (${staleCount} stale)` : ''}
           </Text>
         </View>
       </View>
 
-      <Text style={adminStyles.inlineLabel}>Target</Text>
-      <View style={adminStyles.targets}>
+      <Text style={developerStyles.inlineLabel}>Target</Text>
+      <View style={developerStyles.targets}>
         <TargetChip
           label="All"
           active={target === ALL_TARGET}
@@ -54,9 +54,9 @@ export function AdminHeader({ onMenuPress }: { onMenuPress?: () => void }) {
         ))}
       </View>
       {fleet.length === 0 ? (
-        <Text style={adminStyles.muted}>No daemon connected yet</Text>
+        <Text style={developerStyles.muted}>No daemon connected yet</Text>
       ) : (
-        <Text style={adminStyles.muted}>Diagnostics run against: {targetLabel}</Text>
+        <Text style={developerStyles.muted}>Diagnostics run against: {targetLabel}</Text>
       )}
     </View>
   )

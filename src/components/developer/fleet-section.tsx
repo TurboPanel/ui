@@ -1,21 +1,21 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { SectionPanel } from '@/components/admin/section-panel'
-import { adminStyles } from '@/components/admin/admin-styles'
-import { useAdmin } from '@/lib/admin-context'
+import { SectionPanel } from '@/components/developer/section-panel'
+import { developerStyles } from '@/components/developer/developer-styles'
+import { useDeveloper } from '@/lib/developer-context'
 import {
   daemonLabel,
   setInstanceTunnelToken,
   syncDevToAllDaemons,
   upgradeSystem,
 } from '@/lib/instance-api'
-import { ADMIN_SECTIONS } from '@/lib/admin-navigation'
-import { colors } from '@/lib/admin-theme'
+import { DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
+import { colors } from '@/lib/theme'
 
-const section = ADMIN_SECTIONS.find((s) => s.id === 'fleet')!
+const section = DEVELOPER_SECTIONS.find((s) => s.id === 'fleet')!
 
 export function FleetSection() {
-  const { healthOk, connections, fleet, staleCount } = useAdmin()
+  const { healthOk, connections, fleet, staleCount } = useDeveloper()
   const [upgrading, setUpgrading] = useState(false)
   const [upgradeResult, setUpgradeResult] = useState<{
     ok: boolean
@@ -103,73 +103,73 @@ export function FleetSection() {
 
   return (
     <SectionPanel title={section.label} hint={section.hint}>
-      <View style={adminStyles.row}>
-        <View style={[adminStyles.dot, healthOk ? adminStyles.dotOk : adminStyles.dotBad]} />
-        <Text style={adminStyles.rowText}>
+      <View style={developerStyles.row}>
+        <View style={[developerStyles.dot, healthOk ? developerStyles.dotOk : developerStyles.dotBad]} />
+        <Text style={developerStyles.rowText}>
           API {healthOk === null ? 'checking…' : healthOk ? 'healthy' : 'unreachable'}
         </Text>
-        <Text style={adminStyles.fleetCount}>
+        <Text style={developerStyles.fleetCount}>
           {fleet.length} server{fleet.length === 1 ? '' : 's'}
           {staleCount > 0 ? ` (${staleCount} stale sockets clearing…)` : ''}
         </Text>
       </View>
 
-      <Text style={adminStyles.inlineLabel}>System upgrade</Text>
-      <Text style={adminStyles.muted}>
+      <Text style={developerStyles.inlineLabel}>System upgrade</Text>
+      <Text style={developerStyles.muted}>
         Fetch origin/trunk, notify connected agents to update, and restart this instance.
       </Text>
       <Pressable
-        style={[adminStyles.button, !canUpgrade && adminStyles.buttonDisabled]}
+        style={[developerStyles.button, !canUpgrade && developerStyles.buttonDisabled]}
         onPress={() => void onUpgrade()}
         disabled={!canUpgrade}
       >
         {upgrading ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <ActivityIndicator color={colors.buttonText} />
-            <Text style={adminStyles.buttonText}>Upgrading…</Text>
+            <Text style={developerStyles.buttonText}>Upgrading…</Text>
           </View>
         ) : (
-          <Text style={adminStyles.buttonText}>Upgrade System</Text>
+          <Text style={developerStyles.buttonText}>Upgrade System</Text>
         )}
       </Pressable>
       {upgradeResult ? (
-        <Text style={upgradeResult.ok ? adminStyles.muted : adminStyles.error}>
+        <Text style={upgradeResult.ok ? developerStyles.muted : developerStyles.error}>
           {upgradeResult.message}
         </Text>
       ) : null}
 
-      <Text style={adminStyles.inlineLabel}>Dev sync</Text>
-      <Text style={adminStyles.muted}>
+      <Text style={developerStyles.inlineLabel}>Dev sync</Text>
+      <Text style={developerStyles.muted}>
         Package this host's current daemon build and push it to all connected agents over the
         websocket (no git push/pull); each agent unpacks and restarts.
       </Text>
       <Pressable
-        style={[adminStyles.button, !canSync && adminStyles.buttonDisabled]}
+        style={[developerStyles.button, !canSync && developerStyles.buttonDisabled]}
         onPress={() => void onSyncDev()}
         disabled={!canSync}
       >
         {syncing ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <ActivityIndicator color={colors.buttonText} />
-            <Text style={adminStyles.buttonText}>Syncing…</Text>
+            <Text style={developerStyles.buttonText}>Syncing…</Text>
           </View>
         ) : (
-          <Text style={adminStyles.buttonText}>Sync Dev Build</Text>
+          <Text style={developerStyles.buttonText}>Sync Dev Build</Text>
         )}
       </Pressable>
       {syncResult ? (
-        <Text style={syncResult.ok ? adminStyles.muted : adminStyles.error}>
+        <Text style={syncResult.ok ? developerStyles.muted : developerStyles.error}>
           {syncResult.message}
         </Text>
       ) : null}
 
-      <Text style={adminStyles.inlineLabel}>Cloudflare tunnel</Text>
-      <Text style={adminStyles.muted}>
+      <Text style={developerStyles.inlineLabel}>Cloudflare tunnel</Text>
+      <Text style={developerStyles.muted}>
         Set the instance's Cloudflare tunnel token so the co-located daemon runs cloudflared and
         external agents can reach this instance. Leave empty and save to tear the tunnel down.
       </Text>
       <TextInput
-        style={adminStyles.input}
+        style={developerStyles.input}
         placeholder="Cloudflare tunnel token"
         placeholderTextColor={colors.textMuted}
         value={tunnelToken}
@@ -180,59 +180,59 @@ export function FleetSection() {
         editable={!savingToken}
       />
       <Pressable
-        style={[adminStyles.button, !canSaveToken && adminStyles.buttonDisabled]}
+        style={[developerStyles.button, !canSaveToken && developerStyles.buttonDisabled]}
         onPress={() => void onSaveTunnelToken()}
         disabled={!canSaveToken}
       >
         {savingToken ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <ActivityIndicator color={colors.buttonText} />
-            <Text style={adminStyles.buttonText}>Saving…</Text>
+            <Text style={developerStyles.buttonText}>Saving…</Text>
           </View>
         ) : (
-          <Text style={adminStyles.buttonText}>Save Tunnel Token</Text>
+          <Text style={developerStyles.buttonText}>Save Tunnel Token</Text>
         )}
       </Pressable>
       {tunnelResult ? (
-        <Text style={tunnelResult.ok ? adminStyles.muted : adminStyles.error}>
+        <Text style={tunnelResult.ok ? developerStyles.muted : developerStyles.error}>
           {tunnelResult.message}
         </Text>
       ) : null}
 
       {fleet.length === 0 ? (
-        <Text style={adminStyles.muted}>Waiting for daemon connections…</Text>
+        <Text style={developerStyles.muted}>Waiting for daemon connections…</Text>
       ) : (
         <View style={{ gap: 8 }}>
-          <Text style={adminStyles.inlineLabel}>Connected agents</Text>
+          <Text style={developerStyles.inlineLabel}>Connected agents</Text>
           {fleet.map((conn) => (
-            <View key={conn.id} style={adminStyles.detailCard}>
-              <Text style={adminStyles.detailTitle}>
+            <View key={conn.id} style={developerStyles.detailCard}>
+              <Text style={developerStyles.detailTitle}>
                 {daemonLabel(conn.id, connections)}
               </Text>
-              <Text style={adminStyles.detailLine}>
-                <Text style={adminStyles.detailLabel}>Connection: </Text>
+              <Text style={developerStyles.detailLine}>
+                <Text style={developerStyles.detailLabel}>Connection: </Text>
                 {conn.id}
               </Text>
               {conn.hostname ? (
-                <Text style={adminStyles.detailLine}>
-                  <Text style={adminStyles.detailLabel}>Hostname: </Text>
+                <Text style={developerStyles.detailLine}>
+                  <Text style={developerStyles.detailLabel}>Hostname: </Text>
                   {conn.hostname}
                 </Text>
               ) : null}
               {conn.nodeId ? (
-                <Text style={adminStyles.detailLine}>
-                  <Text style={adminStyles.detailLabel}>Node ID: </Text>
+                <Text style={developerStyles.detailLine}>
+                  <Text style={developerStyles.detailLabel}>Node ID: </Text>
                   {conn.nodeId}
                 </Text>
               ) : null}
               {conn.remoteAddress ? (
-                <Text style={adminStyles.detailLine}>
-                  <Text style={adminStyles.detailLabel}>Remote: </Text>
+                <Text style={developerStyles.detailLine}>
+                  <Text style={developerStyles.detailLabel}>Remote: </Text>
                   {conn.remoteAddress}
                 </Text>
               ) : null}
-              <Text style={adminStyles.detailLine}>
-                <Text style={adminStyles.detailLabel}>Connected: </Text>
+              <Text style={developerStyles.detailLine}>
+                <Text style={developerStyles.detailLabel}>Connected: </Text>
                 {new Date(conn.connectedAt).toLocaleString()}
               </Text>
             </View>

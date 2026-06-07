@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { AddressCard } from '@/components/admin/address-card'
-import { SectionPanel } from '@/components/admin/section-panel'
-import { adminStyles } from '@/components/admin/admin-styles'
-import { useAdmin } from '@/lib/admin-context'
-import { ALL_TARGET, ADMIN_SECTIONS } from '@/lib/admin-navigation'
+import { AddressCard } from '@/components/developer/address-card'
+import { SectionPanel } from '@/components/developer/section-panel'
+import { developerStyles } from '@/components/developer/developer-styles'
+import { useDeveloper } from '@/lib/developer-context'
+import { ALL_TARGET, DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
 import {
   daemonLabel,
   fetchAllDaemonAddresses,
@@ -12,12 +12,12 @@ import {
   fetchInstanceAddresses,
   type ServerAddressEntry,
 } from '@/lib/instance-api'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 
-const section = ADMIN_SECTIONS.find((s) => s.id === 'network')!
+const section = DEVELOPER_SECTIONS.find((s) => s.id === 'network')!
 
 export function NetworkSection() {
-  const { healthOk, connections, fleet, target, setError } = useAdmin()
+  const { healthOk, connections, fleet, target, setError } = useDeveloper()
   const [fetchingAddresses, setFetchingAddresses] = useState(false)
   const [addressResults, setAddressResults] = useState<ServerAddressEntry[] | null>(null)
 
@@ -67,24 +67,24 @@ export function NetworkSection() {
   return (
     <SectionPanel title={section.label} hint={section.hint}>
       <Pressable
-        style={[adminStyles.buttonSecondary, !canFetchAddresses && adminStyles.buttonDisabled]}
+        style={[developerStyles.buttonSecondary, !canFetchAddresses && developerStyles.buttonDisabled]}
         onPress={() => void onFetchAddresses()}
         disabled={!canFetchAddresses}
       >
         {fetchingAddresses ? (
           <ActivityIndicator color={colors.text} />
         ) : (
-          <Text style={adminStyles.buttonSecondaryText}>Get IP addresses</Text>
+          <Text style={developerStyles.buttonSecondaryText}>Get IP addresses</Text>
         )}
       </Pressable>
       {addressResults ? (
-        <View style={adminStyles.addressResults}>
+        <View style={developerStyles.addressResults}>
           {addressResults.map((entry) => (
             <AddressCard key={entry.source} entry={entry} />
           ))}
         </View>
       ) : (
-        <Text style={adminStyles.muted}>Reads IPs assigned to physical interfaces only</Text>
+        <Text style={developerStyles.muted}>Reads IPs assigned to physical interfaces only</Text>
       )}
     </SectionPanel>
   )

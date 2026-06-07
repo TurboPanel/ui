@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 import type { ServerAddressEntry } from '@/lib/instance-api'
 
 export function AddressCard({ entry }: { entry: ServerAddressEntry }) {

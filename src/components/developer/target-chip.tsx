@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text } from 'react-native'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 
 export function TargetChip({
   label,

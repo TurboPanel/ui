@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native'
-import { colors } from '@/lib/admin-theme'
+import { colors } from '@/lib/theme'
 
-export const adminStyles = StyleSheet.create({
+export const developerStyles = StyleSheet.create({
   inlineLabel: {
     color: colors.textLabel,
     fontSize: 11,
