@@ -79,6 +79,14 @@ export type ServerAddressEntry = {
   error?: string
 }
 
+/**
+ * Versioned API surface for the admin UI. The instance also exposes
+ * `/api/client/v1` (end-user UI) and `/api/daemon/v1` (agents); everything the
+ * admin console calls lives under `/api/admin/v1`. `/api/health` is the single
+ * unversioned probe.
+ */
+const ADMIN_API = '/api/admin/v1'
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -100,29 +108,29 @@ export async function fetchHealth(): Promise<{ ok: boolean }> {
 }
 
 export async function fetchDaemonConnections(): Promise<{ connections: DaemonConnection[] }> {
-  return await apiFetch('/api/daemon/connections')
+  return await apiFetch(`${ADMIN_API}/daemon/connections`)
 }
 
 export async function fetchDaemonEvents(limit = 40): Promise<{ events: DaemonEvent[] }> {
-  return await apiFetch(`/api/daemon/events?limit=${limit}`)
+  return await apiFetch(`${ADMIN_API}/daemon/events?limit=${limit}`)
 }
 
 export async function broadcastToDaemon(payload: unknown): Promise<{ ok: boolean; sent: number }> {
-  return await apiFetch('/api/daemon/broadcast', {
+  return await apiFetch(`${ADMIN_API}/daemon/broadcast`, {
     method: 'POST',
     body: JSON.stringify({ payload }),
   })
 }
 
 export async function fetchCommandResults(limit = 25): Promise<{ commands: CommandResult[] }> {
-  return await apiFetch(`/api/daemon/commands?limit=${limit}`)
+  return await apiFetch(`${ADMIN_API}/daemon/commands?limit=${limit}`)
 }
 
 export async function runCommand(
   daemonId: string,
   command: string,
 ): Promise<{ ok: boolean; commandId: string }> {
-  return await apiFetch(`/api/daemon/${encodeURIComponent(daemonId)}/command`, {
+  return await apiFetch(`${ADMIN_API}/daemon/${encodeURIComponent(daemonId)}/command`, {
     method: 'POST',
     body: JSON.stringify({ command }),
   })
@@ -131,7 +139,7 @@ export async function runCommand(
 export async function runCommandOnAll(
   command: string,
 ): Promise<{ ok: boolean; sent: number; commandIds: string[] }> {
-  return await apiFetch('/api/daemon/command', {
+  return await apiFetch(`${ADMIN_API}/daemon/command`, {
     method: 'POST',
     body: JSON.stringify({ command }),
   })
@@ -142,7 +150,7 @@ export async function fetchInstanceAddresses(): Promise<{
   source: string
   addresses: ServerAddresses
 }> {
-  return await apiFetch('/api/instance/addresses')
+  return await apiFetch(`${ADMIN_API}/instance/addresses`)
 }
 
 export async function fetchDaemonAddresses(
@@ -153,7 +161,7 @@ export async function fetchDaemonAddresses(
   hostname: string | null
   addresses: ServerAddresses
 }> {
-  return await apiFetch(`/api/daemon/${encodeURIComponent(daemonId)}/addresses`)
+  return await apiFetch(`${ADMIN_API}/daemon/${encodeURIComponent(daemonId)}/addresses`)
 }
 
 export async function fetchAllDaemonAddresses(): Promise<{
@@ -164,12 +172,41 @@ export async function fetchAllDaemonAddresses(): Promise<{
     error?: string
   }>
 }> {
-  return await apiFetch('/api/daemon/addresses')
+  return await apiFetch(`${ADMIN_API}/daemon/addresses`)
 }
 
 export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> {
-  return await apiFetch('/api/system/upgrade', {
+  return await apiFetch(`${ADMIN_API}/system/upgrade`, {
     method: 'POST',
+  })
+}
+
+/** Push the instance host's current daemon build to one agent (dev only). */
+export async function syncDevToDaemon(
+  daemonId: string,
+): Promise<{ ok: boolean; daemonId: string; error?: string }> {
+  return await apiFetch(`${ADMIN_API}/daemon/${encodeURIComponent(daemonId)}/sync-dev`, {
+    method: 'POST',
+  })
+}
+
+/** Push the current daemon build to every connected agent (dev only). */
+export async function syncDevToAllDaemons(): Promise<{
+  ok: boolean
+  results: Array<{ daemonId: string; ok: boolean; error?: string }>
+}> {
+  return await apiFetch(`${ADMIN_API}/daemon/sync-dev`, {
+    method: 'POST',
+  })
+}
+
+/** Set (or clear, with an empty token) the instance's Cloudflare tunnel token. */
+export async function setInstanceTunnelToken(
+  token: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return await apiFetch(`${ADMIN_API}/instance/tunnel-token`, {
+    method: 'POST',
+    body: JSON.stringify({ token }),
   })
 }
 

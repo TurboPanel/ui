@@ -34,7 +34,13 @@ Dev-only admin shell at `/admin/*` (landing at `/` links to `/admin/fleet`). No 
 | `/admin/shell` | `shell-section.tsx` | Remote commands |
 | `/admin/connectivity` | `connectivity-section.tsx` | Echo broadcast + websocket log |
 
-`AdminProvider` polls every 2s: `/api/health`, `/api/daemon/connections`, `/api/daemon/events`, `/api/daemon/commands`. Target selection (`__all__` or per-daemon id) lives in the header and is shared across Network and Shell.
+`AdminProvider` polls every 2s: `/api/health`, `/api/admin/v1/daemon/connections`, `/api/admin/v1/daemon/events`, `/api/admin/v1/daemon/commands`. Target selection (`__all__` or per-daemon id) lives in the header and is shared across Network and Shell.
+
+The fleet section also exposes operator actions (no auto-update — everything is operator-driven):
+
+- **Upgrade System** — `POST /api/admin/v1/system/upgrade`
+- **Sync Dev Build** — `POST /api/admin/v1/daemon/sync-dev`; the instance tars its local daemon checkout and pushes it to all agents over the websocket (no git push/pull), which restart.
+- **Save Tunnel Token** — `POST /api/admin/v1/instance/tunnel-token`; sets/clears the instance's Cloudflare tunnel token so the co-located daemon runs cloudflared.
 
 ### Adding a new admin section
 
@@ -45,3 +51,5 @@ Dev-only admin shell at `/admin/*` (landing at `/` links to `/admin/fleet`). No 
 ### Instance API
 
 Types and helpers: `src/lib/instance-api.ts` (`daemonLabel`, `formatEvent`, `uniqueFleetConnections`, …). Update when instance endpoints change.
+
+**Versioned surfaces.** The instance exposes `/api/client/v1` (this end-user UI, greenfield), `/api/admin/v1` (admin console), and `/api/daemon/v1` (agents); `/api/health` is the single unversioned probe. All admin calls go through the `ADMIN_API = '/api/admin/v1'` constant in `instance-api.ts` (single choke point) — prefix new admin endpoints there, never hard-code paths in components. WS surfaces `/ws/{client,admin}/v1` exist as stubs for future live streaming (the UI polls today).
