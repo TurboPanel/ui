@@ -14,9 +14,9 @@ import { colors } from '@/lib/theme'
 
 const section = DEVELOPER_SECTIONS.find((s) => s.id === 'database')!
 
-function openStudioPath(publicPath: string) {
+function openStudioUrl(url: string) {
   if (typeof window !== 'undefined') {
-    window.open(publicPath, '_blank', 'noopener,noreferrer')
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 }
 
@@ -87,8 +87,12 @@ export function DatabaseSection() {
     try {
       const result = await startDrizzleStudio()
       setStudioRunning(true)
-      openStudioPath(result.publicPath)
-      setMessage({ ok: true, text: 'Drizzle Studio opened in a new tab.' })
+      openStudioUrl(result.browserUrl)
+      setMessage({
+        ok: true,
+        text:
+          'Drizzle Studio opened at local.drizzle.studio. If it cannot connect, allow local network access in your browser or SSH-tunnel port 4983 from this host.',
+      })
     } catch (err) {
       setMessage({
         ok: false,
@@ -154,9 +158,9 @@ export function DatabaseSection() {
 
       <Text style={developerStyles.inlineLabel}>Drizzle Studio</Text>
       <Text style={developerStyles.muted}>
-        Browse schema and data read-only in the browser (dev only). Does not run migrations or push
-        schema changes.
-        {studioRunning ? ' Studio is running.' : ''}
+        Opens local.drizzle.studio against this host's studio server (port 4983). Read-only browse —
+        no migrations or schema push. When developing remotely, tunnel port 4983 over SSH first.
+        {studioRunning ? ' Studio server is running.' : ''}
       </Text>
       <Pressable
         style={[developerStyles.button, !canOpenStudio && developerStyles.buttonDisabled]}

@@ -217,7 +217,7 @@ export async function fetchDatabaseStatus(): Promise<DatabaseStatus> {
 
 export type DrizzleStudioStatus = {
   running: boolean
-  publicPath: string
+  browserUrl: string
   port: number
 }
 
@@ -225,7 +225,7 @@ export async function fetchDrizzleStudioStatus(): Promise<DrizzleStudioStatus> {
   return await apiFetch(`${DEVELOPER_API}/database/studio`)
 }
 
-export async function startDrizzleStudio(): Promise<{ ok: boolean; publicPath: string }> {
+export async function startDrizzleStudio(): Promise<{ ok: boolean; browserUrl: string }> {
   return await apiFetch(`${DEVELOPER_API}/database/studio`, { method: 'POST' })
 }
 
