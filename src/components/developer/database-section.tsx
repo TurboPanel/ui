@@ -206,8 +206,8 @@ export function DatabaseSection() {
       </Text>
       {usesLanProxy ? (
         <Text style={developerStyles.muted}>
-          2. Caddy proxies the API on port {DRIZZLE_STUDIO_PROXY_PORT} at this host ({browserHostname}
-          ) — no Cursor port forwarding needed.
+          2. Caddy proxies the API over HTTPS on port {DRIZZLE_STUDIO_PROXY_PORT} ({browserHostname}
+          ). Trust the platform CA (same cert as :8443) if Studio cannot connect.
         </Text>
       ) : (
         <>

@@ -5,7 +5,7 @@ export const DEVELOPER_SECTIONS = [
     id: 'fleet',
     label: 'Fleet',
     path: '/developer/fleet',
-    hint: 'Instance health and connected agents',
+    hint: 'Instance health and connected server nodes',
   },
   {
     id: 'network',

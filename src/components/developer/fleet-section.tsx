@@ -110,7 +110,7 @@ export function FleetSection() {
       const result = await upgradeSystem()
       setUpgradeResult({
         ok: true,
-        message: `Upgrade started at commit ${result.commit}. This instance will restart shortly and connected agents will update.`,
+        message: `Upgrade started at commit ${result.commit}. This instance will restart shortly and connected server nodes will update.`,
       })
     } catch (err) {
       setUpgradeResult({
@@ -137,7 +137,7 @@ export function FleetSection() {
 
       <Text style={developerStyles.inlineLabel}>System upgrade</Text>
       <Text style={developerStyles.muted}>
-        Fetch origin/trunk, notify connected agents to update, and restart this instance.
+        Fetch origin/trunk, notify connected server nodes to update, and restart this instance.
         Requires a clean working tree in the instance, daemon, and UI checkouts.
       </Text>
       {dirtyRepos.length > 0 ? (
@@ -169,7 +169,7 @@ export function FleetSection() {
 
       <Text style={developerStyles.inlineLabel}>Dev sync</Text>
       <Text style={developerStyles.muted}>
-        Package this host's current daemon build and push it to all connected agents over the
+        Package this host's current daemon build and push it to all connected server nodes over the
         websocket (no git push/pull); each agent unpacks and restarts.
       </Text>
       <Pressable
@@ -232,7 +232,7 @@ export function FleetSection() {
         <Text style={developerStyles.muted}>Waiting for daemon connections…</Text>
       ) : (
         <View style={{ gap: 8 }}>
-          <Text style={developerStyles.inlineLabel}>Connected agents</Text>
+          <Text style={developerStyles.inlineLabel}>Server nodes</Text>
           {fleet.map((conn) => (
             <View key={conn.id} style={developerStyles.detailCard}>
               <Text style={developerStyles.detailTitle}>
@@ -248,10 +248,10 @@ export function FleetSection() {
                   {conn.hostname}
                 </Text>
               ) : null}
-              {conn.nodeId ? (
+              {conn.serverId ? (
                 <Text style={developerStyles.detailLine}>
-                  <Text style={developerStyles.detailLabel}>Node ID: </Text>
-                  {conn.nodeId}
+                  <Text style={developerStyles.detailLabel}>Server ID: </Text>
+                  {conn.serverId}
                 </Text>
               ) : null}
               {conn.remoteAddress ? (

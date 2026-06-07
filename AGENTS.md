@@ -29,7 +29,7 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 | Route | Component | Purpose |
 |-------|-----------|---------|
-| `/developer/fleet` | `fleet-section.tsx` | Health, connected agents detail |
+| `/developer/fleet` | `fleet-section.tsx` | Health, connected server nodes detail |
 | `/developer/network` | `network-section.tsx` | Interface IP addresses |
 | `/developer/shell` | `shell-section.tsx` | Remote commands |
 | `/developer/connectivity` | `connectivity-section.tsx` | Echo broadcast + websocket log |

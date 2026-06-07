@@ -2,14 +2,14 @@ export type DaemonConnection = {
   id: string
   connectedAt: string
   hostname: string | null
-  nodeId: string | null
+  serverId: string | null
   remoteAddress: string | null
 }
 
 function fleetKey(conn: DaemonConnection): string {
   const address = conn.remoteAddress?.trim()
-  return conn.hostname?.trim() ||
-    conn.nodeId?.trim() ||
+  return conn.serverId?.trim() ||
+    conn.hostname?.trim() ||
     (address && address !== '__direct__' ? address : '') ||
     conn.id
 }
