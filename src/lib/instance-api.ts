@@ -89,6 +89,56 @@ export type ServerAddressEntry = {
  * production build (see the instance `src/dev-mode.ts`).
  */
 const DEVELOPER_API = '/api/developer/v1'
+const CLIENT_API = '/api/client/v1'
+
+export type SessionInfo = {
+  userId: string
+  username: string
+}
+
+export async function fetchSession(): Promise<SessionInfo | null> {
+  const response = await fetch(`${CLIENT_API}/auth/session`, {
+    headers: { 'content-type': 'application/json' },
+  })
+
+  if (response.status === 401) {
+    return null
+  }
+
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`
+    try {
+      const body = await response.json() as { error?: string }
+      if (body.error) detail = body.error
+    } catch {
+      // Non-JSON error body — keep the status-only message.
+    }
+    throw new Error(`${CLIENT_API}/auth/session failed: ${detail}`)
+  }
+
+  const body = await response.json() as {
+    ok: true
+    userId: string
+    username: string
+  }
+  return { userId: body.userId, username: body.username }
+}
+
+export async function signIn(
+  username: string,
+  password: string,
+): Promise<{ ok: true; username: string }> {
+  return await apiFetch(`${CLIENT_API}/auth/sign-in`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export async function signOut(): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/sign-out`, {
+    method: 'POST',
+  })
+}
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -307,6 +357,16 @@ export async function setInstanceTunnelToken(
     method: 'POST',
     body: JSON.stringify({ token }),
   })
+}
+
+export const EXPO_PTY_WS_PATH = '/ws/developer/v1/expo-pty'
+
+export async function fetchExpoStatus(): Promise<{ running: boolean }> {
+  return await apiFetch(`${DEVELOPER_API}/expo/status`)
+}
+
+export async function restartExpoService(): Promise<{ ok: boolean; error?: string }> {
+  return await apiFetch(`${DEVELOPER_API}/expo/restart`, { method: 'POST' })
 }
 
 export function formatEvent(

@@ -99,10 +99,6 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     zIndex: 11,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    boxShadow: '2px 0 8px rgba(0, 0, 0, 0.4)',
   },
 })

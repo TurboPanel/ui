@@ -31,6 +31,12 @@ export const DEVELOPER_SECTIONS = [
     path: '/developer/database',
     hint: 'Postgres connection test and Drizzle Studio',
   },
+  {
+    id: 'expo',
+    label: 'Expo',
+    path: '/developer/expo',
+    hint: 'Expo dev server terminal — stream output and send keypresses',
+  },
 ] as const
 
 export type DeveloperSectionId = (typeof DEVELOPER_SECTIONS)[number]['id']

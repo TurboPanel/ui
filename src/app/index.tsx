@@ -1,22 +1,23 @@
-import { Link } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Redirect } from 'expo-router'
+import { StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useAuth } from '@/lib/auth-context'
 import { colors } from '@/lib/theme'
 
 export default function LandingPage() {
+  const { session } = useAuth()
+
+  if (__DEV__) {
+    return <Redirect href="/developer/fleet" />
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <Text style={styles.title}>TurboPanel</Text>
-        <Text style={styles.subtitle}>Coming Soon</Text>
-        {/* The developer console is a dev-only surface. */}
-        {__DEV__ ? (
-          <Link href="/developer/fleet" asChild>
-            <Pressable style={styles.button}>
-              <Text style={styles.buttonText}>Open developer console</Text>
-            </Pressable>
-          </Link>
-        ) : null}
+        <Text style={styles.subtitle}>
+          You are signed in{session?.username ? ` as ${session.username}` : ''}
+        </Text>
       </View>
     </SafeAreaView>
   )
@@ -42,17 +43,5 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 18,
     color: colors.textMuted,
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: colors.text,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  buttonText: {
-    color: colors.buttonText,
-    fontSize: 14,
-    fontWeight: '600',
   },
 })
