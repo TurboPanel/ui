@@ -14,11 +14,36 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 ## End-user auth & first-run install (self-hosted)
 
-- **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/overview`.
+- **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers/overview`.
 - **Sign-in** — `/sign-in` after install; superadmin email + password only (host accounts cannot sign in).
-- **Dashboard** — `/<organizationId>/overview` once install completes (`session.organizationId`).
+- **Dashboard** — `/<organizationId>/servers/overview` once install completes (`session.organizationId`). Legacy `/<organizationId>/overview` redirects there.
 - **Developer console** — in `__DEV__`, authenticated shell pages show a **Developer console** nav link to `/developer/fleet` (superadmin session required by `developer/_layout.tsx`).
 - Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
+
+## Organization console (`/<organizationId>/*`)
+
+Main product shell for signed-in users. Web uses a left sidebar with area tabs and per-area sub-menus; native will likely move the top-level areas to bottom tabs later.
+
+### Layout
+
+- `src/app/[orgId]/_layout.tsx` — auth guard + `OrgShell`
+- `src/components/org/org-shell.tsx` — responsive shell (sidebar on web, drawer on narrow viewports)
+- `src/components/org/org-sidebar.tsx` — area nav + sub-routes for the active area
+- `src/components/org/org-header.tsx` — page title, user label, sign out, dev console link
+- `src/lib/org-navigation.ts` — area registry (`ORG_AREAS`); add entries + routes together
+
+### Areas (routes)
+
+| Route | Component | Purpose |
+|-------|-----------|---------|
+| `/<orgId>/servers/overview` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
+| `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
+
+### Adding a new organization area
+
+1. Add the area (and sub-routes) to `ORG_AREAS` in `src/lib/org-navigation.ts`
+2. Create `src/app/[orgId]/<area>/<subroute>.tsx` route wrappers
+3. Create section components under `src/components/org/`
 
 ## Developer console (`/developer/*`)
 
@@ -28,7 +53,8 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 - `src/components/developer/developer-shell.tsx` — full-viewport shell: sidebar + header + content slot
 - `src/components/developer/developer-sidebar.tsx` — section nav from `DEVELOPER_SECTIONS`
-- `src/components/developer/developer-header.tsx` — persistent API health + fleet target chips
+- `src/components/developer/developer-header.tsx` — persistent API health + fleet target chips; **Organization console** exits to `dashboardHref`
+- `src/components/developer/developer-sidebar.tsx` — same exit link at the top of the nav
 - `src/lib/developer-context.tsx` — `DeveloperProvider` / `useDeveloper()` for shared polling and fleet state
 - `src/lib/developer-navigation.ts` — section registry (add nav entry + route + section component)
 - `src/lib/theme.ts` — shared colors and layout tokens (used by the developer console and the landing page)

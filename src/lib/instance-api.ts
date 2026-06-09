@@ -173,6 +173,20 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
   return await apiFetch(`${CLIENT_API}/install/status`)
 }
 
+export type OrgServerRecord = {
+  id: string
+  displayName: string | null
+  organizationId: string | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  connected: boolean
+  hostname: string | null
+}
+
+export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/servers`)
+}
+
 export async function completeInstall(body: {
   hostUsername: string
   hostPassword: string

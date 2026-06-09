@@ -66,7 +66,7 @@ export default function InstallScreen() {
 
       await refreshInstallStatus()
       await refreshSession()
-      router.replace(`/${result.organizationId}/overview` as Href)
+      router.replace(`/${result.organizationId}/servers/overview` as Href)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
     } finally {

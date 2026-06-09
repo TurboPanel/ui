@@ -1,4 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useRouter, type Href } from 'expo-router'
+import { dashboardHref, useAuth } from '@/lib/auth-context'
 import { ALL_TARGET } from '@/lib/developer-navigation'
 import { useDeveloper } from '@/lib/developer-context'
 import { daemonLabel } from '@/lib/instance-api'
@@ -7,6 +9,9 @@ import { TargetChip } from '@/components/developer/target-chip'
 import { developerStyles } from '@/components/developer/developer-styles'
 
 export function DeveloperHeader({ onMenuPress }: { onMenuPress?: () => void }) {
+  const router = useRouter()
+  const { session, needsInstall } = useAuth()
+  const exitHref = dashboardHref(session, needsInstall)
   const {
     healthOk,
     connections,
@@ -35,6 +40,12 @@ export function DeveloperHeader({ onMenuPress }: { onMenuPress?: () => void }) {
             {staleCount > 0 ? ` (${staleCount} stale)` : ''}
           </Text>
         </View>
+        <Pressable
+          style={styles.exitButton}
+          onPress={() => router.push(exitHref as Href)}
+        >
+          <Text style={styles.exitLabel}>Organization console</Text>
+        </Pressable>
       </View>
 
       <Text style={developerStyles.inlineLabel}>Target</Text>
@@ -75,6 +86,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flexWrap: 'wrap',
+  },
+  exitButton: {
+    marginLeft: 'auto',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgInput,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  exitLabel: {
+    color: colors.textChip,
+    fontSize: 13,
+    fontWeight: '600',
   },
   menuButton: {
     width: 36,

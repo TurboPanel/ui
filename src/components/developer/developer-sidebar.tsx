@@ -1,11 +1,14 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { usePathname, useRouter } from 'expo-router'
+import { usePathname, useRouter, type Href } from 'expo-router'
+import { dashboardHref, useAuth } from '@/lib/auth-context'
 import { DEVELOPER_SECTIONS } from '@/lib/developer-navigation'
 import { colors, layout } from '@/lib/theme'
 
 export function DeveloperSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { session, needsInstall } = useAuth()
+  const exitHref = dashboardHref(session, needsInstall)
 
   return (
     <View style={styles.sidebar}>
@@ -13,6 +16,16 @@ export function DeveloperSidebar({ onNavigate }: { onNavigate?: () => void }) {
         <Text style={styles.brandTitle}>TurboPanel</Text>
         <Text style={styles.brandHint}>Developer console · dev only</Text>
       </View>
+
+      <Pressable
+        style={styles.exitButton}
+        onPress={() => {
+          router.push(exitHref as Href)
+          onNavigate?.()
+        }}
+      >
+        <Text style={styles.exitLabel}>← Organization console</Text>
+      </Pressable>
 
       <View style={styles.nav}>
         {DEVELOPER_SECTIONS.map((section) => {
@@ -60,6 +73,20 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 11,
     marginTop: 4,
+  },
+  exitButton: {
+    marginHorizontal: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgInput,
+  },
+  exitLabel: {
+    color: colors.textChip,
+    fontSize: 13,
+    fontWeight: '600',
   },
   nav: {
     gap: 4,
