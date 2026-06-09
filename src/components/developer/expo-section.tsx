@@ -102,7 +102,7 @@ export function ExpoSection() {
             return
           }
         } catch {
-          // not JSON — ignore legacy raw frames
+          // ignore malformed frames
         }
       }
 

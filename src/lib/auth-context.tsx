@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  fetchInstallStatus,
   fetchSession,
   signIn as signInApi,
   signOut as signOutApi,
@@ -16,23 +17,41 @@ import {
 
 type AuthContextValue = {
   session: SessionInfo | null
+  needsInstall: boolean
   isLoading: boolean
   bootstrapError: string | null
-  signIn: (username: string, password: string) => Promise<void>
+  signIn: (username: string, password: string) => Promise<SessionInfo>
   signOut: () => Promise<void>
+  clearSession: () => void
+  refreshSession: () => Promise<SessionInfo | null>
+  refreshInstallStatus: () => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionInfo | null>(null)
+  const [needsInstall, setNeedsInstall] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
 
+  const refreshInstallStatus = useCallback(async () => {
+    const status = await fetchInstallStatus()
+    setNeedsInstall(status.needsInstall)
+    return status.needsInstall
+  }, [])
+
+  const refreshSession = useCallback(async () => {
+    const data = await fetchSession()
+    setSession(data)
+    return data
+  }, [])
+
   useEffect(() => {
-    void fetchSession()
-      .then((data) => {
-        setSession(data)
+    void Promise.all([fetchInstallStatus(), fetchSession()])
+      .then(([installStatus, sessionData]) => {
+        setNeedsInstall(installStatus.needsInstall)
+        setSession(sessionData)
         setBootstrapError(null)
       })
       .catch((err: unknown) => {
@@ -47,14 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (username: string, password: string) => {
-    await signInApi(username, password)
-    const loaded = await fetchSession()
-    if (loaded === null) {
-      setSession(null)
-      throw new Error('Sign in succeeded but session could not be loaded')
-    }
+    const loaded = await signInApi(username, password)
     setSession(loaded)
+    setNeedsInstall(loaded.needsInstall)
     setBootstrapError(null)
+    return loaded
   }, [])
 
   const signOut = useCallback(async () => {
@@ -62,15 +78,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null)
   }, [])
 
+  const clearSession = useCallback(() => {
+    setSession(null)
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
+      needsInstall,
       isLoading,
       bootstrapError,
       signIn,
       signOut,
+      clearSession,
+      refreshSession,
+      refreshInstallStatus,
     }),
-    [session, isLoading, bootstrapError, signIn, signOut],
+    [
+      session,
+      needsInstall,
+      isLoading,
+      bootstrapError,
+      signIn,
+      signOut,
+      clearSession,
+      refreshSession,
+      refreshInstallStatus,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -82,4 +116,26 @@ export function useAuth() {
     throw new Error('useAuth must be used within AuthProvider')
   }
   return context
+}
+
+export function isSuperadminSession(session: SessionInfo | null): boolean {
+  return session !== null &&
+    (session.role === 'superadmin' || session.role === 'superuser')
+}
+
+export function hasUserSession(session: SessionInfo | null): boolean {
+  return session !== null
+}
+
+export function dashboardHref(
+  session: SessionInfo | null,
+  needsInstall: boolean,
+): '/install' | '/sign-in' | `/${string}/overview` | '/' {
+  if (needsInstall) {
+    return '/install'
+  }
+  if (session?.organizationId) {
+    return `/${session.organizationId}/overview`
+  }
+  return '/sign-in'
 }

@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { router } from 'expo-router'
 import {
   fetchCommandResults,
   fetchDaemonConnections,
@@ -21,6 +22,15 @@ import {
 import { ALL_TARGET } from '@/lib/developer-navigation'
 
 const POLL_MS = 2_000
+
+function isUnauthorizedError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes('Unauthorized') || message.includes('401')
+}
+
+function redirectToRecovery(reason: 'unauthorized' | 'restart') {
+  router.replace(`/recovering?reason=${reason}`)
+}
 
 type DeveloperContextValue = {
   healthOk: boolean | null
@@ -61,6 +71,10 @@ export function DeveloperProvider({ children }: { children: ReactNode }) {
       setCommands(cmd.commands)
       setError(null)
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        redirectToRecovery('unauthorized')
+        return
+      }
       setHealthOk(false)
       setError(err instanceof Error ? err.message : 'Failed to reach instance')
     }

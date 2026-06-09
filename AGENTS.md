@@ -12,9 +12,17 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - Do not record secrets or environment-specific URLs as if they were universal.
 - Remove or correct notes that prove wrong.
 
+## End-user auth & first-run install (self-hosted)
+
+- **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/overview`.
+- **Sign-in** — `/sign-in` after install; superadmin email + password only (host accounts cannot sign in).
+- **Dashboard** — `/<organizationId>/overview` once install completes (`session.organizationId`).
+- **Developer console** — in `__DEV__`, authenticated shell pages show a **Developer console** nav link to `/developer/fleet` (superadmin session required by `developer/_layout.tsx`).
+- Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
+
 ## Developer console (`/developer/*`)
 
-**Dev-only** developer shell at `/developer/*` (landing at `/` links to `/developer/fleet` only when `__DEV__`). No auth. This is the console a developer uses to babysit a development instance and its development nodes; it must never ship in a production build. `src/app/developer/_layout.tsx` redirects to `/` when `!__DEV__`, and the instance only serves `/api/developer/*` in dev mode (see the instance `src/dev-mode.ts`). `admin` is intentionally reserved for a future *instance admin* surface — do not reuse it here.
+**Dev-only** developer shell at `/developer/*`. No auth on the developer API surface itself, but the layout requires a **superadmin** session (`role === 'superadmin'`). It must never ship in a production build.
 
 ### Layout
 
@@ -45,7 +53,7 @@ The fleet section also exposes operator actions (no auto-update — everything i
 - **Sync Dev Build** — `POST /api/developer/v1/daemon/sync-dev`; the instance tars its local daemon checkout and pushes it to all agents over the websocket (no git push/pull), which restart.
 - **Save Tunnel Token** — `POST /api/developer/v1/instance/tunnel-token`; sets/clears the instance's Cloudflare tunnel token so the co-located daemon runs cloudflared.
 
-The database section exposes **Reset Dev Instance** — `POST /api/developer/v1/system/reset-dev` (drops public schema, repushes `schema.ts`, reprovisions root org, restarts instance).
+The database section exposes **Reset Dev Instance** — `POST /api/developer/v1/system/reset-dev` (drops public schema, repushes `schema.ts`, restarts instance). On success the UI navigates to `/recovering?reason=reset`, polls public health/install endpoints only, then redirects to `/install` or `/sign-in`.
 
 ### Adding a new developer section
 

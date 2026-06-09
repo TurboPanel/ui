@@ -12,15 +12,21 @@ import { colors, spacing } from '@/lib/theme'
 
 export default function SignInScreen() {
   const { signIn } = useAuth()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSignIn() {
+    if (!username.trim() || !password) {
+      setError('Enter your email and password')
+      return
+    }
+
     setError(null)
     setIsSubmitting(true)
     try {
-      await signIn('root', password)
+      await signIn(username.trim(), password)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed')
     } finally {
@@ -32,14 +38,18 @@ export default function SignInScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <Text style={styles.title}>TurboPanel</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
+        <Text style={styles.subtitle}>Sign in to your account</Text>
         <View style={styles.fields}>
           <TextInput
             style={styles.input}
-            value="root"
-            editable={false}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Email"
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="email-address"
+            editable={!isSubmitting}
           />
           <TextInput
             style={styles.input}
@@ -51,6 +61,7 @@ export default function SignInScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isSubmitting}
+            onSubmitEditing={() => void handleSignIn()}
           />
         </View>
         <Pressable
@@ -88,6 +99,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 18,
     color: colors.textMuted,
+    textAlign: 'center',
   },
   fields: {
     width: '100%',

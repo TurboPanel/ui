@@ -1,7 +1,7 @@
 import { Redirect } from 'expo-router'
 import { View } from 'react-native'
 import { DeveloperShell } from '@/components/developer/developer-shell'
-import { useAuth } from '@/lib/auth-context'
+import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { DeveloperProvider } from '@/lib/developer-context'
 import { colors } from '@/lib/theme'
 
@@ -20,7 +20,7 @@ export default function DeveloperLayout() {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />
   }
 
-  if (!session || session.username !== 'root') {
+  if (!isSuperadminSession(session)) {
     return <Redirect href="/" />
   }
 

@@ -22,7 +22,8 @@ function organizationLabel(
 ): string {
   if (!organizationId) return 'Unassigned'
   const org = organizations.find((entry) => entry.id === organizationId)
-  return org ? `${org.displayName} (${org.slug})` : organizationId
+  if (!org) return organizationId
+  return org.slug ? `${org.displayName} (${org.slug})` : org.displayName
 }
 
 export function ServersSection() {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { router } from 'expo-router'
 import {
   ActivityIndicator,
   Pressable,
@@ -75,6 +76,12 @@ export function DatabaseSection() {
       setStudioRunning(studioStatus.running)
       setRemoteStudioPort(studioStatus.port)
     } catch (err) {
+      if (
+        err instanceof Error &&
+        (err.message.includes('Unauthorized') || err.message.includes('401'))
+      ) {
+        return
+      }
       setStatus(null)
       setStudioRunning(false)
       setMessage({
@@ -154,7 +161,7 @@ export function DatabaseSection() {
   const onResetDevInstance = async () => {
     if (typeof window !== 'undefined') {
       const confirmed = window.confirm(
-        'Reset the dev instance? This drops all Postgres data, repushes schema.ts, reprovisions the root org, and restarts the instance. This cannot be undone.',
+        'Reset the dev instance? This drops all Postgres data, repushes schema.ts, and restarts the instance. You will be taken to a recovery screen while it restarts.',
       )
       if (!confirmed) return
     }
@@ -163,10 +170,7 @@ export function DatabaseSection() {
     setMessage(null)
     try {
       await resetDevInstance()
-      setMessage({
-        ok: true,
-        text: 'Dev instance reset started. Postgres was wiped and the instance is restarting — refresh in a few seconds.',
-      })
+      router.replace('/recovering?reason=reset')
     } catch (err) {
       setMessage({
         ok: false,

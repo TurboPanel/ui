@@ -1,6 +1,11 @@
 import { Redirect, Stack, useSegments, type Href } from 'expo-router'
 import { StyleSheet, View } from 'react-native'
-import { AuthProvider, useAuth } from '@/lib/auth-context'
+import {
+  AuthProvider,
+  dashboardHref,
+  hasUserSession,
+  useAuth,
+} from '@/lib/auth-context'
 import { colors } from '@/lib/theme'
 
 export default function RootLayout() {
@@ -12,21 +17,40 @@ export default function RootLayout() {
 }
 
 function AuthGuard() {
-  const { session, isLoading } = useAuth()
+  const { session, needsInstall, isLoading } = useAuth()
   const segments = useSegments()
+  const topSegment = (segments as readonly string[])[0]
 
   if (isLoading) {
     return <View style={styles.loading} />
   }
 
-  const onSignIn = (segments as readonly string[])[0] === 'sign-in'
+  const onSignIn = topSegment === 'sign-in'
+  const onInstall = topSegment === 'install'
+  const onRecovering = topSegment === 'recovering'
 
-  if (session === null && !onSignIn) {
+  if (onRecovering) {
+    return <Stack screenOptions={{ headerShown: false }} />
+  }
+
+  if (needsInstall) {
+    if (!onInstall) {
+      return <Redirect href={'/install' as Href} />
+    }
+
+    return <Stack screenOptions={{ headerShown: false }} />
+  }
+
+  if (onInstall) {
+    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  }
+
+  if (!hasUserSession(session) && !onSignIn) {
     return <Redirect href={'/sign-in' as Href} />
   }
 
-  if (session !== null && onSignIn) {
-    return <Redirect href="/" />
+  if (hasUserSession(session) && onSignIn) {
+    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
   }
 
   return <Stack screenOptions={{ headerShown: false }} />

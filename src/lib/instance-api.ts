@@ -92,8 +92,16 @@ const DEVELOPER_API = '/api/developer/v1'
 const CLIENT_API = '/api/client/v1'
 
 export type SessionInfo = {
-  userId: string
-  username: string
+  userId: string | null
+  username: string | null
+  email: string | null
+  role: string | null
+  needsInstall: boolean
+  organizationId: string | null
+}
+
+export type InstallStatus = {
+  needsInstall: boolean
 }
 
 export async function fetchSession(): Promise<SessionInfo | null> {
@@ -116,19 +124,40 @@ export async function fetchSession(): Promise<SessionInfo | null> {
     throw new Error(`${CLIENT_API}/auth/session failed: ${detail}`)
   }
 
-  const body = await response.json() as {
-    ok: true
-    userId: string
-    username: string
+  const body = await response.json() as SessionInfo & { ok: true }
+  return {
+    userId: body.userId ?? null,
+    username: body.username ?? null,
+    email: body.email ?? null,
+    role: body.role ?? null,
+    needsInstall: body.needsInstall ?? false,
+    organizationId: body.organizationId ?? null,
   }
-  return { userId: body.userId, username: body.username }
 }
 
 export async function signIn(
   username: string,
   password: string,
-): Promise<{ ok: true; username: string }> {
-  return await apiFetch(`${CLIENT_API}/auth/sign-in`, {
+): Promise<SessionInfo> {
+  const body = await apiFetch<SessionInfo & { ok: true }>(`${CLIENT_API}/auth/sign-in`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+  return {
+    userId: body.userId ?? null,
+    username: body.username ?? null,
+    email: body.email ?? null,
+    role: body.role ?? null,
+    needsInstall: body.needsInstall ?? false,
+    organizationId: body.organizationId ?? null,
+  }
+}
+
+export async function bootstrapInstall(
+  username: string,
+  password: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/install/bootstrap`, {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
@@ -138,6 +167,33 @@ export async function signOut(): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/sign-out`, {
     method: 'POST',
   })
+}
+
+export async function fetchInstallStatus(): Promise<InstallStatus> {
+  return await apiFetch(`${CLIENT_API}/install/status`)
+}
+
+export async function completeInstall(body: {
+  hostUsername: string
+  hostPassword: string
+  superadminEmail: string
+  superadminPassword: string
+}): Promise<SessionInfo & { organizationId: string }> {
+  const response = await apiFetch<SessionInfo & { ok: true; organizationId: string }>(
+    `${CLIENT_API}/install`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  )
+  return {
+    userId: response.userId ?? null,
+    username: response.username ?? null,
+    email: response.email ?? null,
+    role: response.role ?? null,
+    needsInstall: false,
+    organizationId: response.organizationId,
+  }
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -238,7 +294,7 @@ export async function fetchAllDaemonAddresses(): Promise<{
 export type OrganizationRecord = {
   id: string
   displayName: string
-  slug: string
+  slug: string | null
 }
 
 export async function fetchOrganizations(): Promise<{ organizations: OrganizationRecord[] }> {
@@ -376,7 +432,7 @@ export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> 
   })
 }
 
-/** Wipe dev Postgres, repush schema.ts, reprovision root, and restart the instance. */
+/** Wipe dev Postgres, repush schema.ts, and restart the instance. */
 export async function resetDevInstance(): Promise<{ ok: true; restarted: boolean }> {
   return await apiFetch(`${DEVELOPER_API}/system/reset-dev`, {
     method: 'POST',
