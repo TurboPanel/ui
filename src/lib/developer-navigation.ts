@@ -37,6 +37,12 @@ export const DEVELOPER_SECTIONS = [
     path: '/developer/expo',
     hint: 'Expo dev server terminal — stream output and send keypresses',
   },
+  {
+    id: 'servers',
+    label: 'Servers',
+    path: '/developer/servers',
+    hint: 'Registered server nodes and organization assignment',
+  },
 ] as const
 
 export type DeveloperSectionId = (typeof DEVELOPER_SECTIONS)[number]['id']

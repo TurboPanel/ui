@@ -235,6 +235,52 @@ export async function fetchAllDaemonAddresses(): Promise<{
   return await apiFetch(`${DEVELOPER_API}/daemon/addresses`)
 }
 
+export type OrganizationRecord = {
+  id: string
+  displayName: string
+  slug: string
+}
+
+export async function fetchOrganizations(): Promise<{ organizations: OrganizationRecord[] }> {
+  return await apiFetch(`${DEVELOPER_API}/organizations`)
+}
+
+export type ServerRecord = {
+  id: string
+  displayName: string | null
+  organizationId: string | null
+  options: Record<string, unknown> | null
+  createdAt: string
+}
+
+export async function fetchServers(): Promise<{ servers: ServerRecord[] }> {
+  return await apiFetch(`${DEVELOPER_API}/servers`)
+}
+
+export async function createServer(body: {
+  displayName?: string | null
+  options?: Record<string, unknown> | null
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${DEVELOPER_API}/servers`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateServer(
+  id: string,
+  body: {
+    displayName?: string | null
+    organizationId?: string | null
+    options?: Record<string, unknown> | null
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${DEVELOPER_API}/servers/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
 export type DirtyRepo = {
   repo: string
   path: string
