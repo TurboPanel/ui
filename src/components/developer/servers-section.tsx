@@ -129,7 +129,9 @@ export function ServersSection() {
 
       <Text style={developerStyles.inlineLabel}>Registered servers</Text>
       <Text style={developerStyles.muted}>
-        Daemons auto-register on connect. Assign each server to an organization here.
+        Register servers explicitly, then assign each to an organization. Co-located
+        daemons register automatically; remote daemons must be registered here before
+        they receive a server ID.
       </Text>
       {error ? <Text style={developerStyles.error}>{error}</Text> : null}
       {loading && servers.length === 0 ? (
