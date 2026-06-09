@@ -376,6 +376,13 @@ export async function upgradeSystem(): Promise<{ ok: boolean; commit: string }> 
   })
 }
 
+/** Wipe dev Postgres, repush schema.ts, reprovision root, and restart the instance. */
+export async function resetDevInstance(): Promise<{ ok: true; restarted: boolean }> {
+  return await apiFetch(`${DEVELOPER_API}/system/reset-dev`, {
+    method: 'POST',
+  })
+}
+
 /** Push the instance host's current daemon build to one agent (dev only). */
 export async function syncDevToDaemon(
   daemonId: string,

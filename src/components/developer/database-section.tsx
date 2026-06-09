@@ -16,6 +16,7 @@ import {
   fetchDatabaseStatus,
   fetchDrizzleStudioStatus,
   loadDrizzleLocalPort,
+  resetDevInstance,
   saveDrizzleLocalPort,
   startDrizzleStudio,
   type DatabaseStatus,
@@ -40,6 +41,7 @@ export function DatabaseSection() {
   const [localPortInput, setLocalPortInput] = useState(String(loadDrizzleLocalPort()))
   const [testing, setTesting] = useState(false)
   const [openingStudio, setOpeningStudio] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
@@ -147,6 +149,33 @@ export function DatabaseSection() {
 
   const canTest = healthOk === true && !testing
   const canOpenStudio = healthOk === true && status?.configured === true && !openingStudio
+  const canResetDev = healthOk === true && status?.configured === true && !resetting
+
+  const onResetDevInstance = async () => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        'Reset the dev instance? This drops all Postgres data, repushes schema.ts, reprovisions the root org, and restarts the instance. This cannot be undone.',
+      )
+      if (!confirmed) return
+    }
+
+    setResetting(true)
+    setMessage(null)
+    try {
+      await resetDevInstance()
+      setMessage({
+        ok: true,
+        text: 'Dev instance reset started. Postgres was wiped and the instance is restarting — refresh in a few seconds.',
+      })
+    } catch (err) {
+      setMessage({
+        ok: false,
+        text: err instanceof Error ? err.message : 'Dev instance reset failed',
+      })
+    } finally {
+      setResetting(false)
+    }
+  }
 
   return (
     <SectionPanel title={section.label} hint={section.hint}>
@@ -246,6 +275,27 @@ export function DatabaseSection() {
           </View>
         ) : (
           <Text style={developerStyles.buttonText}>Start API &amp; open studio</Text>
+        )}
+      </Pressable>
+
+      <Text style={developerStyles.inlineLabel}>Reset dev instance</Text>
+      <Text style={developerStyles.muted}>
+        Early-dev only: drop the public schema, repush `src/db/schema.ts` with drizzle-kit,
+        reprovision the root organization, and restart this instance. All database rows are
+        permanently deleted.
+      </Text>
+      <Pressable
+        style={[developerStyles.button, !canResetDev && developerStyles.buttonDisabled]}
+        onPress={() => void onResetDevInstance()}
+        disabled={!canResetDev}
+      >
+        {resetting ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ActivityIndicator color={colors.buttonText} />
+            <Text style={developerStyles.buttonText}>Resetting…</Text>
+          </View>
+        ) : (
+          <Text style={developerStyles.buttonText}>Reset Dev Instance</Text>
         )}
       </Pressable>
 

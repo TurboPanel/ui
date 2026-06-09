@@ -33,7 +33,7 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 | `/developer/network` | `network-section.tsx` | Interface IP addresses |
 | `/developer/shell` | `shell-section.tsx` | Remote commands |
 | `/developer/connectivity` | `connectivity-section.tsx` | Echo broadcast + websocket log |
-| `/developer/database` | `database-section.tsx` | Postgres connection test + Drizzle Studio |
+| `/developer/database` | `database-section.tsx` | Postgres connection test, Drizzle Studio, reset dev instance |
 | `/developer/expo` | `expo-section.tsx` | Expo dev server terminal — tmux PTY stream + keypress input |
 | `/developer/servers` | `servers-section.tsx` | Registered server rows; assign each to an organization |
 
@@ -44,6 +44,8 @@ The fleet section also exposes operator actions (no auto-update — everything i
 - **Upgrade System** — `POST /api/developer/v1/system/upgrade` (disabled while `GET …/system/upgrade-status` reports dirty instance, daemon, or UI checkouts)
 - **Sync Dev Build** — `POST /api/developer/v1/daemon/sync-dev`; the instance tars its local daemon checkout and pushes it to all agents over the websocket (no git push/pull), which restart.
 - **Save Tunnel Token** — `POST /api/developer/v1/instance/tunnel-token`; sets/clears the instance's Cloudflare tunnel token so the co-located daemon runs cloudflared.
+
+The database section exposes **Reset Dev Instance** — `POST /api/developer/v1/system/reset-dev` (drops public schema, repushes `schema.ts`, reprovisions root org, restarts instance).
 
 ### Adding a new developer section
 
