@@ -12,9 +12,16 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - Do not record secrets or environment-specific URLs as if they were universal.
 - Remove or correct notes that prove wrong.
 
+## Stack
+
+- **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
+- **React Query** `^5.90.14` — module-level `QueryClient` in `src/app/_layout.tsx`; `useAuthStatus()` hook in `src/lib/query-client.ts`.
+- **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.
+
 ## End-user auth & first-run install (self-hosted)
 
 - **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers/overview`.
+- **Sign-up** — `/sign-up` when `isSignupEnabled` (from `GET /install/status`). Calls `POST /auth/sign-up`; no session is returned — user is redirected to `/sign-in` on success. Route is guest-only (authenticated users are redirected to dashboard). Not available when `needsInstall` is true. `sign-up.tsx` inlines `validatePassword` and `checkPwnedPassword` (no shared validation package). Pwned-password check uses `crypto.subtle.digest('SHA-1', …)` against `https://api.pwnedpasswords.com/range/{prefix}` with `Add-Padding: true` and a 5000ms timeout; fails open on error. The "Learn more" link hardcodes `https://turbopanel.io/docs/security/password-safety` — no `DOCS_BASE_URL` env var.
 - **Sign-in** — `/sign-in` after install; superadmin email + password only (host accounts cannot sign in).
 - **Dashboard** — `/<organizationId>/servers/overview` once install completes (`session.organizationId`). Legacy `/<organizationId>/overview` redirects there.
 - **Developer console** — in `__DEV__`, authenticated shell pages show a **Developer console** nav link to `/developer/fleet` (superadmin session required by `developer/_layout.tsx`).

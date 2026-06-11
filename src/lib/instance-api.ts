@@ -102,6 +102,8 @@ export type SessionInfo = {
 
 export type InstallStatus = {
   needsInstall: boolean
+  isInstallMode: boolean
+  isSignupEnabled: boolean
 }
 
 export async function fetchSession(): Promise<SessionInfo | null> {
@@ -170,7 +172,24 @@ export async function signOut(): Promise<{ ok: true }> {
 }
 
 export async function fetchInstallStatus(): Promise<InstallStatus> {
-  return await apiFetch(`${CLIENT_API}/install/status`)
+  const body = await apiFetch<
+    InstallStatus & { ok: true; needsInstall?: boolean }
+  >(`${CLIENT_API}/install/status`)
+  return {
+    needsInstall: body.needsInstall ?? false,
+    isInstallMode: body.isInstallMode ?? body.needsInstall ?? false,
+    isSignupEnabled: body.isSignupEnabled ?? false,
+  }
+}
+
+export async function signUp(
+  email: string,
+  password: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/sign-up`, {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  })
 }
 
 export type OrgServerRecord = {

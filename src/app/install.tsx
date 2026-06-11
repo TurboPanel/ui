@@ -1,50 +1,60 @@
-import { useRouter, type Href } from 'expo-router'
-import { useState } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { Platform, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import {
-  bootstrapInstall,
-  completeInstall,
-} from '@/lib/instance-api'
+import { YStack, XStack, Input, Button, Text } from 'tamagui'
+import { useRouter, type Href } from 'expo-router'
+import { bootstrapInstall, completeInstall } from '@/lib/instance-api'
 import { useAuth } from '@/lib/auth-context'
-import { colors, spacing } from '@/lib/theme'
+import { useAuthStatus } from '@/lib/query-client'
+import { colors } from '@/lib/theme'
+
+const webInputStyle = {
+  borderWidth: 1,
+  borderColor: '#3d3d3d',
+  backgroundColor: '#1a1a1a',
+  color: '#e0e0e0',
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  fontSize: 16,
+  borderRadius: 6,
+  minHeight: 44,
+} as const
 
 export default function InstallScreen() {
   const router = useRouter()
   const { refreshSession, refreshInstallStatus } = useAuth()
+  const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
+  const isInstallMode = instanceInfo?.isInstallMode === true
   const [hostVerified, setHostVerified] = useState(false)
   const [hostUsername, setHostUsername] = useState('root')
   const [hostPassword, setHostPassword] = useState('')
   const [superadminEmail, setSuperadminEmail] = useState('')
   const [superadminPassword, setSuperadminPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showHostPassword, setShowHostPassword] = useState(false)
+  const [showSuperadminPassword, setShowSuperadminPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
-  async function handleHostAuth() {
+  const handleHostAuth = useCallback(async () => {
     if (!hostUsername.trim() || !hostPassword) {
       setError('Enter host username and password')
       return
     }
 
-    setError(null)
-    setIsSubmitting(true)
+    setError('')
+    setLoading(true)
     try {
       await bootstrapInstall(hostUsername.trim(), hostPassword)
       setHostVerified(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Host authentication failed')
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
-  }
+  }, [hostUsername, hostPassword])
 
-  async function handleCompleteSetup() {
+  const handleCompleteSetup = useCallback(async () => {
     if (!hostUsername.trim() || !hostPassword) {
       setError('Enter host username and password')
       return
@@ -54,8 +64,8 @@ export default function InstallScreen() {
       return
     }
 
-    setError(null)
-    setIsSubmitting(true)
+    setError('')
+    setLoading(true)
     try {
       const result = await completeInstall({
         hostUsername: hostUsername.trim(),
@@ -63,174 +73,239 @@ export default function InstallScreen() {
         superadminEmail,
         superadminPassword,
       })
-
+      setSuccess(true)
       await refreshInstallStatus()
       await refreshSession()
       router.replace(`/${result.organizationId}/servers/overview` as Href)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
+      setSuccess(false)
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
+  }, [
+    hostUsername,
+    hostPassword,
+    superadminEmail,
+    superadminPassword,
+    refreshInstallStatus,
+    refreshSession,
+    router,
+  ])
+
+  useEffect(() => {
+    if (instanceInfoLoading) return
+    if (!isInstallMode) router.replace('/sign-in')
+  }, [instanceInfoLoading, isInstallMode, router])
+
+  if (instanceInfoLoading || !isInstallMode) return null
+
+  if (success) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+        <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center" gap="$4">
+          <Text fontSize="$6" fontWeight="bold" color="$color">
+            Installation complete 🎉
+          </Text>
+          <Text color="$gray11" fontSize="$4">
+            Signing you in…
+          </Text>
+        </YStack>
+      </SafeAreaView>
+    )
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>TurboPanel</Text>
-        <Text style={styles.subtitle}>Initial setup</Text>
-        <Text style={styles.copy}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center" gap="$4">
+        <Text fontSize="$6" fontWeight="bold" color="$color">
+          Set up your TurboPanel instance
+        </Text>
+        <Text color="$gray11" fontSize="$4">
           {hostVerified
             ? 'Create your superadmin account. Organization and team use default names.'
             : 'Sign in with root or a sudo-capable host account to begin setup.'}
         </Text>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Host administrator</Text>
-          <TextInput
-            style={styles.input}
-            value={hostUsername}
-            onChangeText={setHostUsername}
-            placeholder="Username"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isSubmitting && !hostVerified}
-          />
-          <TextInput
-            style={styles.input}
-            value={hostPassword}
-            onChangeText={setHostPassword}
-            secureTextEntry
-            placeholder="Password"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isSubmitting}
-          />
-        </View>
+        <YStack gap="$2">
+          <Text color="$color" fontSize="$4">
+            Host administrator
+          </Text>
+          {Platform.OS === 'web' ? (
+            <TextInput
+              placeholder="Username"
+              value={hostUsername}
+              onChangeText={(text) => {
+                setHostUsername(text)
+                setError('')
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading && !hostVerified}
+              style={webInputStyle}
+            />
+          ) : (
+            <Input
+              placeholder="Username"
+              value={hostUsername}
+              onChangeText={(text) => {
+                setHostUsername(text)
+                setError('')
+              }}
+              autoCapitalize="none"
+              autoCorrect={false as unknown as undefined}
+              borderColor="$borderColor"
+              backgroundColor="$background"
+              editable={!loading && !hostVerified}
+            />
+          )}
+          <XStack position="relative" alignItems="center">
+            {Platform.OS === 'web' ? (
+              <TextInput
+                placeholder="Password"
+                value={hostPassword}
+                onChangeText={(text) => {
+                  setHostPassword(text)
+                  setError('')
+                }}
+                secureTextEntry={!showHostPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                style={{ ...webInputStyle, flex: 1 }}
+              />
+            ) : (
+              <Input
+                flex={1}
+                placeholder="Password"
+                value={hostPassword}
+                onChangeText={(text) => {
+                  setHostPassword(text)
+                  setError('')
+                }}
+                secureTextEntry={!showHostPassword}
+                autoCapitalize="none"
+                autoCorrect={false as unknown as undefined}
+                borderColor="$borderColor"
+                backgroundColor="$background"
+                editable={!loading}
+              />
+            )}
+            <Button
+              size="$2"
+              chromeless
+              position="absolute"
+              right="$2"
+              onPress={() => setShowHostPassword((v) => !v)}
+            >
+              {showHostPassword ? 'Hide' : 'Show'}
+            </Button>
+          </XStack>
+        </YStack>
 
         {hostVerified ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Superadmin account</Text>
-            <TextInput
-              style={styles.input}
-              value={superadminEmail}
-              onChangeText={setSuperadminEmail}
-              placeholder="Email address"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              editable={!isSubmitting}
-            />
-            <TextInput
-              style={styles.input}
-              value={superadminPassword}
-              onChangeText={setSuperadminPassword}
-              secureTextEntry
-              placeholder="Password"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isSubmitting}
-            />
-          </View>
+          <YStack gap="$2">
+            <Text color="$color" fontSize="$4">
+              Superadmin account
+            </Text>
+            {Platform.OS === 'web' ? (
+              <TextInput
+                placeholder="you@example.com"
+                value={superadminEmail}
+                onChangeText={(text) => {
+                  setSuperadminEmail(text)
+                  setError('')
+                }}
+                autoComplete="email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                style={webInputStyle}
+              />
+            ) : (
+              <Input
+                placeholder="you@example.com"
+                value={superadminEmail}
+                onChangeText={(text) => {
+                  setSuperadminEmail(text)
+                  setError('')
+                }}
+                autoComplete="email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false as unknown as undefined}
+                borderColor="$borderColor"
+                backgroundColor="$background"
+                editable={!loading}
+              />
+            )}
+            <XStack position="relative" alignItems="center">
+              {Platform.OS === 'web' ? (
+                <TextInput
+                  placeholder="Password"
+                  value={superadminPassword}
+                  onChangeText={(text) => {
+                    setSuperadminPassword(text)
+                    setError('')
+                  }}
+                  secureTextEntry={!showSuperadminPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                  style={{ ...webInputStyle, flex: 1 }}
+                />
+              ) : (
+                <Input
+                  flex={1}
+                  placeholder="Password"
+                  value={superadminPassword}
+                  onChangeText={(text) => {
+                    setSuperadminPassword(text)
+                    setError('')
+                  }}
+                  secureTextEntry={!showSuperadminPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false as unknown as undefined}
+                  borderColor="$borderColor"
+                  backgroundColor="$background"
+                  editable={!loading}
+                />
+              )}
+              <Button
+                size="$2"
+                chromeless
+                position="absolute"
+                right="$2"
+                onPress={() => setShowSuperadminPassword((v) => !v)}
+              >
+                {showSuperadminPassword ? 'Hide' : 'Show'}
+              </Button>
+            </XStack>
+          </YStack>
         ) : null}
 
-        <Pressable
-          style={[styles.button, isSubmitting && styles.buttonDisabled]}
-          onPress={() => void (hostVerified ? handleCompleteSetup() : handleHostAuth())}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonText}>
-            {isSubmitting
-              ? hostVerified
-                ? 'Setting up…'
-                : 'Authenticating…'
-              : hostVerified
-                ? 'Complete setup'
-                : 'Continue'}
+        {error ? (
+          <Text color="$red10" fontSize="$3">
+            {error}
           </Text>
-        </Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </View>
+        ) : null}
+        <Button
+          onPress={hostVerified ? handleCompleteSetup : handleHostAuth}
+          theme="active"
+          size="$4"
+          disabled={loading}
+          opacity={loading ? 0.7 : 1}
+        >
+          {loading
+            ? hostVerified
+              ? 'Setting up…'
+              : 'Authenticating…'
+            : hostVerified
+              ? 'Complete setup'
+              : 'Continue'}
+        </Button>
+      </YStack>
     </SafeAreaView>
   )
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: spacing.lg,
-    width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  copy: {
-    fontSize: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  section: {
-    width: '100%',
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    color: colors.textLabel,
-    fontSize: 14,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  input: {
-    backgroundColor: colors.bgInput,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 8,
-    color: colors.text,
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    width: '100%',
-  },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    width: '100%',
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.buttonText,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  error: {
-    color: colors.error,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-})

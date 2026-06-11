@@ -1,142 +1,166 @@
-import { useState } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { Platform, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { YStack, XStack, Input, Button, Text } from 'tamagui'
+import { Link, useRouter } from 'expo-router'
 import { useAuth } from '@/lib/auth-context'
-import { colors, spacing } from '@/lib/theme'
+import { useAuthStatus } from '@/lib/query-client'
+import { colors } from '@/lib/theme'
+
+const webInputStyle = {
+  borderWidth: 1,
+  borderColor: '#3d3d3d',
+  backgroundColor: '#1a1a1a',
+  color: '#e0e0e0',
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  fontSize: 16,
+  borderRadius: 6,
+  minHeight: 44,
+} as const
 
 export default function SignInScreen() {
+  const router = useRouter()
   const { signIn } = useAuth()
-  const [username, setUsername] = useState('')
+  const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
+  const isInstallMode = instanceInfo?.isInstallMode === true
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  async function handleSignIn() {
-    if (!username.trim() || !password) {
-      setError('Enter your email and password')
-      return
-    }
+  const onEmailChange = useCallback((text: string) => {
+    setEmail(text)
+    setError('')
+  }, [])
 
-    setError(null)
-    setIsSubmitting(true)
+  const onPasswordChange = useCallback((text: string) => {
+    setPassword(text)
+    setError('')
+  }, [])
+
+  const onSubmit = useCallback(async () => {
+    setError('')
+    setLoading(true)
     try {
-      await signIn(username.trim(), password)
+      await signIn(email, password)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed')
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
-  }
+  }, [email, password, signIn])
+
+  useEffect(() => {
+    if (instanceInfoLoading) return
+    if (isInstallMode) router.replace('/install')
+  }, [instanceInfoLoading, isInstallMode, router])
+
+  if (instanceInfoLoading || isInstallMode) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>TurboPanel</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
-        <View style={styles.fields}>
-          <TextInput
-            style={styles.input}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="Email"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            editable={!isSubmitting}
-          />
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Password"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isSubmitting}
-            onSubmitEditing={() => void handleSignIn()}
-          />
-        </View>
-        <Pressable
-          style={[styles.button, isSubmitting && styles.buttonDisabled]}
-          onPress={() => void handleSignIn()}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonText}>
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center" gap="$4">
+        <Text fontSize="$6" fontWeight="bold" color="$color">
+          Sign In
+        </Text>
+        <YStack gap="$2">
+          <Text color="$color" fontSize="$4">
+            Email
           </Text>
-        </Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </View>
+          {Platform.OS === 'web' ? (
+            <TextInput
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={onEmailChange}
+              autoComplete="email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+              style={webInputStyle}
+            />
+          ) : (
+            <Input
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={onEmailChange}
+              autoComplete="email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false as unknown as undefined}
+              borderColor="$borderColor"
+              backgroundColor="$background"
+              editable={!loading}
+            />
+          )}
+        </YStack>
+        <YStack gap="$2">
+          <Text color="$color" fontSize="$4">
+            Password
+          </Text>
+          <XStack position="relative" alignItems="center">
+            {Platform.OS === 'web' ? (
+              <TextInput
+                placeholder="Password"
+                value={password}
+                onChangeText={onPasswordChange}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                style={{ ...webInputStyle, flex: 1 }}
+              />
+            ) : (
+              <Input
+                flex={1}
+                placeholder="Password"
+                value={password}
+                onChangeText={onPasswordChange}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false as unknown as undefined}
+                borderColor="$borderColor"
+                backgroundColor="$background"
+                editable={!loading}
+              />
+            )}
+            <Button
+              size="$2"
+              chromeless
+              position="absolute"
+              right="$2"
+              onPress={() => setShowPassword((v) => !v)}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </Button>
+          </XStack>
+        </YStack>
+        {error ? (
+          <Text color="$red10" fontSize="$3">
+            {error}
+          </Text>
+        ) : null}
+        <Button
+          onPress={onSubmit}
+          theme="active"
+          size="$4"
+          disabled={loading}
+          opacity={loading ? 0.7 : 1}
+        >
+          {loading ? 'Signing in...' : 'Sign In'}
+        </Button>
+        <YStack gap="$2">
+          {instanceInfo?.isSignupEnabled === true ? (
+            <Link href="/sign-up">
+              <Text color="$blue10" fontSize="$3" textDecorationLine="underline">
+                Don&apos;t have an account? Sign up
+              </Text>
+            </Link>
+          ) : null}
+        </YStack>
+      </YStack>
     </SafeAreaView>
   )
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: spacing.lg,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  fields: {
-    width: '100%',
-    maxWidth: 360,
-    gap: spacing.md,
-  },
-  input: {
-    backgroundColor: colors.bgInput,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 8,
-    color: colors.text,
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    width: '100%',
-  },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    width: '100%',
-    maxWidth: 360,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.buttonText,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  error: {
-    color: colors.error,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-})

@@ -16,7 +16,11 @@ export default function OrganizationLayout() {
     return <Redirect href={'/install' as Href} />
   }
 
-  if (session?.organizationId && orgId !== session.organizationId) {
+  if (!session?.organizationId) {
+    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  }
+
+  if (session.organizationId && orgId !== session.organizationId) {
     return <Redirect href={dashboardHref(session, needsInstall) as Href} />
   }
 
