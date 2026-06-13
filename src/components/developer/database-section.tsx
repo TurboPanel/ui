@@ -66,13 +66,28 @@ export function DatabaseSection() {
     [browserHostname, localPort],
   )
 
-  const refresh = useCallback(async () => {
+  const refreshDbStatus = useCallback(async () => {
     try {
-      const [dbStatus, studioStatus] = await Promise.all([
-        fetchDatabaseStatus(),
-        fetchDrizzleStudioStatus(),
-      ])
+      const dbStatus = await fetchDatabaseStatus()
       setStatus(dbStatus)
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        (err.message.includes('Unauthorized') || err.message.includes('401'))
+      ) {
+        return
+      }
+      setStatus(null)
+      setMessage({
+        ok: false,
+        text: err instanceof Error ? err.message : 'Failed to load database status',
+      })
+    }
+  }, [])
+
+  const refreshStudioStatus = useCallback(async () => {
+    try {
+      const studioStatus = await fetchDrizzleStudioStatus()
       setStudioRunning(studioStatus.running)
       setRemoteStudioPort(studioStatus.port)
     } catch (err) {
@@ -82,20 +97,16 @@ export function DatabaseSection() {
       ) {
         return
       }
-      setStatus(null)
       setStudioRunning(false)
-      setMessage({
-        ok: false,
-        text: err instanceof Error ? err.message : 'Failed to load database status',
-      })
     }
   }, [])
 
   useEffect(() => {
-    void refresh()
-    const timer = setInterval(() => void refresh(), 2000)
+    void refreshDbStatus()
+    void refreshStudioStatus()
+    const timer = setInterval(() => void refreshStudioStatus(), 2000)
     return () => clearInterval(timer)
-  }, [refresh])
+  }, [refreshDbStatus, refreshStudioStatus])
 
   useEffect(() => {
     if (!usesLanProxy) saveDrizzleLocalPort(localPort)
@@ -134,7 +145,7 @@ export function DatabaseSection() {
     setOpeningStudio(true)
     setMessage(null)
     try {
-      const result = await startDrizzleStudio()
+      await startDrizzleStudio()
       setStudioRunning(true)
       setMessage({
         ok: true,

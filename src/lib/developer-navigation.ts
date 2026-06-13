@@ -32,12 +32,6 @@ export const DEVELOPER_SECTIONS = [
     hint: 'Postgres connection test and Drizzle Studio',
   },
   {
-    id: 'expo',
-    label: 'Expo',
-    path: '/developer/expo',
-    hint: 'Expo dev server terminal — stream output and send keypresses',
-  },
-  {
     id: 'servers',
     label: 'Servers',
     path: '/developer/servers',

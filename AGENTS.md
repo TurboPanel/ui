@@ -75,7 +75,6 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/developer/shell` | `shell-section.tsx` | Remote commands |
 | `/developer/connectivity` | `connectivity-section.tsx` | Echo broadcast + websocket log |
 | `/developer/database` | `database-section.tsx` | Postgres connection test, Drizzle Studio, reset dev instance |
-| `/developer/expo` | `expo-section.tsx` | Expo dev server terminal — tmux PTY stream + keypress input |
 | `/developer/servers` | `servers-section.tsx` | Registered server rows; assign each to an organization |
 
 `DeveloperProvider` polls every 2s: `/api/health`, `/api/developer/v1/daemon/connections`, `/api/developer/v1/daemon/events`, `/api/developer/v1/daemon/commands`. Target selection (`__all__` or per-daemon id) lives in the header and is shared across Network and Shell.
@@ -99,5 +98,3 @@ The database section exposes **Reset Dev Instance** — `POST /api/developer/v1/
 Types and helpers: `src/lib/instance-api.ts` (`daemonLabel`, `formatEvent`, `uniqueFleetConnections`, …). Update when instance endpoints change.
 
 **Versioned surfaces.** The instance exposes `/api/client/v1` (this end-user UI, greenfield), `/api/developer/v1` (dev-only developer console), and `/api/daemon/v1` (agents); `/api/health` is the single unversioned probe. All developer calls go through the `DEVELOPER_API = '/api/developer/v1'` constant in `instance-api.ts` (single choke point) — prefix new developer endpoints there, never hard-code paths in components. WS surfaces `/ws/{client,developer}/v1` exist as stubs for future live streaming (the UI polls today). `/api/admin/v1` + `/ws/admin/v1` are reserved for a future instance-admin surface.
-
-`EXPO_PTY_WS_PATH = '/ws/developer/v1/expo-pty'` — WebSocket for the Expo log stream. Client→server: `{ type: 'resize', cols, rows }` (sizes the tmux window to the log panel), `{ type: 'input', data: string }` (quick-key / keyboard input via `send-keys`). Server→client: `{ type: 'snapshot', data: string }` — plain `tmux capture-pane -p` polled ~4×/s, rendered in a monospace `<pre>` (not xterm — avoids ANSI/cursor replay artifacts from Metro). Session name: `expo-ui`. Socket opens only when `healthOk === true`; unmount/`healthOk` drop suppresses reconnect timers.

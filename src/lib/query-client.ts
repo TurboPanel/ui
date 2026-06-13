@@ -9,5 +9,6 @@ export function useAuthStatus() {
   return useQuery({
     queryKey: authQueryKeys.authStatus,
     queryFn: fetchInstallStatus,
+    staleTime: 30_000,
   })
 }

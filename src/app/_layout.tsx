@@ -1,29 +1,24 @@
 import { Redirect, Stack, useSegments, type Href } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { useEffect } from 'react'
-import { AppState, Platform, StyleSheet, View } from 'react-native'
-import type { AppStateStatus } from 'react-native'
-import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { TamaguiProvider } from 'tamagui'
 import {
-  AuthProvider,
+  ActivityIndicator,
+  AppState,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native'
+import type { AppStateStatus } from 'react-native'
+import { focusManager } from '@tanstack/react-query'
+import { AppProviders } from '@/components/app-providers'
+import { SafeAreaRoot } from '@/components/safe-area-root'
+import {
   dashboardHref,
   hasUserSession,
   useAuth,
 } from '@/lib/auth-context'
-import tamaguiConfig from '@/lib/tamagui.config'
+import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-})
 
 function onAppStateChange(status: AppStateStatus) {
   if (Platform.OS !== 'web') {
@@ -50,26 +45,27 @@ export default function RootLayout() {
   }
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
-      <QueryClientProvider client={queryClient}>
-        <SafeAreaProvider>
-          <AuthProvider>
-            <AuthGuard />
-          </AuthProvider>
-          {Platform.OS === 'web' && <ReactQueryDevtools initialIsOpen={false} />}
-        </SafeAreaProvider>
-      </QueryClientProvider>
-    </TamaguiProvider>
+    <SafeAreaRoot>
+      <AppProviders>
+        <AuthGuard />
+      </AppProviders>
+    </SafeAreaRoot>
   )
 }
 
 function AuthGuard() {
   const { session, needsInstall, isLoading } = useAuth()
+  const { data: installStatus } = useAuthStatus()
+  const isInstallMode = installStatus?.isInstallMode ?? true
   const segments = useSegments()
   const topSegment = (segments as readonly string[])[0]
 
   if (isLoading) {
-    return <View style={styles.loading} />
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    )
   }
 
   const onSignIn = topSegment === 'sign-in'
@@ -77,12 +73,17 @@ function AuthGuard() {
   const onInstall = topSegment === 'install'
   const onWelcome = topSegment === 'welcome'
   const onRecovering = topSegment === 'recovering'
+  const onDeveloper = topSegment === 'developer'
+  const developerDevBypass = __DEV__ && onDeveloper
 
   if (onRecovering) {
     return <Stack screenOptions={{ headerShown: false }} />
   }
 
   if (needsInstall) {
+    if (developerDevBypass) {
+      return <Stack screenOptions={{ headerShown: false }} />
+    }
     if (!onInstall) {
       return <Redirect href={'/install' as Href} />
     }
@@ -90,11 +91,15 @@ function AuthGuard() {
     return <Stack screenOptions={{ headerShown: false }} />
   }
 
+  if (onInstall && !isInstallMode) {
+    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  }
+
   if (onInstall) {
     return <Redirect href={dashboardHref(session, needsInstall) as Href} />
   }
 
-  if (!hasUserSession(session) && !onSignIn && !onSignUp) {
+  if (!hasUserSession(session) && !onSignIn && !onSignUp && !developerDevBypass) {
     return <Redirect href={'/sign-in' as Href} />
   }
 
@@ -107,7 +112,8 @@ function AuthGuard() {
     !session.organizationId &&
     !onWelcome &&
     !onSignIn &&
-    !onSignUp
+    !onSignUp &&
+    !developerDevBypass
   ) {
     return <Redirect href={'/welcome' as Href} />
   }
@@ -123,5 +129,7 @@ const styles = StyleSheet.create({
   loading: {
     flex: 1,
     backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

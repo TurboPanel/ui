@@ -50,6 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   )
 
+  const fetchInstallStatusCached = useCallback(async () => {
+    return await queryClient.fetchQuery({
+      queryKey: authQueryKeys.authStatus,
+      queryFn: fetchInstallStatus,
+    })
+  }, [queryClient])
+
   const refreshInstallStatus = useCallback(async () => {
     const status = await fetchInstallStatus()
     setNeedsInstall(status.needsInstall)
@@ -65,7 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    void Promise.all([fetchInstallStatus(), fetchSession()])
+    let bootstrapErr: string | null = null
+
+    void Promise.all([fetchInstallStatusCached(), fetchSession()])
       .then(([installStatus, sessionData]) => {
         setNeedsInstall(installStatus.needsInstall)
         setIsSignupEnabled(installStatus.isSignupEnabled ?? false)
@@ -74,15 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBootstrapError(null)
       })
       .catch((err: unknown) => {
+        bootstrapErr =
+          err instanceof Error ? err.message : 'Failed to load session'
         setSession(null)
-        setBootstrapError(
-          err instanceof Error ? err.message : 'Failed to load session',
-        )
+        setBootstrapError(bootstrapErr)
       })
       .finally(() => {
         setIsLoading(false)
       })
-  }, [syncAuthStatusCache])
+  }, [fetchInstallStatusCached, syncAuthStatusCache])
 
   const signIn = useCallback(async (username: string, password: string) => {
     const loaded = await signInApi(username, password)

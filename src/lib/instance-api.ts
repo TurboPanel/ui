@@ -90,6 +90,7 @@ export type ServerAddressEntry = {
  */
 const DEVELOPER_API = '/api/developer/v1'
 const CLIENT_API = '/api/client/v1'
+const INSTALL_API = '/api/install/v1'
 
 export type SessionInfo = {
   userId: string | null
@@ -159,7 +160,7 @@ export async function bootstrapInstall(
   username: string,
   password: string,
 ): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/install/bootstrap`, {
+  return await apiFetch(`${INSTALL_API}/bootstrap`, {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
@@ -174,7 +175,7 @@ export async function signOut(): Promise<{ ok: true }> {
 export async function fetchInstallStatus(): Promise<InstallStatus> {
   const body = await apiFetch<
     InstallStatus & { ok: true; needsInstall?: boolean }
-  >(`${CLIENT_API}/install/status`)
+  >(`${INSTALL_API}/status`)
   return {
     needsInstall: body.needsInstall ?? false,
     isInstallMode: body.isInstallMode ?? body.needsInstall ?? false,
@@ -190,6 +191,11 @@ export async function signUp(
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
+}
+
+export async function verifyEmail(token: string): Promise<{ ok: true }> {
+  const params = new URLSearchParams({ token })
+  return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`)
 }
 
 export type OrgServerRecord = {
@@ -213,7 +219,7 @@ export async function completeInstall(body: {
   superadminPassword: string
 }): Promise<SessionInfo & { organizationId: string }> {
   const response = await apiFetch<SessionInfo & { ok: true; organizationId: string }>(
-    `${CLIENT_API}/install`,
+    INSTALL_API,
     {
       method: 'POST',
       body: JSON.stringify(body),
@@ -499,16 +505,6 @@ export async function setInstanceTunnelToken(
     method: 'POST',
     body: JSON.stringify({ token }),
   })
-}
-
-export const EXPO_PTY_WS_PATH = '/ws/developer/v1/expo-pty'
-
-export async function fetchExpoStatus(): Promise<{ running: boolean }> {
-  return await apiFetch(`${DEVELOPER_API}/expo/status`)
-}
-
-export async function restartExpoService(): Promise<{ ok: boolean; error?: string }> {
-  return await apiFetch(`${DEVELOPER_API}/expo/restart`, { method: 'POST' })
 }
 
 export function formatEvent(
