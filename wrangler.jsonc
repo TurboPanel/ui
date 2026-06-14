@@ -16,7 +16,7 @@
     "not_found_handling": "single-page-application"
   },
   "env": {
-    "testing": {
+    "live": {
       "name": "ui",
       "route": {
         "pattern": "turbopanel.app",
