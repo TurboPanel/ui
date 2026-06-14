@@ -18,6 +18,7 @@ export type InstallStatus = {
 
 export async function fetchSession(): Promise<SessionInfo | null> {
   const response = await fetch(`${CLIENT_API}/auth/session`, {
+    credentials: 'include',
     headers: { "content-type": "application/json" },
   });
 
@@ -147,6 +148,7 @@ export async function completeInstall(body: {
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    credentials: 'include',
     headers: {
       "content-type": "application/json",
       ...init?.headers,
