@@ -122,8 +122,8 @@ export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }>
 }
 
 export async function completeInstall(body: {
-  hostUsername: string;
-  hostPassword: string;
+  username: string;
+  password: string;
   superadminEmail: string;
   superadminPassword: string;
 }): Promise<SessionInfo & { organizationId: string }> {

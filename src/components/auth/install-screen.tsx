@@ -5,10 +5,9 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  withSpring,
 } from 'react-native-reanimated'
 import { YStack, XStack, Input, Button, Text } from 'tamagui'
-import { useRouter, type Href } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { bootstrapInstall, completeInstall } from '@/lib/instance-api'
 import { useAuth } from '@/lib/auth-context'
 import { useAuthStatus } from '@/lib/query-client'
@@ -31,8 +30,8 @@ export function InstallScreenContent() {
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
   const [hostVerified, setHostVerified] = useState(false)
-  const [hostUsername, setHostUsername] = useState('root')
-  const [hostPassword, setHostPassword] = useState('')
+  const [username, setUsername] = useState('root')
+  const [password, setPassword] = useState('')
   const [superadminEmail, setSuperadminEmail] = useState('')
   const [superadminPassword, setSuperadminPassword] = useState('')
   const [showHostPassword, setShowHostPassword] = useState(false)
@@ -69,7 +68,7 @@ export function InstallScreenContent() {
   }))
 
   const handleHostAuth = useCallback(async () => {
-    if (!hostUsername.trim() || !hostPassword) {
+    if (!username.trim() || !password) {
       setError('Enter host username and password')
       return
     }
@@ -77,17 +76,17 @@ export function InstallScreenContent() {
     setError('')
     setLoading(true)
     try {
-      await bootstrapInstall(hostUsername.trim(), hostPassword)
+      await bootstrapInstall(username.trim(), password)
       setHostVerified(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Host authentication failed')
     } finally {
       setLoading(false)
     }
-  }, [hostUsername, hostPassword])
+  }, [username, password])
 
   const handleCompleteSetup = useCallback(async () => {
-    if (!hostUsername.trim() || !hostPassword) {
+    if (!username.trim() || !password) {
       setError('Enter host username and password')
       return
     }
@@ -100,15 +99,15 @@ export function InstallScreenContent() {
     setLoading(true)
     try {
       const result = await completeInstall({
-        hostUsername: hostUsername.trim(),
-        hostPassword,
+        username: username.trim(),
+        password,
         superadminEmail,
         superadminPassword,
       })
       setSuccess(true)
       await refreshInstallStatus()
       await refreshSession()
-      router.replace(`/${result.organizationId}/servers/overview` as Href)
+      router.replace(`/${result.organizationId}/servers/overview`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
       setSuccess(false)
@@ -116,8 +115,8 @@ export function InstallScreenContent() {
       setLoading(false)
     }
   }, [
-    hostUsername,
-    hostPassword,
+    username,
+    password,
     superadminEmail,
     superadminPassword,
     refreshInstallStatus,
@@ -164,9 +163,9 @@ export function InstallScreenContent() {
           {Platform.OS === 'web' ? (
             <TextInput
               placeholder="Username"
-              value={hostUsername}
+              value={username}
               onChangeText={(text) => {
-                setHostUsername(text)
+                setUsername(text)
                 setHostVerified(false)
                 setError('')
               }}
@@ -178,9 +177,9 @@ export function InstallScreenContent() {
           ) : (
             <Input
               placeholder="Username"
-              value={hostUsername}
+              value={username}
               onChangeText={(text) => {
-                setHostUsername(text)
+                setUsername(text)
                 setHostVerified(false)
                 setError('')
               }}
@@ -195,9 +194,9 @@ export function InstallScreenContent() {
             {Platform.OS === 'web' ? (
               <TextInput
                 placeholder="Password"
-                value={hostPassword}
+                value={password}
                 onChangeText={(text) => {
-                  setHostPassword(text)
+                  setPassword(text)
                   setHostVerified(false)
                   setError('')
                 }}
@@ -211,9 +210,9 @@ export function InstallScreenContent() {
               <Input
                 flex={1}
                 placeholder="Password"
-                value={hostPassword}
+                value={password}
                 onChangeText={(text) => {
-                  setHostPassword(text)
+                  setPassword(text)
                   setHostVerified(false)
                   setError('')
                 }}
