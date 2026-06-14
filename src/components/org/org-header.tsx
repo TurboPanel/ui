@@ -1,4 +1,4 @@
-import { Link, usePathname } from 'expo-router'
+import { usePathname } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '@/lib/auth-context'
 import { orgAreaFromPathname } from '@/lib/org-navigation'
@@ -34,13 +34,6 @@ export function OrgHeader({ onMenuPress }: { onMenuPress?: () => void }) {
           <Text style={styles.userLabel}>
             {session.email ?? session.username}
           </Text>
-        ) : null}
-        {__DEV__ ? (
-          <Link href="/developer/fleet" asChild>
-            <Pressable style={styles.linkButton}>
-              <Text style={styles.linkButtonText}>Developer console</Text>
-            </Pressable>
-          </Link>
         ) : null}
         {session ? (
           <Pressable

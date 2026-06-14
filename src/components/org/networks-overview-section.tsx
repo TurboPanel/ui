@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/developer/section-panel'
+import { SectionPanel } from '@/components/org/section-panel'
 import { colors, spacing } from '@/lib/theme'
 
 export function NetworksOverviewSection({ orgId }: { orgId: string }) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/developer/section-panel'
-import { developerStyles } from '@/components/developer/developer-styles'
+import { SectionPanel } from '@/components/org/section-panel'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { fetchOrgServers, type OrgServerRecord } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
 
@@ -54,19 +54,19 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       </Text>
 
       <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
-        {error ? <Text style={developerStyles.error}>{error}</Text> : null}
+        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
         {loading && servers.length === 0 ? (
-          <Text style={developerStyles.muted}>Loading…</Text>
+          <Text style={orgPanelStyles.muted}>Loading…</Text>
         ) : servers.length === 0 ? (
-          <Text style={developerStyles.muted}>
+          <Text style={orgPanelStyles.muted}>
             No servers are assigned to this organization yet.
           </Text>
         ) : (
           <View style={styles.list}>
             {servers.map((server) => (
-              <View key={server.id} style={developerStyles.detailCard}>
+              <View key={server.id} style={orgPanelStyles.detailCard}>
                 <View style={styles.cardHeader}>
-                  <Text style={developerStyles.detailTitle}>
+                  <Text style={orgPanelStyles.detailTitle}>
                     {serverTitle(server)}
                   </Text>
                   <View
@@ -90,17 +90,17 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   </View>
                 </View>
                 {server.hostname && server.displayName ? (
-                  <Text style={developerStyles.detailLine}>
-                    <Text style={developerStyles.detailLabel}>Hostname: </Text>
+                  <Text style={orgPanelStyles.detailLine}>
+                    <Text style={orgPanelStyles.detailLabel}>Hostname: </Text>
                     {server.hostname}
                   </Text>
                 ) : null}
-                <Text style={developerStyles.detailLine}>
-                  <Text style={developerStyles.detailLabel}>ID: </Text>
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>ID: </Text>
                   <Text selectable>{server.id}</Text>
                 </Text>
-                <Text style={developerStyles.detailLine}>
-                  <Text style={developerStyles.detailLabel}>Added: </Text>
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>Added: </Text>
                   {new Date(server.createdAt).toLocaleString()}
                 </Text>
               </View>

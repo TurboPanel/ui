@@ -156,15 +156,6 @@ export function SignInScreenContent() {
             </Text>
           </Link>
         ) : null}
-        {__DEV__ ? (
-          <Button
-            chromeless
-            size="$3"
-            onPress={() => router.push('/developer/fleet')}
-          >
-            Developer console
-          </Button>
-        ) : null}
       </YStack>
     </YStack>
   )

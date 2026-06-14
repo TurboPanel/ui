@@ -1,4 +1,3 @@
-import { Link } from 'expo-router'
 import { type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -21,13 +20,6 @@ export function AppShell({ title, children }: AppShellProps) {
           <Text style={styles.title}>{title}</Text>
         </View>
         <View style={styles.headerActions}>
-          {__DEV__ ? (
-            <Link href="/developer/fleet" asChild>
-              <Pressable style={styles.linkButton}>
-                <Text style={styles.linkButtonText}>Developer console</Text>
-              </Pressable>
-            </Link>
-          ) : null}
           {session ? (
             <Pressable
               style={styles.linkButton}
