@@ -10,7 +10,9 @@ export function OrgHeader({ onMenuPress }: { onMenuPress?: () => void }) {
   const match = orgAreaFromPathname(pathname)
 
   const title = match
-    ? `${match.area.label} · ${match.subRoute.label}`
+    ? match.subRoute
+      ? `${match.area.label} · ${match.subRoute.label}`
+      : match.area.label
     : 'Dashboard'
 
   return (
@@ -23,8 +25,10 @@ export function OrgHeader({ onMenuPress }: { onMenuPress?: () => void }) {
         ) : null}
         <View style={styles.titleBlock}>
           <Text style={styles.title}>{title}</Text>
-          {match?.subRoute.hint ? (
-            <Text style={styles.hint}>{match.subRoute.hint}</Text>
+          {match?.subRoute?.hint || match?.area.hint ? (
+            <Text style={styles.hint}>
+              {match.subRoute?.hint ?? match.area.hint}
+            </Text>
           ) : null}
         </View>
       </View>

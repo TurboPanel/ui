@@ -20,10 +20,10 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 ## End-user auth & first-run install (self-hosted)
 
-- **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers/overview`.
+- **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers`.
 - **Sign-up** — `/sign-up` when `isSignupEnabled` (from `GET /install/status`). Calls `POST /auth/sign-up`; no session is returned — user is redirected to `/sign-in` on success. Route is guest-only (authenticated users are redirected to dashboard). Not available when `needsInstall` is true. `sign-up.tsx` inlines `validatePassword` and `checkPwnedPassword` (no shared validation package). Pwned-password check uses `crypto.subtle.digest('SHA-1', …)` against `https://api.pwnedpasswords.com/range/{prefix}` with `Add-Padding: true` and a 5000ms timeout; fails open on error. The "Learn more" link hardcodes `https://turbopanel.io/docs/security/password-safety` — no `DOCS_BASE_URL` env var.
 - **Sign-in** — `/sign-in` after install; superadmin email + password only (host accounts cannot sign in).
-- **Dashboard** — `/<organizationId>/servers/overview` once install completes (`session.organizationId`). Legacy `/<organizationId>/overview` redirects there.
+- **Dashboard** — `/<organizationId>/servers` once install completes (`session.organizationId`). Legacy `/<organizationId>/overview` and `/<organizationId>/servers/overview` redirect there.
 - Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
 
 The developer console has been moved to the `turbopanel-dev` terminal console (`src/sections/` in that repo).
@@ -44,7 +44,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 
 | Route | Component | Purpose |
 |-------|-----------|---------|
-| `/<orgId>/servers/overview` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
+| `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
 
 ### Adding a new organization area

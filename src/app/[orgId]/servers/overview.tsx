@@ -1,8 +1,7 @@
-import { useLocalSearchParams } from 'expo-router'
-import { ServersOverviewSection } from '@/components/org/servers-overview-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 
-export default function ServersOverviewScreen() {
+export default function ServersOverviewLegacyRedirect() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
 
-  return <ServersOverviewSection orgId={orgId ?? ''} />
+  return <Redirect href={`/${orgId ?? ''}/servers` as Href} />
 }

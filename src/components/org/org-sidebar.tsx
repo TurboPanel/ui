@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
-import { ORG_AREAS, orgRouteHref } from '@/lib/org-navigation'
+import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
 import { colors, layout } from '@/lib/theme'
 
 export function OrgSidebar({
@@ -22,21 +22,16 @@ export function OrgSidebar({
 
       <View style={styles.nav}>
         {ORG_AREAS.map((area) => {
-          const areaActive = pathname.includes(`/${orgId}/${area.pathSegment}`)
-          const defaultSubRoute = area.subRoutes[0]
+          const areaHref = orgAreaHref(orgId, area.pathSegment)
+          const areaActive =
+            pathname === areaHref || pathname.startsWith(`${areaHref}/`)
 
           return (
             <View key={area.id} style={styles.areaGroup}>
               <Pressable
                 style={[styles.areaItem, areaActive && styles.areaItemActive]}
                 onPress={() => {
-                  router.push(
-                    orgRouteHref(
-                      orgId,
-                      area.pathSegment,
-                      defaultSubRoute.pathSegment,
-                    ) as Href,
-                  )
+                  router.push(areaHref as Href)
                   onNavigate?.()
                 }}
               >

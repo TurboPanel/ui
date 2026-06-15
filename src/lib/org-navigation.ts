@@ -6,12 +6,6 @@ export const ORG_AREAS = [
     hint: 'Managed hosts and fleet status',
     subRoutes: [
       {
-        id: 'overview',
-        label: 'Overview',
-        pathSegment: 'overview',
-        hint: 'Fleet summary and server health',
-      },
-      {
         id: 'networks',
         label: 'Networks',
         pathSegment: 'networks',
@@ -25,6 +19,13 @@ export type OrgAreaId = (typeof ORG_AREAS)[number]['id']
 export type OrgSubRouteId =
   (typeof ORG_AREAS)[number]['subRoutes'][number]['id']
 
+export function orgAreaHref(
+  orgId: string,
+  areaPathSegment: string,
+): `/${string}/${string}` {
+  return `/${orgId}/${areaPathSegment}`
+}
+
 export function orgRouteHref(
   orgId: string,
   areaPathSegment: string,
@@ -33,8 +34,8 @@ export function orgRouteHref(
   return `/${orgId}/${areaPathSegment}/${subRoutePathSegment}`
 }
 
-export function defaultOrgDashboardHref(orgId: string): `/${string}/servers/overview` {
-  return `/${orgId}/servers/overview`
+export function defaultOrgDashboardHref(orgId: string): `/${string}/servers` {
+  return `/${orgId}/servers`
 }
 
 export function orgAreaFromPathname(pathname: string) {
@@ -50,9 +51,10 @@ export function orgAreaFromPathname(pathname: string) {
   }
 
   const subRouteSegment = parts[2]
-  const subRoute =
-    area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ??
-    area.subRoutes[0]
+  const subRoute = subRouteSegment
+    ? (area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ??
+      null)
+    : null
 
   return { area, subRoute }
 }

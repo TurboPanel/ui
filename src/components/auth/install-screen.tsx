@@ -107,7 +107,7 @@ export function InstallScreenContent() {
       setSuccess(true)
       await refreshInstallStatus()
       await refreshSession()
-      router.replace(`/${result.organizationId}/servers/overview`)
+      router.replace(`/${result.organizationId}/servers`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
       setSuccess(false)

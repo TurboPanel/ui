@@ -166,12 +166,12 @@ export function hasUserSession(session: SessionInfo | null): boolean {
 export function dashboardHref(
   session: SessionInfo | null,
   needsInstall: boolean,
-): '/install' | '/sign-in' | '/welcome' | `/${string}/servers/overview` | '/' {
+): '/install' | '/sign-in' | '/welcome' | `/${string}/servers` | '/' {
   if (needsInstall) {
     return '/install'
   }
   if (session?.organizationId) {
-    return `/${session.organizationId}/servers/overview`
+    return `/${session.organizationId}/servers`
   }
   if (hasUserSession(session)) {
     return '/welcome'

@@ -55,7 +55,7 @@ export default function RecoveringScreen() {
 
       const session = await refreshSession().catch(() => null)
       if (session?.organizationId) {
-        router.replace(`/${session.organizationId}/servers/overview` as Href)
+        router.replace(`/${session.organizationId}/servers` as Href)
         return
       }
 
