@@ -95,6 +95,12 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                     {server.hostname}
                   </Text>
                 ) : null}
+                {server.connected && server.remoteAddress ? (
+                  <Text style={orgPanelStyles.detailLine}>
+                    <Text style={orgPanelStyles.detailLabel}>Connecting IP: </Text>
+                    <Text selectable>{server.remoteAddress}</Text>
+                  </Text>
+                ) : null}
                 <Text style={orgPanelStyles.detailLine}>
                   <Text style={orgPanelStyles.detailLabel}>ID: </Text>
                   <Text selectable>{server.id}</Text>

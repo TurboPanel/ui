@@ -116,6 +116,7 @@ export type OrgServerRecord = {
   createdAt: string;
   connected: boolean;
   hostname: string | null;
+  remoteAddress: string | null;
 };
 
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
