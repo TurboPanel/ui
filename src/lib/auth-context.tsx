@@ -155,8 +155,7 @@ export function useAuth() {
 }
 
 export function isSuperadminSession(session: SessionInfo | null): boolean {
-  return session !== null &&
-    (session.role === 'superadmin' || session.role === 'superuser')
+  return session !== null && session.role === 'superadmin'
 }
 
 export function hasUserSession(session: SessionInfo | null): boolean {

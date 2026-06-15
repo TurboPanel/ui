@@ -23,7 +23,7 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers`.
 - **Sign-up** — `/sign-up` when `isSignupEnabled` (from `GET /install/status`). Calls `POST /auth/sign-up`; no session is returned — user is redirected to `/sign-in` on success. Route is guest-only (authenticated users are redirected to dashboard). Not available when `needsInstall` is true. `sign-up.tsx` inlines `validatePassword` and `checkPwnedPassword` (no shared validation package). Pwned-password check uses `crypto.subtle.digest('SHA-1', …)` against `https://api.pwnedpasswords.com/range/{prefix}` with `Add-Padding: true` and a 5000ms timeout; fails open on error. The "Learn more" link hardcodes `https://turbopanel.io/docs/security/password-safety` — no `DOCS_BASE_URL` env var.
 - **Sign-in** — `/sign-in` after install; superadmin email + password only (host accounts cannot sign in).
-- **Dashboard** — `/<organizationId>/servers` once install completes (`session.organizationId`). Legacy `/<organizationId>/overview` and `/<organizationId>/servers/overview` redirect there.
+- **Dashboard** — `/<organizationId>/servers` once install completes (`session.organizationId`).
 - Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
 
 The developer console has been moved to the `turbopanel-dev` terminal console (`src/sections/` in that repo).
