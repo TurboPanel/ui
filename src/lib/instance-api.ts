@@ -173,3 +173,36 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export async function fetchHealth(): Promise<{ ok: boolean }> {
   return await apiFetch("/api/health");
 }
+
+export type LicenseRecord = {
+  id: string;
+  displayName: string | null;
+  createdAt: string;
+};
+
+export type CreatedLicense = {
+  licenseId: string;
+  licenseToken: string;
+  installCommand: string;
+};
+
+export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/licenses`);
+}
+
+export async function createLicense(
+  displayName?: string,
+): Promise<CreatedLicense> {
+  return await apiFetch(`${CLIENT_API}/licenses`, {
+    method: "POST",
+    body: displayName ? JSON.stringify({ displayName }) : undefined,
+  });
+}
+
+export async function revokeLicense(
+  licenseId: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/licenses/${licenseId}`, {
+    method: "DELETE",
+  });
+}

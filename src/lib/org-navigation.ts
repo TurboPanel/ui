@@ -11,6 +11,12 @@ export const ORG_AREAS = [
         pathSegment: 'networks',
         hint: 'Addresses, interfaces, and connectivity',
       },
+      {
+        id: 'licenses',
+        label: 'Licenses',
+        pathSegment: 'licenses',
+        hint: 'Server registration keys',
+      },
     ],
   },
 ] as const
