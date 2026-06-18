@@ -206,3 +206,187 @@ export async function revokeLicense(
     method: "DELETE",
   });
 }
+
+export type RoleRecord = {
+  id: string;
+  key: string;
+  displayName: string;
+  description: string | null;
+};
+
+export type PermissionRecord = {
+  id: string;
+  key: string;
+  displayName: string;
+  description: string | null;
+};
+
+export type AccessRecord = {
+  id: string;
+  subjectKind: "user" | "team" | "organization";
+  subjectId: string;
+  resourceId: string;
+  effect: "allow" | "deny";
+  roleId: string | null;
+  roleKey: string | null;
+  permissionId: string | null;
+  permissionKey: string | null;
+};
+
+export type CreateAccessBody = {
+  subjectKind: "user" | "team" | "organization";
+  subjectId: string;
+  resourceId: string;
+  effect: "allow" | "deny";
+  roleId?: string;
+  permissionId?: string;
+};
+
+export async function fetchRoles(): Promise<{ roles: RoleRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/roles`);
+}
+
+export async function fetchPermissions(): Promise<{ permissions: PermissionRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/permissions`);
+}
+
+export async function fetchAccessGrants(
+  resourceId: string,
+): Promise<{ access: AccessRecord[] }> {
+  const params = new URLSearchParams({ resourceId });
+  return await apiFetch(`${CLIENT_API}/access?${params.toString()}`);
+}
+
+export async function checkPermission(
+  resourceId: string,
+  permissionKey: string,
+): Promise<{ allowed: boolean }> {
+  const params = new URLSearchParams({ resourceId, permissionKey });
+  return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
+}
+
+export type AccessScopeKind =
+  | "organization"
+  | "realm"
+  | "environment"
+  | "project"
+  | "service"
+  | "hosting"
+  | "server";
+
+export async function resolveResourceId(
+  kind: AccessScopeKind,
+  itemId: string,
+): Promise<{ resourceId: string; kind: string; itemId: string }> {
+  const params = new URLSearchParams({ kind, itemId });
+  return await apiFetch(`${CLIENT_API}/access/resource-id?${params.toString()}`);
+}
+
+export type RealmRecord = {
+  id: string;
+  displayName: string | null;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EnvironmentRecord = {
+  id: string;
+  displayName: string | null;
+  organizationId: string;
+  realmId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProjectRecord = {
+  id: string;
+  displayName: string | null;
+  organizationId: string;
+  environmentId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ServiceRecord = {
+  id: string;
+  displayName: string | null;
+  organizationId: string;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HostingRecord = {
+  id: string;
+  displayName: string | null;
+  organizationId: string;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchVisibleRealms(): Promise<{ realms: RealmRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/realms`);
+}
+
+export async function fetchVisibleEnvironments(
+  realmId?: string,
+): Promise<{ environments: EnvironmentRecord[] }> {
+  const params = realmId ? new URLSearchParams({ realmId }) : null;
+  const suffix = params ? `?${params.toString()}` : "";
+  return await apiFetch(`${CLIENT_API}/environments${suffix}`);
+}
+
+export async function fetchVisibleProjects(
+  environmentId?: string,
+): Promise<{ projects: ProjectRecord[] }> {
+  const params = environmentId
+    ? new URLSearchParams({ environmentId })
+    : null;
+  const suffix = params ? `?${params.toString()}` : "";
+  return await apiFetch(`${CLIENT_API}/projects${suffix}`);
+}
+
+export async function fetchVisibleServices(
+  projectId?: string,
+): Promise<{ services: ServiceRecord[] }> {
+  const params = projectId ? new URLSearchParams({ projectId }) : null;
+  const suffix = params ? `?${params.toString()}` : "";
+  return await apiFetch(`${CLIENT_API}/services${suffix}`);
+}
+
+export async function fetchVisibleHostings(
+  projectId?: string,
+): Promise<{ hostings: HostingRecord[] }> {
+  const params = projectId ? new URLSearchParams({ projectId }) : null;
+  const suffix = params ? `?${params.toString()}` : "";
+  return await apiFetch(`${CLIENT_API}/hostings${suffix}`);
+}
+
+export async function createAccessGrant(
+  body: CreateAccessBody,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/access`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function revokeAccessGrant(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/access/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function acceptInvitation(
+  invitationId: string,
+): Promise<{ ok: true; organizationId: string }> {
+  return await apiFetch(`${CLIENT_API}/invitations/${invitationId}/accept`, {
+    method: "POST",
+  });
+}
+
+export function isForbiddenError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes("HTTP 403");
+}

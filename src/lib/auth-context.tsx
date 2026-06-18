@@ -17,7 +17,7 @@ import {
   type InstallStatus,
   type SessionInfo,
 } from '@/lib/instance-api'
-import { authQueryKeys } from '@/lib/query-client'
+import { authQueryKeys, isVisibilityQuery } from '@/lib/visibility-queries'
 
 type AuthContextValue = {
   session: SessionInfo | null
@@ -31,6 +31,7 @@ type AuthContextValue = {
   clearSession: () => void
   refreshSession: () => Promise<SessionInfo | null>
   refreshInstallStatus: () => Promise<boolean>
+  handleUnauthorized: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -114,6 +115,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null)
   }, [])
 
+  const handleUnauthorized = useCallback(async () => {
+    await queryClient.invalidateQueries({ predicate: isVisibilityQuery })
+    const data = await refreshSession()
+    if (!data) {
+      setSession(null)
+    }
+  }, [queryClient, refreshSession])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -127,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSession,
       refreshSession,
       refreshInstallStatus,
+      handleUnauthorized,
     }),
     [
       session,
@@ -140,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSession,
       refreshSession,
       refreshInstallStatus,
+      handleUnauthorized,
     ],
   )
 

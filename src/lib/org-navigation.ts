@@ -19,6 +19,13 @@ export const ORG_AREAS = [
       },
     ],
   },
+  {
+    id: 'access',
+    label: 'Access',
+    pathSegment: 'access',
+    hint: 'Roles, permissions, and grants',
+    subRoutes: [],
+  },
 ] as const
 
 export type OrgAreaId = (typeof ORG_AREAS)[number]['id']

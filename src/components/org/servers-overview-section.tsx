@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { fetchOrgServers, type OrgServerRecord } from '@/lib/instance-api'
+import { useAuth } from '@/lib/auth-context'
+import {
+  fetchOrgServers,
+  isForbiddenError,
+  type OrgServerRecord,
+} from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
 
 function serverTitle(server: OrgServerRecord): string {
@@ -10,6 +15,7 @@ function serverTitle(server: OrgServerRecord): string {
 }
 
 export function ServersOverviewSection({ orgId }: { orgId: string }) {
+  const { handleUnauthorized } = useAuth()
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +33,14 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load servers')
+          if (isForbiddenError(err)) {
+            await handleUnauthorized()
+            setError(
+              err instanceof Error ? err.message : 'Access to servers was denied',
+            )
+          } else {
+            setError(err instanceof Error ? err.message : 'Failed to load servers')
+          }
         }
       } finally {
         if (!cancelled) {
@@ -43,7 +56,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       cancelled = true
       clearInterval(timer)
     }
-  }, [orgId])
+  }, [orgId, handleUnauthorized])
 
   return (
     <View style={styles.root}>

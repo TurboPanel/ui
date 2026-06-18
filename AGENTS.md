@@ -46,6 +46,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 |-------|-----------|---------|
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
+| `/<orgId>/access` | `access-overview-section.tsx` | Role/permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
 
@@ -56,3 +57,14 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 ### Instance API
 
 Types and helpers: `src/lib/instance-api.ts` (auth, install, org servers, health). Update when `/api/client/v1` or `/api/install/v1` endpoints change.
+
+Authorization helpers:
+
+- `GET /api/client/v1/roles` → `fetchRoles()`
+- `GET /api/client/v1/permissions` → `fetchPermissions()`
+- `GET /api/client/v1/access?resourceId=<uuid>` → `fetchAccessGrants(resourceId)`
+- `POST /api/client/v1/access` → `createAccessGrant(body)`
+- `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
+- `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
+
+`useCan(resourceId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
