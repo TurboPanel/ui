@@ -46,3 +46,5 @@ example
 /android
 
 .pnpm-store/
+# co-located dev host stamp (normalize-dev-checkout.sh)
+.turbopanel-checkout-stamp
