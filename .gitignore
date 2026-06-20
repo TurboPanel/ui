@@ -11,6 +11,7 @@ expo-env.d.ts
 .cache/
 .local/
 .config/
+logs/
 
 # Native
 .kotlin/
