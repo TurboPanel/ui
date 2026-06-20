@@ -46,7 +46,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 |-------|-----------|---------|
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
-| `/<orgId>/access` | `access-overview-section.tsx` | Role/permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
+| `/<orgId>/access` | `access-overview-section.tsx` | Access profile / permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
 
@@ -60,10 +60,10 @@ Types and helpers: `src/lib/instance-api.ts` (auth, install, org servers, health
 
 Authorization helpers:
 
-- `GET /api/client/v1/roles` → `fetchRoles()`
+- `GET /api/client/v1/access-profiles` → `fetchAccessProfiles()` — returns `{ accessProfiles: { key, displayName, permissions }[] }`
 - `GET /api/client/v1/permissions` → `fetchPermissions()`
 - `GET /api/client/v1/access?resourceId=<uuid>` → `fetchAccessGrants(resourceId)`
-- `POST /api/client/v1/access` → `createAccessGrant(body)`
+- `POST /api/client/v1/access` → `createAccessGrant(body)` — body: `{ subjectKind, subjectId, resourceId, effect, accessProfileKey?, permissionKey? }`; exactly one of `accessProfileKey` or `permissionKey` required
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 

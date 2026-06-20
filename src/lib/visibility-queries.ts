@@ -2,7 +2,7 @@ import type { AccessScopeKind } from '@/lib/instance-api'
 
 export const authQueryKeys = {
   authStatus: ['auth-status'] as const,
-  roles: ['roles'] as const,
+  accessProfiles: ['access-profiles'] as const,
   permissions: ['permissions'] as const,
   accessGrants: (resourceId: string) => ['access-grants', resourceId] as const,
 }

@@ -16,7 +16,7 @@ import {
   fetchAccessGrants,
   fetchOrgServers,
   fetchPermissions,
-  fetchRoles,
+  fetchAccessProfiles,
   fetchVisibleEnvironments,
   fetchVisibleHostings,
   fetchVisibleProjects,
@@ -39,7 +39,7 @@ import {
 import { colors, spacing } from '@/lib/theme'
 
 type SubjectKind = CreateAccessBody['subjectKind']
-type GrantTarget = 'role' | 'permission'
+type GrantTarget = 'accessProfile' | 'permission'
 type Effect = CreateAccessBody['effect']
 
 const SCOPE_KINDS: { kind: AccessScopeKind; label: string }[] = [
@@ -129,8 +129,8 @@ function scopeItemsQueryKey(kind: AccessScopeKind, orgId: string) {
 }
 
 function grantLabel(grant: AccessRecord): string {
-  if (grant.roleKey) {
-    return `role: ${grant.roleKey}`
+  if (grant.accessProfileKey) {
+    return `access profile: ${grant.accessProfileKey}`
   }
   if (grant.permissionKey) {
     return `permission: ${grant.permissionKey}`
@@ -182,9 +182,9 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
 
   const [subjectKind, setSubjectKind] = useState<SubjectKind>('user')
   const [subjectId, setSubjectId] = useState('')
-  const [grantTarget, setGrantTarget] = useState<GrantTarget>('role')
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
-  const [selectedPermissionId, setSelectedPermissionId] = useState<string | null>(
+  const [grantTarget, setGrantTarget] = useState<GrantTarget>('accessProfile')
+  const [selectedAccessProfileKey, setSelectedAccessProfileKey] = useState<string | null>(null)
+  const [selectedPermissionKey, setSelectedPermissionKey] = useState<string | null>(
     null,
   )
   const [effect, setEffect] = useState<Effect>('allow')
@@ -203,10 +203,10 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
 
   useForbiddenRecovery(grantsQuery.error)
 
-  const rolesQuery = useQuery({
-    queryKey: authQueryKeys.roles,
-    queryFn: fetchRoles,
-    enabled: canManage && grantTarget === 'role',
+  const accessProfilesQuery = useQuery({
+    queryKey: authQueryKeys.accessProfiles,
+    queryFn: fetchAccessProfiles,
+    enabled: canManage && grantTarget === 'accessProfile',
   })
 
   const permissionsQuery = useQuery({
@@ -262,18 +262,18 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
       effect,
     }
 
-    if (grantTarget === 'role') {
-      if (!selectedRoleId) {
-        setSubmitError('Select a role')
+    if (grantTarget === 'accessProfile') {
+      if (!selectedAccessProfileKey) {
+        setSubmitError('Select an access profile')
         return
       }
-      body.roleId = selectedRoleId
+      body.accessProfileKey = selectedAccessProfileKey
     } else {
-      if (!selectedPermissionId) {
+      if (!selectedPermissionKey) {
         setSubmitError('Select a permission')
         return
       }
-      body.permissionId = selectedPermissionId
+      body.permissionKey = selectedPermissionKey
     }
 
     setSubmitting(true)
@@ -281,8 +281,8 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     try {
       await createAccessGrant(body)
       setSubjectId('')
-      setSelectedRoleId(null)
-      setSelectedPermissionId(null)
+      setSelectedAccessProfileKey(null)
+      setSelectedPermissionKey(null)
       await queryClient.invalidateQueries({
         queryKey: authQueryKeys.accessGrants(resourceId),
       })
@@ -306,7 +306,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     <View style={styles.root}>
       <Text style={styles.heading}>Access</Text>
       <Text style={styles.copy}>
-        Manage role and permission grants for organization resources.
+        Manage access profile and permission grants for organization resources.
       </Text>
 
       <SectionPanel title="Scope" hint="Choose the resource to manage">
@@ -455,7 +455,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
           </SectionPanel>
 
           {canManage ? (
-            <SectionPanel title="Add grant" hint="Assign a role or permission">
+            <SectionPanel title="Add grant" hint="Assign an access profile or permission">
               <View style={styles.form}>
                 <Text style={styles.label}>Subject kind</Text>
                 <View style={styles.chipRow}>
@@ -497,7 +497,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
 
                 <Text style={styles.label}>Grant target</Text>
                 <View style={styles.chipRow}>
-                  {(['role', 'permission'] as const).map((target) => (
+                  {(['accessProfile', 'permission'] as const).map((target) => (
                     <Pressable
                       key={target}
                       style={[
@@ -506,8 +506,8 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                       ]}
                       onPress={() => {
                         setGrantTarget(target)
-                        setSelectedRoleId(null)
-                        setSelectedPermissionId(null)
+                        setSelectedAccessProfileKey(null)
+                        setSelectedPermissionKey(null)
                         setSubmitError(null)
                       }}
                     >
@@ -517,38 +517,38 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                           grantTarget === target && styles.chipTextActive,
                         ]}
                       >
-                        {target === 'role' ? 'Role' : 'Permission'}
+                        {target === 'accessProfile' ? 'Access Profile' : 'Permission'}
                       </Text>
                     </Pressable>
                   ))}
                 </View>
 
                 <Text style={styles.label}>
-                  {grantTarget === 'role' ? 'Role' : 'Permission'}
+                  {grantTarget === 'accessProfile' ? 'Access Profile' : 'Permission'}
                 </Text>
                 <ScrollView style={styles.pickerList} nestedScrollEnabled>
-                  {grantTarget === 'role' ? (
-                    rolesQuery.isLoading ? (
-                      <Text style={orgPanelStyles.muted}>Loading roles...</Text>
+                  {grantTarget === 'accessProfile' ? (
+                    accessProfilesQuery.isLoading ? (
+                      <Text style={orgPanelStyles.muted}>Loading access profiles...</Text>
                     ) : (
-                      (rolesQuery.data?.roles ?? []).map((role) => {
-                        const selected = selectedRoleId === role.id
+                      (accessProfilesQuery.data?.accessProfiles ?? []).map((profile) => {
+                        const selected = selectedAccessProfileKey === profile.key
                         return (
                           <Pressable
-                            key={role.id}
+                            key={profile.key}
                             style={[
                               styles.pickerRow,
                               selected && styles.pickerRowSelected,
                             ]}
                             onPress={() => {
-                              setSelectedRoleId(role.id)
+                              setSelectedAccessProfileKey(profile.key)
                               setSubmitError(null)
                             }}
                           >
                             <Text style={styles.pickerTitle}>
-                              {role.displayName}
+                              {profile.displayName}
                             </Text>
-                            <Text style={styles.pickerMeta}>{role.key}</Text>
+                            <Text style={styles.pickerMeta}>{profile.key}</Text>
                           </Pressable>
                         )
                       })
@@ -558,16 +558,16 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                   ) : (
                     (permissionsQuery.data?.permissions ?? []).map(
                       (permission) => {
-                        const selected = selectedPermissionId === permission.id
+                        const selected = selectedPermissionKey === permission.key
                         return (
                           <Pressable
-                            key={permission.id}
+                            key={permission.key}
                             style={[
                               styles.pickerRow,
                               selected && styles.pickerRowSelected,
                             ]}
                             onPress={() => {
-                              setSelectedPermissionId(permission.id)
+                              setSelectedPermissionKey(permission.key)
                               setSubmitError(null)
                             }}
                           >

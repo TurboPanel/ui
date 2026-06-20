@@ -207,18 +207,15 @@ export async function revokeLicense(
   });
 }
 
-export type RoleRecord = {
-  id: string;
+export type AccessProfileRecord = {
   key: string;
   displayName: string;
-  description: string | null;
+  permissions: string[];
 };
 
 export type PermissionRecord = {
-  id: string;
   key: string;
   displayName: string;
-  description: string | null;
 };
 
 export type AccessRecord = {
@@ -227,9 +224,7 @@ export type AccessRecord = {
   subjectId: string;
   resourceId: string;
   effect: "allow" | "deny";
-  roleId: string | null;
-  roleKey: string | null;
-  permissionId: string | null;
+  accessProfileKey: string | null;
   permissionKey: string | null;
 };
 
@@ -238,12 +233,12 @@ export type CreateAccessBody = {
   subjectId: string;
   resourceId: string;
   effect: "allow" | "deny";
-  roleId?: string;
-  permissionId?: string;
+  accessProfileKey?: string;
+  permissionKey?: string;
 };
 
-export async function fetchRoles(): Promise<{ roles: RoleRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/roles`);
+export async function fetchAccessProfiles(): Promise<{ accessProfiles: AccessProfileRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/access-profiles`);
 }
 
 export async function fetchPermissions(): Promise<{ permissions: PermissionRecord[] }> {
