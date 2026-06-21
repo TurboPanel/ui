@@ -218,21 +218,33 @@ export type PermissionRecord = {
   displayName: string;
 };
 
-export type AccessRecord = {
+export type AccessScopeKind =
+  | "organization"
+  | "realm"
+  | "environment"
+  | "project"
+  | "service"
+  | "hosting"
+  | "server";
+
+export type AccessGrantRecord = {
   id: string;
-  subjectKind: "user" | "team" | "organization";
+  entityType: AccessScopeKind;
+  entityId: string;
+  subjectType: "user" | "team" | "organization";
   subjectId: string;
-  resourceId: string;
-  effect: "allow" | "deny";
-  accessProfileKey: string | null;
-  permissionKey: string | null;
+  permission: string;
+  allowed: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CreateAccessBody = {
-  subjectKind: "user" | "team" | "organization";
+  entityType: AccessScopeKind;
+  entityId: string;
+  subjectType: "user" | "team" | "organization";
   subjectId: string;
-  resourceId: string;
-  effect: "allow" | "deny";
+  allowed?: boolean;
   accessProfileKey?: string;
   permissionKey?: string;
 };
@@ -246,35 +258,20 @@ export async function fetchPermissions(): Promise<{ permissions: PermissionRecor
 }
 
 export async function fetchAccessGrants(
-  resourceId: string,
-): Promise<{ access: AccessRecord[] }> {
-  const params = new URLSearchParams({ resourceId });
+  entityType: AccessScopeKind,
+  entityId: string,
+): Promise<{ access: AccessGrantRecord[] }> {
+  const params = new URLSearchParams({ entityType, entityId });
   return await apiFetch(`${CLIENT_API}/access?${params.toString()}`);
 }
 
 export async function checkPermission(
-  resourceId: string,
+  entityType: string,
+  entityId: string,
   permissionKey: string,
 ): Promise<{ allowed: boolean }> {
-  const params = new URLSearchParams({ resourceId, permissionKey });
+  const params = new URLSearchParams({ entityType, entityId, permissionKey });
   return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
-}
-
-export type AccessScopeKind =
-  | "organization"
-  | "realm"
-  | "environment"
-  | "project"
-  | "service"
-  | "hosting"
-  | "server";
-
-export async function resolveResourceId(
-  kind: AccessScopeKind,
-  itemId: string,
-): Promise<{ resourceId: string; kind: string; itemId: string }> {
-  const params = new URLSearchParams({ kind, itemId });
-  return await apiFetch(`${CLIENT_API}/access/resource-id?${params.toString()}`);
 }
 
 export type RealmRecord = {
@@ -361,7 +358,7 @@ export async function fetchVisibleHostings(
 
 export async function createAccessGrant(
   body: CreateAccessBody,
-): Promise<{ ok: true; id: string }> {
+): Promise<{ ok: true; ids: string[] }> {
   return await apiFetch(`${CLIENT_API}/access`, {
     method: "POST",
     body: JSON.stringify(body),

@@ -23,9 +23,7 @@ import {
   fetchVisibleRealms,
   fetchVisibleServices,
   isForbiddenError,
-  resolveResourceId,
   revokeAccessGrant,
-  type AccessRecord,
   type AccessScopeKind,
   type CreateAccessBody,
 } from '@/lib/instance-api'
@@ -38,9 +36,8 @@ import {
 } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
-type SubjectKind = CreateAccessBody['subjectKind']
+type SubjectKind = CreateAccessBody['subjectType']
 type GrantTarget = 'accessProfile' | 'permission'
-type Effect = CreateAccessBody['effect']
 
 const SCOPE_KINDS: { kind: AccessScopeKind; label: string }[] = [
   { kind: 'organization', label: 'Organization' },
@@ -128,16 +125,6 @@ function scopeItemsQueryKey(kind: AccessScopeKind, orgId: string) {
   }
 }
 
-function grantLabel(grant: AccessRecord): string {
-  if (grant.accessProfileKey) {
-    return `access profile: ${grant.accessProfileKey}`
-  }
-  if (grant.permissionKey) {
-    return `permission: ${grant.permissionKey}`
-  }
-  return 'unknown grant'
-}
-
 export function AccessOverviewSection({ orgId }: { orgId: string }) {
   const { handleUnauthorized } = useAuth()
   const queryClient = useQueryClient()
@@ -168,37 +155,25 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     }
   }, [scopeKind, orgId, scopeItemsQuery.data, selectedItemId])
 
-  const resourceQuery = useQuery({
-    queryKey: visibilityQueryKeys.resourceId(scopeKind, selectedItemId),
-    queryFn: () => resolveResourceId(scopeKind, selectedItemId),
-    enabled: selectedItemId.length > 0,
-  })
-
-  useForbiddenRecovery(resourceQuery.error)
-
-  const resourceId = resourceQuery.data?.resourceId ?? null
   const managePermission = getAccessManagementPermissionKey(scopeKind)
-  const canManage = useCan(resourceId, managePermission)
+  const canManage = useCan(scopeKind, selectedItemId, managePermission)
 
-  const [subjectKind, setSubjectKind] = useState<SubjectKind>('user')
+  const [subjectType, setSubjectType] = useState<SubjectKind>('user')
   const [subjectId, setSubjectId] = useState('')
   const [grantTarget, setGrantTarget] = useState<GrantTarget>('accessProfile')
   const [selectedAccessProfileKey, setSelectedAccessProfileKey] = useState<string | null>(null)
   const [selectedPermissionKey, setSelectedPermissionKey] = useState<string | null>(
     null,
   )
-  const [effect, setEffect] = useState<Effect>('allow')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [revoking, setRevoking] = useState<Set<string>>(() => new Set())
   const [actionError, setActionError] = useState<string | null>(null)
 
   const grantsQuery = useQuery({
-    queryKey: resourceId
-      ? authQueryKeys.accessGrants(resourceId)
-      : ['access-grants', 'unavailable'],
-    queryFn: () => fetchAccessGrants(resourceId!),
-    enabled: resourceId !== null,
+    queryKey: authQueryKeys.accessGrants(scopeKind, selectedItemId),
+    queryFn: () => fetchAccessGrants(scopeKind, selectedItemId),
+    enabled: selectedItemId.length > 0,
   })
 
   useForbiddenRecovery(grantsQuery.error)
@@ -216,7 +191,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
   })
 
   const onRevokeGrant = async (grantId: string) => {
-    if (!resourceId) {
+    if (!selectedItemId) {
       return
     }
 
@@ -225,7 +200,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     try {
       await revokeAccessGrant(grantId)
       await queryClient.invalidateQueries({
-        queryKey: authQueryKeys.accessGrants(resourceId),
+        queryKey: authQueryKeys.accessGrants(scopeKind, selectedItemId),
       })
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -245,7 +220,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
   }
 
   const onCreateGrant = async () => {
-    if (!resourceId) {
+    if (!selectedItemId) {
       return
     }
 
@@ -256,10 +231,11 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     }
 
     const body: CreateAccessBody = {
-      subjectKind,
+      entityType: scopeKind,
+      entityId: selectedItemId,
+      subjectType,
       subjectId: trimmedSubjectId,
-      resourceId,
-      effect,
+      allowed: true,
     }
 
     if (grantTarget === 'accessProfile') {
@@ -284,7 +260,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
       setSelectedAccessProfileKey(null)
       setSelectedPermissionKey(null)
       await queryClient.invalidateQueries({
-        queryKey: authQueryKeys.accessGrants(resourceId),
+        queryKey: authQueryKeys.accessGrants(scopeKind, selectedItemId),
       })
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -375,27 +351,9 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
             Managing access for organization {orgId}.
           </Text>
         )}
-
-        {resourceQuery.isError ? (
-          <Text style={orgPanelStyles.error}>
-            {resourceQuery.error instanceof Error
-              ? resourceQuery.error.message
-              : 'Failed to resolve resource scope'}
-          </Text>
-        ) : resourceQuery.isLoading && selectedItemId ? (
-          <Text style={orgPanelStyles.muted}>Resolving resource scope...</Text>
-        ) : null}
       </SectionPanel>
 
-      {resourceId === null ? (
-        <SectionPanel title="Access grants">
-          <Text style={orgPanelStyles.muted}>
-            Select a scope with a registered resource to view grants.
-          </Text>
-        </SectionPanel>
-      ) : (
-        <>
-          <SectionPanel title="Access grants" hint="Active allow and deny rows">
+      <SectionPanel title="Access grants" hint="Active allow and deny rows">
             {actionError ? (
               <Text style={orgPanelStyles.error}>{actionError}</Text>
             ) : null}
@@ -414,21 +372,21 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                 {grants.map((grant) => {
                   const isRevoking = revoking.has(grant.id)
                   const effectStyle =
-                    grant.effect === 'allow' ? styles.badgeAllow : styles.badgeDeny
+                    grant.allowed ? styles.badgeAllow : styles.badgeDeny
 
                   return (
                     <View key={grant.id} style={orgPanelStyles.detailCard}>
                       <View style={styles.cardHeader}>
                         <View style={styles.cardTitleBlock}>
                           <Text style={orgPanelStyles.detailTitle}>
-                            {grant.subjectKind}: {grant.subjectId}
+                            {grant.subjectType}: {grant.subjectId}
                           </Text>
                           <View style={styles.badgeRow}>
                             <Text style={[styles.badge, effectStyle]}>
-                              {grant.effect}
+                              {grant.allowed ? 'allow' : 'deny'}
                             </Text>
                             <Text style={orgPanelStyles.detailLine}>
-                              {grantLabel(grant)}
+                              permission: {grant.permission}
                             </Text>
                           </View>
                         </View>
@@ -464,14 +422,14 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                       key={kind}
                       style={[
                         styles.chip,
-                        subjectKind === kind && styles.chipActive,
+                        subjectType === kind && styles.chipActive,
                       ]}
-                      onPress={() => setSubjectKind(kind)}
+                      onPress={() => setSubjectType(kind)}
                     >
                       <Text
                         style={[
                           styles.chipText,
-                          subjectKind === kind && styles.chipTextActive,
+                          subjectType === kind && styles.chipTextActive,
                         ]}
                       >
                         {kind}
@@ -584,26 +542,6 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                   )}
                 </ScrollView>
 
-                <Text style={styles.label}>Effect</Text>
-                <View style={styles.chipRow}>
-                  {(['allow', 'deny'] as const).map((value) => (
-                    <Pressable
-                      key={value}
-                      style={[styles.chip, effect === value && styles.chipActive]}
-                      onPress={() => setEffect(value)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          effect === value && styles.chipTextActive,
-                        ]}
-                      >
-                        {value}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
                 {submitError ? (
                   <Text style={orgPanelStyles.error}>{submitError}</Text>
                 ) : null}
@@ -628,8 +566,6 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
               </Text>
             </SectionPanel>
           )}
-        </>
-      )}
     </View>
   )
 }

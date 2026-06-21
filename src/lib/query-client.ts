@@ -38,22 +38,27 @@ export function useForbiddenRecovery(error: unknown) {
  * on a resource. This is **not** a security boundary — the API enforces authz.
  */
 export function useCan(
-  resourceId: string | null,
+  entityType: string | null,
+  entityId: string,
   permissionKey: string,
 ): boolean {
   const query = useQuery({
-    queryKey: visibilityQueryKeys.can(resourceId ?? '', permissionKey),
+    queryKey: visibilityQueryKeys.can(
+      entityType ?? '',
+      entityId,
+      permissionKey,
+    ),
     queryFn: async () => {
-      const result = await checkPermission(resourceId!, permissionKey)
+      const result = await checkPermission(entityType!, entityId, permissionKey)
       return result.allowed
     },
-    enabled: resourceId !== null,
+    enabled: entityType !== null && entityId.length > 0,
     staleTime: 30_000,
   })
 
   useForbiddenRecovery(query.error)
 
-  if (resourceId === null || query.isLoading) {
+  if (entityType === null || query.isLoading) {
     return false
   }
 

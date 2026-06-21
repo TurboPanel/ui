@@ -4,7 +4,8 @@ export const authQueryKeys = {
   authStatus: ['auth-status'] as const,
   accessProfiles: ['access-profiles'] as const,
   permissions: ['permissions'] as const,
-  accessGrants: (resourceId: string) => ['access-grants', resourceId] as const,
+  accessGrants: (entityType: string, entityId: string) =>
+    ['access-grants', entityType, entityId] as const,
 }
 
 export const visibilityQueryKeys = {
@@ -18,10 +19,8 @@ export const visibilityQueryKeys = {
     ['visible-services', projectId ?? 'all'] as const,
   hostings: (projectId?: string) =>
     ['visible-hostings', projectId ?? 'all'] as const,
-  resourceId: (kind: AccessScopeKind, itemId: string) =>
-    ['resource-id', kind, itemId] as const,
-  can: (resourceId: string, permissionKey: string) =>
-    ['can', resourceId, permissionKey] as const,
+  can: (entityType: string, entityId: string, permissionKey: string) =>
+    ['can', entityType, entityId, permissionKey] as const,
 }
 
 export function isVisibilityQuery(query: {
@@ -35,7 +34,6 @@ export function isVisibilityQuery(query: {
     root === 'visible-projects' ||
     root === 'visible-services' ||
     root === 'visible-hostings' ||
-    root === 'resource-id' ||
     root === 'access-grants' ||
     root === 'can'
   )

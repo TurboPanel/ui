@@ -62,9 +62,9 @@ Authorization helpers:
 
 - `GET /api/client/v1/access-profiles` → `fetchAccessProfiles()` — returns `{ accessProfiles: { key, displayName, permissions }[] }`
 - `GET /api/client/v1/permissions` → `fetchPermissions()`
-- `GET /api/client/v1/access?resourceId=<uuid>` → `fetchAccessGrants(resourceId)`
-- `POST /api/client/v1/access` → `createAccessGrant(body)` — body: `{ subjectKind, subjectId, resourceId, effect, accessProfileKey?, permissionKey? }`; exactly one of `accessProfileKey` or `permissionKey` required
+- `GET /api/client/v1/access?entityType=<kind>&entityId=<uuid>` → `fetchAccessGrants(entityType, entityId)` — returns `AccessGrantRecord[]`; each row carries `entityType`, `entityId`, `subjectType`, `subjectId`, `permission`, `allowed`, `createdAt`, `updatedAt`
+- `POST /api/client/v1/access` → `createAccessGrant(body: CreateAccessBody)` — body: `{ entityType, entityId, subjectType, subjectId, allowed?, accessProfileKey?, permissionKey? }`; exactly one of `accessProfileKey` or `permissionKey` required; `accessProfileKey` is expanded server-side to multiple atomic `access_grant` rows
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 
-`useCan(resourceId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
+`useCan(entityType, entityId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
