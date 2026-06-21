@@ -20,7 +20,7 @@ import {
   fetchVisibleEnvironments,
   fetchVisibleHostings,
   fetchVisibleProjects,
-  fetchVisibleRealms,
+  fetchVisibleWorkspaces,
   fetchVisibleServices,
   isForbiddenError,
   revokeAccessGrant,
@@ -41,7 +41,7 @@ type GrantTarget = 'accessProfile' | 'permission'
 
 const SCOPE_KINDS: { kind: AccessScopeKind; label: string }[] = [
   { kind: 'organization', label: 'Organization' },
-  { kind: 'realm', label: 'Realm' },
+  { kind: 'workspace', label: 'Workspace' },
   { kind: 'environment', label: 'Environment' },
   { kind: 'project', label: 'Project' },
   { kind: 'service', label: 'Service' },
@@ -61,9 +61,9 @@ async function loadScopeItems(
   switch (kind) {
     case 'organization':
       return [{ id: orgId, label: 'Organization' }]
-    case 'realm': {
-      const { realms } = await fetchVisibleRealms()
-      return realms.map((row) => ({
+    case 'workspace': {
+      const { workspaces } = await fetchVisibleWorkspaces()
+      return workspaces.map((row) => ({
         id: row.id,
         label: row.displayName?.trim() || row.id,
       }))
@@ -110,8 +110,8 @@ function scopeItemsQueryKey(kind: AccessScopeKind, orgId: string) {
   switch (kind) {
     case 'organization':
       return ['scope-items', 'organization', orgId] as const
-    case 'realm':
-      return visibilityQueryKeys.realms
+    case 'workspace':
+      return visibilityQueryKeys.workspaces
     case 'environment':
       return visibilityQueryKeys.environments()
     case 'project':

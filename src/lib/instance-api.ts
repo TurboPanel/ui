@@ -220,7 +220,7 @@ export type PermissionRecord = {
 
 export type AccessScopeKind =
   | "organization"
-  | "realm"
+  | "workspace"
   | "environment"
   | "project"
   | "service"
@@ -274,7 +274,7 @@ export async function checkPermission(
   return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
 }
 
-export type RealmRecord = {
+export type WorkspaceRecord = {
   id: string;
   displayName: string | null;
   organizationId: string;
@@ -286,7 +286,7 @@ export type EnvironmentRecord = {
   id: string;
   displayName: string | null;
   organizationId: string;
-  realmId: string;
+  workspaceId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -318,14 +318,14 @@ export type HostingRecord = {
   updatedAt: string;
 };
 
-export async function fetchVisibleRealms(): Promise<{ realms: RealmRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/realms`);
+export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/workspaces`);
 }
 
 export async function fetchVisibleEnvironments(
-  realmId?: string,
+  workspaceId?: string,
 ): Promise<{ environments: EnvironmentRecord[] }> {
-  const params = realmId ? new URLSearchParams({ realmId }) : null;
+  const params = workspaceId ? new URLSearchParams({ workspaceId }) : null;
   const suffix = params ? `?${params.toString()}` : "";
   return await apiFetch(`${CLIENT_API}/environments${suffix}`);
 }

@@ -10,9 +10,9 @@ export const authQueryKeys = {
 
 export const visibilityQueryKeys = {
   orgServers: ['org-servers'] as const,
-  realms: ['visible-realms'] as const,
-  environments: (realmId?: string) =>
-    ['visible-environments', realmId ?? 'all'] as const,
+  workspaces: ['visible-workspaces'] as const,
+  environments: (workspaceId?: string) =>
+    ['visible-environments', workspaceId ?? 'all'] as const,
   projects: (environmentId?: string) =>
     ['visible-projects', environmentId ?? 'all'] as const,
   services: (projectId?: string) =>
@@ -29,7 +29,7 @@ export function isVisibilityQuery(query: {
   const root = query.queryKey[0]
   return (
     root === 'org-servers' ||
-    root === 'visible-realms' ||
+    root === 'visible-workspaces' ||
     root === 'visible-environments' ||
     root === 'visible-projects' ||
     root === 'visible-services' ||
