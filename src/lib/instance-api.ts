@@ -112,6 +112,7 @@ export type OrgServerRecord = {
   id: string;
   displayName: string | null;
   organizationId: string | null;
+  licenseId: string | null;
   options: Record<string, unknown> | null;
   createdAt: string;
   connected: boolean;

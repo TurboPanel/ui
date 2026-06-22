@@ -1,19 +1,16 @@
-import * as Clipboard from 'expo-clipboard'
 import { useEffect, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
+import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
-  createLicense,
   fetchLicenses,
   revokeLicense,
-  type CreatedLicense,
   type LicenseRecord,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
@@ -26,11 +23,6 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
   const [licenses, setLicenses] = useState<LicenseRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [displayName, setDisplayName] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [revealed, setRevealed] = useState<CreatedLicense | null>(null)
-  const [installCommandCopied, setInstallCommandCopied] = useState(false)
   const [revoking, setRevoking] = useState<Set<string>>(() => new Set())
 
   const loadLicenses = async () => {
@@ -76,35 +68,6 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
       clearInterval(timer)
     }
   }, [orgId])
-
-  const onCreateLicense = async () => {
-    setCreating(true)
-    setCreateError(null)
-    try {
-      const created = await createLicense(displayName.trim() || undefined)
-      setRevealed(created)
-      setInstallCommandCopied(false)
-      setDisplayName('')
-      await loadLicenses()
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create license')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const onCopyInstallCommand = async () => {
-    if (!revealed) {
-      return
-    }
-
-    try {
-      await Clipboard.setStringAsync(revealed.installCommand)
-      setInstallCommandCopied(true)
-    } catch {
-      setInstallCommandCopied(false)
-    }
-  }
 
   const onRevokeLicense = async (licenseId: string) => {
     setRevoking((current) => new Set(current).add(licenseId))
@@ -174,72 +137,7 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
         )}
       </SectionPanel>
 
-      <SectionPanel
-        title="Add a server"
-        hint="Generate a license and install command"
-      >
-        <View style={styles.form}>
-          <Text style={styles.label}>Display name (optional)</Text>
-          <TextInput
-            value={displayName}
-            onChangeText={(text) => {
-              setDisplayName(text)
-              setCreateError(null)
-            }}
-            placeholder="Production web server"
-            placeholderTextColor={colors.textDim}
-            editable={!creating}
-            style={styles.input}
-          />
-          {createError ? (
-            <Text style={orgPanelStyles.error}>{createError}</Text>
-          ) : null}
-          <Pressable
-            style={[styles.primaryButton, creating && styles.buttonDisabled]}
-            disabled={creating}
-            onPress={() => void onCreateLicense()}
-          >
-            <Text style={styles.primaryButtonText}>
-              {creating ? 'Creating...' : 'Create License'}
-            </Text>
-          </Pressable>
-        </View>
-
-        {revealed ? (
-          <View style={styles.revealed}>
-            <Text style={styles.warning}>
-              Save this token now - it will not be shown again.
-            </Text>
-            <Text style={styles.secretLabel}>License token</Text>
-            <Text selectable style={styles.secretValue}>
-              {revealed.licenseToken}
-            </Text>
-            <Text style={styles.secretLabel}>Install command</Text>
-            <Text selectable style={styles.secretValue}>
-              {revealed.installCommand}
-            </Text>
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={() => void onCopyInstallCommand()}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {installCommandCopied
-                  ? 'Copied install command'
-                  : 'Copy install command'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={() => {
-                setRevealed(null)
-                setInstallCommandCopied(false)
-              }}
-            >
-              <Text style={styles.secondaryButtonText}>Done</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </SectionPanel>
+      <AddServerWizard onDone={loadLicenses} />
     </View>
   )
 }
@@ -268,37 +166,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  form: {
-    gap: spacing.sm,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: colors.buttonText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
   secondaryButton: {
     alignSelf: 'flex-start',
     borderColor: colors.borderChip,
@@ -314,32 +181,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  revealed: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
-    padding: spacing.md,
-  },
-  warning: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secretLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  secretValue: {
-    color: colors.stdout,
-    fontFamily: 'monospace',
-    fontSize: 12,
-    lineHeight: 18,
   },
 })
