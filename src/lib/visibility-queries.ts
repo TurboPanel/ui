@@ -2,13 +2,13 @@ import type { AccessScopeKind } from '@/lib/instance-api'
 
 export const authQueryKeys = {
   authStatus: ['auth-status'] as const,
-  accessProfiles: ['access-profiles'] as const,
   permissions: ['permissions'] as const,
-  accessGrants: (entityType: string, entityId: string) =>
-    ['access-grants', entityType, entityId] as const,
+  accessGrants: (resourceId: string) =>
+    ['access-grants', resourceId] as const,
 }
 
 export const visibilityQueryKeys = {
+  teams: ['visible-teams'] as const,
   orgServers: ['org-servers'] as const,
   workspaces: ['visible-workspaces'] as const,
   environments: (workspaceId?: string) =>
@@ -19,8 +19,8 @@ export const visibilityQueryKeys = {
     ['visible-services', projectId ?? 'all'] as const,
   hostings: (projectId?: string) =>
     ['visible-hostings', projectId ?? 'all'] as const,
-  can: (entityType: string, entityId: string, permissionKey: string) =>
-    ['can', entityType, entityId, permissionKey] as const,
+  can: (resourceId: string, permissionKey: string) =>
+    ['can', resourceId, permissionKey] as const,
 }
 
 export function isVisibilityQuery(query: {
@@ -29,6 +29,7 @@ export function isVisibilityQuery(query: {
   const root = query.queryKey[0]
   return (
     root === 'org-servers' ||
+    root === 'visible-teams' ||
     root === 'visible-workspaces' ||
     root === 'visible-environments' ||
     root === 'visible-projects' ||
@@ -39,9 +40,11 @@ export function isVisibilityQuery(query: {
   )
 }
 
+/** Mirrors instance `getAccessManagementPermission()` in access-management.ts. */
+export const ACCESS_MANAGEMENT_PERMISSION = 'organization:own' as const
+
 export function getAccessManagementPermissionKey(
-  kind: AccessScopeKind,
-): string {
-  if (kind === 'organization') return 'organization:members'
-  return `${kind}:rw`
+  _kind: AccessScopeKind,
+): typeof ACCESS_MANAGEMENT_PERMISSION {
+  return ACCESS_MANAGEMENT_PERMISSION
 }

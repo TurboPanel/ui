@@ -207,70 +207,78 @@ export async function revokeLicense(
   });
 }
 
-export type AccessProfileRecord = {
-  key: string;
-  displayName: string;
-  permissions: string[];
-};
+export type PermissionKey =
+  | "organization:own"
+  | "organization:manage"
+  | "team:own"
+  | "team:manage";
 
 export type PermissionRecord = {
-  key: string;
+  key: PermissionKey;
   displayName: string;
 };
 
-export type AccessScopeKind =
-  | "organization"
-  | "workspace"
-  | "environment"
-  | "project"
-  | "service"
-  | "hosting"
-  | "server";
+export type AccessScopeKind = "organization" | "team";
 
 export type AccessGrantRecord = {
   id: string;
-  entityType: AccessScopeKind;
-  entityId: string;
-  subjectType: "user" | "team" | "organization";
+  subjectKind: "user" | "team" | "organization";
   subjectId: string;
-  permission: string;
-  allowed: boolean;
+  resourceId: string;
+  effect: "allow" | "deny";
+  permissionKey: string;
+};
+
+export type CreateAccessBody = {
+  resourceId: string;
+  subjectKind: "user" | "team" | "organization";
+  subjectId: string;
+  effect: "allow" | "deny";
+  permissionKey: PermissionKey;
+};
+
+export type ResolvedResourceId = {
+  resourceId: string;
+  kind: string;
+  itemId: string;
+};
+
+export type TeamRecord = {
+  id: string;
+  displayName: string | null;
+  organizationId: string;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateAccessBody = {
-  entityType: AccessScopeKind;
-  entityId: string;
-  subjectType: "user" | "team" | "organization";
-  subjectId: string;
-  allowed?: boolean;
-  accessProfileKey?: string;
-  permissionKey?: string;
-};
-
-export async function fetchAccessProfiles(): Promise<{ accessProfiles: AccessProfileRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/access-profiles`);
+export async function fetchVisibleTeams(): Promise<{ teams: TeamRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/teams`);
 }
 
 export async function fetchPermissions(): Promise<{ permissions: PermissionRecord[] }> {
   return await apiFetch(`${CLIENT_API}/permissions`);
 }
 
+export async function resolveResourceId(
+  kind: AccessScopeKind,
+  itemId: string,
+): Promise<ResolvedResourceId> {
+  const params = new URLSearchParams({ kind, itemId });
+  return await apiFetch(`${CLIENT_API}/access/resource-id?${params.toString()}`);
+}
+
 export async function fetchAccessGrants(
-  entityType: AccessScopeKind,
-  entityId: string,
+  resourceId: string,
 ): Promise<{ access: AccessGrantRecord[] }> {
-  const params = new URLSearchParams({ entityType, entityId });
+  const params = new URLSearchParams({ resourceId });
   return await apiFetch(`${CLIENT_API}/access?${params.toString()}`);
 }
 
 export async function checkPermission(
-  entityType: string,
-  entityId: string,
-  permissionKey: string,
+  resourceId: string,
+  permissionKey: PermissionKey | string,
 ): Promise<{ allowed: boolean }> {
-  const params = new URLSearchParams({ entityType, entityId, permissionKey });
+  const params = new URLSearchParams({ resourceId, permissionKey });
   return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
 }
 
@@ -358,7 +366,7 @@ export async function fetchVisibleHostings(
 
 export async function createAccessGrant(
   body: CreateAccessBody,
-): Promise<{ ok: true; ids: string[] }> {
+): Promise<{ ok: true; id: string; created?: boolean }> {
   return await apiFetch(`${CLIENT_API}/access`, {
     method: "POST",
     body: JSON.stringify(body),

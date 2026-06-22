@@ -46,7 +46,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 |-------|-----------|---------|
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
-| `/<orgId>/access` | `access-overview-section.tsx` | Access profile / permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
+| `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
 
@@ -60,11 +60,11 @@ Types and helpers: `src/lib/instance-api.ts` (auth, install, org servers, health
 
 Authorization helpers:
 
-- `GET /api/client/v1/access-profiles` → `fetchAccessProfiles()` — returns `{ accessProfiles: { key, displayName, permissions }[] }`
 - `GET /api/client/v1/permissions` → `fetchPermissions()`
-- `GET /api/client/v1/access?entityType=<kind>&entityId=<uuid>` → `fetchAccessGrants(entityType, entityId)` — returns `AccessGrantRecord[]`; each row carries `entityType`, `entityId`, `subjectType`, `subjectId`, `permission`, `allowed`, `createdAt`, `updatedAt`
-- `POST /api/client/v1/access` → `createAccessGrant(body: CreateAccessBody)` — body: `{ entityType, entityId, subjectType, subjectId, allowed?, accessProfileKey?, permissionKey? }`; exactly one of `accessProfileKey` or `permissionKey` required; `accessProfileKey` is expanded server-side to multiple atomic `access_grant` rows
+- `GET /api/client/v1/access?resourceId=<uuid>` → `fetchAccessGrants(resourceId)` — returns `{ access: AccessGrantRecord[] }`; each row carries `subjectKind`, `subjectId`, `resourceId`, `effect`, and `permissionKey`
+- `GET /api/client/v1/access/resource-id?kind=<organization|team>&itemId=<uuid>` → `resolveResourceId(kind, itemId)`
+- `POST /api/client/v1/access` → `createAccessGrant(body: CreateAccessBody)` — body: `{ resourceId, subjectKind, subjectId, effect, permissionKey }`; grant targets are organization or team entities only
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 
-`useCan(entityType, entityId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
+`useCan(scopeKind, itemId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.

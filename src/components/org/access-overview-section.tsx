@@ -14,18 +14,14 @@ import { useAuth } from '@/lib/auth-context'
 import {
   createAccessGrant,
   fetchAccessGrants,
-  fetchOrgServers,
   fetchPermissions,
-  fetchAccessProfiles,
-  fetchVisibleEnvironments,
-  fetchVisibleHostings,
-  fetchVisibleProjects,
-  fetchVisibleWorkspaces,
-  fetchVisibleServices,
+  fetchVisibleTeams,
   isForbiddenError,
+  resolveResourceId,
   revokeAccessGrant,
   type AccessScopeKind,
   type CreateAccessBody,
+  type PermissionKey,
 } from '@/lib/instance-api'
 import {
   authQueryKeys,
@@ -36,18 +32,17 @@ import {
 } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
-type SubjectKind = CreateAccessBody['subjectType']
-type GrantTarget = 'accessProfile' | 'permission'
+type SubjectKind = CreateAccessBody['subjectKind']
 
 const SCOPE_KINDS: { kind: AccessScopeKind; label: string }[] = [
   { kind: 'organization', label: 'Organization' },
-  { kind: 'workspace', label: 'Workspace' },
-  { kind: 'environment', label: 'Environment' },
-  { kind: 'project', label: 'Project' },
-  { kind: 'service', label: 'Service' },
-  { kind: 'hosting', label: 'Hosting' },
-  { kind: 'server', label: 'Server' },
+  { kind: 'team', label: 'Team' },
 ]
+
+const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
+  organization: ['organization:own', 'organization:manage'],
+  team: ['team:own', 'team:manage'],
+}
 
 type ScopeItem = {
   id: string
@@ -61,46 +56,11 @@ async function loadScopeItems(
   switch (kind) {
     case 'organization':
       return [{ id: orgId, label: 'Organization' }]
-    case 'workspace': {
-      const { workspaces } = await fetchVisibleWorkspaces()
-      return workspaces.map((row) => ({
+    case 'team': {
+      const { teams } = await fetchVisibleTeams()
+      return teams.map((row) => ({
         id: row.id,
         label: row.displayName?.trim() || row.id,
-      }))
-    }
-    case 'environment': {
-      const { environments } = await fetchVisibleEnvironments()
-      return environments.map((row) => ({
-        id: row.id,
-        label: row.displayName?.trim() || row.id,
-      }))
-    }
-    case 'project': {
-      const { projects } = await fetchVisibleProjects()
-      return projects.map((row) => ({
-        id: row.id,
-        label: row.displayName?.trim() || row.id,
-      }))
-    }
-    case 'service': {
-      const { services } = await fetchVisibleServices()
-      return services.map((row) => ({
-        id: row.id,
-        label: row.displayName?.trim() || row.id,
-      }))
-    }
-    case 'hosting': {
-      const { hostings } = await fetchVisibleHostings()
-      return hostings.map((row) => ({
-        id: row.id,
-        label: row.displayName?.trim() || row.id,
-      }))
-    }
-    case 'server': {
-      const { servers } = await fetchOrgServers()
-      return servers.map((row) => ({
-        id: row.id,
-        label: row.displayName?.trim() || row.hostname?.trim() || row.id,
       }))
     }
   }
@@ -110,18 +70,8 @@ function scopeItemsQueryKey(kind: AccessScopeKind, orgId: string) {
   switch (kind) {
     case 'organization':
       return ['scope-items', 'organization', orgId] as const
-    case 'workspace':
-      return visibilityQueryKeys.workspaces
-    case 'environment':
-      return visibilityQueryKeys.environments()
-    case 'project':
-      return visibilityQueryKeys.projects()
-    case 'service':
-      return visibilityQueryKeys.services()
-    case 'hosting':
-      return visibilityQueryKeys.hostings()
-    case 'server':
-      return visibilityQueryKeys.orgServers
+    case 'team':
+      return visibilityQueryKeys.teams
   }
 }
 
@@ -158,11 +108,19 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
   const managePermission = getAccessManagementPermissionKey(scopeKind)
   const canManage = useCan(scopeKind, selectedItemId, managePermission)
 
-  const [subjectType, setSubjectType] = useState<SubjectKind>('user')
+  const resourceIdQuery = useQuery({
+    queryKey: ['resource-id', scopeKind, selectedItemId],
+    queryFn: () => resolveResourceId(scopeKind, selectedItemId),
+    enabled: selectedItemId.length > 0,
+  })
+
+  useForbiddenRecovery(resourceIdQuery.error)
+
+  const resourceId = resourceIdQuery.data?.resourceId ?? ''
+
+  const [subjectKind, setSubjectKind] = useState<SubjectKind>('user')
   const [subjectId, setSubjectId] = useState('')
-  const [grantTarget, setGrantTarget] = useState<GrantTarget>('accessProfile')
-  const [selectedAccessProfileKey, setSelectedAccessProfileKey] = useState<string | null>(null)
-  const [selectedPermissionKey, setSelectedPermissionKey] = useState<string | null>(
+  const [selectedPermissionKey, setSelectedPermissionKey] = useState<PermissionKey | null>(
     null,
   )
   const [submitting, setSubmitting] = useState(false)
@@ -170,28 +128,30 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
   const [revoking, setRevoking] = useState<Set<string>>(() => new Set())
   const [actionError, setActionError] = useState<string | null>(null)
 
+  useEffect(() => {
+    setSelectedPermissionKey(null)
+  }, [scopeKind])
+
   const grantsQuery = useQuery({
-    queryKey: authQueryKeys.accessGrants(scopeKind, selectedItemId),
-    queryFn: () => fetchAccessGrants(scopeKind, selectedItemId),
-    enabled: selectedItemId.length > 0,
+    queryKey: authQueryKeys.accessGrants(resourceId),
+    queryFn: () => fetchAccessGrants(resourceId),
+    enabled: resourceId.length > 0,
   })
 
   useForbiddenRecovery(grantsQuery.error)
 
-  const accessProfilesQuery = useQuery({
-    queryKey: authQueryKeys.accessProfiles,
-    queryFn: fetchAccessProfiles,
-    enabled: canManage && grantTarget === 'accessProfile',
-  })
-
   const permissionsQuery = useQuery({
     queryKey: authQueryKeys.permissions,
     queryFn: fetchPermissions,
-    enabled: canManage && grantTarget === 'permission',
+    enabled: canManage,
   })
 
+  const compatiblePermissions = (permissionsQuery.data?.permissions ?? []).filter(
+    (permission) => PERMISSIONS_BY_SCOPE[scopeKind].includes(permission.key),
+  )
+
   const onRevokeGrant = async (grantId: string) => {
-    if (!selectedItemId) {
+    if (!resourceId) {
       return
     }
 
@@ -200,7 +160,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     try {
       await revokeAccessGrant(grantId)
       await queryClient.invalidateQueries({
-        queryKey: authQueryKeys.accessGrants(scopeKind, selectedItemId),
+        queryKey: authQueryKeys.accessGrants(resourceId),
       })
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -220,7 +180,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
   }
 
   const onCreateGrant = async () => {
-    if (!selectedItemId) {
+    if (!resourceId) {
       return
     }
 
@@ -230,26 +190,17 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
       return
     }
 
-    const body: CreateAccessBody = {
-      entityType: scopeKind,
-      entityId: selectedItemId,
-      subjectType,
-      subjectId: trimmedSubjectId,
-      allowed: true,
+    if (!selectedPermissionKey) {
+      setSubmitError('Select a permission')
+      return
     }
 
-    if (grantTarget === 'accessProfile') {
-      if (!selectedAccessProfileKey) {
-        setSubmitError('Select an access profile')
-        return
-      }
-      body.accessProfileKey = selectedAccessProfileKey
-    } else {
-      if (!selectedPermissionKey) {
-        setSubmitError('Select a permission')
-        return
-      }
-      body.permissionKey = selectedPermissionKey
+    const body: CreateAccessBody = {
+      resourceId,
+      subjectKind,
+      subjectId: trimmedSubjectId,
+      effect: 'allow',
+      permissionKey: selectedPermissionKey,
     }
 
     setSubmitting(true)
@@ -257,10 +208,9 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     try {
       await createAccessGrant(body)
       setSubjectId('')
-      setSelectedAccessProfileKey(null)
       setSelectedPermissionKey(null)
       await queryClient.invalidateQueries({
-        queryKey: authQueryKeys.accessGrants(scopeKind, selectedItemId),
+        queryKey: authQueryKeys.accessGrants(resourceId),
       })
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -282,11 +232,11 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
     <View style={styles.root}>
       <Text style={styles.heading}>Access</Text>
       <Text style={styles.copy}>
-        Manage access profile and permission grants for organization resources.
+        Manage permission grants for organizations and teams.
       </Text>
 
-      <SectionPanel title="Scope" hint="Choose the resource to manage">
-        <Text style={styles.label}>Resource kind</Text>
+      <SectionPanel title="Scope" hint="Choose the grant target">
+        <Text style={styles.label}>Grant target</Text>
         <View style={styles.chipRow}>
           {SCOPE_KINDS.map(({ kind, label }) => (
             <Pressable
@@ -310,20 +260,20 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
           ))}
         </View>
 
-        {scopeKind !== 'organization' ? (
+        {scopeKind === 'team' ? (
           <>
-            <Text style={styles.label}>Resource</Text>
+            <Text style={styles.label}>Team</Text>
             {scopeItemsQuery.isLoading ? (
-              <Text style={orgPanelStyles.muted}>Loading resources...</Text>
+              <Text style={orgPanelStyles.muted}>Loading teams...</Text>
             ) : scopeItemsQuery.isError ? (
               <Text style={orgPanelStyles.error}>
                 {scopeItemsQuery.error instanceof Error
                   ? scopeItemsQuery.error.message
-                  : 'Failed to load resources'}
+                  : 'Failed to load teams'}
               </Text>
             ) : scopeItems.length === 0 ? (
               <Text style={orgPanelStyles.muted}>
-                No visible {scopeKind} resources in this organization.
+                No teams in this organization.
               </Text>
             ) : (
               <ScrollView style={styles.pickerList} nestedScrollEnabled>
@@ -372,21 +322,21 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                 {grants.map((grant) => {
                   const isRevoking = revoking.has(grant.id)
                   const effectStyle =
-                    grant.allowed ? styles.badgeAllow : styles.badgeDeny
+                    grant.effect === 'allow' ? styles.badgeAllow : styles.badgeDeny
 
                   return (
                     <View key={grant.id} style={orgPanelStyles.detailCard}>
                       <View style={styles.cardHeader}>
                         <View style={styles.cardTitleBlock}>
                           <Text style={orgPanelStyles.detailTitle}>
-                            {grant.subjectType}: {grant.subjectId}
+                            {grant.subjectKind}: {grant.subjectId}
                           </Text>
                           <View style={styles.badgeRow}>
                             <Text style={[styles.badge, effectStyle]}>
-                              {grant.allowed ? 'allow' : 'deny'}
+                              {grant.effect}
                             </Text>
                             <Text style={orgPanelStyles.detailLine}>
-                              permission: {grant.permission}
+                              permission: {grant.permissionKey}
                             </Text>
                           </View>
                         </View>
@@ -413,7 +363,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
           </SectionPanel>
 
           {canManage ? (
-            <SectionPanel title="Add grant" hint="Assign an access profile or permission">
+            <SectionPanel title="Add grant" hint="Assign a permission">
               <View style={styles.form}>
                 <Text style={styles.label}>Subject kind</Text>
                 <View style={styles.chipRow}>
@@ -422,14 +372,14 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                       key={kind}
                       style={[
                         styles.chip,
-                        subjectType === kind && styles.chipActive,
+                        subjectKind === kind && styles.chipActive,
                       ]}
-                      onPress={() => setSubjectType(kind)}
+                      onPress={() => setSubjectKind(kind)}
                     >
                       <Text
                         style={[
                           styles.chipText,
-                          subjectType === kind && styles.chipTextActive,
+                          subjectKind === kind && styles.chipTextActive,
                         ]}
                       >
                         {kind}
@@ -453,69 +403,12 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
                   style={styles.input}
                 />
 
-                <Text style={styles.label}>Grant target</Text>
-                <View style={styles.chipRow}>
-                  {(['accessProfile', 'permission'] as const).map((target) => (
-                    <Pressable
-                      key={target}
-                      style={[
-                        styles.chip,
-                        grantTarget === target && styles.chipActive,
-                      ]}
-                      onPress={() => {
-                        setGrantTarget(target)
-                        setSelectedAccessProfileKey(null)
-                        setSelectedPermissionKey(null)
-                        setSubmitError(null)
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          grantTarget === target && styles.chipTextActive,
-                        ]}
-                      >
-                        {target === 'accessProfile' ? 'Access Profile' : 'Permission'}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <Text style={styles.label}>
-                  {grantTarget === 'accessProfile' ? 'Access Profile' : 'Permission'}
-                </Text>
+                <Text style={styles.label}>Permission</Text>
                 <ScrollView style={styles.pickerList} nestedScrollEnabled>
-                  {grantTarget === 'accessProfile' ? (
-                    accessProfilesQuery.isLoading ? (
-                      <Text style={orgPanelStyles.muted}>Loading access profiles...</Text>
-                    ) : (
-                      (accessProfilesQuery.data?.accessProfiles ?? []).map((profile) => {
-                        const selected = selectedAccessProfileKey === profile.key
-                        return (
-                          <Pressable
-                            key={profile.key}
-                            style={[
-                              styles.pickerRow,
-                              selected && styles.pickerRowSelected,
-                            ]}
-                            onPress={() => {
-                              setSelectedAccessProfileKey(profile.key)
-                              setSubmitError(null)
-                            }}
-                          >
-                            <Text style={styles.pickerTitle}>
-                              {profile.displayName}
-                            </Text>
-                            <Text style={styles.pickerMeta}>{profile.key}</Text>
-                          </Pressable>
-                        )
-                      })
-                    )
-                  ) : permissionsQuery.isLoading ? (
+                  {permissionsQuery.isLoading ? (
                     <Text style={orgPanelStyles.muted}>Loading permissions...</Text>
                   ) : (
-                    (permissionsQuery.data?.permissions ?? []).map(
-                      (permission) => {
+                    compatiblePermissions.map((permission) => {
                         const selected = selectedPermissionKey === permission.key
                         return (
                           <Pressable

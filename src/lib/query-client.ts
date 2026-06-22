@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { checkPermission, fetchInstallStatus, isForbiddenError } from '@/lib/instance-api'
+import { checkPermission, fetchInstallStatus, isForbiddenError, resolveResourceId } from '@/lib/instance-api'
 import { useAuth } from '@/lib/auth-context'
 import {
   authQueryKeys,
@@ -42,25 +42,34 @@ export function useCan(
   entityId: string,
   permissionKey: string,
 ): boolean {
-  const query = useQuery({
-    queryKey: visibilityQueryKeys.can(
-      entityType ?? '',
-      entityId,
-      permissionKey,
-    ),
+  const resourceQuery = useQuery({
+    queryKey: ['resource-id', entityType ?? '', entityId],
+    queryFn: () =>
+      resolveResourceId(
+        entityType as Parameters<typeof resolveResourceId>[0],
+        entityId,
+      ),
+    enabled: entityType !== null && entityId.length > 0,
+    staleTime: 60_000,
+  })
+
+  const resourceId = resourceQuery.data?.resourceId ?? ''
+
+  const canQuery = useQuery({
+    queryKey: visibilityQueryKeys.can(resourceId, permissionKey),
     queryFn: async () => {
-      const result = await checkPermission(entityType!, entityId, permissionKey)
+      const result = await checkPermission(resourceId, permissionKey)
       return result.allowed
     },
-    enabled: entityType !== null && entityId.length > 0,
+    enabled: resourceId.length > 0,
     staleTime: 30_000,
   })
 
-  useForbiddenRecovery(query.error)
+  useForbiddenRecovery(resourceQuery.error ?? canQuery.error)
 
-  if (entityType === null || query.isLoading) {
+  if (entityType === null || resourceQuery.isLoading || canQuery.isLoading) {
     return false
   }
 
-  return query.data ?? false
+  return canQuery.data ?? false
 }
