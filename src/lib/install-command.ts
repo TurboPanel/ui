@@ -20,8 +20,8 @@ export function buildInstallCommandWithBaseUrl(opts: {
   const base = trimTrailingSlash(opts.baseUrl.trim())
   const licenseArg = `${opts.licenseId}:${opts.licenseToken}`
   return (
-    `curl -fsSL ${base}/run.sh | ` +
-    `sh -s -- --license ${licenseArg} --host ${base} --binary-url ${base}/downloads/daemon`
+    `curl -fsSLk ${base}/run.sh | ` +
+    `sh -s -- --license ${licenseArg} --host ${base} --binary-url ${base}/downloads/daemon --insecure-tls`
   )
 }
 
