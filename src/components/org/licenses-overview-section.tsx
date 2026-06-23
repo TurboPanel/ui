@@ -106,6 +106,7 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
           <View style={styles.list}>
             {licenses.map((license) => {
               const isRevoking = revoking.has(license.id)
+              const isColocatedControlPlane = license.revocable === false
 
               return (
                 <View key={license.id} style={orgPanelStyles.detailCard}>
@@ -113,18 +114,24 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
                     <Text style={orgPanelStyles.detailTitle}>
                       {licenseTitle(license)}
                     </Text>
-                    <Pressable
-                      style={[
-                        styles.secondaryButton,
-                        isRevoking && styles.buttonDisabled,
-                      ]}
-                      disabled={isRevoking}
-                      onPress={() => void onRevokeLicense(license.id)}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        {isRevoking ? 'Revoking...' : 'Revoke'}
+                    {isColocatedControlPlane ? (
+                      <Text style={orgPanelStyles.muted}>
+                        Local control plane
                       </Text>
-                    </Pressable>
+                    ) : (
+                      <Pressable
+                        style={[
+                          styles.secondaryButton,
+                          isRevoking && styles.buttonDisabled,
+                        ]}
+                        disabled={isRevoking}
+                        onPress={() => void onRevokeLicense(license.id)}
+                      >
+                        <Text style={styles.secondaryButtonText}>
+                          {isRevoking ? 'Revoking...' : 'Revoke'}
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>Created: </Text>

@@ -190,6 +190,8 @@ export type LicenseRecord = {
   id: string;
   displayName: string | null;
   createdAt: string;
+  /** When false, this is the co-located control plane license (omit on older APIs). */
+  revocable?: boolean;
 };
 
 export type CreatedLicense = {
@@ -204,10 +206,14 @@ export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
 
 export async function createLicense(
   displayName?: string,
+  installBaseUrl?: string,
 ): Promise<CreatedLicense> {
+  const body: Record<string, string> = {}
+  if (displayName) body.displayName = displayName
+  if (installBaseUrl?.trim()) body.installBaseUrl = installBaseUrl.trim()
   return await apiFetch(`${CLIENT_API}/licenses`, {
     method: "POST",
-    body: displayName ? JSON.stringify({ displayName }) : undefined,
+    body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
   });
 }
 

@@ -18,6 +18,10 @@ import {
   type CreatedLicense,
   type OrgServerRecord,
 } from '@/lib/instance-api'
+import {
+  defaultDevInstallBaseUrl,
+  resolveDisplayedInstallCommand,
+} from '@/lib/install-command'
 import { colors, spacing } from '@/lib/theme'
 
 const POLL_FAILURE_THRESHOLD = 3
@@ -35,6 +39,9 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
   const { handleUnauthorized } = useAuth()
   const [step, setStep] = useState<WizardStep>('create')
   const [displayName, setDisplayName] = useState('')
+  const [installBaseUrl, setInstallBaseUrl] = useState(() =>
+    __DEV__ ? defaultDevInstallBaseUrl() : '',
+  )
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [revealed, setRevealed] = useState<CreatedLicense | null>(null)
@@ -47,6 +54,7 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
   const resetWizard = () => {
     setStep('create')
     setDisplayName('')
+    setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl() : '')
     setCreating(false)
     setCreateError(null)
     setRevealed(null)
@@ -61,7 +69,10 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
     setCreating(true)
     setCreateError(null)
     try {
-      const created = await createLicense(displayName.trim() || undefined)
+      const created = await createLicense(
+        displayName.trim() || undefined,
+        __DEV__ ? installBaseUrl : undefined,
+      )
       setRevealed(created)
       setInstallCommandCopied(false)
       setDisplayName('')
@@ -73,13 +84,17 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
     }
   }
 
+  const displayedInstallCommand = revealed
+    ? resolveDisplayedInstallCommand(revealed, installBaseUrl)
+    : ''
+
   const onCopyInstallCommand = async () => {
     if (!revealed) {
       return
     }
 
     try {
-      await Clipboard.setStringAsync(revealed.installCommand)
+      await Clipboard.setStringAsync(displayedInstallCommand)
       setInstallCommandCopied(true)
     } catch {
       setInstallCommandCopied(false)
@@ -185,6 +200,27 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
           {createError ? (
             <Text style={orgPanelStyles.error}>{createError}</Text>
           ) : null}
+          {__DEV__ ? (
+            <>
+              <Text style={styles.label}>Public install URL (dev)</Text>
+              <TextInput
+                value={installBaseUrl}
+                onChangeText={(text) => {
+                  setInstallBaseUrl(text)
+                  setCreateError(null)
+                }}
+                placeholder="https://192.168.1.10:8443"
+                placeholderTextColor={colors.textDim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!creating}
+                style={styles.input}
+              />
+              <Text style={orgPanelStyles.muted}>
+                Used for --host and download URLs in the install command.
+              </Text>
+            </>
+          ) : null}
           <Pressable
             style={[styles.primaryButton, creating && styles.buttonDisabled]}
             disabled={creating}
@@ -207,8 +243,22 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
             {revealed.licenseToken}
           </Text>
           <Text style={styles.secretLabel}>Install command</Text>
+          {__DEV__ ? (
+            <>
+              <Text style={styles.label}>Public install URL (dev)</Text>
+              <TextInput
+                value={installBaseUrl}
+                onChangeText={setInstallBaseUrl}
+                placeholder="https://192.168.1.10:8443"
+                placeholderTextColor={colors.textDim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+              />
+            </>
+          ) : null}
           <Text selectable style={styles.secretValue}>
-            {revealed.installCommand}
+            {displayedInstallCommand}
           </Text>
           <Pressable
             style={styles.secondaryButton}
