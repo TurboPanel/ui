@@ -60,10 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshInstallStatus = useCallback(async () => {
     const status = await fetchInstallStatus()
-    setNeedsInstall(status.needsInstall)
+    setNeedsInstall(status.needsInstall ?? false)
     setIsSignupEnabled(status.isSignupEnabled ?? false)
     syncAuthStatusCache(status)
-    return status.needsInstall
+    return status.needsInstall ?? false
   }, [syncAuthStatusCache])
 
   const refreshSession = useCallback(async () => {
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void Promise.all([fetchInstallStatusCached(), fetchSession()])
       .then(([installStatus, sessionData]) => {
-        setNeedsInstall(installStatus.needsInstall)
+        setNeedsInstall(installStatus.needsInstall ?? false)
         setIsSignupEnabled(installStatus.isSignupEnabled ?? false)
         syncAuthStatusCache(installStatus)
         setSession(sessionData)
@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (username: string, password: string) => {
     const loaded = await signInApi(username, password)
     setSession(loaded)
-    setNeedsInstall(loaded.needsInstall)
+    setNeedsInstall(loaded.needsInstall ?? false)
     setBootstrapError(null)
     return loaded
   }, [])

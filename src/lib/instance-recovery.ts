@@ -42,7 +42,7 @@ export async function pollInstanceRecovery(): Promise<RecoveryPollResult> {
   let needsInstall = false
   try {
     const status = await fetchInstallStatus()
-    needsInstall = status.needsInstall
+    needsInstall = status.needsInstall ?? false
   } catch {
     return { kind: 'waiting' }
   }

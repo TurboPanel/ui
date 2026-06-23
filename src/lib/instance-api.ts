@@ -6,13 +6,16 @@ export type SessionInfo = {
   username: string | null;
   email: string | null;
   role: string | null;
-  needsInstall: boolean;
+  /** Deno self-hosted only — absent on Workers. */
+  needsInstall?: boolean;
   organizationId: string | null;
 };
 
 export type InstallStatus = {
-  needsInstall: boolean;
-  isInstallMode: boolean;
+  /** Deno self-hosted only — absent on Workers. */
+  needsInstall?: boolean;
+  /** Deno self-hosted only — absent on Workers. */
+  isInstallMode?: boolean;
   isSignupEnabled: boolean;
 };
 
@@ -43,7 +46,9 @@ export async function fetchSession(): Promise<SessionInfo | null> {
     username: body.username ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
-    needsInstall: body.needsInstall ?? false,
+    ...(body.needsInstall === undefined
+      ? {}
+      : { needsInstall: body.needsInstall }),
     organizationId: body.organizationId ?? null,
   };
 }
@@ -61,7 +66,9 @@ export async function signIn(
     username: body.username ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
-    needsInstall: body.needsInstall ?? false,
+    ...(body.needsInstall === undefined
+      ? {}
+      : { needsInstall: body.needsInstall }),
     organizationId: body.organizationId ?? null,
   };
 }
@@ -87,8 +94,12 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
     InstallStatus & { ok: true; needsInstall?: boolean }
   >(`${CLIENT_API}/status`);
   return {
-    needsInstall: body.needsInstall ?? false,
-    isInstallMode: body.isInstallMode ?? body.needsInstall ?? false,
+    ...(body.needsInstall === undefined
+      ? {}
+      : { needsInstall: body.needsInstall }),
+    ...(body.isInstallMode === undefined && body.needsInstall === undefined
+      ? {}
+      : { isInstallMode: body.isInstallMode ?? body.needsInstall ?? false }),
     isSignupEnabled: body.isSignupEnabled ?? false,
   };
 }

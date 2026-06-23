@@ -56,7 +56,7 @@ export default function RootLayout() {
 function AuthGuard() {
   const { session, needsInstall, isLoading } = useAuth()
   const { data: installStatus } = useAuthStatus()
-  const isInstallMode = installStatus?.isInstallMode ?? true
+  const isInstallMode = installStatus?.isInstallMode === true
   const segments = useSegments()
   const topSegment = (segments as readonly string[])[0]
 
