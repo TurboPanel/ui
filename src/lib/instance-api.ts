@@ -17,7 +17,7 @@ export type InstallStatus = {
 };
 
 export async function fetchSession(): Promise<SessionInfo | null> {
-  const response = await fetch(`${CLIENT_API}/auth/session`, {
+  const response = await fetch(`${CLIENT_API}/authn/session`, {
     credentials: 'include',
     headers: { "content-type": "application/json" },
   });
@@ -34,7 +34,7 @@ export async function fetchSession(): Promise<SessionInfo | null> {
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
-    throw new Error(`${CLIENT_API}/auth/session failed: ${detail}`);
+    throw new Error(`${CLIENT_API}/authn/session failed: ${detail}`);
   }
 
   const body = await response.json() as SessionInfo & { ok: true };
@@ -85,7 +85,7 @@ export async function signOut(): Promise<{ ok: true }> {
 export async function fetchInstallStatus(): Promise<InstallStatus> {
   const body = await apiFetch<
     InstallStatus & { ok: true; needsInstall?: boolean }
-  >(`${INSTALL_API}/status`);
+  >(`${CLIENT_API}/status`);
   return {
     needsInstall: body.needsInstall ?? false,
     isInstallMode: body.isInstallMode ?? body.needsInstall ?? false,
