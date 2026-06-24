@@ -68,3 +68,31 @@ Authorization helpers:
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 
 `useCan(scopeKind, itemId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
+
+## Admin area (`/admin/*`)
+
+Instance-wide administration for users with the `admin` or `superadmin` role.
+
+### Layout
+
+- `src/app/admin/_layout.tsx` — role guard (`superadmin` or `admin` via `isAdminSession`); non-admins redirect to their dashboard
+- `src/lib/admin-navigation.ts` — area registry (`ADMIN_AREAS`); add entries + routes together
+- `src/components/admin/admin-shell.tsx`, `admin-sidebar.tsx`, `admin-header.tsx` — responsive shell (mirrors org console)
+
+### Areas (routes)
+
+| Route | Component | Purpose |
+|-------|-----------|---------|
+| `/admin/networking` | `control-plane-urls-section.tsx` | Control-plane public URLs and TLS cert SANs |
+
+### Instance API
+
+Admin helpers in `src/lib/instance-api.ts` (`ADMIN_API = '/api/admin/v1'`):
+
+- `fetchPublicUrls()` → `GET /api/admin/v1/instance/public-urls`
+- `savePublicUrls(urls)` → `PUT /api/admin/v1/instance/public-urls`
+- `applyPublicUrls(urls?)` → `POST /api/admin/v1/instance/public-urls/apply` (Deno self-hosted only)
+
+When apply returns 422 with `"cert apply is not applicable on this runtime"` (Workers), hide the Apply button and show an informational note instead.
+
+`useCan` is display-only; rely on server 403s and `handleUnauthorized()`.

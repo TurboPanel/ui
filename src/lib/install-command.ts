@@ -1,4 +1,7 @@
-export function defaultDevInstallBaseUrl(): string {
+export function defaultDevInstallBaseUrl(managedUrls?: string[]): string {
+  if (managedUrls && managedUrls.length > 0) {
+    return managedUrls[0]
+  }
   if (typeof globalThis !== 'undefined' && 'location' in globalThis) {
     const location = globalThis.location as Location
     const origin = location.origin?.trim()

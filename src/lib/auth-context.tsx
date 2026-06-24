@@ -169,6 +169,10 @@ export function isSuperadminSession(session: SessionInfo | null): boolean {
   return session !== null && session.role === 'superadmin'
 }
 
+export function isAdminSession(session: SessionInfo | null): boolean {
+  return session !== null && (session.role === 'superadmin' || session.role === 'admin')
+}
+
 export function hasUserSession(session: SessionInfo | null): boolean {
   return session !== null
 }

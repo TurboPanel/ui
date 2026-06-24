@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/auth-context'
 import {
   createLicense,
   fetchOrgServers,
+  fetchPublicUrls,
   isForbiddenError,
   type CreatedLicense,
   type OrgServerRecord,
@@ -37,6 +38,7 @@ type WizardStep = 'create' | 'install' | 'waiting'
 
 export function AddServerWizard({ onDone }: { onDone: () => void }) {
   const { handleUnauthorized } = useAuth()
+  const [managedUrls, setManagedUrls] = useState<string[]>([])
   const [step, setStep] = useState<WizardStep>('create')
   const [displayName, setDisplayName] = useState('')
   const [installBaseUrl, setInstallBaseUrl] = useState(() =>
@@ -54,7 +56,7 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
   const resetWizard = () => {
     setStep('create')
     setDisplayName('')
-    setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl() : '')
+    setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl(managedUrls) : '')
     setCreating(false)
     setCreateError(null)
     setRevealed(null)
@@ -110,6 +112,32 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
     resetWizard()
     onDone()
   }
+
+  useEffect(() => {
+    if (!__DEV__) {
+      return
+    }
+
+    let cancelled = false
+
+    void fetchPublicUrls()
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        setManagedUrls(result.urls)
+        if (result.urls.length > 0) {
+          setInstallBaseUrl(defaultDevInstallBaseUrl(result.urls))
+        }
+      })
+      .catch(() => {
+        // Non-admin users may get 403 — fall back to location.origin.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (step !== 'waiting' || !revealed) {

@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
+import { adminAreaHref } from '@/lib/admin-navigation'
+import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
 import { colors, layout } from '@/lib/theme'
 
@@ -10,8 +12,11 @@ export function OrgSidebar({
   orgId: string
   onNavigate?: () => void
 }) {
+  const { session } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
+  const showAdminLink = isAdminSession(session)
+  const adminHref = adminAreaHref('networking')
 
   return (
     <View style={styles.sidebar}>
@@ -81,6 +86,32 @@ export function OrgSidebar({
           )
         })}
       </View>
+
+      {showAdminLink ? (
+        <View style={styles.adminNav}>
+          <Pressable
+            style={[
+              styles.adminItem,
+              (pathname === adminHref || pathname.startsWith('/admin/')) &&
+                styles.adminItemActive,
+            ]}
+            onPress={() => {
+              router.push(adminHref as Href)
+              onNavigate?.()
+            }}
+          >
+            <Text
+              style={[
+                styles.adminLabel,
+                (pathname === adminHref || pathname.startsWith('/admin/')) &&
+                  styles.adminLabelActive,
+              ]}
+            >
+              Admin
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -156,5 +187,30 @@ const styles = StyleSheet.create({
   },
   subLabelActive: {
     color: colors.accent,
+  },
+  adminNav: {
+    marginTop: 'auto',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  adminItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  adminItemActive: {
+    borderColor: colors.borderMuted,
+    backgroundColor: colors.bgSecondary,
+  },
+  adminLabel: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  adminLabelActive: {
+    color: colors.text,
   },
 })

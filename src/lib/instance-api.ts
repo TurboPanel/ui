@@ -1,5 +1,6 @@
 const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
+const ADMIN_API = '/api/admin/v1';
 
 export type SessionInfo = {
   userId: string | null;
@@ -407,4 +408,34 @@ export async function acceptInvitation(
 
 export function isForbiddenError(err: unknown): boolean {
   return err instanceof Error && err.message.includes("HTTP 403");
+}
+
+export type PublicUrlsResponse = {
+  ok: boolean
+  urls: string[]
+  applied?: boolean
+}
+
+export type ApplyPublicUrlsResponse = {
+  ok: boolean
+  applied: boolean
+  error?: string
+}
+
+export async function fetchPublicUrls(): Promise<PublicUrlsResponse> {
+  return await apiFetch(`${ADMIN_API}/instance/public-urls`)
+}
+
+export async function savePublicUrls(urls: string[]): Promise<PublicUrlsResponse> {
+  return await apiFetch(`${ADMIN_API}/instance/public-urls`, {
+    method: 'PUT',
+    body: JSON.stringify({ urls }),
+  })
+}
+
+export async function applyPublicUrls(urls?: string[]): Promise<ApplyPublicUrlsResponse> {
+  return await apiFetch(`${ADMIN_API}/instance/public-urls/apply`, {
+    method: 'POST',
+    body: urls !== undefined ? JSON.stringify({ urls }) : undefined,
+  })
 }

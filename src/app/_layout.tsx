@@ -15,6 +15,7 @@ import { SafeAreaRoot } from '@/components/safe-area-root'
 import {
   dashboardHref,
   hasUserSession,
+  isAdminSession,
   useAuth,
 } from '@/lib/auth-context'
 import { useAuthStatus } from '@/lib/query-client'
@@ -72,6 +73,7 @@ function AuthGuard() {
   const onSignUp = topSegment === 'sign-up'
   const onInstall = topSegment === 'install'
   const onWelcome = topSegment === 'welcome'
+  const onAdmin = topSegment === 'admin'
   const onRecovering = topSegment === 'recovering'
   const onDeveloper = topSegment === 'developer'
   const developerDevBypass = __DEV__ && onDeveloper
@@ -113,7 +115,8 @@ function AuthGuard() {
     !onWelcome &&
     !onSignIn &&
     !onSignUp &&
-    !developerDevBypass
+    !developerDevBypass &&
+    !(onAdmin && isAdminSession(session))
   ) {
     return <Redirect href={'/welcome' as Href} />
   }
