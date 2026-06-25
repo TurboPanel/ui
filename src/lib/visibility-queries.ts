@@ -11,14 +11,14 @@ export const visibilityQueryKeys = {
   teams: ['visible-teams'] as const,
   orgServers: ['org-servers'] as const,
   workspaces: ['visible-workspaces'] as const,
-  environments: (workspaceId?: string) =>
-    ['visible-environments', workspaceId ?? 'all'] as const,
-  projects: (environmentId?: string) =>
-    ['visible-projects', environmentId ?? 'all'] as const,
-  services: (projectId?: string) =>
-    ['visible-services', projectId ?? 'all'] as const,
-  hostings: (projectId?: string) =>
-    ['visible-hostings', projectId ?? 'all'] as const,
+  environments: (projectId?: string) =>
+    ['visible-environments', projectId ?? 'all'] as const,
+  projects: (workspaceId?: string) =>
+    ['visible-projects', workspaceId ?? 'all'] as const,
+  services: (environmentId?: string) =>
+    ['visible-services', environmentId ?? 'all'] as const,
+  hostings: (serviceId?: string) =>
+    ['visible-hostings', serviceId ?? 'all'] as const,
   can: (resourceId: string, permissionKey: string) =>
     ['can', resourceId, permissionKey] as const,
 }

@@ -318,8 +318,7 @@ export type WorkspaceRecord = {
 export type EnvironmentRecord = {
   id: string;
   displayName: string | null;
-  organizationId: string;
-  workspaceId: string;
+  projectId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -327,8 +326,7 @@ export type EnvironmentRecord = {
 export type ProjectRecord = {
   id: string;
   displayName: string | null;
-  organizationId: string;
-  environmentId: string;
+  workspaceId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -336,8 +334,7 @@ export type ProjectRecord = {
 export type ServiceRecord = {
   id: string;
   displayName: string | null;
-  organizationId: string;
-  projectId: string;
+  environmentId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -345,8 +342,7 @@ export type ServiceRecord = {
 export type HostingRecord = {
   id: string;
   displayName: string | null;
-  organizationId: string;
-  projectId: string;
+  serviceId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -356,35 +352,35 @@ export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceR
 }
 
 export async function fetchVisibleEnvironments(
-  workspaceId?: string,
+  projectId?: string,
 ): Promise<{ environments: EnvironmentRecord[] }> {
-  const params = workspaceId ? new URLSearchParams({ workspaceId }) : null;
+  const params = projectId ? new URLSearchParams({ projectId }) : null;
   const suffix = params ? `?${params.toString()}` : "";
   return await apiFetch(`${CLIENT_API}/environments${suffix}`);
 }
 
 export async function fetchVisibleProjects(
-  environmentId?: string,
+  workspaceId?: string,
 ): Promise<{ projects: ProjectRecord[] }> {
-  const params = environmentId
-    ? new URLSearchParams({ environmentId })
+  const params = workspaceId
+    ? new URLSearchParams({ workspaceId })
     : null;
   const suffix = params ? `?${params.toString()}` : "";
   return await apiFetch(`${CLIENT_API}/projects${suffix}`);
 }
 
 export async function fetchVisibleServices(
-  projectId?: string,
+  environmentId?: string,
 ): Promise<{ services: ServiceRecord[] }> {
-  const params = projectId ? new URLSearchParams({ projectId }) : null;
+  const params = environmentId ? new URLSearchParams({ environmentId }) : null;
   const suffix = params ? `?${params.toString()}` : "";
   return await apiFetch(`${CLIENT_API}/services${suffix}`);
 }
 
 export async function fetchVisibleHostings(
-  projectId?: string,
+  serviceId?: string,
 ): Promise<{ hostings: HostingRecord[] }> {
-  const params = projectId ? new URLSearchParams({ projectId }) : null;
+  const params = serviceId ? new URLSearchParams({ serviceId }) : null;
   const suffix = params ? `?${params.toString()}` : "";
   return await apiFetch(`${CLIENT_API}/hostings${suffix}`);
 }
@@ -582,4 +578,36 @@ export async function fetchServerCell(
   serverId: string,
 ): Promise<FetchServerCellResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/cell`)
+}
+
+export type ServerUpdateCommit = {
+  commit: string
+  buildId: string
+  builtAt?: string
+}
+
+export type ServerUpdateStatus = {
+  ok: boolean
+  serverId: string
+  channel: string
+  current: ServerUpdateCommit | null
+  target: (ServerUpdateCommit & { manifestUrl?: string }) | null
+  updateAvailable: boolean
+  status: 'idle' | 'updating' | 'error'
+  targetStatus: 'ok' | 'unknown'
+  targetError?: string
+}
+
+export async function fetchServerUpdate(
+  serverId: string,
+): Promise<ServerUpdateStatus> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`)
+}
+
+export async function triggerServerUpdate(
+  serverId: string,
+): Promise<{ ok: boolean; queued: boolean; status: string }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`, {
+    method: 'POST',
+  })
 }
