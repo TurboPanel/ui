@@ -130,6 +130,12 @@ export type OrgServerRecord = {
   connected: boolean;
   hostname: string | null;
   remoteAddress: string | null;
+  lastHeartbeatAt: string | null;
+  connectedAt: string | null;
+  status: string | null;
+  healthyCount: number | null;
+  degradedCount: number | null;
+  unhealthyCount: number | null;
 };
 
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
@@ -438,4 +444,142 @@ export async function applyPublicUrls(urls?: string[]): Promise<ApplyPublicUrlsR
     method: 'POST',
     body: urls !== undefined ? JSON.stringify({ urls }) : undefined,
   })
+}
+
+export type ServerAddresses = {
+  privateIpv4: string[]
+  privateIpv6: string[]
+  publicIpv4: string[]
+  publicIpv6: string[]
+}
+
+export type ServerOsFamily = 'linux' | 'windows' | 'freebsd' | 'darwin'
+
+export type ServerOsMetadata = {
+  family?: ServerOsFamily
+  version?: string
+  arch?: string
+}
+
+export type ServerCpuCores = {
+  p?: number
+  e?: number
+}
+
+export type ServerCpuMetadata = {
+  sockets?: number
+  cores?: ServerCpuCores
+  threads?: number
+}
+
+export type ServerMetadata = {
+  os?: ServerOsMetadata
+  cpu?: ServerCpuMetadata
+  machineId?: string
+  hostname?: string
+  cellLocationHint?: string
+  cellGeneration?: number
+  cellSnapshotVersion?: number
+}
+
+export type DaemonCellSnapshot = {
+  serverId: string
+  version: number
+  updatedAt: string
+  hostname?: string
+  machineId?: string
+  remoteAddress?: string
+  sessionId?: string
+  keyId?: string
+  connected: boolean
+  connectedAt?: string
+  lastInboundAt?: string
+  lastOutboundAt?: string
+  lastHeartbeatAt?: string
+  addresses?: ServerAddresses
+  metadata?: ServerMetadata
+}
+
+export type MonitorInstanceSummary = {
+  cpu?: { usagePercent?: number; cores?: number }
+  memory?: { usedBytes?: number; totalBytes?: number; usagePercent?: number }
+  disk?: { usedBytes?: number; totalBytes?: number; usagePercent?: number }
+  load?: { one?: number; five?: number; fifteen?: number }
+  uptimeSeconds?: number
+  bootId?: string
+}
+
+export type MonitorInstanceRow = {
+  serverId: string
+  sequence: number
+  at: string
+  instance: MonitorInstanceSummary
+  updatedAt: string
+}
+
+export type MonitorResourceKind =
+  | 'instance'
+  | 'project'
+  | 'service'
+  | 'container'
+
+export type MonitorResourceStatus =
+  | 'unknown'
+  | 'starting'
+  | 'healthy'
+  | 'degraded'
+  | 'unhealthy'
+  | 'stopped'
+  | 'failed'
+  | 'offline'
+
+export type MonitorResourceState = {
+  resourceKey: string
+  kind: MonitorResourceKind
+  status: MonitorResourceStatus
+  name?: string
+  image?: string
+  healthStatus?: string
+  restartCount?: number
+  ports?: string[]
+  labels?: Record<string, string>
+  projectId?: string
+  serviceId?: string
+  containerId?: string
+  updatedAt?: string
+}
+
+export type MonitorResourceRow = {
+  resourceKey: string
+  serverId: string
+  kind: MonitorResourceKind
+  status: MonitorResourceStatus
+  state: MonitorResourceState
+  updatedAt: string
+}
+
+export type PingServerResponse = {
+  ok: boolean
+  tripMs: number
+  sentAt: string
+  pongAt: string
+}
+
+export type FetchServerCellResponse = {
+  ok: boolean
+  snapshot: DaemonCellSnapshot
+  monitorInstance: MonitorInstanceRow | null
+  resources: MonitorResourceRow[]
+}
+
+export async function pingServer(serverId: string): Promise<PingServerResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/ping`, {
+    method: 'POST',
+  })
+}
+
+export async function fetchServerCell(
+  serverId: string,
+): Promise<FetchServerCellResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/cell`)
 }
