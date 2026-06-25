@@ -31,7 +31,10 @@ type CellState = {
   loading: boolean
   data: FetchServerCellResponse | null
   error: string | null
+  loadedAt: string | null
 }
+
+const CELL_REFRESH_MS = 10_000
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -150,22 +153,22 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     }
   }
 
-  const handleToggleCell = async (serverId: string) => {
+  const loadCellData = async (
+    serverId: string,
+    options?: { silent?: boolean },
+  ): Promise<void> => {
     const current = cellStates.get(serverId)
-    if (current?.open) {
+    if (!options?.silent) {
       setCellStates((prev) =>
-        new Map(prev).set(serverId, { ...current, open: false }),
+        new Map(prev).set(serverId, {
+          open: true,
+          loading: true,
+          data: current?.data ?? null,
+          error: null,
+          loadedAt: current?.loadedAt ?? null,
+        }),
       )
-      return
     }
-    setCellStates((prev) =>
-      new Map(prev).set(serverId, {
-        open: true,
-        loading: true,
-        data: current?.data ?? null,
-        error: null,
-      }),
-    )
     try {
       const data = await fetchServerCell(serverId)
       setCellStates((prev) =>
@@ -174,6 +177,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
           loading: false,
           data,
           error: null,
+          loadedAt: new Date().toISOString(),
         }),
       )
     } catch (err) {
@@ -183,11 +187,23 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         new Map(prev).set(serverId, {
           open: true,
           loading: false,
-          data: null,
+          data: options?.silent ? current?.data ?? null : null,
           error: message,
+          loadedAt: current?.loadedAt ?? null,
         }),
       )
     }
+  }
+
+  const handleToggleCell = async (serverId: string) => {
+    const current = cellStates.get(serverId)
+    if (current?.open) {
+      setCellStates((prev) =>
+        new Map(prev).set(serverId, { ...current, open: false }),
+      )
+      return
+    }
+    await loadCellData(serverId)
   }
 
   useEffect(() => {
@@ -228,6 +244,21 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     }
   }, [orgId, handleUnauthorized])
 
+  useEffect(() => {
+    const openServerIds = [...cellStates.entries()]
+      .filter(([, state]) => state.open)
+      .map(([serverId]) => serverId)
+    if (openServerIds.length === 0) return
+
+    const timer = setInterval(() => {
+      for (const serverId of openServerIds) {
+        void loadCellData(serverId, { silent: true })
+      }
+    }, CELL_REFRESH_MS)
+
+    return () => clearInterval(timer)
+  }, [cellStates])
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Servers overview</Text>
@@ -257,6 +288,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                 loading: false,
                 data: null,
                 error: null,
+                loadedAt: null,
               }
               const snapshot = cellState.data?.snapshot
               const monitorInstance = cellState.data?.monitorInstance
@@ -427,16 +459,35 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   </View>
 
                   <View style={styles.cellPanel}>
-                    <TouchableOpacity
-                      style={styles.cellToggle}
-                      onPress={() => void handleToggleCell(server.id)}
-                    >
-                      <Text style={styles.cellToggleText}>
-                        {cellState.open
-                          ? '▼ Hide Daemon Cell'
-                          : '▶ Show Daemon Cell'}
+                    <View style={styles.cellHeaderRow}>
+                      <TouchableOpacity
+                        style={styles.cellToggle}
+                        onPress={() => void handleToggleCell(server.id)}
+                      >
+                        <Text style={styles.cellToggleText}>
+                          {cellState.open
+                            ? '▼ Hide Daemon Cell'
+                            : '▶ Show Daemon Cell'}
+                        </Text>
+                      </TouchableOpacity>
+                      {cellState.open ? (
+                        <TouchableOpacity
+                          style={styles.cellRefreshButton}
+                          onPress={() => void loadCellData(server.id)}
+                          disabled={cellState.loading}
+                        >
+                          <Text style={styles.cellRefreshText}>
+                            {cellState.loading ? 'Refreshing…' : 'Refresh'}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    {cellState.open && cellState.loadedAt ? (
+                      <Text style={orgPanelStyles.muted}>
+                        Cell data loaded{' '}
+                        {formatHeartbeat(cellState.loadedAt)}
                       </Text>
-                    </TouchableOpacity>
+                    ) : null}
                     {cellState.open ? (
                       cellState.loading ? (
                         <View style={styles.cellRow}>
@@ -682,6 +733,25 @@ const styles = StyleSheet.create({
   cellPanel: {
     marginTop: spacing.sm,
     gap: spacing.xs,
+  },
+  cellHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  cellRefreshButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: colors.bgSecondary,
+  },
+  cellRefreshText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
   },
   cellRow: {
     flexDirection: 'row',
