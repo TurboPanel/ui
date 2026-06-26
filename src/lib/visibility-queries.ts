@@ -17,8 +17,8 @@ export const visibilityQueryKeys = {
     ['visible-projects', workspaceId ?? 'all'] as const,
   services: (environmentId?: string) =>
     ['visible-services', environmentId ?? 'all'] as const,
-  hostings: (serviceId?: string) =>
-    ['visible-hostings', serviceId ?? 'all'] as const,
+  hostings: (serviceId: string) =>
+    ['visible-hostings', serviceId] as const,
   can: (resourceId: string, permissionKey: string) =>
     ['can', resourceId, permissionKey] as const,
 }

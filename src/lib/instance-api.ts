@@ -350,7 +350,14 @@ export type ServiceRecord = {
 export type HostingRecord = {
   id: string;
   displayName: string | null;
-  serviceId: string | null;
+  serviceId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NetworkRecord = {
+  id: string;
+  serverId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -386,11 +393,47 @@ export async function fetchVisibleServices(
 }
 
 export async function fetchVisibleHostings(
-  serviceId?: string,
+  serviceId: string,
 ): Promise<{ hostings: HostingRecord[] }> {
-  const params = serviceId ? new URLSearchParams({ serviceId }) : null;
-  const suffix = params ? `?${params.toString()}` : "";
-  return await apiFetch(`${CLIENT_API}/hostings${suffix}`);
+  const params = new URLSearchParams({ serviceId });
+  return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`);
+}
+
+export async function createHosting(
+  serviceId: string,
+  body?: { displayName?: string },
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/hostings`, {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId,
+      ...(body?.displayName !== undefined ? { displayName: body.displayName } : {}),
+    }),
+  });
+}
+
+export async function fetchNetworks(
+  serverId: string,
+): Promise<{ networks: NetworkRecord[] }> {
+  const params = new URLSearchParams({ serverId });
+  return await apiFetch(`${CLIENT_API}/networks?${params.toString()}`);
+}
+
+export async function createNetwork(
+  serverId: string,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/networks`, {
+    method: "POST",
+    body: JSON.stringify({ serverId }),
+  });
+}
+
+export async function deleteNetwork(
+  networkId: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/networks/${networkId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function createAccessGrant(

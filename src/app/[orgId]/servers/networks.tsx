@@ -2,7 +2,19 @@ import { useLocalSearchParams } from 'expo-router'
 import { NetworksOverviewSection } from '@/components/org/networks-overview-section'
 
 export default function ServersNetworksScreen() {
-  const { orgId } = useLocalSearchParams<{ orgId: string }>()
+  const { orgId, serverId } = useLocalSearchParams<{
+    orgId: string
+    serverId?: string | string[]
+  }>()
 
-  return <NetworksOverviewSection orgId={orgId ?? ''} />
+  const resolvedServerId = Array.isArray(serverId)
+    ? (serverId[0] ?? '')
+    : (serverId ?? '')
+
+  return (
+    <NetworksOverviewSection
+      orgId={orgId ?? ''}
+      serverId={resolvedServerId}
+    />
+  )
 }
