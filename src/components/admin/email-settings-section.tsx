@@ -62,6 +62,35 @@ const PLACEHOLDERS: Record<FullKey, string> = {
 
 const PROVIDER_OPTIONS: ('smtp' | 'mailgun')[] = ['smtp', 'mailgun']
 
+const PROVIDER_LABELS: Record<(typeof PROVIDER_OPTIONS)[number], string> = {
+  smtp: 'SMTP',
+  mailgun: 'Mailgun API',
+}
+
+const SMTP_KEYS: FullKey[] = [
+  'TURBOPANEL_SYSTEM_EMAIL__SMTP_HOST',
+  'TURBOPANEL_SYSTEM_EMAIL__SMTP_PORT',
+  'TURBOPANEL_SYSTEM_EMAIL__SMTP_USER',
+  'TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS',
+]
+
+const MAILGUN_KEYS: FullKey[] = [
+  'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY',
+  'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN',
+]
+
+const BASE_KEYS: FullKey[] = [
+  'TURBOPANEL_SYSTEM_EMAIL__PROVIDER',
+  'TURBOPANEL_SYSTEM_EMAIL__FROM',
+]
+
+function visibleKeysForProvider(provider: string): FullKey[] {
+  const resolved = provider === 'mailgun' ? 'mailgun' : 'smtp'
+  return resolved === 'mailgun'
+    ? [...BASE_KEYS, ...MAILGUN_KEYS]
+    : [...BASE_KEYS, ...SMTP_KEYS]
+}
+
 function isSecretKey(key: FullKey): boolean {
   return SECRET_KEYS.has(key)
 }
@@ -259,7 +288,7 @@ export function EmailSettingsSection() {
                   disabled={isEnv || saveMutation.isPending}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                    {opt}
+                    {PROVIDER_LABELS[opt]}
                   </Text>
                 </Pressable>
               )
@@ -310,7 +339,7 @@ export function EmailSettingsSection() {
 
       <SectionPanel
         title="Email settings"
-        hint="Provider selection and credentials for SMTP or Mailgun"
+        hint="Provider selection and credentials for SMTP or Mailgun API"
       >
         {emailQuery.isError ? (
           <Text style={orgPanelStyles.error}>
@@ -326,7 +355,11 @@ export function EmailSettingsSection() {
           <Text style={orgPanelStyles.muted}>Loading...</Text>
         ) : (
           <>
-            {FULL_KEYS.map((k) => renderField(k))}
+            {visibleKeysForProvider(
+              draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER ||
+                loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ||
+                'smtp',
+            ).map((k) => renderField(k))}
 
             <View style={styles.actions}>
               <Pressable
@@ -473,7 +506,6 @@ const styles = StyleSheet.create({
     color: colors.textChip,
     fontSize: 14,
     fontWeight: '600',
-    textTransform: 'capitalize',
   },
   chipTextActive: {
     color: colors.text,
