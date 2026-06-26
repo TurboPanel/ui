@@ -71,6 +71,7 @@ function AuthGuard() {
 
   const onSignIn = topSegment === 'sign-in'
   const onSignUp = topSegment === 'sign-up'
+  const onVerifyEmail = topSegment === 'verify-email'
   const onInstall = topSegment === 'install'
   const onWelcome = topSegment === 'welcome'
   const onAdmin = topSegment === 'admin'
@@ -101,7 +102,7 @@ function AuthGuard() {
     return <Redirect href={dashboardHref(session, needsInstall) as Href} />
   }
 
-  if (!hasUserSession(session) && !onSignIn && !onSignUp && !developerDevBypass) {
+  if (!hasUserSession(session) && !onSignIn && !onSignUp && !onVerifyEmail && !developerDevBypass) {
     return <Redirect href={'/sign-in' as Href} />
   }
 

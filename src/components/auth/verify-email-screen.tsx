@@ -23,6 +23,9 @@ export function VerifyEmailScreenContent() {
 
   useEffect(() => {
     if (!token) {
+      // #region agent log
+      fetch('http://localhost:7440/ingest/3e0179a5-fa63-49e5-b717-b62ee1a155c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'543aa9'},body:JSON.stringify({sessionId:'543aa9',location:'verify-email-screen.tsx',message:'verify screen mounted without token',data:{},timestamp:Date.now(),hypothesisId:'F',runId:'post-fix-ui'})}).catch(()=>{});
+      // #endregion
       setStatus('error')
       setErrorMessage('This verification link is missing a token.')
       return
@@ -35,9 +38,15 @@ export function VerifyEmailScreenContent() {
 
     void verifyEmail(token)
       .then(() => {
+        // #region agent log
+        fetch('http://localhost:7440/ingest/3e0179a5-fa63-49e5-b717-b62ee1a155c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'543aa9'},body:JSON.stringify({sessionId:'543aa9',location:'verify-email-screen.tsx',message:'verify API succeeded',data:{tokenLength:token.length},timestamp:Date.now(),hypothesisId:'F',runId:'post-fix-ui'})}).catch(()=>{});
+        // #endregion
         if (!cancelled) setStatus('success')
       })
       .catch((err) => {
+        // #region agent log
+        fetch('http://localhost:7440/ingest/3e0179a5-fa63-49e5-b717-b62ee1a155c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'543aa9'},body:JSON.stringify({sessionId:'543aa9',location:'verify-email-screen.tsx',message:'verify API failed',data:{tokenLength:token.length,error:err instanceof Error?err.message:String(err)},timestamp:Date.now(),hypothesisId:'F,G',runId:'post-fix-ui'})}).catch(()=>{});
+        // #endregion
         if (cancelled) return
         setStatus('error')
         setErrorMessage(err instanceof Error ? err.message : 'Verification failed')
