@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { YStack, Button, Text } from 'tamagui'
 import { Link, useLocalSearchParams, useRouter } from 'expo-router'
 import { verifyEmail } from '@/lib/instance-api'
@@ -19,6 +19,7 @@ export function VerifyEmailScreenContent() {
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
+  const verifyStartedRef = useRef(false)
 
   useEffect(() => {
     if (!token) {
@@ -26,6 +27,9 @@ export function VerifyEmailScreenContent() {
       setErrorMessage('This verification link is missing a token.')
       return
     }
+
+    if (verifyStartedRef.current) return
+    verifyStartedRef.current = true
 
     let cancelled = false
 
