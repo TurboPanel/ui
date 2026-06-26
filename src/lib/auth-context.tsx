@@ -21,6 +21,7 @@ import { authQueryKeys, isVisibilityQuery } from '@/lib/visibility-queries'
 
 type AuthContextValue = {
   session: SessionInfo | null
+  /** Deno self-hosted only — false on Workers (bootstrap via sign-up). */
   needsInstall: boolean
   isSignupEnabled: boolean
   isLoading: boolean

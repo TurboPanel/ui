@@ -394,6 +394,7 @@ export function SignUpScreenContent() {
   const validation = validatePassword(password)
   const isInstallMode = instanceInfo?.isInstallMode === true
   const isSignupDisabled = instanceInfo?.isSignupEnabled === false
+  /** Workers omit install fields — sign-up is the bootstrap path when enabled. */
   const instanceInfoWarning =
     instanceInfoErrored || !instanceInfo
       ? 'Could not verify signup availability right now. You can still try signing up.'

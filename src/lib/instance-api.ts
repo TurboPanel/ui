@@ -13,10 +13,11 @@ export type SessionInfo = {
 };
 
 export type InstallStatus = {
-  /** Deno self-hosted only — absent on Workers. */
+  /** Deno self-hosted only — absent on Workers (use sign-up for bootstrap). */
   needsInstall?: boolean;
   /** Deno self-hosted only — absent on Workers. */
   isInstallMode?: boolean;
+  /** Workers: defaults to true when env and DB are unset (sign-up is the bootstrap path). */
   isSignupEnabled: boolean;
 };
 
