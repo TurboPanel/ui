@@ -611,3 +611,31 @@ export async function triggerServerUpdate(
     method: 'POST',
   })
 }
+
+export type EmailSettingSource = 'env' | 'db' | 'default'
+
+export type EmailSettingEntry = { value: string | null; source: EmailSettingSource }
+
+export type EmailSettingsResponse = { ok: boolean; settings: Record<string, EmailSettingEntry> }
+
+const ADMIN_EMAIL_SETTINGS_URL = `${ADMIN_API}/settings/email`
+
+export async function fetchEmailSettings(): Promise<EmailSettingsResponse> {
+  const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
+    ADMIN_EMAIL_SETTINGS_URL,
+  )
+  return { ok: true, settings: raw.settings ?? {} }
+}
+
+export async function saveEmailSettings(
+  settings: Record<string, string | null>,
+): Promise<EmailSettingsResponse> {
+  const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
+    ADMIN_EMAIL_SETTINGS_URL,
+    {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    },
+  )
+  return { ok: true, settings: raw.settings ?? {} }
+}

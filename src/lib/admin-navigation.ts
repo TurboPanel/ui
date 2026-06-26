@@ -6,6 +6,13 @@ export const ADMIN_AREAS = [
     hint: 'Control-plane public URLs and TLS',
     subRoutes: [],
   },
+  {
+    id: 'email',
+    label: 'Email',
+    pathSegment: 'email',
+    hint: 'Email provider and SMTP/Mailgun configuration',
+    subRoutes: [],
+  },
 ] as const
 
 export type AdminAreaId = (typeof ADMIN_AREAS)[number]['id']
