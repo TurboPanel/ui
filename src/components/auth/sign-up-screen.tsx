@@ -106,6 +106,7 @@ type SignupFormProps = {
 }
 
 type SignupSuccessProps = {
+  isEmailVerificationEnabled: boolean
   onContinue: () => void
 }
 
@@ -136,12 +137,26 @@ type SignupActionsProps = {
   onSubmit: () => void
 }
 
-function SignupSuccess({ onContinue }: Readonly<SignupSuccessProps>) {
+function SignupSuccess({
+  isEmailVerificationEnabled,
+  onContinue,
+}: Readonly<SignupSuccessProps>) {
   return (
     <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center">
-      <Text color="$color" fontSize="$5" marginBottom="$4">
-        Account created! Please sign in.
-      </Text>
+      {isEmailVerificationEnabled ? (
+        <>
+          <Text color="$color" fontSize="$5" marginBottom="$2">
+            Check your email to verify your account before signing in.
+          </Text>
+          <Text color="$gray10" fontSize="$3" marginBottom="$4">
+            We sent a verification link to your inbox.
+          </Text>
+        </>
+      ) : (
+        <Text color="$color" fontSize="$5" marginBottom="$4">
+          Account created! Please sign in.
+        </Text>
+      )}
       <Button onPress={onContinue} theme="active" size="$4">
         Go to sign in
       </Button>
@@ -480,8 +495,14 @@ export function SignUpScreenContent() {
     return null
   }
 
+  const isEmailVerificationEnabled =
+    instanceInfo?.isSignupEmailVerificationEnabled ?? true
+
   return success ? (
-    <SignupSuccess onContinue={onSignupSuccessContinue} />
+    <SignupSuccess
+      isEmailVerificationEnabled={isEmailVerificationEnabled}
+      onContinue={onSignupSuccessContinue}
+    />
   ) : (
     <SignupForm
       email={email}

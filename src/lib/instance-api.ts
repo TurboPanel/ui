@@ -19,6 +19,7 @@ export type InstallStatus = {
   isInstallMode?: boolean;
   /** Workers: defaults to true when env and DB are unset (sign-up is the bootstrap path). */
   isSignupEnabled: boolean;
+  isSignupEmailVerificationEnabled?: boolean;
 };
 
 export async function fetchSession(): Promise<SessionInfo | null> {
@@ -103,6 +104,12 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
       ? {}
       : { isInstallMode: body.isInstallMode ?? body.needsInstall ?? false }),
     isSignupEnabled: body.isSignupEnabled ?? false,
+    ...(body.isSignupEmailVerificationEnabled === undefined
+      ? {}
+      : {
+          isSignupEmailVerificationEnabled:
+            body.isSignupEmailVerificationEnabled,
+        }),
   };
 }
 
