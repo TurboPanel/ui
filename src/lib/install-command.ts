@@ -14,6 +14,14 @@ function trimTrailingSlash(url: string): string {
   return url.replace(/\/$/, '')
 }
 
+function encodeLicenseArg(licenseId: string, licenseToken: string): string {
+  const combined = `${licenseId}:${licenseToken}`
+  return btoa(combined)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
+
 /** Rebuild a dev install command (run.sh + downloads on the same public host). */
 export function buildInstallCommandWithBaseUrl(opts: {
   licenseId: string
@@ -21,10 +29,10 @@ export function buildInstallCommandWithBaseUrl(opts: {
   baseUrl: string
 }): string {
   const base = trimTrailingSlash(opts.baseUrl.trim())
-  const licenseArg = `${opts.licenseId}:${opts.licenseToken}`
+  const licenseArg = encodeLicenseArg(opts.licenseId, opts.licenseToken)
   return (
     `curl -fsSLk ${base}/run.sh | ` +
-    `sh -s -- --license ${licenseArg} --host ${base} --binary-url ${base}/downloads/daemon --insecure-tls`
+    `sh -s -- --license ${licenseArg} --host ${base} --insecure-tls`
   )
 }
 
