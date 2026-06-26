@@ -318,6 +318,7 @@ export async function checkPermission(
 export type WorkspaceRecord = {
   id: string;
   displayName: string | null;
+  description: string | null;
   organizationId: string;
   createdAt: string;
   updatedAt: string;
@@ -326,6 +327,7 @@ export type WorkspaceRecord = {
 export type EnvironmentRecord = {
   id: string;
   displayName: string | null;
+  description: string | null;
   projectId: string;
   createdAt: string;
   updatedAt: string;
@@ -334,6 +336,7 @@ export type EnvironmentRecord = {
 export type ProjectRecord = {
   id: string;
   displayName: string | null;
+  description: string | null;
   workspaceId: string;
   createdAt: string;
   updatedAt: string;
@@ -342,6 +345,7 @@ export type ProjectRecord = {
 export type ServiceRecord = {
   id: string;
   displayName: string | null;
+  description: string | null;
   environmentId: string;
   createdAt: string;
   updatedAt: string;
@@ -350,6 +354,7 @@ export type ServiceRecord = {
 export type HostingRecord = {
   id: string;
   displayName: string | null;
+  description: string | null;
   serviceId: string;
   createdAt: string;
   updatedAt: string;
@@ -401,13 +406,14 @@ export async function fetchVisibleHostings(
 
 export async function createHosting(
   serviceId: string,
-  body?: { displayName?: string },
+  body?: { displayName?: string; description?: string },
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
     method: "POST",
     body: JSON.stringify({
       serviceId,
       ...(body?.displayName !== undefined ? { displayName: body.displayName } : {}),
+      ...(body?.description !== undefined ? { description: body.description } : {}),
     }),
   });
 }
