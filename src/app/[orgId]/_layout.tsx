@@ -1,31 +1,65 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
-import { View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, View } from 'react-native'
 import { OrgShell } from '@/components/org/org-shell'
-import { dashboardHref, useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/auth-context'
+import { fetchOrganizations } from '@/lib/instance-api'
+import { setActiveOrganizationId } from '@/lib/org-context'
 import { colors } from '@/lib/theme'
 
 export default function OrganizationLayout() {
   const { session, needsInstall, isLoading } = useAuth()
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
+  const [orgAllowed, setOrgAllowed] = useState<boolean | null>(null)
 
-  if (isLoading) {
-    return <View style={{ flex: 1, backgroundColor: colors.bg }} />
+  useEffect(() => {
+    if (!orgId || !session) {
+      setOrgAllowed(null)
+      return
+    }
+
+    let cancelled = false
+    void fetchOrganizations()
+      .then(({ organizations }) => {
+        if (cancelled) return
+        const allowed = organizations.some((org) => org.id === orgId)
+        setOrgAllowed(allowed)
+        if (allowed) {
+          setActiveOrganizationId(orgId)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOrgAllowed(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, session])
+
+  if (isLoading || (session && orgId && orgAllowed === null)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    )
   }
 
   if (needsInstall) {
     return <Redirect href={'/install' as Href} />
   }
 
-  if (!session?.organizationId) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  if (!session) {
+    return <Redirect href={'/sign-in' as Href} />
   }
 
-  if (session.organizationId && orgId !== session.organizationId) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
-  }
-
-  if (!orgId) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  if (!orgId || orgAllowed === false) {
+    if (orgAllowed === false) {
+      setActiveOrganizationId(null)
+    }
+    return <Redirect href={'/welcome' as Href} />
   }
 
   return <OrgShell orgId={orgId} />

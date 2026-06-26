@@ -106,27 +106,46 @@ function AuthGuard() {
     return <Redirect href={'/sign-in' as Href} />
   }
 
-  if (hasUserSession(session) && session.organizationId && onWelcome) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
-  }
-
-  if (
-    hasUserSession(session) &&
-    !session.organizationId &&
-    !onWelcome &&
-    !onSignIn &&
-    !onSignUp &&
-    !developerDevBypass &&
-    !(onAdmin && isAdminSession(session))
-  ) {
-    return <Redirect href={'/welcome' as Href} />
-  }
-
   if (hasUserSession(session) && (onSignIn || onSignUp)) {
     return <Redirect href={dashboardHref(session, needsInstall) as Href} />
   }
 
+  if (hasUserSession(session) && onWelcome) {
+    const href = dashboardHref(session, needsInstall)
+    if (href !== '/welcome') {
+      return <Redirect href={href as Href} />
+    }
+  }
+
+  if (
+    hasUserSession(session) &&
+    !onWelcome &&
+    !onSignIn &&
+    !onSignUp &&
+    !onVerifyEmail &&
+    !developerDevBypass &&
+    !(onAdmin && isAdminSession(session)) &&
+    !isOrgRoute(topSegment)
+  ) {
+    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  }
+
   return <Stack screenOptions={{ headerShown: false }} />
+}
+
+const PUBLIC_ROUTE_SEGMENTS = new Set([
+  'sign-in',
+  'sign-up',
+  'verify-email',
+  'install',
+  'welcome',
+  'admin',
+  'recovering',
+  'developer',
+])
+
+function isOrgRoute(topSegment: string | undefined): boolean {
+  return Boolean(topSegment && !PUBLIC_ROUTE_SEGMENTS.has(topSegment))
 }
 
 const styles = StyleSheet.create({

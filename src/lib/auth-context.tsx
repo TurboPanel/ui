@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import {
   fetchInstallStatus,
+  fetchOrganizations,
   fetchSession,
   signIn as signInApi,
   signOut as signOutApi,
@@ -17,6 +18,10 @@ import {
   type InstallStatus,
   type SessionInfo,
 } from '@/lib/instance-api'
+import {
+  resolvePreferredOrganizationId,
+  setActiveOrganizationId,
+} from '@/lib/org-context'
 import { authQueryKeys, isVisibilityQuery } from '@/lib/visibility-queries'
 
 type AuthContextValue = {
@@ -33,6 +38,9 @@ type AuthContextValue = {
   refreshSession: () => Promise<SessionInfo | null>
   refreshInstallStatus: () => Promise<boolean>
   handleUnauthorized: () => Promise<void>
+  resolveDashboardHref: () => Promise<
+    '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
+  >
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -73,6 +81,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }, [])
 
+  const resolveDashboardHref = useCallback(async () => {
+    if (needsInstall) {
+      return '/install'
+    }
+    if (!session) {
+      return '/sign-in'
+    }
+
+    try {
+      const { organizations } = await fetchOrganizations()
+      const preferred = resolvePreferredOrganizationId(organizations)
+      if (preferred) {
+        setActiveOrganizationId(preferred)
+        return `/${preferred}/servers`
+      }
+    } catch {
+      // Fall back to welcome when org discovery fails.
+    }
+
+    return '/welcome'
+  }, [needsInstall, session])
+
   useEffect(() => {
     let bootstrapErr: string | null = null
 
@@ -106,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await signOutApi()
     setSession(null)
+    setActiveOrganizationId(null)
   }, [])
 
   const signUp = useCallback(async (email: string, password: string) => {
@@ -114,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearSession = useCallback(() => {
     setSession(null)
+    setActiveOrganizationId(null)
   }, [])
 
   const handleUnauthorized = useCallback(async () => {
@@ -121,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await refreshSession()
     if (!data) {
       setSession(null)
+      setActiveOrganizationId(null)
     }
   }, [queryClient, refreshSession])
 
@@ -138,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshSession,
       refreshInstallStatus,
       handleUnauthorized,
+      resolveDashboardHref,
     }),
     [
       session,
@@ -152,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshSession,
       refreshInstallStatus,
       handleUnauthorized,
+      resolveDashboardHref,
     ],
   )
 
@@ -184,9 +219,6 @@ export function dashboardHref(
 ): '/install' | '/sign-in' | '/welcome' | `/${string}/servers` | '/' {
   if (needsInstall) {
     return '/install'
-  }
-  if (session?.organizationId) {
-    return `/${session.organizationId}/servers`
   }
   if (hasUserSession(session)) {
     return '/welcome'

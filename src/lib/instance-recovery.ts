@@ -1,4 +1,5 @@
-import { fetchHealth, fetchInstallStatus, fetchSession } from '@/lib/instance-api'
+import { fetchHealth, fetchInstallStatus, fetchOrganizations, fetchSession } from '@/lib/instance-api'
+import { resolvePreferredOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
 
 export type RecoveryReason = 'reset' | 'restart' | 'unauthorized'
 
@@ -28,6 +29,7 @@ export type RecoveryPollResult =
   | { kind: 'waiting' }
   | { kind: 'needsInstall' }
   | { kind: 'signedIn'; organizationId: string }
+  | { kind: 'welcome' }
   | { kind: 'signIn' }
 
 /** Poll public endpoints only — safe while the instance is restarting or sessions are invalid. */
@@ -52,11 +54,22 @@ export async function pollInstanceRecovery(): Promise<RecoveryPollResult> {
   }
 
   const session = await fetchSession()
-  if (session?.organizationId) {
-    return { kind: 'signedIn', organizationId: session.organizationId }
+  if (!session) {
+    return { kind: 'signIn' }
   }
 
-  return { kind: 'signIn' }
+  try {
+    const { organizations } = await fetchOrganizations()
+    const preferred = resolvePreferredOrganizationId(organizations)
+    if (preferred) {
+      setActiveOrganizationId(preferred)
+      return { kind: 'signedIn', organizationId: preferred }
+    }
+  } catch {
+    return { kind: 'waiting' }
+  }
+
+  return { kind: 'welcome' }
 }
 
 export function parseRecoveryReason(value: string | string[] | undefined): RecoveryReason | null {

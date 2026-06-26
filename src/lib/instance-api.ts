@@ -1,3 +1,8 @@
+import {
+  getActiveOrganizationId,
+  ORG_ID_HEADER,
+} from '@/lib/org-context'
+
 const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
 const ADMIN_API = '/api/admin/v1';
@@ -9,7 +14,12 @@ export type SessionInfo = {
   role: string | null;
   /** Deno self-hosted only — absent on Workers. */
   needsInstall?: boolean;
-  organizationId: string | null;
+};
+
+export type OrganizationRecord = {
+  id: string;
+  displayName: string | null;
+  createdAt: string;
 };
 
 export type InstallStatus = {
@@ -52,7 +62,6 @@ export async function fetchSession(): Promise<SessionInfo | null> {
     ...(body.needsInstall === undefined
       ? {}
       : { needsInstall: body.needsInstall }),
-    organizationId: body.organizationId ?? null,
   };
 }
 
@@ -72,7 +81,6 @@ export async function signIn(
     ...(body.needsInstall === undefined
       ? {}
       : { needsInstall: body.needsInstall }),
-    organizationId: body.organizationId ?? null,
   };
 }
 
@@ -150,12 +158,20 @@ export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }>
   return await apiFetch(`${CLIENT_API}/servers`);
 }
 
+export async function fetchOrganizations(): Promise<{ organizations: OrganizationRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/organizations`);
+}
+
+export type InstallCompleteResult = SessionInfo & {
+  organizationId: string;
+};
+
 export async function completeInstall(body: {
   username: string;
   password: string;
   superadminEmail: string;
   superadminPassword: string;
-}): Promise<SessionInfo & { organizationId: string }> {
+}): Promise<InstallCompleteResult> {
   const response = await apiFetch<SessionInfo & { ok: true; organizationId: string }>(
     INSTALL_API,
     {
@@ -173,14 +189,24 @@ export async function completeInstall(body: {
   };
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  organizationId?: string | null,
+): Promise<T> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
   const response = await fetch(path, {
     ...init,
     credentials: 'include',
-    headers: {
-      "content-type": "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {

@@ -7,9 +7,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { YStack, XStack, Input, Button, Text } from 'tamagui'
-import { useRouter } from 'expo-router'
+import { useRouter, type Href } from 'expo-router'
 import { bootstrapInstall, completeInstall } from '@/lib/instance-api'
 import { useAuth } from '@/lib/auth-context'
+import { setActiveOrganizationId } from '@/lib/org-context'
+import { defaultOrgDashboardHref } from '@/lib/org-navigation'
 import { useAuthStatus } from '@/lib/query-client'
 
 const webInputStyle = {
@@ -107,7 +109,8 @@ export function InstallScreenContent() {
       setSuccess(true)
       await refreshInstallStatus()
       await refreshSession()
-      router.replace(`/${result.organizationId}/servers`)
+      setActiveOrganizationId(result.organizationId)
+      router.replace(defaultOrgDashboardHref(result.organizationId) as Href)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
       setSuccess(false)

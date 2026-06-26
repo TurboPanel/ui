@@ -53,9 +53,13 @@ export default function RecoveringScreen() {
         return
       }
 
-      const session = await refreshSession().catch(() => null)
-      if (session?.organizationId) {
-        router.replace(`/${session.organizationId}/servers` as Href)
+      if (result.kind === 'signedIn') {
+        router.replace(`/${result.organizationId}/servers` as Href)
+        return
+      }
+
+      if (result.kind === 'welcome') {
+        router.replace('/welcome' as Href)
         return
       }
 

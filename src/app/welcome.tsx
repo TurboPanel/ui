@@ -1,28 +1,87 @@
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, type Href } from 'expo-router'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
+import { fetchOrganizations, type OrganizationRecord } from '@/lib/instance-api'
+import { setActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
+import { defaultOrgDashboardHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 
 export default function WelcomeScreen() {
   const { session, signOut } = useAuth()
   const router = useRouter()
   const showAdminLink = isAdminSession(session)
+  const [organizations, setOrganizations] = useState<OrganizationRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    void fetchOrganizations()
+      .then(({ organizations: orgs }) => {
+        if (cancelled) return
+        setOrganizations(orgs)
+        const preferred = resolvePreferredOrganizationId(orgs)
+        if (preferred) {
+          setActiveOrganizationId(preferred)
+          router.replace(defaultOrgDashboardHref(preferred) as Href)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load organizations')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <Text style={styles.title}>TurboPanel</Text>
-        <Text style={styles.subtitle}>You are signed in</Text>
+        <Text style={styles.subtitle}>Choose an organization</Text>
         {session?.email ? (
           <Text style={styles.email}>{session.email}</Text>
         ) : null}
-        <Text style={styles.detail}>
-          Your account is not assigned to an organization yet. Contact an
-          administrator to get access, or wait for organization onboarding to
-          become available.
-        </Text>
+        {loading ? (
+          <Text style={styles.detail}>Loading organizations…</Text>
+        ) : error ? (
+          <Text style={styles.detail}>{error}</Text>
+        ) : organizations.length === 0 ? (
+          <Text style={styles.detail}>
+            Your account is not assigned to an organization yet. Contact an
+            administrator to get access, or wait for organization onboarding to
+            become available.
+          </Text>
+        ) : (
+          <View style={styles.orgList}>
+            {organizations.map((org) => (
+              <Pressable
+                key={org.id}
+                style={styles.orgButton}
+                onPress={() => {
+                  setActiveOrganizationId(org.id)
+                  router.replace(defaultOrgDashboardHref(org.id) as Href)
+                }}
+              >
+                <Text style={styles.orgButtonText}>
+                  {org.displayName?.trim() || org.id}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         {showAdminLink ? (
           <Pressable
             style={styles.adminButton}
@@ -72,6 +131,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     maxWidth: 420,
+  },
+  orgList: {
+    width: '100%',
+    maxWidth: 360,
+    gap: spacing.sm,
+  },
+  orgButton: {
+    backgroundColor: colors.accent,
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  orgButtonText: {
+    color: colors.buttonText,
+    fontSize: 16,
+    fontWeight: '600',
   },
   adminButton: {
     backgroundColor: colors.accent,

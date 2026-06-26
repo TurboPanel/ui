@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Platform, TextInput } from 'react-native'
 import { YStack, XStack, Input, Button, Text } from 'tamagui'
-import { Link, useRouter } from 'expo-router'
+import { Link, useRouter, type Href } from 'expo-router'
 import { useAuth } from '@/lib/auth-context'
 import { useAuthStatus } from '@/lib/query-client'
 
@@ -19,7 +19,7 @@ const webInputStyle = {
 
 export function SignInScreenContent() {
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn, resolveDashboardHref } = useAuth()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
   const [email, setEmail] = useState('')
@@ -43,12 +43,14 @@ export function SignInScreenContent() {
     setLoading(true)
     try {
       await signIn(email, password)
+      const href = await resolveDashboardHref()
+      router.replace(href as Href)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed')
     } finally {
       setLoading(false)
     }
-  }, [email, password, signIn])
+  }, [email, password, resolveDashboardHref, router, signIn])
 
   useEffect(() => {
     if (instanceInfoLoading) return
