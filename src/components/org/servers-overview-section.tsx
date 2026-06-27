@@ -14,21 +14,13 @@ import {
   fetchServerCell,
   fetchServerUpdate,
   isForbiddenError,
-  pingServer,
   triggerServerUpdate,
   type FetchServerCellResponse,
   type OrgServerRecord,
-  type PingServerResponse,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
-
-type PingState = {
-  pinging: boolean
-  result: PingServerResponse | null
-  error: string | null
-}
 
 type CellState = {
   open: boolean
@@ -67,19 +59,6 @@ function formatUptime(value: string | null): string {
   return `${days}d ${hours % 24}h`
 }
 
-function formatUptimeSeconds(seconds: number): string {
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-  const parts: string[] = []
-  if (days > 0) parts.push(`${days}d`)
-  if (hours > 0) parts.push(`${hours}h`)
-  if (minutes > 0) parts.push(`${minutes}m`)
-  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`)
-  return parts.join(' ')
-}
-
 function formatHeartbeat(value: string | null): string {
   if (!value) return 'Never'
   const ts = Date.parse(value)
@@ -97,76 +76,18 @@ function formatHeartbeat(value: string | null): string {
   return `${days}d ago (${absolute})`
 }
 
-function statusColor(status: string | null): string {
-  switch (status) {
-    case 'healthy':
-      return colors.accent
-    case 'degraded':
-      return colors.pending
-    case 'unhealthy':
-    case 'failed':
-      return colors.error
-    default:
-      return colors.textDim
-  }
-}
-
-function mapPingError(err: unknown): string {
-  const message = err instanceof Error ? err.message : 'Ping failed'
-  const lower = message.toLowerCase()
-  if (lower.includes('daemon not connected')) {
-    return 'Daemon not connected'
-  }
-  if (lower.includes('ping timed out')) {
-    return 'Ping timed out'
-  }
-  return message
-}
-
 export function ServersOverviewSection({ orgId }: { orgId: string }) {
   const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [pingStates, setPingStates] = useState<Map<string, PingState>>(
-    new Map(),
-  )
   const [cellStates, setCellStates] = useState<Map<string, CellState>>(
     new Map(),
   )
   const [updateStates, setUpdateStates] = useState<Map<string, UpdateState>>(
     new Map(),
   )
-
-  const handlePing = async (serverId: string) => {
-    setPingStates((prev) =>
-      new Map(prev).set(serverId, {
-        pinging: true,
-        result: null,
-        error: null,
-      }),
-    )
-    try {
-      const result = await pingServer(serverId)
-      setPingStates((prev) =>
-        new Map(prev).set(serverId, {
-          pinging: false,
-          result,
-          error: null,
-        }),
-      )
-    } catch (err) {
-      const message = mapPingError(err)
-      setPingStates((prev) =>
-        new Map(prev).set(serverId, {
-          pinging: false,
-          result: null,
-          error: message,
-        }),
-      )
-    }
-  }
 
   const loadCellData = async (
     serverId: string,
@@ -386,11 +307,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         ) : (
           <View style={styles.list}>
             {servers.map((server) => {
-              const pingState = pingStates.get(server.id) ?? {
-                pinging: false,
-                result: null,
-                error: null,
-              }
               const updateState = updateStates.get(server.id) ?? {
                 loading: false,
                 triggering: false,
@@ -413,10 +329,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                 loadedAt: null,
               }
               const snapshot = cellState.data?.snapshot
-              const monitorInstance = cellState.data?.monitorInstance
-              const resources = cellState.data?.resources ?? []
-              const instance = monitorInstance?.instance
-              const load = instance?.load
 
               return (
                 <View key={server.id} style={orgPanelStyles.detailCard}>
@@ -444,77 +356,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                       </Text>
                     </View>
                   </View>
-
-                  {server.connected ? (
-                    <View style={styles.healthRow}>
-                      <View
-                        style={[
-                          styles.healthChip,
-                          {
-                            borderColor: statusColor(server.status),
-                            backgroundColor: colors.bgSecondary,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.healthChipText,
-                            { color: statusColor(server.status) },
-                          ]}
-                        >
-                          {(server.status ?? 'unknown').toUpperCase()}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.healthChip,
-                          {
-                            borderColor: colors.accent,
-                            backgroundColor: colors.bgSecondary,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.healthChipText, { color: colors.accent }]}
-                        >
-                          ✓ {server.healthyCount ?? 0} healthy
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.healthChip,
-                          {
-                            borderColor: colors.pending,
-                            backgroundColor: colors.bgSecondary,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.healthChipText,
-                            { color: colors.pending },
-                          ]}
-                        >
-                          ⚠ {server.degradedCount ?? 0} degraded
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.healthChip,
-                          {
-                            borderColor: colors.error,
-                            backgroundColor: colors.bgSecondary,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.healthChipText, { color: colors.error }]}
-                        >
-                          ✗ {server.unhealthyCount ?? 0} unhealthy
-                        </Text>
-                      </View>
-                    </View>
-                  ) : null}
 
                   {server.hostname && server.displayName ? (
                     <Text style={orgPanelStyles.detailLine}>
@@ -553,32 +394,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                     <Text style={orgPanelStyles.detailLabel}>Added: </Text>
                     {new Date(server.createdAt).toLocaleString()}
                   </Text>
-
-                  <View style={styles.pingRow}>
-                    <TouchableOpacity
-                      style={styles.pingButton}
-                      onPress={() => void handlePing(server.id)}
-                      disabled={pingState.pinging}
-                    >
-                      {pingState.pinging ? (
-                        <ActivityIndicator size="small" color={colors.textMuted} />
-                      ) : null}
-                      <Text style={styles.pingButtonText}>
-                        {pingState.pinging ? 'Testing…' : 'Test WS Connection'}
-                      </Text>
-                    </TouchableOpacity>
-                    {pingState.result ? (
-                      <Text style={styles.pingResult}>
-                        Round-trip: {pingState.result.tripMs} ms | Sent:{' '}
-                        {new Date(pingState.result.sentAt).toLocaleTimeString()} |
-                        Pong:{' '}
-                        {new Date(pingState.result.pongAt).toLocaleTimeString()}
-                      </Text>
-                    ) : null}
-                    {pingState.error ? (
-                      <Text style={styles.pingError}>{pingState.error}</Text>
-                    ) : null}
-                  </View>
 
                   <View style={styles.updatePanel}>
                     <Text style={styles.updateHeading}>Daemon version</Text>
@@ -697,7 +512,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                     ) : null}
 
                     {updateState.error ? (
-                      <Text style={styles.pingError}>{updateState.error}</Text>
+                      <Text style={styles.errorText}>{updateState.error}</Text>
                     ) : null}
                   </View>
 
@@ -743,7 +558,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                           </Text>
                         </View>
                       ) : cellState.error ? (
-                        <Text style={styles.pingError}>{cellState.error}</Text>
+                        <Text style={styles.errorText}>{cellState.error}</Text>
                       ) : snapshot ? (
                         <View style={[orgPanelStyles.detailCard, styles.cellData]}>
                           <Text style={orgPanelStyles.detailLine}>
@@ -789,73 +604,13 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                               : '—'}
                           </Text>
                           <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>CPU: </Text>
-                            {instance?.cpu?.usagePercent != null
-                              ? `${instance.cpu.usagePercent.toFixed(1)}%`
-                              : '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
                             <Text style={orgPanelStyles.detailLabel}>
-                              Memory:{' '}
+                              Last seen:{' '}
                             </Text>
-                            {instance?.memory?.usagePercent != null
-                              ? `${instance.memory.usagePercent.toFixed(1)}%`
+                            {snapshot.lastSeenAt
+                              ? formatHeartbeat(snapshot.lastSeenAt)
                               : '—'}
                           </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>Disk: </Text>
-                            {instance?.disk?.usagePercent != null
-                              ? `${instance.disk.usagePercent.toFixed(1)}%`
-                              : '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Load (1m/5m/15m):{' '}
-                            </Text>
-                            {load?.one != null ||
-                            load?.five != null ||
-                            load?.fifteen != null
-                              ? [
-                                  load?.one ?? '—',
-                                  load?.five ?? '—',
-                                  load?.fifteen ?? '—',
-                                ].join(' / ')
-                              : '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Uptime:{' '}
-                            </Text>
-                            {instance?.uptimeSeconds != null
-                              ? formatUptimeSeconds(instance.uptimeSeconds)
-                              : '—'}
-                          </Text>
-                          {resources.length > 0 ? (
-                            <>
-                              <Text
-                                style={[
-                                  orgPanelStyles.detailLabel,
-                                  { marginTop: spacing.xs },
-                                ]}
-                              >
-                                Resources
-                              </Text>
-                              {resources.map((resource) => (
-                                <Text
-                                  key={resource.resourceKey}
-                                  style={orgPanelStyles.detailLine}
-                                >
-                                  [{resource.kind}]{' '}
-                                  {resource.state.name ?? resource.resourceKey} —{' '}
-                                  <Text
-                                    style={{ color: statusColor(resource.status) }}
-                                  >
-                                    {resource.status}
-                                  </Text>
-                                </Text>
-                              ))}
-                            </>
-                          ) : null}
                         </View>
                       ) : null
                     ) : null}
@@ -920,55 +675,13 @@ const styles = StyleSheet.create({
   statusTextOffline: {
     color: colors.textDim,
   },
-  healthRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  healthChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  healthChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  pingRow: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  pingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  pingButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  pingResult: {
-    color: colors.accent,
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  pingError: {
-    color: colors.errorText,
-    fontSize: 12,
-  },
   updatePanel: {
     marginTop: spacing.sm,
     gap: spacing.xs,
+  },
+  errorText: {
+    color: colors.errorText,
+    fontSize: 12,
   },
   updateHeading: {
     color: colors.textMuted,

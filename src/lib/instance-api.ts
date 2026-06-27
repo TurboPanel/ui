@@ -148,10 +148,6 @@ export type OrgServerRecord = {
   remoteAddress: string | null;
   lastHeartbeatAt: string | null;
   connectedAt: string | null;
-  status: string | null;
-  healthyCount: number | null;
-  degradedCount: number | null;
-  unhealthyCount: number | null;
 };
 
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
@@ -556,9 +552,6 @@ export type ServerMetadata = {
   cpu?: ServerCpuMetadata
   machineId?: string
   hostname?: string
-  cellLocationHint?: string
-  cellGeneration?: number
-  cellSnapshotVersion?: number
 }
 
 export type DaemonCellSnapshot = {
@@ -575,86 +568,14 @@ export type DaemonCellSnapshot = {
   lastInboundAt?: string
   lastOutboundAt?: string
   lastHeartbeatAt?: string
+  lastSeenAt?: string
   addresses?: ServerAddresses
   metadata?: ServerMetadata
-}
-
-export type MonitorInstanceSummary = {
-  cpu?: { usagePercent?: number; cores?: number }
-  memory?: { usedBytes?: number; totalBytes?: number; usagePercent?: number }
-  disk?: { usedBytes?: number; totalBytes?: number; usagePercent?: number }
-  load?: { one?: number; five?: number; fifteen?: number }
-  uptimeSeconds?: number
-  bootId?: string
-}
-
-export type MonitorInstanceRow = {
-  serverId: string
-  sequence: number
-  at: string
-  instance: MonitorInstanceSummary
-  updatedAt: string
-}
-
-export type MonitorResourceKind =
-  | 'instance'
-  | 'project'
-  | 'service'
-  | 'container'
-
-export type MonitorResourceStatus =
-  | 'unknown'
-  | 'starting'
-  | 'healthy'
-  | 'degraded'
-  | 'unhealthy'
-  | 'stopped'
-  | 'failed'
-  | 'offline'
-
-export type MonitorResourceState = {
-  resourceKey: string
-  kind: MonitorResourceKind
-  status: MonitorResourceStatus
-  name?: string
-  image?: string
-  healthStatus?: string
-  restartCount?: number
-  ports?: string[]
-  labels?: Record<string, string>
-  projectId?: string
-  serviceId?: string
-  containerId?: string
-  updatedAt?: string
-}
-
-export type MonitorResourceRow = {
-  resourceKey: string
-  serverId: string
-  kind: MonitorResourceKind
-  status: MonitorResourceStatus
-  state: MonitorResourceState
-  updatedAt: string
-}
-
-export type PingServerResponse = {
-  ok: boolean
-  tripMs: number
-  sentAt: string
-  pongAt: string
 }
 
 export type FetchServerCellResponse = {
   ok: boolean
   snapshot: DaemonCellSnapshot
-  monitorInstance: MonitorInstanceRow | null
-  resources: MonitorResourceRow[]
-}
-
-export async function pingServer(serverId: string): Promise<PingServerResponse> {
-  return await apiFetch(`${CLIENT_API}/servers/${serverId}/ping`, {
-    method: 'POST',
-  })
 }
 
 export async function fetchServerCell(
