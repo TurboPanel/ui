@@ -38,6 +38,12 @@ type UpdateState = {
 }
 
 const CELL_REFRESH_MS = 10_000
+// The servers list reflects coarse presence from the Postgres projection, which
+// changes about as often as one daemon heartbeat. Poll it slowly rather than at
+// a constant 5s; a push-based update path can replace this entirely later.
+const SERVERS_REFRESH_MS = 30_000
+// Only poll per-server update status while an update is actively in progress.
+const UPDATE_PROGRESS_POLL_MS = 5_000
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -242,9 +248,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         const result = await fetchOrgServers()
         if (!cancelled) {
           setServers(result.servers)
-          for (const server of result.servers) {
-            void loadUpdateData(server.id, { silent: true })
-          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -265,13 +268,44 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     }
 
     void load()
-    const timer = setInterval(() => void load(), 5000)
+    const timer = setInterval(() => void load(), SERVERS_REFRESH_MS)
 
     return () => {
       cancelled = true
       clearInterval(timer)
     }
   }, [orgId, handleUnauthorized])
+
+  // Fetch per-server update status once when a server first appears, instead of
+  // on every list refresh. `servers` is a fresh array each refresh, but servers
+  // that already have an update entry are skipped so this does not re-fetch.
+  useEffect(() => {
+    for (const server of servers) {
+      if (!updateStates.has(server.id)) {
+        void loadUpdateData(server.id, { silent: true })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servers])
+
+  // While an update is actively in progress, poll just those servers until they
+  // reach a terminal state; the effect re-runs and clears the timer once none
+  // remain in progress.
+  useEffect(() => {
+    const inProgressIds = [...updateStates.entries()]
+      .filter(([, state]) => state.triggering || state.data?.status === 'updating')
+      .map(([serverId]) => serverId)
+    if (inProgressIds.length === 0) return
+
+    const timer = setInterval(() => {
+      for (const serverId of inProgressIds) {
+        void loadUpdateData(serverId, { silent: true })
+      }
+    }, UPDATE_PROGRESS_POLL_MS)
+
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateStates])
 
   useEffect(() => {
     const openServerIds = [...cellStates.entries()]
@@ -292,8 +326,8 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     <View style={styles.root}>
       <Text style={styles.heading}>Servers overview</Text>
       <Text style={styles.copy}>
-        Hosts assigned to your organization. Connection status refreshes every few
-        seconds.
+        Hosts assigned to your organization. Connection status refreshes
+        periodically.
       </Text>
 
       <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
