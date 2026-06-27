@@ -146,6 +146,8 @@ export type OrgServerRecord = {
   connected: boolean;
   hostname: string | null;
   remoteAddress: string | null;
+  lastInboundAt: string | null;
+  /** @deprecated use lastInboundAt */
   lastHeartbeatAt: string | null;
   connectedAt: string | null;
 };

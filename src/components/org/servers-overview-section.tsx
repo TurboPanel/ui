@@ -382,9 +382,9 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   ) : null}
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>
-                      Last heartbeat:{' '}
+                      Last activity:{' '}
                     </Text>
-                    {formatHeartbeat(server.lastHeartbeatAt)}
+                    {formatHeartbeat(server.lastInboundAt ?? server.lastHeartbeatAt)}
                   </Text>
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>ID: </Text>
@@ -597,10 +597,12 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                           </Text>
                           <Text style={orgPanelStyles.detailLine}>
                             <Text style={orgPanelStyles.detailLabel}>
-                              Last heartbeat:{' '}
+                              Last activity:{' '}
                             </Text>
-                            {snapshot.lastHeartbeatAt
-                              ? formatHeartbeat(snapshot.lastHeartbeatAt)
+                            {snapshot.lastInboundAt ?? snapshot.lastHeartbeatAt
+                              ? formatHeartbeat(
+                                snapshot.lastInboundAt ?? snapshot.lastHeartbeatAt,
+                              )
                               : '—'}
                           </Text>
                           <Text style={orgPanelStyles.detailLine}>
