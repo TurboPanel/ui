@@ -545,7 +545,11 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                 updateState.resetting ||
                 updateData?.status === 'updating'
               const canResetUpdateStatus =
-                updateData?.status === 'error' && !isUpdateInProgress
+                (updateData?.status === 'error' ||
+                  Boolean(updateData?.lastUpdateError)) &&
+                !isUpdateInProgress
+              const showUpdateErrorBadge =
+                updateData?.status === 'error' && !updateData?.updateAvailable
               const targetKnown = updateData?.targetStatus === 'ok'
               const shortCommit = (c?: string | null) =>
                 c ? c.slice(0, 12) : '—'
@@ -685,51 +689,60 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                         </Text>
                       </View>
                     ) : updateData ? (
-                      <View
-                        style={[
-                          styles.updateBadge,
-                          updateData.status === 'updating'
-                            ? styles.updateBadgeUpdating
-                              : updateData.status === 'error'
-                              ? styles.updateBadgeError
-                              : colocated
-                                ? styles.updateBadgeCurrent
-                                : updateData.targetStatus === 'unknown'
-                                  ? styles.updateBadgeUnknown
-                                  : updateData.updateAvailable
-                                    ? styles.updateBadgeAvailable
-                                    : styles.updateBadgeCurrent,
-                        ]}
-                      >
-                        <Text
+                      <>
+                        <View
                           style={[
-                            styles.updateBadgeText,
+                            styles.updateBadge,
                             updateData.status === 'updating'
-                              ? styles.updateBadgeTextUpdating
-                              : updateData.status === 'error'
-                                ? styles.updateBadgeTextError
+                              ? styles.updateBadgeUpdating
+                              : showUpdateErrorBadge
+                                ? styles.updateBadgeError
                                 : colocated
-                                  ? styles.updateBadgeTextCurrent
+                                  ? styles.updateBadgeCurrent
                                   : updateData.targetStatus === 'unknown'
-                                    ? styles.updateBadgeTextUnknown
+                                    ? styles.updateBadgeUnknown
                                     : updateData.updateAvailable
-                                      ? styles.updateBadgeTextAvailable
-                                      : styles.updateBadgeTextCurrent,
+                                      ? styles.updateBadgeAvailable
+                                      : styles.updateBadgeCurrent,
                           ]}
                         >
-                          {updateData.status === 'updating'
-                            ? 'Update in progress'
-                            : updateData.status === 'error'
-                              ? 'Update error'
-                              : colocated
-                                ? 'Co-located host'
-                                : updateData.targetStatus === 'unknown'
-                                  ? 'Target unavailable'
-                                  : updateData.updateAvailable
-                                    ? 'Update available'
-                                    : 'Up to date'}
-                        </Text>
-                      </View>
+                          <Text
+                            style={[
+                              styles.updateBadgeText,
+                              updateData.status === 'updating'
+                                ? styles.updateBadgeTextUpdating
+                                : showUpdateErrorBadge
+                                  ? styles.updateBadgeTextError
+                                  : colocated
+                                    ? styles.updateBadgeTextCurrent
+                                    : updateData.targetStatus === 'unknown'
+                                      ? styles.updateBadgeTextUnknown
+                                      : updateData.updateAvailable
+                                        ? styles.updateBadgeTextAvailable
+                                        : styles.updateBadgeTextCurrent,
+                            ]}
+                          >
+                            {updateData.status === 'updating'
+                              ? 'Update in progress'
+                              : showUpdateErrorBadge
+                                ? 'Update error'
+                                : colocated
+                                  ? 'Co-located host'
+                                  : updateData.targetStatus === 'unknown'
+                                    ? 'Target unavailable'
+                                    : updateData.updateAvailable
+                                      ? 'Update available'
+                                      : 'Up to date'}
+                          </Text>
+                        </View>
+                        {updateData.lastUpdateError &&
+                        updateData.updateAvailable &&
+                        !colocated ? (
+                          <Text style={orgPanelStyles.muted}>
+                            Last attempt: {updateData.lastUpdateError}
+                          </Text>
+                        ) : null}
+                      </>
                     ) : null}
 
                     {canManage ? (

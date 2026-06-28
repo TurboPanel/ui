@@ -606,6 +606,7 @@ export type ServerUpdateStatus = {
   status: 'idle' | 'updating' | 'error'
   targetStatus: 'ok' | 'unknown'
   targetError?: string
+  lastUpdateError?: string
 }
 
 export type ServerUpdateTriggerResult = {
