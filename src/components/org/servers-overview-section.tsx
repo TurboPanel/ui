@@ -16,6 +16,7 @@ import {
   isForbiddenError,
   triggerAllServerUpdates,
   triggerServerUpdate,
+  resetServerUpdateStatus,
   type FetchServerCellResponse,
   type OrgServerRecord,
   type ServerUpdateStatus,
@@ -34,6 +35,7 @@ type CellState = {
 type UpdateState = {
   loading: boolean
   triggering: boolean
+  resetting: boolean
   data: ServerUpdateStatus | null
   error: string | null
 }
@@ -188,6 +190,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     return new Map(prev).set(serverId, {
       loading: options?.loading ?? false,
       triggering: preserveTriggering || data.status === 'updating',
+      resetting: false,
       data,
       error: null,
     })
@@ -207,6 +210,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
           next = new Map(next).set(serverId, {
             loading: true,
             triggering: current?.triggering ?? false,
+            resetting: current?.resetting ?? false,
             data: current?.data ?? null,
             error: null,
           })
@@ -241,6 +245,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
             next = new Map(next).set(serverId, {
               loading: false,
               triggering: current?.triggering ?? false,
+              resetting: false,
               data: current?.data ?? null,
               error: message,
             })
@@ -264,6 +269,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       new Map(prev).set(serverId, {
         loading: current?.loading ?? false,
         triggering: true,
+        resetting: false,
         data: current?.data ?? null,
         error: null,
       }),
@@ -281,6 +287,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         new Map(prev).set(serverId, {
           loading: false,
           triggering: false,
+          resetting: false,
           data: current?.data ?? null,
           error: message,
         }),
@@ -310,6 +317,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         next = new Map(next).set(server.id, {
           loading: current?.loading ?? false,
           triggering: true,
+          resetting: false,
           data: current?.data ?? null,
           error: null,
         })
@@ -336,6 +344,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
           next = new Map(next).set(server.id, {
             loading: false,
             triggering: false,
+            resetting: false,
             data: current?.data ?? null,
             error: message,
           })
@@ -344,6 +353,40 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       })
     } finally {
       setBatchUpdating(false)
+    }
+  }
+
+  const handleResetUpdateStatus = async (serverId: string): Promise<void> => {
+    const current = updateStates.get(serverId)
+    setUpdateStates((prev) =>
+      new Map(prev).set(serverId, {
+        loading: current?.loading ?? false,
+        triggering: false,
+        resetting: true,
+        data: current?.data ?? null,
+        error: null,
+      }),
+    )
+    try {
+      const result = await resetServerUpdateStatus(serverId)
+      setUpdateStates((prev) =>
+        mergeUpdateEntry(prev, serverId, result, { loading: false }),
+      )
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+      }
+      const message =
+        err instanceof Error ? err.message : 'Failed to reset update status'
+      setUpdateStates((prev) =>
+        new Map(prev).set(serverId, {
+          loading: false,
+          triggering: false,
+          resetting: false,
+          data: current?.data ?? null,
+          error: message,
+        }),
+      )
     }
   }
 
@@ -489,6 +532,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
               const updateState = updateStates.get(server.id) ?? {
                 loading: false,
                 triggering: false,
+                resetting: false,
                 data: null,
                 error: null,
               }
@@ -497,7 +541,11 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
               const isUpdateStatusLoading =
                 updateState.loading && updateData === null
               const isUpdateInProgress =
-                updateState.triggering || updateData?.status === 'updating'
+                updateState.triggering ||
+                updateState.resetting ||
+                updateData?.status === 'updating'
+              const canResetUpdateStatus =
+                updateData?.status === 'error' && !isUpdateInProgress
               const targetKnown = updateData?.targetStatus === 'ok'
               const shortCommit = (c?: string | null) =>
                 c ? c.slice(0, 12) : '—'
@@ -685,49 +733,79 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                     ) : null}
 
                     {canManage ? (
-                      <TouchableOpacity
-                        style={[
-                          styles.updateButton,
-                          (isUpdateStatusLoading ||
+                      <View style={styles.updateButtonRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.updateButton,
+                            (isUpdateStatusLoading ||
+                              isUpdateInProgress ||
+                              !server.connected ||
+                              !targetKnown ||
+                              colocated ||
+                              !updateData?.updateAvailable) &&
+                              styles.updateButtonDisabled,
+                          ]}
+                          onPress={() => void handleTriggerUpdate(server.id)}
+                          disabled={
+                            isUpdateStatusLoading ||
                             isUpdateInProgress ||
                             !server.connected ||
                             !targetKnown ||
                             colocated ||
-                            !updateData?.updateAvailable) &&
-                            styles.updateButtonDisabled,
-                        ]}
-                        onPress={() => void handleTriggerUpdate(server.id)}
-                        disabled={
-                          isUpdateStatusLoading ||
-                          isUpdateInProgress ||
-                          !server.connected ||
-                          !targetKnown ||
-                          colocated ||
-                          !updateData?.updateAvailable
-                        }
-                      >
-                        {isUpdateStatusLoading || isUpdateInProgress ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={colors.textMuted}
-                          />
+                            !updateData?.updateAvailable
+                          }
+                        >
+                          {isUpdateStatusLoading ||
+                          (isUpdateInProgress && updateState.triggering) ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.textMuted}
+                            />
+                          ) : null}
+                          <Text style={styles.updateButtonText}>
+                            {isUpdateStatusLoading
+                              ? 'Loading…'
+                              : updateState.triggering ||
+                                  updateData?.status === 'updating'
+                                ? 'Updating…'
+                                : !server.connected
+                                  ? 'Offline'
+                                  : !targetKnown
+                                    ? 'Target unknown'
+                                    : colocated
+                                      ? 'Not updatable'
+                                      : !updateData?.updateAvailable
+                                        ? 'Up to date'
+                                        : 'Update'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {canResetUpdateStatus ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.resetUpdateButton,
+                              updateState.resetting &&
+                                styles.updateButtonDisabled,
+                            ]}
+                            onPress={() =>
+                              void handleResetUpdateStatus(server.id)
+                            }
+                            disabled={updateState.resetting}
+                          >
+                            {updateState.resetting ? (
+                              <ActivityIndicator
+                                size="small"
+                                color={colors.textMuted}
+                              />
+                            ) : null}
+                            <Text style={styles.resetUpdateButtonText}>
+                              {updateState.resetting
+                                ? 'Resetting…'
+                                : 'Reset status'}
+                            </Text>
+                          </TouchableOpacity>
                         ) : null}
-                        <Text style={styles.updateButtonText}>
-                          {isUpdateStatusLoading
-                            ? 'Loading…'
-                            : isUpdateInProgress
-                              ? 'Updating…'
-                              : !server.connected
-                                ? 'Offline'
-                                : !targetKnown
-                                  ? 'Target unknown'
-                                  : colocated
-                                    ? 'Not updatable'
-                                    : !updateData?.updateAvailable
-                                      ? 'Up to date'
-                                      : 'Update'}
-                        </Text>
-                      </TouchableOpacity>
+                      </View>
                     ) : null}
 
                     {updateState.error ? (
@@ -974,13 +1052,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    alignSelf: 'flex-start',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: colors.bgActive,
+  },
+  updateButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  resetUpdateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: colors.bgSecondary,
+  },
+  resetUpdateButtonText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
   },
   updateButtonDisabled: {
     opacity: 0.5,

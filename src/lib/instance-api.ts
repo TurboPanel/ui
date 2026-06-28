@@ -618,6 +618,10 @@ export type ServerUpdateTriggerResult = {
   error?: string
 }
 
+export type ServerUpdateResetResult = ServerUpdateStatus & {
+  cleared: number
+}
+
 export type ServerBatchUpdateStatus = {
   ok: boolean
   channel: string
@@ -656,6 +660,14 @@ export async function triggerServerUpdate(
   serverId: string,
 ): Promise<ServerUpdateTriggerResult> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`, {
+    method: 'POST',
+  })
+}
+
+export async function resetServerUpdateStatus(
+  serverId: string,
+): Promise<ServerUpdateResetResult> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/update/reset`, {
     method: 'POST',
   })
 }
