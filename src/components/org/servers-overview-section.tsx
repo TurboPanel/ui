@@ -151,6 +151,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
   }
 
   const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
+    if (status.updateBlocked) return true
     if (status.status === 'error') return true
     if (status.status === 'updating') return false
     if (status.targetStatus === 'unknown') return true
@@ -585,6 +586,13 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                       </Text>
                     ) : null}
 
+                    {updateData?.updateBlocked &&
+                    updateData.updateBlockedReason ? (
+                      <Text style={orgPanelStyles.muted}>
+                        {updateData.updateBlockedReason}
+                      </Text>
+                    ) : null}
+
                     {isUpdateStatusLoading ? (
                       <View style={styles.cellRow}>
                         <ActivityIndicator
@@ -603,11 +611,13 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                             ? styles.updateBadgeUpdating
                             : updateData.status === 'error'
                               ? styles.updateBadgeError
-                              : updateData.targetStatus === 'unknown'
-                                ? styles.updateBadgeUnknown
-                                : updateData.updateAvailable
-                                  ? styles.updateBadgeAvailable
-                                  : styles.updateBadgeCurrent,
+                              : updateData.updateBlocked
+                                ? styles.updateBadgeCurrent
+                                : updateData.targetStatus === 'unknown'
+                                  ? styles.updateBadgeUnknown
+                                  : updateData.updateAvailable
+                                    ? styles.updateBadgeAvailable
+                                    : styles.updateBadgeCurrent,
                         ]}
                       >
                         <Text
@@ -617,22 +627,26 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                               ? styles.updateBadgeTextUpdating
                               : updateData.status === 'error'
                                 ? styles.updateBadgeTextError
-                                : updateData.targetStatus === 'unknown'
-                                  ? styles.updateBadgeTextUnknown
-                                  : updateData.updateAvailable
-                                    ? styles.updateBadgeTextAvailable
-                                    : styles.updateBadgeTextCurrent,
+                                : updateData.updateBlocked
+                                  ? styles.updateBadgeTextCurrent
+                                  : updateData.targetStatus === 'unknown'
+                                    ? styles.updateBadgeTextUnknown
+                                    : updateData.updateAvailable
+                                      ? styles.updateBadgeTextAvailable
+                                      : styles.updateBadgeTextCurrent,
                           ]}
                         >
                           {updateData.status === 'updating'
                             ? 'Update in progress'
                             : updateData.status === 'error'
                               ? 'Update error'
-                              : updateData.targetStatus === 'unknown'
-                                ? 'Target unavailable'
-                                : updateData.updateAvailable
-                                  ? 'Update available'
-                                  : 'Up to date'}
+                              : updateData.updateBlocked
+                                ? 'Development daemon'
+                                : updateData.targetStatus === 'unknown'
+                                  ? 'Target unavailable'
+                                  : updateData.updateAvailable
+                                    ? 'Update available'
+                                    : 'Up to date'}
                         </Text>
                       </View>
                     ) : null}
@@ -645,6 +659,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                             isUpdateInProgress ||
                             !server.connected ||
                             !targetKnown ||
+                            updateData?.updateBlocked ||
                             !updateData?.updateAvailable) &&
                             styles.updateButtonDisabled,
                         ]}
@@ -654,6 +669,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                           isUpdateInProgress ||
                           !server.connected ||
                           !targetKnown ||
+                          updateData?.updateBlocked ||
                           !updateData?.updateAvailable
                         }
                       >
@@ -672,9 +688,11 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                                 ? 'Offline'
                                 : !targetKnown
                                   ? 'Target unknown'
-                                  : !updateData?.updateAvailable
-                                    ? 'Up to date'
-                                    : 'Update'}
+                                  : updateData?.updateBlocked
+                                    ? 'Not updatable'
+                                    : !updateData?.updateAvailable
+                                      ? 'Up to date'
+                                      : 'Update'}
                         </Text>
                       </TouchableOpacity>
                     ) : null}

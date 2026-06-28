@@ -599,6 +599,8 @@ export type ServerUpdateStatus = {
   current: ServerUpdateCommit | null
   target: (ServerUpdateCommit & { manifestUrl?: string }) | null
   updateAvailable: boolean
+  updateBlocked?: boolean
+  updateBlockedReason?: string
   status: 'idle' | 'updating' | 'error'
   targetStatus: 'ok' | 'unknown'
   targetError?: string
