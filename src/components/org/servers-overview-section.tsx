@@ -12,8 +12,9 @@ import { useAuth } from '@/lib/auth-context'
 import {
   fetchOrgServers,
   fetchServerCell,
-  fetchServerUpdate,
+  fetchServersUpdateStatus,
   isForbiddenError,
+  triggerAllServerUpdates,
   triggerServerUpdate,
   type FetchServerCellResponse,
   type OrgServerRecord,
@@ -94,6 +95,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
   const [updateStates, setUpdateStates] = useState<Map<string, UpdateState>>(
     new Map(),
   )
+  const [batchUpdating, setBatchUpdating] = useState(false)
 
   const loadCellData = async (
     serverId: string,
@@ -148,64 +150,103 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     await loadCellData(serverId)
   }
 
-  const loadUpdateData = async (
+  const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
+    if (status.status === 'error') return true
+    if (status.status === 'updating') return false
+    if (status.targetStatus === 'unknown') return true
+    if (!status.updateAvailable) return true
+    if (
+      status.current?.commit &&
+      status.target?.commit &&
+      status.current.commit === status.target.commit
+    ) {
+      return true
+    }
+    return status.status === 'idle'
+  }
+
+  const mergeUpdateEntry = (
+    prev: Map<string, UpdateState>,
     serverId: string,
+    data: ServerUpdateStatus,
+    options?: { preserveTriggering?: boolean; loading?: boolean },
+  ): Map<string, UpdateState> => {
+    const current = prev.get(serverId)
+    const preserveTriggering =
+      options?.preserveTriggering &&
+      (current?.triggering ?? false) &&
+      !isTerminalUpdateState(data)
+    return new Map(prev).set(serverId, {
+      loading: options?.loading ?? false,
+      triggering: preserveTriggering || data.status === 'updating',
+      data,
+      error: null,
+    })
+  }
+
+  const loadAllUpdateData = async (
+    serverIds: string[],
     options?: { silent?: boolean },
   ): Promise<void> => {
-    const current = updateStates.get(serverId)
+    if (serverIds.length === 0) return
+
     if (!options?.silent) {
-      setUpdateStates((prev) =>
-        new Map(prev).set(serverId, {
-          loading: true,
-          triggering: current?.triggering ?? false,
-          data: current?.data ?? null,
-          error: null,
-        }),
-      )
-    }
-    try {
-      const data = await fetchServerUpdate(serverId)
-      const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
-        if (status.status === 'error') return true
-        if (status.status === 'updating') return false
-        if (status.targetStatus === 'unknown') return true
-        if (!status.updateAvailable) return true
-        if (
-          status.current?.commit &&
-          status.target?.commit &&
-          status.current.commit === status.target.commit
-        ) {
-          return true
+      setUpdateStates((prev) => {
+        let next = prev
+        for (const serverId of serverIds) {
+          const current = prev.get(serverId)
+          next = new Map(next).set(serverId, {
+            loading: true,
+            triggering: current?.triggering ?? false,
+            data: current?.data ?? null,
+            error: null,
+          })
         }
-        return status.status === 'idle'
-      }
-      const preserveTriggering =
-        options?.silent &&
-        (current?.triggering ?? false) &&
-        !isTerminalUpdateState(data)
-      setUpdateStates((prev) =>
-        new Map(prev).set(serverId, {
-          loading: false,
-          triggering: preserveTriggering || data.status === 'updating',
-          data,
-          error: null,
-        }),
-      )
+        return next
+      })
+    }
+
+    try {
+      const batch = await fetchServersUpdateStatus()
+      setUpdateStates((prev) => {
+        let next = prev
+        for (const entry of batch.servers) {
+          if (!serverIds.includes(entry.serverId)) continue
+          next = mergeUpdateEntry(next, entry.serverId, entry, {
+            preserveTriggering: options?.silent,
+          })
+        }
+        return next
+      })
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
       }
-      const message =
-        err instanceof Error ? err.message : 'Failed to load update status'
-      setUpdateStates((prev) =>
-        new Map(prev).set(serverId, {
-          loading: false,
-          triggering: current?.triggering ?? false,
-          data: options?.silent ? current?.data ?? null : null,
-          error: message,
-        }),
-      )
+      if (!options?.silent) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to load update status'
+        setUpdateStates((prev) => {
+          let next = prev
+          for (const serverId of serverIds) {
+            const current = prev.get(serverId)
+            next = new Map(next).set(serverId, {
+              loading: false,
+              triggering: current?.triggering ?? false,
+              data: current?.data ?? null,
+              error: message,
+            })
+          }
+          return next
+        })
+      }
     }
+  }
+
+  const loadUpdateData = async (
+    serverId: string,
+    options?: { silent?: boolean },
+  ): Promise<void> => {
+    await loadAllUpdateData([serverId], options)
   }
 
   const handleTriggerUpdate = async (serverId: string): Promise<void> => {
@@ -220,7 +261,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     )
     try {
       await triggerServerUpdate(serverId)
-      await loadUpdateData(serverId)
+      void loadUpdateData(serverId, { silent: true })
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
@@ -235,6 +276,64 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
           error: message,
         }),
       )
+    }
+  }
+
+  const handleTriggerAllUpdates = async (): Promise<void> => {
+    const targets = servers.filter((server) => {
+      const state = updateStates.get(server.id)
+      return (
+        server.connected &&
+        state?.data?.targetStatus === 'ok' &&
+        state.data.updateAvailable &&
+        !state.triggering &&
+        state.data.status !== 'updating'
+      )
+    })
+    if (targets.length === 0) return
+
+    setBatchUpdating(true)
+    setUpdateStates((prev) => {
+      let next = prev
+      for (const server of targets) {
+        const current = prev.get(server.id)
+        next = new Map(next).set(server.id, {
+          loading: current?.loading ?? false,
+          triggering: true,
+          data: current?.data ?? null,
+          error: null,
+        })
+      }
+      return next
+    })
+
+    try {
+      await triggerAllServerUpdates()
+      void loadAllUpdateData(
+        targets.map((server) => server.id),
+        { silent: true },
+      )
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+      }
+      const message =
+        err instanceof Error ? err.message : 'Failed to trigger updates'
+      setUpdateStates((prev) => {
+        let next = prev
+        for (const server of targets) {
+          const current = prev.get(server.id)
+          next = new Map(next).set(server.id, {
+            loading: false,
+            triggering: false,
+            data: current?.data ?? null,
+            error: message,
+          })
+        }
+        return next
+      })
+    } finally {
+      setBatchUpdating(false)
     }
   }
 
@@ -276,15 +375,13 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     }
   }, [orgId, handleUnauthorized])
 
-  // Fetch per-server update status once when a server first appears, instead of
-  // on every list refresh. `servers` is a fresh array each refresh, but servers
-  // that already have an update entry are skipped so this does not re-fetch.
+  // Fetch update status in one batch when servers first appear.
   useEffect(() => {
-    for (const server of servers) {
-      if (!updateStates.has(server.id)) {
-        void loadUpdateData(server.id, { silent: true })
-      }
-    }
+    const pendingIds = servers
+      .map((server) => server.id)
+      .filter((serverId) => !updateStates.has(serverId))
+    if (pendingIds.length === 0) return
+    void loadAllUpdateData(pendingIds, { silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servers])
 
@@ -298,9 +395,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     if (inProgressIds.length === 0) return
 
     const timer = setInterval(() => {
-      for (const serverId of inProgressIds) {
-        void loadUpdateData(serverId, { silent: true })
-      }
+      void loadAllUpdateData(inProgressIds, { silent: true })
     }, UPDATE_PROGRESS_POLL_MS)
 
     return () => clearInterval(timer)
@@ -322,6 +417,23 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     return () => clearInterval(timer)
   }, [cellStates])
 
+  const updatableServerCount = servers.filter((server) => {
+    const state = updateStates.get(server.id)
+    return (
+      server.connected &&
+      state?.data?.targetStatus === 'ok' &&
+      state.data.updateAvailable &&
+      !state.triggering &&
+      state.data.status !== 'updating'
+    )
+  }).length
+
+  const anyUpdateInProgress =
+    batchUpdating ||
+    [...updateStates.values()].some(
+      (state) => state.triggering || state.data?.status === 'updating',
+    )
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Servers overview</Text>
@@ -331,6 +443,28 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       </Text>
 
       <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
+        {canManage && updatableServerCount > 0 ? (
+          <View style={styles.batchUpdateRow}>
+            <TouchableOpacity
+              style={[
+                styles.updateButton,
+                (anyUpdateInProgress || batchUpdating) &&
+                  styles.updateButtonDisabled,
+              ]}
+              onPress={() => void handleTriggerAllUpdates()}
+              disabled={anyUpdateInProgress || batchUpdating}
+            >
+              {batchUpdating ? (
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              ) : null}
+              <Text style={styles.updateButtonText}>
+                {batchUpdating
+                  ? 'Updating all…'
+                  : `Update all (${updatableServerCount})`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
         {loading && servers.length === 0 ? (
           <Text style={orgPanelStyles.muted}>Loading…</Text>
@@ -678,6 +812,9 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 8,
+  },
+  batchUpdateRow: {
+    marginBottom: spacing.sm,
   },
   cardHeader: {
     flexDirection: 'row',

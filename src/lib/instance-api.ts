@@ -604,16 +604,60 @@ export type ServerUpdateStatus = {
   targetError?: string
 }
 
+export type ServerUpdateTriggerResult = {
+  ok: boolean
+  queued?: boolean
+  status?: 'updating'
+  serverId: string
+  requestId?: string
+  channel?: string
+  error?: string
+}
+
+export type ServerBatchUpdateStatus = {
+  ok: boolean
+  channel: string
+  target: (ServerUpdateCommit & { manifestUrl?: string }) | null
+  targetStatus: 'ok' | 'unknown'
+  targetError?: string
+  servers: Array<
+    ServerUpdateStatus & { serverId: string }
+  >
+}
+
+export type ServerBatchUpdateTriggerResult = {
+  ok: boolean
+  results: Array<{
+    serverId: string
+    ok: boolean
+    queued?: boolean
+    status?: 'updating'
+    requestId?: string
+    channel?: string
+    error?: string
+  }>
+}
+
 export async function fetchServerUpdate(
   serverId: string,
 ): Promise<ServerUpdateStatus> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`)
 }
 
+export async function fetchServersUpdateStatus(): Promise<ServerBatchUpdateStatus> {
+  return await apiFetch(`${CLIENT_API}/servers/updates`)
+}
+
 export async function triggerServerUpdate(
   serverId: string,
-): Promise<{ ok: boolean; queued: boolean; status: string }> {
+): Promise<ServerUpdateTriggerResult> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`, {
+    method: 'POST',
+  })
+}
+
+export async function triggerAllServerUpdates(): Promise<ServerBatchUpdateTriggerResult> {
+  return await apiFetch(`${CLIENT_API}/servers/updates`, {
     method: 'POST',
   })
 }
