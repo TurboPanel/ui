@@ -34,8 +34,23 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# env and secret-bearing dotenv variants
+.env
+.env.*
+.env-*
+.envrc
+!.env.example
+.dev.vars
+.dev.vars*
+!.dev.vars.example
+
+# keys, certs, tokens, and passwords
+*.token
+*.secret
+*.pass
+server-key.json
+license.token
+certs/
 
 # typescript
 *.tsbuildinfo
