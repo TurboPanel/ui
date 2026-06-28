@@ -150,6 +150,14 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     await loadCellData(serverId)
   }
 
+  const isColocatedServer = (
+    server: OrgServerRecord,
+    updateData?: ServerUpdateStatus | null,
+  ): boolean =>
+    server.colocatedWithInstance === true ||
+    updateData?.colocatedWithInstance === true ||
+    updateData?.updateBlocked === true
+
   const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
     if (status.updateBlocked) return true
     if (status.status === 'error') return true
@@ -285,6 +293,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       const state = updateStates.get(server.id)
       return (
         server.connected &&
+        !isColocatedServer(server, state?.data) &&
         state?.data?.targetStatus === 'ok' &&
         state.data.updateAvailable &&
         !state.triggering &&
@@ -422,6 +431,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     const state = updateStates.get(server.id)
     return (
       server.connected &&
+      !isColocatedServer(server, state?.data) &&
       state?.data?.targetStatus === 'ok' &&
       state.data.updateAvailable &&
       !state.triggering &&
@@ -483,6 +493,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                 error: null,
               }
               const updateData = updateState.data
+              const colocated = isColocatedServer(server, updateData)
               const isUpdateStatusLoading =
                 updateState.loading && updateData === null
               const isUpdateInProgress =
@@ -505,26 +516,48 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                     <Text style={orgPanelStyles.detailTitle}>
                       {serverTitle(server)}
                     </Text>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        server.connected
-                          ? styles.statusOnline
-                          : styles.statusOffline,
-                      ]}
-                    >
-                      <Text
+                    <View style={styles.cardHeaderBadges}>
+                      {colocated ? (
+                        <View style={[styles.statusBadge, styles.statusColocated]}>
+                          <Text
+                            style={[
+                              styles.statusText,
+                              styles.statusTextColocated,
+                            ]}
+                          >
+                            Co-located
+                          </Text>
+                        </View>
+                      ) : null}
+                      <View
                         style={[
-                          styles.statusText,
+                          styles.statusBadge,
                           server.connected
-                            ? styles.statusTextOnline
-                            : styles.statusTextOffline,
+                            ? styles.statusOnline
+                            : styles.statusOffline,
                         ]}
                       >
-                        {server.connected ? 'Online' : 'Offline'}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.statusText,
+                            server.connected
+                              ? styles.statusTextOnline
+                              : styles.statusTextOffline,
+                          ]}
+                        >
+                          {server.connected ? 'Online' : 'Offline'}
+                        </Text>
+                      </View>
                     </View>
                   </View>
+
+                  {colocated ? (
+                    <Text style={orgPanelStyles.muted}>
+                      This server runs on the same host as the control plane.
+                      Remote trunk updates are disabled — use Sync Dev Build or
+                      local git instead.
+                    </Text>
+                  ) : null}
 
                   {server.hostname && server.displayName ? (
                     <Text style={orgPanelStyles.detailLine}>
@@ -609,9 +642,9 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                           styles.updateBadge,
                           updateData.status === 'updating'
                             ? styles.updateBadgeUpdating
-                            : updateData.status === 'error'
+                              : updateData.status === 'error'
                               ? styles.updateBadgeError
-                              : updateData.updateBlocked
+                              : colocated
                                 ? styles.updateBadgeCurrent
                                 : updateData.targetStatus === 'unknown'
                                   ? styles.updateBadgeUnknown
@@ -627,7 +660,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                               ? styles.updateBadgeTextUpdating
                               : updateData.status === 'error'
                                 ? styles.updateBadgeTextError
-                                : updateData.updateBlocked
+                                : colocated
                                   ? styles.updateBadgeTextCurrent
                                   : updateData.targetStatus === 'unknown'
                                     ? styles.updateBadgeTextUnknown
@@ -640,8 +673,8 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                             ? 'Update in progress'
                             : updateData.status === 'error'
                               ? 'Update error'
-                              : updateData.updateBlocked
-                                ? 'Development daemon'
+                              : colocated
+                                ? 'Co-located host'
                                 : updateData.targetStatus === 'unknown'
                                   ? 'Target unavailable'
                                   : updateData.updateAvailable
@@ -659,7 +692,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                             isUpdateInProgress ||
                             !server.connected ||
                             !targetKnown ||
-                            updateData?.updateBlocked ||
+                            colocated ||
                             !updateData?.updateAvailable) &&
                             styles.updateButtonDisabled,
                         ]}
@@ -669,7 +702,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                           isUpdateInProgress ||
                           !server.connected ||
                           !targetKnown ||
-                          updateData?.updateBlocked ||
+                          colocated ||
                           !updateData?.updateAvailable
                         }
                       >
@@ -688,7 +721,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                                 ? 'Offline'
                                 : !targetKnown
                                   ? 'Target unknown'
-                                  : updateData?.updateBlocked
+                                  : colocated
                                     ? 'Not updatable'
                                     : !updateData?.updateAvailable
                                       ? 'Up to date'
@@ -840,6 +873,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  cardHeaderBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   statusBadge: {
     borderRadius: 999,
     borderWidth: 1,
@@ -854,6 +892,10 @@ const styles = StyleSheet.create({
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
   },
+  statusColocated: {
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+  },
   statusText: {
     fontSize: 12,
     fontWeight: '700',
@@ -865,6 +907,9 @@ const styles = StyleSheet.create({
   },
   statusTextOffline: {
     color: colors.textDim,
+  },
+  statusTextColocated: {
+    color: colors.textMuted,
   },
   updatePanel: {
     marginTop: spacing.sm,

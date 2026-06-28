@@ -150,6 +150,7 @@ export type OrgServerRecord = {
   /** @deprecated use lastInboundAt */
   lastHeartbeatAt: string | null;
   connectedAt: string | null;
+  colocatedWithInstance?: boolean;
 };
 
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
@@ -599,6 +600,7 @@ export type ServerUpdateStatus = {
   current: ServerUpdateCommit | null
   target: (ServerUpdateCommit & { manifestUrl?: string }) | null
   updateAvailable: boolean
+  colocatedWithInstance?: boolean
   updateBlocked?: boolean
   updateBlockedReason?: string
   status: 'idle' | 'updating' | 'error'
