@@ -19,6 +19,11 @@ import {
   type OrgServerRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
+import {
+  formatElapsedSince,
+  formatLocalDateTime,
+  formatRelativeLocalDateTime,
+} from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
@@ -39,39 +44,6 @@ const UPDATE_PROGRESS_POLL_MS = 5_000
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
-}
-
-function formatUptime(value: string | null): string {
-  if (!value) return 'Unknown'
-  const ts = Date.parse(value)
-  if (Number.isNaN(ts)) return 'Unknown'
-  const deltaMs = Date.now() - ts
-  if (deltaMs < 0) return 'Just now'
-  const seconds = Math.floor(deltaMs / 1000)
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ${minutes % 60}m`
-  const days = Math.floor(hours / 24)
-  return `${days}d ${hours % 24}h`
-}
-
-function formatHeartbeat(value: string | null): string {
-  if (!value) return 'Never'
-  const ts = Date.parse(value)
-  if (Number.isNaN(ts)) return 'Never'
-  const deltaMs = Date.now() - ts
-  const absolute = new Date(ts).toLocaleString()
-  if (deltaMs < 0) return absolute
-  const seconds = Math.floor(deltaMs / 1000)
-  if (seconds < 60) return `${seconds}s ago (${absolute})`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago (${absolute})`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago (${absolute})`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago (${absolute})`
 }
 
 export function ServersOverviewSection({ orgId }: { orgId: string }) {
@@ -540,15 +512,17 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                       <Text style={orgPanelStyles.detailLabel}>
                         Connected since:{' '}
                       </Text>
-                      {new Date(server.connectedAt).toLocaleString()} (
-                      {formatUptime(server.connectedAt)})
+                      {formatLocalDateTime(server.connectedAt)} (
+                      {formatElapsedSince(server.connectedAt)})
                     </Text>
                   ) : null}
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>
                       Last activity:{' '}
                     </Text>
-                    {formatHeartbeat(server.lastInboundAt ?? server.lastHeartbeatAt)}
+                    {formatRelativeLocalDateTime(
+                      server.lastInboundAt ?? server.lastHeartbeatAt,
+                    )}
                   </Text>
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>ID: </Text>
@@ -556,7 +530,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   </Text>
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>Added: </Text>
-                    {new Date(server.createdAt).toLocaleString()}
+                    {formatLocalDateTime(server.createdAt)}
                   </Text>
 
                   <View style={styles.updatePanel}>
