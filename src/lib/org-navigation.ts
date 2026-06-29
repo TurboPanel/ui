@@ -20,6 +20,13 @@ export const ORG_AREAS = [
     ],
   },
   {
+    id: 'workspaces',
+    label: 'Workspaces',
+    pathSegment: 'workspaces',
+    hint: 'Manage workspaces for this organization',
+    subRoutes: [],
+  },
+  {
     id: 'access',
     label: 'Access',
     pathSegment: 'access',

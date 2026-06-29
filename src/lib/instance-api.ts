@@ -396,6 +396,40 @@ export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceR
   return await apiFetch(`${CLIENT_API}/workspaces`);
 }
 
+export const WORKSPACE_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
+
+export async function fetchWorkspace(
+  id: string,
+): Promise<{ workspace: WorkspaceRecord }> {
+  return await apiFetch(`${CLIENT_API}/workspaces/${id}`);
+}
+
+export async function createWorkspace(body: {
+  displayName?: string;
+  description?: string;
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/workspaces`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateWorkspace(
+  id: string,
+  body: { displayName?: string; description?: string },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/workspaces/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteWorkspace(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/workspaces/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function fetchVisibleEnvironments(
   projectId?: string,
 ): Promise<{ environments: EnvironmentRecord[] }> {
