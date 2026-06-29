@@ -435,9 +435,8 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                 updateState.resetting ||
                 updateData?.status === 'updating'
               const canResetUpdateStatus =
-                (updateData?.status === 'error' ||
-                  Boolean(updateData?.lastUpdateError)) &&
-                !isUpdateInProgress
+                updateData?.canResetUpdateStatus === true &&
+                !updateState.resetting
               const showUpdateErrorBadge =
                 updateData?.status === 'error' && !updateData?.updateAvailable
               const targetKnown = updateData?.targetStatus === 'ok'
@@ -698,7 +697,9 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                             <Text style={styles.resetUpdateButtonText}>
                               {updateState.resetting
                                 ? 'Resetting…'
-                                : 'Reset status'}
+                                : updateData?.status === 'updating'
+                                  ? 'Clear stuck update'
+                                  : 'Reset status'}
                             </Text>
                           </TouchableOpacity>
                         ) : null}

@@ -667,6 +667,8 @@ export type ServerUpdateStatus = {
   targetStatus: 'ok' | 'unknown'
   targetError?: string
   lastUpdateError?: string
+  queuedAt?: string
+  canResetUpdateStatus?: boolean
 }
 
 export type ServerUpdateTriggerResult = {
