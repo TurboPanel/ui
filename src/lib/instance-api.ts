@@ -615,6 +615,32 @@ export type FetchServerCellResponse = {
   snapshot: DaemonCellSnapshot
 }
 
+export type ServerStatusRecord = {
+  serverId: string
+  connected: boolean
+  daemonStatus: 'online' | 'offline' | 'unknown' | null
+  lastSeenAt: string | null
+  connectedAt: string | null
+  disconnectedAt: string | null
+  statusChangedAt: string | null
+  hostname: string | null
+  remoteAddress: string | null
+  colocatedWithInstance: boolean
+}
+
+export async function fetchServersStatus(): Promise<{ servers: ServerStatusRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/servers/status`)
+}
+
+export async function fetchServerStatus(
+  serverId: string,
+): Promise<ServerStatusRecord> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/status`)
+}
+
+/**
+ * **Admin/debug only.** Hits the Durable Object directly. Never call on a timer or from normal status views. Use `fetchServersStatus()` or `fetchServerStatus()` instead.
+ */
 export async function fetchServerCell(
   serverId: string,
 ): Promise<FetchServerCellResponse> {

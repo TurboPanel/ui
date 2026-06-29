@@ -11,26 +11,16 @@ import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
   fetchOrgServers,
-  fetchServerCell,
   fetchServersUpdateStatus,
   isForbiddenError,
   triggerAllServerUpdates,
   triggerServerUpdate,
   resetServerUpdateStatus,
-  type FetchServerCellResponse,
   type OrgServerRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
-
-type CellState = {
-  open: boolean
-  loading: boolean
-  data: FetchServerCellResponse | null
-  error: string | null
-  loadedAt: string | null
-}
 
 type UpdateState = {
   loading: boolean
@@ -40,7 +30,6 @@ type UpdateState = {
   error: string | null
 }
 
-const CELL_REFRESH_MS = 10_000
 // The servers list reflects coarse presence from the Postgres projection, which
 // changes about as often as one daemon heartbeat. Poll it slowly rather than at
 // a constant 5s; a push-based update path can replace this entirely later.
@@ -91,66 +80,10 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cellStates, setCellStates] = useState<Map<string, CellState>>(
-    new Map(),
-  )
   const [updateStates, setUpdateStates] = useState<Map<string, UpdateState>>(
     new Map(),
   )
   const [batchUpdating, setBatchUpdating] = useState(false)
-
-  const loadCellData = async (
-    serverId: string,
-    options?: { silent?: boolean },
-  ): Promise<void> => {
-    const current = cellStates.get(serverId)
-    if (!options?.silent) {
-      setCellStates((prev) =>
-        new Map(prev).set(serverId, {
-          open: true,
-          loading: true,
-          data: current?.data ?? null,
-          error: null,
-          loadedAt: current?.loadedAt ?? null,
-        }),
-      )
-    }
-    try {
-      const data = await fetchServerCell(serverId)
-      setCellStates((prev) =>
-        new Map(prev).set(serverId, {
-          open: true,
-          loading: false,
-          data,
-          error: null,
-          loadedAt: new Date().toISOString(),
-        }),
-      )
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to load cell data'
-      setCellStates((prev) =>
-        new Map(prev).set(serverId, {
-          open: true,
-          loading: false,
-          data: options?.silent ? current?.data ?? null : null,
-          error: message,
-          loadedAt: current?.loadedAt ?? null,
-        }),
-      )
-    }
-  }
-
-  const handleToggleCell = async (serverId: string) => {
-    const current = cellStates.get(serverId)
-    if (current?.open) {
-      setCellStates((prev) =>
-        new Map(prev).set(serverId, { ...current, open: false }),
-      )
-      return
-    }
-    await loadCellData(serverId)
-  }
 
   const isColocatedServer = (
     server: OrgServerRecord,
@@ -455,21 +388,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateStates])
 
-  useEffect(() => {
-    const openServerIds = [...cellStates.entries()]
-      .filter(([, state]) => state.open)
-      .map(([serverId]) => serverId)
-    if (openServerIds.length === 0) return
-
-    const timer = setInterval(() => {
-      for (const serverId of openServerIds) {
-        void loadCellData(serverId, { silent: true })
-      }
-    }, CELL_REFRESH_MS)
-
-    return () => clearInterval(timer)
-  }, [cellStates])
-
   const updatableServerCount = servers.filter((server) => {
     const state = updateStates.get(server.id)
     return (
@@ -553,14 +471,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
               const targetKnown = updateData?.targetStatus === 'ok'
               const shortCommit = (c?: string | null) =>
                 c ? c.slice(0, 12) : '—'
-              const cellState = cellStates.get(server.id) ?? {
-                open: false,
-                loading: false,
-                data: null,
-                error: null,
-                loadedAt: null,
-              }
-              const snapshot = cellState.data?.snapshot
 
               return (
                 <View key={server.id} style={orgPanelStyles.detailCard}>
@@ -825,108 +735,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                       <Text style={styles.errorText}>{updateState.error}</Text>
                     ) : null}
                   </View>
-
-                  <View style={styles.cellPanel}>
-                    <View style={styles.cellHeaderRow}>
-                      <TouchableOpacity
-                        style={styles.cellToggle}
-                        onPress={() => void handleToggleCell(server.id)}
-                      >
-                        <Text style={styles.cellToggleText}>
-                          {cellState.open
-                            ? '▼ Hide Daemon Cell'
-                            : '▶ Show Daemon Cell'}
-                        </Text>
-                      </TouchableOpacity>
-                      {cellState.open ? (
-                        <TouchableOpacity
-                          style={styles.cellRefreshButton}
-                          onPress={() => void loadCellData(server.id)}
-                          disabled={cellState.loading}
-                        >
-                          <Text style={styles.cellRefreshText}>
-                            {cellState.loading ? 'Refreshing…' : 'Refresh'}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                    {cellState.open && cellState.loadedAt ? (
-                      <Text style={orgPanelStyles.muted}>
-                        Cell data loaded{' '}
-                        {formatHeartbeat(cellState.loadedAt)}
-                      </Text>
-                    ) : null}
-                    {cellState.open ? (
-                      cellState.loading ? (
-                        <View style={styles.cellRow}>
-                          <ActivityIndicator
-                            size="small"
-                            color={colors.textMuted}
-                          />
-                          <Text style={orgPanelStyles.muted}>
-                            Loading cell data…
-                          </Text>
-                        </View>
-                      ) : cellState.error ? (
-                        <Text style={styles.errorText}>{cellState.error}</Text>
-                      ) : snapshot ? (
-                        <View style={[orgPanelStyles.detailCard, styles.cellData]}>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Session ID:{' '}
-                            </Text>
-                            {snapshot.sessionId ?? '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Key ID:{' '}
-                            </Text>
-                            {snapshot.keyId ?? '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Remote address:{' '}
-                            </Text>
-                            {snapshot.remoteAddress ?? '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Last inbound:{' '}
-                            </Text>
-                            {snapshot.lastInboundAt
-                              ? formatHeartbeat(snapshot.lastInboundAt)
-                              : '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Last outbound:{' '}
-                            </Text>
-                            {snapshot.lastOutboundAt
-                              ? formatHeartbeat(snapshot.lastOutboundAt)
-                              : '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Last activity:{' '}
-                            </Text>
-                            {snapshot.lastInboundAt ?? snapshot.lastHeartbeatAt
-                              ? formatHeartbeat(
-                                snapshot.lastInboundAt ?? snapshot.lastHeartbeatAt,
-                              )
-                              : '—'}
-                          </Text>
-                          <Text style={orgPanelStyles.detailLine}>
-                            <Text style={orgPanelStyles.detailLabel}>
-                              Last seen:{' '}
-                            </Text>
-                            {snapshot.lastSeenAt
-                              ? formatHeartbeat(snapshot.lastSeenAt)
-                              : '—'}
-                          </Text>
-                        </View>
-                      ) : null
-                    ) : null}
-                  </View>
                 </View>
               )
             })}
@@ -1102,44 +910,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  cellToggle: {
-    alignSelf: 'flex-start',
-  },
-  cellToggleText: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  cellPanel: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  cellHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  cellRefreshButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: colors.bgSecondary,
-  },
-  cellRefreshText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
   cellRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  cellData: {
-    gap: 4,
     marginTop: spacing.xs,
   },
 })
