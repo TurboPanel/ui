@@ -39,6 +39,7 @@ import {
 import { useCan } from '@/lib/query-client'
 import {
   countryCodeToFlagEmoji,
+  formatServerGeoAsn,
   formatServerGeoCountryCode,
   formatServerGeoLocation,
 } from '@/lib/server-geo'
@@ -73,10 +74,8 @@ function ConnectingIpDetail({
   const flag = countryCodeToFlagEmoji(geo?.country)
   const location = formatServerGeoLocation(geo)
   const countryCode = formatServerGeoCountryCode(geo)
-  const geoTrailing =
-    location && countryCode
-      ? `${location} · ${countryCode}`
-      : location || countryCode
+  const asn = formatServerGeoAsn(geo)
+  const geoTrailing = [location, countryCode, asn].filter(Boolean).join(' · ')
   const showGeo = Boolean(flag || geoTrailing)
 
   if (!showGeo) {

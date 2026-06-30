@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, type Href } from 'expo-router'
 import { adminAreaHref } from '@/lib/admin-navigation'
@@ -48,7 +48,12 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+      >
         <Text style={styles.title}>TurboPanel</Text>
         <Text style={styles.subtitle}>Choose an organization</Text>
         {session?.email ? (
@@ -93,7 +98,7 @@ export default function WelcomeScreen() {
         <Pressable style={styles.button} onPress={() => void signOut()}>
           <Text style={styles.buttonText}>Sign out</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
@@ -103,12 +108,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  container: {
+  scroll: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingVertical: spacing.xl,
     gap: spacing.lg,
+    width: '100%',
   },
   title: {
     fontSize: 32,

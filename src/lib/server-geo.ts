@@ -36,3 +36,14 @@ export function formatServerGeoCountryCode(geo?: ServerGeo | null): string {
   if (!geo) return ''
   return geo.country?.trim().toUpperCase() ?? ''
 }
+
+/** Format ASN and optional organization (e.g. `"AS13335 (Cloudflare, Inc.)"`). */
+export function formatServerGeoAsn(geo?: ServerGeo | null): string {
+  if (!geo) return ''
+  const org = geo.asOrganization?.trim()
+  const asn = geo.asn
+  if (asn != null && Number.isFinite(asn)) {
+    return org ? `AS${asn} (${org})` : `AS${asn}`
+  }
+  return org ?? ''
+}
