@@ -23,6 +23,7 @@ import {
   fetchServersUpdateStatus,
   isForbiddenError,
   pingDaemon,
+  rebootServer,
   resetServerUpdateStatus,
   setServerHostname,
   triggerAllServerUpdates,
@@ -36,6 +37,11 @@ import {
   formatRelativeLocalDateTime,
 } from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
+import {
+  countryCodeToFlagEmoji,
+  formatServerGeoCountryCode,
+  formatServerGeoLocation,
+} from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
 
 type UpdateState = {
@@ -55,6 +61,45 @@ const UPDATE_PROGRESS_POLL_MS = 5_000
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
+}
+
+function ConnectingIpDetail({
+  remoteAddress,
+  geo,
+}: {
+  remoteAddress: string
+  geo: OrgServerRecord['geo']
+}) {
+  const flag = countryCodeToFlagEmoji(geo?.country)
+  const location = formatServerGeoLocation(geo)
+  const countryCode = formatServerGeoCountryCode(geo)
+  const geoTrailing =
+    location && countryCode
+      ? `${location} · ${countryCode}`
+      : location || countryCode
+  const showGeo = Boolean(flag || geoTrailing)
+
+  if (!showGeo) {
+    return (
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Connecting IP: </Text>
+        <Text selectable>{remoteAddress}</Text>
+      </Text>
+    )
+  }
+
+  return (
+    <View style={styles.connectingIpRow}>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Connecting IP: </Text>
+        {flag ? <Text>{flag} </Text> : null}
+        <Text selectable>{remoteAddress}</Text>
+      </Text>
+      {geoTrailing ? (
+        <Text style={styles.geoTrailing}>{geoTrailing}</Text>
+      ) : null}
+    </View>
+  )
 }
 
 export function ServersOverviewSection({ orgId }: { orgId: string }) {
@@ -371,6 +416,12 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         pingRunning: false,
         activeCommand: null,
       })
+    } else if (kind === 'reboot') {
+      patchCommandState(serverId, {
+        rebootError: message,
+        rebootRunning: false,
+        activeCommand: null,
+      })
     } else {
       patchCommandState(serverId, {
         hostnameError: message,
@@ -398,6 +449,29 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
       patchCommandState(serverId, {
         pingError: err instanceof Error ? err.message : 'Failed to ping daemon',
         pingRunning: false,
+      })
+    }
+  }
+
+  const handleReboot = async (serverId: string): Promise<void> => {
+    patchCommandState(serverId, {
+      rebootError: null,
+      commandRecord: null,
+      rebootRunning: true,
+    })
+    try {
+      const result = await rebootServer(serverId)
+      patchCommandState(serverId, {
+        activeCommand: { commandId: result.commandId, kind: 'reboot' },
+      })
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+      }
+      patchCommandState(serverId, {
+        rebootError:
+          err instanceof Error ? err.message : 'Failed to reboot server',
+        rebootRunning: false,
       })
     }
   }
@@ -483,6 +557,14 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   if (record.status !== 'succeeded') {
                     updated.pingError =
                       record.error ?? `Ping ${record.status}`
+                  }
+                } else if (activeCommand.kind === 'reboot') {
+                  updated.rebootRunning = false
+                  if (record.status !== 'succeeded') {
+                    updated.rebootError =
+                      record.error ?? `Reboot ${record.status}`
+                  } else {
+                    void refreshServers({ silent: true })
                   }
                 } else {
                   updated.hostnameRunning = false
@@ -702,12 +784,10 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                     </Text>
                   ) : null}
                   {server.connected && server.remoteAddress ? (
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>
-                        Connecting IP:{' '}
-                      </Text>
-                      <Text selectable>{server.remoteAddress}</Text>
-                    </Text>
+                    <ConnectingIpDetail
+                      remoteAddress={server.remoteAddress}
+                      geo={server.geo}
+                    />
                   ) : null}
                   {server.connected && server.connectedAt ? (
                     <Text style={orgPanelStyles.detailLine}>
@@ -917,11 +997,13 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   <ServerCommandsPanel
                     server={server}
                     canManage={canManage}
+                    showReboot={!colocated}
                     commandState={getCommandState(server.id)}
                     onPing={() => void handlePing(server.id)}
                     onSetHostname={(hostname) =>
                       void handleSetHostname(server.id, hostname)
                     }
+                    onReboot={() => void handleReboot(server.id)}
                   />
                 </View>
               )
@@ -1103,5 +1185,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.xs,
+  },
+  connectingIpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  geoTrailing: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    flexShrink: 1,
   },
 })

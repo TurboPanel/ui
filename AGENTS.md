@@ -118,6 +118,7 @@ Per-server command actions are implemented in `src/components/org/server-command
 
 - `pingDaemon(serverId)` → `POST /api/client/v1/servers/:id/commands/ping` — returns `CommandEnqueueResponse`: `{ ok: true, commandId, status }`.
 - `setServerHostname(serverId, hostname)` → `POST /api/client/v1/servers/:id/hostname` — returns the same `CommandEnqueueResponse` shape: `{ ok: true, commandId, status }`.
+- `rebootServer(serverId)` → `POST /api/client/v1/servers/:id/commands/reboot` — returns `CommandEnqueueResponse`.
 - `fetchCommand(serverId, commandId)` → `GET /api/client/v1/servers/:id/commands/:commandId` — returns `CommandRecord`; for `daemon.ping` commands the response includes optional `latency` (`PingLatencyBreakdown`).
 - Types: `CommandStatus` (string union of all statuses), `PingLatencyBreakdown`, `CommandRecord`, `CommandEnqueueResponse`.
 - The `CommandRecord` shape is flat (all lifecycle timestamps are top-level fields); the instance serializes them from the `metadata` jsonb blob server-side — the UI type and fetch helpers are unchanged.
@@ -153,5 +154,15 @@ Segment durations are computed server-side from the flat `CommandRecord` lifecyc
 - On submit: validates non-empty client-side, calls `setServerHostname(serverId, hostname)`, registers with the shared command poll coordinator until terminal.
 - On `succeeded`: refreshes the server list (re-fetches `GET /api/client/v1/servers`) so the new hostname appears.
 - On `failed`: shows the error inline.
+
+### Reboot Server
+
+- `rebootServer(serverId)` → `POST /api/client/v1/servers/:id/commands/reboot` — returns `CommandEnqueueResponse`.
+- Gated by `canManage` (display hint only; server enforces 403).
+- Disabled when `!server.connected` or any command is in flight.
+- Two-step confirm: first press shows "Confirm reboot?" + Confirm/Cancel; only Confirm calls `onReboot`.
+- Polled via the shared `COMMAND_POLL_MS` coordinator — no new timer.
+- On `succeeded`: triggers a silent server list refresh (`refreshServers({ silent: true })`).
+- On `failed`/`timed_out`: surfaces `rebootError` inline.
 
 Poll only while a command is in flight. Do not add per-server background polling loops. N servers must not produce N repeated calls. This is the same O(1) rule as the existing status read model.

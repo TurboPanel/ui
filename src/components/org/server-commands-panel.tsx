@@ -48,56 +48,73 @@ const LATENCY_ROWS: Array<{
 
 export type ActiveCommand = {
   commandId: string
-  kind: 'ping' | 'hostname'
+  kind: 'ping' | 'hostname' | 'reboot'
 }
 
 export type ServerCommandState = {
   pingRunning: boolean
   hostnameRunning: boolean
+  rebootRunning: boolean
   activeCommand: ActiveCommand | null
   commandRecord: CommandRecord | null
   pingError: string | null
   hostnameError: string | null
+  rebootError: string | null
 }
 
 export const defaultServerCommandState = (): ServerCommandState => ({
   pingRunning: false,
   hostnameRunning: false,
+  rebootRunning: false,
   activeCommand: null,
   commandRecord: null,
   pingError: null,
   hostnameError: null,
+  rebootError: null,
 })
 
 type ServerCommandsPanelProps = {
   server: OrgServerRecord
   canManage: boolean
+  showReboot?: boolean
   commandState: ServerCommandState
   onPing: () => void
   onSetHostname: (hostname: string) => void
+  onReboot: () => void
 }
 
 export function ServerCommandsPanel({
   server,
   canManage,
+  showReboot = true,
   commandState,
   onPing,
   onSetHostname,
+  onReboot,
 }: ServerCommandsPanelProps) {
   const [hostnameInput, setHostnameInput] = useState(server.hostname ?? '')
+  const [confirmingReboot, setConfirmingReboot] = useState(false)
 
   const {
     pingRunning,
     hostnameRunning,
+    rebootRunning,
     activeCommand,
     commandRecord,
     pingError,
     hostnameError,
+    rebootError,
   } = commandState
 
   useEffect(() => {
     setHostnameInput(server.hostname ?? '')
   }, [server.hostname])
+
+  useEffect(() => {
+    if (rebootRunning) {
+      setConfirmingReboot(false)
+    }
+  }, [rebootRunning])
 
   const commandInFlight = activeCommand !== null
   const showPingLatency =
@@ -126,7 +143,68 @@ export function ServerCommandsPanel({
             {pingRunning ? 'Pinging…' : !server.connected ? 'Offline' : 'Ping daemon'}
           </Text>
         </TouchableOpacity>
+
+        {canManage && showReboot ? (
+          <>
+            {!rebootRunning && !confirmingReboot ? (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  (!server.connected || commandInFlight) &&
+                    styles.actionButtonDisabled,
+                ]}
+                onPress={() => setConfirmingReboot(true)}
+                disabled={!server.connected || commandInFlight}
+              >
+                <Text style={styles.actionButtonText}>Reboot server</Text>
+              </TouchableOpacity>
+            ) : confirmingReboot && !rebootRunning ? (
+              <View style={styles.confirmRow}>
+                <Text style={orgPanelStyles.muted}>Confirm reboot?</Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => {
+                    setConfirmingReboot(false)
+                    onReboot()
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Confirm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.mutedButton}
+                  onPress={() => setConfirmingReboot(false)}
+                >
+                  <Text style={styles.mutedButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.actionButtonDisabled]}
+                disabled
+              >
+                <ActivityIndicator size="small" color={colors.textMuted} />
+                <Text style={styles.actionButtonText}>Rebooting…</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : null}
       </View>
+
+      {showReboot &&
+      rebootRunning &&
+      commandRecord &&
+      !isTerminalCommandStatus(commandRecord.status) ? (
+        <View style={styles.cellRow}>
+          <ActivityIndicator size="small" color={colors.textMuted} />
+          <Text style={orgPanelStyles.muted}>
+            Rebooting… ({commandRecord.status})
+          </Text>
+        </View>
+      ) : null}
+
+      {showReboot && rebootError ? (
+        <Text style={styles.errorText}>{rebootError}</Text>
+      ) : null}
 
       {pingRunning && commandRecord && !isTerminalCommandStatus(commandRecord.status) ? (
         <View style={styles.cellRow}>
@@ -246,6 +324,28 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: colors.accent,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  mutedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: colors.bgSecondary,
+  },
+  mutedButtonText: {
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },

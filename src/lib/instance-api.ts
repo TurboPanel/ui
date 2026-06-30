@@ -136,6 +136,23 @@ export async function verifyEmail(token: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`);
 }
 
+export type ServerGeo = {
+  asOrganization?: string;
+  country?: string;
+  city?: string;
+  continent?: string;
+  region?: string;
+  regionCode?: string;
+  timezone?: string;
+  longitude?: string;
+  latitude?: string;
+  postalCode?: string;
+  metroCode?: string;
+  asn?: number;
+  datacenter?: string;
+  capturedAt?: string;
+};
+
 export type OrgServerRecord = {
   id: string;
   displayName: string | null;
@@ -150,6 +167,7 @@ export type OrgServerRecord = {
   /** @deprecated use lastInboundAt */
   lastHeartbeatAt: string | null;
   connectedAt: string | null;
+  geo: ServerGeo | null;
   colocatedWithInstance?: boolean;
 };
 
@@ -625,6 +643,7 @@ export type ServerStatusRecord = {
   statusChangedAt: string | null
   hostname: string | null
   remoteAddress: string | null
+  geo: ServerGeo | null
   colocatedWithInstance: boolean
 }
 
@@ -835,6 +854,14 @@ export async function setServerHostname(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/hostname`, {
     method: 'POST',
     body: JSON.stringify({ hostname }),
+  })
+}
+
+export async function rebootServer(
+  serverId: string,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/reboot`, {
+    method: 'POST',
   })
 }
 
