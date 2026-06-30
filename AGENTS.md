@@ -109,3 +109,49 @@ Admin helpers in `src/lib/instance-api.ts` (`ADMIN_API = '/api/admin/v1'`):
 When apply returns 422 with `"cert apply is not applicable on this runtime"` (Workers), hide the Apply button and show an informational note instead.
 
 `useCan` is display-only; rely on server 403s and `handleUnauthorized()`.
+
+## Command Pipeline UI
+
+Per-server command actions are implemented in `src/components/org/server-commands-panel.tsx` (presentational UI) with orchestration in `src/components/org/servers-overview-section.tsx`. Commands follow a create-then-poll pattern: the UI calls the create endpoint, receives a `commandId`, then polls `fetchCommand` until the status is terminal (`succeeded`, `failed`, or `timed_out`). A single shared timer in `servers-overview-section.tsx` coalesces polling for all in-flight commands — no per-server intervals.
+
+### API helpers — `src/lib/instance-api.ts`
+
+- `pingDaemon(serverId)` → `POST /api/client/v1/servers/:id/commands/ping` — returns `CommandEnqueueResponse`: `{ ok: true, commandId, status }`.
+- `setServerHostname(serverId, hostname)` → `POST /api/client/v1/servers/:id/hostname` — returns the same `CommandEnqueueResponse` shape: `{ ok: true, commandId, status }`.
+- `fetchCommand(serverId, commandId)` → `GET /api/client/v1/servers/:id/commands/:commandId` — returns `CommandRecord`; for `daemon.ping` commands the response includes optional `latency` (`PingLatencyBreakdown`).
+- Types: `CommandStatus` (string union of all statuses), `PingLatencyBreakdown`, `CommandRecord`, `CommandEnqueueResponse`.
+- The `CommandRecord` shape is flat (all lifecycle timestamps are top-level fields); the instance serializes them from the `metadata` jsonb blob server-side — the UI type and fetch helpers are unchanged.
+
+**Latency breakdown shape** (`CommandRecord.latency` for `daemon.ping`):
+
+```
+PingLatencyBreakdown {
+  apiToConsumerMs: number | null       // queuedAt → dispatchStartedAt
+  consumerToCellMs: number | null      // dispatchStartedAt → sentAt
+  cellToDaemonMs: number | null        // sentAt → ackedAt
+  daemonProcessingMs: number | null    // daemonReceivedAt → daemonRespondedAt (from result)
+  daemonToRecordedMs: number | null    // daemonRespondedAt → finishedAt
+  totalRoundTripMs: number | null      // queuedAt → finishedAt
+}
+```
+
+Segment durations are computed server-side from the flat `CommandRecord` lifecycle fields (`queuedAt`, `dispatchStartedAt`, `sentAt`, `ackedAt`, `finishedAt`) before being exposed on `CommandRecord.latency`.
+
+### Ping Daemon button
+
+- Visible per server card; requires no special permission (read access is sufficient).
+- On click: calls `pingDaemon(serverId)`, registers the `commandId` with the shared command poll coordinator in `servers-overview-section.tsx` (`COMMAND_POLL_MS = 2_000`).
+- Stops polling when status is `succeeded`, `failed`, or `timed_out`.
+- On `succeeded`: renders the latency breakdown table inline below the button.
+- On `failed`/`timed_out`: renders the error message inline.
+- Reuses `orgPanelStyles`, `colors`, `spacing`, and existing badge/button styles.
+
+### Change Hostname
+
+- Gated by `useCan('organization', orgId, 'organization:manage')` as a **display hint only** — the server enforces the real 403. On 403 response, call `handleUnauthorized()`.
+- Disabled when the server's `connected` field is `false` (daemon offline — from Postgres status, no extra call).
+- On submit: validates non-empty client-side, calls `setServerHostname(serverId, hostname)`, registers with the shared command poll coordinator until terminal.
+- On `succeeded`: refreshes the server list (re-fetches `GET /api/client/v1/servers`) so the new hostname appears.
+- On `failed`: shows the error inline.
+
+Poll only while a command is in flight. Do not add per-server background polling loops. N servers must not produce N repeated calls. This is the same O(1) rule as the existing status read model.

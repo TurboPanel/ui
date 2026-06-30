@@ -641,6 +641,8 @@ export async function fetchServerStatus(
 /**
  * **Admin/debug only.** Hits the Durable Object directly. Never call on a timer or from normal status views. Use `fetchServersStatus()` or `fetchServerStatus()` instead.
  */
+// TODO: global rate limiting should eventually hook in here before this reaches the DO.
+// This endpoint hits the Durable Object directly — only call on explicit user action, never on a timer.
 export async function fetchServerCell(
   serverId: string,
 ): Promise<FetchServerCellResponse> {
@@ -767,4 +769,78 @@ export async function saveEmailSettings(
     },
   )
   return { ok: true, settings: raw.settings ?? {} }
+}
+
+export type CommandStatus =
+  | 'queued'
+  | 'dispatching'
+  | 'sent'
+  | 'acked'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'timed_out'
+  | 'cancelled'
+
+export type PingLatencyBreakdown = {
+  apiToConsumerMs: number | null
+  consumerToCellMs: number | null
+  cellToDaemonMs: number | null
+  daemonProcessingMs: number | null
+  daemonToRecordedMs: number | null
+  totalRoundTripMs: number | null
+}
+
+export type CommandRecord = {
+  id: string
+  serverId: string
+  actorEntityType: string
+  actorEntityId: string
+  type: string
+  status: CommandStatus
+  payload: Record<string, unknown> | null
+  result: Record<string, unknown> | null
+  error: string | null
+  attempts: number
+  createdAt: string
+  updatedAt: string
+  queuedAt: string | null
+  dispatchStartedAt: string | null
+  sentAt: string | null
+  ackedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  expiresAt: string | null
+  latency?: PingLatencyBreakdown
+}
+
+export type CommandEnqueueResponse = {
+  ok: true
+  commandId: string
+  status: string
+}
+
+export async function pingDaemon(
+  serverId: string,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/ping`, {
+    method: 'POST',
+  })
+}
+
+export async function setServerHostname(
+  serverId: string,
+  hostname: string,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/hostname`, {
+    method: 'POST',
+    body: JSON.stringify({ hostname }),
+  })
+}
+
+export async function fetchCommand(
+  serverId: string,
+  commandId: string,
+): Promise<CommandRecord> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/${commandId}`)
 }

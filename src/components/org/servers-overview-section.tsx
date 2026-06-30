@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   StyleSheet,
@@ -7,15 +7,26 @@ import {
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
+import {
+  COMMAND_POLL_MS,
+  defaultServerCommandState,
+  isTerminalCommandStatus,
+  ServerCommandsPanel,
+  type ActiveCommand,
+  type ServerCommandState,
+} from '@/components/org/server-commands-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
+  fetchCommand,
   fetchOrgServers,
   fetchServersUpdateStatus,
   isForbiddenError,
+  pingDaemon,
+  resetServerUpdateStatus,
+  setServerHostname,
   triggerAllServerUpdates,
   triggerServerUpdate,
-  resetServerUpdateStatus,
   type OrgServerRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
@@ -56,6 +67,12 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     new Map(),
   )
   const [batchUpdating, setBatchUpdating] = useState(false)
+  const [commandStates, setCommandStates] = useState<
+    Map<string, ServerCommandState>
+  >(new Map())
+
+  const commandStatesRef = useRef(commandStates)
+  commandStatesRef.current = commandStates
 
   const isColocatedServer = (
     server: OrgServerRecord,
@@ -295,42 +312,228 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
+  const refreshServers = async (options?: {
+    silent?: boolean
+    isCancelled?: () => boolean
+  }): Promise<void> => {
+    if (!options?.silent) {
       setLoading(true)
       setError(null)
-      try {
-        const result = await fetchOrgServers()
-        if (!cancelled) {
-          setServers(result.servers)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            setError(
-              err instanceof Error ? err.message : 'Access to servers was denied',
-            )
-          } else {
-            setError(err instanceof Error ? err.message : 'Failed to load servers')
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+    }
+    try {
+      const result = await fetchOrgServers()
+      if (options?.isCancelled?.()) return
+      setServers(result.servers)
+    } catch (err) {
+      if (options?.isCancelled?.()) return
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        setError(
+          err instanceof Error ? err.message : 'Access to servers was denied',
+        )
+      } else if (!options?.silent) {
+        setError(err instanceof Error ? err.message : 'Failed to load servers')
+      }
+    } finally {
+      if (!options?.silent && !options?.isCancelled?.()) {
+        setLoading(false)
       }
     }
+  }
 
-    void load()
-    const timer = setInterval(() => void load(), SERVERS_REFRESH_MS)
+  const getCommandState = (serverId: string): ServerCommandState =>
+    commandStates.get(serverId) ?? defaultServerCommandState()
+
+  const patchCommandState = (
+    serverId: string,
+    patch: Partial<ServerCommandState>,
+  ): void => {
+    setCommandStates((prev) => {
+      const next = new Map(prev)
+      const current = prev.get(serverId) ?? defaultServerCommandState()
+      next.set(serverId, { ...current, ...patch })
+      return next
+    })
+  }
+
+  const handleCommandPollError = async (
+    serverId: string,
+    kind: ActiveCommand['kind'],
+    err: unknown,
+  ): Promise<void> => {
+    if (isForbiddenError(err)) {
+      await handleUnauthorized()
+    }
+    const message = err instanceof Error ? err.message : 'Command poll failed'
+    if (kind === 'ping') {
+      patchCommandState(serverId, {
+        pingError: message,
+        pingRunning: false,
+        activeCommand: null,
+      })
+    } else {
+      patchCommandState(serverId, {
+        hostnameError: message,
+        hostnameRunning: false,
+        activeCommand: null,
+      })
+    }
+  }
+
+  const handlePing = async (serverId: string): Promise<void> => {
+    patchCommandState(serverId, {
+      pingError: null,
+      commandRecord: null,
+      pingRunning: true,
+    })
+    try {
+      const result = await pingDaemon(serverId)
+      patchCommandState(serverId, {
+        activeCommand: { commandId: result.commandId, kind: 'ping' },
+      })
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+      }
+      patchCommandState(serverId, {
+        pingError: err instanceof Error ? err.message : 'Failed to ping daemon',
+        pingRunning: false,
+      })
+    }
+  }
+
+  const handleSetHostname = async (
+    serverId: string,
+    hostname: string,
+  ): Promise<void> => {
+    if (!hostname) {
+      patchCommandState(serverId, { hostnameError: 'Hostname is required' })
+      return
+    }
+
+    patchCommandState(serverId, {
+      hostnameError: null,
+      commandRecord: null,
+      hostnameRunning: true,
+    })
+    try {
+      const result = await setServerHostname(serverId, hostname)
+      patchCommandState(serverId, {
+        activeCommand: { commandId: result.commandId, kind: 'hostname' },
+      })
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+      }
+      patchCommandState(serverId, {
+        hostnameError:
+          err instanceof Error ? err.message : 'Failed to change hostname',
+        hostnameRunning: false,
+      })
+    }
+  }
+
+  const inFlightCommandsKey = [...commandStates.entries()]
+    .filter(([, state]) => state.activeCommand !== null)
+    .map(([serverId, state]) => `${serverId}:${state.activeCommand!.commandId}`)
+    .sort()
+    .join(',')
+
+  // Single timer polls every in-flight command; re-runs only when that set changes.
+  useEffect(() => {
+    if (!inFlightCommandsKey) return
+
+    let cancelled = false
+
+    const pollAll = async (): Promise<void> => {
+      const entries = [...commandStatesRef.current.entries()].filter(
+        ([, state]) => state.activeCommand !== null,
+      )
+      if (entries.length === 0) return
+
+      await Promise.all(
+        entries.map(async ([serverId, state]) => {
+          const activeCommand = state.activeCommand!
+          try {
+            const record = await fetchCommand(
+              serverId,
+              activeCommand.commandId,
+            )
+            if (cancelled) return
+
+            setCommandStates((prev) => {
+              const current = prev.get(serverId)
+              if (
+                !current?.activeCommand ||
+                current.activeCommand.commandId !== activeCommand.commandId
+              ) {
+                return prev
+              }
+
+              const next = new Map(prev)
+              const updated: ServerCommandState = {
+                ...current,
+                commandRecord: record,
+              }
+
+              if (isTerminalCommandStatus(record.status)) {
+                updated.activeCommand = null
+                if (activeCommand.kind === 'ping') {
+                  updated.pingRunning = false
+                  if (record.status !== 'succeeded') {
+                    updated.pingError =
+                      record.error ?? `Ping ${record.status}`
+                  }
+                } else {
+                  updated.hostnameRunning = false
+                  if (record.status === 'succeeded') {
+                    void refreshServers({ silent: true })
+                  } else {
+                    updated.hostnameError =
+                      record.error ?? `Hostname change ${record.status}`
+                  }
+                }
+              }
+
+              next.set(serverId, updated)
+              return next
+            })
+          } catch (err) {
+            if (cancelled) return
+            await handleCommandPollError(serverId, activeCommand.kind, err)
+          }
+        }),
+      )
+    }
+
+    void pollAll()
+    const timer = setInterval(() => void pollAll(), COMMAND_POLL_MS)
 
     return () => {
       cancelled = true
       clearInterval(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFlightCommandsKey, handleUnauthorized])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      await refreshServers({ isCancelled: () => cancelled })
+    }
+
+    void load()
+    const timer = setInterval(
+      () => void refreshServers({ silent: true, isCancelled: () => cancelled }),
+      SERVERS_REFRESH_MS,
+    )
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, handleUnauthorized])
 
   // Fetch update status in one batch when servers first appear.
@@ -710,6 +913,16 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                       <Text style={styles.errorText}>{updateState.error}</Text>
                     ) : null}
                   </View>
+
+                  <ServerCommandsPanel
+                    server={server}
+                    canManage={canManage}
+                    commandState={getCommandState(server.id)}
+                    onPing={() => void handlePing(server.id)}
+                    onSetHostname={(hostname) =>
+                      void handleSetHostname(server.id, hostname)
+                    }
+                  />
                 </View>
               )
             })}
