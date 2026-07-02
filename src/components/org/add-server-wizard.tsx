@@ -21,6 +21,7 @@ import {
 } from '@/lib/instance-api'
 import {
   defaultDevInstallBaseUrl,
+  defaultDevInstallHttpBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
 import { colors, spacing } from '@/lib/theme'
@@ -244,6 +245,26 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
                 editable={!creating}
                 style={styles.input}
               />
+              <View style={styles.devUrlQuickPicks}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    setInstallBaseUrl(defaultDevInstallBaseUrl(managedUrls))
+                    setCreateError(null)
+                  }}
+                >
+                  <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    setInstallBaseUrl(defaultDevInstallHttpBaseUrl(managedUrls))
+                    setCreateError(null)
+                  }}
+                >
+                  <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
+                </Pressable>
+              </View>
               <Text style={orgPanelStyles.muted}>
                 Used for --host and download URLs in the install command.
               </Text>
@@ -283,6 +304,24 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
                 autoCorrect={false}
                 style={styles.input}
               />
+              <View style={styles.devUrlQuickPicks}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() =>
+                    setInstallBaseUrl(defaultDevInstallBaseUrl(managedUrls))
+                  }
+                >
+                  <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() =>
+                    setInstallBaseUrl(defaultDevInstallHttpBaseUrl(managedUrls))
+                  }
+                >
+                  <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
+                </Pressable>
+              </View>
             </>
           ) : null}
           <Text selectable style={styles.secretValue}>
@@ -357,6 +396,10 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
 
 const styles = StyleSheet.create({
   form: {
+    gap: spacing.sm,
+  },
+  devUrlQuickPicks: {
+    flexDirection: 'row',
     gap: spacing.sm,
   },
   label: {
