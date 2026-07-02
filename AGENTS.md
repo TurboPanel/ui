@@ -46,6 +46,11 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 |-------|-----------|---------|
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
+| `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspaces list (`GET /api/client/v1/workspaces`) |
+| `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list (optional `?workspaceId` filter) |
+| `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker + catalog + name form |
+| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + `environments-overview-section.tsx` |
+| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Environment details + `variables-section.tsx` |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
@@ -66,6 +71,25 @@ Authorization helpers:
 - `POST /api/client/v1/access` → `createAccessGrant(body: CreateAccessBody)` — body: `{ resourceId, subjectKind, subjectId, effect, permissionKey }`; grant targets are organization or team entities only
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
+- `fetchVisibleWorkspaces()` → `GET /api/client/v1/workspaces`
+- `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
+- `fetchProjectCatalog()` → `GET /api/client/v1/project-catalog` — returns `{ catalog: CatalogSummary[] }`
+- `fetchProject(id)` → `GET /api/client/v1/projects/:id`
+- `createProject(body: CreateProjectBody)` → `POST /api/client/v1/projects`
+- `updateProject(id, body)` → `PATCH /api/client/v1/projects/:id`
+- `deleteProject(id)` → `DELETE /api/client/v1/projects/:id` — `PROJECT_HAS_CHILDREN_ERROR` when environments exist
+- `fetchVisibleEnvironments(projectId?)` → `GET /api/client/v1/environments`
+- `fetchEnvironment(id)` → `GET /api/client/v1/environments/:id`
+- `createEnvironment(body)` → `POST /api/client/v1/environments`
+- `updateEnvironment(id, body)` → `PATCH /api/client/v1/environments/:id`
+- `deleteEnvironment(id)` → `DELETE /api/client/v1/environments/:id`
+- `fetchVariables(environmentId)` → `GET /api/client/v1/variables?environmentId=`
+- `fetchVariable(id)` → `GET /api/client/v1/variables/:id`
+- `createVariable(body)` → `POST /api/client/v1/variables`
+- `updateVariable(id, body)` → `PATCH /api/client/v1/variables/:id`
+- `deleteVariable(id)` → `DELETE /api/client/v1/variables/:id`
+- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`
+- **Secret write-only rule:** `VariableRecord.value` is always `null` when `isSecret` is true — the UI must never display or pre-fill secret values; use masked placeholders and write-only update forms
 - `fetchServerUpdate(serverId)` → `GET /api/client/v1/servers/:id/update` — returns `ServerUpdateStatus` with `current`/`target` commit identity and `updateAvailable`.
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
 - The Update button is gated by `useCan('organization', orgId, 'organization:manage')` as a display hint; the server enforces the real 403. Non-managers see commit rows read-only with no button.

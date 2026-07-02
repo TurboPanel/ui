@@ -372,6 +372,8 @@ export type EnvironmentRecord = {
   displayName: string | null;
   description: string | null;
   projectId: string;
+  metadata: Record<string, unknown> | null;
+  options: { compose?: Record<string, unknown> } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -381,8 +383,66 @@ export type ProjectRecord = {
   displayName: string | null;
   description: string | null;
   workspaceId: string;
+  metadata: {
+    type?: 'managed' | 'template' | null;
+    managed_id?: string;
+  } | null;
+  options: { compose?: Record<string, unknown> } | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CatalogSummary = {
+  code: string;
+  kind: 'managed' | 'template';
+  displayName: string;
+  description: string;
+};
+
+export type VariableRecord = {
+  id: string;
+  key: string;
+  isSecret: boolean;
+  value: string | null;
+  organizationId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  environmentId: string | null;
+  serviceId: string | null;
+  serverId: string | null;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VariableParentFilter =
+  | { organizationId: string }
+  | { workspaceId: string }
+  | { projectId: string }
+  | { environmentId: string }
+  | { serviceId: string }
+  | { serverId: string };
+
+export type CreateVariableBody = {
+  key: string;
+  value?: string;
+  isSecret?: boolean;
+  description?: string;
+} & (
+  | { organizationId: string }
+  | { workspaceId: string }
+  | { projectId: string }
+  | { environmentId: string }
+  | { serviceId: string }
+  | { serverId: string }
+);
+
+export type CreateProjectBody = {
+  workspaceId: string;
+  displayName?: string;
+  description?: string;
+  type?: 'blank' | 'template' | 'managed';
+  code?: string;
 };
 
 export type ServiceRecord = {
@@ -415,6 +475,8 @@ export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceR
 }
 
 export const WORKSPACE_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
+
+export const PROJECT_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
 
 export async function fetchWorkspace(
   id: string,
@@ -464,6 +526,125 @@ export async function fetchVisibleProjects(
     : null;
   const suffix = params ? `?${params.toString()}` : "";
   return await apiFetch(`${CLIENT_API}/projects${suffix}`);
+}
+
+export async function fetchProjectCatalog(): Promise<{ catalog: CatalogSummary[] }> {
+  return await apiFetch(`${CLIENT_API}/project-catalog`);
+}
+
+export async function fetchProject(
+  id: string,
+): Promise<{ project: ProjectRecord }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}`);
+}
+
+export async function createProject(
+  body: CreateProjectBody,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/projects`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateProject(
+  id: string,
+  body: {
+    displayName?: string;
+    description?: string;
+    options?: { compose?: Record<string, unknown> };
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteProject(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchEnvironment(
+  id: string,
+): Promise<{ environment: EnvironmentRecord }> {
+  return await apiFetch(`${CLIENT_API}/environments/${id}`);
+}
+
+export async function createEnvironment(body: {
+  projectId: string;
+  displayName?: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  options?: { compose?: Record<string, unknown> };
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/environments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateEnvironment(
+  id: string,
+  body: {
+    displayName?: string;
+    description?: string;
+    metadata?: Record<string, unknown>;
+    options?: { compose?: Record<string, unknown> };
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/environments/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteEnvironment(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/environments/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchVariables(
+  parentFilter: VariableParentFilter,
+): Promise<{ variables: VariableRecord[] }> {
+  const params = new URLSearchParams(
+    Object.entries(parentFilter).map(([key, value]) => [key, value]),
+  );
+  return await apiFetch(`${CLIENT_API}/variables?${params.toString()}`);
+}
+
+export async function fetchVariable(
+  id: string,
+): Promise<{ variable: VariableRecord }> {
+  return await apiFetch(`${CLIENT_API}/variables/${id}`);
+}
+
+export async function createVariable(
+  body: CreateVariableBody,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/variables`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateVariable(
+  id: string,
+  body: { key?: string; value?: string; isSecret?: boolean },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/variables/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteVariable(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/variables/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function fetchVisibleServices(

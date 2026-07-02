@@ -27,6 +27,13 @@ export const ORG_AREAS = [
     subRoutes: [],
   },
   {
+    id: 'projects',
+    label: 'Projects',
+    pathSegment: 'projects',
+    hint: 'Manage projects and environments',
+    subRoutes: [],
+  },
+  {
     id: 'access',
     label: 'Access',
     pathSegment: 'access',
