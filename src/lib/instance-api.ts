@@ -404,11 +404,13 @@ export type VariableRecord = {
   key: string;
   isSecret: boolean;
   value: string | null;
+  prefix: string | null;
   organizationId: string | null;
   workspaceId: string | null;
   projectId: string | null;
   environmentId: string | null;
   serviceId: string | null;
+  hostingId: string | null;
   serverId: string | null;
   description: string | null;
   createdAt: string;
@@ -421,12 +423,14 @@ export type VariableParentFilter =
   | { projectId: string }
   | { environmentId: string }
   | { serviceId: string }
+  | { hostingId: string }
   | { serverId: string };
 
 export type CreateVariableBody = {
   key: string;
   value?: string;
   isSecret?: boolean;
+  prefix?: string;
   description?: string;
 } & (
   | { organizationId: string }
@@ -434,6 +438,7 @@ export type CreateVariableBody = {
   | { projectId: string }
   | { environmentId: string }
   | { serviceId: string }
+  | { hostingId: string }
   | { serverId: string }
 );
 
