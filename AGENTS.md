@@ -28,6 +28,15 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 The developer console has been moved to the `turbopanel-dev` terminal console (`src/sections/` in that repo).
 
+## Build output & deployment (dev vs prod)
+
+The UI is never installed as a standalone service tree — the **instance** repo's Caddy serves it, and the **daemon** installs its build output. Two modes (`TURBOPANEL_UI_MODE` on the instance):
+
+- **Development** (`dev`) — `turbopanel-ui.service` runs the Expo web dev server on `:8081` (installed by the daemon `instance-launch` role, running as `instance:turbopanel`). Caddy reverse-proxies non-`/api`/`/ws` traffic to it. Co-located dev logs go to checkout-local `logs/`.
+- **Production** (`static`) — `pnpm export` produces the static web bundle; the daemon `ui-build` role publishes it to the FHS path **`/opt/turbopanel/share/ui`** (instance `TURBOPANEL_UI_ROOT` default). Caddy serves those files directly with SPA fallback and `turbopanel-ui.service` is stopped/disabled.
+
+Both modes route through the single instance Caddy entrypoint; there is no separate `turbopaneld.service` or FHS tree owned by this repo. Canonical paths/units live in `../instance/AGENTS.md` (Caddy + UI env vars) and `../daemon/AGENTS.md` (Filesystem layout & path model).
+
 ## Organization console (`/<organizationId>/*`)
 
 Main product shell for signed-in users. Web uses a left sidebar with area tabs and per-area sub-menus; native will likely move the top-level areas to bottom tabs later.
