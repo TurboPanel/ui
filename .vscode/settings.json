@@ -1,5 +1,4 @@
 {
-  "sonarlint.pathToNodeExecutable": "/opt/turbopanel/vendor/node/current/bin/node",
   "editor.codeActionsOnSave": {
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
