@@ -724,8 +724,13 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
               const showUpdateErrorBadge =
                 updateData?.status === 'error' && !updateData?.updateAvailable
               const targetKnown = updateData?.targetStatus === 'ok'
+              const runningVersionUnknown =
+                targetKnown &&
+                server.connected &&
+                !colocated &&
+                !updateData?.current?.commit
               const shortCommit = (c?: string | null) =>
-                c ? c.slice(0, 12) : '—'
+                c ? c.slice(0, 12) : 'Unknown'
 
               return (
                 <View key={server.id} style={orgPanelStyles.detailCard}>
@@ -865,9 +870,11 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                                   ? styles.updateBadgeCurrent
                                   : updateData.targetStatus === 'unknown'
                                     ? styles.updateBadgeUnknown
-                                    : updateData.updateAvailable
-                                      ? styles.updateBadgeAvailable
-                                      : styles.updateBadgeCurrent,
+                                    : runningVersionUnknown
+                                      ? styles.updateBadgeUnknown
+                                      : updateData.updateAvailable
+                                        ? styles.updateBadgeAvailable
+                                        : styles.updateBadgeCurrent,
                           ]}
                         >
                           <Text
@@ -881,9 +888,11 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                                     ? styles.updateBadgeTextCurrent
                                     : updateData.targetStatus === 'unknown'
                                       ? styles.updateBadgeTextUnknown
-                                      : updateData.updateAvailable
-                                        ? styles.updateBadgeTextAvailable
-                                        : styles.updateBadgeTextCurrent,
+                                      : runningVersionUnknown
+                                        ? styles.updateBadgeTextUnknown
+                                        : updateData.updateAvailable
+                                          ? styles.updateBadgeTextAvailable
+                                          : styles.updateBadgeTextCurrent,
                             ]}
                           >
                             {updateData.status === 'updating'
@@ -894,9 +903,11 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                                   ? 'Co-located host'
                                   : updateData.targetStatus === 'unknown'
                                     ? 'Target unavailable'
-                                    : updateData.updateAvailable
-                                      ? 'Update available'
-                                      : 'Up to date'}
+                                    : runningVersionUnknown
+                                      ? 'Version unknown'
+                                      : updateData.updateAvailable
+                                        ? 'Update available'
+                                        : 'Up to date'}
                           </Text>
                         </View>
                         {updateData.lastUpdateError &&
