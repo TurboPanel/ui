@@ -404,7 +404,6 @@ export type VariableRecord = {
   key: string;
   isSecret: boolean;
   value: string | null;
-  prefix: string | null;
   organizationId: string | null;
   workspaceId: string | null;
   projectId: string | null;
@@ -430,7 +429,6 @@ export type CreateVariableBody = {
   key: string;
   value?: string;
   isSecret?: boolean;
-  prefix?: string;
   description?: string;
 } & (
   | { organizationId: string }
