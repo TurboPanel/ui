@@ -771,8 +771,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
                   {colocated ? (
                     <Text style={orgPanelStyles.muted}>
                       This server runs on the same host as the control plane.
-                      Remote trunk updates are disabled — use Sync Dev Build or
-                      local git instead.
+                      Remote trunk updates are disabled — use local git instead.
                     </Text>
                   ) : null}
 

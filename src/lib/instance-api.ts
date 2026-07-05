@@ -7,6 +7,13 @@ const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
 const ADMIN_API = '/api/admin/v1';
 
+/**
+ * Dev-sync (`POST /api/developer/v1/daemon/sync-dev`) is Deno-only, superadmin /
+ * local-console authenticated, and exposed through the turbopanel-dev terminal
+ * console — not this web client. There is no client-surface helper here by design.
+ */
+export const DEV_SYNC_WEB_AVAILABLE = false;
+
 export type SessionInfo = {
   userId: string | null;
   username: string | null;
