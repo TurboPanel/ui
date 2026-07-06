@@ -53,6 +53,271 @@ type UpdateState = {
   error: string | null
 }
 
+type UpdateBadgeVariant =
+  | 'updating'
+  | 'error'
+  | 'colocated'
+  | 'unknown'
+  | 'available'
+  | 'current'
+
+function resolveUpdateBadgeVariant(input: {
+  status: ServerUpdateStatus['status'] | undefined
+  targetStatus: ServerUpdateStatus['targetStatus'] | undefined
+  updateAvailable: boolean | undefined
+  colocated: boolean
+  showUpdateErrorBadge: boolean
+  runningVersionUnknown: boolean
+}): UpdateBadgeVariant {
+  if (input.status === 'updating') return 'updating'
+  if (input.showUpdateErrorBadge) return 'error'
+  if (input.colocated) return 'colocated'
+  if (input.targetStatus === 'unknown' || input.runningVersionUnknown) {
+    return 'unknown'
+  }
+  if (input.updateAvailable) return 'available'
+  return 'current'
+}
+
+function updateBadgeLabel(
+  variant: UpdateBadgeVariant,
+  runningVersionUnknown: boolean,
+): string {
+  switch (variant) {
+    case 'updating':
+      return 'Update in progress'
+    case 'error':
+      return 'Update error'
+    case 'colocated':
+      return 'Co-located host'
+    case 'unknown':
+      return runningVersionUnknown ? 'Version unknown' : 'Target unavailable'
+    case 'available':
+      return 'Update available'
+    case 'current':
+      return 'Up to date'
+  }
+}
+
+function updateButtonLabel(input: {
+  isUpdateStatusLoading: boolean
+  isUpdateInProgress: boolean
+  connected: boolean
+  targetKnown: boolean
+  colocated: boolean
+  updateAvailable: boolean | undefined
+}): string {
+  if (input.isUpdateStatusLoading) return 'Loading…'
+  if (input.isUpdateInProgress) return 'Updating…'
+  if (!input.connected) return 'Offline'
+  if (!input.targetKnown) return 'Target unknown'
+  if (input.colocated) return 'Not updatable'
+  if (!input.updateAvailable) return 'Up to date'
+  return 'Update'
+}
+
+function resetUpdateButtonLabel(
+  resetting: boolean,
+  status: ServerUpdateStatus['status'] | undefined,
+): string {
+  if (resetting) return 'Resetting…'
+  if (status === 'updating') return 'Clear stuck update'
+  return 'Reset status'
+}
+
+function applyCommandPollResult(
+  current: ServerCommandState,
+  activeCommand: ActiveCommand,
+  record: Awaited<ReturnType<typeof fetchCommand>>,
+  onRebootSucceeded: () => void,
+): ServerCommandState | null {
+  if (current.activeCommand?.commandId !== activeCommand.commandId) {
+    return null
+  }
+
+  const updated: ServerCommandState = {
+    ...current,
+    commandRecord: record,
+  }
+
+  if (!isTerminalCommandStatus(record.status)) {
+    return updated
+  }
+
+  updated.activeCommand = null
+  if (activeCommand.kind === 'ping') {
+    updated.pingRunning = false
+    if (record.status !== 'succeeded') {
+      updated.pingError = record.error ?? `Ping ${record.status}`
+    }
+    return updated
+  }
+  if (activeCommand.kind === 'reboot') {
+    updated.rebootRunning = false
+    if (record.status !== 'succeeded') {
+      updated.rebootError = record.error ?? `Reboot ${record.status}`
+    } else {
+      onRebootSucceeded()
+    }
+    return updated
+  }
+
+  updated.hostnameRunning = false
+  if (record.status === 'succeeded') {
+    onRebootSucceeded()
+  } else {
+    updated.hostnameError = record.error ?? `Hostname change ${record.status}`
+  }
+  return updated
+}
+
+function reportServersRefreshError(
+  err: unknown,
+  options: { silent?: boolean } | undefined,
+  setError: (message: string) => void,
+): void {
+  if (!options?.silent) {
+    setError(err instanceof Error ? err.message : 'Failed to load servers')
+  }
+}
+
+async function pollSingleServerCommand(
+  serverId: string,
+  activeCommand: ActiveCommand,
+  isCancelled: () => boolean,
+  applyResult: (
+    serverId: string,
+    activeCommand: ActiveCommand,
+    record: Awaited<ReturnType<typeof fetchCommand>>,
+  ) => void,
+  onError: (
+    serverId: string,
+    kind: ActiveCommand['kind'],
+    err: unknown,
+  ) => Promise<void>,
+): Promise<void> {
+  try {
+    const record = await fetchCommand(serverId, activeCommand.commandId)
+    if (isCancelled()) return
+    applyResult(serverId, activeCommand, record)
+  } catch (err) {
+    if (isCancelled()) return
+    await onError(serverId, activeCommand.kind, err)
+  }
+}
+
+function mergeCommandPollState(
+  prev: Map<string, ServerCommandState>,
+  serverId: string,
+  activeCommand: ActiveCommand,
+  record: Awaited<ReturnType<typeof fetchCommand>>,
+  onRefresh: () => void,
+): Map<string, ServerCommandState> {
+  const current = prev.get(serverId)
+  if (!current) return prev
+  const updated = applyCommandPollResult(
+    current,
+    activeCommand,
+    record,
+    onRefresh,
+  )
+  if (!updated) return prev
+  const next = new Map(prev)
+  next.set(serverId, updated)
+  return next
+}
+
+const defaultUpdateState: UpdateState = {
+  loading: false,
+  triggering: false,
+  resetting: false,
+  data: null,
+  error: null,
+}
+
+async function pollInFlightCommands(
+  commandStates: Map<string, ServerCommandState>,
+  isCancelled: () => boolean,
+  applyResult: (
+    serverId: string,
+    activeCommand: ActiveCommand,
+    record: Awaited<ReturnType<typeof fetchCommand>>,
+  ) => void,
+  onError: (
+    serverId: string,
+    kind: ActiveCommand['kind'],
+    err: unknown,
+  ) => Promise<void>,
+): Promise<void> {
+  for (const [serverId, state] of commandStates.entries()) {
+    if (!state.activeCommand) continue
+    await pollSingleServerCommand(
+      serverId,
+      state.activeCommand,
+      isCancelled,
+      applyResult,
+      onError,
+    )
+  }
+}
+
+function isColocatedServer(
+  server: OrgServerRecord,
+  updateData?: ServerUpdateStatus | null,
+): boolean {
+  return (
+    server.colocatedWithInstance === true ||
+    updateData?.colocatedWithInstance === true ||
+    updateData?.updateBlocked === true
+  )
+}
+
+function shortCommit(commit?: string | null): string {
+  return commit ? commit.slice(0, 12) : 'Unknown'
+}
+
+function deriveServerUpdateViewModel(
+  server: OrgServerRecord,
+  updateState: UpdateState,
+) {
+  const updateData = updateState.data
+  const colocated = isColocatedServer(server, updateData)
+  const isUpdateStatusLoading = updateState.loading && updateData === null
+  const isUpdateInProgress =
+    updateState.triggering ||
+    updateState.resetting ||
+    updateData?.status === 'updating'
+  const canResetUpdateStatus =
+    updateData?.canResetUpdateStatus === true && !updateState.resetting
+  const showUpdateErrorBadge =
+    updateData?.status === 'error' && !updateData?.updateAvailable
+  const targetKnown = updateData?.targetStatus === 'ok'
+  const runningVersionUnknown =
+    targetKnown &&
+    server.connected &&
+    !colocated &&
+    !updateData?.current?.commit
+  const badgeVariant = resolveUpdateBadgeVariant({
+    status: updateData?.status,
+    targetStatus: updateData?.targetStatus,
+    updateAvailable: updateData?.updateAvailable,
+    colocated,
+    showUpdateErrorBadge,
+    runningVersionUnknown,
+  })
+
+  return {
+    updateData,
+    colocated,
+    isUpdateStatusLoading,
+    isUpdateInProgress,
+    canResetUpdateStatus,
+    targetKnown,
+    runningVersionUnknown,
+    badgeVariant,
+  }
+}
+
 // The servers list reflects coarse presence from the Postgres projection, which
 // changes about as often as one daemon heartbeat. Poll it slowly rather than at
 // a constant 5s; a push-based update path can replace this entirely later.
@@ -67,10 +332,10 @@ function serverTitle(server: OrgServerRecord): string {
 function ConnectingIpDetail({
   remoteAddress,
   geo,
-}: {
+}: Readonly<{
   remoteAddress: string
   geo: OrgServerRecord['geo']
-}) {
+}>) {
   const flag = countryCodeToFlagEmoji(geo?.country)
   const location = formatServerGeoLocation(geo)
   const countryCode = formatServerGeoCountryCode(geo)
@@ -101,7 +366,7 @@ function ConnectingIpDetail({
   )
 }
 
-export function ServersOverviewSection({ orgId }: { orgId: string }) {
+export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [servers, setServers] = useState<OrgServerRecord[]>([])
@@ -117,14 +382,6 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
 
   const commandStatesRef = useRef(commandStates)
   commandStatesRef.current = commandStates
-
-  const isColocatedServer = (
-    server: OrgServerRecord,
-    updateData?: ServerUpdateStatus | null,
-  ): boolean =>
-    server.colocatedWithInstance === true ||
-    updateData?.colocatedWithInstance === true ||
-    updateData?.updateBlocked === true
 
   const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
     if (status.updateBlocked) return true
@@ -375,8 +632,8 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
         setError(
           err instanceof Error ? err.message : 'Access to servers was denied',
         )
-      } else if (!options?.silent) {
-        setError(err instanceof Error ? err.message : 'Failed to load servers')
+      } else {
+        reportServersRefreshError(err, options, setError)
       }
     } finally {
       if (!options?.silent && !options?.isCancelled?.()) {
@@ -509,7 +766,7 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
   const inFlightCommandsKey = [...commandStates.entries()]
     .filter(([, state]) => state.activeCommand !== null)
     .map(([serverId, state]) => `${serverId}:${state.activeCommand!.commandId}`)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .join(',')
 
   // Single timer polls every in-flight command; re-runs only when that set changes.
@@ -518,77 +775,37 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
 
     let cancelled = false
 
-    const pollAll = async (): Promise<void> => {
-      const entries = [...commandStatesRef.current.entries()].filter(
-        ([, state]) => state.activeCommand !== null,
-      )
-      if (entries.length === 0) return
+    const onPollRefresh = (): void => {
+      void refreshServers({ silent: true })
+    }
 
-      await Promise.all(
-        entries.map(async ([serverId, state]) => {
-          const activeCommand = state.activeCommand!
-          try {
-            const record = await fetchCommand(
-              serverId,
-              activeCommand.commandId,
-            )
-            if (cancelled) return
-
-            setCommandStates((prev) => {
-              const current = prev.get(serverId)
-              if (
-                !current?.activeCommand ||
-                current.activeCommand.commandId !== activeCommand.commandId
-              ) {
-                return prev
-              }
-
-              const next = new Map(prev)
-              const updated: ServerCommandState = {
-                ...current,
-                commandRecord: record,
-              }
-
-              if (isTerminalCommandStatus(record.status)) {
-                updated.activeCommand = null
-                if (activeCommand.kind === 'ping') {
-                  updated.pingRunning = false
-                  if (record.status !== 'succeeded') {
-                    updated.pingError =
-                      record.error ?? `Ping ${record.status}`
-                  }
-                } else if (activeCommand.kind === 'reboot') {
-                  updated.rebootRunning = false
-                  if (record.status !== 'succeeded') {
-                    updated.rebootError =
-                      record.error ?? `Reboot ${record.status}`
-                  } else {
-                    void refreshServers({ silent: true })
-                  }
-                } else {
-                  updated.hostnameRunning = false
-                  if (record.status === 'succeeded') {
-                    void refreshServers({ silent: true })
-                  } else {
-                    updated.hostnameError =
-                      record.error ?? `Hostname change ${record.status}`
-                  }
-                }
-              }
-
-              next.set(serverId, updated)
-              return next
-            })
-          } catch (err) {
-            if (cancelled) return
-            await handleCommandPollError(serverId, activeCommand.kind, err)
-          }
-        }),
+    const applyPollResult = (
+      serverId: string,
+      activeCommand: ActiveCommand,
+      record: Awaited<ReturnType<typeof fetchCommand>>,
+    ): void => {
+      setCommandStates((prev) =>
+        mergeCommandPollState(
+          prev,
+          serverId,
+          activeCommand,
+          record,
+          onPollRefresh,
+        ),
       )
     }
 
-    void pollAll()
-    const timer = setInterval(() => void pollAll(), COMMAND_POLL_MS)
+    const runPoll = (): void => {
+      void pollInFlightCommands(
+        commandStatesRef.current,
+        () => cancelled,
+        applyPollResult,
+        handleCommandPollError,
+      )
+    }
+
+    runPoll()
+    const timer = setInterval(runPoll, COMMAND_POLL_MS)
 
     return () => {
       cancelled = true
@@ -694,331 +911,36 @@ export function ServersOverviewSection({ orgId }: { orgId: string }) {
           </View>
         ) : null}
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-        {loading && servers.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
-        ) : servers.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
-            No servers are assigned to this organization yet.
-          </Text>
-        ) : (
+        {(() => {
+          if (loading && servers.length === 0) {
+            return <Text style={orgPanelStyles.muted}>Loading…</Text>
+          }
+          if (servers.length === 0) {
+            return (
+              <Text style={orgPanelStyles.muted}>
+                No servers are assigned to this organization yet.
+              </Text>
+            )
+          }
+          return (
           <View style={styles.list}>
-            {servers.map((server) => {
-              const updateState = updateStates.get(server.id) ?? {
-                loading: false,
-                triggering: false,
-                resetting: false,
-                data: null,
-                error: null,
-              }
-              const updateData = updateState.data
-              const colocated = isColocatedServer(server, updateData)
-              const isUpdateStatusLoading =
-                updateState.loading && updateData === null
-              const isUpdateInProgress =
-                updateState.triggering ||
-                updateState.resetting ||
-                updateData?.status === 'updating'
-              const canResetUpdateStatus =
-                updateData?.canResetUpdateStatus === true &&
-                !updateState.resetting
-              const showUpdateErrorBadge =
-                updateData?.status === 'error' && !updateData?.updateAvailable
-              const targetKnown = updateData?.targetStatus === 'ok'
-              const runningVersionUnknown =
-                targetKnown &&
-                server.connected &&
-                !colocated &&
-                !updateData?.current?.commit
-              const shortCommit = (c?: string | null) =>
-                c ? c.slice(0, 12) : 'Unknown'
-
-              return (
-                <View key={server.id} style={orgPanelStyles.detailCard}>
-                  <View style={styles.cardHeader}>
-                    <Text style={orgPanelStyles.detailTitle}>
-                      {serverTitle(server)}
-                    </Text>
-                    <View style={styles.cardHeaderBadges}>
-                      {colocated ? (
-                        <View style={[styles.statusBadge, styles.statusColocated]}>
-                          <Text
-                            style={[
-                              styles.statusText,
-                              styles.statusTextColocated,
-                            ]}
-                          >
-                            Co-located
-                          </Text>
-                        </View>
-                      ) : null}
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          server.connected
-                            ? styles.statusOnline
-                            : styles.statusOffline,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusText,
-                            server.connected
-                              ? styles.statusTextOnline
-                              : styles.statusTextOffline,
-                          ]}
-                        >
-                          {server.connected ? 'Online' : 'Offline'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {colocated ? (
-                    <Text style={orgPanelStyles.muted}>
-                      This server runs on the same host as the control plane.
-                      Remote trunk updates are disabled — use local git instead.
-                    </Text>
-                  ) : null}
-
-                  {server.hostname && server.displayName ? (
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Hostname: </Text>
-                      {server.hostname}
-                    </Text>
-                  ) : null}
-                  {server.connected && server.remoteAddress ? (
-                    <ConnectingIpDetail
-                      remoteAddress={server.remoteAddress}
-                      geo={server.geo}
-                    />
-                  ) : null}
-                  {server.connected && server.connectedAt ? (
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>
-                        Connected since:{' '}
-                      </Text>
-                      {formatLocalDateTime(server.connectedAt)} (
-                      {formatElapsedSince(server.connectedAt)})
-                    </Text>
-                  ) : null}
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>
-                      Last activity:{' '}
-                    </Text>
-                    {formatRelativeLocalDateTime(
-                      server.lastInboundAt ?? server.lastHeartbeatAt,
-                    )}
-                  </Text>
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>ID: </Text>
-                    <Text selectable>{server.id}</Text>
-                  </Text>
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>Added: </Text>
-                    {formatLocalDateTime(server.createdAt)}
-                  </Text>
-
-                  <View style={styles.updatePanel}>
-                    <Text style={styles.updateHeading}>Daemon version</Text>
-
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Running: </Text>
-                      {shortCommit(updateData?.current?.commit)}
-                    </Text>
-
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Trunk: </Text>
-                      {updateData?.targetStatus === 'unknown'
-                        ? 'Unknown'
-                        : shortCommit(updateData?.target?.commit)}
-                    </Text>
-
-                    {updateData?.targetStatus === 'unknown' &&
-                    updateData.targetError ? (
-                      <Text style={orgPanelStyles.muted}>
-                        {updateData.targetError}
-                      </Text>
-                    ) : null}
-
-                    {updateData?.updateBlocked &&
-                    updateData.updateBlockedReason ? (
-                      <Text style={orgPanelStyles.muted}>
-                        {updateData.updateBlockedReason}
-                      </Text>
-                    ) : null}
-
-                    {isUpdateStatusLoading ? (
-                      <View style={styles.cellRow}>
-                        <ActivityIndicator
-                          size="small"
-                          color={colors.textMuted}
-                        />
-                        <Text style={orgPanelStyles.muted}>
-                          Loading update status…
-                        </Text>
-                      </View>
-                    ) : updateData ? (
-                      <>
-                        <View
-                          style={[
-                            styles.updateBadge,
-                            updateData.status === 'updating'
-                              ? styles.updateBadgeUpdating
-                              : showUpdateErrorBadge
-                                ? styles.updateBadgeError
-                                : colocated
-                                  ? styles.updateBadgeCurrent
-                                  : updateData.targetStatus === 'unknown'
-                                    ? styles.updateBadgeUnknown
-                                    : runningVersionUnknown
-                                      ? styles.updateBadgeUnknown
-                                      : updateData.updateAvailable
-                                        ? styles.updateBadgeAvailable
-                                        : styles.updateBadgeCurrent,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.updateBadgeText,
-                              updateData.status === 'updating'
-                                ? styles.updateBadgeTextUpdating
-                                : showUpdateErrorBadge
-                                  ? styles.updateBadgeTextError
-                                  : colocated
-                                    ? styles.updateBadgeTextCurrent
-                                    : updateData.targetStatus === 'unknown'
-                                      ? styles.updateBadgeTextUnknown
-                                      : runningVersionUnknown
-                                        ? styles.updateBadgeTextUnknown
-                                        : updateData.updateAvailable
-                                          ? styles.updateBadgeTextAvailable
-                                          : styles.updateBadgeTextCurrent,
-                            ]}
-                          >
-                            {updateData.status === 'updating'
-                              ? 'Update in progress'
-                              : showUpdateErrorBadge
-                                ? 'Update error'
-                                : colocated
-                                  ? 'Co-located host'
-                                  : updateData.targetStatus === 'unknown'
-                                    ? 'Target unavailable'
-                                    : runningVersionUnknown
-                                      ? 'Version unknown'
-                                      : updateData.updateAvailable
-                                        ? 'Update available'
-                                        : 'Up to date'}
-                          </Text>
-                        </View>
-                        {updateData.lastUpdateError &&
-                        updateData.updateAvailable &&
-                        !colocated ? (
-                          <Text style={orgPanelStyles.muted}>
-                            Last attempt: {updateData.lastUpdateError}
-                          </Text>
-                        ) : null}
-                      </>
-                    ) : null}
-
-                    {canManage ? (
-                      <View style={styles.updateButtonRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.updateButton,
-                            (isUpdateStatusLoading ||
-                              isUpdateInProgress ||
-                              !server.connected ||
-                              !targetKnown ||
-                              colocated ||
-                              !updateData?.updateAvailable) &&
-                              styles.updateButtonDisabled,
-                          ]}
-                          onPress={() => void handleTriggerUpdate(server.id)}
-                          disabled={
-                            isUpdateStatusLoading ||
-                            isUpdateInProgress ||
-                            !server.connected ||
-                            !targetKnown ||
-                            colocated ||
-                            !updateData?.updateAvailable
-                          }
-                        >
-                          {isUpdateStatusLoading ||
-                          (isUpdateInProgress && updateState.triggering) ? (
-                            <ActivityIndicator
-                              size="small"
-                              color={colors.textMuted}
-                            />
-                          ) : null}
-                          <Text style={styles.updateButtonText}>
-                            {isUpdateStatusLoading
-                              ? 'Loading…'
-                              : updateState.triggering ||
-                                  updateData?.status === 'updating'
-                                ? 'Updating…'
-                                : !server.connected
-                                  ? 'Offline'
-                                  : !targetKnown
-                                    ? 'Target unknown'
-                                    : colocated
-                                      ? 'Not updatable'
-                                      : !updateData?.updateAvailable
-                                        ? 'Up to date'
-                                        : 'Update'}
-                          </Text>
-                        </TouchableOpacity>
-
-                        {canResetUpdateStatus ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.resetUpdateButton,
-                              updateState.resetting &&
-                                styles.updateButtonDisabled,
-                            ]}
-                            onPress={() =>
-                              void handleResetUpdateStatus(server.id)
-                            }
-                            disabled={updateState.resetting}
-                          >
-                            {updateState.resetting ? (
-                              <ActivityIndicator
-                                size="small"
-                                color={colors.textMuted}
-                              />
-                            ) : null}
-                            <Text style={styles.resetUpdateButtonText}>
-                              {updateState.resetting
-                                ? 'Resetting…'
-                                : updateData?.status === 'updating'
-                                  ? 'Clear stuck update'
-                                  : 'Reset status'}
-                            </Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    ) : null}
-
-                    {updateState.error ? (
-                      <Text style={styles.errorText}>{updateState.error}</Text>
-                    ) : null}
-                  </View>
-
-                  <ServerCommandsPanel
-                    server={server}
-                    canManage={canManage}
-                    showReboot={!colocated}
-                    commandState={getCommandState(server.id)}
-                    onPing={() => void handlePing(server.id)}
-                    onSetHostname={(hostname) =>
-                      void handleSetHostname(server.id, hostname)
-                    }
-                    onReboot={() => void handleReboot(server.id)}
-                  />
-                </View>
-              )
-            })}
+            {servers.map((server) => (
+              <OrgServerOverviewCard
+                key={server.id}
+                server={server}
+                updateState={updateStates.get(server.id) ?? defaultUpdateState}
+                canManage={canManage}
+                commandState={getCommandState(server.id)}
+                onTriggerUpdate={handleTriggerUpdate}
+                onResetUpdateStatus={handleResetUpdateStatus}
+                onPing={handlePing}
+                onSetHostname={handleSetHostname}
+                onReboot={handleReboot}
+              />
+            ))}
           </View>
-        )}
+          )
+        })()}
       </SectionPanel>
     </View>
   )
@@ -1209,3 +1131,387 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 })
+
+function ServerCardHeader({
+  server,
+  colocated,
+}: Readonly<{ server: OrgServerRecord; colocated: boolean }>) {
+  return (
+    <>
+      <View style={styles.cardHeader}>
+        <Text style={orgPanelStyles.detailTitle}>{serverTitle(server)}</Text>
+        <View style={styles.cardHeaderBadges}>
+          {colocated ? (
+            <View style={[styles.statusBadge, styles.statusColocated]}>
+              <Text style={[styles.statusText, styles.statusTextColocated]}>
+                Co-located
+              </Text>
+            </View>
+          ) : null}
+          <View
+            style={[
+              styles.statusBadge,
+              server.connected ? styles.statusOnline : styles.statusOffline,
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                server.connected
+                  ? styles.statusTextOnline
+                  : styles.statusTextOffline,
+              ]}
+            >
+              {server.connected ? 'Online' : 'Offline'}
+            </Text>
+          </View>
+        </View>
+      </View>
+      {colocated ? (
+        <Text style={orgPanelStyles.muted}>
+          This server runs on the same host as the control plane. Remote trunk
+          updates are disabled — use local git instead.
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+function ServerCardDetails({ server }: Readonly<{ server: OrgServerRecord }>) {
+  return (
+    <>
+      {server.hostname && server.displayName ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Hostname: </Text>
+          {server.hostname}
+        </Text>
+      ) : null}
+      {server.connected && server.remoteAddress ? (
+        <ConnectingIpDetail
+          remoteAddress={server.remoteAddress}
+          geo={server.geo}
+        />
+      ) : null}
+      {server.connected && server.connectedAt ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Connected since: </Text>
+          {formatLocalDateTime(server.connectedAt)} (
+          {formatElapsedSince(server.connectedAt)})
+        </Text>
+      ) : null}
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Last activity: </Text>
+        {formatRelativeLocalDateTime(server.lastInboundAt)}
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>ID: </Text>
+        <Text selectable>{server.id}</Text>
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Added: </Text>
+        {formatLocalDateTime(server.createdAt)}
+      </Text>
+    </>
+  )
+}
+
+function ServerUpdateStatus({
+  updateData,
+  colocated,
+  isUpdateStatusLoading,
+  runningVersionUnknown,
+  badgeVariant,
+}: Readonly<{
+  updateData: ServerUpdateStatus | null
+  colocated: boolean
+  isUpdateStatusLoading: boolean
+  runningVersionUnknown: boolean
+  badgeVariant: UpdateBadgeVariant
+}>) {
+  const badgePresentation = pickUpdateBadgeStyles(badgeVariant, styles)
+
+  if (isUpdateStatusLoading) {
+    return (
+      <View style={styles.cellRow}>
+        <ActivityIndicator size="small" color={colors.textMuted} />
+        <Text style={orgPanelStyles.muted}>Loading update status…</Text>
+      </View>
+    )
+  }
+
+  if (!updateData) return null
+
+  return (
+    <>
+      <View style={[styles.updateBadge, badgePresentation.container]}>
+        <Text style={[styles.updateBadgeText, badgePresentation.text]}>
+          {updateBadgeLabel(badgeVariant, runningVersionUnknown)}
+        </Text>
+      </View>
+      {updateData.lastUpdateError && updateData.updateAvailable && !colocated ? (
+        <Text style={orgPanelStyles.muted}>
+          Last attempt: {updateData.lastUpdateError}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+function ServerUpdateActions({
+  server,
+  updateState,
+  updateData,
+  colocated,
+  canManage,
+  isUpdateStatusLoading,
+  isUpdateInProgress,
+  canResetUpdateStatus,
+  targetKnown,
+  onTriggerUpdate,
+  onResetUpdateStatus,
+}: Readonly<{
+  server: OrgServerRecord
+  updateState: UpdateState
+  updateData: ServerUpdateStatus | null
+  colocated: boolean
+  canManage: boolean
+  isUpdateStatusLoading: boolean
+  isUpdateInProgress: boolean
+  canResetUpdateStatus: boolean
+  targetKnown: boolean
+  onTriggerUpdate: (serverId: string) => Promise<void>
+  onResetUpdateStatus: (serverId: string) => Promise<void>
+}>) {
+  if (!canManage) return null
+
+  const updateButtonDisabled =
+    isUpdateStatusLoading ||
+    isUpdateInProgress ||
+    !server.connected ||
+    !targetKnown ||
+    colocated ||
+    !updateData?.updateAvailable
+
+  return (
+    <View style={styles.updateButtonRow}>
+      <TouchableOpacity
+        style={[
+          styles.updateButton,
+          updateButtonDisabled && styles.updateButtonDisabled,
+        ]}
+        onPress={() => void onTriggerUpdate(server.id)}
+        disabled={updateButtonDisabled}
+      >
+        {isUpdateStatusLoading ||
+        (isUpdateInProgress && updateState.triggering) ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : null}
+        <Text style={styles.updateButtonText}>
+          {updateButtonLabel({
+            isUpdateStatusLoading,
+            isUpdateInProgress:
+              updateState.triggering || updateData?.status === 'updating',
+            connected: server.connected,
+            targetKnown,
+            colocated,
+            updateAvailable: updateData?.updateAvailable,
+          })}
+        </Text>
+      </TouchableOpacity>
+
+      {canResetUpdateStatus ? (
+        <TouchableOpacity
+          style={[
+            styles.resetUpdateButton,
+            updateState.resetting && styles.updateButtonDisabled,
+          ]}
+          onPress={() => void onResetUpdateStatus(server.id)}
+          disabled={updateState.resetting}
+        >
+          {updateState.resetting ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : null}
+          <Text style={styles.resetUpdateButtonText}>
+            {resetUpdateButtonLabel(
+              updateState.resetting,
+              updateData?.status,
+            )}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  )
+}
+
+function ServerUpdatePanel({
+  server,
+  updateState,
+  updateData,
+  colocated,
+  canManage,
+  isUpdateStatusLoading,
+  isUpdateInProgress,
+  canResetUpdateStatus,
+  targetKnown,
+  runningVersionUnknown,
+  badgeVariant,
+  onTriggerUpdate,
+  onResetUpdateStatus,
+}: Readonly<{
+  server: OrgServerRecord
+  updateState: UpdateState
+  updateData: ServerUpdateStatus | null
+  colocated: boolean
+  canManage: boolean
+  isUpdateStatusLoading: boolean
+  isUpdateInProgress: boolean
+  canResetUpdateStatus: boolean
+  targetKnown: boolean
+  runningVersionUnknown: boolean
+  badgeVariant: UpdateBadgeVariant
+  onTriggerUpdate: (serverId: string) => Promise<void>
+  onResetUpdateStatus: (serverId: string) => Promise<void>
+}>) {
+  return (
+    <View style={styles.updatePanel}>
+      <Text style={styles.updateHeading}>Daemon version</Text>
+
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Running: </Text>
+        {shortCommit(updateData?.current?.commit)}
+      </Text>
+
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Trunk: </Text>
+        {updateData?.targetStatus === 'unknown'
+          ? 'Unknown'
+          : shortCommit(updateData?.target?.commit)}
+      </Text>
+
+      {updateData?.targetStatus === 'unknown' && updateData.targetError ? (
+        <Text style={orgPanelStyles.muted}>{updateData.targetError}</Text>
+      ) : null}
+
+      {updateData?.updateBlocked && updateData.updateBlockedReason ? (
+        <Text style={orgPanelStyles.muted}>
+          {updateData.updateBlockedReason}
+        </Text>
+      ) : null}
+
+      <ServerUpdateStatus
+        updateData={updateData}
+        colocated={colocated}
+        isUpdateStatusLoading={isUpdateStatusLoading}
+        runningVersionUnknown={runningVersionUnknown}
+        badgeVariant={badgeVariant}
+      />
+
+      <ServerUpdateActions
+        server={server}
+        updateState={updateState}
+        updateData={updateData}
+        colocated={colocated}
+        canManage={canManage}
+        isUpdateStatusLoading={isUpdateStatusLoading}
+        isUpdateInProgress={isUpdateInProgress}
+        canResetUpdateStatus={canResetUpdateStatus}
+        targetKnown={targetKnown}
+        onTriggerUpdate={onTriggerUpdate}
+        onResetUpdateStatus={onResetUpdateStatus}
+      />
+
+      {updateState.error ? (
+        <Text style={styles.errorText}>{updateState.error}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+function OrgServerOverviewCard({
+  server,
+  updateState,
+  canManage,
+  commandState,
+  onTriggerUpdate,
+  onResetUpdateStatus,
+  onPing,
+  onSetHostname,
+  onReboot,
+}: Readonly<{
+  server: OrgServerRecord
+  updateState: UpdateState
+  canManage: boolean
+  commandState: ServerCommandState
+  onTriggerUpdate: (serverId: string) => Promise<void>
+  onResetUpdateStatus: (serverId: string) => Promise<void>
+  onPing: (serverId: string) => Promise<void>
+  onSetHostname: (serverId: string, hostname: string) => Promise<void>
+  onReboot: (serverId: string) => Promise<void>
+}>) {
+  const viewModel = deriveServerUpdateViewModel(server, updateState)
+
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <ServerCardHeader server={server} colocated={viewModel.colocated} />
+      <ServerCardDetails server={server} />
+      <ServerUpdatePanel
+        server={server}
+        updateState={updateState}
+        updateData={viewModel.updateData}
+        colocated={viewModel.colocated}
+        canManage={canManage}
+        isUpdateStatusLoading={viewModel.isUpdateStatusLoading}
+        isUpdateInProgress={viewModel.isUpdateInProgress}
+        canResetUpdateStatus={viewModel.canResetUpdateStatus}
+        targetKnown={viewModel.targetKnown}
+        runningVersionUnknown={viewModel.runningVersionUnknown}
+        badgeVariant={viewModel.badgeVariant}
+        onTriggerUpdate={onTriggerUpdate}
+        onResetUpdateStatus={onResetUpdateStatus}
+      />
+      <ServerCommandsPanel
+        server={server}
+        canManage={canManage}
+        showReboot={!viewModel.colocated}
+        commandState={commandState}
+        onPing={() => void onPing(server.id)}
+        onSetHostname={(hostname) => void onSetHostname(server.id, hostname)}
+        onReboot={() => void onReboot(server.id)}
+      />
+    </View>
+  )
+}
+
+function pickUpdateBadgeStyles(
+  variant: UpdateBadgeVariant,
+  s: typeof styles,
+): { container: object; text: object } {
+  switch (variant) {
+    case 'updating':
+      return {
+        container: s.updateBadgeUpdating,
+        text: s.updateBadgeTextUpdating,
+      }
+    case 'error':
+      return {
+        container: s.updateBadgeError,
+        text: s.updateBadgeTextError,
+      }
+    case 'colocated':
+    case 'current':
+      return {
+        container: s.updateBadgeCurrent,
+        text: s.updateBadgeTextCurrent,
+      }
+    case 'unknown':
+      return {
+        container: s.updateBadgeUnknown,
+        text: s.updateBadgeTextUnknown,
+      }
+    case 'available':
+      return {
+        container: s.updateBadgeAvailable,
+        text: s.updateBadgeTextAvailable,
+      }
+  }
+}

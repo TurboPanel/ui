@@ -12,6 +12,18 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - Do not record secrets or environment-specific URLs as if they were universal.
 - Remove or correct notes that prove wrong.
 
+### TypeScript style (SonarQube)
+
+- Prefer **`String#replaceAll()`** over **`String#replace()` with a global regex** when replacing every occurrence of a substring (`typescript:S7781`).
+- Use **`String.raw`** for string literals that contain backslashes so escapes stay readable and correct (`typescript:S7780`).
+- Prefer **optional chaining** (`obj?.prop`) over `!obj || obj.prop` (`typescript:S6582`).
+- Avoid **nested ternaries** — use `if`/`switch` or helpers (`typescript:S3358`).
+- Extract helpers when **cognitive complexity** exceeds 15 (`typescript:S3776`).
+- Sort strings with **`.sort((a, b) => a.localeCompare(b))`** (`typescript:S2871`).
+- Mark React component props **`Readonly<{…}>`** (`typescript:S6759`).
+- Do not leave **`TODO`** in code — use `Future:` in a normal comment (`typescript:S1135`).
+- Avoid widening unions with bare **`string`** when a literal union exists (`typescript:S6571`).
+
 ## Stack
 
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
@@ -32,10 +44,10 @@ The developer console has been moved to the [turbopanel/dev](https://github.com/
 
 GitHub repository: [turbopanel/ui](https://github.com/turbopanel/ui). Package name: `@turbopanel/ui` (`package.json`).
 
-Identifiers intentionally kept on legacy values (bound to external deployment resources):
+Identifiers for Cloudflare and Expo deployments:
 
-- `app.json` `slug`: `turbopanel-ui` — stable Expo project id for existing EAS/Expo URLs.
-- `wrangler.jsonc` top-level `name`: `turbopanel-ui` — legacy Cloudflare Worker resource id; production deploy uses `env.live.name` `ui`.
+- `app.json` `slug`: `turbopanel` — Expo project slug for web/EAS builds.
+- `wrangler.jsonc` top-level `name`: `ui` — Cloudflare Worker resource name; production deploy uses `env.live.name` `ui`.
 
 ## Build output & deployment (dev vs prod)
 

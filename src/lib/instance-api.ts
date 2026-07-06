@@ -171,8 +171,6 @@ export type OrgServerRecord = {
   hostname: string | null;
   remoteAddress: string | null;
   lastInboundAt: string | null;
-  /** @deprecated use lastInboundAt */
-  lastHeartbeatAt: string | null;
   connectedAt: string | null;
   geo: ServerGeo | null;
   colocatedWithInstance?: boolean;
@@ -359,7 +357,7 @@ export async function fetchAccessGrants(
 
 export async function checkPermission(
   resourceId: string,
-  permissionKey: PermissionKey | string,
+  permissionKey: PermissionKey,
 ): Promise<{ allowed: boolean }> {
   const params = new URLSearchParams({ resourceId, permissionKey });
   return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
@@ -813,7 +811,6 @@ export type DaemonCellSnapshot = {
   connectedAt?: string
   lastInboundAt?: string
   lastOutboundAt?: string
-  lastHeartbeatAt?: string
   lastSeenAt?: string
   addresses?: ServerAddresses
   metadata?: ServerMetadata
@@ -850,9 +847,9 @@ export async function fetchServerStatus(
 
 /**
  * **Admin/debug only.** Hits the Durable Object directly. Never call on a timer or from normal status views. Use `fetchServersStatus()` or `fetchServerStatus()` instead.
+ * Future: global rate limiting should hook in here before this reaches the DO.
+ * This endpoint hits the Durable Object directly — only call on explicit user action, never on a timer.
  */
-// TODO: global rate limiting should eventually hook in here before this reaches the DO.
-// This endpoint hits the Durable Object directly — only call on explicit user action, never on a timer.
 export async function fetchServerCell(
   serverId: string,
 ): Promise<FetchServerCellResponse> {
