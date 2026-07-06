@@ -112,6 +112,7 @@ Authorization helpers:
 - Do not add per-server polling loops. N servers must not produce N repeated DO or Redis calls. The servers page must issue O(1) status calls regardless of fleet size.
 - The same Postgres-only status semantics hold identically on Workers (Cloudflare) and self-hosted (Deno/Redis) modes.
 - `DaemonCellSnapshot` / `FetchServerCellResponse` types remain in `instance-api.ts` for admin surfaces only; do not import them in normal org views.
+- Durable Object billing, cell storage schema, and the "no DO polling / O(1) status reads" rationale are canonical in `../instance/AGENTS.md` (Daemon Cell); UI must never introduce per-server DO/Redis reads.
 
 `useCan(scopeKind, itemId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
 
