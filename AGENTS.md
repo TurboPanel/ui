@@ -26,7 +26,16 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - **Dashboard** — `/<organizationId>/servers` once install completes (`session.organizationId`).
 - Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
 
-The developer console has been moved to the `turbopanel-dev` terminal console (`src/sections/` in that repo).
+The developer console has been moved to the [turbopanel/dev](https://github.com/turbopanel/dev) terminal console (`src/` in that repo).
+
+## Project metadata
+
+GitHub repository: [turbopanel/ui](https://github.com/turbopanel/ui). Package name: `@turbopanel/ui` (`package.json`).
+
+Identifiers intentionally kept on legacy values (bound to external deployment resources):
+
+- `app.json` `slug`: `turbopanel-ui` — stable Expo project id for existing EAS/Expo URLs.
+- `wrangler.jsonc` top-level `name`: `turbopanel-ui` — legacy Cloudflare Worker resource id; production deploy uses `env.live.name` `ui`.
 
 ## Build output & deployment (dev vs prod)
 

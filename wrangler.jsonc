@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "send_metrics": false,
   "account_id": "a574c2793baa3e2276ac16e96097bc8c",
+  // name: legacy Cloudflare Worker resource id — live deploy uses env.live.name "ui"
   "name": "turbopanel-ui",
   "compatibility_date": "2026-06-01",
   "observability": {

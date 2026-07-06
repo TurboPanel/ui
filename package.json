@@ -1,5 +1,5 @@
 {
-  "name": "turbopanel-ui",
+  "name": "@turbopanel/ui",
   "main": "expo-router/entry",
   "version": "0.1.0",
   "license": "AGPL-3.0-or-later",
