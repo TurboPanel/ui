@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Image } from 'expo-image'
 import {
   ActivityIndicator,
   Pressable,
@@ -31,6 +32,7 @@ import {
   triggerAllServerUpdates,
   triggerServerUpdate,
   type OrgServerRecord,
+  type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import {
@@ -38,6 +40,7 @@ import {
   formatLocalDateTime,
 } from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
+import { osLogoUri } from '@/lib/os-logos'
 import {
   countryCodeToFlagEmoji,
   formatServerGeoCountryCode,
@@ -359,6 +362,17 @@ function formatLocationCell(geo: OrgServerRecord['geo']): string {
   const trailing = parts.join(', ')
   if (flag && trailing) return `${flag} ${trailing}`
   return flag || trailing || EMPTY_CELL
+}
+
+function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
+  if (server.osLogo) return server.osLogo
+  const id = server.os?.id?.toLowerCase()
+  if (server.os?.variant === 'raspberry-pi-os') return 'raspberry-pi-os'
+  if (id === 'raspbian' || id === 'raspberrypi' || id === 'raspios') {
+    return 'raspberry-pi-os'
+  }
+  if (id === 'debian') return 'debian'
+  return null
 }
 
 function formatConnectedSinceCell(
@@ -1012,14 +1026,11 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
                   <View style={[styles.tableCell, styles.colName]}>
                     <Text style={styles.tableHeaderText}>Name / UUID</Text>
                   </View>
-                  <View style={[styles.tableCell, styles.colLocation]}>
-                    <Text style={styles.tableHeaderText}>Location</Text>
-                  </View>
                   <View style={[styles.tableCell, styles.colLinux]}>
                     <Text style={styles.tableHeaderText}>Linux</Text>
                   </View>
-                  <View style={[styles.tableCell, styles.colIp]}>
-                    <Text style={styles.tableHeaderText}>IP address</Text>
+                  <View style={[styles.tableCell, styles.colConnectedFrom]}>
+                    <Text style={styles.tableHeaderText}>Connected From</Text>
                   </View>
                   <View style={[styles.tableCell, styles.colConnected]}>
                     <Text style={styles.tableHeaderText}>Connected Since</Text>
@@ -1138,17 +1149,14 @@ const styles = StyleSheet.create({
     minWidth: 180,
     gap: 2,
   },
-  colLocation: {
-    flex: 1.4,
-    minWidth: 120,
-  },
   colLinux: {
-    flex: 1.4,
-    minWidth: 120,
+    flex: 2,
+    minWidth: 180,
   },
-  colIp: {
-    flex: 1.2,
-    minWidth: 110,
+  colConnectedFrom: {
+    flex: 1.8,
+    minWidth: 140,
+    gap: 2,
   },
   colConnected: {
     flex: 1.8,
@@ -1163,6 +1171,21 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     alignItems: 'center',
+  },
+  osCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
+  },
+  osLogo: {
+    width: 18,
+    height: 18,
+    flexShrink: 0,
+  },
+  osTextWrap: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   nameButton: {
     flexDirection: 'row',
@@ -1390,6 +1413,8 @@ function OrgServerTableRow({
   const viewModel = deriveServerUpdateViewModel(server, updateState)
   const location = formatLocationCell(server.geo)
   const linux = server.osDisplay?.trim() || EMPTY_CELL
+  const logoKey = resolveOsLogoKey(server)
+  const logo = osLogoUri(logoKey)
   const ip =
     server.connected && server.remoteAddress
       ? server.remoteAddress
@@ -1398,6 +1423,7 @@ function OrgServerTableRow({
     server.connected,
     server.connectedAt,
   )
+  const connectedFromEmpty = ip === EMPTY_CELL && location === EMPTY_CELL
 
   return (
     <View style={styles.tableRowWrap}>
@@ -1424,30 +1450,51 @@ function OrgServerTableRow({
             </View>
           </Pressable>
         </View>
-        <View style={[styles.tableCell, styles.colLocation]}>
-          <Text
-            style={location === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
-            numberOfLines={2}
-          >
-            {location}
-          </Text>
-        </View>
         <View style={[styles.tableCell, styles.colLinux]}>
-          <Text
-            style={linux === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
-            numberOfLines={2}
-          >
-            {linux}
-          </Text>
+          <View style={styles.osCell}>
+            {logo ? (
+              <Image
+                source={{ uri: logo }}
+                style={styles.osLogo}
+                contentFit="contain"
+                accessibilityLabel={
+                  logoKey === 'raspberry-pi-os'
+                    ? 'Raspberry Pi OS'
+                    : 'Debian'
+                }
+              />
+            ) : null}
+            <View style={styles.osTextWrap}>
+              <Text
+                style={
+                  linux === EMPTY_CELL ? styles.cellTextMuted : styles.cellText
+                }
+                numberOfLines={2}
+              >
+                {linux}
+              </Text>
+            </View>
+          </View>
         </View>
-        <View style={[styles.tableCell, styles.colIp]}>
-          <Text
-            style={ip === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
-            selectable={ip !== EMPTY_CELL}
-            numberOfLines={1}
-          >
-            {ip}
-          </Text>
+        <View style={[styles.tableCell, styles.colConnectedFrom]}>
+          {connectedFromEmpty ? (
+            <Text style={styles.cellTextMuted}>{EMPTY_CELL}</Text>
+          ) : (
+            <>
+              <Text
+                style={ip === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
+                selectable={ip !== EMPTY_CELL}
+                numberOfLines={1}
+              >
+                {ip}
+              </Text>
+              {location !== EMPTY_CELL ? (
+                <Text style={styles.cellTextMuted} numberOfLines={1}>
+                  {location}
+                </Text>
+              ) : null}
+            </>
+          )}
         </View>
         <View style={[styles.tableCell, styles.colConnected]}>
           <Text

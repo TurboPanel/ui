@@ -162,14 +162,19 @@ export type ServerGeo = {
 
 export type ServerOsFamily = 'linux' | 'windows' | 'freebsd' | 'darwin'
 
+export type ServerOsVariant = 'raspberry-pi-os'
+
 export type ServerOsMetadata = {
   family?: ServerOsFamily
   id?: string
+  variant?: ServerOsVariant
   version?: string
   versionCodename?: string
   prettyName?: string
   arch?: string
 }
+
+export type ServerOsLogoKey = 'debian' | 'raspberry-pi-os'
 
 export type OrgServerRecord = {
   id: string;
@@ -186,8 +191,10 @@ export type OrgServerRecord = {
   geo: ServerGeo | null;
   /** Host OS from server.metadata.os (daemon hello); null until reported. */
   os: ServerOsMetadata | null;
-  /** Formatted label e.g. "Debian 13 (Trixie)". */
+  /** Formatted label e.g. "Debian 13.5 (Trixie)". */
   osDisplay: string | null;
+  /** Logo key for the OS column (`debian` / `raspberry-pi-os`). */
+  osLogo: ServerOsLogoKey | null;
   colocatedWithInstance?: boolean;
 };
 
