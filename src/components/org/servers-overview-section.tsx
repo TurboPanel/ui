@@ -1001,7 +1001,12 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
             )
           }
           return (
-            <ScrollView horizontal nestedScrollEnabled>
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              style={styles.tableScroll}
+              contentContainerStyle={styles.tableScrollContent}
+            >
               <View style={styles.table}>
                 <View style={[styles.tableRow, styles.tableHeaderRow]}>
                   <View style={[styles.tableCell, styles.colName]}>
@@ -1077,17 +1082,34 @@ const styles = StyleSheet.create({
   },
   batchUpdateRow: {
     marginBottom: spacing.sm,
+    alignSelf: 'stretch',
+  },
+  tableScroll: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  tableScrollContent: {
+    flexGrow: 1,
+    minWidth: '100%',
   },
   table: {
+    flexGrow: 1,
+    width: '100%',
     minWidth: 980,
     borderWidth: 1,
     borderColor: colors.borderMuted,
     borderRadius: 8,
     overflow: 'hidden',
   },
+  tableRowWrap: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
+    alignSelf: 'stretch',
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
     paddingVertical: spacing.sm,
@@ -1102,6 +1124,7 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     justifyContent: 'center',
+    minWidth: 0,
   },
   tableHeaderText: {
     color: colors.textMuted,
@@ -1111,26 +1134,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   colName: {
-    width: 220,
+    flex: 2.2,
+    minWidth: 180,
     gap: 2,
   },
   colLocation: {
-    width: 160,
+    flex: 1.4,
+    minWidth: 120,
   },
   colLinux: {
-    width: 150,
+    flex: 1.4,
+    minWidth: 120,
   },
   colIp: {
-    width: 140,
+    flex: 1.2,
+    minWidth: 110,
   },
   colConnected: {
-    width: 180,
+    flex: 1.8,
+    minWidth: 150,
   },
   colStatus: {
-    width: 100,
+    flex: 0.9,
+    minWidth: 90,
   },
   colCheck: {
     width: 40,
+    flexGrow: 0,
+    flexShrink: 0,
     alignItems: 'center',
   },
   nameButton: {
@@ -1369,7 +1400,7 @@ function OrgServerTableRow({
   )
 
   return (
-    <View>
+    <View style={styles.tableRowWrap}>
       <View
         style={[styles.tableRow, expanded ? styles.tableRowExpanded : null]}
       >
