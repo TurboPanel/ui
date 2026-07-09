@@ -1,21 +1,10 @@
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { SectionPanel } from '@/components/org/section-panel'
+import { createWorkspace, fetchWorkspace, updateWorkspace } from '@/lib/instance-api'
+import { colors, spacing } from '@/lib/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import {
-  createWorkspace,
-  fetchWorkspace,
-  updateWorkspace,
-} from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
 const DISPLAY_NAME_PATTERN = /^[A-Za-z0-9 ._-]+$/
 
@@ -69,9 +58,7 @@ export function WorkspaceFormSection({
         }
       } catch (err) {
         if (!cancelled) {
-          setApiError(
-            err instanceof Error ? err.message : 'Failed to load workspace',
-          )
+          setApiError(err instanceof Error ? err.message : 'Failed to load workspace')
         }
       } finally {
         if (!cancelled) {
@@ -121,9 +108,7 @@ export function WorkspaceFormSection({
       if (mode === 'create') {
         await createWorkspace({
           displayName: displayName.trim(),
-          ...(trimmedDescription
-            ? { description: trimmedDescription }
-            : {}),
+          ...(trimmedDescription ? { description: trimmedDescription } : {}),
         })
       } else {
         await updateWorkspace(workspaceId!, {
@@ -133,9 +118,7 @@ export function WorkspaceFormSection({
       }
       router.replace(`/${orgId}/workspaces`)
     } catch (err) {
-      setApiError(
-        err instanceof Error ? err.message : 'Failed to save workspace',
-      )
+      setApiError(err instanceof Error ? err.message : 'Failed to save workspace')
     } finally {
       setSubmitting(false)
     }
@@ -153,13 +136,9 @@ export function WorkspaceFormSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>
-        {mode === 'create' ? 'New workspace' : 'Edit workspace'}
-      </Text>
+      <Text style={styles.heading}>{mode === 'create' ? 'New workspace' : 'Edit workspace'}</Text>
 
-      <SectionPanel
-        title={mode === 'create' ? 'New workspace' : 'Edit workspace'}
-      >
+      <SectionPanel title={mode === 'create' ? 'New workspace' : 'Edit workspace'}>
         {loadingWorkspace ? (
           <Text style={orgPanelStyles.muted}>Loading…</Text>
         ) : (
@@ -173,9 +152,9 @@ export function WorkspaceFormSection({
                   setDisplayName(t)
                   setFieldErrors({})
                 }}
-                placeholder="e.g. production"
+                placeholder="e.g. Product or Marketing"
                 placeholderTextColor={colors.textDim}
-                autoCapitalize="none"
+                autoCapitalize="words"
                 autoCorrect={false}
                 editable={!submitting}
                 maxLength={255}
@@ -205,25 +184,16 @@ export function WorkspaceFormSection({
               ) : null}
             </View>
 
-            {apiError ? (
-              <Text style={orgPanelStyles.error}>{apiError}</Text>
-            ) : null}
+            {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
 
             <View style={styles.actions}>
               <Pressable
-                style={[
-                  styles.primaryButton,
-                  submitting && styles.buttonDisabled,
-                ]}
+                style={[styles.primaryButton, submitting && styles.buttonDisabled]}
                 disabled={submitting}
                 onPress={() => void handleSubmit()}
               >
                 <Text style={styles.primaryButtonText}>
-                  {submitting
-                    ? 'Saving…'
-                    : mode === 'create'
-                      ? 'Create workspace'
-                      : 'Save changes'}
+                  {submitting ? 'Saving…' : mode === 'create' ? 'Create workspace' : 'Save changes'}
                 </Text>
               </Pressable>
               <Pressable
