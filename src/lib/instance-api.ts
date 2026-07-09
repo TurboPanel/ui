@@ -160,6 +160,17 @@ export type ServerGeo = {
   capturedAt?: string;
 };
 
+export type ServerOsFamily = 'linux' | 'windows' | 'freebsd' | 'darwin'
+
+export type ServerOsMetadata = {
+  family?: ServerOsFamily
+  id?: string
+  version?: string
+  versionCodename?: string
+  prettyName?: string
+  arch?: string
+}
+
 export type OrgServerRecord = {
   id: string;
   displayName: string | null;
@@ -173,6 +184,10 @@ export type OrgServerRecord = {
   lastInboundAt: string | null;
   connectedAt: string | null;
   geo: ServerGeo | null;
+  /** Host OS from server.metadata.os (daemon hello); null until reported. */
+  os: ServerOsMetadata | null;
+  /** Formatted label e.g. "Debian 13 (Trixie)". */
+  osDisplay: string | null;
   colocatedWithInstance?: boolean;
 };
 
@@ -770,14 +785,6 @@ export type ServerAddresses = {
   privateIpv6: string[]
   publicIpv4: string[]
   publicIpv6: string[]
-}
-
-export type ServerOsFamily = 'linux' | 'windows' | 'freebsd' | 'darwin'
-
-export type ServerOsMetadata = {
-  family?: ServerOsFamily
-  version?: string
-  arch?: string
 }
 
 export type ServerCpuCores = {

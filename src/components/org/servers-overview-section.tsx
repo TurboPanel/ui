@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -34,12 +36,10 @@ import {
 import {
   formatElapsedSince,
   formatLocalDateTime,
-  formatRelativeLocalDateTime,
 } from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
 import {
   countryCodeToFlagEmoji,
-  formatServerGeoAsn,
   formatServerGeoCountryCode,
   formatServerGeoLocation,
 } from '@/lib/server-geo'
@@ -113,6 +113,15 @@ function updateButtonLabel(input: {
   if (!input.targetKnown) return 'Target unknown'
   if (input.colocated) return 'Not updatable'
   if (!input.updateAvailable) return 'Up to date'
+  return 'Update'
+}
+
+function selectedUpdateButtonLabel(
+  batchUpdating: boolean,
+  selectedUpdatableCount: number,
+): string {
+  if (batchUpdating) return 'Updating…'
+  if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
   return 'Update'
 }
 
@@ -329,40 +338,66 @@ function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
 }
 
-function ConnectingIpDetail({
-  remoteAddress,
-  geo,
-}: Readonly<{
-  remoteAddress: string
-  geo: OrgServerRecord['geo']
-}>) {
+const EMPTY_CELL = '—'
+
+function checkboxMark(checked: boolean, indeterminate: boolean) {
+  if (indeterminate) {
+    return <Text style={styles.checkboxMark}>−</Text>
+  }
+  if (checked) {
+    return <Text style={styles.checkboxMark}>✓</Text>
+  }
+  return null
+}
+
+function formatLocationCell(geo: OrgServerRecord['geo']): string {
   const flag = countryCodeToFlagEmoji(geo?.country)
   const location = formatServerGeoLocation(geo)
   const countryCode = formatServerGeoCountryCode(geo)
-  const asn = formatServerGeoAsn(geo)
-  const geoTrailing = [location, countryCode, asn].filter(Boolean).join(' · ')
-  const showGeo = Boolean(flag || geoTrailing)
+  const parts = [location, countryCode].filter(Boolean)
+  if (!flag && parts.length === 0) return EMPTY_CELL
+  const trailing = parts.join(', ')
+  if (flag && trailing) return `${flag} ${trailing}`
+  return flag || trailing || EMPTY_CELL
+}
 
-  if (!showGeo) {
-    return (
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Connecting IP: </Text>
-        <Text selectable>{remoteAddress}</Text>
-      </Text>
-    )
-  }
+function formatConnectedSinceCell(
+  connected: boolean,
+  connectedAt: string | null,
+): string {
+  if (!connected || !connectedAt) return EMPTY_CELL
+  return `${formatLocalDateTime(connectedAt)} (${formatElapsedSince(connectedAt)})`
+}
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  onPress,
+  accessibilityLabel,
+}: Readonly<{
+  checked: boolean
+  indeterminate?: boolean
+  onPress: () => void
+  accessibilityLabel: string
+}>) {
   return (
-    <View style={styles.connectingIpRow}>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Connecting IP: </Text>
-        {flag ? <Text>{flag} </Text> : null}
-        <Text selectable>{remoteAddress}</Text>
-      </Text>
-      {geoTrailing ? (
-        <Text style={styles.geoTrailing}>{geoTrailing}</Text>
-      ) : null}
-    </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: indeterminate ? 'mixed' : checked }}
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      style={styles.checkboxHit}
+    >
+      <View
+        style={[
+          styles.checkbox,
+          (checked || indeterminate) && styles.checkboxChecked,
+        ]}
+      >
+        {checkboxMark(checked, indeterminate)}
+      </View>
+    </Pressable>
   )
 }
 
@@ -376,12 +411,26 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     new Map(),
   )
   const [batchUpdating, setBatchUpdating] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [commandStates, setCommandStates] = useState<
     Map<string, ServerCommandState>
   >(new Map())
 
   const commandStatesRef = useRef(commandStates)
   commandStatesRef.current = commandStates
+
+  const isServerUpdatable = (server: OrgServerRecord): boolean => {
+    const state = updateStates.get(server.id)
+    return (
+      server.connected &&
+      !isColocatedServer(server, state?.data) &&
+      state?.data?.targetStatus === 'ok' &&
+      state.data.updateAvailable === true &&
+      !state.triggering &&
+      state.data.status !== 'updating'
+    )
+  }
 
   const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
     if (status.updateBlocked) return true
@@ -518,18 +567,10 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     }
   }
 
-  const handleTriggerAllUpdates = async (): Promise<void> => {
-    const targets = servers.filter((server) => {
-      const state = updateStates.get(server.id)
-      return (
-        server.connected &&
-        !isColocatedServer(server, state?.data) &&
-        state?.data?.targetStatus === 'ok' &&
-        state.data.updateAvailable &&
-        !state.triggering &&
-        state.data.status !== 'updating'
-      )
-    })
+  const handleTriggerSelectedUpdates = async (): Promise<void> => {
+    const targets = servers.filter(
+      (server) => selectedIds.has(server.id) && isServerUpdatable(server),
+    )
     if (targets.length === 0) return
 
     setBatchUpdating(true)
@@ -625,6 +666,14 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       const result = await fetchOrgServers()
       if (options?.isCancelled?.()) return
       setServers(result.servers)
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return prev
+        const next = new Set<string>()
+        for (const server of result.servers) {
+          if (prev.has(server.id)) next.add(server.id)
+        }
+        return next.size === prev.size ? prev : next
+      })
     } catch (err) {
       if (options?.isCancelled?.()) return
       if (isForbiddenError(err)) {
@@ -861,17 +910,39 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateStates])
 
-  const updatableServerCount = servers.filter((server) => {
-    const state = updateStates.get(server.id)
-    return (
-      server.connected &&
-      !isColocatedServer(server, state?.data) &&
-      state?.data?.targetStatus === 'ok' &&
-      state.data.updateAvailable &&
-      !state.triggering &&
-      state.data.status !== 'updating'
-    )
-  }).length
+  const selectedUpdatableCount = servers.filter(
+    (server) => selectedIds.has(server.id) && isServerUpdatable(server),
+  ).length
+
+  const allSelected =
+    servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
+  const someSelected = selectedIds.size > 0 && !allSelected
+
+  const toggleSelectAll = (): void => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+      return
+    }
+    setSelectedIds(new Set(servers.map((server) => server.id)))
+  }
+
+  const toggleSelected = (serverId: string): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(serverId)) next.delete(serverId)
+      else next.add(serverId)
+      return next
+    })
+  }
+
+  const toggleExpanded = (serverId: string): void => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(serverId)) next.delete(serverId)
+      else next.add(serverId)
+      return next
+    })
+  }
 
   const anyUpdateInProgress =
     batchUpdating ||
@@ -888,24 +959,31 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       </Text>
 
       <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
-        {canManage && updatableServerCount > 0 ? (
+        {canManage ? (
           <View style={styles.batchUpdateRow}>
             <TouchableOpacity
               style={[
                 styles.updateButton,
-                (anyUpdateInProgress || batchUpdating) &&
+                (anyUpdateInProgress ||
+                  batchUpdating ||
+                  selectedUpdatableCount === 0) &&
                   styles.updateButtonDisabled,
               ]}
-              onPress={() => void handleTriggerAllUpdates()}
-              disabled={anyUpdateInProgress || batchUpdating}
+              onPress={() => void handleTriggerSelectedUpdates()}
+              disabled={
+                anyUpdateInProgress ||
+                batchUpdating ||
+                selectedUpdatableCount === 0
+              }
             >
               {batchUpdating ? (
                 <ActivityIndicator size="small" color={colors.textMuted} />
               ) : null}
               <Text style={styles.updateButtonText}>
-                {batchUpdating
-                  ? 'Updating all…'
-                  : `Update all (${updatableServerCount})`}
+                {selectedUpdateButtonLabel(
+                  batchUpdating,
+                  selectedUpdatableCount,
+                )}
               </Text>
             </TouchableOpacity>
           </View>
@@ -923,22 +1001,58 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
             )
           }
           return (
-          <View style={styles.list}>
-            {servers.map((server) => (
-              <OrgServerOverviewCard
-                key={server.id}
-                server={server}
-                updateState={updateStates.get(server.id) ?? defaultUpdateState}
-                canManage={canManage}
-                commandState={getCommandState(server.id)}
-                onTriggerUpdate={handleTriggerUpdate}
-                onResetUpdateStatus={handleResetUpdateStatus}
-                onPing={handlePing}
-                onSetHostname={handleSetHostname}
-                onReboot={handleReboot}
-              />
-            ))}
-          </View>
+            <ScrollView horizontal nestedScrollEnabled>
+              <View style={styles.table}>
+                <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                  <View style={[styles.tableCell, styles.colName]}>
+                    <Text style={styles.tableHeaderText}>Name / UUID</Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.colLocation]}>
+                    <Text style={styles.tableHeaderText}>Location</Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.colLinux]}>
+                    <Text style={styles.tableHeaderText}>Linux</Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.colIp]}>
+                    <Text style={styles.tableHeaderText}>IP address</Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.colConnected]}>
+                    <Text style={styles.tableHeaderText}>Connected Since</Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.colStatus]}>
+                    <Text style={styles.tableHeaderText}>Status</Text>
+                  </View>
+                  <View style={[styles.tableCell, styles.colCheck]}>
+                    <SelectionCheckbox
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onPress={toggleSelectAll}
+                      accessibilityLabel="Select all servers"
+                    />
+                  </View>
+                </View>
+                {servers.map((server) => (
+                  <OrgServerTableRow
+                    key={server.id}
+                    server={server}
+                    selected={selectedIds.has(server.id)}
+                    expanded={expandedIds.has(server.id)}
+                    updateState={
+                      updateStates.get(server.id) ?? defaultUpdateState
+                    }
+                    canManage={canManage}
+                    commandState={getCommandState(server.id)}
+                    onToggleSelected={() => toggleSelected(server.id)}
+                    onToggleExpanded={() => toggleExpanded(server.id)}
+                    onTriggerUpdate={handleTriggerUpdate}
+                    onResetUpdateStatus={handleResetUpdateStatus}
+                    onPing={handlePing}
+                    onSetHostname={handleSetHostname}
+                    onReboot={handleReboot}
+                  />
+                ))}
+              </View>
+            </ScrollView>
           )
         })()}
       </SectionPanel>
@@ -961,24 +1075,96 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
-  list: {
-    gap: 8,
-  },
   batchUpdateRow: {
     marginBottom: spacing.sm,
   },
-  cardHeader: {
+  table: {
+    minWidth: 980,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
     gap: spacing.sm,
   },
-  cardHeaderBadges: {
-    flexDirection: 'row',
+  tableHeaderRow: {
+    backgroundColor: colors.bgSecondary,
+  },
+  tableRowExpanded: {
+    borderBottomWidth: 0,
+  },
+  tableCell: {
+    justifyContent: 'center',
+  },
+  tableHeaderText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  colName: {
+    width: 220,
+    gap: 2,
+  },
+  colLocation: {
+    width: 160,
+  },
+  colLinux: {
+    width: 150,
+  },
+  colIp: {
+    width: 140,
+  },
+  colConnected: {
+    width: 180,
+  },
+  colStatus: {
+    width: 100,
+  },
+  colCheck: {
+    width: 40,
     alignItems: 'center',
+  },
+  nameButton: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.xs,
   },
+  expandChevron: {
+    color: colors.textDim,
+    fontSize: 12,
+    marginTop: 3,
+    width: 12,
+  },
+  nameText: {
+    color: colors.textTitle,
+    fontSize: 14,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  uuidText: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  cellText: {
+    color: colors.textBody,
+    fontSize: 13,
+  },
+  cellTextMuted: {
+    color: colors.textDim,
+    fontSize: 13,
+  },
   statusBadge: {
+    alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -992,12 +1178,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
   },
-  statusColocated: {
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-  },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -1008,11 +1190,37 @@ const styles = StyleSheet.create({
   statusTextOffline: {
     color: colors.textDim,
   },
-  statusTextColocated: {
-    color: colors.textMuted,
+  checkboxHit: {
+    padding: 2,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  checkboxMark: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  expandedPanel: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.bgInset,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   updatePanel: {
-    marginTop: spacing.sm,
     gap: spacing.xs,
   },
   errorText: {
@@ -1117,37 +1325,112 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.xs,
   },
-  connectingIpRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  geoTrailing: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'monospace',
-    flexShrink: 1,
-  },
 })
 
-function ServerCardHeader({
+function OrgServerTableRow({
   server,
-  colocated,
-}: Readonly<{ server: OrgServerRecord; colocated: boolean }>) {
+  selected,
+  expanded,
+  updateState,
+  canManage,
+  commandState,
+  onToggleSelected,
+  onToggleExpanded,
+  onTriggerUpdate,
+  onResetUpdateStatus,
+  onPing,
+  onSetHostname,
+  onReboot,
+}: Readonly<{
+  server: OrgServerRecord
+  selected: boolean
+  expanded: boolean
+  updateState: UpdateState
+  canManage: boolean
+  commandState: ServerCommandState
+  onToggleSelected: () => void
+  onToggleExpanded: () => void
+  onTriggerUpdate: (serverId: string) => Promise<void>
+  onResetUpdateStatus: (serverId: string) => Promise<void>
+  onPing: (serverId: string) => Promise<void>
+  onSetHostname: (serverId: string, hostname: string) => Promise<void>
+  onReboot: (serverId: string) => Promise<void>
+}>) {
+  const viewModel = deriveServerUpdateViewModel(server, updateState)
+  const location = formatLocationCell(server.geo)
+  const linux = server.osDisplay?.trim() || EMPTY_CELL
+  const ip =
+    server.connected && server.remoteAddress
+      ? server.remoteAddress
+      : EMPTY_CELL
+  const connectedSince = formatConnectedSinceCell(
+    server.connected,
+    server.connectedAt,
+  )
+
   return (
-    <>
-      <View style={styles.cardHeader}>
-        <Text style={orgPanelStyles.detailTitle}>{serverTitle(server)}</Text>
-        <View style={styles.cardHeaderBadges}>
-          {colocated ? (
-            <View style={[styles.statusBadge, styles.statusColocated]}>
-              <Text style={[styles.statusText, styles.statusTextColocated]}>
-                Co-located
+    <View>
+      <View
+        style={[styles.tableRow, expanded ? styles.tableRowExpanded : null]}
+      >
+        <View style={[styles.tableCell, styles.colName]}>
+          <Pressable
+            onPress={onToggleExpanded}
+            style={styles.nameButton}
+            accessibilityRole="button"
+            accessibilityLabel={
+              expanded ? 'Collapse server details' : 'Expand server details'
+            }
+          >
+            <Text style={styles.expandChevron}>{expanded ? '▾' : '▸'}</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={styles.nameText} numberOfLines={1}>
+                {serverTitle(server)}
+              </Text>
+              <Text style={styles.uuidText} selectable numberOfLines={1}>
+                {server.id}
               </Text>
             </View>
-          ) : null}
+          </Pressable>
+        </View>
+        <View style={[styles.tableCell, styles.colLocation]}>
+          <Text
+            style={location === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
+            numberOfLines={2}
+          >
+            {location}
+          </Text>
+        </View>
+        <View style={[styles.tableCell, styles.colLinux]}>
+          <Text
+            style={linux === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
+            numberOfLines={2}
+          >
+            {linux}
+          </Text>
+        </View>
+        <View style={[styles.tableCell, styles.colIp]}>
+          <Text
+            style={ip === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
+            selectable={ip !== EMPTY_CELL}
+            numberOfLines={1}
+          >
+            {ip}
+          </Text>
+        </View>
+        <View style={[styles.tableCell, styles.colConnected]}>
+          <Text
+            style={
+              connectedSince === EMPTY_CELL
+                ? styles.cellTextMuted
+                : styles.cellText
+            }
+            numberOfLines={2}
+          >
+            {connectedSince}
+          </Text>
+        </View>
+        <View style={[styles.tableCell, styles.colStatus]}>
           <View
             style={[
               styles.statusBadge,
@@ -1162,56 +1445,55 @@ function ServerCardHeader({
                   : styles.statusTextOffline,
               ]}
             >
-              {server.connected ? 'Online' : 'Offline'}
+              {server.connected ? 'Running' : 'Offline'}
             </Text>
           </View>
         </View>
+        <View style={[styles.tableCell, styles.colCheck]}>
+          <SelectionCheckbox
+            checked={selected}
+            onPress={onToggleSelected}
+            accessibilityLabel={`Select ${serverTitle(server)}`}
+          />
+        </View>
       </View>
-      {colocated ? (
-        <Text style={orgPanelStyles.muted}>
-          This server runs on the same host as the control plane. Remote trunk
-          updates are disabled — use local git instead.
-        </Text>
+      {expanded ? (
+        <View style={styles.expandedPanel}>
+          {viewModel.colocated ? (
+            <Text style={orgPanelStyles.muted}>
+              This server runs on the same host as the control plane. Remote
+              trunk updates are disabled — use local git instead.
+            </Text>
+          ) : null}
+          <ServerUpdatePanel
+            server={server}
+            updateState={updateState}
+            updateData={viewModel.updateData}
+            colocated={viewModel.colocated}
+            canManage={canManage}
+            isUpdateStatusLoading={viewModel.isUpdateStatusLoading}
+            isUpdateInProgress={viewModel.isUpdateInProgress}
+            canResetUpdateStatus={viewModel.canResetUpdateStatus}
+            targetKnown={viewModel.targetKnown}
+            runningVersionUnknown={viewModel.runningVersionUnknown}
+            badgeVariant={viewModel.badgeVariant}
+            onTriggerUpdate={onTriggerUpdate}
+            onResetUpdateStatus={onResetUpdateStatus}
+          />
+          <ServerCommandsPanel
+            server={server}
+            canManage={canManage}
+            showReboot={!viewModel.colocated}
+            commandState={commandState}
+            onPing={() => void onPing(server.id)}
+            onSetHostname={(hostname) =>
+              void onSetHostname(server.id, hostname)
+            }
+            onReboot={() => void onReboot(server.id)}
+          />
+        </View>
       ) : null}
-    </>
-  )
-}
-
-function ServerCardDetails({ server }: Readonly<{ server: OrgServerRecord }>) {
-  return (
-    <>
-      {server.hostname && server.displayName ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Hostname: </Text>
-          {server.hostname}
-        </Text>
-      ) : null}
-      {server.connected && server.remoteAddress ? (
-        <ConnectingIpDetail
-          remoteAddress={server.remoteAddress}
-          geo={server.geo}
-        />
-      ) : null}
-      {server.connected && server.connectedAt ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Connected since: </Text>
-          {formatLocalDateTime(server.connectedAt)} (
-          {formatElapsedSince(server.connectedAt)})
-        </Text>
-      ) : null}
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Last activity: </Text>
-        {formatRelativeLocalDateTime(server.lastInboundAt)}
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>ID: </Text>
-        <Text selectable>{server.id}</Text>
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Added: </Text>
-        {formatLocalDateTime(server.createdAt)}
-      </Text>
-    </>
+    </View>
   )
 }
 
@@ -1423,61 +1705,6 @@ function ServerUpdatePanel({
       {updateState.error ? (
         <Text style={styles.errorText}>{updateState.error}</Text>
       ) : null}
-    </View>
-  )
-}
-
-function OrgServerOverviewCard({
-  server,
-  updateState,
-  canManage,
-  commandState,
-  onTriggerUpdate,
-  onResetUpdateStatus,
-  onPing,
-  onSetHostname,
-  onReboot,
-}: Readonly<{
-  server: OrgServerRecord
-  updateState: UpdateState
-  canManage: boolean
-  commandState: ServerCommandState
-  onTriggerUpdate: (serverId: string) => Promise<void>
-  onResetUpdateStatus: (serverId: string) => Promise<void>
-  onPing: (serverId: string) => Promise<void>
-  onSetHostname: (serverId: string, hostname: string) => Promise<void>
-  onReboot: (serverId: string) => Promise<void>
-}>) {
-  const viewModel = deriveServerUpdateViewModel(server, updateState)
-
-  return (
-    <View style={orgPanelStyles.detailCard}>
-      <ServerCardHeader server={server} colocated={viewModel.colocated} />
-      <ServerCardDetails server={server} />
-      <ServerUpdatePanel
-        server={server}
-        updateState={updateState}
-        updateData={viewModel.updateData}
-        colocated={viewModel.colocated}
-        canManage={canManage}
-        isUpdateStatusLoading={viewModel.isUpdateStatusLoading}
-        isUpdateInProgress={viewModel.isUpdateInProgress}
-        canResetUpdateStatus={viewModel.canResetUpdateStatus}
-        targetKnown={viewModel.targetKnown}
-        runningVersionUnknown={viewModel.runningVersionUnknown}
-        badgeVariant={viewModel.badgeVariant}
-        onTriggerUpdate={onTriggerUpdate}
-        onResetUpdateStatus={onResetUpdateStatus}
-      />
-      <ServerCommandsPanel
-        server={server}
-        canManage={canManage}
-        showReboot={!viewModel.colocated}
-        commandState={commandState}
-        onPing={() => void onPing(server.id)}
-        onSetHostname={(hostname) => void onSetHostname(server.id, hostname)}
-        onReboot={() => void onReboot(server.id)}
-      />
     </View>
   )
 }

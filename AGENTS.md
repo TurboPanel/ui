@@ -124,9 +124,16 @@ Authorization helpers:
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
 - The Update button is gated by `useCan('organization', orgId, 'organization:manage')` as a display hint; the server enforces the real 403. Non-managers see commit rows read-only with no button.
 
+#### Servers overview table
+
+- `servers-overview-section.tsx` renders a selectable table: Name/UUID, Location, Linux (`osDisplay`), IP, Connected Since, Status (**Running** / Offline), and a checkbox column (header = select all).
+- Row expand reveals daemon version / Update / Ping / hostname / reboot (same helpers as before). Collapsed table is the default.
+- Batch **Update** targets **selected** updatable servers (not every updatable host).
+- `OrgServerRecord` includes `os` / `osDisplay` from `GET /api/client/v1/servers`.
+
 #### Server status reads — Postgres only
 
-- Server online/offline status, `lastInboundAt`, `connectedAt`, `hostname`, and `remoteAddress` all come from `GET /api/client/v1/servers` (Postgres-backed, no Durable Object reads).
+- Server online/offline status, `lastInboundAt`, `connectedAt`, `hostname`, `remoteAddress`, `geo`, and `os` / `osDisplay` all come from `GET /api/client/v1/servers` (Postgres-backed, no Durable Object reads).
 - Batch update status comes from `GET /api/client/v1/servers/updates` (single call for all servers).
 - Per-server status is available via `fetchServerStatus(id)` → `GET /api/client/v1/servers/:id/status` (Postgres-backed).
 - **Never call `fetchServerCell()` from a timer or from any normal status view.** It hits the Durable Object directly and is admin/debug-only. It is annotated as such in `instance-api.ts`.
