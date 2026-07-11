@@ -1171,6 +1171,7 @@ const styles = StyleSheet.create({
     height: 30,
     flexShrink: 0,
     alignSelf: 'center',
+    marginRight: spacing.xs,
     opacity: 0.9,
   },
   nameButton: {
