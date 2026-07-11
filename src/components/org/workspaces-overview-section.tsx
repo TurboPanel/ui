@@ -17,7 +17,7 @@ import {
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
-export function WorkspacesOverviewSection({ orgId }: { orgId: string }) {
+export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
@@ -122,9 +122,11 @@ export function WorkspacesOverviewSection({ orgId }: { orgId: string }) {
             {workspaces.map((ws) => (
               <View key={ws.id} style={orgPanelStyles.detailCard}>
                 <View style={styles.cardHeader}>
-                  <Text style={orgPanelStyles.detailTitle}>
-                    {ws.displayName?.trim() || 'Unnamed workspace'}
-                  </Text>
+                  <Pressable onPress={() => router.push(`/${orgId}/workspaces/${ws.id}`)}>
+                    <Text style={orgPanelStyles.detailTitle}>
+                      {ws.displayName?.trim() || 'Unnamed workspace'}
+                    </Text>
+                  </Pressable>
                   {canOwn ? (
                     <View style={styles.cardActions}>
                       <Pressable

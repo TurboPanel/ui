@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { EnvironmentsOverviewSection } from '@/components/org/environments-overview-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -7,17 +8,11 @@ import { useAuth } from '@/lib/auth-context'
 import {
   fetchProject,
   isForbiddenError,
+  updateProject,
+  type ComposeDocument,
   type ProjectRecord,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
-
-function hasComposeOptions(
-  options: { compose?: Record<string, unknown> } | null | undefined,
-): boolean {
-  return Boolean(
-    options?.compose && Object.keys(options.compose).length > 0,
-  )
-}
 
 function projectTypeBadge(project: ProjectRecord) {
   const type = project.metadata?.type
@@ -41,14 +36,15 @@ function projectTypeBadge(project: ProjectRecord) {
 export function ProjectDetailSection({
   orgId,
   projectId,
-}: {
+}: Readonly<{
   orgId: string
   projectId: string
-}) {
+}>) {
   const { handleUnauthorized } = useAuth()
   const [project, setProject] = useState<ProjectRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [savingCompose, setSavingCompose] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +81,27 @@ export function ProjectDetailSection({
     }
   }, [projectId, handleUnauthorized])
 
+  const saveCompose = async (compose: ComposeDocument) => {
+    setSavingCompose(true)
+    setError(null)
+    try {
+      await updateProject(projectId, { options: { compose } })
+      setProject((current) =>
+        current
+          ? { ...current, options: { compose } }
+          : current,
+      )
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(err instanceof Error ? err.message : 'Failed to save compose')
+    } finally {
+      setSavingCompose(false)
+    }
+  }
+
   if (loading && !project) {
     return (
       <View style={styles.root}>
@@ -112,10 +129,11 @@ export function ProjectDetailSection({
           {project.description ? (
             <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
           ) : null}
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Compose: </Text>
-            {hasComposeOptions(project.options) ? 'configured' : 'none'}
-          </Text>
+          <ComposeEditorSection
+            document={project.options?.compose}
+            onSave={saveCompose}
+            saving={savingCompose}
+          />
         </SectionPanel>
       ) : null}
 

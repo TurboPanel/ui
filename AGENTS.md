@@ -77,10 +77,11 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
 | `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspaces list (`GET /api/client/v1/workspaces`) |
+| `/<orgId>/workspaces/[workspaceId]` | `workspace-detail-section.tsx` | Workspace detail + projects in workspace |
 | `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list (optional `?workspaceId` filter) |
-| `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker + catalog + name form |
-| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + `environments-overview-section.tsx` |
-| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Environment details + `variables-section.tsx` |
+| `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
+| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + compose editor + environments |
+| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Env overlay compose, deploy, hosting hostnames, variables |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
@@ -102,6 +103,11 @@ Authorization helpers:
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 - `fetchVisibleWorkspaces()` → `GET /api/client/v1/workspaces`
+- `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
+- `createProject({ type: 'docker-compose' | 'template' | 'managed', … })` — Docker Compose is the default manual compose path (blank removed)
+- `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`)
+- `deployEnvironment(environmentId, { serverId })` → `POST /api/client/v1/environments/:id/deploy`; poll with `fetchCommand(serverId, commandId)` (Postgres only)
+- Compose UI: `compose-editor-section.tsx` (YAML | Visual) on project and environment detail
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `fetchProjectCatalog()` → `GET /api/client/v1/project-catalog` — returns `{ catalog: CatalogSummary[] }`
 - `fetchProject(id)` → `GET /api/client/v1/projects/:id`

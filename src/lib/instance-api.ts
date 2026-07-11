@@ -2,6 +2,9 @@ import {
   getActiveOrganizationId,
   ORG_ID_HEADER,
 } from '@/lib/org-context'
+import type { ComposeDocument } from '@/lib/compose'
+
+export type { ComposeDocument } from '@/lib/compose'
 
 const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
@@ -400,7 +403,8 @@ export type EnvironmentRecord = {
   description: string | null;
   projectId: string;
   metadata: Record<string, unknown> | null;
-  options: { compose?: Record<string, unknown> } | null;
+  /** `options.compose` is a versioned ComposeDocument (or legacy bare compose object). */
+  options: { compose?: ComposeDocument | Record<string, unknown> } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -411,10 +415,11 @@ export type ProjectRecord = {
   description: string | null;
   workspaceId: string;
   metadata: {
-    type?: 'managed' | 'template' | null;
+    type?: 'docker-compose' | 'managed' | 'template' | null;
     managed_id?: string;
   } | null;
-  options: { compose?: Record<string, unknown> } | null;
+  /** `options.compose` is a versioned ComposeDocument (or legacy bare compose object). */
+  options: { compose?: ComposeDocument | Record<string, unknown> } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -471,7 +476,7 @@ export type CreateProjectBody = {
   workspaceId: string;
   displayName?: string;
   description?: string;
-  type?: 'blank' | 'template' | 'managed';
+  type?: 'docker-compose' | 'template' | 'managed';
   code?: string;
 };
 
@@ -480,6 +485,8 @@ export type ServiceRecord = {
   displayName: string | null;
   description: string | null;
   environmentId: string;
+  metadata?: Record<string, unknown> | null;
+  options?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -489,6 +496,8 @@ export type HostingRecord = {
   displayName: string | null;
   description: string | null;
   serviceId: string;
+  metadata?: Record<string, unknown> | null;
+  options?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -582,7 +591,7 @@ export async function updateProject(
   body: {
     displayName?: string;
     description?: string;
-    options?: { compose?: Record<string, unknown> };
+    options?: { compose?: ComposeDocument | Record<string, unknown> };
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
@@ -608,7 +617,7 @@ export async function createEnvironment(body: {
   displayName?: string;
   description?: string;
   metadata?: Record<string, unknown>;
-  options?: { compose?: Record<string, unknown> };
+  options?: { compose?: ComposeDocument | Record<string, unknown> };
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/environments`, {
     method: "POST",
@@ -622,7 +631,7 @@ export async function updateEnvironment(
     displayName?: string;
     description?: string;
     metadata?: Record<string, unknown>;
-    options?: { compose?: Record<string, unknown> };
+    options?: { compose?: ComposeDocument | Record<string, unknown> };
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
@@ -685,6 +694,21 @@ export async function fetchVisibleServices(
   return await apiFetch(`${CLIENT_API}/services${suffix}`);
 }
 
+export async function createService(
+  environmentId: string,
+  body: {
+    displayName?: string
+    description?: string
+    metadata?: Record<string, unknown>
+    options?: Record<string, unknown>
+  },
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/services`, {
+    method: 'POST',
+    body: JSON.stringify({ environmentId, ...body }),
+  })
+}
+
 export async function fetchVisibleHostings(
   serviceId: string,
 ): Promise<{ hostings: HostingRecord[] }> {
@@ -694,7 +718,12 @@ export async function fetchVisibleHostings(
 
 export async function createHosting(
   serviceId: string,
-  body?: { displayName?: string; description?: string },
+  body?: {
+    displayName?: string
+    description?: string
+    metadata?: Record<string, unknown>
+    options?: Record<string, unknown>
+  },
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
     method: "POST",
@@ -702,8 +731,25 @@ export async function createHosting(
       serviceId,
       ...(body?.displayName !== undefined ? { displayName: body.displayName } : {}),
       ...(body?.description !== undefined ? { description: body.description } : {}),
+      ...(body?.metadata !== undefined ? { metadata: body.metadata } : {}),
+      ...(body?.options !== undefined ? { options: body.options } : {}),
     }),
   });
+}
+
+export async function updateHosting(
+  hostingId: string,
+  body: {
+    displayName?: string
+    description?: string
+    metadata?: Record<string, unknown>
+    options?: Record<string, unknown>
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function fetchNetworks(
@@ -1072,4 +1118,14 @@ export async function fetchCommand(
   commandId: string,
 ): Promise<CommandRecord> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/${commandId}`)
+}
+
+export async function deployEnvironment(
+  environmentId: string,
+  body: { serverId: string },
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }

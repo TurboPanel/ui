@@ -107,6 +107,9 @@ importers:
       tamagui:
         specifier: ^2.0.0-rc.26
         version: 2.2.0(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.16)(react@19.2.3))(react@19.2.3)
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
     devDependencies:
       '@tanstack/react-query-devtools':
         specifier: ^5.91.2

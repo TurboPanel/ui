@@ -36,7 +36,7 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
-type ProjectType = 'blank' | 'template' | 'managed'
+type ProjectType = 'docker-compose' | 'template' | 'managed'
 
 const TYPE_OPTIONS: {
   type: ProjectType
@@ -44,9 +44,9 @@ const TYPE_OPTIONS: {
   description: string
 }[] = [
   {
-    type: 'blank',
-    label: 'Blank',
-    description: 'Start with an empty project and add environments manually.',
+    type: 'docker-compose',
+    label: 'Docker Compose',
+    description: 'Write your own Docker Compose configuration with a default environment.',
   },
   {
     type: 'template',
@@ -60,7 +60,7 @@ const TYPE_OPTIONS: {
   },
 ]
 
-export function ProjectCreateSection({ orgId }: { orgId: string }) {
+export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
   const { workspaceId } = useLocalSearchParams<{ workspaceId?: string }>()
@@ -132,7 +132,7 @@ export function ProjectCreateSection({ orgId }: { orgId: string }) {
   }, [resolvedWorkspaceId, handleUnauthorized])
 
   useEffect(() => {
-    if (step !== 2 || !selectedType || selectedType === 'blank') {
+    if (step !== 2 || !selectedType || selectedType === 'docker-compose') {
       return
     }
 
@@ -184,7 +184,7 @@ export function ProjectCreateSection({ orgId }: { orgId: string }) {
     setSelectedType(type)
     setSelectedCode(null)
     setApiError(null)
-    if (type === 'blank') {
+    if (type === 'docker-compose') {
       setStep(3)
     } else {
       setStep(2)
@@ -194,7 +194,7 @@ export function ProjectCreateSection({ orgId }: { orgId: string }) {
   const handleBack = () => {
     setApiError(null)
     if (step === 3) {
-      if (selectedType === 'blank') {
+      if (selectedType === 'docker-compose') {
         setStep(1)
         setSelectedType(null)
       } else {
@@ -249,14 +249,14 @@ export function ProjectCreateSection({ orgId }: { orgId: string }) {
     setApiError(null)
     try {
       const trimmedDescription = description.trim()
-      await createProject({
+      const result = await createProject({
         workspaceId: workspaceIdForCreate,
         type: selectedType,
         displayName: displayName.trim(),
         ...(trimmedDescription ? { description: trimmedDescription } : {}),
         ...(selectedCode ? { code: selectedCode } : {}),
       })
-      router.replace(`/${orgId}/projects`)
+      router.replace(`/${orgId}/projects/${result.id}`)
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
