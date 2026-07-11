@@ -40,7 +40,8 @@ import {
   formatLocalDateTime,
 } from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
-import { osLogoUri } from '@/lib/os-logos'
+import { osLogoSource } from '@/lib/os-logos'
+import { formatServerOsProductName } from '@/lib/server-os-display'
 import {
   countryCodeToFlagEmoji,
   formatServerGeoCountryCode,
@@ -1026,9 +1027,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
                   <View style={[styles.tableCell, styles.colName]}>
                     <Text style={styles.tableHeaderText}>Name / UUID</Text>
                   </View>
-                  <View style={[styles.tableCell, styles.colLinux]}>
-                    <Text style={styles.tableHeaderText}>Linux</Text>
-                  </View>
                   <View style={[styles.tableCell, styles.colConnectedFrom]}>
                     <Text style={styles.tableHeaderText}>Connected From</Text>
                   </View>
@@ -1106,7 +1104,7 @@ const styles = StyleSheet.create({
   table: {
     flexGrow: 1,
     width: '100%',
-    minWidth: 980,
+    minWidth: 860,
     borderWidth: 1,
     borderColor: colors.borderMuted,
     borderRadius: 8,
@@ -1145,13 +1143,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   colName: {
-    flex: 2.2,
-    minWidth: 180,
+    flex: 2.6,
+    minWidth: 220,
     gap: 2,
-  },
-  colLinux: {
-    flex: 2,
-    minWidth: 180,
   },
   colConnectedFrom: {
     flex: 1.8,
@@ -1172,31 +1166,29 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
   },
-  osCell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minWidth: 0,
-  },
-  osLogo: {
+  osLogoBesideName: {
     width: 18,
-    height: 18,
+    height: 30,
     flexShrink: 0,
-  },
-  osTextWrap: {
-    flexShrink: 1,
-    minWidth: 0,
+    alignSelf: 'center',
+    opacity: 0.9,
   },
   nameButton: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  nameBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   expandChevron: {
     color: colors.textDim,
     fontSize: 12,
-    marginTop: 3,
     width: 12,
+    alignSelf: 'center',
   },
   nameText: {
     color: colors.textTitle,
@@ -1273,6 +1265,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     gap: spacing.sm,
+  },
+  osDetailRow: {
+    gap: 2,
   },
   updatePanel: {
     gap: spacing.xs,
@@ -1412,9 +1407,11 @@ function OrgServerTableRow({
 }>) {
   const viewModel = deriveServerUpdateViewModel(server, updateState)
   const location = formatLocationCell(server.geo)
-  const linux = server.osDisplay?.trim() || EMPTY_CELL
+  const osProduct =
+    formatServerOsProductName(server.os, server.osDisplay) ?? EMPTY_CELL
+  const osFull = server.osDisplay?.trim() || null
   const logoKey = resolveOsLogoKey(server)
-  const logo = osLogoUri(logoKey)
+  const logo = osLogoSource(logoKey)
   const ip =
     server.connected && server.remoteAddress
       ? server.remoteAddress
@@ -1440,7 +1437,15 @@ function OrgServerTableRow({
             }
           >
             <Text style={styles.expandChevron}>{expanded ? '▾' : '▸'}</Text>
-            <View style={{ flexShrink: 1 }}>
+            {logo ? (
+              <Image
+                source={logo}
+                style={styles.osLogoBesideName}
+                contentFit="contain"
+                accessibilityLabel={osProduct === EMPTY_CELL ? 'OS' : osProduct}
+              />
+            ) : null}
+            <View style={styles.nameBlock}>
               <Text style={styles.nameText} numberOfLines={1}>
                 {serverTitle(server)}
               </Text>
@@ -1449,32 +1454,6 @@ function OrgServerTableRow({
               </Text>
             </View>
           </Pressable>
-        </View>
-        <View style={[styles.tableCell, styles.colLinux]}>
-          <View style={styles.osCell}>
-            {logo ? (
-              <Image
-                source={{ uri: logo }}
-                style={styles.osLogo}
-                contentFit="contain"
-                accessibilityLabel={
-                  logoKey === 'raspberry-pi-os'
-                    ? 'Raspberry Pi OS'
-                    : 'Debian'
-                }
-              />
-            ) : null}
-            <View style={styles.osTextWrap}>
-              <Text
-                style={
-                  linux === EMPTY_CELL ? styles.cellTextMuted : styles.cellText
-                }
-                numberOfLines={2}
-              >
-                {linux}
-              </Text>
-            </View>
-          </View>
         </View>
         <View style={[styles.tableCell, styles.colConnectedFrom]}>
           {connectedFromEmpty ? (
@@ -1537,6 +1516,12 @@ function OrgServerTableRow({
       </View>
       {expanded ? (
         <View style={styles.expandedPanel}>
+          {osFull ? (
+            <View style={styles.osDetailRow}>
+              <Text style={orgPanelStyles.detailLabel}>Operating system</Text>
+              <Text style={orgPanelStyles.detailLine}>{osFull}</Text>
+            </View>
+          ) : null}
           {viewModel.colocated ? (
             <Text style={orgPanelStyles.muted}>
               This server runs on the same host as the control plane. Remote
