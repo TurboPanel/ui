@@ -5,25 +5,38 @@ import {
   Text,
   View,
 } from 'react-native'
-import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { useAuth } from '@/lib/auth-context'
 import {
   fetchLicenses,
-  revokeLicense,
+  invalidateLicense,
+  isForbiddenError,
   type LicenseRecord,
 } from '@/lib/instance-api'
+import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 function licenseTitle(license: LicenseRecord): string {
   return license.displayName?.trim() || 'Unnamed license'
 }
 
-export function LicensesOverviewSection({ orgId }: { orgId: string }) {
+function boundServerLabel(license: LicenseRecord): string | null {
+  const bound = license.boundServer
+  if (!bound) return null
+  const name = bound.displayName?.trim() || bound.id
+  const status = bound.connected ? 'online' : 'offline'
+  return `${name} (${status})`
+}
+
+export function LicensesOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
+  const { handleUnauthorized } = useAuth()
+  const canOwn = useCan('organization', orgId, 'organization:own')
   const [licenses, setLicenses] = useState<LicenseRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [revoking, setRevoking] = useState<Set<string>>(() => new Set())
+  const [invalidating, setInvalidating] = useState<Set<string>>(() => new Set())
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
   const loadLicenses = async () => {
     setLoading(true)
@@ -69,16 +82,21 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
     }
   }, [orgId])
 
-  const onRevokeLicense = async (licenseId: string) => {
-    setRevoking((current) => new Set(current).add(licenseId))
+  const onInvalidateLicense = async (licenseId: string) => {
+    setInvalidating((current) => new Set(current).add(licenseId))
     setError(null)
     try {
-      await revokeLicense(licenseId)
+      await invalidateLicense(licenseId)
+      setConfirmingId((current) => (current === licenseId ? null : current))
       await loadLicenses()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke license')
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(err instanceof Error ? err.message : 'Failed to invalidate license')
     } finally {
-      setRevoking((current) => {
+      setInvalidating((current) => {
         const next = new Set(current)
         next.delete(licenseId)
         return next
@@ -90,8 +108,8 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
     <View style={styles.root}>
       <Text style={styles.heading}>Licenses</Text>
       <Text style={styles.copy}>
-        Generate server registration keys and revoke licenses that should no
-        longer be accepted.
+        Registration keys issued to servers in your organization. Invalidate a
+        key to disconnect its server from the control plane.
       </Text>
 
       <SectionPanel title="Your licenses" hint="Active registration keys">
@@ -105,8 +123,10 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
         ) : (
           <View style={styles.list}>
             {licenses.map((license) => {
-              const isRevoking = revoking.has(license.id)
+              const isInvalidating = invalidating.has(license.id)
               const isColocatedControlPlane = license.revocable === false
+              const usedBy = boundServerLabel(license)
+              const isConfirming = confirmingId === license.id
 
               return (
                 <View key={license.id} style={orgPanelStyles.detailCard}>
@@ -118,33 +138,65 @@ export function LicensesOverviewSection({ orgId }: { orgId: string }) {
                       <Text style={orgPanelStyles.muted}>
                         Local control plane
                       </Text>
-                    ) : (
+                    ) : canOwn && !isConfirming ? (
                       <Pressable
                         style={[
                           styles.secondaryButton,
-                          isRevoking && styles.buttonDisabled,
+                          isInvalidating && styles.buttonDisabled,
                         ]}
-                        disabled={isRevoking}
-                        onPress={() => void onRevokeLicense(license.id)}
+                        disabled={isInvalidating}
+                        onPress={() => setConfirmingId(license.id)}
                       >
                         <Text style={styles.secondaryButtonText}>
-                          {isRevoking ? 'Revoking...' : 'Revoke'}
+                          {isInvalidating ? 'Invalidating...' : 'Invalidate'}
                         </Text>
                       </Pressable>
-                    )}
+                    ) : canOwn && isConfirming ? (
+                      <View style={styles.confirmActions}>
+                        <Pressable
+                          style={[
+                            styles.secondaryButton,
+                            isInvalidating && styles.buttonDisabled,
+                          ]}
+                          disabled={isInvalidating}
+                          onPress={() => void onInvalidateLicense(license.id)}
+                        >
+                          <Text style={styles.secondaryButtonText}>
+                            {isInvalidating ? 'Invalidating...' : 'Confirm'}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.cancelButton}
+                          disabled={isInvalidating}
+                          onPress={() => setConfirmingId(null)}
+                        >
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
                   <Text style={orgPanelStyles.detailLine}>
                     <Text style={orgPanelStyles.detailLabel}>Created: </Text>
                     {new Date(license.createdAt).toLocaleString()}
                   </Text>
+                  {usedBy ? (
+                    <Text style={orgPanelStyles.detailLine}>
+                      <Text style={orgPanelStyles.detailLabel}>Used by: </Text>
+                      {usedBy}
+                    </Text>
+                  ) : null}
+                  {canOwn && isConfirming ? (
+                    <Text style={orgPanelStyles.muted}>
+                      This disconnects any server using this key from the control
+                      plane.
+                    </Text>
+                  ) : null}
                 </View>
               )
             })}
           </View>
         )}
       </SectionPanel>
-
-      <AddServerWizard onDone={loadLicenses} />
     </View>
   )
 }
@@ -173,20 +225,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  confirmActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   secondaryButton: {
     alignSelf: 'flex-start',
     borderColor: colors.borderChip,
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: colors.bgSecondary,
   },
   secondaryButtonText: {
     color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cancelButtonText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
 })

@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
+import { AddServerWizard } from '@/components/org/add-server-wizard'
 import {
   COMMAND_POLL_MS,
   defaultServerCommandState,
@@ -21,9 +22,12 @@ import {
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
+  deleteServer,
   fetchCommand,
   fetchOrgServers,
+  fetchLicenses,
   fetchServersUpdateStatus,
+  formatServerDeleteBlockedError,
   isForbiddenError,
   pingDaemon,
   rebootServer,
@@ -40,6 +44,7 @@ import {
   formatLocalDateTime,
 } from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
+import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
 import {
@@ -419,6 +424,11 @@ function SelectionCheckbox({
 export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
+  const canOwn = useCan('organization', orgId, 'organization:own')
+  const [showAddServerWizard, setShowAddServerWizard] = useState(false)
+  const [addServerEligibility, setAddServerEligibility] = useState(() =>
+    resolveServerAddEligibility([]),
+  )
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -431,6 +441,10 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const [commandStates, setCommandStates] = useState<
     Map<string, ServerCommandState>
   >(new Map())
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [deleteErrors, setDeleteErrors] = useState<Map<string, string>>(
+    new Map(),
+  )
 
   const commandStatesRef = useRef(commandStates)
   commandStatesRef.current = commandStates
@@ -827,6 +841,44 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     }
   }
 
+  const handleDelete = async (serverId: string): Promise<void> => {
+    setDeletingIds((current) => new Set(current).add(serverId))
+    setDeleteErrors((current) => {
+      const next = new Map(current)
+      next.delete(serverId)
+      return next
+    })
+    try {
+      await deleteServer(serverId, orgId)
+      setServers((current) => current.filter((entry) => entry.id !== serverId))
+      setSelectedIds((current) => {
+        const next = new Set(current)
+        next.delete(serverId)
+        return next
+      })
+      setExpandedIds((current) => {
+        const next = new Set(current)
+        next.delete(serverId)
+        return next
+      })
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setDeleteErrors((current) => new Map(current).set(
+        serverId,
+        formatServerDeleteBlockedError(err),
+      ))
+    } finally {
+      setDeletingIds((current) => {
+        const next = new Set(current)
+        next.delete(serverId)
+        return next
+      })
+    }
+  }
+
   const inFlightCommandsKey = [...commandStates.entries()]
     .filter(([, state]) => state.activeCommand !== null)
     .map(([serverId, state]) => `${serverId}:${state.activeCommand!.commandId}`)
@@ -897,6 +949,33 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, handleUnauthorized])
+
+  useEffect(() => {
+    if (!canOwn) {
+      return
+    }
+
+    let cancelled = false
+
+    const loadEligibility = async () => {
+      try {
+        const { licenses } = await fetchLicenses()
+        if (!cancelled) {
+          setAddServerEligibility(resolveServerAddEligibility(licenses))
+        }
+      } catch {
+        if (!cancelled) {
+          setAddServerEligibility(resolveServerAddEligibility([]))
+        }
+      }
+    }
+
+    void loadEligibility()
+
+    return () => {
+      cancelled = true
+    }
+  }, [canOwn, orgId])
 
   // Fetch update status in one batch when servers first appear.
   useEffect(() => {
@@ -974,34 +1053,52 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       </Text>
 
       <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
-        {canManage ? (
-          <View style={styles.batchUpdateRow}>
-            <TouchableOpacity
-              style={[
-                styles.updateButton,
-                (anyUpdateInProgress ||
+        {canOwn || canManage ? (
+          <View style={styles.toolbarRow}>
+            {canOwn ? (
+              <Pressable
+                style={[
+                  styles.addServerButton,
+                  (!addServerEligibility.canAdd || showAddServerWizard) &&
+                    styles.addServerButtonDisabled,
+                ]}
+                disabled={!addServerEligibility.canAdd || showAddServerWizard}
+                onPress={() => setShowAddServerWizard(true)}
+              >
+                <Text style={styles.addServerButtonText}>+ Server</Text>
+              </Pressable>
+            ) : null}
+            {canManage ? (
+              <TouchableOpacity
+                style={[
+                  styles.updateButton,
+                  (anyUpdateInProgress ||
+                    batchUpdating ||
+                    selectedUpdatableCount === 0) &&
+                    styles.updateButtonDisabled,
+                ]}
+                onPress={() => void handleTriggerSelectedUpdates()}
+                disabled={
+                  anyUpdateInProgress ||
                   batchUpdating ||
-                  selectedUpdatableCount === 0) &&
-                  styles.updateButtonDisabled,
-              ]}
-              onPress={() => void handleTriggerSelectedUpdates()}
-              disabled={
-                anyUpdateInProgress ||
-                batchUpdating ||
-                selectedUpdatableCount === 0
-              }
-            >
-              {batchUpdating ? (
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : null}
-              <Text style={styles.updateButtonText}>
-                {selectedUpdateButtonLabel(
-                  batchUpdating,
-                  selectedUpdatableCount,
-                )}
-              </Text>
-            </TouchableOpacity>
+                  selectedUpdatableCount === 0
+                }
+              >
+                {batchUpdating ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : null}
+                <Text style={styles.updateButtonText}>
+                  {selectedUpdateButtonLabel(
+                    batchUpdating,
+                    selectedUpdatableCount,
+                  )}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
+        ) : null}
+        {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
+          <Text style={orgPanelStyles.muted}>{addServerEligibility.reason}</Text>
         ) : null}
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
         {(() => {
@@ -1063,6 +1160,9 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
                     onPing={handlePing}
                     onSetHostname={handleSetHostname}
                     onReboot={handleReboot}
+                    onDelete={handleDelete}
+                    deleting={deletingIds.has(server.id)}
+                    deleteError={deleteErrors.get(server.id) ?? null}
                   />
                 ))}
               </View>
@@ -1070,6 +1170,16 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           )
         })()}
       </SectionPanel>
+
+      {canOwn && showAddServerWizard ? (
+        <AddServerWizard
+          onComplete={() => {
+            setShowAddServerWizard(false)
+            void refreshServers()
+          }}
+          onDismiss={() => setShowAddServerWizard(false)}
+        />
+      ) : null}
     </View>
   )
 }
@@ -1092,6 +1202,31 @@ const styles = StyleSheet.create({
   batchUpdateRow: {
     marginBottom: spacing.sm,
     alignSelf: 'stretch',
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    alignSelf: 'stretch',
+  },
+  addServerButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.bgActive,
+  },
+  addServerButtonDisabled: {
+    opacity: 0.5,
+  },
+  addServerButtonText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '700',
   },
   tableScroll: {
     width: '100%',
@@ -1375,6 +1510,36 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.xs,
   },
+  deleteSection: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  deleteButton: {
+    alignSelf: 'flex-start',
+    borderColor: colors.error,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  deleteButtonText: {
+    color: colors.error,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  confirmRow: {
+    gap: spacing.sm,
+  },
+  mutedButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  mutedButtonText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
 })
 
 function OrgServerTableRow({
@@ -1391,6 +1556,9 @@ function OrgServerTableRow({
   onPing,
   onSetHostname,
   onReboot,
+  onDelete,
+  deleting,
+  deleteError,
 }: Readonly<{
   server: OrgServerRecord
   selected: boolean
@@ -1405,7 +1573,11 @@ function OrgServerTableRow({
   onPing: (serverId: string) => Promise<void>
   onSetHostname: (serverId: string, hostname: string) => Promise<void>
   onReboot: (serverId: string) => Promise<void>
+  onDelete: (serverId: string) => Promise<void>
+  deleting: boolean
+  deleteError: string | null
 }>) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const viewModel = deriveServerUpdateViewModel(server, updateState)
   const location = formatLocationCell(server.geo)
   const osProduct =
@@ -1555,6 +1727,53 @@ function OrgServerTableRow({
             }
             onReboot={() => void onReboot(server.id)}
           />
+          {canManage && viewModel.colocated ? (
+            <Text style={orgPanelStyles.muted}>
+              The co-located control plane server cannot be deleted.
+            </Text>
+          ) : null}
+          {canManage && !viewModel.colocated ? (
+            <View style={styles.deleteSection}>
+              {deleteError ? (
+                <Text style={orgPanelStyles.error}>{deleteError}</Text>
+              ) : null}
+              {!deleting && !confirmingDelete ? (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => setConfirmingDelete(true)}
+                  disabled={deleting}
+                >
+                  <Text style={styles.deleteButtonText}>Delete server</Text>
+                </TouchableOpacity>
+              ) : confirmingDelete && !deleting ? (
+                <View style={styles.confirmRow}>
+                  <Text style={orgPanelStyles.muted}>
+                    Permanently remove this server from the organization?
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => {
+                      setConfirmingDelete(false)
+                      void onDelete(server.id)
+                    }}
+                  >
+                    <Text style={styles.deleteButtonText}>Confirm delete</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.mutedButton}
+                    onPress={() => setConfirmingDelete(false)}
+                  >
+                    <Text style={styles.mutedButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.cellRow}>
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                  <Text style={orgPanelStyles.muted}>Deleting…</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
         </View>
       ) : null}
     </View>

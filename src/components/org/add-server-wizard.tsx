@@ -37,7 +37,12 @@ function isAuthorizationError(err: unknown): boolean {
 
 type WizardStep = 'create' | 'install' | 'waiting'
 
-export function AddServerWizard({ onDone }: { onDone: () => void }) {
+type AddServerWizardProps = Readonly<{
+  onComplete: () => void
+  onDismiss?: () => void
+}>
+
+export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps) {
   const { handleUnauthorized } = useAuth()
   const [managedUrls, setManagedUrls] = useState<string[]>([])
   const [step, setStep] = useState<WizardStep>('create')
@@ -68,7 +73,7 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
     setPollAttempt(0)
   }
 
-  const onCreateLicense = async () => {
+  const onStartAddServer = async () => {
     setCreating(true)
     setCreateError(null)
     try {
@@ -81,7 +86,9 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
       setDisplayName('')
       setStep('install')
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create license')
+      setCreateError(
+        err instanceof Error ? err.message : 'Failed to start server setup',
+      )
     } finally {
       setCreating(false)
     }
@@ -104,14 +111,18 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const onCancel = () => {
+  const dismissWizard = () => {
     resetWizard()
-    onDone()
+    if (onDismiss) {
+      onDismiss()
+      return
+    }
+    onComplete()
   }
 
   const onFinish = () => {
     resetWizard()
-    onDone()
+    onComplete()
   }
 
   useEffect(() => {
@@ -209,12 +220,12 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
 
   return (
     <SectionPanel
-      title="Set up a new server"
-      hint="Generate a license and install command"
+      title="Add server"
+      hint="Install the TurboPanel daemon on a new host"
     >
       {step === 'create' ? (
         <View style={styles.form}>
-          <Text style={styles.label}>Display name (optional)</Text>
+          <Text style={styles.label}>Server name (optional)</Text>
           <TextInput
             value={displayName}
             onChangeText={(text) => {
@@ -270,24 +281,35 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
               </Text>
             </>
           ) : null}
-          <Pressable
-            style={[styles.primaryButton, creating && styles.buttonDisabled]}
-            disabled={creating}
-            onPress={() => void onCreateLicense()}
-          >
-            <Text style={styles.primaryButtonText}>
-              {creating ? 'Creating...' : 'Create License'}
-            </Text>
-          </Pressable>
+          <View style={styles.formActions}>
+            <Pressable
+              style={[styles.primaryButton, creating && styles.buttonDisabled]}
+              disabled={creating}
+              onPress={() => void onStartAddServer()}
+            >
+              <Text style={styles.primaryButtonText}>
+                {creating ? 'Preparing…' : 'Continue'}
+              </Text>
+            </Pressable>
+            {onDismiss ? (
+              <Pressable
+                style={styles.secondaryButton}
+                disabled={creating}
+                onPress={dismissWizard}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
       {step === 'install' && revealed ? (
         <View style={styles.revealed}>
           <Text style={styles.warning}>
-            Save this token — it will not be shown again.
+            Save this registration key — it will not be shown again.
           </Text>
-          <Text style={styles.secretLabel}>License token</Text>
+          <Text style={styles.secretLabel}>Registration key</Text>
           <Text selectable style={styles.secretValue}>
             {revealed.licenseToken}
           </Text>
@@ -358,7 +380,7 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
                 <Pressable style={styles.primaryButton} onPress={onRetryPolling}>
                   <Text style={styles.primaryButtonText}>Retry</Text>
                 </Pressable>
-                <Pressable style={styles.secondaryButton} onPress={onCancel}>
+                <Pressable style={styles.secondaryButton} onPress={dismissWizard}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
                 </Pressable>
               </View>
@@ -371,7 +393,7 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
                   Still waiting… ({elapsedSeconds}s)
                 </Text>
               </View>
-              <Pressable style={styles.secondaryButton} onPress={onCancel}>
+              <Pressable style={styles.secondaryButton} onPress={dismissWizard}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </Pressable>
             </>
@@ -396,6 +418,12 @@ export function AddServerWizard({ onDone }: { onDone: () => void }) {
 
 const styles = StyleSheet.create({
   form: {
+    gap: spacing.sm,
+  },
+  formActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   devUrlQuickPicks: {

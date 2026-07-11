@@ -15,7 +15,7 @@ export const ORG_AREAS = [
         id: 'licenses',
         label: 'Licenses',
         pathSegment: 'licenses',
-        hint: 'Server registration keys',
+        hint: 'Registration keys in use',
       },
     ],
   },

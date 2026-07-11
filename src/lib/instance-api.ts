@@ -205,6 +205,79 @@ export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }>
   return await apiFetch(`${CLIENT_API}/servers`);
 }
 
+export type ServerDeleteBlocker = {
+  kind: 'network'
+  count: number
+}
+
+export class ServerDeleteBlockedError extends Error {
+  readonly code = 'server_has_blockers'
+  readonly blockers: ServerDeleteBlocker[]
+
+  constructor(message: string, blockers: ServerDeleteBlocker[]) {
+    super(message)
+    this.name = 'ServerDeleteBlockedError'
+    this.blockers = blockers
+  }
+}
+
+export function formatServerDeleteBlockedError(err: unknown): string {
+  if (err instanceof ServerDeleteBlockedError) {
+    const networkBlock = err.blockers.find((blocker) => blocker.kind === 'network')
+    if (networkBlock) {
+      const label = networkBlock.count === 1 ? 'network' : 'networks'
+      return `Remove ${networkBlock.count} ${label} on this server before deleting it.`
+    }
+    return err.message
+  }
+  return err instanceof Error ? err.message : 'Failed to delete server'
+}
+
+export async function deleteServer(
+  serverId: string,
+  organizationId?: string | null,
+): Promise<{ ok: true; serverId: string }> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const path = `${CLIENT_API}/servers/${serverId}`
+  const response = await fetch(path, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers,
+  })
+
+  if (!response.ok) {
+    let body: {
+      error?: string
+      code?: string
+      blockers?: ServerDeleteBlocker[]
+    } = {}
+    try {
+      body = await response.json() as typeof body
+    } catch {
+      // Non-JSON error body.
+    }
+
+    if (response.status === 409 && body.code === 'server_has_blockers' && body.blockers) {
+      throw new ServerDeleteBlockedError(
+        body.error ?? 'Cannot delete this server while dependent resources still exist',
+        body.blockers,
+      )
+    }
+
+    const detail = body.error ?? `HTTP ${response.status}`
+    throw new Error(`${path} failed: ${detail}`)
+  }
+
+  return await response.json() as { ok: true; serverId: string }
+}
+
 export async function fetchOrganizations(): Promise<{ organizations: OrganizationRecord[] }> {
   return await apiFetch(`${CLIENT_API}/organizations`);
 }
@@ -274,12 +347,19 @@ export async function fetchHealth(): Promise<{ ok: boolean }> {
   return await apiFetch("/api/health");
 }
 
+export type LicenseBoundServer = {
+  id: string
+  displayName: string | null
+  connected: boolean
+}
+
 export type LicenseRecord = {
   id: string;
   displayName: string | null;
   createdAt: string;
   /** When false, this is the co-located control plane license (omit on older APIs). */
   revocable?: boolean;
+  boundServer?: LicenseBoundServer | null;
 };
 
 export type CreatedLicense = {
@@ -305,12 +385,19 @@ export async function createLicense(
   });
 }
 
-export async function revokeLicense(
+export async function invalidateLicense(
   licenseId: string,
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/licenses/${licenseId}`, {
     method: "DELETE",
   });
+}
+
+/** @deprecated Use invalidateLicense — licenses are soft-invalidated, not deleted. */
+export async function revokeLicense(
+  licenseId: string,
+): Promise<{ ok: true }> {
+  return invalidateLicense(licenseId)
 }
 
 export type PermissionKey =

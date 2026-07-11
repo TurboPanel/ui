@@ -134,9 +134,22 @@ Authorization helpers:
 
 - `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Running** / Offline), and a checkbox column (header = select all).
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) rendered from data-URI SVGs in `src/lib/os-logos.ts`.
-- Row expand reveals daemon version / Update / Ping / hostname / reboot (same helpers as before). Collapsed table is the default.
+- Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
+- **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`).
 - Batch **Update** targets **selected** updatable servers (not every updatable host).
 - `OrgServerRecord` includes `os` / `osDisplay` / `osLogo` from `GET /api/client/v1/servers`.
+
+#### Servers overview — add server
+
+- **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) opens `AddServerWizard` inline on the servers page — not on Licenses.
+- `resolveServerAddEligibility()` in `src/lib/server-add-eligibility.ts` is the future subscription seat gate; until billing exists, org owners may add servers on self-hosted (registration key minted during the flow).
+- Wizard copy is server-focused ("Add server", registration key + install command); avoid "create license" in the primary action.
+
+#### Licenses (`/<orgId>/servers/licenses`)
+
+- `fetchLicenses()` → `GET /api/client/v1/licenses` (includes optional `boundServer` when exactly one server references the license).
+- `invalidateLicense(id)` → `DELETE /api/client/v1/licenses/:id` (soft invalidate; disconnects bound servers). `revokeLicense` is a deprecated alias.
+- `licenses-overview-section.tsx` — list + invalidate with confirm; gated by `useCan(..., 'organization:own')`; co-located license shows as non-invalidateable.
 
 #### Server status reads — Postgres only
 
