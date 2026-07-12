@@ -1,3 +1,5 @@
+import { formatFetchFailureDetail } from '@/lib/fetch-error-detail'
+export { isForbiddenError } from '@/lib/fetch-error-detail'
 import {
   getActiveOrganizationId,
   ORG_ID_HEADER,
@@ -886,10 +888,6 @@ export async function acceptInvitation(
   });
 }
 
-export function isForbiddenError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes("HTTP 403");
-}
-
 export type PublicUrlsResponse = {
   ok: boolean
   urls: string[]
@@ -1215,4 +1213,186 @@ export async function deployEnvironment(
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/** Ordered metric keys — mirrors instance `HOST_METRIC_KEYS`. */
+export const HOST_METRIC_KEYS = [
+  'cpuUsagePercent',
+  'cpuUserPercent',
+  'cpuSystemPercent',
+  'cpuIowaitPercent',
+  'load1',
+  'load5',
+  'load15',
+  'memoryUsedPercent',
+  'memoryUsedBytes',
+  'memoryAvailableBytes',
+  'swapUsedPercent',
+  'diskUsedPercent',
+  'diskReadBytesPerSecond',
+  'diskWriteBytesPerSecond',
+  'diskReadOpsPerSecond',
+  'diskWriteOpsPerSecond',
+  'networkReceiveBytesPerSecond',
+  'networkTransmitBytesPerSecond',
+  'processCount',
+  'uptimeSeconds',
+] as const
+
+export type HostMetricKey = (typeof HOST_METRIC_KEYS)[number]
+
+export type MetricsBackendKind =
+  | 'disabled'
+  | 'analytics-engine'
+  | 'clickhouse'
+
+export type MetricsSeriesPoint = {
+  at: string
+  values: Partial<Record<HostMetricKey, number | null>>
+  minimums?: Partial<Record<HostMetricKey, number | null>>
+  maximums?: Partial<Record<HostMetricKey, number | null>>
+  sampleCount: number
+  expectedSampleCount?: number
+}
+
+export type MetricsSeriesResponse = {
+  ok: true
+  serverId: string
+  from: string
+  to: string
+  resolutionSeconds: number | null
+  backend: MetricsBackendKind
+  available: boolean
+  metrics: HostMetricKey[]
+  sampleCount: number
+  gapCount: number
+  points: MetricsSeriesPoint[]
+}
+
+export type MetricsSummaryResponse = {
+  ok: true
+  serverId: string
+  from: string
+  to: string
+  backend: MetricsBackendKind
+  available: boolean
+  sampleCount: number
+  latestAt: string | null
+}
+
+export class MetricsBackendUnavailableError extends Error {
+  readonly code = 'metrics_backend_unavailable'
+  readonly backend: MetricsBackendKind
+
+  constructor(backend: MetricsBackendKind, message?: string) {
+    super(
+      message ??
+        `Metrics backend unavailable (${backend})`,
+    )
+    this.name = 'MetricsBackendUnavailableError'
+    this.backend = backend
+  }
+}
+
+export type FetchServerMetricsSeriesOptions = {
+  fromIso: string
+  toIso: string
+  metrics?: HostMetricKey[]
+  resolution?: number
+  maxPoints?: number
+}
+
+async function fetchServerMetricsJson<T>(
+  serverId: string,
+  pathSuffix: string,
+  query: URLSearchParams,
+  organizationId?: string | null,
+): Promise<T> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const path = `${CLIENT_API}/servers/${serverId}/metrics/${pathSuffix}?${query.toString()}`
+  const response = await fetch(path, {
+    credentials: 'include',
+    headers,
+  })
+
+  if (response.status === 503) {
+    let body: { error?: string; backend?: MetricsBackendKind } = {}
+    try {
+      body = await response.json() as typeof body
+    } catch {
+      // Non-JSON error body.
+    }
+    if (body.error === 'metrics_backend_unavailable') {
+      throw new MetricsBackendUnavailableError(
+        body.backend ?? 'disabled',
+        `${path} failed: metrics_backend_unavailable`,
+      )
+    }
+  }
+
+  if (!response.ok) {
+    let bodyError: string | undefined
+    try {
+      const body = await response.json() as { error?: string }
+      if (body.error) bodyError = body.error
+    } catch {
+      // Non-JSON error body.
+    }
+    const detail = formatFetchFailureDetail(response.status, bodyError)
+    throw new Error(`${path} failed: ${detail}`)
+  }
+
+  return await response.json() as T
+}
+
+export async function fetchServerMetricsSeries(
+  serverId: string,
+  options: FetchServerMetricsSeriesOptions,
+  organizationId?: string | null,
+): Promise<MetricsSeriesResponse> {
+  const query = new URLSearchParams({
+    from: options.fromIso,
+    to: options.toIso,
+  })
+  if (options.metrics && options.metrics.length > 0) {
+    query.set('metrics', options.metrics.join(','))
+  }
+  if (options.resolution !== undefined) {
+    query.set('resolution', String(options.resolution))
+  }
+  if (options.maxPoints !== undefined) {
+    query.set('maxPoints', String(options.maxPoints))
+  }
+
+  return await fetchServerMetricsJson<MetricsSeriesResponse>(
+    serverId,
+    'series',
+    query,
+    organizationId,
+  )
+}
+
+export async function fetchServerMetricsSummary(
+  serverId: string,
+  options: { fromIso: string; toIso: string },
+  organizationId?: string | null,
+): Promise<MetricsSummaryResponse> {
+  const query = new URLSearchParams({
+    from: options.fromIso,
+    to: options.toIso,
+  })
+
+  return await fetchServerMetricsJson<MetricsSummaryResponse>(
+    serverId,
+    'summary',
+    query,
+    organizationId,
+  )
 }

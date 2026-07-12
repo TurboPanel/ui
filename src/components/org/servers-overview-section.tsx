@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import {
   ActivityIndicator,
@@ -53,6 +54,7 @@ import {
   formatServerGeoLocation,
 } from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
+import { serverMetricsHref } from '@/lib/org-navigation'
 
 type UpdateState = {
   loading: boolean
@@ -421,6 +423,212 @@ function SelectionCheckbox({
   )
 }
 
+function isServerUpdatable(
+  server: OrgServerRecord,
+  updateStates: Map<string, UpdateState>,
+): boolean {
+  const state = updateStates.get(server.id)
+  return (
+    server.connected &&
+    !isColocatedServer(server, state?.data) &&
+    state?.data?.targetStatus === 'ok' &&
+    state.data.updateAvailable === true &&
+    !state.triggering &&
+    state.data.status !== 'updating'
+  )
+}
+
+function isTerminalUpdateState(status: ServerUpdateStatus): boolean {
+  if (status.updateBlocked) return true
+  if (status.status === 'error') return true
+  if (status.status === 'updating') return false
+  if (status.targetStatus === 'unknown') return true
+  if (!status.updateAvailable) return true
+  if (
+    status.current?.commit &&
+    status.target?.commit &&
+    status.current.commit === status.target.commit
+  ) {
+    return true
+  }
+  return status.status === 'idle'
+}
+
+function ServersOverviewToolbar({
+  canOwn,
+  canManage,
+  addServerEligibility,
+  showAddServerWizard,
+  onAddServer,
+  anyUpdateInProgress,
+  batchUpdating,
+  selectedUpdatableCount,
+  onTriggerSelectedUpdates,
+}: Readonly<{
+  canOwn: boolean
+  canManage: boolean
+  addServerEligibility: ReturnType<typeof resolveServerAddEligibility>
+  showAddServerWizard: boolean
+  onAddServer: () => void
+  anyUpdateInProgress: boolean
+  batchUpdating: boolean
+  selectedUpdatableCount: number
+  onTriggerSelectedUpdates: () => void
+}>) {
+  if (!canOwn && !canManage) return null
+
+  const addDisabled = !addServerEligibility.canAdd || showAddServerWizard
+  const updateDisabled =
+    anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
+
+  return (
+    <View style={styles.toolbarRow}>
+      {canOwn ? (
+        <Pressable
+          style={[
+            styles.addServerButton,
+            addDisabled && styles.addServerButtonDisabled,
+          ]}
+          disabled={addDisabled}
+          onPress={onAddServer}
+        >
+          <Text style={styles.addServerButtonText}>+ Server</Text>
+        </Pressable>
+      ) : null}
+      {canManage ? (
+        <TouchableOpacity
+          style={[
+            styles.updateButton,
+            updateDisabled && styles.updateButtonDisabled,
+          ]}
+          onPress={onTriggerSelectedUpdates}
+          disabled={updateDisabled}
+        >
+          {batchUpdating ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : null}
+          <Text style={styles.updateButtonText}>
+            {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  )
+}
+
+function ServersTable({
+  orgId,
+  loading,
+  servers,
+  allSelected,
+  someSelected,
+  selectedIds,
+  expandedIds,
+  updateStates,
+  canManage,
+  getCommandState,
+  onToggleSelectAll,
+  onToggleSelected,
+  onToggleExpanded,
+  onTriggerUpdate,
+  onResetUpdateStatus,
+  onPing,
+  onSetHostname,
+  onReboot,
+  onDelete,
+  deletingIds,
+  deleteErrors,
+}: Readonly<{
+  orgId: string
+  loading: boolean
+  servers: OrgServerRecord[]
+  allSelected: boolean
+  someSelected: boolean
+  selectedIds: Set<string>
+  expandedIds: Set<string>
+  updateStates: Map<string, UpdateState>
+  canManage: boolean
+  getCommandState: (serverId: string) => ServerCommandState
+  onToggleSelectAll: () => void
+  onToggleSelected: (serverId: string) => void
+  onToggleExpanded: (serverId: string) => void
+  onTriggerUpdate: (serverId: string) => Promise<void>
+  onResetUpdateStatus: (serverId: string) => Promise<void>
+  onPing: (serverId: string) => Promise<void>
+  onSetHostname: (serverId: string, hostname: string) => Promise<void>
+  onReboot: (serverId: string) => Promise<void>
+  onDelete: (serverId: string) => Promise<void>
+  deletingIds: Set<string>
+  deleteErrors: Map<string, string>
+}>) {
+  if (loading && servers.length === 0) {
+    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+  }
+  if (servers.length === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        No servers are assigned to this organization yet.
+      </Text>
+    )
+  }
+
+  return (
+    <ScrollView
+      horizontal
+      nestedScrollEnabled
+      style={styles.tableScroll}
+      contentContainerStyle={styles.tableScrollContent}
+    >
+      <View style={styles.table}>
+        <View style={[styles.tableRow, styles.tableHeaderRow]}>
+          <View style={[styles.tableCell, styles.colName]}>
+            <Text style={styles.tableHeaderText}>Name / UUID</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colConnectedFrom]}>
+            <Text style={styles.tableHeaderText}>Connected From</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colConnected]}>
+            <Text style={styles.tableHeaderText}>Connected Since</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colStatus]}>
+            <Text style={styles.tableHeaderText}>Status</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colCheck]}>
+            <SelectionCheckbox
+              checked={allSelected}
+              indeterminate={someSelected}
+              onPress={onToggleSelectAll}
+              accessibilityLabel="Select all servers"
+            />
+          </View>
+        </View>
+        {servers.map((server) => (
+          <OrgServerTableRow
+            key={server.id}
+            orgId={orgId}
+            server={server}
+            selected={selectedIds.has(server.id)}
+            expanded={expandedIds.has(server.id)}
+            updateState={updateStates.get(server.id) ?? defaultUpdateState}
+            canManage={canManage}
+            commandState={getCommandState(server.id)}
+            onToggleSelected={() => onToggleSelected(server.id)}
+            onToggleExpanded={() => onToggleExpanded(server.id)}
+            onTriggerUpdate={onTriggerUpdate}
+            onResetUpdateStatus={onResetUpdateStatus}
+            onPing={onPing}
+            onSetHostname={onSetHostname}
+            onReboot={onReboot}
+            onDelete={onDelete}
+            deleting={deletingIds.has(server.id)}
+            deleteError={deleteErrors.get(server.id) ?? null}
+          />
+        ))}
+      </View>
+    </ScrollView>
+  )
+}
+
 export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
@@ -448,34 +656,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const commandStatesRef = useRef(commandStates)
   commandStatesRef.current = commandStates
-
-  const isServerUpdatable = (server: OrgServerRecord): boolean => {
-    const state = updateStates.get(server.id)
-    return (
-      server.connected &&
-      !isColocatedServer(server, state?.data) &&
-      state?.data?.targetStatus === 'ok' &&
-      state.data.updateAvailable === true &&
-      !state.triggering &&
-      state.data.status !== 'updating'
-    )
-  }
-
-  const isTerminalUpdateState = (status: ServerUpdateStatus): boolean => {
-    if (status.updateBlocked) return true
-    if (status.status === 'error') return true
-    if (status.status === 'updating') return false
-    if (status.targetStatus === 'unknown') return true
-    if (!status.updateAvailable) return true
-    if (
-      status.current?.commit &&
-      status.target?.commit &&
-      status.current.commit === status.target.commit
-    ) {
-      return true
-    }
-    return status.status === 'idle'
-  }
 
   const mergeUpdateEntry = (
     prev: Map<string, UpdateState>,
@@ -598,7 +778,8 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const handleTriggerSelectedUpdates = async (): Promise<void> => {
     const targets = servers.filter(
-      (server) => selectedIds.has(server.id) && isServerUpdatable(server),
+      (server) =>
+        selectedIds.has(server.id) && isServerUpdatable(server, updateStates),
     )
     if (targets.length === 0) return
 
@@ -1005,7 +1186,8 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   }, [updateStates])
 
   const selectedUpdatableCount = servers.filter(
-    (server) => selectedIds.has(server.id) && isServerUpdatable(server),
+    (server) =>
+      selectedIds.has(server.id) && isServerUpdatable(server, updateStates),
   ).length
 
   const allSelected =
@@ -1044,6 +1226,19 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       (state) => state.triggering || state.data?.status === 'updating',
     )
 
+  const handleTriggerSelectedUpdatesPress = () => {
+    handleTriggerSelectedUpdates().catch(() => {
+      // Errors surface via update state.
+    })
+  }
+
+  const handleWizardComplete = () => {
+    setShowAddServerWizard(false)
+    refreshServers().catch(() => {
+      // Errors surface via section error state.
+    })
+  }
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Servers overview</Text>
@@ -1053,130 +1248,49 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       </Text>
 
       <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
-        {canOwn || canManage ? (
-          <View style={styles.toolbarRow}>
-            {canOwn ? (
-              <Pressable
-                style={[
-                  styles.addServerButton,
-                  (!addServerEligibility.canAdd || showAddServerWizard) &&
-                    styles.addServerButtonDisabled,
-                ]}
-                disabled={!addServerEligibility.canAdd || showAddServerWizard}
-                onPress={() => setShowAddServerWizard(true)}
-              >
-                <Text style={styles.addServerButtonText}>+ Server</Text>
-              </Pressable>
-            ) : null}
-            {canManage ? (
-              <TouchableOpacity
-                style={[
-                  styles.updateButton,
-                  (anyUpdateInProgress ||
-                    batchUpdating ||
-                    selectedUpdatableCount === 0) &&
-                    styles.updateButtonDisabled,
-                ]}
-                onPress={() => void handleTriggerSelectedUpdates()}
-                disabled={
-                  anyUpdateInProgress ||
-                  batchUpdating ||
-                  selectedUpdatableCount === 0
-                }
-              >
-                {batchUpdating ? (
-                  <ActivityIndicator size="small" color={colors.textMuted} />
-                ) : null}
-                <Text style={styles.updateButtonText}>
-                  {selectedUpdateButtonLabel(
-                    batchUpdating,
-                    selectedUpdatableCount,
-                  )}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        ) : null}
+        <ServersOverviewToolbar
+          canOwn={canOwn}
+          canManage={canManage}
+          addServerEligibility={addServerEligibility}
+          showAddServerWizard={showAddServerWizard}
+          onAddServer={() => setShowAddServerWizard(true)}
+          anyUpdateInProgress={anyUpdateInProgress}
+          batchUpdating={batchUpdating}
+          selectedUpdatableCount={selectedUpdatableCount}
+          onTriggerSelectedUpdates={handleTriggerSelectedUpdatesPress}
+        />
         {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
           <Text style={orgPanelStyles.muted}>{addServerEligibility.reason}</Text>
         ) : null}
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-        {(() => {
-          if (loading && servers.length === 0) {
-            return <Text style={orgPanelStyles.muted}>Loading…</Text>
-          }
-          if (servers.length === 0) {
-            return (
-              <Text style={orgPanelStyles.muted}>
-                No servers are assigned to this organization yet.
-              </Text>
-            )
-          }
-          return (
-            <ScrollView
-              horizontal
-              nestedScrollEnabled
-              style={styles.tableScroll}
-              contentContainerStyle={styles.tableScrollContent}
-            >
-              <View style={styles.table}>
-                <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                  <View style={[styles.tableCell, styles.colName]}>
-                    <Text style={styles.tableHeaderText}>Name / UUID</Text>
-                  </View>
-                  <View style={[styles.tableCell, styles.colConnectedFrom]}>
-                    <Text style={styles.tableHeaderText}>Connected From</Text>
-                  </View>
-                  <View style={[styles.tableCell, styles.colConnected]}>
-                    <Text style={styles.tableHeaderText}>Connected Since</Text>
-                  </View>
-                  <View style={[styles.tableCell, styles.colStatus]}>
-                    <Text style={styles.tableHeaderText}>Status</Text>
-                  </View>
-                  <View style={[styles.tableCell, styles.colCheck]}>
-                    <SelectionCheckbox
-                      checked={allSelected}
-                      indeterminate={someSelected}
-                      onPress={toggleSelectAll}
-                      accessibilityLabel="Select all servers"
-                    />
-                  </View>
-                </View>
-                {servers.map((server) => (
-                  <OrgServerTableRow
-                    key={server.id}
-                    server={server}
-                    selected={selectedIds.has(server.id)}
-                    expanded={expandedIds.has(server.id)}
-                    updateState={
-                      updateStates.get(server.id) ?? defaultUpdateState
-                    }
-                    canManage={canManage}
-                    commandState={getCommandState(server.id)}
-                    onToggleSelected={() => toggleSelected(server.id)}
-                    onToggleExpanded={() => toggleExpanded(server.id)}
-                    onTriggerUpdate={handleTriggerUpdate}
-                    onResetUpdateStatus={handleResetUpdateStatus}
-                    onPing={handlePing}
-                    onSetHostname={handleSetHostname}
-                    onReboot={handleReboot}
-                    onDelete={handleDelete}
-                    deleting={deletingIds.has(server.id)}
-                    deleteError={deleteErrors.get(server.id) ?? null}
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          )
-        })()}
+        <ServersTable
+          orgId={orgId}
+          loading={loading}
+          servers={servers}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          selectedIds={selectedIds}
+          expandedIds={expandedIds}
+          updateStates={updateStates}
+          canManage={canManage}
+          getCommandState={getCommandState}
+          onToggleSelectAll={toggleSelectAll}
+          onToggleSelected={toggleSelected}
+          onToggleExpanded={toggleExpanded}
+          onTriggerUpdate={handleTriggerUpdate}
+          onResetUpdateStatus={handleResetUpdateStatus}
+          onPing={handlePing}
+          onSetHostname={handleSetHostname}
+          onReboot={handleReboot}
+          onDelete={handleDelete}
+          deletingIds={deletingIds}
+          deleteErrors={deleteErrors}
+        />
       </SectionPanel>
 
       {canOwn && showAddServerWizard ? (
         <AddServerWizard
-          onComplete={() => {
-            setShowAddServerWizard(false)
-            void refreshServers()
-          }}
+          onComplete={handleWizardComplete}
           onDismiss={() => setShowAddServerWizard(false)}
         />
       ) : null}
@@ -1514,6 +1628,20 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     gap: spacing.sm,
   },
+  metricsButton: {
+    alignSelf: 'flex-start',
+    borderColor: colors.borderChip,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  metricsButtonText: {
+    color: colors.textChip,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   deleteButton: {
     alignSelf: 'flex-start',
     borderColor: colors.error,
@@ -1542,7 +1670,279 @@ const styles = StyleSheet.create({
   },
 })
 
+function ServerNameCell({
+  server,
+  expanded,
+  onToggleExpanded,
+}: Readonly<{
+  server: OrgServerRecord
+  expanded: boolean
+  onToggleExpanded: () => void
+}>) {
+  const osProduct =
+    formatServerOsProductName(server.os, server.osDisplay) ?? EMPTY_CELL
+  const logo = osLogoSource(resolveOsLogoKey(server))
+
+  return (
+    <View style={[styles.tableCell, styles.colName]}>
+      <Pressable
+        onPress={onToggleExpanded}
+        style={styles.nameButton}
+        accessibilityRole="button"
+        accessibilityLabel={
+          expanded ? 'Collapse server details' : 'Expand server details'
+        }
+      >
+        <Text style={styles.expandChevron}>{expanded ? '▾' : '▸'}</Text>
+        {logo ? (
+          <Image
+            source={logo}
+            style={styles.osLogoBesideName}
+            contentFit="contain"
+            accessibilityLabel={osProduct === EMPTY_CELL ? 'OS' : osProduct}
+          />
+        ) : null}
+        <View style={styles.nameBlock}>
+          <Text style={styles.nameText} numberOfLines={1}>
+            {serverTitle(server)}
+          </Text>
+          <Text style={styles.uuidText} selectable numberOfLines={1}>
+            {server.id}
+          </Text>
+        </View>
+      </Pressable>
+    </View>
+  )
+}
+
+function ServerConnectedFromCell({
+  server,
+}: Readonly<{ server: OrgServerRecord }>) {
+  const location = formatLocationCell(server.geo)
+  const ip =
+    server.connected && server.remoteAddress
+      ? server.remoteAddress
+      : EMPTY_CELL
+  const empty = ip === EMPTY_CELL && location === EMPTY_CELL
+
+  if (empty) {
+    return (
+      <View style={[styles.tableCell, styles.colConnectedFrom]}>
+        <Text style={styles.cellTextMuted}>{EMPTY_CELL}</Text>
+      </View>
+    )
+  }
+
+  return (
+    <View style={[styles.tableCell, styles.colConnectedFrom]}>
+      <Text
+        style={ip === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
+        selectable={ip !== EMPTY_CELL}
+        numberOfLines={1}
+      >
+        {ip}
+      </Text>
+      {location !== EMPTY_CELL ? (
+        <Text style={styles.cellTextMuted} numberOfLines={1}>
+          {location}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function ServerStatusBadge({
+  connected,
+}: Readonly<{ connected: boolean }>) {
+  return (
+    <View style={[styles.tableCell, styles.colStatus]}>
+      <View
+        style={[
+          styles.statusBadge,
+          connected ? styles.statusOnline : styles.statusOffline,
+        ]}
+      >
+        <Text
+          style={[
+            styles.statusText,
+            connected ? styles.statusTextOnline : styles.statusTextOffline,
+          ]}
+        >
+          {connected ? 'Running' : 'Offline'}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+function ServerDeleteControls({
+  deleting,
+  deleteError,
+  confirmingDelete,
+  onRequestConfirm,
+  onCancelConfirm,
+  onConfirmDelete,
+}: Readonly<{
+  deleting: boolean
+  deleteError: string | null
+  confirmingDelete: boolean
+  onRequestConfirm: () => void
+  onCancelConfirm: () => void
+  onConfirmDelete: () => void
+}>) {
+  let action: ReactNode
+  if (deleting) {
+    action = (
+      <View style={styles.cellRow}>
+        <ActivityIndicator size="small" color={colors.textMuted} />
+        <Text style={orgPanelStyles.muted}>Deleting…</Text>
+      </View>
+    )
+  } else if (confirmingDelete) {
+    action = (
+      <View style={styles.confirmRow}>
+        <Text style={orgPanelStyles.muted}>
+          Permanently remove this server from the organization?
+        </Text>
+        <TouchableOpacity style={styles.deleteButton} onPress={onConfirmDelete}>
+          <Text style={styles.deleteButtonText}>Confirm delete</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.mutedButton} onPress={onCancelConfirm}>
+          <Text style={styles.mutedButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  } else {
+    action = (
+      <TouchableOpacity style={styles.deleteButton} onPress={onRequestConfirm}>
+        <Text style={styles.deleteButtonText}>Delete server</Text>
+      </TouchableOpacity>
+    )
+  }
+
+  return (
+    <View style={styles.deleteSection}>
+      {deleteError ? (
+        <Text style={orgPanelStyles.error}>{deleteError}</Text>
+      ) : null}
+      {action}
+    </View>
+  )
+}
+
+function ExpandedServerPanel({
+  orgId,
+  server,
+  updateState,
+  viewModel,
+  canManage,
+  commandState,
+  onTriggerUpdate,
+  onResetUpdateStatus,
+  onPing,
+  onSetHostname,
+  onReboot,
+  onDelete,
+  deleting,
+  deleteError,
+}: Readonly<{
+  orgId: string
+  server: OrgServerRecord
+  updateState: UpdateState
+  viewModel: ReturnType<typeof deriveServerUpdateViewModel>
+  canManage: boolean
+  commandState: ServerCommandState
+  onTriggerUpdate: (serverId: string) => Promise<void>
+  onResetUpdateStatus: (serverId: string) => Promise<void>
+  onPing: (serverId: string) => Promise<void>
+  onSetHostname: (serverId: string, hostname: string) => Promise<void>
+  onReboot: (serverId: string) => Promise<void>
+  onDelete: (serverId: string) => Promise<void>
+  deleting: boolean
+  deleteError: string | null
+}>) {
+  const router = useRouter()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const osFull = server.osDisplay?.trim() || null
+
+  const runCommand = (action: () => Promise<void>) => {
+    action().catch(() => {
+      // Errors surface via command / delete state.
+    })
+  }
+
+  return (
+    <View style={styles.expandedPanel}>
+      {osFull ? (
+        <View style={styles.osDetailRow}>
+          <Text style={orgPanelStyles.detailLabel}>Operating system</Text>
+          <Text style={orgPanelStyles.detailLine}>{osFull}</Text>
+        </View>
+      ) : null}
+      {viewModel.colocated ? (
+        <Text style={orgPanelStyles.muted}>
+          This server runs on the same host as the control plane. Remote trunk
+          updates are disabled — use local git instead.
+        </Text>
+      ) : null}
+      <ServerUpdatePanel
+        server={server}
+        updateState={updateState}
+        updateData={viewModel.updateData}
+        colocated={viewModel.colocated}
+        canManage={canManage}
+        isUpdateStatusLoading={viewModel.isUpdateStatusLoading}
+        isUpdateInProgress={viewModel.isUpdateInProgress}
+        canResetUpdateStatus={viewModel.canResetUpdateStatus}
+        targetKnown={viewModel.targetKnown}
+        runningVersionUnknown={viewModel.runningVersionUnknown}
+        badgeVariant={viewModel.badgeVariant}
+        onTriggerUpdate={onTriggerUpdate}
+        onResetUpdateStatus={onResetUpdateStatus}
+      />
+      <ServerCommandsPanel
+        server={server}
+        canManage={canManage}
+        showReboot={!viewModel.colocated}
+        commandState={commandState}
+        onPing={() => runCommand(() => onPing(server.id))}
+        onSetHostname={(hostname) =>
+          runCommand(() => onSetHostname(server.id, hostname))
+        }
+        onReboot={() => runCommand(() => onReboot(server.id))}
+      />
+      <TouchableOpacity
+        style={styles.metricsButton}
+        onPress={() => router.push(serverMetricsHref(orgId, server.id))}
+        accessibilityRole="button"
+        accessibilityLabel="View server metrics"
+      >
+        <Text style={styles.metricsButtonText}>Metrics</Text>
+      </TouchableOpacity>
+      {canManage && viewModel.colocated ? (
+        <Text style={orgPanelStyles.muted}>
+          The co-located control plane server cannot be deleted.
+        </Text>
+      ) : null}
+      {canManage && !viewModel.colocated ? (
+        <ServerDeleteControls
+          deleting={deleting}
+          deleteError={deleteError}
+          confirmingDelete={confirmingDelete}
+          onRequestConfirm={() => setConfirmingDelete(true)}
+          onCancelConfirm={() => setConfirmingDelete(false)}
+          onConfirmDelete={() => {
+            setConfirmingDelete(false)
+            runCommand(() => onDelete(server.id))
+          }}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 function OrgServerTableRow({
+  orgId,
   server,
   selected,
   expanded,
@@ -1560,6 +1960,7 @@ function OrgServerTableRow({
   deleting,
   deleteError,
 }: Readonly<{
+  orgId: string
   server: OrgServerRecord
   selected: boolean
   expanded: boolean
@@ -1577,77 +1978,23 @@ function OrgServerTableRow({
   deleting: boolean
   deleteError: string | null
 }>) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const viewModel = deriveServerUpdateViewModel(server, updateState)
-  const location = formatLocationCell(server.geo)
-  const osProduct =
-    formatServerOsProductName(server.os, server.osDisplay) ?? EMPTY_CELL
-  const osFull = server.osDisplay?.trim() || null
-  const logoKey = resolveOsLogoKey(server)
-  const logo = osLogoSource(logoKey)
-  const ip =
-    server.connected && server.remoteAddress
-      ? server.remoteAddress
-      : EMPTY_CELL
   const connectedSince = formatConnectedSinceCell(
     server.connected,
     server.connectedAt,
   )
-  const connectedFromEmpty = ip === EMPTY_CELL && location === EMPTY_CELL
 
   return (
     <View style={styles.tableRowWrap}>
       <View
         style={[styles.tableRow, expanded ? styles.tableRowExpanded : null]}
       >
-        <View style={[styles.tableCell, styles.colName]}>
-          <Pressable
-            onPress={onToggleExpanded}
-            style={styles.nameButton}
-            accessibilityRole="button"
-            accessibilityLabel={
-              expanded ? 'Collapse server details' : 'Expand server details'
-            }
-          >
-            <Text style={styles.expandChevron}>{expanded ? '▾' : '▸'}</Text>
-            {logo ? (
-              <Image
-                source={logo}
-                style={styles.osLogoBesideName}
-                contentFit="contain"
-                accessibilityLabel={osProduct === EMPTY_CELL ? 'OS' : osProduct}
-              />
-            ) : null}
-            <View style={styles.nameBlock}>
-              <Text style={styles.nameText} numberOfLines={1}>
-                {serverTitle(server)}
-              </Text>
-              <Text style={styles.uuidText} selectable numberOfLines={1}>
-                {server.id}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-        <View style={[styles.tableCell, styles.colConnectedFrom]}>
-          {connectedFromEmpty ? (
-            <Text style={styles.cellTextMuted}>{EMPTY_CELL}</Text>
-          ) : (
-            <>
-              <Text
-                style={ip === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
-                selectable={ip !== EMPTY_CELL}
-                numberOfLines={1}
-              >
-                {ip}
-              </Text>
-              {location !== EMPTY_CELL ? (
-                <Text style={styles.cellTextMuted} numberOfLines={1}>
-                  {location}
-                </Text>
-              ) : null}
-            </>
-          )}
-        </View>
+        <ServerNameCell
+          server={server}
+          expanded={expanded}
+          onToggleExpanded={onToggleExpanded}
+        />
+        <ServerConnectedFromCell server={server} />
         <View style={[styles.tableCell, styles.colConnected]}>
           <Text
             style={
@@ -1660,25 +2007,7 @@ function OrgServerTableRow({
             {connectedSince}
           </Text>
         </View>
-        <View style={[styles.tableCell, styles.colStatus]}>
-          <View
-            style={[
-              styles.statusBadge,
-              server.connected ? styles.statusOnline : styles.statusOffline,
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                server.connected
-                  ? styles.statusTextOnline
-                  : styles.statusTextOffline,
-              ]}
-            >
-              {server.connected ? 'Running' : 'Offline'}
-            </Text>
-          </View>
-        </View>
+        <ServerStatusBadge connected={server.connected} />
         <View style={[styles.tableCell, styles.colCheck]}>
           <SelectionCheckbox
             checked={selected}
@@ -1688,93 +2017,22 @@ function OrgServerTableRow({
         </View>
       </View>
       {expanded ? (
-        <View style={styles.expandedPanel}>
-          {osFull ? (
-            <View style={styles.osDetailRow}>
-              <Text style={orgPanelStyles.detailLabel}>Operating system</Text>
-              <Text style={orgPanelStyles.detailLine}>{osFull}</Text>
-            </View>
-          ) : null}
-          {viewModel.colocated ? (
-            <Text style={orgPanelStyles.muted}>
-              This server runs on the same host as the control plane. Remote
-              trunk updates are disabled — use local git instead.
-            </Text>
-          ) : null}
-          <ServerUpdatePanel
-            server={server}
-            updateState={updateState}
-            updateData={viewModel.updateData}
-            colocated={viewModel.colocated}
-            canManage={canManage}
-            isUpdateStatusLoading={viewModel.isUpdateStatusLoading}
-            isUpdateInProgress={viewModel.isUpdateInProgress}
-            canResetUpdateStatus={viewModel.canResetUpdateStatus}
-            targetKnown={viewModel.targetKnown}
-            runningVersionUnknown={viewModel.runningVersionUnknown}
-            badgeVariant={viewModel.badgeVariant}
-            onTriggerUpdate={onTriggerUpdate}
-            onResetUpdateStatus={onResetUpdateStatus}
-          />
-          <ServerCommandsPanel
-            server={server}
-            canManage={canManage}
-            showReboot={!viewModel.colocated}
-            commandState={commandState}
-            onPing={() => void onPing(server.id)}
-            onSetHostname={(hostname) =>
-              void onSetHostname(server.id, hostname)
-            }
-            onReboot={() => void onReboot(server.id)}
-          />
-          {canManage && viewModel.colocated ? (
-            <Text style={orgPanelStyles.muted}>
-              The co-located control plane server cannot be deleted.
-            </Text>
-          ) : null}
-          {canManage && !viewModel.colocated ? (
-            <View style={styles.deleteSection}>
-              {deleteError ? (
-                <Text style={orgPanelStyles.error}>{deleteError}</Text>
-              ) : null}
-              {!deleting && !confirmingDelete ? (
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => setConfirmingDelete(true)}
-                  disabled={deleting}
-                >
-                  <Text style={styles.deleteButtonText}>Delete server</Text>
-                </TouchableOpacity>
-              ) : confirmingDelete && !deleting ? (
-                <View style={styles.confirmRow}>
-                  <Text style={orgPanelStyles.muted}>
-                    Permanently remove this server from the organization?
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => {
-                      setConfirmingDelete(false)
-                      void onDelete(server.id)
-                    }}
-                  >
-                    <Text style={styles.deleteButtonText}>Confirm delete</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.mutedButton}
-                    onPress={() => setConfirmingDelete(false)}
-                  >
-                    <Text style={styles.mutedButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.cellRow}>
-                  <ActivityIndicator size="small" color={colors.textMuted} />
-                  <Text style={orgPanelStyles.muted}>Deleting…</Text>
-                </View>
-              )}
-            </View>
-          ) : null}
-        </View>
+        <ExpandedServerPanel
+          orgId={orgId}
+          server={server}
+          updateState={updateState}
+          viewModel={viewModel}
+          canManage={canManage}
+          commandState={commandState}
+          onTriggerUpdate={onTriggerUpdate}
+          onResetUpdateStatus={onResetUpdateStatus}
+          onPing={onPing}
+          onSetHostname={onSetHostname}
+          onReboot={onReboot}
+          onDelete={onDelete}
+          deleting={deleting}
+          deleteError={deleteError}
+        />
       ) : null}
     </View>
   )

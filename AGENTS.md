@@ -145,6 +145,14 @@ Authorization helpers:
 - `resolveServerAddEligibility()` in `src/lib/server-add-eligibility.ts` is the future subscription seat gate; until billing exists, org owners may add servers on self-hosted (registration key minted during the flow).
 - Wizard copy is server-focused ("Add server", registration key + install command); avoid "create license" in the primary action.
 
+#### Server metrics (`/<orgId>/servers/[serverId]/metrics`)
+
+- **Route/nav** — `src/app/[orgId]/servers/[serverId]/metrics.tsx` → `ServerMetricsSection` (`src/components/org/server-metrics-section.tsx`); registered in `src/lib/org-navigation.ts` (`serverMetricsHref`).
+- **Charts** — custom Tamagui-styled SVG on `react-native-svg` (already a dependency; cross-platform web-safe, no heavy chart library). Components: `src/components/org/charts/chart-card.tsx`, `chart-legend.tsx`, `metric-line-chart.tsx`.
+- **API** — `fetchServerMetricsSeries` / `fetchServerMetricsSummary` in `src/lib/instance-api.ts`; types `MetricsSeriesResponse`, `MetricsSeriesPoint` (`values`, `sampleCount`, `expectedSampleCount`), `HostMetricKey`, `MetricsBackendKind`, `MetricsBackendUnavailableError`.
+- **O(1) fetch rule** — one combined series call per visible dashboard; refresh restrained (1 h/6 h → 60 s, 24 h → 300 s, longer ranges → no auto-refresh). Use backend `resolutionSeconds` — never fetch thousands of points to discard client-side. Ranges 1 h / 6 h / 24 h / 7 d / 30 d / 90 d, bounded by backend retention. Paired charts only — never all 20 metrics in one view.
+- **Rendered states** — no metrics yet; storage still starting; unsupported OS; backend unavailable (ClickHouse `503`); sample gaps (distinct from zero values); stale/offline server; partial metric availability. Charts are not real-time below the ~60 s collection interval.
+
 #### Licenses (`/<orgId>/servers/licenses`)
 
 - `fetchLicenses()` → `GET /api/client/v1/licenses` (includes optional `boundServer` when exactly one server references the license).
