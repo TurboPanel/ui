@@ -359,9 +359,9 @@ export type LicenseRecord = {
   id: string;
   displayName: string | null;
   createdAt: string;
-  /** When false, this is the co-located control plane license (omit on older APIs). */
-  revocable?: boolean;
-  boundServer?: LicenseBoundServer | null;
+  /** When false, this is the co-located control plane license. */
+  revocable: boolean;
+  boundServer: LicenseBoundServer | null;
 };
 
 export type CreatedLicense = {
@@ -393,13 +393,6 @@ export async function invalidateLicense(
   return await apiFetch(`${CLIENT_API}/licenses/${licenseId}`, {
     method: "DELETE",
   });
-}
-
-/** @deprecated Use invalidateLicense — licenses are soft-invalidated, not deleted. */
-export async function revokeLicense(
-  licenseId: string,
-): Promise<{ ok: true }> {
-  return invalidateLicense(licenseId)
 }
 
 export type PermissionKey =
@@ -492,8 +485,8 @@ export type EnvironmentRecord = {
   description: string | null;
   projectId: string;
   metadata: Record<string, unknown> | null;
-  /** `options.compose` is a versioned ComposeDocument (or legacy bare compose object). */
-  options: { compose?: ComposeDocument | Record<string, unknown> } | null;
+  /** `options.compose` is a versioned ComposeDocument. */
+  options: { compose?: ComposeDocument } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -507,8 +500,8 @@ export type ProjectRecord = {
     type?: 'docker-compose' | 'managed' | 'template' | null;
     managed_id?: string;
   } | null;
-  /** `options.compose` is a versioned ComposeDocument (or legacy bare compose object). */
-  options: { compose?: ComposeDocument | Record<string, unknown> } | null;
+  /** `options.compose` is a versioned ComposeDocument. */
+  options: { compose?: ComposeDocument } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -680,7 +673,7 @@ export async function updateProject(
   body: {
     displayName?: string;
     description?: string;
-    options?: { compose?: ComposeDocument | Record<string, unknown> };
+    options?: { compose?: ComposeDocument };
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
@@ -706,7 +699,7 @@ export async function createEnvironment(body: {
   displayName?: string;
   description?: string;
   metadata?: Record<string, unknown>;
-  options?: { compose?: ComposeDocument | Record<string, unknown> };
+  options?: { compose?: ComposeDocument };
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/environments`, {
     method: "POST",
@@ -720,7 +713,7 @@ export async function updateEnvironment(
     displayName?: string;
     description?: string;
     metadata?: Record<string, unknown>;
-    options?: { compose?: ComposeDocument | Record<string, unknown> };
+    options?: { compose?: ComposeDocument };
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {

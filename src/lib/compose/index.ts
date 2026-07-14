@@ -22,34 +22,34 @@ export function emptyComposeDocument(): ComposeDocument {
   }
 }
 
+function isComposeDocument(value: unknown): value is ComposeDocument {
+  if (!isRecord(value)) return false
+  if (value.version !== 1) return false
+  if (!isRecord(value.data)) return false
+  if (!isRecord(value.presentation)) return false
+  const presentation = value.presentation
+  return Array.isArray(presentation.keyOrder) && isRecord(presentation.comments)
+}
+
+/**
+ * Normalize a valid ComposeDocument, or an intentionally empty value (`null` /
+ * `undefined`). Does not lift bare compose objects into the current format.
+ */
 export function normalizeCompose(value: unknown): ComposeDocument {
-  if (!isRecord(value)) {
-    return emptyComposeDocument()
-  }
+  if (value == null) return emptyComposeDocument()
+  if (!isComposeDocument(value)) return emptyComposeDocument()
 
-  if (value.version === 1 && isRecord(value.data) && isRecord(value.presentation)) {
-    const presentation = value.presentation
-    return {
-      version: 1,
-      data: { ...value.data },
-      presentation: {
-        keyOrder: Array.isArray(presentation.keyOrder)
-          ? presentation.keyOrder.filter((key): key is string => typeof key === 'string')
-          : Object.keys(value.data),
-        comments: isRecord(presentation.comments)
-          ? presentation.comments as ComposeDocument['presentation']['comments']
-          : {},
-        ...(isRecord(presentation.blankLines)
-          ? { blankLines: presentation.blankLines as Record<string, number> }
-          : {}),
-      },
-    }
-  }
-
+  const presentation = value.presentation
   return {
     version: 1,
-    data: { ...value },
-    presentation: { keyOrder: Object.keys(value), comments: {} },
+    data: { ...value.data },
+    presentation: {
+      keyOrder: presentation.keyOrder.filter((key): key is string => typeof key === 'string'),
+      comments: { ...presentation.comments },
+      ...(isRecord(presentation.blankLines)
+        ? { blankLines: presentation.blankLines as Record<string, number> }
+        : {}),
+    },
   }
 }
 

@@ -156,7 +156,7 @@ Authorization helpers:
 #### Licenses (`/<orgId>/servers/licenses`)
 
 - `fetchLicenses()` → `GET /api/client/v1/licenses` (includes optional `boundServer` when exactly one server references the license).
-- `invalidateLicense(id)` → `DELETE /api/client/v1/licenses/:id` (soft invalidate; disconnects bound servers). `revokeLicense` is a deprecated alias.
+- `invalidateLicense(id)` → `DELETE /api/client/v1/licenses/:id` (soft invalidate; disconnects bound servers).
 - `licenses-overview-section.tsx` — list + invalidate with confirm; gated by `useCan(..., 'organization:own')`; co-located license shows as non-invalidateable.
 
 #### Server status reads — Postgres only
