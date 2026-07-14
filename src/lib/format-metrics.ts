@@ -111,11 +111,23 @@ export function formatAxisTime(
 }
 
 export function formatCoveragePercent(
-  sampleCount: number,
+  presentSamples: number,
   expectedSamples: number,
 ): string {
   if (expectedSamples <= 0) return '—'
-  const pct = (sampleCount / expectedSamples) * 100
+  // Coverage is grid fill rate, not raw AE SUM(_sample_interval). Extra samples
+  // in one bucket must not push coverage above 100% or past (expected - gaps).
+  const present = Math.max(0, Math.min(presentSamples, expectedSamples))
+  const pct = (present / expectedSamples) * 100
   if (!Number.isFinite(pct)) return '—'
   return `${pct.toFixed(1)}%`
+}
+
+/** Slots on the resolution grid that have at least the expected samples. */
+export function presentSamplesFromGaps(
+  expectedSamples: number,
+  gapCount: number,
+): number {
+  if (expectedSamples <= 0) return 0
+  return Math.max(0, expectedSamples - Math.max(0, gapCount))
 }

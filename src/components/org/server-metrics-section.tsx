@@ -25,6 +25,7 @@ import {
   formatOpsPerSecond,
   formatPercent,
   formatUptimeSeconds,
+  presentSamplesFromGaps,
   type MetricsRangeId,
 } from '@/lib/format-metrics'
 import {
@@ -556,6 +557,7 @@ function MetricsCharts({
   normalizedMetrics,
   chartDomainMs,
   expectedSamples,
+  presentSamples,
   coverageLabel,
   resolutionLabel,
   twoColumn,
@@ -565,6 +567,7 @@ function MetricsCharts({
   normalizedMetrics: ReturnType<typeof normalizeMetricsGrid> | null
   chartDomainMs: readonly [number, number]
   expectedSamples: number
+  presentSamples: number
   coverageLabel: string | null
   resolutionLabel: string
   twoColumn: boolean
@@ -601,11 +604,11 @@ function MetricsCharts({
         <ChartCard title="Sample coverage" subtitle="coverage">
           <View style={styles.coverageChartMeta}>
             <Text style={styles.coverageDetail}>
-              Samples: {data.sampleCount}
+              Present: {presentSamples}
             </Text>
             <Text style={styles.coverageDetail}>Gaps: {data.gapCount}</Text>
             <Text style={styles.coverageDetail}>
-              Expected samples: {expectedSamples || '—'}
+              Expected: {expectedSamples || '—'}
             </Text>
             <Text style={styles.coverageDetail}>
               Coverage: {coverageLabel ?? '—'}
@@ -689,9 +692,12 @@ export function ServerMetricsSection({
   const expectedSamples =
     normalizedMetrics?.expectedSamples ??
     (data ? data.sampleCount + data.gapCount : 0)
+  const presentSamples = data
+    ? presentSamplesFromGaps(expectedSamples, data.gapCount)
+    : 0
   const coverageLabel =
     data && expectedSamples > 0
-      ? formatCoveragePercent(data.sampleCount, expectedSamples)
+      ? formatCoveragePercent(presentSamples, expectedSamples)
       : null
 
   const resolutionLabel =
@@ -740,6 +746,7 @@ export function ServerMetricsSection({
           normalizedMetrics={normalizedMetrics}
           chartDomainMs={chartDomainMs}
           expectedSamples={expectedSamples}
+          presentSamples={presentSamples}
           coverageLabel={coverageLabel}
           resolutionLabel={resolutionLabel}
           twoColumn={twoColumn}
