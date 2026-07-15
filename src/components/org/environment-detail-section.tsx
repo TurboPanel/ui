@@ -593,7 +593,7 @@ export function EnvironmentDetailSection({
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [containersByService, setContainersByService] = useState<
     Record<string, ContainerRecord[]>
-  >({}))
+  >({})
 
   useEffect(() => {
     let cancelled = false
