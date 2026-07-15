@@ -47,7 +47,7 @@ export function OrgSidebar({
                 </Text>
               </Pressable>
 
-              {areaActive ? (
+              {areaActive && area.subRoutes.length > 0 ? (
                 <View style={styles.subNav}>
                   {area.subRoutes.map((subRoute) => {
                     const subHref = orgRouteHref(

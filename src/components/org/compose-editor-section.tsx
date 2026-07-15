@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
+  composeDocumentToRuntimeYaml,
   composeDocumentToYaml,
   normalizeCompose,
+  preserveComposePlacement,
+  stripComposePlacement,
   yamlToComposeDocument,
   type ComposeDocument,
 } from '@/lib/compose'
 import { colors, spacing } from '@/lib/theme'
 
-type EditorTab = 'yaml' | 'visual'
+type EditorTab = 'user' | 'stored' | 'visual'
 
 function servicesFrom(document: ComposeDocument): Record<string, Record<string, unknown>> {
   const services = document.data.services
@@ -29,6 +32,30 @@ function servicePorts(value: unknown): string {
   return Array.isArray(value) ? value.map(String).join(', ') : ''
 }
 
+function editedDocument(
+  tab: EditorTab,
+  yaml: string,
+  draft: ComposeDocument,
+): ComposeDocument {
+  if (tab === 'user') {
+    return yamlToComposeDocument(yaml)
+  }
+  return draft
+}
+
+function storedPreviewDocument(
+  tab: EditorTab,
+  yaml: string,
+  draft: ComposeDocument,
+  source: unknown,
+): ComposeDocument {
+  try {
+    return preserveComposePlacement(editedDocument(tab, yaml, draft), source)
+  } catch {
+    return preserveComposePlacement(draft, source)
+  }
+}
+
 export function ComposeEditorSection({
   document,
   onSave,
@@ -40,26 +67,34 @@ export function ComposeEditorSection({
   saving?: boolean
   title?: string
 }>) {
-  const [tab, setTab] = useState<EditorTab>('yaml')
-  const [draft, setDraft] = useState<ComposeDocument>(() => normalizeCompose(document))
-  const [yaml, setYaml] = useState(() => composeDocumentToYaml(document))
+  const source = normalizeCompose(document)
+  const [tab, setTab] = useState<EditorTab>('user')
+  const [draft, setDraft] = useState<ComposeDocument>(() => stripComposePlacement(source))
+  const [yaml, setYaml] = useState(() =>
+    composeDocumentToYaml(stripComposePlacement(source)),
+  )
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const normalized = normalizeCompose(document)
+    const normalized = stripComposePlacement(normalizeCompose(document))
     setDraft(normalized)
     setYaml(composeDocumentToYaml(normalized))
   }, [document])
 
   const updateDraft = (next: ComposeDocument) => {
-    setDraft(next)
-    setYaml(composeDocumentToYaml(next))
+    const visible = stripComposePlacement(next)
+    setDraft(visible)
+    setYaml(composeDocumentToYaml(visible))
     setError(null)
   }
 
+  const resolveStoredPreview = (): ComposeDocument =>
+    storedPreviewDocument(tab, yaml, draft, document)
+
   const handleSave = async () => {
     try {
-      const next = tab === 'yaml' ? yamlToComposeDocument(yaml) : draft
+      const edited = tab === 'user' ? yamlToComposeDocument(yaml) : draft
+      const next = preserveComposePlacement(edited, document)
       setError(null)
       await onSave(next)
       updateDraft(next)
@@ -119,45 +154,95 @@ export function ComposeEditorSection({
     })
   }
 
+  const storedPreview = tab === 'stored' ? resolveStoredPreview() : null
+  const storedYaml = storedPreview ? composeDocumentToYaml(storedPreview) : ''
+  const runtimeYaml = storedPreview ? composeDocumentToRuntimeYaml(storedPreview) : ''
+
   return (
     <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.tabs}>
-          {(['yaml', 'visual'] as const).map((entry) => (
+          {([
+            ['user', 'User'],
+            ['stored', 'Stored'],
+            ['visual', 'Visual'],
+          ] as const).map(([entry, label]) => (
             <Pressable
               key={entry}
               style={[styles.tab, tab === entry && styles.tabActive]}
               onPress={() => {
-                if (entry === 'yaml') {
+                if (tab === 'user' && entry !== 'user') {
+                  try {
+                    const parsed = stripComposePlacement(yamlToComposeDocument(yaml))
+                    setDraft(parsed)
+                    setYaml(composeDocumentToYaml(parsed))
+                    setError(null)
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Compose YAML is invalid')
+                    return
+                  }
+                }
+                if (entry === 'user' && tab === 'visual') {
                   setYaml(composeDocumentToYaml(draft))
                 }
                 setTab(entry)
               }}
             >
               <Text style={[styles.tabText, tab === entry && styles.tabTextActive]}>
-                {entry === 'yaml' ? 'YAML' : 'Visual'}
+                {label}
               </Text>
             </Pressable>
           ))}
         </View>
       </View>
 
-      {tab === 'yaml' ? (
-        <TextInput
-          multiline
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={yaml}
-          onChangeText={(value) => {
-            setYaml(value)
-            setError(null)
-          }}
-          editable={!saving}
-          style={styles.yamlInput}
-          textAlignVertical="top"
-        />
-      ) : (
+      {tab === 'user' ? (
+        <>
+          <Text style={styles.hint}>
+            Editable compose — TurboPanel placement (`x-turbopanel`) is hidden here. Comments are kept on save.
+          </Text>
+          <TextInput
+            multiline
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={yaml}
+            onChangeText={(value) => {
+              setYaml(value)
+              setError(null)
+            }}
+            editable={!saving}
+            style={styles.yamlInput}
+            textAlignVertical="top"
+          />
+        </>
+      ) : null}
+
+      {tab === 'stored' ? (
+        <>
+          <Text style={styles.hint}>
+            What is stored (including placement). Runtime deploy drops presentation-only comments.
+          </Text>
+          <Text style={styles.subheading}>Stored</Text>
+          <TextInput
+            editable={false}
+            multiline
+            value={storedYaml}
+            style={[styles.yamlInput, styles.yamlReadonly]}
+            textAlignVertical="top"
+          />
+          <Text style={styles.subheading}>Runtime (deployed)</Text>
+          <TextInput
+            editable={false}
+            multiline
+            value={runtimeYaml}
+            style={[styles.yamlInput, styles.yamlReadonly]}
+            textAlignVertical="top"
+          />
+        </>
+      ) : null}
+
+      {tab === 'visual' ? (
         <View style={styles.serviceList}>
           {Object.entries(servicesFrom(draft)).map(([name, service]) => (
             <View key={name} style={orgPanelStyles.detailCard}>
@@ -200,16 +285,18 @@ export function ComposeEditorSection({
             <Text style={styles.secondaryButtonText}>Add service</Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      <Pressable
-        style={[styles.saveButton, saving && styles.buttonDisabled]}
-        onPress={() => void handleSave()}
-        disabled={saving}
-      >
-        <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save compose'}</Text>
-      </Pressable>
+      {tab !== 'stored' ? (
+        <Pressable
+          style={[styles.saveButton, saving && styles.buttonDisabled]}
+          onPress={() => void handleSave()}
+          disabled={saving}
+        >
+          <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save compose'}</Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -218,6 +305,8 @@ const styles = StyleSheet.create({
   root: { gap: spacing.sm },
   header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  hint: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
+  subheading: { color: colors.text, fontSize: 13, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { borderWidth: 1, borderColor: colors.borderChip, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
   tabActive: { borderColor: colors.accent, backgroundColor: colors.bgActive },
@@ -235,6 +324,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     padding: spacing.sm,
   },
+  yamlReadonly: { minHeight: 160, opacity: 0.95 },
   serviceList: { gap: spacing.sm },
   serviceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   serviceNameInput: { color: colors.accent, fontFamily: 'monospace', fontSize: 13, fontWeight: '600', flex: 1 },

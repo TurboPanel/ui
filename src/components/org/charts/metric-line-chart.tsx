@@ -140,14 +140,14 @@ function gapBandLayout(
 ): { left: number; width: number } | null {
   const [startMs, endMs] = xDomainMs
   const domain = endMs - startMs
-  if (!(domain > 0) || !(plotWidth > 0)) return null
+  if (domain <= 0 || plotWidth <= 0) return null
 
   const rawLeft = ((band.fromMs - startMs) / domain) * plotWidth
   const rawRight = ((band.toMs - startMs) / domain) * plotWidth
   const left = Math.max(0, Math.min(plotWidth, rawLeft))
   const right = Math.max(0, Math.min(plotWidth, rawRight))
   const width = right - left
-  if (!(width > 0)) return null
+  if (width <= 0) return null
   return { left, width }
 }
 

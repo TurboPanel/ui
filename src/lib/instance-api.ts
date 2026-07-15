@@ -208,7 +208,7 @@ export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }>
 }
 
 export type ServerDeleteBlocker = {
-  kind: 'network'
+  kind: 'network' | 'container'
   count: number
 }
 
@@ -223,12 +223,32 @@ export class ServerDeleteBlockedError extends Error {
   }
 }
 
+function formatDeleteBlockerMessage(
+  kind: 'network' | 'container',
+  count: number,
+): string {
+  let label: string
+  if (kind === 'network') {
+    label = count === 1 ? 'network' : 'networks'
+  } else {
+    label = count === 1 ? 'container' : 'containers'
+  }
+  return `Remove ${count} ${label} on this server before deleting it.`
+}
+
 export function formatServerDeleteBlockedError(err: unknown): string {
   if (err instanceof ServerDeleteBlockedError) {
+    const parts: string[] = []
     const networkBlock = err.blockers.find((blocker) => blocker.kind === 'network')
     if (networkBlock) {
-      const label = networkBlock.count === 1 ? 'network' : 'networks'
-      return `Remove ${networkBlock.count} ${label} on this server before deleting it.`
+      parts.push(formatDeleteBlockerMessage('network', networkBlock.count))
+    }
+    const containerBlock = err.blockers.find((blocker) => blocker.kind === 'container')
+    if (containerBlock) {
+      parts.push(formatDeleteBlockerMessage('container', containerBlock.count))
+    }
+    if (parts.length > 0) {
+      return parts.join(' ')
     }
     return err.message
   }
@@ -586,6 +606,23 @@ export type HostingRecord = {
   updatedAt: string;
 };
 
+export type ContainerMetadata = {
+  containerId?: string;
+  containerName?: string;
+  status?: string;
+  composeServiceName?: string;
+};
+
+export type ContainerRecord = {
+  id: string;
+  serviceId: string;
+  serverId: string;
+  metadata?: ContainerMetadata | null;
+  options?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type NetworkRecord = {
   id: string;
   serverId: string;
@@ -834,6 +871,51 @@ export async function updateHosting(
     method: 'PATCH',
     body: JSON.stringify(body),
   })
+}
+
+export async function fetchContainers(
+  serviceId?: string,
+): Promise<{ containers: ContainerRecord[] }> {
+  const params = serviceId ? new URLSearchParams({ serviceId }) : null;
+  const suffix = params ? `?${params.toString()}` : "";
+  return await apiFetch(`${CLIENT_API}/containers${suffix}`);
+}
+
+export async function fetchContainer(
+  id: string,
+): Promise<{ container: ContainerRecord }> {
+  return await apiFetch(`${CLIENT_API}/containers/${id}`);
+}
+
+export async function createContainer(body: {
+  serviceId: string;
+  serverId: string;
+  metadata?: ContainerMetadata;
+  options?: Record<string, unknown>;
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/containers`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateContainer(
+  id: string,
+  body: {
+    metadata?: ContainerMetadata;
+    options?: Record<string, unknown>;
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/containers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteContainer(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/containers/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function fetchNetworks(
@@ -1202,11 +1284,11 @@ export async function fetchCommand(
 
 export async function deployEnvironment(
   environmentId: string,
-  body: { serverId: string },
+  body?: { serverId?: string },
 ): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy`, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify(body ?? {}),
   })
 }
 

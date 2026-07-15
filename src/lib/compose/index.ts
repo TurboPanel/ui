@@ -1,84 +1,27 @@
-import { parseDocument, stringify } from 'yaml'
+export type {
+  ComposeComment,
+  ComposeDocument,
+  ComposePresentation,
+} from './types'
+export {
+  emptyComposeDocument,
+  isComposeDocument,
+  normalizeCompose,
+} from './types'
+export {
+  ComposeParseError,
+  composeDocumentToRuntimeYaml,
+  composeDocumentToYaml,
+  yamlToComposeDocument,
+} from './convert'
 
-export type ComposeDocument = {
-  version: 1
-  data: Record<string, unknown>
-  presentation: {
-    keyOrder: string[]
-    comments: Record<string, { before?: string; inline?: string }>
-    blankLines?: Record<string, number>
-  }
-}
+import {
+  normalizeCompose,
+  type ComposeDocument,
+} from './types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-export function emptyComposeDocument(): ComposeDocument {
-  return {
-    version: 1,
-    data: { services: {} },
-    presentation: { keyOrder: ['services'], comments: {} },
-  }
-}
-
-function isComposeDocument(value: unknown): value is ComposeDocument {
-  if (!isRecord(value)) return false
-  if (value.version !== 1) return false
-  if (!isRecord(value.data)) return false
-  if (!isRecord(value.presentation)) return false
-  const presentation = value.presentation
-  return Array.isArray(presentation.keyOrder) && isRecord(presentation.comments)
-}
-
-/**
- * Normalize a valid ComposeDocument, or an intentionally empty value (`null` /
- * `undefined`). Does not lift bare compose objects into the current format.
- */
-export function normalizeCompose(value: unknown): ComposeDocument {
-  if (value == null) return emptyComposeDocument()
-  if (!isComposeDocument(value)) return emptyComposeDocument()
-
-  const presentation = value.presentation
-  return {
-    version: 1,
-    data: { ...value.data },
-    presentation: {
-      keyOrder: presentation.keyOrder.filter((key): key is string => typeof key === 'string'),
-      comments: { ...presentation.comments },
-      ...(isRecord(presentation.blankLines)
-        ? { blankLines: presentation.blankLines as Record<string, number> }
-        : {}),
-    },
-  }
-}
-
-export function yamlToComposeDocument(source: string): ComposeDocument {
-  if (!source.trim()) {
-    return emptyComposeDocument()
-  }
-
-  const document = parseDocument(source, { prettyErrors: true })
-  if (document.errors.length > 0) {
-    throw new Error(document.errors.map((error) => error.message).join('; '))
-  }
-
-  const value = document.toJSON()
-  if (!isRecord(value)) {
-    throw new Error('Compose file root must be a mapping')
-  }
-
-  return {
-    version: 1,
-    data: value,
-    presentation: { keyOrder: Object.keys(value), comments: {} },
-  }
-}
-
-export function composeDocumentToYaml(value: unknown): string {
-  const document = normalizeCompose(value)
-  const yaml = stringify(document.data, { lineWidth: 0 })
-  return yaml.endsWith('\n') ? yaml : `${yaml}\n`
 }
 
 function deepMerge(
@@ -101,9 +44,11 @@ export function mergeComposeOverlay(
 ): ComposeDocument {
   const baseDocument = normalizeCompose(base)
   const overlayDocument = normalizeCompose(overlay)
-  const overlayIsEmpty = Object.keys(overlayDocument.data).length === 1 &&
-    isRecord(overlayDocument.data.services) &&
-    Object.keys(overlayDocument.data.services).length === 0
+  const overlayKeys = Object.keys(overlayDocument.data)
+  const overlayIsEmpty = overlayKeys.length === 0 ||
+    (overlayKeys.length === 1 &&
+      isRecord(overlayDocument.data.services) &&
+      Object.keys(overlayDocument.data.services).length === 0)
 
   if (overlayIsEmpty) {
     return baseDocument
@@ -125,4 +70,93 @@ export function mergeComposeOverlay(
       },
     },
   }
+}
+
+/** Mirror of instance `src/lib/compose/placement.ts`. */
+export const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
+
+export type ComposeTurbopanelExtension = {
+  placement?: { server_id?: string }
+}
+
+export function readComposePlacementServerId(
+  document: ComposeDocument,
+): string | null {
+  const extension = document.data[TURBOPANEL_EXTENSION_KEY]
+  if (!isRecord(extension)) return null
+  const placement = extension.placement
+  if (!isRecord(placement)) return null
+  const serverId = placement.server_id
+  if (typeof serverId !== 'string') return null
+  const trimmed = serverId.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+export function setComposePlacementServerId(
+  document: ComposeDocument,
+  serverId: string | null,
+): ComposeDocument {
+  const normalized = normalizeCompose(document)
+  const data = { ...normalized.data }
+  const keyOrder = [...normalized.presentation.keyOrder]
+
+  if (!serverId) {
+    delete data[TURBOPANEL_EXTENSION_KEY]
+    return {
+      version: 1,
+      data,
+      presentation: {
+        keyOrder: keyOrder.filter((key) => key !== TURBOPANEL_EXTENSION_KEY),
+        comments: { ...normalized.presentation.comments },
+        ...(normalized.presentation.blankLines
+          ? { blankLines: { ...normalized.presentation.blankLines } }
+          : {}),
+      },
+    }
+  }
+
+  const existing = isRecord(data[TURBOPANEL_EXTENSION_KEY])
+    ? data[TURBOPANEL_EXTENSION_KEY]
+    : {}
+  const existingPlacement = isRecord(existing.placement) ? existing.placement : {}
+  data[TURBOPANEL_EXTENSION_KEY] = {
+    ...existing,
+    placement: { ...existingPlacement, server_id: serverId },
+  }
+  if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
+    keyOrder.push(TURBOPANEL_EXTENSION_KEY)
+  }
+
+  return {
+    version: 1,
+    data,
+    presentation: {
+      keyOrder,
+      comments: { ...normalized.presentation.comments },
+      ...(normalized.presentation.blankLines
+        ? { blankLines: { ...normalized.presentation.blankLines } }
+        : {}),
+    },
+  }
+}
+
+/**
+ * Compose document for editor/preview UI: omit `x-turbopanel` placement.
+ * Placement is managed via the project Server placement control, not YAML.
+ */
+export function stripComposePlacement(document: ComposeDocument): ComposeDocument {
+  return setComposePlacementServerId(document, null)
+}
+
+/**
+ * Re-apply placement from `source` onto `edited` so compose saves do not wipe a pin.
+ */
+export function preserveComposePlacement(
+  edited: ComposeDocument,
+  source: unknown,
+): ComposeDocument {
+  return setComposePlacementServerId(
+    edited,
+    readComposePlacementServerId(normalizeCompose(source)),
+  )
 }

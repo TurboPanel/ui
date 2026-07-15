@@ -1,15 +1,22 @@
-import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { EnvironmentsOverviewSection } from '@/components/org/environments-overview-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
+  normalizeCompose,
+  readComposePlacementServerId,
+  setComposePlacementServerId,
+} from '@/lib/compose'
+import {
+  fetchOrgServers,
   fetchProject,
   isForbiddenError,
   updateProject,
   type ComposeDocument,
+  type OrgServerRecord,
   type ProjectRecord,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
@@ -33,6 +40,25 @@ function projectTypeBadge(project: ProjectRecord) {
   return null
 }
 
+function serverLabel(server: OrgServerRecord): string {
+  return server.displayName?.trim() || server.hostname || server.id
+}
+
+function placementSummary(
+  placementServerId: string | null,
+  servers: OrgServerRecord[],
+): string {
+  if (!placementServerId) {
+    return 'Not pinned — server chosen at deploy time.'
+  }
+  const pinned = servers.find((server) => server.id === placementServerId)
+  if (!pinned) {
+    return `Pinned to ${placementServerId}`
+  }
+  const offlineHint = pinned.connected ? '' : ' (offline)'
+  return `Pinned to ${serverLabel(pinned)}${offlineHint}`
+}
+
 export function ProjectDetailSection({
   orgId,
   projectId,
@@ -42,9 +68,11 @@ export function ProjectDetailSection({
 }>) {
   const { handleUnauthorized } = useAuth()
   const [project, setProject] = useState<ProjectRecord | null>(null)
+  const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingCompose, setSavingCompose] = useState(false)
+  const [savingPlacement, setSavingPlacement] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -53,9 +81,13 @@ export function ProjectDetailSection({
       setLoading(true)
       setError(null)
       try {
-        const result = await fetchProject(projectId)
+        const [projectResult, serversResult] = await Promise.all([
+          fetchProject(projectId),
+          fetchOrgServers(),
+        ])
         if (!cancelled) {
-          setProject(result.project)
+          setProject(projectResult.project)
+          setServers(serversResult.servers)
         }
       } catch (err) {
         if (!cancelled) {
@@ -81,6 +113,22 @@ export function ProjectDetailSection({
     }
   }, [projectId, handleUnauthorized])
 
+  const placementServerId = useMemo(
+    () =>
+      project
+        ? readComposePlacementServerId(normalizeCompose(project.options?.compose))
+        : null,
+    [project],
+  )
+
+  const sortedServers = useMemo(
+    () =>
+      [...servers].sort((a, b) =>
+        (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
+      ),
+    [servers],
+  )
+
   const saveCompose = async (compose: ComposeDocument) => {
     setSavingCompose(true)
     setError(null)
@@ -102,6 +150,31 @@ export function ProjectDetailSection({
     }
   }
 
+  const savePlacement = async (serverId: string | null) => {
+    setSavingPlacement(true)
+    setError(null)
+    try {
+      const compose = setComposePlacementServerId(
+        normalizeCompose(project?.options?.compose),
+        serverId,
+      )
+      await updateProject(projectId, { options: { compose } })
+      setProject((current) =>
+        current
+          ? { ...current, options: { compose } }
+          : current,
+      )
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(err instanceof Error ? err.message : 'Failed to save placement')
+    } finally {
+      setSavingPlacement(false)
+    }
+  }
+
   if (loading && !project) {
     return (
       <View style={styles.root}>
@@ -119,22 +192,95 @@ export function ProjectDetailSection({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       {project ? (
-        <SectionPanel title="Project" hint="Project details">
-          <View style={styles.headerRow}>
-            <Text style={orgPanelStyles.detailTitle}>
-              {project.displayName?.trim() || 'Unnamed project'}
+        <>
+          <SectionPanel title="Project" hint="Project details">
+            <View style={styles.headerRow}>
+              <Text style={orgPanelStyles.detailTitle}>
+                {project.displayName?.trim() || 'Unnamed project'}
+              </Text>
+              {projectTypeBadge(project)}
+            </View>
+            {project.description ? (
+              <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
+            ) : null}
+            <ComposeEditorSection
+              document={project.options?.compose}
+              onSave={saveCompose}
+              saving={savingCompose}
+            />
+          </SectionPanel>
+
+          <SectionPanel
+            title="Server placement"
+            hint="Pin this project (all environments) to one server"
+          >
+            <Text style={orgPanelStyles.detailLine}>
+              {placementSummary(placementServerId, servers)}
             </Text>
-            {projectTypeBadge(project)}
-          </View>
-          {project.description ? (
-            <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
-          ) : null}
-          <ComposeEditorSection
-            document={project.options?.compose}
-            onSave={saveCompose}
-            saving={savingCompose}
-          />
-        </SectionPanel>
+            <Text style={orgPanelStyles.muted}>
+              Save compose edits above before changing placement if both need updating.
+            </Text>
+            <View style={styles.serverList}>
+              <Pressable
+                style={[
+                  styles.serverOption,
+                  placementServerId === null && styles.serverOptionSelected,
+                ]}
+                disabled={savingPlacement}
+                onPress={() => {
+                  void savePlacement(null)
+                }}
+              >
+                <Text style={styles.serverOptionText}>Unpinned</Text>
+              </Pressable>
+              {sortedServers.map((server) => {
+                const selected = placementServerId === server.id
+                const canSelect = server.connected
+                if (!canSelect) {
+                  return (
+                    <View
+                      key={server.id}
+                      style={[
+                        styles.serverOption,
+                        styles.serverOptionDisabled,
+                        selected && styles.serverOptionSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.serverOptionText,
+                          styles.serverOptionTextDisabled,
+                        ]}
+                      >
+                        {serverLabel(server)} (offline)
+                      </Text>
+                    </View>
+                  )
+                }
+                return (
+                  <Pressable
+                    key={server.id}
+                    style={[
+                      styles.serverOption,
+                      selected && styles.serverOptionSelected,
+                    ]}
+                    disabled={savingPlacement}
+                    onPress={() => {
+                      void savePlacement(server.id)
+                    }}
+                  >
+                    <Text style={styles.serverOptionText}>
+                      {serverLabel(server)}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+            {savingPlacement ? (
+              <Text style={orgPanelStyles.muted}>Saving placement…</Text>
+            ) : null}
+          </SectionPanel>
+        </>
       ) : null}
 
       <EnvironmentsOverviewSection orgId={orgId} projectId={projectId} />
@@ -185,5 +331,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  serverList: { gap: spacing.xs },
+  serverOption: {
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 6,
+    backgroundColor: colors.bgSecondary,
+    padding: spacing.sm,
+  },
+  serverOptionSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  serverOptionDisabled: {
+    opacity: 0.6,
+  },
+  serverOptionText: {
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: 'monospace',
+  },
+  serverOptionTextDisabled: {
+    color: colors.textMuted,
   },
 })

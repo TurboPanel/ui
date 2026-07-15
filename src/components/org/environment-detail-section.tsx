@@ -9,6 +9,7 @@ import {
   createHosting,
   createService,
   deployEnvironment,
+  fetchContainers,
   fetchEnvironment,
   fetchOrgServers,
   fetchProject,
@@ -20,12 +21,18 @@ import {
   updateHosting,
   type CommandRecord,
   type ComposeDocument,
+  type ContainerRecord,
   type EnvironmentRecord,
   type HostingRecord,
   type OrgServerRecord,
   type ServiceRecord,
 } from '@/lib/instance-api'
-import { composeDocumentToYaml, mergeComposeOverlay } from '@/lib/compose'
+import {
+  composeDocumentToRuntimeYaml,
+  mergeComposeOverlay,
+  normalizeCompose,
+  readComposePlacementServerId,
+} from '@/lib/compose'
 import { colors, spacing } from '@/lib/theme'
 
 const TERMINAL_COMMAND_STATUSES = new Set<CommandRecord['status']>([
@@ -62,6 +69,10 @@ function pickDefaultServerId(current: string, servers: OrgServerRecord[]): strin
   return servers.find((server) => server.connected)?.id ?? ''
 }
 
+function serverLabel(server: OrgServerRecord): string {
+  return server.displayName?.trim() || server.hostname || server.id
+}
+
 async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
   byService: Record<string, HostingRecord[]>
   hostnames: Record<string, string>
@@ -78,6 +89,70 @@ async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
       entries.map(([serviceId, hostings]) => [serviceId, formatHostingHostnames(hostings)]),
     ),
   }
+}
+
+async function fetchContainersByService(
+  services: ServiceRecord[],
+): Promise<Record<string, ContainerRecord[]>> {
+  const entries = await Promise.all(
+    services.map(async (service) => {
+      const result = await fetchContainers(service.id)
+      return [service.id, result.containers] as const
+    }),
+  )
+  return Object.fromEntries(entries)
+}
+
+type ContainerStatusVariant = 'running' | 'pending' | 'stopped' | 'unknown'
+
+function containerStatusVariant(status?: string): ContainerStatusVariant {
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'restarting':
+    case 'created':
+    case 'paused':
+      return 'pending'
+    case 'exited':
+    case 'dead':
+    case 'removing':
+      return 'stopped'
+    default:
+      return 'unknown'
+  }
+}
+
+function containerDisplayName(container: ContainerRecord): string {
+  return (
+    container.metadata?.containerName ??
+    container.metadata?.composeServiceName ??
+    container.id
+  )
+}
+
+function containerHostLabel(
+  container: ContainerRecord,
+  allServers: OrgServerRecord[],
+): string {
+  const host = allServers.find((server) => server.id === container.serverId)
+  if (host) {
+    return serverLabel(host)
+  }
+  return container.serverId
+}
+
+function ContainerStatusBadge({
+  status,
+}: Readonly<{ status?: string }>) {
+  const variant = containerStatusVariant(status)
+  const label = status?.trim() || 'unknown'
+  return (
+    <View style={[styles.statusBadge, statusBadgeVariantStyles[variant].badge]}>
+      <Text style={[styles.statusBadgeText, statusBadgeVariantStyles[variant].text]}>
+        {label}
+      </Text>
+    </View>
+  )
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -103,11 +178,58 @@ async function waitForTerminalCommand(
   return command
 }
 
+/** Consumer marks deploy succeeded before container reconcile finishes — retry briefly. */
+const POST_DEPLOY_CONTAINER_REFRESH_ATTEMPTS = 5
+const POST_DEPLOY_CONTAINER_REFRESH_DELAY_MS = 400
+
+function hasAnyContainers(
+  services: ServiceRecord[],
+  containersByService: Record<string, ContainerRecord[]>,
+): boolean {
+  return services.some((service) => (containersByService[service.id] ?? []).length > 0)
+}
+
+async function refreshServicesAndContainersAfterDeploy(
+  environmentId: string,
+): Promise<{
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+}> {
+  let services: ServiceRecord[] = []
+  let containersByService: Record<string, ContainerRecord[]> = {}
+
+  for (let attempt = 0; attempt < POST_DEPLOY_CONTAINER_REFRESH_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, POST_DEPLOY_CONTAINER_REFRESH_DELAY_MS),
+      )
+    }
+    const servicesResult = await fetchVisibleServices(environmentId)
+    services = servicesResult.services
+    containersByService = await fetchContainersByService(services)
+    // Always take a second pass when rows appear on attempt 0 — they may still
+    // be pre-reconcile. Stop once a deferred attempt sees containers.
+    if (attempt > 0 && hasAnyContainers(services, containersByService)) {
+      break
+    }
+  }
+
+  return { services, containersByService }
+}
+
 function deployStatusMessage(command: CommandRecord): string {
   if (command.status === 'succeeded') {
     return 'Deployment completed.'
   }
   return command.error ?? `Deployment ${command.status}.`
+}
+
+function deployErrorMessage(err: unknown): string {
+  const message = errorMessage(err, 'Failed to deploy environment')
+  if (message.includes('server_placement_mismatch')) {
+    return "Deploy target does not match the project's pinned server placement."
+  }
+  return message
 }
 
 async function reportSectionError(
@@ -142,6 +264,86 @@ async function upsertHosting(
     metadata: { composeServiceName },
     options,
   })
+}
+
+function pinnedPlacementBlockedReason(
+  placementServerId: string | null,
+  pinnedServer: OrgServerRecord | null,
+): string | null {
+  if (!placementServerId) {
+    return null
+  }
+  if (!pinnedServer) {
+    return 'Pinned server is unavailable. Update project placement to a connected server.'
+  }
+  if (!pinnedServer.connected) {
+    return 'Pinned server is offline. Update project placement to a connected server.'
+  }
+  return null
+}
+
+function DeployServerPicker({
+  placementServerId,
+  pinnedServer,
+  servers,
+  serverId,
+  setServerId,
+}: Readonly<{
+  placementServerId: string | null
+  pinnedServer: OrgServerRecord | null
+  servers: OrgServerRecord[]
+  serverId: string
+  setServerId: (id: string) => void
+}>) {
+  if (placementServerId) {
+    const label = pinnedServer
+      ? serverLabel(pinnedServer)
+      : placementServerId
+    const offlineHint =
+      pinnedServer && !pinnedServer.connected ? ' (offline)' : ''
+    const blockedReason = pinnedPlacementBlockedReason(
+      placementServerId,
+      pinnedServer,
+    )
+    return (
+      <View style={styles.serverList}>
+        <View style={[styles.serverOption, styles.serverOptionSelected]}>
+          <Text style={styles.serverOptionText}>
+            {label}
+            {offlineHint}
+          </Text>
+          <Text style={orgPanelStyles.muted}>Pinned by project</Text>
+        </View>
+        {blockedReason ? (
+          <Text style={orgPanelStyles.error}>{blockedReason}</Text>
+        ) : null}
+      </View>
+    )
+  }
+
+  if (servers.length === 0) {
+    return (
+      <View style={styles.serverList}>
+        <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.serverList}>
+      {servers.map((server) => (
+        <Pressable
+          key={server.id}
+          style={[styles.serverOption, serverId === server.id && styles.serverOptionSelected]}
+          onPress={() => setServerId(server.id)}
+        >
+          <Text style={styles.serverOptionText}>
+            {serverLabel(server)}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  )
 }
 
 function HostingHostnameRow({
@@ -188,8 +390,12 @@ function EnvironmentLoadedPanels({
   mergedCompose,
   serviceNames,
   servers,
+  allServers,
   serverId,
   setServerId,
+  placementServerId,
+  pinnedServer,
+  pinnedDeployBlocked,
   deploying,
   deployStatus,
   onDeploy,
@@ -200,14 +406,19 @@ function EnvironmentLoadedPanels({
   setHostnames,
   savingHosting,
   onSaveHostnames,
+  containersByService,
 }: Readonly<{
   environment: EnvironmentRecord
   projectId: string
   mergedCompose: ComposeDocument
   serviceNames: string[]
   servers: OrgServerRecord[]
+  allServers: OrgServerRecord[]
   serverId: string
   setServerId: (id: string) => void
+  placementServerId: string | null
+  pinnedServer: OrgServerRecord | null
+  pinnedDeployBlocked: boolean
   deploying: boolean
   deployStatus: string | null
   onDeploy: () => void
@@ -218,7 +429,12 @@ function EnvironmentLoadedPanels({
   setHostnames: Dispatch<SetStateAction<Record<string, string>>>
   savingHosting: string | null
   onSaveHostnames: (composeServiceName: string) => void
+  containersByService: Record<string, ContainerRecord[]>
 }>) {
+  const hasContainers = services.some(
+    (service) => (containersByService[service.id] ?? []).length > 0,
+  )
+
   return (
     <>
       <SectionPanel title="Environment" hint="Environment details">
@@ -245,37 +461,37 @@ function EnvironmentLoadedPanels({
         />
       </SectionPanel>
 
-      <SectionPanel title="Merged runtime compose" hint="Project base with this environment overlay">
+      <SectionPanel
+        title="Merged runtime compose"
+        hint="Project base + overlay as deployed (comments stripped; hosting labels added on the server)"
+      >
         <TextInput
           editable={false}
           multiline
-          value={composeDocumentToYaml(mergedCompose)}
+          value={composeDocumentToRuntimeYaml(mergedCompose)}
           style={styles.preview}
           textAlignVertical="top"
         />
       </SectionPanel>
 
       <SectionPanel title="Deploy" hint="Deploy this environment to a connected server">
-        <View style={styles.serverList}>
-          {servers.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
-          ) : (
-            servers.map((server) => (
-              <Pressable
-                key={server.id}
-                style={[styles.serverOption, serverId === server.id && styles.serverOptionSelected]}
-                onPress={() => setServerId(server.id)}
-              >
-                <Text style={styles.serverOptionText}>
-                  {server.displayName?.trim() || server.hostname || server.id}
-                </Text>
-              </Pressable>
-            ))
-          )}
-        </View>
+        <DeployServerPicker
+          placementServerId={placementServerId}
+          pinnedServer={pinnedServer}
+          servers={servers}
+          serverId={serverId}
+          setServerId={setServerId}
+        />
         <Pressable
-          style={[styles.deployButton, deploying && styles.buttonDisabled]}
-          disabled={deploying || !serverId}
+          style={[
+            styles.deployButton,
+            (deploying || pinnedDeployBlocked) && styles.buttonDisabled,
+          ]}
+          disabled={
+            deploying ||
+            pinnedDeployBlocked ||
+            (!placementServerId && !serverId)
+          }
           onPress={onDeploy}
         >
           <Text style={styles.deployButtonText}>{deploying ? 'Deploying…' : 'Deploy'}</Text>
@@ -310,6 +526,43 @@ function EnvironmentLoadedPanels({
           </View>
         )}
       </SectionPanel>
+
+      <SectionPanel title="Containers" hint="Deployed containers and their status">
+        {!hasContainers ? (
+          <Text style={orgPanelStyles.muted}>No containers deployed yet.</Text>
+        ) : (
+          <View style={styles.containerList}>
+            {services.map((service) => {
+              const containers = containersByService[service.id] ?? []
+              if (containers.length === 0) {
+                return null
+              }
+              return (
+                <View key={service.id} style={orgPanelStyles.detailCard}>
+                  <Text style={orgPanelStyles.detailTitle}>
+                    {service.displayName?.trim() ||
+                      String(service.metadata?.composeServiceName ?? service.id)}
+                  </Text>
+                  {containers.map((container) => (
+                    <View key={container.id} style={styles.containerRow}>
+                      <View style={styles.containerHeader}>
+                        <Text style={orgPanelStyles.detailLine}>
+                          {containerDisplayName(container)}
+                        </Text>
+                        <ContainerStatusBadge status={container.metadata?.status} />
+                      </View>
+                      <Text style={orgPanelStyles.detailLine}>
+                        <Text style={orgPanelStyles.detailLabel}>Host: </Text>
+                        {containerHostLabel(container, allServers)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )
+            })}
+          </View>
+        )}
+      </SectionPanel>
     </>
   )
 }
@@ -329,6 +582,7 @@ export function EnvironmentDetailSection({
   const [error, setError] = useState<string | null>(null)
   const [projectCompose, setProjectCompose] = useState<unknown>(null)
   const [savingCompose, setSavingCompose] = useState(false)
+  const [allServers, setAllServers] = useState<OrgServerRecord[]>([])
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [serverId, setServerId] = useState('')
   const [deploying, setDeploying] = useState(false)
@@ -337,6 +591,9 @@ export function EnvironmentDetailSection({
   const [hostingsByService, setHostingsByService] = useState<Record<string, HostingRecord[]>>({})
   const [hostnames, setHostnames] = useState<Record<string, string>>({})
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
+  const [containersByService, setContainersByService] = useState<
+    Record<string, ContainerRecord[]>
+  >({}))
 
   useEffect(() => {
     let cancelled = false
@@ -356,15 +613,20 @@ export function EnvironmentDetailSection({
         }
         setEnvironment(result.environment)
         setProjectCompose(projectResult.project.options?.compose)
+        setAllServers(serversResult.servers)
         setServers(serversResult.servers.filter((server) => server.connected))
         setServices(servicesResult.services)
         setServerId((current) => pickDefaultServerId(current, serversResult.servers))
-        const hostingState = await fetchHostingsByService(servicesResult.services)
+        const [hostingState, containersState] = await Promise.all([
+          fetchHostingsByService(servicesResult.services),
+          fetchContainersByService(servicesResult.services),
+        ])
         if (cancelled) {
           return
         }
         setHostingsByService(hostingState.byService)
         setHostnames(hostingState.hostnames)
+        setContainersByService(containersState)
       } catch (err) {
         if (cancelled) {
           return
@@ -396,6 +658,16 @@ export function EnvironmentDetailSection({
     [environment?.options?.compose, projectCompose],
   )
   const serviceNames = useMemo(() => composeServiceNames(mergedCompose), [mergedCompose])
+  const placementServerId = useMemo(
+    () => readComposePlacementServerId(normalizeCompose(projectCompose)),
+    [projectCompose],
+  )
+  const pinnedServer = useMemo(
+    () => allServers.find((server) => server.id === placementServerId) ?? null,
+    [allServers, placementServerId],
+  )
+  const pinnedDeployBlocked =
+    pinnedPlacementBlockedReason(placementServerId, pinnedServer) !== null
 
   const saveCompose = async (compose: ComposeDocument) => {
     setSavingCompose(true)
@@ -420,23 +692,38 @@ export function EnvironmentDetailSection({
   }
 
   const deploy = async () => {
-    if (!serverId) {
+    const blockedReason = pinnedPlacementBlockedReason(
+      placementServerId,
+      pinnedServer,
+    )
+    if (blockedReason) {
+      setDeployStatus(blockedReason)
+      return
+    }
+    const targetServerId = placementServerId ?? serverId
+    if (!targetServerId) {
       setDeployStatus('Select a connected server.')
       return
     }
     setDeploying(true)
     setDeployStatus('Queueing deployment…')
     try {
-      const result = await deployEnvironment(environmentId, { serverId })
-      const command = await waitForTerminalCommand(serverId, result.commandId)
+      const result = placementServerId
+        ? await deployEnvironment(environmentId)
+        : await deployEnvironment(environmentId, { serverId })
+      const command = await waitForTerminalCommand(targetServerId, result.commandId)
       setDeployStatus(deployStatusMessage(command))
+      if (command.status === 'succeeded') {
+        const refreshed = await refreshServicesAndContainersAfterDeploy(environmentId)
+        setServices(refreshed.services)
+        setContainersByService(refreshed.containersByService)
+      }
     } catch (err) {
-      await reportSectionError(
-        err,
-        handleUnauthorized,
-        setDeployStatus,
-        'Failed to deploy environment',
-      )
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setDeployStatus(deployErrorMessage(err))
     } finally {
       setDeploying(false)
     }
@@ -472,6 +759,7 @@ export function EnvironmentDetailSection({
         ...current,
         [resolvedService.id]: options.hostnames.join(', '),
       }))
+      setContainersByService(await fetchContainersByService(servicesResult.services))
     } catch (err) {
       await reportSectionError(
         err,
@@ -507,8 +795,12 @@ export function EnvironmentDetailSection({
           mergedCompose={mergedCompose}
           serviceNames={serviceNames}
           servers={servers}
+          allServers={allServers}
           serverId={serverId}
           setServerId={setServerId}
+          placementServerId={placementServerId}
+          pinnedServer={pinnedServer}
+          pinnedDeployBlocked={pinnedDeployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
           onDeploy={() => {
@@ -527,6 +819,7 @@ export function EnvironmentDetailSection({
               // Errors are surfaced via setError.
             })
           }}
+          containersByService={containersByService}
         />
       ) : null}
 
@@ -597,4 +890,47 @@ const styles = StyleSheet.create({
   },
   saveHostingButtonText: { color: colors.accent, fontSize: 12, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },
+  containerList: { gap: spacing.sm },
+  containerRow: { gap: spacing.xs, marginTop: spacing.sm },
+  containerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
 })
+
+const statusBadgeVariantStyles: Record<
+  ContainerStatusVariant,
+  { badge: { borderColor: string; backgroundColor: string }; text: { color: string } }
+> = {
+  running: {
+    badge: { borderColor: colors.accent, backgroundColor: colors.bgActive },
+    text: { color: colors.accent },
+  },
+  pending: {
+    badge: { borderColor: colors.pending, backgroundColor: colors.bgSecondary },
+    text: { color: colors.pending },
+  },
+  stopped: {
+    badge: { borderColor: colors.error, backgroundColor: colors.bgSecondary },
+    text: { color: colors.error },
+  },
+  unknown: {
+    badge: { borderColor: colors.borderChip, backgroundColor: colors.bgSecondary },
+    text: { color: colors.textMuted },
+  },
+}

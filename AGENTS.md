@@ -81,7 +81,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list (optional `?workspaceId` filter) |
 | `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
 | `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + compose editor + environments |
-| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Env overlay compose, deploy, hosting hostnames, variables |
+| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Env overlay compose, deploy, hosting hostnames, containers (status + host server), variables |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
@@ -106,8 +106,10 @@ Authorization helpers:
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `createProject({ type: 'docker-compose' | 'template' | 'managed', … })` — Docker Compose is the default manual compose path (blank removed)
 - `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`)
-- `deployEnvironment(environmentId, { serverId })` → `POST /api/client/v1/environments/:id/deploy`; poll with `fetchCommand(serverId, commandId)` (Postgres only)
-- Compose UI: `compose-editor-section.tsx` (YAML | Visual) on project and environment detail
+- `deployEnvironment(environmentId, body?)` → `POST /api/client/v1/environments/:id/deploy`; `serverId` is optional — when omitted, the instance resolves the target from project compose `x-turbopanel.placement.server_id` (`readComposePlacementServerId` / `setComposePlacementServerId` in `src/lib/compose/`); poll with `fetchCommand(serverId, commandId)` (Postgres only)
+- Compose UI: `compose-editor-section.tsx` (User | Stored | Visual) on project and environment detail; project detail pins placement via `x-turbopanel` on the base compose. **User** edits YAML with `x-turbopanel` hidden (`stripComposePlacement`) and preserves `#` comments on save; **Stored** is a read-only preview of the full document (placement restored) plus the comment-free **runtime** YAML used for deploy; saves re-apply the existing pin (`preserveComposePlacement`) so YAML edits do not wipe placement.
+- `readComposePlacementServerId(document)` / `setComposePlacementServerId(document, serverId | null)` — compose helpers for project server placement (`TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'`)
+- `stripComposePlacement(document)` / `preserveComposePlacement(edited, source)` — hide placement in compose GUI; restore it across compose saves
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `fetchProjectCatalog()` → `GET /api/client/v1/project-catalog` — returns `{ catalog: CatalogSummary[] }`
 - `fetchProject(id)` → `GET /api/client/v1/projects/:id`
@@ -124,7 +126,12 @@ Authorization helpers:
 - `createVariable(body)` → `POST /api/client/v1/variables`
 - `updateVariable(id, body)` → `PATCH /api/client/v1/variables/:id`
 - `deleteVariable(id)` → `DELETE /api/client/v1/variables/:id`
-- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`
+- `fetchContainers(serviceId?)` → `GET /api/client/v1/containers` (optional `?serviceId=`) — Postgres-backed rows; never DO reads
+- `fetchContainer(id)` → `GET /api/client/v1/containers/:id`
+- `createContainer(body)` → `POST /api/client/v1/containers` (`serviceId`, `serverId`, optional `metadata`/`options`)
+- `updateContainer(id, body)` → `PATCH /api/client/v1/containers/:id` (`metadata?`, `options?`)
+- `deleteContainer(id)` → `DELETE /api/client/v1/containers/:id`
+- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ContainerRecord` (`serviceId`, `serverId`, `metadata?: ContainerMetadata`), `ContainerMetadata` (`containerId?`, `containerName?`, `status?`, `composeServiceName?` — status/id from Postgres reconcile, never DO reads)
 - **Secret write-only rule:** `VariableRecord.value` is always `null` when `isSecret` is true — the UI must never display or pre-fill secret values; use masked placeholders and write-only update forms
 - `fetchServerUpdate(serverId)` → `GET /api/client/v1/servers/:id/update` — returns `ServerUpdateStatus` with `current`/`target` commit identity and `updateAvailable`.
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
@@ -135,7 +142,7 @@ Authorization helpers:
 - `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Online** / Offline), and a checkbox column (header = select all).
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) rendered from data-URI SVGs in `src/lib/os-logos.ts`.
 - Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
-- **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`).
+- **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks or containers still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`).
 - Batch **Update** targets **selected** updatable servers (not every updatable host).
 - `OrgServerRecord` includes `os` / `osDisplay` / `osLogo` from `GET /api/client/v1/servers`.
 
