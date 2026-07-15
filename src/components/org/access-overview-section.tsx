@@ -148,8 +148,8 @@ function AccessGrantCard({
   isRevoking: boolean
   onRevoke: (grantId: string) => void
 }>) {
-  const effectStyle =
-    grant.effect === 'allow' ? styles.badgeAllow : styles.badgeDeny
+  // Deny grants are not supported — every grant is an allow grant.
+  const effectStyle = styles.badgeAllow
 
   return (
     <View style={orgPanelStyles.detailCard}>
@@ -228,7 +228,7 @@ function AccessGrantsPanel({
   }
 
   return (
-    <SectionPanel title="Access grants" hint="Active allow and deny rows">
+    <SectionPanel title="Access grants" hint="Active allow grants">
       {actionError ? (
         <Text style={orgPanelStyles.error}>{actionError}</Text>
       ) : null}
@@ -626,10 +626,6 @@ const styles = StyleSheet.create({
   badgeAllow: {
     color: colors.accent,
     backgroundColor: colors.bgActive,
-  },
-  badgeDeny: {
-    color: colors.error,
-    backgroundColor: colors.bgSecondary,
   },
   form: {
     gap: spacing.sm,

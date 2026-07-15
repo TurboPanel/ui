@@ -408,12 +408,14 @@ export type PermissionRecord = {
 
 export type AccessScopeKind = "organization" | "team";
 
+// Deny grants are not supported by the instance — authorization only evaluates
+// allow grants, so `effect` is always `"allow"`.
 export type AccessGrantRecord = {
   id: string;
   subjectKind: "user" | "team" | "organization";
   subjectId: string;
   resourceId: string;
-  effect: "allow" | "deny";
+  effect: "allow";
   permissionKey: string;
 };
 
@@ -421,7 +423,7 @@ export type CreateAccessBody = {
   resourceId: string;
   subjectKind: "user" | "team" | "organization";
   subjectId: string;
-  effect: "allow" | "deny";
+  effect: "allow";
   permissionKey: PermissionKey;
 };
 
