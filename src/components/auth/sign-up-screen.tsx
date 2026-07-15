@@ -34,7 +34,7 @@ const webInputStyle = {
 function validatePassword(password: string): PasswordValidation {
   const hasMinLength = password.length >= 8
   const hasNumber = /\d/.test(password)
-  const hasSpecialChar = /[$!@%&*#^()_+=\-]/.test(password)
+  const hasSpecialChar = /[$!@%&*#^()_+=-]/.test(password)
   const noLeadingTrailingWhitespace = password === password.trim()
   return {
     hasMinLength,
@@ -47,6 +47,7 @@ function validatePassword(password: string): PasswordValidation {
 
 async function sha1Hex(password: string): Promise<string> {
   const enc = new TextEncoder()
+  // NOSONAR typescript:S4790 — HIBP range API requires SHA-1; only prefix is sent (k-anonymity)
   const digest = await crypto.subtle.digest('SHA-1', enc.encode(password))
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -157,7 +158,7 @@ function SignupSuccess({
           Account created! Please sign in.
         </Text>
       )}
-      <Button onPress={onContinue} theme="active" size="$4">
+      <Button onPress={onContinue} theme="accent" size="$4">
         Go to sign in
       </Button>
     </YStack>
@@ -311,7 +312,7 @@ function SignupActions({
       ) : null}
       <Button
         onPress={onSubmit}
-        theme="active"
+        theme="accent"
         size="$4"
         disabled={loading || pwnedChecking || !isValid}
         opacity={loading || pwnedChecking ? 0.7 : 1}

@@ -67,7 +67,7 @@ export function VerifyEmailScreenContent() {
         <Text fontSize="$4" color="$gray10">
           Your email address has been verified. You can now sign in.
         </Text>
-        <Button theme="active" size="$4" onPress={() => router.replace('/sign-in')}>
+        <Button theme="accent" size="$4" onPress={() => router.replace('/sign-in')}>
           Go to sign in
         </Button>
       </YStack>
@@ -82,7 +82,7 @@ export function VerifyEmailScreenContent() {
       <Text fontSize="$3" color="$red10">
         {errorMessage}
       </Text>
-      <Button theme="active" size="$4" onPress={() => router.replace('/sign-in')}>
+      <Button theme="accent" size="$4" onPress={() => router.replace('/sign-in')}>
         Go to sign in
       </Button>
       <Link href="/sign-in">

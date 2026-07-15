@@ -38,10 +38,10 @@ const webInputStyle = {
 export function EnvironmentsOverviewSection({
   orgId,
   projectId,
-}: {
+}: Readonly<{
   orgId: string
   projectId: string
-}) {
+}>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
@@ -186,6 +186,62 @@ export function EnvironmentsOverviewSection({
     hasError && Platform.OS !== 'web' && styles.inputError,
   ]
 
+  let environmentsContent
+  if (loading && environments.length === 0) {
+    environmentsContent = (
+      <Text style={orgPanelStyles.muted}>Loading…</Text>
+    )
+  } else if (environments.length === 0) {
+    environmentsContent = (
+      <Text style={orgPanelStyles.muted}>No environments yet.</Text>
+    )
+  } else {
+    environmentsContent = (
+      <View style={styles.list}>
+        {environments.map((env) => (
+          <View key={env.id} style={orgPanelStyles.detailCard}>
+            <View style={styles.cardHeader}>
+              <Text style={orgPanelStyles.detailTitle}>
+                {env.displayName?.trim() || 'Unnamed environment'}
+              </Text>
+              <View style={styles.cardActions}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() =>
+                    router.push(
+                      `/${orgId}/projects/${projectId}/${env.id}`,
+                    )
+                  }
+                >
+                  <Text style={styles.secondaryButtonText}>Open</Text>
+                </Pressable>
+                {canOwn ? (
+                  <Pressable
+                    style={[
+                      styles.secondaryButton,
+                      deleting.has(env.id) && styles.buttonDisabled,
+                    ]}
+                    disabled={deleting.has(env.id)}
+                    onPress={() => void handleDeleteEnvironment(env.id)}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {deleting.has(env.id) ? 'Deleting…' : 'Delete'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+            {env.description ? (
+              <Text style={orgPanelStyles.detailLine}>
+                {env.description}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    )
+  }
+
   return (
     <SectionPanel title="Environments" hint="Project environments">
       {canOwn ? (
@@ -248,54 +304,7 @@ export function EnvironmentsOverviewSection({
         </View>
       ) : null}
 
-      {loading && environments.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
-      ) : environments.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No environments yet.</Text>
-      ) : (
-        <View style={styles.list}>
-          {environments.map((env) => (
-            <View key={env.id} style={orgPanelStyles.detailCard}>
-              <View style={styles.cardHeader}>
-                <Text style={orgPanelStyles.detailTitle}>
-                  {env.displayName?.trim() || 'Unnamed environment'}
-                </Text>
-                <View style={styles.cardActions}>
-                  <Pressable
-                    style={styles.secondaryButton}
-                    onPress={() =>
-                      router.push(
-                        `/${orgId}/projects/${projectId}/${env.id}`,
-                      )
-                    }
-                  >
-                    <Text style={styles.secondaryButtonText}>Open</Text>
-                  </Pressable>
-                  {canOwn ? (
-                    <Pressable
-                      style={[
-                        styles.secondaryButton,
-                        deleting.has(env.id) && styles.buttonDisabled,
-                      ]}
-                      disabled={deleting.has(env.id)}
-                      onPress={() => void handleDeleteEnvironment(env.id)}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        {deleting.has(env.id) ? 'Deleting…' : 'Delete'}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-              {env.description ? (
-                <Text style={orgPanelStyles.detailLine}>
-                  {env.description}
-                </Text>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      )}
+      {environmentsContent}
     </SectionPanel>
   )
 }

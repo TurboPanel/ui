@@ -8,7 +8,6 @@ import {
   pollInstanceRecovery,
   recoveryDetail,
   recoveryTitle,
-  type RecoveryReason,
 } from '@/lib/instance-recovery'
 import { colors, spacing } from '@/lib/theme'
 

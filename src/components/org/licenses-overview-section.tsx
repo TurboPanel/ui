@@ -29,6 +29,178 @@ function boundServerLabel(license: LicenseRecord): string | null {
   return `${name} (${status})`
 }
 
+function LicenseInvalidateActions({
+  canOwn,
+  isColocatedControlPlane,
+  isConfirming,
+  isInvalidating,
+  onConfirm,
+  onRequestConfirm,
+  onCancel,
+}: Readonly<{
+  canOwn: boolean
+  isColocatedControlPlane: boolean
+  isConfirming: boolean
+  isInvalidating: boolean
+  onConfirm: () => void
+  onRequestConfirm: () => void
+  onCancel: () => void
+}>) {
+  if (isColocatedControlPlane) {
+    return <Text style={orgPanelStyles.muted}>Local control plane</Text>
+  }
+
+  if (!canOwn) {
+    return null
+  }
+
+  if (!isConfirming) {
+    return (
+      <Pressable
+        style={[
+          styles.secondaryButton,
+          isInvalidating && styles.buttonDisabled,
+        ]}
+        disabled={isInvalidating}
+        onPress={onRequestConfirm}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {isInvalidating ? 'Invalidating...' : 'Invalidate'}
+        </Text>
+      </Pressable>
+    )
+  }
+
+  return (
+    <View style={styles.confirmActions}>
+      <Pressable
+        style={[
+          styles.secondaryButton,
+          isInvalidating && styles.buttonDisabled,
+        ]}
+        disabled={isInvalidating}
+        onPress={onConfirm}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {isInvalidating ? 'Invalidating...' : 'Confirm'}
+        </Text>
+      </Pressable>
+      <Pressable
+        style={styles.cancelButton}
+        disabled={isInvalidating}
+        onPress={onCancel}
+      >
+        <Text style={styles.cancelButtonText}>Cancel</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function LicenseCard({
+  license,
+  canOwn,
+  isInvalidating,
+  isConfirming,
+  onRequestConfirm,
+  onConfirm,
+  onCancel,
+}: Readonly<{
+  license: LicenseRecord
+  canOwn: boolean
+  isInvalidating: boolean
+  isConfirming: boolean
+  onRequestConfirm: () => void
+  onConfirm: () => void
+  onCancel: () => void
+}>) {
+  const isColocatedControlPlane = license.revocable === false
+  const usedBy = boundServerLabel(license)
+
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <View style={styles.cardHeader}>
+        <Text style={orgPanelStyles.detailTitle}>
+          {licenseTitle(license)}
+        </Text>
+        <LicenseInvalidateActions
+          canOwn={canOwn}
+          isColocatedControlPlane={isColocatedControlPlane}
+          isConfirming={isConfirming}
+          isInvalidating={isInvalidating}
+          onConfirm={onConfirm}
+          onRequestConfirm={onRequestConfirm}
+          onCancel={onCancel}
+        />
+      </View>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+        {new Date(license.createdAt).toLocaleString()}
+      </Text>
+      {usedBy ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Used by: </Text>
+          {usedBy}
+        </Text>
+      ) : null}
+      {canOwn && isConfirming ? (
+        <Text style={orgPanelStyles.muted}>
+          This disconnects any server using this key from the control
+          plane.
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function LicensesListBody({
+  loading,
+  licenses,
+  canOwn,
+  invalidating,
+  confirmingId,
+  onRequestConfirm,
+  onConfirm,
+  onCancel,
+}: Readonly<{
+  loading: boolean
+  licenses: LicenseRecord[]
+  canOwn: boolean
+  invalidating: Set<string>
+  confirmingId: string | null
+  onRequestConfirm: (licenseId: string) => void
+  onConfirm: (licenseId: string) => void
+  onCancel: () => void
+}>) {
+  if (loading && licenses.length === 0) {
+    return <Text style={orgPanelStyles.muted}>Loading...</Text>
+  }
+
+  if (licenses.length === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        No active registration keys yet.
+      </Text>
+    )
+  }
+
+  return (
+    <View style={styles.list}>
+      {licenses.map((license) => (
+        <LicenseCard
+          key={license.id}
+          license={license}
+          canOwn={canOwn}
+          isInvalidating={invalidating.has(license.id)}
+          isConfirming={confirmingId === license.id}
+          onRequestConfirm={() => onRequestConfirm(license.id)}
+          onConfirm={() => onConfirm(license.id)}
+          onCancel={onCancel}
+        />
+      ))}
+    </View>
+  )
+}
+
 export function LicensesOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
@@ -114,88 +286,16 @@ export function LicensesOverviewSection({ orgId }: Readonly<{ orgId: string }>) 
 
       <SectionPanel title="Your licenses" hint="Active registration keys">
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-        {loading && licenses.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading...</Text>
-        ) : licenses.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
-            No active registration keys yet.
-          </Text>
-        ) : (
-          <View style={styles.list}>
-            {licenses.map((license) => {
-              const isInvalidating = invalidating.has(license.id)
-              const isColocatedControlPlane = license.revocable === false
-              const usedBy = boundServerLabel(license)
-              const isConfirming = confirmingId === license.id
-
-              return (
-                <View key={license.id} style={orgPanelStyles.detailCard}>
-                  <View style={styles.cardHeader}>
-                    <Text style={orgPanelStyles.detailTitle}>
-                      {licenseTitle(license)}
-                    </Text>
-                    {isColocatedControlPlane ? (
-                      <Text style={orgPanelStyles.muted}>
-                        Local control plane
-                      </Text>
-                    ) : canOwn && !isConfirming ? (
-                      <Pressable
-                        style={[
-                          styles.secondaryButton,
-                          isInvalidating && styles.buttonDisabled,
-                        ]}
-                        disabled={isInvalidating}
-                        onPress={() => setConfirmingId(license.id)}
-                      >
-                        <Text style={styles.secondaryButtonText}>
-                          {isInvalidating ? 'Invalidating...' : 'Invalidate'}
-                        </Text>
-                      </Pressable>
-                    ) : canOwn && isConfirming ? (
-                      <View style={styles.confirmActions}>
-                        <Pressable
-                          style={[
-                            styles.secondaryButton,
-                            isInvalidating && styles.buttonDisabled,
-                          ]}
-                          disabled={isInvalidating}
-                          onPress={() => void onInvalidateLicense(license.id)}
-                        >
-                          <Text style={styles.secondaryButtonText}>
-                            {isInvalidating ? 'Invalidating...' : 'Confirm'}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.cancelButton}
-                          disabled={isInvalidating}
-                          onPress={() => setConfirmingId(null)}
-                        >
-                          <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </Pressable>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-                    {new Date(license.createdAt).toLocaleString()}
-                  </Text>
-                  {usedBy ? (
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Used by: </Text>
-                      {usedBy}
-                    </Text>
-                  ) : null}
-                  {canOwn && isConfirming ? (
-                    <Text style={orgPanelStyles.muted}>
-                      This disconnects any server using this key from the control
-                      plane.
-                    </Text>
-                  ) : null}
-                </View>
-              )
-            })}
-          </View>
-        )}
+        <LicensesListBody
+          loading={loading}
+          licenses={licenses}
+          canOwn={canOwn}
+          invalidating={invalidating}
+          confirmingId={confirmingId}
+          onRequestConfirm={setConfirmingId}
+          onConfirm={(licenseId) => void onInvalidateLicense(licenseId)}
+          onCancel={() => setConfirmingId(null)}
+        />
       </SectionPanel>
     </View>
   )

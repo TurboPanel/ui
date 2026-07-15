@@ -18,8 +18,10 @@ import {
   isAdminSession,
   useAuth,
 } from '@/lib/auth-context'
-import { useAuthStatus } from '@/lib/query-client'
+import type { SessionInfo } from '@/lib/instance-api'
 import { colors } from '@/lib/theme'
+
+const STACK_SCREEN_OPTIONS = { headerShown: false } as const
 
 function onAppStateChange(status: AppStateStatus) {
   if (Platform.OS !== 'web') {
@@ -56,8 +58,6 @@ export default function RootLayout() {
 
 function AuthGuard() {
   const { session, needsInstall, isLoading } = useAuth()
-  const { data: installStatus } = useAuthStatus()
-  const isInstallMode = installStatus?.isInstallMode === true
   const segments = useSegments()
   const topSegment = (segments as readonly string[])[0]
 
@@ -69,68 +69,103 @@ function AuthGuard() {
     )
   }
 
-  const onSignIn = topSegment === 'sign-in'
-  const onSignUp = topSegment === 'sign-up'
-  const onVerifyEmail = topSegment === 'verify-email'
-  const onInstall = topSegment === 'install'
-  const onWelcome = topSegment === 'welcome'
-  const onAdmin = topSegment === 'admin'
-  const onRecovering = topSegment === 'recovering'
-  const onDeveloper = topSegment === 'developer'
-  const developerDevBypass = __DEV__ && onDeveloper
+  const href = resolveAuthGuardHref({
+    session,
+    needsInstall,
+    topSegment,
+    developerDevBypass: __DEV__ && topSegment === 'developer',
+  })
 
-  if (onRecovering) {
-    return <Stack screenOptions={{ headerShown: false }} />
+  if (href !== null) {
+    return <Redirect href={href} />
+  }
+
+  return <Stack screenOptions={STACK_SCREEN_OPTIONS} />
+}
+
+type AuthGuardContext = Readonly<{
+  session: SessionInfo | null
+  needsInstall: boolean
+  topSegment: string | undefined
+  developerDevBypass: boolean
+}>
+
+/** Returns a redirect target, or `null` to render the root Stack. */
+function resolveAuthGuardHref(ctx: AuthGuardContext): Href | null {
+  const { needsInstall, topSegment, developerDevBypass } = ctx
+
+  if (topSegment === 'recovering') {
+    return null
   }
 
   if (needsInstall) {
-    if (developerDevBypass) {
-      return <Stack screenOptions={{ headerShown: false }} />
-    }
-    if (!onInstall) {
-      return <Redirect href={'/install' as Href} />
-    }
-
-    return <Stack screenOptions={{ headerShown: false }} />
+    return resolveNeedsInstallHref(topSegment, developerDevBypass)
   }
 
-  if (onInstall && !isInstallMode) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  // Install wizard is only for fresh hosts; leave once install is complete.
+  if (topSegment === 'install') {
+    return dashboardHref(ctx.session, needsInstall) as Href
   }
 
-  if (onInstall) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  return resolveSessionRouteHref(ctx)
+}
+
+function resolveNeedsInstallHref(
+  topSegment: string | undefined,
+  developerDevBypass: boolean,
+): Href | null {
+  if (developerDevBypass || topSegment === 'install') {
+    return null
+  }
+  return '/install' as Href
+}
+
+function resolveSessionRouteHref(ctx: AuthGuardContext): Href | null {
+  const { session, needsInstall, topSegment, developerDevBypass } = ctx
+  const signedIn = hasUserSession(session)
+  const onAuthRoute = isPublicAuthRoute(topSegment)
+  const dash = dashboardHref(session, needsInstall) as Href
+
+  if (!signedIn && !onAuthRoute && !developerDevBypass) {
+    return '/sign-in' as Href
   }
 
-  if (!hasUserSession(session) && !onSignIn && !onSignUp && !onVerifyEmail && !developerDevBypass) {
-    return <Redirect href={'/sign-in' as Href} />
+  if (signedIn && (topSegment === 'sign-in' || topSegment === 'sign-up')) {
+    return dash
   }
 
-  if (hasUserSession(session) && (onSignIn || onSignUp)) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
+  if (signedIn && topSegment === 'welcome' && dash !== '/welcome') {
+    return dash
   }
 
-  if (hasUserSession(session) && onWelcome) {
-    const href = dashboardHref(session, needsInstall)
-    if (href !== '/welcome') {
-      return <Redirect href={href as Href} />
-    }
+  if (signedIn && shouldLeaveUnknownSignedInRoute(ctx)) {
+    return dash
   }
 
-  if (
-    hasUserSession(session) &&
-    !onWelcome &&
-    !onSignIn &&
-    !onSignUp &&
-    !onVerifyEmail &&
-    !developerDevBypass &&
-    !(onAdmin && isAdminSession(session)) &&
-    !isOrgRoute(topSegment)
-  ) {
-    return <Redirect href={dashboardHref(session, needsInstall) as Href} />
-  }
+  return null
+}
 
-  return <Stack screenOptions={{ headerShown: false }} />
+function isPublicAuthRoute(topSegment: string | undefined): boolean {
+  return (
+    topSegment === 'sign-in' ||
+    topSegment === 'sign-up' ||
+    topSegment === 'verify-email'
+  )
+}
+
+function shouldLeaveUnknownSignedInRoute(ctx: AuthGuardContext): boolean {
+  const { session, topSegment, developerDevBypass } = ctx
+
+  if (topSegment === 'welcome' || isPublicAuthRoute(topSegment)) {
+    return false
+  }
+  if (developerDevBypass) {
+    return false
+  }
+  if (topSegment === 'admin' && isAdminSession(session)) {
+    return false
+  }
+  return !isOrgRoute(topSegment)
 }
 
 const PUBLIC_ROUTE_SEGMENTS = new Set([

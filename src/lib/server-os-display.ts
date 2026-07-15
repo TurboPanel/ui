@@ -51,7 +51,8 @@ function productNameFromOs(os: ServerOsMetadata): string | undefined {
 }
 
 function productNameFromDisplay(osDisplay: string): string {
-  const product = osDisplay.split(/\s+\d/)[0]?.trim()
+  // Use `\s\d` (not `\s+\d`) so the match is linear — no quantifier backtracking.
+  const product = osDisplay.split(/\s\d/)[0]?.trim()
   return product || osDisplay
 }
 

@@ -45,7 +45,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const queryClient = useQueryClient()
   const [session, setSession] = useState<SessionInfo | null>(null)
   const [needsInstall, setNeedsInstall] = useState(false)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -261,60 +261,76 @@ export function EmailSettingsSection() {
     const envName = envVarName(key)
     const isProvider = key === 'TURBOPANEL_SYSTEM_EMAIL__PROVIDER'
 
+    let sourceBadge: ReactNode = null
+    if (isEnv) {
+      sourceBadge = (
+        <View style={[styles.badge, styles.badgeEnv]}>
+          <Text style={styles.badgeTextEnv}>Set by environment</Text>
+        </View>
+      )
+    } else if (isDb) {
+      sourceBadge = (
+        <View style={[styles.badge, styles.badgeDb]}>
+          <Text style={styles.badgeTextDb}>Saved</Text>
+        </View>
+      )
+    }
+
+    let fieldControl: ReactNode
+    if (isProvider) {
+      fieldControl = (
+        <View style={styles.chipRow}>
+          {PROVIDER_OPTIONS.map((opt) => {
+            const selected = (value || 'smtp') === opt
+            return (
+              <Pressable
+                key={opt}
+                style={[styles.chip, selected && styles.chipActive]}
+                onPress={isEnv || saveMutation.isPending ? undefined : () => onProviderChange(opt)}
+                disabled={isEnv || saveMutation.isPending}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                  {PROVIDER_LABELS[opt]}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      )
+    } else if (isEnv) {
+      fieldControl = (
+        <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
+          <Text style={styles.lockIcon}>🔒</Text>
+          <Text style={styles.lockValue} numberOfLines={1}>
+            {isSecret ? '••••••••' : (value || '')}
+          </Text>
+        </View>
+      )
+    } else {
+      fieldControl = (
+        <TextInput
+          value={value}
+          onChangeText={(t) => onChange(key, t)}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          secureTextEntry={isSecret}
+          style={styles.input}
+          editable={!saveMutation.isPending}
+        />
+      )
+    }
+
     return (
       <View key={key} style={styles.field}>
         <View style={styles.labelRow}>
           <Text style={styles.label}>{label}</Text>
-          {isEnv ? (
-            <View style={[styles.badge, styles.badgeEnv]}>
-              <Text style={styles.badgeTextEnv}>Set by environment</Text>
-            </View>
-          ) : isDb ? (
-            <View style={[styles.badge, styles.badgeDb]}>
-              <Text style={styles.badgeTextDb}>Saved</Text>
-            </View>
-          ) : null}
+          {sourceBadge}
         </View>
 
-        {isProvider ? (
-          <View style={styles.chipRow}>
-            {PROVIDER_OPTIONS.map((opt) => {
-              const selected = (value || 'smtp') === opt
-              return (
-                <Pressable
-                  key={opt}
-                  style={[styles.chip, selected && styles.chipActive]}
-                  onPress={isEnv || saveMutation.isPending ? undefined : () => onProviderChange(opt)}
-                  disabled={isEnv || saveMutation.isPending}
-                >
-                  <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                    {PROVIDER_LABELS[opt]}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        ) : isEnv ? (
-          <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
-            <Text style={styles.lockIcon}>🔒</Text>
-            <Text style={styles.lockValue} numberOfLines={1}>
-              {isSecret ? '••••••••' : (value || '')}
-            </Text>
-          </View>
-        ) : (
-          <TextInput
-            value={value}
-            onChangeText={(t) => onChange(key, t)}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textDim}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            secureTextEntry={isSecret}
-            style={styles.input}
-            editable={!saveMutation.isPending}
-          />
-        )}
+        {fieldControl}
 
         {isEnv ? (
           <Text style={styles.help}>

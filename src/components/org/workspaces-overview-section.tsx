@@ -94,6 +94,64 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     }
   }
 
+  let workspaceListContent
+  if (loading && workspaces.length === 0) {
+    workspaceListContent = (
+      <Text style={orgPanelStyles.muted}>Loading…</Text>
+    )
+  } else if (workspaces.length === 0) {
+    workspaceListContent = (
+      <Text style={orgPanelStyles.muted}>No workspaces yet.</Text>
+    )
+  } else {
+    workspaceListContent = (
+      <View style={styles.list}>
+        {workspaces.map((ws) => (
+          <View key={ws.id} style={orgPanelStyles.detailCard}>
+            <View style={styles.cardHeader}>
+              <Pressable onPress={() => router.push(`/${orgId}/workspaces/${ws.id}`)}>
+                <Text style={orgPanelStyles.detailTitle}>
+                  {ws.displayName?.trim() || 'Unnamed workspace'}
+                </Text>
+              </Pressable>
+              {canOwn ? (
+                <View style={styles.cardActions}>
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() =>
+                      router.push(`/${orgId}/workspaces/${ws.id}/edit`)
+                    }
+                  >
+                    <Text style={styles.secondaryButtonText}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.secondaryButton,
+                      deleting.has(ws.id) && styles.buttonDisabled,
+                    ]}
+                    disabled={deleting.has(ws.id)}
+                    onPress={() => void handleDelete(ws.id)}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+            {ws.description ? (
+              <Text style={orgPanelStyles.detailLine}>{ws.description}</Text>
+            ) : null}
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+              {new Date(ws.createdAt).toLocaleString()}
+            </Text>
+          </View>
+        ))}
+      </View>
+    )
+  }
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Workspaces</Text>
@@ -113,56 +171,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
 
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-        {loading && workspaces.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
-        ) : workspaces.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No workspaces yet.</Text>
-        ) : (
-          <View style={styles.list}>
-            {workspaces.map((ws) => (
-              <View key={ws.id} style={orgPanelStyles.detailCard}>
-                <View style={styles.cardHeader}>
-                  <Pressable onPress={() => router.push(`/${orgId}/workspaces/${ws.id}`)}>
-                    <Text style={orgPanelStyles.detailTitle}>
-                      {ws.displayName?.trim() || 'Unnamed workspace'}
-                    </Text>
-                  </Pressable>
-                  {canOwn ? (
-                    <View style={styles.cardActions}>
-                      <Pressable
-                        style={styles.secondaryButton}
-                        onPress={() =>
-                          router.push(`/${orgId}/workspaces/${ws.id}/edit`)
-                        }
-                      >
-                        <Text style={styles.secondaryButtonText}>Edit</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[
-                          styles.secondaryButton,
-                          deleting.has(ws.id) && styles.buttonDisabled,
-                        ]}
-                        disabled={deleting.has(ws.id)}
-                        onPress={() => void handleDelete(ws.id)}
-                      >
-                        <Text style={styles.secondaryButtonText}>
-                          {deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </View>
-                {ws.description ? (
-                  <Text style={orgPanelStyles.detailLine}>{ws.description}</Text>
-                ) : null}
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-                  {new Date(ws.createdAt).toLocaleString()}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
+        {workspaceListContent}
       </SectionPanel>
     </View>
   )

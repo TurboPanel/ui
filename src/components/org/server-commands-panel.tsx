@@ -34,6 +34,17 @@ function formatLatencyMs(value: number | null | undefined): string {
   return `${Math.round(value)} ms`
 }
 
+function actionButtonLabel(
+  running: boolean,
+  connected: boolean,
+  runningLabel: string,
+  idleLabel: string,
+): string {
+  if (running) return runningLabel
+  if (!connected) return 'Offline'
+  return idleLabel
+}
+
 const LATENCY_ROWS: Array<{
   key: keyof PingLatencyBreakdown
   label: string
@@ -73,7 +84,7 @@ export const defaultServerCommandState = (): ServerCommandState => ({
   rebootError: null,
 })
 
-type ServerCommandsPanelProps = {
+type ServerCommandsPanelProps = Readonly<{
   server: OrgServerRecord
   canManage: boolean
   showReboot?: boolean
@@ -81,6 +92,161 @@ type ServerCommandsPanelProps = {
   onPing: () => void
   onSetHostname: (hostname: string) => void
   onReboot: () => void
+}>
+
+function CommandProgressRow({
+  message,
+}: Readonly<{ message: string }>) {
+  return (
+    <View style={styles.cellRow}>
+      <ActivityIndicator size="small" color={colors.textMuted} />
+      <Text style={orgPanelStyles.muted}>{message}</Text>
+    </View>
+  )
+}
+
+function PingLatencyBlock({
+  latency,
+}: Readonly<{ latency: PingLatencyBreakdown }>) {
+  return (
+    <View style={styles.latencyBlock}>
+      {LATENCY_ROWS.map(({ key, label }) => (
+        <Text key={key} style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>{label}: </Text>
+          {formatLatencyMs(latency[key])}
+        </Text>
+      ))}
+    </View>
+  )
+}
+
+function RebootControls({
+  connected,
+  commandInFlight,
+  rebootRunning,
+  confirmingReboot,
+  onRequestConfirm,
+  onConfirm,
+  onCancel,
+}: Readonly<{
+  connected: boolean
+  commandInFlight: boolean
+  rebootRunning: boolean
+  confirmingReboot: boolean
+  onRequestConfirm: () => void
+  onConfirm: () => void
+  onCancel: () => void
+}>) {
+  if (rebootRunning) {
+    return (
+      <TouchableOpacity
+        style={[styles.actionButton, styles.actionButtonDisabled]}
+        disabled
+      >
+        <ActivityIndicator size="small" color={colors.textMuted} />
+        <Text style={styles.actionButtonText}>Rebooting…</Text>
+      </TouchableOpacity>
+    )
+  }
+
+  if (confirmingReboot) {
+    return (
+      <View style={styles.confirmRow}>
+        <Text style={orgPanelStyles.muted}>Confirm reboot?</Text>
+        <TouchableOpacity style={styles.actionButton} onPress={onConfirm}>
+          <Text style={styles.actionButtonText}>Confirm</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.mutedButton} onPress={onCancel}>
+          <Text style={styles.mutedButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.actionButton,
+        (!connected || commandInFlight) && styles.actionButtonDisabled,
+      ]}
+      onPress={onRequestConfirm}
+      disabled={!connected || commandInFlight}
+    >
+      <Text style={styles.actionButtonText}>Reboot server</Text>
+    </TouchableOpacity>
+  )
+}
+
+function HostnameBlock({
+  connected,
+  commandInFlight,
+  hostnameRunning,
+  commandRecord,
+  hostnameError,
+  hostnameInput,
+  onHostnameInputChange,
+  onSetHostname,
+}: Readonly<{
+  connected: boolean
+  commandInFlight: boolean
+  hostnameRunning: boolean
+  commandRecord: CommandRecord | null
+  hostnameError: string | null
+  hostnameInput: string
+  onHostnameInputChange: (text: string) => void
+  onSetHostname: (hostname: string) => void
+}>) {
+  const trimmedHostname = hostnameInput.trim()
+  const disabled =
+    !connected || hostnameRunning || commandInFlight || !trimmedHostname
+  const showProgress =
+    hostnameRunning &&
+    commandRecord !== null &&
+    !isTerminalCommandStatus(commandRecord.status)
+
+  return (
+    <View style={styles.hostnameBlock}>
+      <Text style={styles.label}>Change hostname</Text>
+      <TextInput
+        value={hostnameInput}
+        onChangeText={onHostnameInputChange}
+        placeholder="hostname.example"
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={connected && !hostnameRunning && !commandInFlight}
+        style={[
+          styles.input,
+          (!connected || hostnameRunning || commandInFlight) &&
+            styles.inputDisabled,
+        ]}
+      />
+      <TouchableOpacity
+        style={[styles.actionButton, disabled && styles.actionButtonDisabled]}
+        onPress={() => onSetHostname(trimmedHostname)}
+        disabled={disabled}
+      >
+        {hostnameRunning ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : null}
+        <Text style={styles.actionButtonText}>
+          {actionButtonLabel(
+            hostnameRunning,
+            connected,
+            'Applying…',
+            'Apply hostname',
+          )}
+        </Text>
+      </TouchableOpacity>
+      {showProgress ? (
+        <CommandProgressRow
+          message={`Applying hostname (${commandRecord.status})…`}
+        />
+      ) : null}
+      {hostnameError ? (
+        <Text style={styles.errorText}>{hostnameError}</Text>
+      ) : null}
+    </View>
+  )
 }
 
 export function ServerCommandsPanel({
@@ -121,6 +287,16 @@ export function ServerCommandsPanel({
     commandRecord?.type === 'daemon.ping' &&
     commandRecord.status === 'succeeded' &&
     commandRecord.latency !== undefined
+  const showPingProgress =
+    pingRunning &&
+    commandRecord !== null &&
+    !isTerminalCommandStatus(commandRecord.status)
+  const showRebootProgress =
+    showReboot &&
+    rebootRunning &&
+    commandRecord !== null &&
+    !isTerminalCommandStatus(commandRecord.status)
+  const pingDisabled = !server.connected || pingRunning || commandInFlight
 
   return (
     <View style={styles.root}>
@@ -130,164 +306,73 @@ export function ServerCommandsPanel({
         <TouchableOpacity
           style={[
             styles.actionButton,
-            (!server.connected || pingRunning || commandInFlight) &&
-              styles.actionButtonDisabled,
+            pingDisabled && styles.actionButtonDisabled,
           ]}
           onPress={onPing}
-          disabled={!server.connected || pingRunning || commandInFlight}
+          disabled={pingDisabled}
         >
           {pingRunning ? (
             <ActivityIndicator size="small" color={colors.textMuted} />
           ) : null}
           <Text style={styles.actionButtonText}>
-            {pingRunning ? 'Pinging…' : !server.connected ? 'Offline' : 'Ping daemon'}
+            {actionButtonLabel(
+              pingRunning,
+              server.connected,
+              'Pinging…',
+              'Ping daemon',
+            )}
           </Text>
         </TouchableOpacity>
 
         {canManage && showReboot ? (
-          <>
-            {!rebootRunning && !confirmingReboot ? (
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  (!server.connected || commandInFlight) &&
-                    styles.actionButtonDisabled,
-                ]}
-                onPress={() => setConfirmingReboot(true)}
-                disabled={!server.connected || commandInFlight}
-              >
-                <Text style={styles.actionButtonText}>Reboot server</Text>
-              </TouchableOpacity>
-            ) : confirmingReboot && !rebootRunning ? (
-              <View style={styles.confirmRow}>
-                <Text style={orgPanelStyles.muted}>Confirm reboot?</Text>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => {
-                    setConfirmingReboot(false)
-                    onReboot()
-                  }}
-                >
-                  <Text style={styles.actionButtonText}>Confirm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.mutedButton}
-                  onPress={() => setConfirmingReboot(false)}
-                >
-                  <Text style={styles.mutedButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.actionButtonDisabled]}
-                disabled
-              >
-                <ActivityIndicator size="small" color={colors.textMuted} />
-                <Text style={styles.actionButtonText}>Rebooting…</Text>
-              </TouchableOpacity>
-            )}
-          </>
+          <RebootControls
+            connected={server.connected}
+            commandInFlight={commandInFlight}
+            rebootRunning={rebootRunning}
+            confirmingReboot={confirmingReboot}
+            onRequestConfirm={() => setConfirmingReboot(true)}
+            onConfirm={() => {
+              setConfirmingReboot(false)
+              onReboot()
+            }}
+            onCancel={() => setConfirmingReboot(false)}
+          />
         ) : null}
       </View>
 
-      {showReboot &&
-      rebootRunning &&
-      commandRecord &&
-      !isTerminalCommandStatus(commandRecord.status) ? (
-        <View style={styles.cellRow}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
-          <Text style={orgPanelStyles.muted}>
-            Rebooting… ({commandRecord.status})
-          </Text>
-        </View>
+      {showRebootProgress ? (
+        <CommandProgressRow
+          message={`Rebooting… (${commandRecord.status})`}
+        />
       ) : null}
 
       {showReboot && rebootError ? (
         <Text style={styles.errorText}>{rebootError}</Text>
       ) : null}
 
-      {pingRunning && commandRecord && !isTerminalCommandStatus(commandRecord.status) ? (
-        <View style={styles.cellRow}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
-          <Text style={orgPanelStyles.muted}>
-            Waiting for daemon ({commandRecord.status})…
-          </Text>
-        </View>
+      {showPingProgress ? (
+        <CommandProgressRow
+          message={`Waiting for daemon (${commandRecord.status})…`}
+        />
       ) : null}
 
       {showPingLatency && commandRecord.latency ? (
-        <View style={styles.latencyBlock}>
-          {LATENCY_ROWS.map(({ key, label }) => (
-            <Text key={key} style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>{label}: </Text>
-              {formatLatencyMs(commandRecord.latency?.[key])}
-            </Text>
-          ))}
-        </View>
+        <PingLatencyBlock latency={commandRecord.latency} />
       ) : null}
 
       {pingError ? <Text style={styles.errorText}>{pingError}</Text> : null}
 
       {canManage ? (
-        <View style={styles.hostnameBlock}>
-          <Text style={styles.label}>Change hostname</Text>
-          <TextInput
-            value={hostnameInput}
-            onChangeText={(text) => {
-              setHostnameInput(text)
-            }}
-            placeholder="hostname.example"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={server.connected && !hostnameRunning && !commandInFlight}
-            style={[
-              styles.input,
-              (!server.connected || hostnameRunning || commandInFlight) &&
-                styles.inputDisabled,
-            ]}
-          />
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              (!server.connected ||
-                hostnameRunning ||
-                commandInFlight ||
-                !hostnameInput.trim()) &&
-                styles.actionButtonDisabled,
-            ]}
-            onPress={() => onSetHostname(hostnameInput.trim())}
-            disabled={
-              !server.connected ||
-              hostnameRunning ||
-              commandInFlight ||
-              !hostnameInput.trim()
-            }
-          >
-            {hostnameRunning ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            ) : null}
-            <Text style={styles.actionButtonText}>
-              {hostnameRunning
-                ? 'Applying…'
-                : !server.connected
-                  ? 'Offline'
-                  : 'Apply hostname'}
-            </Text>
-          </TouchableOpacity>
-          {hostnameRunning &&
-          commandRecord &&
-          !isTerminalCommandStatus(commandRecord.status) ? (
-            <View style={styles.cellRow}>
-              <ActivityIndicator size="small" color={colors.textMuted} />
-              <Text style={orgPanelStyles.muted}>
-                Applying hostname ({commandRecord.status})…
-              </Text>
-            </View>
-          ) : null}
-          {hostnameError ? (
-            <Text style={styles.errorText}>{hostnameError}</Text>
-          ) : null}
-        </View>
+        <HostnameBlock
+          connected={server.connected}
+          commandInFlight={commandInFlight}
+          hostnameRunning={hostnameRunning}
+          commandRecord={commandRecord}
+          hostnameError={hostnameError}
+          hostnameInput={hostnameInput}
+          onHostnameInputChange={setHostnameInput}
+          onSetHostname={onSetHostname}
+        />
       ) : null}
     </View>
   )

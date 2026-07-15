@@ -1,6 +1,12 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { checkPermission, fetchInstallStatus, isForbiddenError, resolveResourceId } from '@/lib/instance-api'
+import {
+  checkPermission,
+  fetchInstallStatus,
+  isForbiddenError,
+  resolveResourceId,
+  type PermissionKey,
+} from '@/lib/instance-api'
 import { useAuth } from '@/lib/auth-context'
 import {
   authQueryKeys,
@@ -40,7 +46,7 @@ export function useForbiddenRecovery(error: unknown) {
 export function useCan(
   entityType: string | null,
   entityId: string,
-  permissionKey: string,
+  permissionKey: PermissionKey,
 ): boolean {
   const resourceQuery = useQuery({
     queryKey: ['resource-id', entityType ?? '', entityId],

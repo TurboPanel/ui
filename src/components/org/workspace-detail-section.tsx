@@ -13,6 +13,73 @@ import {
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
 
+function renderWorkspaceBody({
+  loading,
+  workspace,
+  onEdit,
+}: Readonly<{
+  loading: boolean
+  workspace: WorkspaceRecord | null
+  onEdit: () => void
+}>) {
+  if (loading && !workspace) {
+    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+  }
+  if (!workspace) {
+    return null
+  }
+  return (
+    <>
+      <View style={styles.header}>
+        <Text style={orgPanelStyles.detailTitle}>
+          {workspace.displayName?.trim() || 'Unnamed workspace'}
+        </Text>
+        <Pressable style={styles.secondaryButton} onPress={onEdit}>
+          <Text style={styles.secondaryButtonText}>Edit</Text>
+        </Pressable>
+      </View>
+      {workspace.description ? (
+        <Text style={orgPanelStyles.detailLine}>{workspace.description}</Text>
+      ) : null}
+    </>
+  )
+}
+
+function renderProjectsBody({
+  loading,
+  projects,
+  onOpenProject,
+}: Readonly<{
+  loading: boolean
+  projects: ProjectRecord[]
+  onOpenProject: (projectId: string) => void
+}>) {
+  if (loading) {
+    return <Text style={orgPanelStyles.muted}>Loading projects…</Text>
+  }
+  if (projects.length === 0) {
+    return <Text style={orgPanelStyles.muted}>No projects yet.</Text>
+  }
+  return (
+    <View style={styles.list}>
+      {projects.map((project) => (
+        <Pressable
+          key={project.id}
+          style={orgPanelStyles.detailCard}
+          onPress={() => onOpenProject(project.id)}
+        >
+          <Text style={orgPanelStyles.detailTitle}>
+            {project.displayName?.trim() || 'Unnamed project'}
+          </Text>
+          {project.description ? (
+            <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
+          ) : null}
+        </Pressable>
+      ))}
+    </View>
+  )
+}
+
 export function WorkspaceDetailSection({
   orgId,
   workspaceId,
@@ -69,26 +136,11 @@ export function WorkspaceDetailSection({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       <SectionPanel title="Workspace" hint="Workspace details">
-        {loading && !workspace ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
-        ) : workspace ? (
-          <>
-            <View style={styles.header}>
-              <Text style={orgPanelStyles.detailTitle}>
-                {workspace.displayName?.trim() || 'Unnamed workspace'}
-              </Text>
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={() => router.push(`/${orgId}/workspaces/${workspaceId}/edit`)}
-              >
-                <Text style={styles.secondaryButtonText}>Edit</Text>
-              </Pressable>
-            </View>
-            {workspace.description ? (
-              <Text style={orgPanelStyles.detailLine}>{workspace.description}</Text>
-            ) : null}
-          </>
-        ) : null}
+        {renderWorkspaceBody({
+          loading,
+          workspace,
+          onEdit: () => router.push(`/${orgId}/workspaces/${workspaceId}/edit`),
+        })}
       </SectionPanel>
 
       <SectionPanel title="Projects" hint="Projects in this workspace">
@@ -98,28 +150,11 @@ export function WorkspaceDetailSection({
         >
           <Text style={styles.primaryButtonText}>New project</Text>
         </Pressable>
-        {loading ? (
-          <Text style={orgPanelStyles.muted}>Loading projects…</Text>
-        ) : projects.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No projects yet.</Text>
-        ) : (
-          <View style={styles.list}>
-            {projects.map((project) => (
-              <Pressable
-                key={project.id}
-                style={orgPanelStyles.detailCard}
-                onPress={() => router.push(`/${orgId}/projects/${project.id}`)}
-              >
-                <Text style={orgPanelStyles.detailTitle}>
-                  {project.displayName?.trim() || 'Unnamed project'}
-                </Text>
-                {project.description ? (
-                  <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
-                ) : null}
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {renderProjectsBody({
+          loading,
+          projects,
+          onOpenProject: (projectId) => router.push(`/${orgId}/projects/${projectId}`),
+        })}
       </SectionPanel>
     </View>
   )

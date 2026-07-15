@@ -25,13 +25,220 @@ function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
 }
 
+function ServerPickerList({
+  servers,
+  selectedServerId,
+  onSelect,
+}: Readonly<{
+  servers: OrgServerRecord[]
+  selectedServerId: string
+  onSelect: (id: string) => void
+}>) {
+  return (
+    <View style={styles.list}>
+      {servers.map((server) => {
+        const isSelected = server.id === selectedServerId
+        return (
+          <Pressable
+            key={server.id}
+            style={[
+              orgPanelStyles.detailCard,
+              isSelected && styles.selectedCard,
+            ]}
+            onPress={() => onSelect(server.id)}
+          >
+            <Text style={orgPanelStyles.detailTitle}>
+              {serverTitle(server)}
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Status: </Text>
+              {server.connected ? 'Online' : 'Offline'}
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>ID: </Text>
+              <Text selectable>{server.id}</Text>
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+function ServerPickerContent({
+  servers,
+  serversLoading,
+  selectedServerId,
+  onSelect,
+}: Readonly<{
+  servers: OrgServerRecord[]
+  serversLoading: boolean
+  selectedServerId: string
+  onSelect: (id: string) => void
+}>) {
+  if (serversLoading && servers.length === 0) {
+    return <Text style={orgPanelStyles.muted}>Loading servers…</Text>
+  }
+  if (servers.length === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        No servers are assigned to this organization yet.
+      </Text>
+    )
+  }
+  return (
+    <ServerPickerList
+      servers={servers}
+      selectedServerId={selectedServerId}
+      onSelect={onSelect}
+    />
+  )
+}
+
+function NetworkCard({
+  network,
+  isDeleting,
+  onDelete,
+}: Readonly<{
+  network: NetworkRecord
+  isDeleting: boolean
+  onDelete: (networkId: string) => void
+}>) {
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <View style={styles.cardHeader}>
+        <Text style={orgPanelStyles.detailTitle}>{network.id}</Text>
+        <Pressable
+          style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
+          disabled={isDeleting}
+          onPress={() => onDelete(network.id)}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {isDeleting ? 'Deleting…' : 'Delete'}
+          </Text>
+        </Pressable>
+      </View>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+        {new Date(network.createdAt).toLocaleString()}
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Updated: </Text>
+        {new Date(network.updatedAt).toLocaleString()}
+      </Text>
+    </View>
+  )
+}
+
+function NetworksListContent({
+  networks,
+  networksLoading,
+  deleting,
+  onDelete,
+}: Readonly<{
+  networks: NetworkRecord[]
+  networksLoading: boolean
+  deleting: Set<string>
+  onDelete: (networkId: string) => void
+}>) {
+  if (networksLoading && networks.length === 0) {
+    return <Text style={orgPanelStyles.muted}>Loading networks…</Text>
+  }
+  if (networks.length === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        No networks for this server yet.
+      </Text>
+    )
+  }
+  return (
+    <View style={styles.list}>
+      {networks.map((network) => (
+        <NetworkCard
+          key={network.id}
+          network={network}
+          isDeleting={deleting.has(network.id)}
+          onDelete={onDelete}
+        />
+      ))}
+    </View>
+  )
+}
+
+function NetworksPanel({
+  selectedServerId,
+  selectedServer,
+  networks,
+  networksLoading,
+  networksError,
+  creating,
+  deleting,
+  onCreate,
+  onRefresh,
+  onDelete,
+}: Readonly<{
+  selectedServerId: string
+  selectedServer: OrgServerRecord | null
+  networks: NetworkRecord[]
+  networksLoading: boolean
+  networksError: string | null
+  creating: boolean
+  deleting: Set<string>
+  onCreate: () => void
+  onRefresh: () => void
+  onDelete: (networkId: string) => void
+}>) {
+  const hint = selectedServer
+    ? serverTitle(selectedServer)
+    : `Server ${selectedServerId}`
+
+  return (
+    <SectionPanel title="Networks" hint={hint}>
+      {networksError ? (
+        <Text style={orgPanelStyles.error}>{networksError}</Text>
+      ) : null}
+
+      <View style={styles.actionsRow}>
+        <Pressable
+          style={[styles.primaryButton, creating && styles.buttonDisabled]}
+          disabled={creating}
+          onPress={onCreate}
+        >
+          {creating ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : null}
+          <Text style={styles.primaryButtonText}>
+            {creating ? 'Creating…' : 'Create network'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          disabled={networksLoading}
+          onPress={onRefresh}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {networksLoading ? 'Refreshing…' : 'Refresh'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <NetworksListContent
+        networks={networks}
+        networksLoading={networksLoading}
+        deleting={deleting}
+        onDelete={onDelete}
+      />
+    </SectionPanel>
+  )
+}
+
 export function NetworksOverviewSection({
   orgId,
   serverId,
-}: {
+}: Readonly<{
   orgId: string
   serverId: string
-}) {
+}>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
   const [servers, setServers] = useState<OrgServerRecord[]>([])
@@ -156,123 +363,27 @@ export function NetworksOverviewSection({
         {serversError ? (
           <Text style={orgPanelStyles.error}>{serversError}</Text>
         ) : null}
-        {serversLoading && servers.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading servers…</Text>
-        ) : servers.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
-            No servers are assigned to this organization yet.
-          </Text>
-        ) : (
-          <View style={styles.list}>
-            {servers.map((server) => {
-              const isSelected = server.id === selectedServerId
-              return (
-                <Pressable
-                  key={server.id}
-                  style={[
-                    orgPanelStyles.detailCard,
-                    isSelected && styles.selectedCard,
-                  ]}
-                  onPress={() => handleSelectServer(server.id)}
-                >
-                  <Text style={orgPanelStyles.detailTitle}>
-                    {serverTitle(server)}
-                  </Text>
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>Status: </Text>
-                    {server.connected ? 'Online' : 'Offline'}
-                  </Text>
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>ID: </Text>
-                    <Text selectable>{server.id}</Text>
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        )}
+        <ServerPickerContent
+          servers={servers}
+          serversLoading={serversLoading}
+          selectedServerId={selectedServerId}
+          onSelect={handleSelectServer}
+        />
       </SectionPanel>
 
       {selectedServerId ? (
-        <SectionPanel
-          title="Networks"
-          hint={
-            selectedServer
-              ? serverTitle(selectedServer)
-              : `Server ${selectedServerId}`
-          }
-        >
-          {networksError ? (
-            <Text style={orgPanelStyles.error}>{networksError}</Text>
-          ) : null}
-
-          <View style={styles.actionsRow}>
-            <Pressable
-              style={[styles.primaryButton, creating && styles.buttonDisabled]}
-              disabled={creating}
-              onPress={() => void handleCreateNetwork()}
-            >
-              {creating ? (
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : null}
-              <Text style={styles.primaryButtonText}>
-                {creating ? 'Creating…' : 'Create network'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.secondaryButton}
-              disabled={networksLoading}
-              onPress={() => void loadNetworks()}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {networksLoading ? 'Refreshing…' : 'Refresh'}
-              </Text>
-            </Pressable>
-          </View>
-
-          {networksLoading && networks.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>Loading networks…</Text>
-          ) : networks.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>
-              No networks for this server yet.
-            </Text>
-          ) : (
-            <View style={styles.list}>
-              {networks.map((network) => {
-                const isDeleting = deleting.has(network.id)
-                return (
-                  <View key={network.id} style={orgPanelStyles.detailCard}>
-                    <View style={styles.cardHeader}>
-                      <Text style={orgPanelStyles.detailTitle}>
-                        {network.id}
-                      </Text>
-                      <Pressable
-                        style={[
-                          styles.secondaryButton,
-                          isDeleting && styles.buttonDisabled,
-                        ]}
-                        disabled={isDeleting}
-                        onPress={() => void handleDeleteNetwork(network.id)}
-                      >
-                        <Text style={styles.secondaryButtonText}>
-                          {isDeleting ? 'Deleting…' : 'Delete'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-                      {new Date(network.createdAt).toLocaleString()}
-                    </Text>
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Updated: </Text>
-                      {new Date(network.updatedAt).toLocaleString()}
-                    </Text>
-                  </View>
-                )
-              })}
-            </View>
-          )}
-        </SectionPanel>
+        <NetworksPanel
+          selectedServerId={selectedServerId}
+          selectedServer={selectedServer}
+          networks={networks}
+          networksLoading={networksLoading}
+          networksError={networksError}
+          creating={creating}
+          deleting={deleting}
+          onCreate={() => void handleCreateNetwork()}
+          onRefresh={() => void loadNetworks()}
+          onDelete={(networkId) => void handleDeleteNetwork(networkId)}
+        />
       ) : null}
     </View>
   )

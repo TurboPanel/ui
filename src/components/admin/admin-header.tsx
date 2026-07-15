@@ -4,7 +4,9 @@ import { useAuth } from '@/lib/auth-context'
 import { adminAreaFromPathname } from '@/lib/admin-navigation'
 import { colors, spacing } from '@/lib/theme'
 
-export function AdminHeader({ onMenuPress }: { onMenuPress?: () => void }) {
+export function AdminHeader({
+  onMenuPress,
+}: Readonly<{ onMenuPress?: () => void }>) {
   const pathname = usePathname()
   const { session, signOut } = useAuth()
   const match = adminAreaFromPathname(pathname)

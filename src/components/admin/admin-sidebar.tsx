@@ -3,7 +3,9 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { ADMIN_AREAS, adminAreaHref } from '@/lib/admin-navigation'
 import { colors, layout } from '@/lib/theme'
 
-export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function AdminSidebar({
+  onNavigate,
+}: Readonly<{ onNavigate?: () => void }>) {
   const pathname = usePathname()
   const router = useRouter()
 

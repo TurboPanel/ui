@@ -24,11 +24,11 @@ export function WorkspaceFormSection({
   orgId,
   workspaceId,
   mode,
-}: {
+}: Readonly<{
   orgId: string
   workspaceId?: string
   mode: 'create' | 'edit'
-}) {
+}>) {
   const router = useRouter()
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
@@ -134,6 +134,13 @@ export function WorkspaceFormSection({
     hasError && Platform.OS !== 'web' && styles.inputError,
   ]
 
+  let submitLabel = 'Save changes'
+  if (submitting) {
+    submitLabel = 'Saving…'
+  } else if (mode === 'create') {
+    submitLabel = 'Create workspace'
+  }
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>{mode === 'create' ? 'New workspace' : 'Edit workspace'}</Text>
@@ -192,9 +199,7 @@ export function WorkspaceFormSection({
                 disabled={submitting}
                 onPress={() => void handleSubmit()}
               >
-                <Text style={styles.primaryButtonText}>
-                  {submitting ? 'Saving…' : mode === 'create' ? 'Create workspace' : 'Save changes'}
-                </Text>
+                <Text style={styles.primaryButtonText}>{submitLabel}</Text>
               </Pressable>
               <Pressable
                 style={styles.secondaryButton}

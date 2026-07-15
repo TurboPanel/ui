@@ -143,7 +143,7 @@ export function SignInScreenContent() {
       ) : null}
       <Button
         onPress={onSubmit}
-        theme="active"
+        theme="accent"
         size="$4"
         disabled={loading}
         opacity={loading ? 0.7 : 1}

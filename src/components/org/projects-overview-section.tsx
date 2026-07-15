@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router'
+import { useRouter, type Href } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
   Pressable,
@@ -41,10 +41,10 @@ function projectTypeBadge(type: ProjectRecord['metadata']) {
 export function ProjectsOverviewSection({
   orgId,
   workspaceId,
-}: {
+}: Readonly<{
   orgId: string
   workspaceId?: string
-}) {
+}>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
@@ -132,9 +132,72 @@ export function ProjectsOverviewSection({
     }
   }
 
-  const newProjectHref = workspaceId
-    ? `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`
-    : `/${orgId}/projects/new`
+  const newProjectHref = (
+    workspaceId
+      ? `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`
+      : `/${orgId}/projects/new`
+  ) as Href
+
+  let projectListContent
+  if (loading && projects.length === 0) {
+    projectListContent = (
+      <Text style={orgPanelStyles.muted}>Loading…</Text>
+    )
+  } else if (projects.length === 0) {
+    projectListContent = (
+      <Text style={orgPanelStyles.muted}>No projects yet.</Text>
+    )
+  } else {
+    projectListContent = (
+      <View style={styles.list}>
+        {projects.map((project) => (
+          <View key={project.id} style={orgPanelStyles.detailCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.titleRow}>
+                <Text style={orgPanelStyles.detailTitle}>
+                  {project.displayName?.trim() || 'Unnamed project'}
+                </Text>
+                {projectTypeBadge(project.metadata)}
+              </View>
+              <View style={styles.cardActions}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() =>
+                    router.push(`/${orgId}/projects/${project.id}` as Href)
+                  }
+                >
+                  <Text style={styles.secondaryButtonText}>Open</Text>
+                </Pressable>
+                {canOwn ? (
+                  <Pressable
+                    style={[
+                      styles.secondaryButton,
+                      deleting.has(project.id) && styles.buttonDisabled,
+                    ]}
+                    disabled={deleting.has(project.id)}
+                    onPress={() => void handleDelete(project.id)}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {deleting.has(project.id) ? 'Deleting…' : 'Delete'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+            {project.description ? (
+              <Text style={orgPanelStyles.detailLine}>
+                {project.description}
+              </Text>
+            ) : null}
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+              {new Date(project.createdAt).toLocaleString()}
+            </Text>
+          </View>
+        ))}
+      </View>
+    )
+  }
 
   return (
     <View style={styles.root}>
@@ -155,59 +218,7 @@ export function ProjectsOverviewSection({
 
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-        {loading && projects.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
-        ) : projects.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No projects yet.</Text>
-        ) : (
-          <View style={styles.list}>
-            {projects.map((project) => (
-              <View key={project.id} style={orgPanelStyles.detailCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.titleRow}>
-                    <Text style={orgPanelStyles.detailTitle}>
-                      {project.displayName?.trim() || 'Unnamed project'}
-                    </Text>
-                    {projectTypeBadge(project.metadata)}
-                  </View>
-                  <View style={styles.cardActions}>
-                    <Pressable
-                      style={styles.secondaryButton}
-                      onPress={() =>
-                        router.push(`/${orgId}/projects/${project.id}`)
-                      }
-                    >
-                      <Text style={styles.secondaryButtonText}>Open</Text>
-                    </Pressable>
-                    {canOwn ? (
-                      <Pressable
-                        style={[
-                          styles.secondaryButton,
-                          deleting.has(project.id) && styles.buttonDisabled,
-                        ]}
-                        disabled={deleting.has(project.id)}
-                        onPress={() => void handleDelete(project.id)}
-                      >
-                        <Text style={styles.secondaryButtonText}>
-                          {deleting.has(project.id) ? 'Deleting…' : 'Delete'}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </View>
-                {project.description ? (
-                  <Text style={orgPanelStyles.detailLine}>
-                    {project.description}
-                  </Text>
-                ) : null}
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-                  {new Date(project.createdAt).toLocaleString()}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
+        {projectListContent}
       </SectionPanel>
     </View>
   )

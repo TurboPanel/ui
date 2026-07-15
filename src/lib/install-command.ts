@@ -79,8 +79,8 @@ function trimTrailingSlash(url: string): string {
 function encodeLicenseArg(licenseId: string, licenseToken: string): string {
   const combined = `${licenseId}:${licenseToken}`
   return btoa(combined)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
     .replace(/=+$/, '')
 }
 

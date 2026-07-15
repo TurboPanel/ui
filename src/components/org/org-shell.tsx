@@ -12,7 +12,7 @@ import { OrgHeader } from '@/components/org/org-header'
 import { OrgSidebar } from '@/components/org/org-sidebar'
 import { colors, layout } from '@/lib/theme'
 
-export function OrgShell({ orgId }: { orgId: string }) {
+export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
   const { width } = useWindowDimensions()
   const isDesktop = width >= layout.desktopBreakpoint
   const [drawerOpen, setDrawerOpen] = useState(false)

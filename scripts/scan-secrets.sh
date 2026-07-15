@@ -23,6 +23,8 @@ for file in $FILES; do
     *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.woff|*.woff2|*.ttf|*.otf|*.zip|*.tar|*.zst|*.gz)
       continue
       ;;
+    *)
+      ;;
   esac
   lineno=0
   while IFS= read -r line || [ -n "$line" ]; do
@@ -31,6 +33,8 @@ for file in $FILES; do
       *amqp://*:*@*|*postgresql://*:*@*|*TURBOPANEL_SECRET=*|*license.token*|*server-key.json*)
         echo "scan-secrets: suspected secret in $file:$lineno" >&2
         fail=1
+        ;;
+      *)
         ;;
     esac
   done < "$file"

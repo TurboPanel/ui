@@ -43,6 +43,132 @@ function composeServiceNames(document: ComposeDocument): string[] {
   return Object.keys(services)
 }
 
+function isStringHostname(hostname: unknown): hostname is string {
+  return typeof hostname === 'string'
+}
+
+function formatHostingHostnames(hostings: HostingRecord[]): string {
+  const raw = hostings[0]?.options?.hostnames
+  if (!Array.isArray(raw)) {
+    return ''
+  }
+  return raw.filter(isStringHostname).join(', ')
+}
+
+function pickDefaultServerId(current: string, servers: OrgServerRecord[]): string {
+  if (current) {
+    return current
+  }
+  return servers.find((server) => server.connected)?.id ?? ''
+}
+
+async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
+  byService: Record<string, HostingRecord[]>
+  hostnames: Record<string, string>
+}> {
+  const entries = await Promise.all(
+    services.map(async (service) => {
+      const hostings = await fetchVisibleHostings(service.id)
+      return [service.id, hostings.hostings] as const
+    }),
+  )
+  return {
+    byService: Object.fromEntries(entries),
+    hostnames: Object.fromEntries(
+      entries.map(([serviceId, hostings]) => [serviceId, formatHostingHostnames(hostings)]),
+    ),
+  }
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
+
+function parseHostnameList(value: string): string[] {
+  return value
+    .split(',')
+    .map((hostname) => hostname.trim())
+    .filter(Boolean)
+}
+
+async function waitForTerminalCommand(
+  serverId: string,
+  commandId: string,
+): Promise<CommandRecord> {
+  let command = await fetchCommand(serverId, commandId)
+  while (!TERMINAL_COMMAND_STATUSES.has(command.status)) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 2000))
+    command = await fetchCommand(serverId, commandId)
+  }
+  return command
+}
+
+function deployStatusMessage(command: CommandRecord): string {
+  if (command.status === 'succeeded') {
+    return 'Deployment completed.'
+  }
+  return command.error ?? `Deployment ${command.status}.`
+}
+
+async function upsertHosting(
+  serviceId: string,
+  composeServiceName: string,
+  options: { hostnames: string[] },
+  hostingsByService: Record<string, HostingRecord[]>,
+): Promise<void> {
+  const existing = hostingsByService[serviceId]?.[0]
+  if (existing) {
+    await updateHosting(existing.id, {
+      metadata: { composeServiceName },
+      options,
+    })
+    return
+  }
+  await createHosting(serviceId, {
+    displayName: composeServiceName,
+    metadata: { composeServiceName },
+    options,
+  })
+}
+
+function HostingHostnameRow({
+  composeServiceName,
+  value,
+  saving,
+  disabled,
+  onChange,
+  onSave,
+}: Readonly<{
+  composeServiceName: string
+  value: string
+  saving: boolean
+  disabled: boolean
+  onChange: (value: string) => void
+  onSave: () => void
+}>) {
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder="app.example.com, www.example.com"
+        placeholderTextColor={colors.textDim}
+        style={styles.hostnamesInput}
+      />
+      <Pressable
+        style={[styles.saveHostingButton, saving && styles.buttonDisabled]}
+        disabled={disabled}
+        onPress={onSave}
+      >
+        <Text style={styles.saveHostingButtonText}>
+          {saving ? 'Saving…' : 'Save hostnames'}
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
 export function EnvironmentDetailSection({
   orgId,
   projectId,
@@ -80,38 +206,29 @@ export function EnvironmentDetailSection({
           fetchOrgServers(),
           fetchVisibleServices(environmentId),
         ])
-        if (!cancelled) {
-          setEnvironment(result.environment)
-          setProjectCompose(projectResult.project.options?.compose)
-          setServers(serversResult.servers.filter((server) => server.connected))
-          setServices(servicesResult.services)
-          setServerId((current) => current || serversResult.servers.find((server) => server.connected)?.id || '')
-          const entries = await Promise.all(
-            servicesResult.services.map(async (service) => {
-              const hostings = await fetchVisibleHostings(service.id)
-              return [service.id, hostings.hostings] as const
-            }),
-          )
-          if (!cancelled) {
-            setHostingsByService(Object.fromEntries(entries))
-            setHostnames(Object.fromEntries(entries.map(([serviceId, hostings]) => [
-              serviceId,
-              Array.isArray(hostings[0]?.options?.hostnames)
-                ? hostings[0].options.hostnames.filter((hostname): hostname is string => typeof hostname === 'string').join(', ')
-                : '',
-            ])))
-          }
+        if (cancelled) {
+          return
         }
+        setEnvironment(result.environment)
+        setProjectCompose(projectResult.project.options?.compose)
+        setServers(serversResult.servers.filter((server) => server.connected))
+        setServices(servicesResult.services)
+        setServerId((current) => pickDefaultServerId(current, serversResult.servers))
+        const hostingState = await fetchHostingsByService(servicesResult.services)
+        if (cancelled) {
+          return
+        }
+        setHostingsByService(hostingState.byService)
+        setHostnames(hostingState.hostnames)
       } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setError(
-            err instanceof Error ? err.message : 'Failed to load environment',
-          )
+        if (cancelled) {
+          return
         }
+        if (isForbiddenError(err)) {
+          await handleUnauthorized()
+          return
+        }
+        setError(errorMessage(err, 'Failed to load environment'))
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -130,6 +247,7 @@ export function EnvironmentDetailSection({
     () => mergeComposeOverlay(projectCompose, environment?.options?.compose),
     [environment?.options?.compose, projectCompose],
   )
+  const serviceNames = useMemo(() => composeServiceNames(mergedCompose), [mergedCompose])
 
   const saveCompose = async (compose: ComposeDocument) => {
     setSavingCompose(true)
@@ -146,7 +264,7 @@ export function EnvironmentDetailSection({
         await handleUnauthorized()
         return
       }
-      setError(err instanceof Error ? err.message : 'Failed to save compose overlay')
+      setError(errorMessage(err, 'Failed to save compose overlay'))
     } finally {
       setSavingCompose(false)
     }
@@ -161,22 +279,14 @@ export function EnvironmentDetailSection({
     setDeployStatus('Queueing deployment…')
     try {
       const result = await deployEnvironment(environmentId, { serverId })
-      let command = await fetchCommand(serverId, result.commandId)
-      while (!TERMINAL_COMMAND_STATUSES.has(command.status)) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 2000))
-        command = await fetchCommand(serverId, result.commandId)
-      }
-      setDeployStatus(
-        command.status === 'succeeded'
-          ? 'Deployment completed.'
-          : command.error ?? `Deployment ${command.status}.`,
-      )
+      const command = await waitForTerminalCommand(serverId, result.commandId)
+      setDeployStatus(deployStatusMessage(command))
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
         return
       }
-      setDeployStatus(err instanceof Error ? err.message : 'Failed to deploy environment')
+      setDeployStatus(errorMessage(err, 'Failed to deploy environment'))
     } finally {
       setDeploying(false)
     }
@@ -196,24 +306,9 @@ export function EnvironmentDetailSection({
         })).id,
       }
       const options = {
-        hostnames: (hostnames[service?.id ?? composeServiceName] ?? '')
-          .split(',')
-          .map((hostname) => hostname.trim())
-          .filter(Boolean),
+        hostnames: parseHostnameList(hostnames[service?.id ?? composeServiceName] ?? ''),
       }
-      const existing = hostingsByService[resolvedService.id]?.[0]
-      if (existing) {
-        await updateHosting(existing.id, {
-          metadata: { composeServiceName },
-          options,
-        })
-      } else {
-        await createHosting(resolvedService.id, {
-          displayName: composeServiceName,
-          metadata: { composeServiceName },
-          options,
-        })
-      }
+      await upsertHosting(resolvedService.id, composeServiceName, options, hostingsByService)
       const [servicesResult, hostingsResult] = await Promise.all([
         fetchVisibleServices(environmentId),
         fetchVisibleHostings(resolvedService.id),
@@ -232,7 +327,7 @@ export function EnvironmentDetailSection({
         await handleUnauthorized()
         return
       }
-      setError(err instanceof Error ? err.message : 'Failed to save hosting')
+      setError(errorMessage(err, 'Failed to save hosting'))
     } finally {
       setSavingHosting(null)
     }
@@ -321,40 +416,27 @@ export function EnvironmentDetailSection({
           </SectionPanel>
 
           <SectionPanel title="Hostnames" hint="Map compose services to hostnames">
-            {composeServiceNames(mergedCompose).length === 0 ? (
+            {serviceNames.length === 0 ? (
               <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
             ) : (
               <View style={styles.hostingList}>
-                {composeServiceNames(mergedCompose).map((composeServiceName) => {
+                {serviceNames.map((composeServiceName) => {
                   const service = services.find(
                     (item) => item.metadata?.composeServiceName === composeServiceName,
                   )
                   const serviceId = service?.id ?? composeServiceName
                   return (
-                    <View key={composeServiceName} style={orgPanelStyles.detailCard}>
-                      <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
-                      <TextInput
-                        value={hostnames[serviceId] ?? ''}
-                        onChangeText={(value) =>
-                          setHostnames((current) => ({ ...current, [serviceId]: value }))
-                        }
-                        placeholder="app.example.com, www.example.com"
-                        placeholderTextColor={colors.textDim}
-                        style={styles.hostnamesInput}
-                      />
-                      <Pressable
-                        style={[
-                          styles.saveHostingButton,
-                          savingHosting === composeServiceName && styles.buttonDisabled,
-                        ]}
-                        disabled={savingHosting !== null}
-                        onPress={() => void saveHostnames(composeServiceName)}
-                      >
-                        <Text style={styles.saveHostingButtonText}>
-                          {savingHosting === composeServiceName ? 'Saving…' : 'Save hostnames'}
-                        </Text>
-                      </Pressable>
-                    </View>
+                    <HostingHostnameRow
+                      key={composeServiceName}
+                      composeServiceName={composeServiceName}
+                      value={hostnames[serviceId] ?? ''}
+                      saving={savingHosting === composeServiceName}
+                      disabled={savingHosting !== null}
+                      onChange={(value) =>
+                        setHostnames((current) => ({ ...current, [serviceId]: value }))
+                      }
+                      onSave={() => void saveHostnames(composeServiceName)}
+                    />
                   )
                 })}
               </View>

@@ -6,11 +6,11 @@ export function SectionPanel({
   title,
   hint,
   children,
-}: {
+}: Readonly<{
   title: string
   hint?: string
   children: ReactNode
-}) {
+}>) {
   return (
     <View style={styles.area}>
       <View style={styles.areaHeader}>

@@ -26,6 +26,60 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
+function submitButtonLabel(loading: boolean, hostVerified: boolean): string {
+  if (loading) {
+    return hostVerified ? 'Setting up…' : 'Authenticating…'
+  }
+  return hostVerified ? 'Complete setup' : 'Continue'
+}
+
+function PasswordField({
+  value,
+  onChangeText,
+  showPassword,
+  onToggleShow,
+  disabled,
+}: Readonly<{
+  value: string
+  onChangeText: (text: string) => void
+  showPassword: boolean
+  onToggleShow: () => void
+  disabled: boolean
+}>) {
+  return (
+    <XStack position="relative" items="center">
+      {Platform.OS === 'web' ? (
+        <TextInput
+          placeholder="Password"
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!disabled}
+          style={{ ...webInputStyle, flex: 1 }}
+        />
+      ) : (
+        <Input
+          flex={1}
+          placeholder="Password"
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+          autoCorrect={false as unknown as undefined}
+          borderColor="$borderColor"
+          bg="$background"
+          disabled={disabled}
+        />
+      )}
+      <Button size="$2" chromeless position="absolute" r="$2" onPress={onToggleShow}>
+        {showPassword ? 'Hide' : 'Show'}
+      </Button>
+    </XStack>
+  )
+}
+
 export function InstallScreenContent() {
   const router = useRouter()
   const { refreshSession, refreshInstallStatus } = useAuth()
@@ -68,6 +122,11 @@ export function InstallScreenContent() {
     maxHeight: interpolate(superadminSectionHeight.value, [0, 1], [0, 300]),
     overflow: 'hidden' as const,
   }))
+
+  const resetHostVerification = useCallback(() => {
+    setHostVerified(false)
+    setError('')
+  }, [])
 
   const handleHostAuth = useCallback(async () => {
     if (!username.trim() || !password) {
@@ -136,7 +195,7 @@ export function InstallScreenContent() {
 
   if (success) {
     return (
-      <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center" gap="$4">
+      <YStack flex={1} bg="$background" p="$6" justify="center" gap="$4">
         <Text fontSize="$6" fontWeight="bold" color="$color">
           Installation complete 🎉
         </Text>
@@ -147,15 +206,17 @@ export function InstallScreenContent() {
     )
   }
 
+  const introText = hostVerified
+    ? 'Host verified. Create your superadmin account below.'
+    : 'Sign in with root or a sudo-capable host account to begin setup.'
+
   return (
-    <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center" gap="$4">
+    <YStack flex={1} bg="$background" p="$6" justify="center" gap="$4">
       <Text fontSize="$6" fontWeight="bold" color="$color">
         Set up your TurboPanel instance
       </Text>
       <Text color="$gray11" fontSize="$4">
-        {hostVerified
-          ? 'Host verified. Create your superadmin account below.'
-          : 'Sign in with root or a sudo-capable host account to begin setup.'}
+        {introText}
       </Text>
 
       <Animated.View style={hostSectionStyle}>
@@ -169,8 +230,7 @@ export function InstallScreenContent() {
               value={username}
               onChangeText={(text) => {
                 setUsername(text)
-                setHostVerified(false)
-                setError('')
+                resetHostVerification()
               }}
               autoCapitalize="none"
               autoCorrect={false}
@@ -183,65 +243,30 @@ export function InstallScreenContent() {
               value={username}
               onChangeText={(text) => {
                 setUsername(text)
-                setHostVerified(false)
-                setError('')
+                resetHostVerification()
               }}
               autoCapitalize="none"
               autoCorrect={false as unknown as undefined}
               borderColor="$borderColor"
-              backgroundColor="$background"
-              editable={!loading}
+              bg="$background"
+              disabled={loading}
             />
           )}
-          <XStack position="relative" alignItems="center">
-            {Platform.OS === 'web' ? (
-              <TextInput
-                placeholder="Password"
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text)
-                  setHostVerified(false)
-                  setError('')
-                }}
-                secureTextEntry={!showHostPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-                style={{ ...webInputStyle, flex: 1 }}
-              />
-            ) : (
-              <Input
-                flex={1}
-                placeholder="Password"
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text)
-                  setHostVerified(false)
-                  setError('')
-                }}
-                secureTextEntry={!showHostPassword}
-                autoCapitalize="none"
-                autoCorrect={false as unknown as undefined}
-                borderColor="$borderColor"
-                backgroundColor="$background"
-                editable={!loading}
-              />
-            )}
-            <Button
-              size="$2"
-              chromeless
-              position="absolute"
-              right="$2"
-              onPress={() => setShowHostPassword((v) => !v)}
-            >
-              {showHostPassword ? 'Hide' : 'Show'}
-            </Button>
-          </XStack>
+          <PasswordField
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text)
+              resetHostVerification()
+            }}
+            showPassword={showHostPassword}
+            onToggleShow={() => setShowHostPassword((v) => !v)}
+            disabled={loading}
+          />
         </YStack>
       </Animated.View>
 
       <Animated.View style={[{ overflow: 'hidden' }, superadminSectionStyle]}>
-        <YStack gap="$2" paddingTop="$2">
+        <YStack gap="$2" pt="$2">
           <Text color="$color" fontSize="$4">
             Superadmin account
           </Text>
@@ -273,52 +298,20 @@ export function InstallScreenContent() {
               autoCapitalize="none"
               autoCorrect={false as unknown as undefined}
               borderColor="$borderColor"
-              backgroundColor="$background"
-              editable={!loading}
+              bg="$background"
+              disabled={loading}
             />
           )}
-          <XStack position="relative" alignItems="center">
-            {Platform.OS === 'web' ? (
-              <TextInput
-                placeholder="Password"
-                value={superadminPassword}
-                onChangeText={(text) => {
-                  setSuperadminPassword(text)
-                  setError('')
-                }}
-                secureTextEntry={!showSuperadminPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-                style={{ ...webInputStyle, flex: 1 }}
-              />
-            ) : (
-              <Input
-                flex={1}
-                placeholder="Password"
-                value={superadminPassword}
-                onChangeText={(text) => {
-                  setSuperadminPassword(text)
-                  setError('')
-                }}
-                secureTextEntry={!showSuperadminPassword}
-                autoCapitalize="none"
-                autoCorrect={false as unknown as undefined}
-                borderColor="$borderColor"
-                backgroundColor="$background"
-                editable={!loading}
-              />
-            )}
-            <Button
-              size="$2"
-              chromeless
-              position="absolute"
-              right="$2"
-              onPress={() => setShowSuperadminPassword((v) => !v)}
-            >
-              {showSuperadminPassword ? 'Hide' : 'Show'}
-            </Button>
-          </XStack>
+          <PasswordField
+            value={superadminPassword}
+            onChangeText={(text) => {
+              setSuperadminPassword(text)
+              setError('')
+            }}
+            showPassword={showSuperadminPassword}
+            onToggleShow={() => setShowSuperadminPassword((v) => !v)}
+            disabled={loading}
+          />
         </YStack>
       </Animated.View>
 
@@ -329,18 +322,12 @@ export function InstallScreenContent() {
       ) : null}
       <Button
         onPress={hostVerified ? handleCompleteSetup : handleHostAuth}
-        theme="active"
+        theme="accent"
         size="$4"
         disabled={loading || (hostVerified && (!superadminEmail.trim() || !superadminPassword))}
         opacity={loading ? 0.7 : 1}
       >
-        {loading
-          ? hostVerified
-            ? 'Setting up…'
-            : 'Authenticating…'
-          : hostVerified
-            ? 'Complete setup'
-            : 'Continue'}
+        {submitButtonLabel(loading, hostVerified)}
       </Button>
     </YStack>
   )

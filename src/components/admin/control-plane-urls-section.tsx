@@ -19,14 +19,30 @@ import { colors, spacing } from '@/lib/theme'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
+
+async function recoverIfForbidden(
+  err: unknown,
+  handleUnauthorized: () => Promise<void>,
+): Promise<boolean> {
+  if (!isForbiddenError(err)) {
+    return false
+  }
+  await handleUnauthorized()
+  return true
+}
+
+type ApplyStatus = 'idle' | 'done' | 'failed'
+
 export function ControlPlaneUrlsSection() {
   const { handleUnauthorized } = useAuth()
-  const [urls, setUrls] = useState<string[]>([])
   const [draft, setDraft] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [applying, setApplying] = useState(false)
-  const [applyStatus, setApplyStatus] = useState<'idle' | 'done' | 'failed'>('idle')
+  const [applyStatus, setApplyStatus] = useState<ApplyStatus>('idle')
   const [applyError, setApplyError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [newUrl, setNewUrl] = useState('')
@@ -40,21 +56,23 @@ export function ControlPlaneUrlsSection() {
       setError(null)
       try {
         const result = await fetchPublicUrls()
-        if (!cancelled) {
-          setUrls(result.urls)
-          setDraft(result.urls)
+        if (cancelled) {
+          return
         }
+        setDraft(result.urls)
       } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            setError(
-              err instanceof Error ? err.message : 'Access to public URLs was denied',
-            )
-          } else {
-            setError(err instanceof Error ? err.message : 'Failed to load public URLs')
-          }
+        if (cancelled) {
+          return
         }
+        const forbidden = await recoverIfForbidden(err, handleUnauthorized)
+        setError(
+          errorMessage(
+            err,
+            forbidden
+              ? 'Access to public URLs was denied'
+              : 'Failed to load public URLs',
+          ),
+        )
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -69,6 +87,11 @@ export function ControlPlaneUrlsSection() {
     }
   }, [handleUnauthorized])
 
+  const clearApplyFeedback = () => {
+    setApplyStatus('idle')
+    setApplyError(null)
+  }
+
   const onAddUrl = () => {
     const trimmed = newUrl.trim()
     if (!trimmed) {
@@ -77,14 +100,12 @@ export function ControlPlaneUrlsSection() {
     setDraft((current) => [...current, trimmed])
     setNewUrl('')
     setError(null)
-    setApplyStatus('idle')
-    setApplyError(null)
+    clearApplyFeedback()
   }
 
   const onRemoveUrl = (index: number) => {
     setDraft((current) => current.filter((_, i) => i !== index))
-    setApplyStatus('idle')
-    setApplyError(null)
+    clearApplyFeedback()
   }
 
   const onSave = async () => {
@@ -92,48 +113,48 @@ export function ControlPlaneUrlsSection() {
     setError(null)
     try {
       const result = await savePublicUrls(draft)
-      setUrls(result.urls)
       setDraft(result.urls)
     } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        setError(err instanceof Error ? err.message : 'Access to public URLs was denied')
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to save public URLs')
-      }
+      const forbidden = await recoverIfForbidden(err, handleUnauthorized)
+      setError(
+        errorMessage(
+          err,
+          forbidden
+            ? 'Access to public URLs was denied'
+            : 'Failed to save public URLs',
+        ),
+      )
     } finally {
       setSaving(false)
     }
   }
 
+  const handleApplyError = async (err: unknown) => {
+    const message = errorMessage(err, 'Failed to apply public URLs')
+    if (message.includes(WORKERS_APPLY_MESSAGE)) {
+      setApplyNotAvailable(true)
+      clearApplyFeedback()
+      return
+    }
+    await recoverIfForbidden(err, handleUnauthorized)
+    setApplyStatus('failed')
+    setApplyError(message)
+  }
+
   const onSaveAndApply = async () => {
     setApplying(true)
     setError(null)
-    setApplyStatus('idle')
-    setApplyError(null)
+    clearApplyFeedback()
     try {
       const result = await applyPublicUrls(draft)
       if (result.ok && result.applied) {
-        setUrls(draft)
         setApplyStatus('done')
-      } else {
-        setApplyStatus('failed')
-        setApplyError(result.error ?? 'Apply failed')
+        return
       }
+      setApplyStatus('failed')
+      setApplyError(result.error ?? 'Apply failed')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to apply public URLs'
-      if (message.includes(WORKERS_APPLY_MESSAGE)) {
-        setApplyNotAvailable(true)
-        setApplyStatus('idle')
-        setApplyError(null)
-      } else if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        setApplyStatus('failed')
-        setApplyError(message)
-      } else {
-        setApplyStatus('failed')
-        setApplyError(message)
-      }
+      await handleApplyError(err)
     } finally {
       setApplying(false)
     }
@@ -155,94 +176,183 @@ export function ControlPlaneUrlsSection() {
         {loading ? (
           <Text style={orgPanelStyles.muted}>Loading...</Text>
         ) : (
-          <>
-            <View style={styles.list}>
-              {draft.length === 0 ? (
-                <Text style={orgPanelStyles.muted}>No public URLs configured.</Text>
-              ) : (
-                draft.map((url, index) => (
-                  <View key={`${url}-${index}`} style={styles.urlRow}>
-                    <Text selectable style={styles.urlText}>
-                      {url}
-                    </Text>
-                    <Pressable
-                      style={styles.removeButton}
-                      onPress={() => onRemoveUrl(index)}
-                    >
-                      <Text style={styles.removeButtonText}>Remove</Text>
-                    </Pressable>
-                  </View>
-                ))
-              )}
-            </View>
-
-            <View style={styles.addRow}>
-              <TextInput
-                value={newUrl}
-                onChangeText={setNewUrl}
-                placeholder="https://panel.example.com:8443"
-                placeholderTextColor={colors.textDim}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={styles.input}
-                onSubmitEditing={onAddUrl}
-              />
-              <Pressable style={styles.secondaryButton} onPress={onAddUrl}>
-                <Text style={styles.secondaryButtonText}>Add</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.actions}>
-              <Pressable
-                style={[styles.primaryButton, saving && styles.buttonDisabled]}
-                disabled={saving}
-                onPress={() => void onSave()}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {saving ? 'Saving...' : 'Save'}
-                </Text>
-              </Pressable>
-
-              {!applyNotAvailable ? (
-                <Pressable
-                  style={[styles.primaryButton, applying && styles.buttonDisabled]}
-                  disabled={applying}
-                  onPress={() => void onSaveAndApply()}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {applying ? 'Saving & Applying...' : 'Save & Apply'}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            {!applyNotAvailable ? (
-              <Text style={orgPanelStyles.muted}>
-                Apply regenerates the TLS cert and reloads Caddy.
-              </Text>
-            ) : (
-              <Text style={orgPanelStyles.muted}>
-                Cert apply is not available on this runtime (Cloudflare Workers).
-                Save URLs here; apply TLS changes on your self-hosted instance.
-              </Text>
-            )}
-
-            {applying ? (
-              <Text style={styles.applyPending}>Applying…</Text>
-            ) : null}
-            {applyStatus === 'done' ? (
-              <Text style={styles.applyDone}>
-                Applied — cert regenerated and Caddy reloaded
-              </Text>
-            ) : null}
-            {applyStatus === 'failed' && applyError ? (
-              <Text style={styles.applyFailed}>Apply failed: {applyError}</Text>
-            ) : null}
-          </>
+          <PublicUrlsEditor
+            draft={draft}
+            newUrl={newUrl}
+            saving={saving}
+            applying={applying}
+            applyStatus={applyStatus}
+            applyError={applyError}
+            applyNotAvailable={applyNotAvailable}
+            onNewUrlChange={setNewUrl}
+            onAddUrl={onAddUrl}
+            onRemoveUrl={onRemoveUrl}
+            onSave={() => void onSave()}
+            onSaveAndApply={() => void onSaveAndApply()}
+          />
         )}
       </SectionPanel>
     </View>
   )
+}
+
+function PublicUrlsEditor({
+  draft,
+  newUrl,
+  saving,
+  applying,
+  applyStatus,
+  applyError,
+  applyNotAvailable,
+  onNewUrlChange,
+  onAddUrl,
+  onRemoveUrl,
+  onSave,
+  onSaveAndApply,
+}: Readonly<{
+  draft: string[]
+  newUrl: string
+  saving: boolean
+  applying: boolean
+  applyStatus: ApplyStatus
+  applyError: string | null
+  applyNotAvailable: boolean
+  onNewUrlChange: (value: string) => void
+  onAddUrl: () => void
+  onRemoveUrl: (index: number) => void
+  onSave: () => void
+  onSaveAndApply: () => void
+}>) {
+  return (
+    <>
+      <UrlList draft={draft} onRemoveUrl={onRemoveUrl} />
+
+      <View style={styles.addRow}>
+        <TextInput
+          value={newUrl}
+          onChangeText={onNewUrlChange}
+          placeholder="https://panel.example.com:8443"
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.input}
+          onSubmitEditing={onAddUrl}
+        />
+        <Pressable style={styles.secondaryButton} onPress={onAddUrl}>
+          <Text style={styles.secondaryButtonText}>Add</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.actions}>
+        <Pressable
+          style={[styles.primaryButton, saving && styles.buttonDisabled]}
+          disabled={saving}
+          onPress={onSave}
+        >
+          <Text style={styles.primaryButtonText}>
+            {saving ? 'Saving...' : 'Save'}
+          </Text>
+        </Pressable>
+
+        {!applyNotAvailable ? (
+          <Pressable
+            style={[styles.primaryButton, applying && styles.buttonDisabled]}
+            disabled={applying}
+            onPress={onSaveAndApply}
+          >
+            <Text style={styles.primaryButtonText}>
+              {applying ? 'Saving & Applying...' : 'Save & Apply'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <ApplyAvailabilityNote applyNotAvailable={applyNotAvailable} />
+      <ApplyFeedback
+        applying={applying}
+        applyStatus={applyStatus}
+        applyError={applyError}
+      />
+    </>
+  )
+}
+
+function UrlList({
+  draft,
+  onRemoveUrl,
+}: Readonly<{
+  draft: string[]
+  onRemoveUrl: (index: number) => void
+}>) {
+  if (draft.length === 0) {
+    return (
+      <View style={styles.list}>
+        <Text style={orgPanelStyles.muted}>No public URLs configured.</Text>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.list}>
+      {draft.map((url, index) => (
+        <View key={`${url}-${index}`} style={styles.urlRow}>
+          <Text selectable style={styles.urlText}>
+            {url}
+          </Text>
+          <Pressable
+            style={styles.removeButton}
+            onPress={() => onRemoveUrl(index)}
+          >
+            <Text style={styles.removeButtonText}>Remove</Text>
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function ApplyAvailabilityNote({
+  applyNotAvailable,
+}: Readonly<{ applyNotAvailable: boolean }>) {
+  if (applyNotAvailable) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        Cert apply is not available on this runtime (Cloudflare Workers).
+        Save URLs here; apply TLS changes on your self-hosted instance.
+      </Text>
+    )
+  }
+
+  return (
+    <Text style={orgPanelStyles.muted}>
+      Apply regenerates the TLS cert and reloads Caddy.
+    </Text>
+  )
+}
+
+function ApplyFeedback({
+  applying,
+  applyStatus,
+  applyError,
+}: Readonly<{
+  applying: boolean
+  applyStatus: ApplyStatus
+  applyError: string | null
+}>) {
+  if (applying) {
+    return <Text style={styles.applyPending}>Applying…</Text>
+  }
+  if (applyStatus === 'done') {
+    return (
+      <Text style={styles.applyDone}>
+        Applied — cert regenerated and Caddy reloaded
+      </Text>
+    )
+  }
+  if (applyStatus === 'failed' && applyError) {
+    return <Text style={styles.applyFailed}>Apply failed: {applyError}</Text>
+  }
+  return null
 }
 
 const styles = StyleSheet.create({

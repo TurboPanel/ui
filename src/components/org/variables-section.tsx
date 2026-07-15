@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Platform,
   Pressable,
@@ -42,13 +42,476 @@ function displayVariableValue(variable: VariableRecord): string {
   return variable.value ?? ''
 }
 
+function inputStyle(hasError: boolean) {
+  return [
+    Platform.OS === 'web'
+      ? {
+          ...webInputStyle,
+          borderColor: hasError ? colors.error : colors.border,
+        }
+      : styles.input,
+    hasError && Platform.OS !== 'web' && styles.inputError,
+  ]
+}
+
+function VariableEditForm({
+  editKey,
+  editValue,
+  editSaving,
+  onKeyChange,
+  onValueChange,
+  onSave,
+  onCancel,
+}: Readonly<{
+  editKey: string
+  editValue: string
+  editSaving: boolean
+  onKeyChange: (value: string) => void
+  onValueChange: (value: string) => void
+  onSave: () => void
+  onCancel: () => void
+}>) {
+  return (
+    <View style={styles.inlineForm}>
+      <View style={styles.field}>
+        <Text style={styles.label}>Key</Text>
+        <TextInput
+          style={inputStyle(false)}
+          value={editKey}
+          onChangeText={onKeyChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!editSaving}
+        />
+      </View>
+      <View style={styles.field}>
+        <Text style={styles.label}>Value</Text>
+        <TextInput
+          style={inputStyle(false)}
+          value={editValue}
+          onChangeText={onValueChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!editSaving}
+        />
+      </View>
+      <View style={styles.rowActions}>
+        <Pressable
+          style={[styles.submitButton, editSaving && styles.buttonDisabled]}
+          disabled={editSaving}
+          onPress={onSave}
+        >
+          <Text style={styles.submitButtonText}>
+            {editSaving ? 'Saving…' : 'Save'}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={onCancel}>
+          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+function VariableSecretUpdateForm({
+  variableKey,
+  secretNewValue,
+  secretSaving,
+  onValueChange,
+  onSave,
+  onCancel,
+}: Readonly<{
+  variableKey: string
+  secretNewValue: string
+  secretSaving: boolean
+  onValueChange: (value: string) => void
+  onSave: () => void
+  onCancel: () => void
+}>) {
+  return (
+    <View style={styles.inlineForm}>
+      <Text style={styles.monoKey}>{variableKey}</Text>
+      <View style={styles.field}>
+        <Text style={styles.label}>New value</Text>
+        <TextInput
+          style={inputStyle(false)}
+          value={secretNewValue}
+          onChangeText={onValueChange}
+          placeholder="Enter new secret value"
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!secretSaving}
+          secureTextEntry
+        />
+      </View>
+      <View style={styles.rowActions}>
+        <Pressable
+          style={[styles.submitButton, secretSaving && styles.buttonDisabled]}
+          disabled={secretSaving}
+          onPress={onSave}
+        >
+          <Text style={styles.submitButtonText}>
+            {secretSaving ? 'Saving…' : 'Save secret'}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={onCancel}>
+          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+function VariableOwnerActions({
+  variable,
+  isDeleting,
+  onEdit,
+  onSecretUpdate,
+  onDelete,
+}: Readonly<{
+  variable: VariableRecord
+  isDeleting: boolean
+  onEdit: (variable: VariableRecord) => void
+  onSecretUpdate: (variable: VariableRecord) => void
+  onDelete: (id: string) => void
+}>) {
+  let editAction: ReactNode
+  if (variable.isSecret) {
+    editAction = (
+      <Pressable
+        style={styles.secondaryButton}
+        onPress={() => onSecretUpdate(variable)}
+      >
+        <Text style={styles.secondaryButtonText}>Update value</Text>
+      </Pressable>
+    )
+  } else {
+    editAction = (
+      <Pressable
+        style={styles.secondaryButton}
+        onPress={() => onEdit(variable)}
+      >
+        <Text style={styles.secondaryButtonText}>Edit</Text>
+      </Pressable>
+    )
+  }
+
+  return (
+    <View style={styles.rowActions}>
+      {editAction}
+      <Pressable
+        style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
+        disabled={isDeleting}
+        onPress={() => onDelete(variable.id)}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {isDeleting ? 'Deleting…' : 'Delete'}
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function VariableDisplayCard({
+  variable,
+  canOwn,
+  isDeleting,
+  onEdit,
+  onSecretUpdate,
+  onDelete,
+}: Readonly<{
+  variable: VariableRecord
+  canOwn: boolean
+  isDeleting: boolean
+  onEdit: (variable: VariableRecord) => void
+  onSecretUpdate: (variable: VariableRecord) => void
+  onDelete: (id: string) => void
+}>) {
+  return (
+    <>
+      <View style={styles.variableHeader}>
+        <View style={styles.keyRow}>
+          <Text style={styles.monoKey}>{variable.key}</Text>
+          {variable.isSecret ? (
+            <View style={styles.secretBadge}>
+              <Text style={styles.secretBadgeText}>SECRET</Text>
+            </View>
+          ) : null}
+        </View>
+        {canOwn ? (
+          <VariableOwnerActions
+            variable={variable}
+            isDeleting={isDeleting}
+            onEdit={onEdit}
+            onSecretUpdate={onSecretUpdate}
+            onDelete={onDelete}
+          />
+        ) : null}
+      </View>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Value: </Text>
+        {displayVariableValue(variable)}
+      </Text>
+    </>
+  )
+}
+
+function VariableCard({
+  variable,
+  canOwn,
+  isEditing,
+  isUpdatingSecret,
+  isDeleting,
+  editKey,
+  editValue,
+  editSaving,
+  secretNewValue,
+  secretSaving,
+  onEditKeyChange,
+  onEditValueChange,
+  onSaveEdit,
+  onCancelEdit,
+  onSecretValueChange,
+  onSaveSecret,
+  onCancelSecret,
+  onEdit,
+  onSecretUpdate,
+  onDelete,
+}: Readonly<{
+  variable: VariableRecord
+  canOwn: boolean
+  isEditing: boolean
+  isUpdatingSecret: boolean
+  isDeleting: boolean
+  editKey: string
+  editValue: string
+  editSaving: boolean
+  secretNewValue: string
+  secretSaving: boolean
+  onEditKeyChange: (value: string) => void
+  onEditValueChange: (value: string) => void
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+  onSecretValueChange: (value: string) => void
+  onSaveSecret: () => void
+  onCancelSecret: () => void
+  onEdit: (variable: VariableRecord) => void
+  onSecretUpdate: (variable: VariableRecord) => void
+  onDelete: (id: string) => void
+}>) {
+  if (isEditing && !variable.isSecret) {
+    return (
+      <View style={orgPanelStyles.detailCard}>
+        <VariableEditForm
+          editKey={editKey}
+          editValue={editValue}
+          editSaving={editSaving}
+          onKeyChange={onEditKeyChange}
+          onValueChange={onEditValueChange}
+          onSave={onSaveEdit}
+          onCancel={onCancelEdit}
+        />
+      </View>
+    )
+  }
+
+  if (isUpdatingSecret) {
+    return (
+      <View style={orgPanelStyles.detailCard}>
+        <VariableSecretUpdateForm
+          variableKey={variable.key}
+          secretNewValue={secretNewValue}
+          secretSaving={secretSaving}
+          onValueChange={onSecretValueChange}
+          onSave={onSaveSecret}
+          onCancel={onCancelSecret}
+        />
+      </View>
+    )
+  }
+
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <VariableDisplayCard
+        variable={variable}
+        canOwn={canOwn}
+        isDeleting={isDeleting}
+        onEdit={onEdit}
+        onSecretUpdate={onSecretUpdate}
+        onDelete={onDelete}
+      />
+    </View>
+  )
+}
+
+function VariablesListContent({
+  loading,
+  variables,
+  canOwn,
+  deleting,
+  editingId,
+  updatingSecretId,
+  editKey,
+  editValue,
+  editSaving,
+  secretNewValue,
+  secretSaving,
+  onEditKeyChange,
+  onEditValueChange,
+  onSaveEdit,
+  onCancelEdit,
+  onSecretValueChange,
+  onSaveSecret,
+  onCancelSecret,
+  onEdit,
+  onSecretUpdate,
+  onDelete,
+}: Readonly<{
+  loading: boolean
+  variables: VariableRecord[]
+  canOwn: boolean
+  deleting: Set<string>
+  editingId: string | null
+  updatingSecretId: string | null
+  editKey: string
+  editValue: string
+  editSaving: boolean
+  secretNewValue: string
+  secretSaving: boolean
+  onEditKeyChange: (value: string) => void
+  onEditValueChange: (value: string) => void
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+  onSecretValueChange: (value: string) => void
+  onSaveSecret: () => void
+  onCancelSecret: () => void
+  onEdit: (variable: VariableRecord) => void
+  onSecretUpdate: (variable: VariableRecord) => void
+  onDelete: (id: string) => void
+}>) {
+  if (loading && variables.length === 0) {
+    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+  }
+
+  if (variables.length === 0) {
+    return <Text style={orgPanelStyles.muted}>No variables yet.</Text>
+  }
+
+  return (
+    <View style={styles.list}>
+      {variables.map((variable) => (
+        <VariableCard
+          key={variable.id}
+          variable={variable}
+          canOwn={canOwn}
+          isEditing={editingId === variable.id}
+          isUpdatingSecret={updatingSecretId === variable.id}
+          isDeleting={deleting.has(variable.id)}
+          editKey={editKey}
+          editValue={editValue}
+          editSaving={editSaving}
+          secretNewValue={secretNewValue}
+          secretSaving={secretSaving}
+          onEditKeyChange={onEditKeyChange}
+          onEditValueChange={onEditValueChange}
+          onSaveEdit={onSaveEdit}
+          onCancelEdit={onCancelEdit}
+          onSecretValueChange={onSecretValueChange}
+          onSaveSecret={onSaveSecret}
+          onCancelSecret={onCancelSecret}
+          onEdit={onEdit}
+          onSecretUpdate={onSecretUpdate}
+          onDelete={onDelete}
+        />
+      ))}
+    </View>
+  )
+}
+
+function AddVariableForm({
+  newKey,
+  newValue,
+  newIsSecret,
+  addFieldError,
+  adding,
+  onKeyChange,
+  onValueChange,
+  onToggleSecret,
+  onSubmit,
+}: Readonly<{
+  newKey: string
+  newValue: string
+  newIsSecret: boolean
+  addFieldError: string | null
+  adding: boolean
+  onKeyChange: (value: string) => void
+  onValueChange: (value: string) => void
+  onToggleSecret: () => void
+  onSubmit: () => void
+}>) {
+  return (
+    <View style={styles.inlineForm}>
+      <View style={styles.field}>
+        <Text style={styles.label}>Key *</Text>
+        <TextInput
+          style={inputStyle(Boolean(addFieldError))}
+          value={newKey}
+          onChangeText={onKeyChange}
+          placeholder="e.g. DATABASE_URL"
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!adding}
+        />
+      </View>
+      <View style={styles.field}>
+        <Text style={styles.label}>Value</Text>
+        <TextInput
+          style={inputStyle(false)}
+          value={newValue}
+          onChangeText={onValueChange}
+          placeholder={
+            newIsSecret ? 'Secret value (write-only)' : 'Plaintext value'
+          }
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!adding}
+          secureTextEntry={newIsSecret}
+        />
+      </View>
+      <Pressable style={styles.toggleRow} onPress={onToggleSecret}>
+        <View
+          style={[styles.checkbox, newIsSecret && styles.checkboxChecked]}
+        >
+          {newIsSecret ? <Text style={styles.checkboxMark}>✓</Text> : null}
+        </View>
+        <Text style={styles.toggleLabel}>Secret</Text>
+      </Pressable>
+      {addFieldError ? (
+        <Text style={styles.fieldError}>{addFieldError}</Text>
+      ) : null}
+      <Pressable
+        style={[styles.submitButton, adding && styles.buttonDisabled]}
+        disabled={adding}
+        onPress={onSubmit}
+      >
+        <Text style={styles.submitButtonText}>
+          {adding ? 'Adding…' : 'Add variable'}
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
 export function VariablesSection({
   orgId,
   parentField,
-}: {
+}: Readonly<{
   orgId: string
   parentField: VariableParentFilter
-}) {
+}>) {
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const [variables, setVariables] = useState<VariableRecord[]>([])
@@ -272,16 +735,6 @@ export function VariablesSection({
     }
   }
 
-  const inputStyle = (hasError: boolean) => [
-    Platform.OS === 'web'
-      ? {
-          ...webInputStyle,
-          borderColor: hasError ? colors.error : colors.border,
-        }
-      : styles.input,
-    hasError && Platform.OS !== 'web' && styles.inputError,
-  ]
-
   return (
     <SectionPanel title="Variables" hint="Environment variables">
       {canOwn ? (
@@ -298,223 +751,48 @@ export function VariablesSection({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       {showAddForm && canOwn ? (
-        <View style={styles.inlineForm}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Key *</Text>
-            <TextInput
-              style={inputStyle(Boolean(addFieldError))}
-              value={newKey}
-              onChangeText={(t) => {
-                setNewKey(t)
-                setAddFieldError(null)
-              }}
-              placeholder="e.g. DATABASE_URL"
-              placeholderTextColor={colors.textDim}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!adding}
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Value</Text>
-            <TextInput
-              style={inputStyle(false)}
-              value={newValue}
-              onChangeText={setNewValue}
-              placeholder={
-                newIsSecret ? 'Secret value (write-only)' : 'Plaintext value'
-              }
-              placeholderTextColor={colors.textDim}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!adding}
-              secureTextEntry={newIsSecret}
-            />
-          </View>
-          <Pressable
-            style={styles.toggleRow}
-            onPress={() => setNewIsSecret((current) => !current)}
-          >
-            <View
-              style={[
-                styles.checkbox,
-                newIsSecret && styles.checkboxChecked,
-              ]}
-            >
-              {newIsSecret ? (
-                <Text style={styles.checkboxMark}>✓</Text>
-              ) : null}
-            </View>
-            <Text style={styles.toggleLabel}>Secret</Text>
-          </Pressable>
-          {addFieldError ? (
-            <Text style={styles.fieldError}>{addFieldError}</Text>
-          ) : null}
-          <Pressable
-            style={[styles.submitButton, adding && styles.buttonDisabled]}
-            disabled={adding}
-            onPress={() => void handleAddVariable()}
-          >
-            <Text style={styles.submitButtonText}>
-              {adding ? 'Adding…' : 'Add variable'}
-            </Text>
-          </Pressable>
-        </View>
+        <AddVariableForm
+          newKey={newKey}
+          newValue={newValue}
+          newIsSecret={newIsSecret}
+          addFieldError={addFieldError}
+          adding={adding}
+          onKeyChange={(t) => {
+            setNewKey(t)
+            setAddFieldError(null)
+          }}
+          onValueChange={setNewValue}
+          onToggleSecret={() => setNewIsSecret((current) => !current)}
+          onSubmit={() => void handleAddVariable()}
+        />
       ) : null}
 
-      {loading && variables.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
-      ) : variables.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No variables yet.</Text>
-      ) : (
-        <View style={styles.list}>
-          {variables.map((variable) => (
-            <View key={variable.id} style={orgPanelStyles.detailCard}>
-              {editingId === variable.id && !variable.isSecret ? (
-                <View style={styles.inlineForm}>
-                  <View style={styles.field}>
-                    <Text style={styles.label}>Key</Text>
-                    <TextInput
-                      style={inputStyle(false)}
-                      value={editKey}
-                      onChangeText={setEditKey}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!editSaving}
-                    />
-                  </View>
-                  <View style={styles.field}>
-                    <Text style={styles.label}>Value</Text>
-                    <TextInput
-                      style={inputStyle(false)}
-                      value={editValue}
-                      onChangeText={setEditValue}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!editSaving}
-                    />
-                  </View>
-                  <View style={styles.rowActions}>
-                    <Pressable
-                      style={[
-                        styles.submitButton,
-                        editSaving && styles.buttonDisabled,
-                      ]}
-                      disabled={editSaving}
-                      onPress={() => void handleSaveEdit()}
-                    >
-                      <Text style={styles.submitButtonText}>
-                        {editSaving ? 'Saving…' : 'Save'}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.secondaryButton}
-                      onPress={() => setEditingId(null)}
-                    >
-                      <Text style={styles.secondaryButtonText}>Cancel</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : updatingSecretId === variable.id ? (
-                <View style={styles.inlineForm}>
-                  <Text style={styles.monoKey}>{variable.key}</Text>
-                  <View style={styles.field}>
-                    <Text style={styles.label}>New value</Text>
-                    <TextInput
-                      style={inputStyle(false)}
-                      value={secretNewValue}
-                      onChangeText={setSecretNewValue}
-                      placeholder="Enter new secret value"
-                      placeholderTextColor={colors.textDim}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      editable={!secretSaving}
-                      secureTextEntry
-                    />
-                  </View>
-                  <View style={styles.rowActions}>
-                    <Pressable
-                      style={[
-                        styles.submitButton,
-                        secretSaving && styles.buttonDisabled,
-                      ]}
-                      disabled={secretSaving}
-                      onPress={() => void handleSaveSecretValue()}
-                    >
-                      <Text style={styles.submitButtonText}>
-                        {secretSaving ? 'Saving…' : 'Save secret'}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.secondaryButton}
-                      onPress={() => {
-                        setUpdatingSecretId(null)
-                        setSecretNewValue('')
-                      }}
-                    >
-                      <Text style={styles.secondaryButtonText}>Cancel</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.variableHeader}>
-                    <View style={styles.keyRow}>
-                      <Text style={styles.monoKey}>{variable.key}</Text>
-                      {variable.isSecret ? (
-                        <View style={styles.secretBadge}>
-                          <Text style={styles.secretBadgeText}>SECRET</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {canOwn ? (
-                      <View style={styles.rowActions}>
-                        {variable.isSecret ? (
-                          <Pressable
-                            style={styles.secondaryButton}
-                            onPress={() => startSecretUpdate(variable)}
-                          >
-                            <Text style={styles.secondaryButtonText}>
-                              Update value
-                            </Text>
-                          </Pressable>
-                        ) : (
-                          <Pressable
-                            style={styles.secondaryButton}
-                            onPress={() => startEdit(variable)}
-                          >
-                            <Text style={styles.secondaryButtonText}>
-                              Edit
-                            </Text>
-                          </Pressable>
-                        )}
-                        <Pressable
-                          style={[
-                            styles.secondaryButton,
-                            deleting.has(variable.id) && styles.buttonDisabled,
-                          ]}
-                          disabled={deleting.has(variable.id)}
-                          onPress={() => void handleDeleteVariable(variable.id)}
-                        >
-                          <Text style={styles.secondaryButtonText}>
-                            {deleting.has(variable.id)
-                              ? 'Deleting…'
-                              : 'Delete'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>Value: </Text>
-                    {displayVariableValue(variable)}
-                  </Text>
-                </>
-              )}
-            </View>
-          ))}
-        </View>
-      )}
+      <VariablesListContent
+        loading={loading}
+        variables={variables}
+        canOwn={canOwn}
+        deleting={deleting}
+        editingId={editingId}
+        updatingSecretId={updatingSecretId}
+        editKey={editKey}
+        editValue={editValue}
+        editSaving={editSaving}
+        secretNewValue={secretNewValue}
+        secretSaving={secretSaving}
+        onEditKeyChange={setEditKey}
+        onEditValueChange={setEditValue}
+        onSaveEdit={() => void handleSaveEdit()}
+        onCancelEdit={() => setEditingId(null)}
+        onSecretValueChange={setSecretNewValue}
+        onSaveSecret={() => void handleSaveSecretValue()}
+        onCancelSecret={() => {
+          setUpdatingSecretId(null)
+          setSecretNewValue('')
+        }}
+        onEdit={startEdit}
+        onSecretUpdate={startSecretUpdate}
+        onDelete={(id) => void handleDeleteVariable(id)}
+      />
     </SectionPanel>
   )
 }

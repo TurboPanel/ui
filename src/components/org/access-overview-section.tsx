@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Pressable,
   ScrollView,
@@ -19,9 +19,11 @@ import {
   isForbiddenError,
   resolveResourceId,
   revokeAccessGrant,
+  type AccessGrantRecord,
   type AccessScopeKind,
   type CreateAccessBody,
   type PermissionKey,
+  type PermissionRecord,
 } from '@/lib/instance-api'
 import {
   authQueryKeys,
@@ -47,6 +49,10 @@ const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
 type ScopeItem = {
   id: string
   label: string
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
 }
 
 async function loadScopeItems(
@@ -75,7 +81,264 @@ function scopeItemsQueryKey(kind: AccessScopeKind, orgId: string) {
   }
 }
 
-export function AccessOverviewSection({ orgId }: { orgId: string }) {
+function TeamScopePicker({
+  isLoading,
+  isError,
+  error,
+  items,
+  selectedItemId,
+  onSelect,
+}: Readonly<{
+  isLoading: boolean
+  isError: boolean
+  error: unknown
+  items: ScopeItem[]
+  selectedItemId: string
+  onSelect: (id: string) => void
+}>) {
+  let body: ReactNode
+  if (isLoading) {
+    body = <Text style={orgPanelStyles.muted}>Loading teams...</Text>
+  } else if (isError) {
+    body = (
+      <Text style={orgPanelStyles.error}>
+        {errorMessage(error, 'Failed to load teams')}
+      </Text>
+    )
+  } else if (items.length === 0) {
+    body = (
+      <Text style={orgPanelStyles.muted}>No teams in this organization.</Text>
+    )
+  } else {
+    body = (
+      <ScrollView style={styles.pickerList} nestedScrollEnabled>
+        {items.map((item) => {
+          const selected = selectedItemId === item.id
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+              onPress={() => onSelect(item.id)}
+            >
+              <Text style={styles.pickerTitle}>{item.label}</Text>
+              <Text style={styles.pickerMeta}>{item.id}</Text>
+            </Pressable>
+          )
+        })}
+      </ScrollView>
+    )
+  }
+
+  return (
+    <>
+      <Text style={styles.label}>Team</Text>
+      {body}
+    </>
+  )
+}
+
+function AccessGrantCard({
+  grant,
+  canManage,
+  isRevoking,
+  onRevoke,
+}: Readonly<{
+  grant: AccessGrantRecord
+  canManage: boolean
+  isRevoking: boolean
+  onRevoke: (grantId: string) => void
+}>) {
+  const effectStyle =
+    grant.effect === 'allow' ? styles.badgeAllow : styles.badgeDeny
+
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleBlock}>
+          <Text style={orgPanelStyles.detailTitle}>
+            {grant.subjectKind}: {grant.subjectId}
+          </Text>
+          <View style={styles.badgeRow}>
+            <Text style={[styles.badge, effectStyle]}>{grant.effect}</Text>
+            <Text style={orgPanelStyles.detailLine}>
+              permission: {grant.permissionKey}
+            </Text>
+          </View>
+        </View>
+        {canManage ? (
+          <Pressable
+            style={[styles.secondaryButton, isRevoking && styles.buttonDisabled]}
+            disabled={isRevoking}
+            onPress={() => onRevoke(grant.id)}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {isRevoking ? 'Revoking...' : 'Revoke'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
+function AccessGrantsPanel({
+  actionError,
+  isLoading,
+  isError,
+  error,
+  grants,
+  canManage,
+  revoking,
+  onRevoke,
+}: Readonly<{
+  actionError: string | null
+  isLoading: boolean
+  isError: boolean
+  error: unknown
+  grants: AccessGrantRecord[]
+  canManage: boolean
+  revoking: ReadonlySet<string>
+  onRevoke: (grantId: string) => void
+}>) {
+  let body: ReactNode
+  if (isLoading && grants.length === 0) {
+    body = <Text style={orgPanelStyles.muted}>Loading...</Text>
+  } else if (isError) {
+    body = (
+      <Text style={orgPanelStyles.error}>
+        {errorMessage(error, 'Failed to load access grants')}
+      </Text>
+    )
+  } else if (grants.length === 0) {
+    body = <Text style={orgPanelStyles.muted}>No access grants yet.</Text>
+  } else {
+    body = (
+      <View style={styles.list}>
+        {grants.map((grant) => (
+          <AccessGrantCard
+            key={grant.id}
+            grant={grant}
+            canManage={canManage}
+            isRevoking={revoking.has(grant.id)}
+            onRevoke={onRevoke}
+          />
+        ))}
+      </View>
+    )
+  }
+
+  return (
+    <SectionPanel title="Access grants" hint="Active allow and deny rows">
+      {actionError ? (
+        <Text style={orgPanelStyles.error}>{actionError}</Text>
+      ) : null}
+      {body}
+    </SectionPanel>
+  )
+}
+
+function AddGrantForm({
+  subjectKind,
+  subjectId,
+  selectedPermissionKey,
+  submitting,
+  submitError,
+  permissionsLoading,
+  compatiblePermissions,
+  onSubjectKindChange,
+  onSubjectIdChange,
+  onPermissionSelect,
+  onSubmit,
+}: Readonly<{
+  subjectKind: SubjectKind
+  subjectId: string
+  selectedPermissionKey: PermissionKey | null
+  submitting: boolean
+  submitError: string | null
+  permissionsLoading: boolean
+  compatiblePermissions: PermissionRecord[]
+  onSubjectKindChange: (kind: SubjectKind) => void
+  onSubjectIdChange: (text: string) => void
+  onPermissionSelect: (key: PermissionKey) => void
+  onSubmit: () => void
+}>) {
+  return (
+    <View style={styles.form}>
+      <Text style={styles.label}>Subject kind</Text>
+      <View style={styles.chipRow}>
+        {(['user', 'team', 'organization'] as const).map((kind) => (
+          <Pressable
+            key={kind}
+            style={[styles.chip, subjectKind === kind && styles.chipActive]}
+            onPress={() => onSubjectKindChange(kind)}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                subjectKind === kind && styles.chipTextActive,
+              ]}
+            >
+              {kind}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>Subject ID</Text>
+      <TextInput
+        value={subjectId}
+        onChangeText={onSubjectIdChange}
+        placeholder="UUID"
+        placeholderTextColor={colors.textDim}
+        editable={!submitting}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.input}
+      />
+
+      <Text style={styles.label}>Permission</Text>
+      <ScrollView style={styles.pickerList} nestedScrollEnabled>
+        {permissionsLoading ? (
+          <Text style={orgPanelStyles.muted}>Loading permissions...</Text>
+        ) : (
+          compatiblePermissions.map((permission) => {
+            const selected = selectedPermissionKey === permission.key
+            return (
+              <Pressable
+                key={permission.key}
+                style={[
+                  styles.pickerRow,
+                  selected && styles.pickerRowSelected,
+                ]}
+                onPress={() => onPermissionSelect(permission.key)}
+              >
+                <Text style={styles.pickerTitle}>{permission.displayName}</Text>
+                <Text style={styles.pickerMeta}>{permission.key}</Text>
+              </Pressable>
+            )
+          })
+        )}
+      </ScrollView>
+
+      {submitError ? (
+        <Text style={orgPanelStyles.error}>{submitError}</Text>
+      ) : null}
+      <Pressable
+        style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+        disabled={submitting}
+        onPress={onSubmit}
+      >
+        <Text style={styles.primaryButtonText}>
+          {submitting ? 'Creating...' : 'Create grant'}
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+export function AccessOverviewSection({
+  orgId,
+}: Readonly<{ orgId: string }>) {
   const { handleUnauthorized } = useAuth()
   const queryClient = useQueryClient()
 
@@ -167,9 +430,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
         await handleUnauthorized()
         return
       }
-      setActionError(
-        err instanceof Error ? err.message : 'Failed to revoke access grant',
-      )
+      setActionError(errorMessage(err, 'Failed to revoke access grant'))
     } finally {
       setRevoking((current) => {
         const next = new Set(current)
@@ -217,9 +478,7 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
         await handleUnauthorized()
         return
       }
-      setSubmitError(
-        err instanceof Error ? err.message : 'Failed to create access grant',
-      )
+      setSubmitError(errorMessage(err, 'Failed to create access grant'))
     } finally {
       setSubmitting(false)
     }
@@ -261,41 +520,14 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
         </View>
 
         {scopeKind === 'team' ? (
-          <>
-            <Text style={styles.label}>Team</Text>
-            {scopeItemsQuery.isLoading ? (
-              <Text style={orgPanelStyles.muted}>Loading teams...</Text>
-            ) : scopeItemsQuery.isError ? (
-              <Text style={orgPanelStyles.error}>
-                {scopeItemsQuery.error instanceof Error
-                  ? scopeItemsQuery.error.message
-                  : 'Failed to load teams'}
-              </Text>
-            ) : scopeItems.length === 0 ? (
-              <Text style={orgPanelStyles.muted}>
-                No teams in this organization.
-              </Text>
-            ) : (
-              <ScrollView style={styles.pickerList} nestedScrollEnabled>
-                {scopeItems.map((item) => {
-                  const selected = selectedItemId === item.id
-                  return (
-                    <Pressable
-                      key={item.id}
-                      style={[
-                        styles.pickerRow,
-                        selected && styles.pickerRowSelected,
-                      ]}
-                      onPress={() => setSelectedItemId(item.id)}
-                    >
-                      <Text style={styles.pickerTitle}>{item.label}</Text>
-                      <Text style={styles.pickerMeta}>{item.id}</Text>
-                    </Pressable>
-                  )
-                })}
-              </ScrollView>
-            )}
-          </>
+          <TeamScopePicker
+            isLoading={scopeItemsQuery.isLoading}
+            isError={scopeItemsQuery.isError}
+            error={scopeItemsQuery.error}
+            items={scopeItems}
+            selectedItemId={selectedItemId}
+            onSelect={setSelectedItemId}
+          />
         ) : (
           <Text style={orgPanelStyles.muted}>
             Managing access for organization {orgId}.
@@ -303,162 +535,46 @@ export function AccessOverviewSection({ orgId }: { orgId: string }) {
         )}
       </SectionPanel>
 
-      <SectionPanel title="Access grants" hint="Active allow and deny rows">
-            {actionError ? (
-              <Text style={orgPanelStyles.error}>{actionError}</Text>
-            ) : null}
-            {grantsQuery.isLoading && grants.length === 0 ? (
-              <Text style={orgPanelStyles.muted}>Loading...</Text>
-            ) : grantsQuery.isError ? (
-              <Text style={orgPanelStyles.error}>
-                {grantsQuery.error instanceof Error
-                  ? grantsQuery.error.message
-                  : 'Failed to load access grants'}
-              </Text>
-            ) : grants.length === 0 ? (
-              <Text style={orgPanelStyles.muted}>No access grants yet.</Text>
-            ) : (
-              <View style={styles.list}>
-                {grants.map((grant) => {
-                  const isRevoking = revoking.has(grant.id)
-                  const effectStyle =
-                    grant.effect === 'allow' ? styles.badgeAllow : styles.badgeDeny
+      <AccessGrantsPanel
+        actionError={actionError}
+        isLoading={grantsQuery.isLoading}
+        isError={grantsQuery.isError}
+        error={grantsQuery.error}
+        grants={grants}
+        canManage={canManage}
+        revoking={revoking}
+        onRevoke={(grantId) => void onRevokeGrant(grantId)}
+      />
 
-                  return (
-                    <View key={grant.id} style={orgPanelStyles.detailCard}>
-                      <View style={styles.cardHeader}>
-                        <View style={styles.cardTitleBlock}>
-                          <Text style={orgPanelStyles.detailTitle}>
-                            {grant.subjectKind}: {grant.subjectId}
-                          </Text>
-                          <View style={styles.badgeRow}>
-                            <Text style={[styles.badge, effectStyle]}>
-                              {grant.effect}
-                            </Text>
-                            <Text style={orgPanelStyles.detailLine}>
-                              permission: {grant.permissionKey}
-                            </Text>
-                          </View>
-                        </View>
-                        {canManage ? (
-                          <Pressable
-                            style={[
-                              styles.secondaryButton,
-                              isRevoking && styles.buttonDisabled,
-                            ]}
-                            disabled={isRevoking}
-                            onPress={() => void onRevokeGrant(grant.id)}
-                          >
-                            <Text style={styles.secondaryButtonText}>
-                              {isRevoking ? 'Revoking...' : 'Revoke'}
-                            </Text>
-                          </Pressable>
-                        ) : null}
-                      </View>
-                    </View>
-                  )
-                })}
-              </View>
-            )}
-          </SectionPanel>
-
-          {canManage ? (
-            <SectionPanel title="Add grant" hint="Assign a permission">
-              <View style={styles.form}>
-                <Text style={styles.label}>Subject kind</Text>
-                <View style={styles.chipRow}>
-                  {(['user', 'team', 'organization'] as const).map((kind) => (
-                    <Pressable
-                      key={kind}
-                      style={[
-                        styles.chip,
-                        subjectKind === kind && styles.chipActive,
-                      ]}
-                      onPress={() => setSubjectKind(kind)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          subjectKind === kind && styles.chipTextActive,
-                        ]}
-                      >
-                        {kind}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <Text style={styles.label}>Subject ID</Text>
-                <TextInput
-                  value={subjectId}
-                  onChangeText={(text) => {
-                    setSubjectId(text)
-                    setSubmitError(null)
-                  }}
-                  placeholder="UUID"
-                  placeholderTextColor={colors.textDim}
-                  editable={!submitting}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.input}
-                />
-
-                <Text style={styles.label}>Permission</Text>
-                <ScrollView style={styles.pickerList} nestedScrollEnabled>
-                  {permissionsQuery.isLoading ? (
-                    <Text style={orgPanelStyles.muted}>Loading permissions...</Text>
-                  ) : (
-                    compatiblePermissions.map((permission) => {
-                        const selected = selectedPermissionKey === permission.key
-                        return (
-                          <Pressable
-                            key={permission.key}
-                            style={[
-                              styles.pickerRow,
-                              selected && styles.pickerRowSelected,
-                            ]}
-                            onPress={() => {
-                              setSelectedPermissionKey(permission.key)
-                              setSubmitError(null)
-                            }}
-                          >
-                            <Text style={styles.pickerTitle}>
-                              {permission.displayName}
-                            </Text>
-                            <Text style={styles.pickerMeta}>
-                              {permission.key}
-                            </Text>
-                          </Pressable>
-                        )
-                      },
-                    )
-                  )}
-                </ScrollView>
-
-                {submitError ? (
-                  <Text style={orgPanelStyles.error}>{submitError}</Text>
-                ) : null}
-                <Pressable
-                  style={[
-                    styles.primaryButton,
-                    submitting && styles.buttonDisabled,
-                  ]}
-                  disabled={submitting}
-                  onPress={() => void onCreateGrant()}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {submitting ? 'Creating...' : 'Create grant'}
-                  </Text>
-                </Pressable>
-              </View>
-            </SectionPanel>
-          ) : (
-            <SectionPanel title="Add grant">
-              <Text style={orgPanelStyles.muted}>
-                You don&apos;t have permission to manage access on this scope.
-              </Text>
-            </SectionPanel>
-          )}
+      {canManage ? (
+        <SectionPanel title="Add grant" hint="Assign a permission">
+          <AddGrantForm
+            subjectKind={subjectKind}
+            subjectId={subjectId}
+            selectedPermissionKey={selectedPermissionKey}
+            submitting={submitting}
+            submitError={submitError}
+            permissionsLoading={permissionsQuery.isLoading}
+            compatiblePermissions={compatiblePermissions}
+            onSubjectKindChange={setSubjectKind}
+            onSubjectIdChange={(text) => {
+              setSubjectId(text)
+              setSubmitError(null)
+            }}
+            onPermissionSelect={(key) => {
+              setSelectedPermissionKey(key)
+              setSubmitError(null)
+            }}
+            onSubmit={() => void onCreateGrant()}
+          />
+        </SectionPanel>
+      ) : (
+        <SectionPanel title="Add grant">
+          <Text style={orgPanelStyles.muted}>
+            You don&apos;t have permission to manage access on this scope.
+          </Text>
+        </SectionPanel>
+      )}
     </View>
   )
 }

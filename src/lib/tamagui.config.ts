@@ -10,9 +10,19 @@ import { createTamagui, isWeb } from 'tamagui'
 const tamaguiConfig = createTamagui({
   ...defaultConfig,
   animations: isWeb ? animationsCSS : animationsReanimated,
+  // v5 defaults to onlyAllowShorthands: true, which drops longhand style props
+  // (backgroundColor, padding, justifyContent, …) from component types.
+  settings: {
+    ...defaultConfig.settings,
+    onlyAllowShorthands: false,
+  },
 })
 
 export type Conf = typeof tamaguiConfig
+
+declare module '@tamagui/core' {
+  interface TamaguiCustomConfig extends Conf {}
+}
 
 declare module 'tamagui' {
   interface TamaguiCustomConfig extends Conf {}

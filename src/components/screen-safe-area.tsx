@@ -3,10 +3,10 @@ import { StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '@/lib/theme'
 
-type ScreenSafeAreaProps = {
+type ScreenSafeAreaProps = Readonly<{
   children: ReactNode
   backgroundColor?: string
-}
+}>
 
 export function ScreenSafeArea({
   children,

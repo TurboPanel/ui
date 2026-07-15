@@ -4,16 +4,19 @@ import { useAuth } from '@/lib/auth-context'
 import { orgAreaFromPathname } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 
-export function OrgHeader({ onMenuPress }: { onMenuPress?: () => void }) {
+export function OrgHeader({
+  onMenuPress,
+}: Readonly<{ onMenuPress?: () => void }>) {
   const pathname = usePathname()
   const { session, signOut } = useAuth()
   const match = orgAreaFromPathname(pathname)
 
-  const title = match
-    ? match.subRoute
-      ? `${match.area.label} · ${match.subRoute.label}`
-      : match.area.label
-    : 'Dashboard'
+  let title = 'Dashboard'
+  if (match?.subRoute) {
+    title = `${match.area.label} · ${match.subRoute.label}`
+  } else if (match) {
+    title = match.area.label
+  }
 
   return (
     <View style={styles.header}>

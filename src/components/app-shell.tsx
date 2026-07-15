@@ -4,10 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '@/lib/auth-context'
 import { colors, spacing } from '@/lib/theme'
 
-type AppShellProps = {
+type AppShellProps = Readonly<{
   title: string
   children: ReactNode
-}
+}>
 
 export function AppShell({ title, children }: AppShellProps) {
   const { session, signOut } = useAuth()

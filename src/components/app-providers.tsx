@@ -15,9 +15,9 @@ const queryClient = new QueryClient({
   },
 })
 
-type AppProvidersProps = {
+type AppProvidersProps = Readonly<{
   children: ReactNode
-}
+}>
 
 export function AppProviders({ children }: AppProvidersProps) {
   return (

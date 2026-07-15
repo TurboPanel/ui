@@ -42,6 +42,246 @@ type AddServerWizardProps = Readonly<{
   onDismiss?: () => void
 }>
 
+type DevInstallUrlFieldsProps = Readonly<{
+  installBaseUrl: string
+  managedUrls: string[]
+  onChange: (url: string) => void
+  editable?: boolean
+}>
+
+function DevInstallUrlFields({
+  installBaseUrl,
+  managedUrls,
+  onChange,
+  editable = true,
+}: DevInstallUrlFieldsProps) {
+  return (
+    <>
+      <Text style={styles.label}>Public install URL (dev)</Text>
+      <TextInput
+        value={installBaseUrl}
+        onChangeText={onChange}
+        placeholder="https://192.168.1.10:8443"
+        placeholderTextColor={colors.textDim}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={editable}
+        style={styles.input}
+      />
+      <View style={styles.devUrlQuickPicks}>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => onChange(defaultDevInstallBaseUrl(managedUrls))}
+        >
+          <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => onChange(defaultDevInstallHttpBaseUrl(managedUrls))}
+        >
+          <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
+        </Pressable>
+      </View>
+    </>
+  )
+}
+
+type CreateStepProps = Readonly<{
+  displayName: string
+  installBaseUrl: string
+  managedUrls: string[]
+  creating: boolean
+  createError: string | null
+  onDisplayNameChange: (text: string) => void
+  onInstallBaseUrlChange: (url: string) => void
+  onContinue: () => void
+  onCancel?: () => void
+}>
+
+function CreateStep({
+  displayName,
+  installBaseUrl,
+  managedUrls,
+  creating,
+  createError,
+  onDisplayNameChange,
+  onInstallBaseUrlChange,
+  onContinue,
+  onCancel,
+}: CreateStepProps) {
+  return (
+    <View style={styles.form}>
+      <Text style={styles.label}>Server name (optional)</Text>
+      <TextInput
+        value={displayName}
+        onChangeText={onDisplayNameChange}
+        placeholder="Production web server"
+        placeholderTextColor={colors.textDim}
+        editable={!creating}
+        style={styles.input}
+      />
+      {createError ? (
+        <Text style={orgPanelStyles.error}>{createError}</Text>
+      ) : null}
+      {__DEV__ ? (
+        <>
+          <DevInstallUrlFields
+            installBaseUrl={installBaseUrl}
+            managedUrls={managedUrls}
+            onChange={onInstallBaseUrlChange}
+            editable={!creating}
+          />
+          <Text style={orgPanelStyles.muted}>
+            Used for --host and download URLs in the install command.
+          </Text>
+        </>
+      ) : null}
+      <View style={styles.formActions}>
+        <Pressable
+          style={[styles.primaryButton, creating && styles.buttonDisabled]}
+          disabled={creating}
+          onPress={onContinue}
+        >
+          <Text style={styles.primaryButtonText}>
+            {creating ? 'Preparing…' : 'Continue'}
+          </Text>
+        </Pressable>
+        {onCancel ? (
+          <Pressable
+            style={styles.secondaryButton}
+            disabled={creating}
+            onPress={onCancel}
+          >
+            <Text style={styles.secondaryButtonText}>Cancel</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
+type InstallStepProps = Readonly<{
+  revealed: CreatedLicense
+  installBaseUrl: string
+  managedUrls: string[]
+  displayedInstallCommand: string
+  installCommandCopied: boolean
+  onInstallBaseUrlChange: (url: string) => void
+  onCopyInstallCommand: () => void
+  onContinue: () => void
+}>
+
+function InstallStep({
+  revealed,
+  installBaseUrl,
+  managedUrls,
+  displayedInstallCommand,
+  installCommandCopied,
+  onInstallBaseUrlChange,
+  onCopyInstallCommand,
+  onContinue,
+}: InstallStepProps) {
+  return (
+    <View style={styles.revealed}>
+      <Text style={styles.warning}>
+        Save this registration key — it will not be shown again.
+      </Text>
+      <Text style={styles.secretLabel}>Registration key</Text>
+      <Text selectable style={styles.secretValue}>
+        {revealed.licenseToken}
+      </Text>
+      <Text style={styles.secretLabel}>Install command</Text>
+      {__DEV__ ? (
+        <DevInstallUrlFields
+          installBaseUrl={installBaseUrl}
+          managedUrls={managedUrls}
+          onChange={onInstallBaseUrlChange}
+        />
+      ) : null}
+      <Text selectable style={styles.secretValue}>
+        {displayedInstallCommand}
+      </Text>
+      <Pressable style={styles.secondaryButton} onPress={onCopyInstallCommand}>
+        <Text style={styles.secondaryButtonText}>
+          {installCommandCopied
+            ? 'Copied install command'
+            : 'Copy install command'}
+        </Text>
+      </Pressable>
+      <Text style={orgPanelStyles.muted}>
+        Run this command on your new server, then click Continue.
+      </Text>
+      <Pressable style={styles.primaryButton} onPress={onContinue}>
+        <Text style={styles.primaryButtonText}>Continue</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+type WaitingStepProps = Readonly<{
+  pollError: string | null
+  connectedServer: OrgServerRecord | null
+  elapsedSeconds: number
+  onRetry: () => void
+  onCancel: () => void
+  onFinish: () => void
+}>
+
+function WaitingStep({
+  pollError,
+  connectedServer,
+  elapsedSeconds,
+  onRetry,
+  onCancel,
+  onFinish,
+}: WaitingStepProps) {
+  if (pollError) {
+    return (
+      <View style={styles.waiting}>
+        <Text style={orgPanelStyles.error}>{pollError}</Text>
+        <View style={styles.waitingActions}>
+          <Pressable style={styles.primaryButton} onPress={onRetry}>
+            <Text style={styles.primaryButtonText}>Retry</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={onCancel}>
+            <Text style={styles.secondaryButtonText}>Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
+    )
+  }
+
+  if (connectedServer == null) {
+    return (
+      <View style={styles.waiting}>
+        <View style={styles.waitingStatus}>
+          <ActivityIndicator size="small" color={colors.accent} />
+          <Text style={orgPanelStyles.muted}>
+            Still waiting… ({elapsedSeconds}s)
+          </Text>
+        </View>
+        <Pressable style={styles.secondaryButton} onPress={onCancel}>
+          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.waiting}>
+      <Text style={styles.success}>
+        ✓ Server connected —{' '}
+        <Text style={styles.successHostname}>
+          {connectedServer.hostname?.trim() || connectedServer.id}
+        </Text>
+      </Text>
+      <Pressable style={styles.primaryButton} onPress={onFinish}>
+        <Text style={styles.primaryButtonText}>Done</Text>
+      </Pressable>
+    </View>
+  )
+}
+
 export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps) {
   const { handleUnauthorized } = useAuth()
   const [managedUrls, setManagedUrls] = useState<string[]>([])
@@ -218,199 +458,53 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
     setPollAttempt((current) => current + 1)
   }
 
+  const clearCreateErrorOnChange = (setter: (value: string) => void) =>
+    (text: string) => {
+      setter(text)
+      setCreateError(null)
+    }
+
   return (
     <SectionPanel
       title="Add server"
       hint="Install the TurboPanel daemon on a new host"
     >
       {step === 'create' ? (
-        <View style={styles.form}>
-          <Text style={styles.label}>Server name (optional)</Text>
-          <TextInput
-            value={displayName}
-            onChangeText={(text) => {
-              setDisplayName(text)
-              setCreateError(null)
-            }}
-            placeholder="Production web server"
-            placeholderTextColor={colors.textDim}
-            editable={!creating}
-            style={styles.input}
-          />
-          {createError ? (
-            <Text style={orgPanelStyles.error}>{createError}</Text>
-          ) : null}
-          {__DEV__ ? (
-            <>
-              <Text style={styles.label}>Public install URL (dev)</Text>
-              <TextInput
-                value={installBaseUrl}
-                onChangeText={(text) => {
-                  setInstallBaseUrl(text)
-                  setCreateError(null)
-                }}
-                placeholder="https://192.168.1.10:8443"
-                placeholderTextColor={colors.textDim}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!creating}
-                style={styles.input}
-              />
-              <View style={styles.devUrlQuickPicks}>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() => {
-                    setInstallBaseUrl(defaultDevInstallBaseUrl(managedUrls))
-                    setCreateError(null)
-                  }}
-                >
-                  <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() => {
-                    setInstallBaseUrl(defaultDevInstallHttpBaseUrl(managedUrls))
-                    setCreateError(null)
-                  }}
-                >
-                  <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
-                </Pressable>
-              </View>
-              <Text style={orgPanelStyles.muted}>
-                Used for --host and download URLs in the install command.
-              </Text>
-            </>
-          ) : null}
-          <View style={styles.formActions}>
-            <Pressable
-              style={[styles.primaryButton, creating && styles.buttonDisabled]}
-              disabled={creating}
-              onPress={() => void onStartAddServer()}
-            >
-              <Text style={styles.primaryButtonText}>
-                {creating ? 'Preparing…' : 'Continue'}
-              </Text>
-            </Pressable>
-            {onDismiss ? (
-              <Pressable
-                style={styles.secondaryButton}
-                disabled={creating}
-                onPress={dismissWizard}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
+        <CreateStep
+          displayName={displayName}
+          installBaseUrl={installBaseUrl}
+          managedUrls={managedUrls}
+          creating={creating}
+          createError={createError}
+          onDisplayNameChange={clearCreateErrorOnChange(setDisplayName)}
+          onInstallBaseUrlChange={clearCreateErrorOnChange(setInstallBaseUrl)}
+          onContinue={() => void onStartAddServer()}
+          onCancel={onDismiss ? dismissWizard : undefined}
+        />
       ) : null}
 
       {step === 'install' && revealed ? (
-        <View style={styles.revealed}>
-          <Text style={styles.warning}>
-            Save this registration key — it will not be shown again.
-          </Text>
-          <Text style={styles.secretLabel}>Registration key</Text>
-          <Text selectable style={styles.secretValue}>
-            {revealed.licenseToken}
-          </Text>
-          <Text style={styles.secretLabel}>Install command</Text>
-          {__DEV__ ? (
-            <>
-              <Text style={styles.label}>Public install URL (dev)</Text>
-              <TextInput
-                value={installBaseUrl}
-                onChangeText={setInstallBaseUrl}
-                placeholder="https://192.168.1.10:8443"
-                placeholderTextColor={colors.textDim}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={styles.input}
-              />
-              <View style={styles.devUrlQuickPicks}>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() =>
-                    setInstallBaseUrl(defaultDevInstallBaseUrl(managedUrls))
-                  }
-                >
-                  <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() =>
-                    setInstallBaseUrl(defaultDevInstallHttpBaseUrl(managedUrls))
-                  }
-                >
-                  <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : null}
-          <Text selectable style={styles.secretValue}>
-            {displayedInstallCommand}
-          </Text>
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={() => void onCopyInstallCommand()}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {installCommandCopied
-                ? 'Copied install command'
-                : 'Copy install command'}
-            </Text>
-          </Pressable>
-          <Text style={orgPanelStyles.muted}>
-            Run this command on your new server, then click Continue.
-          </Text>
-          <Pressable
-            style={styles.primaryButton}
-            onPress={() => setStep('waiting')}
-          >
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          </Pressable>
-        </View>
+        <InstallStep
+          revealed={revealed}
+          installBaseUrl={installBaseUrl}
+          managedUrls={managedUrls}
+          displayedInstallCommand={displayedInstallCommand}
+          installCommandCopied={installCommandCopied}
+          onInstallBaseUrlChange={setInstallBaseUrl}
+          onCopyInstallCommand={() => void onCopyInstallCommand()}
+          onContinue={() => setStep('waiting')}
+        />
       ) : null}
 
       {step === 'waiting' && revealed ? (
-        <View style={styles.waiting}>
-          {pollError ? (
-            <>
-              <Text style={orgPanelStyles.error}>{pollError}</Text>
-              <View style={styles.waitingActions}>
-                <Pressable style={styles.primaryButton} onPress={onRetryPolling}>
-                  <Text style={styles.primaryButtonText}>Retry</Text>
-                </Pressable>
-                <Pressable style={styles.secondaryButton} onPress={dismissWizard}>
-                  <Text style={styles.secondaryButtonText}>Cancel</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : connectedServer == null ? (
-            <>
-              <View style={styles.waitingStatus}>
-                <ActivityIndicator size="small" color={colors.accent} />
-                <Text style={orgPanelStyles.muted}>
-                  Still waiting… ({elapsedSeconds}s)
-                </Text>
-              </View>
-              <Pressable style={styles.secondaryButton} onPress={dismissWizard}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.success}>
-                ✓ Server connected —{' '}
-                <Text style={styles.successHostname}>
-                  {connectedServer.hostname?.trim() || connectedServer.id}
-                </Text>
-              </Text>
-              <Pressable style={styles.primaryButton} onPress={onFinish}>
-                <Text style={styles.primaryButtonText}>Done</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
+        <WaitingStep
+          pollError={pollError}
+          connectedServer={connectedServer}
+          elapsedSeconds={elapsedSeconds}
+          onRetry={onRetryPolling}
+          onCancel={dismissWizard}
+          onFinish={onFinish}
+        />
       ) : null}
     </SectionPanel>
   )

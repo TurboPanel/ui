@@ -20,8 +20,9 @@ export default function WelcomeScreen() {
   useEffect(() => {
     let cancelled = false
 
-    void fetchOrganizations()
-      .then(({ organizations: orgs }) => {
+    async function loadOrganizations() {
+      try {
+        const { organizations: orgs } = await fetchOrganizations()
         if (cancelled) return
         setOrganizations(orgs)
         const preferred = resolvePreferredOrganizationId(orgs)
@@ -29,22 +30,61 @@ export default function WelcomeScreen() {
           setActiveOrganizationId(preferred)
           router.replace(defaultOrgDashboardHref(preferred) as Href)
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load organizations')
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setLoading(false)
         }
-      })
+      }
+    }
+
+    loadOrganizations().catch(() => {
+      // Errors are handled inside loadOrganizations.
+    })
 
     return () => {
       cancelled = true
     }
   }, [router])
+
+  let organizationContent
+  if (loading) {
+    organizationContent = (
+      <Text style={styles.detail}>Loading organizations…</Text>
+    )
+  } else if (error) {
+    organizationContent = <Text style={styles.detail}>{error}</Text>
+  } else if (organizations.length === 0) {
+    organizationContent = (
+      <Text style={styles.detail}>
+        Your account is not assigned to an organization yet. Contact an
+        administrator to get access, or wait for organization onboarding to
+        become available.
+      </Text>
+    )
+  } else {
+    organizationContent = (
+      <View style={styles.orgList}>
+        {organizations.map((org) => (
+          <Pressable
+            key={org.id}
+            style={styles.orgButton}
+            onPress={() => {
+              setActiveOrganizationId(org.id)
+              router.replace(defaultOrgDashboardHref(org.id) as Href)
+            }}
+          >
+            <Text style={styles.orgButtonText}>
+              {org.displayName?.trim() || org.id}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -59,34 +99,7 @@ export default function WelcomeScreen() {
         {session?.email ? (
           <Text style={styles.email}>{session.email}</Text>
         ) : null}
-        {loading ? (
-          <Text style={styles.detail}>Loading organizations…</Text>
-        ) : error ? (
-          <Text style={styles.detail}>{error}</Text>
-        ) : organizations.length === 0 ? (
-          <Text style={styles.detail}>
-            Your account is not assigned to an organization yet. Contact an
-            administrator to get access, or wait for organization onboarding to
-            become available.
-          </Text>
-        ) : (
-          <View style={styles.orgList}>
-            {organizations.map((org) => (
-              <Pressable
-                key={org.id}
-                style={styles.orgButton}
-                onPress={() => {
-                  setActiveOrganizationId(org.id)
-                  router.replace(defaultOrgDashboardHref(org.id) as Href)
-                }}
-              >
-                <Text style={styles.orgButtonText}>
-                  {org.displayName?.trim() || org.id}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {organizationContent}
         {showAdminLink ? (
           <Pressable
             style={styles.adminButton}
@@ -95,7 +108,14 @@ export default function WelcomeScreen() {
             <Text style={styles.adminButtonText}>Instance administration</Text>
           </Pressable>
         ) : null}
-        <Pressable style={styles.button} onPress={() => void signOut()}>
+        <Pressable
+          style={styles.button}
+          onPress={() => {
+            signOut().catch(() => {
+              // Sign-out failures are non-blocking on this screen.
+            })
+          }}
+        >
           <Text style={styles.buttonText}>Sign out</Text>
         </Pressable>
       </ScrollView>

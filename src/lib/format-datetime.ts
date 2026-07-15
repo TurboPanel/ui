@@ -1,3 +1,5 @@
+export type TimestampInput = Date | string | number | null | undefined
+
 export type FormatLocalDateTimeOptions = {
   /** Show calendar date. Default true. */
   includeDate?: boolean
@@ -11,9 +13,7 @@ export type FormatLocalDateTimeOptions = {
   fallback?: string
 }
 
-function parseTimestamp(
-  value: Date | string | number | null | undefined,
-): Date | null {
+function parseTimestamp(value: TimestampInput): Date | null {
   if (value == null || value === '') return null
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value
@@ -27,7 +27,7 @@ function parseTimestamp(
  * Pass `undefined` as locale so Intl uses the device/browser default.
  */
 export function formatLocalDateTime(
-  value: Date | string | number | null | undefined,
+  value: TimestampInput,
   options: FormatLocalDateTimeOptions = {},
 ): string {
   const {
@@ -72,7 +72,7 @@ export type FormatRelativeLocalDateTimeOptions = {
  * Relative age (e.g. `5m ago`) with the absolute local timestamp in parentheses.
  */
 export function formatRelativeLocalDateTime(
-  value: Date | string | number | null | undefined,
+  value: TimestampInput,
   options: FormatRelativeLocalDateTimeOptions = {},
 ): string {
   const {
@@ -105,7 +105,7 @@ export function formatRelativeLocalDateTime(
  * Elapsed time since an instant (e.g. uptime). Does not include a zone label.
  */
 export function formatElapsedSince(
-  value: Date | string | number | null | undefined,
+  value: TimestampInput,
   options: { fallback?: string; justNowLabel?: string } = {},
 ): string {
   const { fallback = 'Unknown', justNowLabel = 'Just now' } = options

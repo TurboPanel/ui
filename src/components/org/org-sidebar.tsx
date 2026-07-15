@@ -8,10 +8,10 @@ import { colors, layout } from '@/lib/theme'
 export function OrgSidebar({
   orgId,
   onNavigate,
-}: {
+}: Readonly<{
   orgId: string
   onNavigate?: () => void
-}) {
+}>) {
   const { session } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
