@@ -120067,7 +120067,7 @@
       "shouldAddPrefersColorThemes": true,
       "allowedStyleValues": "somewhat-strict-web",
       "addThemeClassName": "html",
-      "onlyAllowShorthands": true,
+      "onlyAllowShorthands": false,
       "styleCompat": "web"
     },
     "animations": {
