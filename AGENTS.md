@@ -132,7 +132,7 @@ Authorization helpers:
 
 #### Servers overview table
 
-- `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Running** / Offline), and a checkbox column (header = select all).
+- `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Online** / Offline), and a checkbox column (header = select all).
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) rendered from data-URI SVGs in `src/lib/os-logos.ts`.
 - Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
 - **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`).

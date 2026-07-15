@@ -1768,7 +1768,7 @@ function ServerStatusBadge({
             connected ? styles.statusTextOnline : styles.statusTextOffline,
           ]}
         >
-          {connected ? 'Running' : 'Offline'}
+          {connected ? 'Online' : 'Offline'}
         </Text>
       </View>
     </View>
