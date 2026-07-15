@@ -81,7 +81,7 @@ function encodeLicenseArg(licenseId: string, licenseToken: string): string {
   return btoa(combined)
     .replaceAll('+', '-')
     .replaceAll('/', '_')
-    .replace(/=+$/, '')
+    .replaceAll('=', '')
 }
 
 /** Rebuild a dev install command (run.sh + downloads on the same public host). */

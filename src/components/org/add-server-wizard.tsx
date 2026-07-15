@@ -372,7 +372,7 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
 
     let cancelled = false
 
-    void fetchPublicUrls()
+    fetchPublicUrls()
       .then((result) => {
         if (cancelled) {
           return

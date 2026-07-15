@@ -24,6 +24,7 @@ for file in $FILES; do
       continue
       ;;
     *)
+      # Scan all other files for secret-like patterns.
       ;;
   esac
   lineno=0
@@ -35,6 +36,7 @@ for file in $FILES; do
         fail=1
         ;;
       *)
+        # No secret-like pattern on this line.
         ;;
     esac
   done < "$file"

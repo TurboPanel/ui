@@ -292,7 +292,9 @@ export function NetworksOverviewSection({
   }, [handleUnauthorized, selectedServerId])
 
   useEffect(() => {
-    void loadServers()
+    loadServers().catch(() => {
+      // Errors are surfaced via serversError state inside loadServers.
+    })
   }, [loadServers, orgId])
 
   useEffect(() => {
@@ -302,7 +304,9 @@ export function NetworksOverviewSection({
       return
     }
 
-    void loadNetworks()
+    loadNetworks().catch(() => {
+      // Errors are surfaced via networksError state inside loadNetworks.
+    })
   }, [loadNetworks, selectedServerId])
 
   const handleSelectServer = (id: string) => {
@@ -380,9 +384,21 @@ export function NetworksOverviewSection({
           networksError={networksError}
           creating={creating}
           deleting={deleting}
-          onCreate={() => void handleCreateNetwork()}
-          onRefresh={() => void loadNetworks()}
-          onDelete={(networkId) => void handleDeleteNetwork(networkId)}
+          onCreate={() => {
+            handleCreateNetwork().catch(() => {
+              // Errors are surfaced via networksError state.
+            })
+          }}
+          onRefresh={() => {
+            loadNetworks().catch(() => {
+              // Errors are surfaced via networksError state.
+            })
+          }}
+          onDelete={(networkId) => {
+            handleDeleteNetwork(networkId).catch(() => {
+              // Errors are surfaced via networksError state.
+            })
+          }}
         />
       ) : null}
     </View>

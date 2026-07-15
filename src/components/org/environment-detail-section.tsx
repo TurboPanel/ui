@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -110,6 +110,19 @@ function deployStatusMessage(command: CommandRecord): string {
   return command.error ?? `Deployment ${command.status}.`
 }
 
+async function reportSectionError(
+  err: unknown,
+  handleUnauthorized: () => Promise<void>,
+  setMessage: (message: string) => void,
+  fallback: string,
+): Promise<void> {
+  if (isForbiddenError(err)) {
+    await handleUnauthorized()
+    return
+  }
+  setMessage(errorMessage(err, fallback))
+}
+
 async function upsertHosting(
   serviceId: string,
   composeServiceName: string,
@@ -169,6 +182,138 @@ function HostingHostnameRow({
   )
 }
 
+function EnvironmentLoadedPanels({
+  environment,
+  projectId,
+  mergedCompose,
+  serviceNames,
+  servers,
+  serverId,
+  setServerId,
+  deploying,
+  deployStatus,
+  onDeploy,
+  onSaveCompose,
+  savingCompose,
+  services,
+  hostnames,
+  setHostnames,
+  savingHosting,
+  onSaveHostnames,
+}: Readonly<{
+  environment: EnvironmentRecord
+  projectId: string
+  mergedCompose: ComposeDocument
+  serviceNames: string[]
+  servers: OrgServerRecord[]
+  serverId: string
+  setServerId: (id: string) => void
+  deploying: boolean
+  deployStatus: string | null
+  onDeploy: () => void
+  onSaveCompose: (compose: ComposeDocument) => Promise<void>
+  savingCompose: boolean
+  services: ServiceRecord[]
+  hostnames: Record<string, string>
+  setHostnames: Dispatch<SetStateAction<Record<string, string>>>
+  savingHosting: string | null
+  onSaveHostnames: (composeServiceName: string) => void
+}>) {
+  return (
+    <>
+      <SectionPanel title="Environment" hint="Environment details">
+        <Text style={orgPanelStyles.detailTitle}>
+          {environment.displayName?.trim() || 'Unnamed environment'}
+        </Text>
+        {environment.description ? (
+          <Text style={orgPanelStyles.detailLine}>
+            {environment.description}
+          </Text>
+        ) : null}
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Project: </Text>
+          {projectId}
+        </Text>
+      </SectionPanel>
+
+      <SectionPanel title="Compose overlay" hint="Overrides the project compose">
+        <ComposeEditorSection
+          document={environment.options?.compose}
+          onSave={onSaveCompose}
+          saving={savingCompose}
+          title="Environment compose overlay"
+        />
+      </SectionPanel>
+
+      <SectionPanel title="Merged runtime compose" hint="Project base with this environment overlay">
+        <TextInput
+          editable={false}
+          multiline
+          value={composeDocumentToYaml(mergedCompose)}
+          style={styles.preview}
+          textAlignVertical="top"
+        />
+      </SectionPanel>
+
+      <SectionPanel title="Deploy" hint="Deploy this environment to a connected server">
+        <View style={styles.serverList}>
+          {servers.length === 0 ? (
+            <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
+          ) : (
+            servers.map((server) => (
+              <Pressable
+                key={server.id}
+                style={[styles.serverOption, serverId === server.id && styles.serverOptionSelected]}
+                onPress={() => setServerId(server.id)}
+              >
+                <Text style={styles.serverOptionText}>
+                  {server.displayName?.trim() || server.hostname || server.id}
+                </Text>
+              </Pressable>
+            ))
+          )}
+        </View>
+        <Pressable
+          style={[styles.deployButton, deploying && styles.buttonDisabled]}
+          disabled={deploying || !serverId}
+          onPress={onDeploy}
+        >
+          <Text style={styles.deployButtonText}>{deploying ? 'Deploying…' : 'Deploy'}</Text>
+        </Pressable>
+        {deployStatus ? <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text> : null}
+      </SectionPanel>
+
+      <SectionPanel title="Hostnames" hint="Map compose services to hostnames">
+        {serviceNames.length === 0 ? (
+          <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
+        ) : (
+          <View style={styles.hostingList}>
+            {serviceNames.map((composeServiceName) => {
+              const service = services.find(
+                (item) => item.metadata?.composeServiceName === composeServiceName,
+              )
+              const serviceId = service?.id ?? composeServiceName
+              return (
+                <HostingHostnameRow
+                  key={composeServiceName}
+                  composeServiceName={composeServiceName}
+                  value={hostnames[serviceId] ?? ''}
+                  saving={savingHosting === composeServiceName}
+                  disabled={savingHosting !== null}
+                  onChange={(value) =>
+                    setHostnames((current) => ({ ...current, [serviceId]: value }))
+                  }
+                  onSave={() => onSaveHostnames(composeServiceName)}
+                />
+              )
+            })}
+          </View>
+        )}
+      </SectionPanel>
+    </>
+  )
+}
+
 export function EnvironmentDetailSection({
   orgId,
   projectId,
@@ -224,11 +369,12 @@ export function EnvironmentDetailSection({
         if (cancelled) {
           return
         }
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(errorMessage(err, 'Failed to load environment'))
+        await reportSectionError(
+          err,
+          handleUnauthorized,
+          setError,
+          'Failed to load environment',
+        )
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -236,7 +382,9 @@ export function EnvironmentDetailSection({
       }
     }
 
-    void load()
+    load().catch(() => {
+      // Errors are handled inside load via setError / unauthorized recovery.
+    })
 
     return () => {
       cancelled = true
@@ -260,11 +408,12 @@ export function EnvironmentDetailSection({
           : current,
       )
     } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to save compose overlay'))
+      await reportSectionError(
+        err,
+        handleUnauthorized,
+        setError,
+        'Failed to save compose overlay',
+      )
     } finally {
       setSavingCompose(false)
     }
@@ -282,11 +431,12 @@ export function EnvironmentDetailSection({
       const command = await waitForTerminalCommand(serverId, result.commandId)
       setDeployStatus(deployStatusMessage(command))
     } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setDeployStatus(errorMessage(err, 'Failed to deploy environment'))
+      await reportSectionError(
+        err,
+        handleUnauthorized,
+        setDeployStatus,
+        'Failed to deploy environment',
+      )
     } finally {
       setDeploying(false)
     }
@@ -323,11 +473,12 @@ export function EnvironmentDetailSection({
         [resolvedService.id]: options.hostnames.join(', '),
       }))
     } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to save hosting'))
+      await reportSectionError(
+        err,
+        handleUnauthorized,
+        setError,
+        'Failed to save hosting',
+      )
     } finally {
       setSavingHosting(null)
     }
@@ -350,99 +501,33 @@ export function EnvironmentDetailSection({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       {environment ? (
-        <SectionPanel title="Environment" hint="Environment details">
-          <Text style={orgPanelStyles.detailTitle}>
-            {environment.displayName?.trim() || 'Unnamed environment'}
-          </Text>
-          {environment.description ? (
-            <Text style={orgPanelStyles.detailLine}>
-              {environment.description}
-            </Text>
-          ) : null}
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Project: </Text>
-            {projectId}
-          </Text>
-        </SectionPanel>
-      ) : null}
-
-      {environment ? (
-        <>
-          <SectionPanel title="Compose overlay" hint="Overrides the project compose">
-            <ComposeEditorSection
-              document={environment.options?.compose}
-              onSave={saveCompose}
-              saving={savingCompose}
-              title="Environment compose overlay"
-            />
-          </SectionPanel>
-
-          <SectionPanel title="Merged runtime compose" hint="Project base with this environment overlay">
-            <TextInput
-              editable={false}
-              multiline
-              value={composeDocumentToYaml(mergedCompose)}
-              style={styles.preview}
-              textAlignVertical="top"
-            />
-          </SectionPanel>
-
-          <SectionPanel title="Deploy" hint="Deploy this environment to a connected server">
-            <View style={styles.serverList}>
-              {servers.length === 0 ? (
-                <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
-              ) : (
-                servers.map((server) => (
-                  <Pressable
-                    key={server.id}
-                    style={[styles.serverOption, serverId === server.id && styles.serverOptionSelected]}
-                    onPress={() => setServerId(server.id)}
-                  >
-                    <Text style={styles.serverOptionText}>
-                      {server.displayName?.trim() || server.hostname || server.id}
-                    </Text>
-                  </Pressable>
-                ))
-              )}
-            </View>
-            <Pressable
-              style={[styles.deployButton, deploying && styles.buttonDisabled]}
-              disabled={deploying || !serverId}
-              onPress={() => void deploy()}
-            >
-              <Text style={styles.deployButtonText}>{deploying ? 'Deploying…' : 'Deploy'}</Text>
-            </Pressable>
-            {deployStatus ? <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text> : null}
-          </SectionPanel>
-
-          <SectionPanel title="Hostnames" hint="Map compose services to hostnames">
-            {serviceNames.length === 0 ? (
-              <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
-            ) : (
-              <View style={styles.hostingList}>
-                {serviceNames.map((composeServiceName) => {
-                  const service = services.find(
-                    (item) => item.metadata?.composeServiceName === composeServiceName,
-                  )
-                  const serviceId = service?.id ?? composeServiceName
-                  return (
-                    <HostingHostnameRow
-                      key={composeServiceName}
-                      composeServiceName={composeServiceName}
-                      value={hostnames[serviceId] ?? ''}
-                      saving={savingHosting === composeServiceName}
-                      disabled={savingHosting !== null}
-                      onChange={(value) =>
-                        setHostnames((current) => ({ ...current, [serviceId]: value }))
-                      }
-                      onSave={() => void saveHostnames(composeServiceName)}
-                    />
-                  )
-                })}
-              </View>
-            )}
-          </SectionPanel>
-        </>
+        <EnvironmentLoadedPanels
+          environment={environment}
+          projectId={projectId}
+          mergedCompose={mergedCompose}
+          serviceNames={serviceNames}
+          servers={servers}
+          serverId={serverId}
+          setServerId={setServerId}
+          deploying={deploying}
+          deployStatus={deployStatus}
+          onDeploy={() => {
+            deploy().catch(() => {
+              // Errors are surfaced via deployStatus.
+            })
+          }}
+          onSaveCompose={saveCompose}
+          savingCompose={savingCompose}
+          services={services}
+          hostnames={hostnames}
+          setHostnames={setHostnames}
+          savingHosting={savingHosting}
+          onSaveHostnames={(composeServiceName) => {
+            saveHostnames(composeServiceName).catch(() => {
+              // Errors are surfaced via setError.
+            })
+          }}
+        />
       ) : null}
 
       <VariablesSection orgId={orgId} parentField={{ environmentId }} />

@@ -47,8 +47,8 @@ function validatePassword(password: string): PasswordValidation {
 
 async function sha1Hex(password: string): Promise<string> {
   const enc = new TextEncoder()
-  // NOSONAR typescript:S4790 — HIBP range API requires SHA-1; only prefix is sent (k-anonymity)
-  const digest = await crypto.subtle.digest('SHA-1', enc.encode(password))
+  // HIBP range API requires SHA-1; only the 5-char prefix is sent (k-anonymity).
+  const digest = await crypto.subtle.digest('SHA-1', enc.encode(password)) // NOSONAR typescript:S4790 — HIBP k-anonymity API mandates SHA-1
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')

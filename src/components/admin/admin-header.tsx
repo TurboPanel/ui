@@ -38,7 +38,11 @@ export function AdminHeader({
         {session ? (
           <Pressable
             style={styles.linkButton}
-            onPress={() => void signOut()}
+            onPress={() => {
+              signOut().catch(() => {
+                // Sign-out failures are non-blocking in the header.
+              })
+            }}
           >
             <Text style={styles.linkButtonText}>Sign out</Text>
           </Pressable>

@@ -33,7 +33,7 @@ export function VerifyEmailScreenContent() {
 
     let cancelled = false
 
-    void verifyEmail(token)
+    verifyEmail(token)
       .then(() => {
         if (!cancelled) setStatus('success')
       })

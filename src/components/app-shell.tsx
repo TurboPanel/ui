@@ -23,7 +23,11 @@ export function AppShell({ title, children }: AppShellProps) {
           {session ? (
             <Pressable
               style={styles.linkButton}
-              onPress={() => void signOut()}
+              onPress={() => {
+                signOut().catch(() => {
+                  // Sign-out failures are non-blocking in the shell.
+                })
+              }}
             >
               <Text style={styles.linkButtonText}>Sign out</Text>
             </Pressable>

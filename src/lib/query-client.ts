@@ -34,7 +34,9 @@ export function useForbiddenRecovery(error: unknown) {
 
   useEffect(() => {
     if (error && isForbiddenError(error)) {
-      void handleUnauthorized()
+      handleUnauthorized().catch(() => {
+        // Recovery is best-effort; the caller already observed the 403.
+      })
     }
   }, [error, handleUnauthorized])
 }
