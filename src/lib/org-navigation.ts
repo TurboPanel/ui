@@ -17,6 +17,12 @@ export const ORG_AREAS = [
         pathSegment: 'licenses',
         hint: 'Registration keys in use',
       },
+      {
+        id: 'tls',
+        label: 'TLS',
+        pathSegment: 'tls',
+        hint: 'Organization certificate library',
+      },
     ],
   },
   {

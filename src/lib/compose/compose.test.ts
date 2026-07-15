@@ -21,6 +21,50 @@ describe('compose comment round-trip', () => {
     expect(roundTrip.trimStart().startsWith('services:')).toBe(true)
   })
 
+  it('keeps leading document comments separated by a blank line', () => {
+    const source = `# test
+
+services:
+  nginx:
+    image: nginx # herpin and derpin 2
+`
+    const doc = yamlToComposeDocument(source)
+    expect(doc.presentation.documentCommentBefore).toContain('test')
+    expect(doc.presentation.comments.services?.keyBefore).toBeUndefined()
+
+    const roundTrip = composeDocumentToYaml(doc)
+    expect(roundTrip.startsWith('# test\n')).toBe(true)
+    expect(roundTrip).toContain('# test\n\nservices:')
+    expect(roundTrip).toContain('image: nginx # herpin and derpin 2')
+  })
+
+  it('keeps leading comments glued to the first key when there is no blank line', () => {
+    const source = `# test
+services:
+  nginx:
+    image: nginx
+`
+    const doc = yamlToComposeDocument(source)
+    expect(doc.presentation.documentCommentBefore).toBeUndefined()
+    expect(doc.presentation.comments.services?.keyBefore).toContain('test')
+
+    const roundTrip = composeDocumentToYaml(doc)
+    expect(roundTrip).toContain('# test')
+    expect(roundTrip.indexOf('# test')).toBeLessThan(roundTrip.indexOf('services:'))
+  })
+
+  it('keeps trailing document comments', () => {
+    const source = `services:
+  nginx:
+    image: nginx
+# trailing
+`
+    const doc = yamlToComposeDocument(source)
+    expect(doc.presentation.documentComment).toContain('trailing')
+    const roundTrip = composeDocumentToYaml(doc)
+    expect(roundTrip).toContain('# trailing')
+  })
+
   it('keeps trailing scalar comments', () => {
     const source = `services:
   nginx:

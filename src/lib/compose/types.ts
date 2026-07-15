@@ -21,6 +21,15 @@ export type ComposePresentation = {
   comments: Record<string, ComposeComment>
   /** Path → number of blank lines before the node. */
   blankLines?: Record<string, number>
+  /**
+   * Leading `#` lines on the Document when separated from the root mapping by
+   * a blank line (yaml attaches those to `Document.commentBefore`, not the
+   * first key). Without a blank line, leading comments land on the first key
+   * as {@link ComposeComment.keyBefore} instead.
+   */
+  documentCommentBefore?: string
+  /** Trailing `#` lines after the document root (`Document.comment`). */
+  documentComment?: string
 }
 
 export type ComposeDocument = {
@@ -69,6 +78,14 @@ export function normalizeCompose(value: unknown): ComposeDocument {
       comments: { ...presentation.comments },
       ...(isRecord(presentation.blankLines)
         ? { blankLines: presentation.blankLines as Record<string, number> }
+        : {}),
+      ...(typeof presentation.documentCommentBefore === 'string' &&
+          presentation.documentCommentBefore.length > 0
+        ? { documentCommentBefore: presentation.documentCommentBefore }
+        : {}),
+      ...(typeof presentation.documentComment === 'string' &&
+          presentation.documentComment.length > 0
+        ? { documentComment: presentation.documentComment }
         : {}),
     },
   }

@@ -13,6 +13,7 @@ import {
   fetchEnvironment,
   fetchOrgServers,
   fetchProject,
+  fetchTlsLibrary,
   fetchVisibleHostings,
   fetchVisibleServices,
   fetchCommand,
@@ -26,7 +27,9 @@ import {
   type HostingRecord,
   type OrgServerRecord,
   type ServiceRecord,
+  type TlsRecord,
 } from '@/lib/instance-api'
+import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
   mergeComposeOverlay,
@@ -76,6 +79,7 @@ function serverLabel(server: OrgServerRecord): string {
 async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
   byService: Record<string, HostingRecord[]>
   hostnames: Record<string, string>
+  tlsPins: Record<string, string | null>
 }> {
   const entries = await Promise.all(
     services.map(async (service) => {
@@ -87,6 +91,9 @@ async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
     byService: Object.fromEntries(entries),
     hostnames: Object.fromEntries(
       entries.map(([serviceId, hostings]) => [serviceId, formatHostingHostnames(hostings)]),
+    ),
+    tlsPins: Object.fromEntries(
+      entries.map(([serviceId, hostings]) => [serviceId, hostings[0]?.tlsId ?? null]),
     ),
   }
 }
@@ -250,12 +257,14 @@ async function upsertHosting(
   composeServiceName: string,
   options: { hostnames: string[] },
   hostingsByService: Record<string, HostingRecord[]>,
+  tlsId: string | null,
 ): Promise<void> {
   const existing = hostingsByService[serviceId]?.[0]
   if (existing) {
     await updateHosting(existing.id, {
       metadata: { composeServiceName },
       options,
+      tlsId,
     })
     return
   }
@@ -263,7 +272,12 @@ async function upsertHosting(
     displayName: composeServiceName,
     metadata: { composeServiceName },
     options,
+    tlsId,
   })
+}
+
+function tlsLabel(row: TlsRecord): string {
+  return row.displayName?.trim() || row.metadata.dnsNames[0] || row.id.slice(0, 8)
 }
 
 function pinnedPlacementBlockedReason(
@@ -349,18 +363,31 @@ function DeployServerPicker({
 function HostingHostnameRow({
   composeServiceName,
   value,
+  tlsId,
+  tlsOptions,
   saving,
   disabled,
   onChange,
+  onTlsChange,
   onSave,
 }: Readonly<{
   composeServiceName: string
   value: string
+  tlsId: string | null
+  tlsOptions: TlsRecord[]
   saving: boolean
   disabled: boolean
   onChange: (value: string) => void
+  onTlsChange: (tlsId: string | null) => void
   onSave: () => void
 }>) {
+  const hostnames = parseHostnameList(value)
+  const covering = tlsOptions.filter(
+    (row) =>
+      row.metadata.status === 'ready' &&
+      coversAllHostnames(row.metadata.dnsNames, hostnames),
+  )
+
   return (
     <View style={orgPanelStyles.detailCard}>
       <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
@@ -371,6 +398,26 @@ function HostingHostnameRow({
         placeholderTextColor={colors.textDim}
         style={styles.hostnamesInput}
       />
+      <Text style={styles.tlsLabel}>TLS certificate</Text>
+      <View style={styles.tlsOptions}>
+        <Pressable
+          style={[styles.tlsChip, tlsId === null && styles.tlsChipActive]}
+          disabled={disabled}
+          onPress={() => onTlsChange(null)}
+        >
+          <Text style={styles.tlsChipText}>Auto</Text>
+        </Pressable>
+        {covering.map((row) => (
+          <Pressable
+            key={row.id}
+            style={[styles.tlsChip, tlsId === row.id && styles.tlsChipActive]}
+            disabled={disabled}
+            onPress={() => onTlsChange(row.id)}
+          >
+            <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
+          </Pressable>
+        ))}
+      </View>
       <Pressable
         style={[styles.saveHostingButton, saving && styles.buttonDisabled]}
         disabled={disabled}
@@ -404,6 +451,9 @@ function EnvironmentLoadedPanels({
   services,
   hostnames,
   setHostnames,
+  tlsPins,
+  setTlsPins,
+  tlsLibrary,
   savingHosting,
   onSaveHostnames,
   containersByService,
@@ -427,6 +477,9 @@ function EnvironmentLoadedPanels({
   services: ServiceRecord[]
   hostnames: Record<string, string>
   setHostnames: Dispatch<SetStateAction<Record<string, string>>>
+  tlsPins: Record<string, string | null>
+  setTlsPins: Dispatch<SetStateAction<Record<string, string | null>>>
+  tlsLibrary: TlsRecord[]
   savingHosting: string | null
   onSaveHostnames: (composeServiceName: string) => void
   containersByService: Record<string, ContainerRecord[]>
@@ -514,10 +567,15 @@ function EnvironmentLoadedPanels({
                   key={composeServiceName}
                   composeServiceName={composeServiceName}
                   value={hostnames[serviceId] ?? ''}
+                  tlsId={tlsPins[serviceId] ?? null}
+                  tlsOptions={tlsLibrary}
                   saving={savingHosting === composeServiceName}
                   disabled={savingHosting !== null}
                   onChange={(value) =>
                     setHostnames((current) => ({ ...current, [serviceId]: value }))
+                  }
+                  onTlsChange={(nextTlsId) =>
+                    setTlsPins((current) => ({ ...current, [serviceId]: nextTlsId }))
                   }
                   onSave={() => onSaveHostnames(composeServiceName)}
                 />
@@ -590,6 +648,8 @@ export function EnvironmentDetailSection({
   const [services, setServices] = useState<ServiceRecord[]>([])
   const [hostingsByService, setHostingsByService] = useState<Record<string, HostingRecord[]>>({})
   const [hostnames, setHostnames] = useState<Record<string, string>>({})
+  const [tlsPins, setTlsPins] = useState<Record<string, string | null>>({})
+  const [tlsLibrary, setTlsLibrary] = useState<TlsRecord[]>([])
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [containersByService, setContainersByService] = useState<
     Record<string, ContainerRecord[]>
@@ -602,12 +662,14 @@ export function EnvironmentDetailSection({
       setLoading(true)
       setError(null)
       try {
-        const [result, projectResult, serversResult, servicesResult] = await Promise.all([
-          fetchEnvironment(environmentId),
-          fetchProject(projectId),
-          fetchOrgServers(),
-          fetchVisibleServices(environmentId),
-        ])
+        const [result, projectResult, serversResult, servicesResult, tlsResult] =
+          await Promise.all([
+            fetchEnvironment(environmentId),
+            fetchProject(projectId),
+            fetchOrgServers(),
+            fetchVisibleServices(environmentId),
+            fetchTlsLibrary(),
+          ])
         if (cancelled) {
           return
         }
@@ -616,6 +678,7 @@ export function EnvironmentDetailSection({
         setAllServers(serversResult.servers)
         setServers(serversResult.servers.filter((server) => server.connected))
         setServices(servicesResult.services)
+        setTlsLibrary(tlsResult.tls)
         setServerId((current) => pickDefaultServerId(current, serversResult.servers))
         const [hostingState, containersState] = await Promise.all([
           fetchHostingsByService(servicesResult.services),
@@ -626,6 +689,7 @@ export function EnvironmentDetailSection({
         }
         setHostingsByService(hostingState.byService)
         setHostnames(hostingState.hostnames)
+        setTlsPins(hostingState.tlsPins)
         setContainersByService(containersState)
       } catch (err) {
         if (cancelled) {
@@ -742,10 +806,18 @@ export function EnvironmentDetailSection({
           metadata: { composeServiceName },
         })).id,
       }
+      const serviceKey = service?.id ?? composeServiceName
       const options = {
-        hostnames: parseHostnameList(hostnames[service?.id ?? composeServiceName] ?? ''),
+        hostnames: parseHostnameList(hostnames[serviceKey] ?? ''),
       }
-      await upsertHosting(resolvedService.id, composeServiceName, options, hostingsByService)
+      const tlsId = tlsPins[serviceKey] ?? null
+      await upsertHosting(
+        resolvedService.id,
+        composeServiceName,
+        options,
+        hostingsByService,
+        tlsId,
+      )
       const [servicesResult, hostingsResult] = await Promise.all([
         fetchVisibleServices(environmentId),
         fetchVisibleHostings(resolvedService.id),
@@ -758,6 +830,10 @@ export function EnvironmentDetailSection({
       setHostnames((current) => ({
         ...current,
         [resolvedService.id]: options.hostnames.join(', '),
+      }))
+      setTlsPins((current) => ({
+        ...current,
+        [resolvedService.id]: hostingsResult.hostings[0]?.tlsId ?? tlsId,
       }))
       setContainersByService(await fetchContainersByService(servicesResult.services))
     } catch (err) {
@@ -813,6 +889,9 @@ export function EnvironmentDetailSection({
           services={services}
           hostnames={hostnames}
           setHostnames={setHostnames}
+          tlsPins={tlsPins}
+          setTlsPins={setTlsPins}
+          tlsLibrary={tlsLibrary}
           savingHosting={savingHosting}
           onSaveHostnames={(composeServiceName) => {
             saveHostnames(composeServiceName).catch(() => {
@@ -879,6 +958,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  tlsLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  tlsOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  tlsChip: {
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 6,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  tlsChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  tlsChipText: {
+    color: colors.textChip,
+    fontSize: 12,
   },
   saveHostingButton: {
     alignSelf: 'flex-start',

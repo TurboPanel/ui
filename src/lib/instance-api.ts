@@ -600,11 +600,40 @@ export type HostingRecord = {
   displayName: string | null;
   description: string | null;
   serviceId: string;
+  /** Pinned org TLS id; null/undefined = auto-match by SAN. */
+  tlsId?: string | null;
   metadata?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed'
+
+export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked'
+
+export type TlsMetadata = {
+  dnsNames: string[]
+  hasWildcard: boolean
+  notBefore: string
+  notAfter: string
+  fingerprintSha256: string
+  subject: string
+  issuer: string
+  status: TlsStatus
+}
+
+export type TlsRecord = {
+  id: string
+  organizationId: string
+  displayName: string | null
+  source: TlsSource | string
+  metadata: TlsMetadata
+  options?: { prefer?: number; autoRenew?: boolean; requestedHostnames?: string[] } | null
+  certificatePem?: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type ContainerMetadata = {
   containerId?: string;
@@ -844,6 +873,7 @@ export async function createHosting(
     description?: string
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
+    tlsId?: string | null
   },
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
@@ -854,6 +884,7 @@ export async function createHosting(
       ...(body?.description !== undefined ? { description: body.description } : {}),
       ...(body?.metadata !== undefined ? { metadata: body.metadata } : {}),
       ...(body?.options !== undefined ? { options: body.options } : {}),
+      ...(body?.tlsId !== undefined ? { tlsId: body.tlsId } : {}),
     }),
   });
 }
@@ -865,11 +896,38 @@ export async function updateHosting(
     description?: string
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
+    tlsId?: string | null
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
+  })
+}
+
+export async function fetchTlsLibrary(): Promise<{ tls: TlsRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/tls`)
+}
+
+export async function createTlsCertificate(body: {
+  source: TlsSource
+  displayName?: string
+  certificatePem?: string
+  privateKeyPem?: string
+  hostnames?: string[]
+  prefer?: number
+  autoRenew?: boolean
+  challengeType?: 'http-01' | 'dns-01'
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/tls`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteTlsCertificate(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tls/${id}`, {
+    method: 'DELETE',
   })
 }
 

@@ -76,12 +76,13 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 |-------|-----------|---------|
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
+| `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
 | `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspaces list (`GET /api/client/v1/workspaces`) |
 | `/<orgId>/workspaces/[workspaceId]` | `workspace-detail-section.tsx` | Workspace detail + projects in workspace |
 | `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list (optional `?workspaceId` filter) |
 | `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
 | `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + compose editor + environments |
-| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Env overlay compose, deploy, hosting hostnames, containers (status + host server), variables |
+| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Env overlay compose, deploy, hosting hostnames + TLS Auto/pin, containers (status + host server), variables |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 
 ### Adding a new organization area
@@ -131,7 +132,11 @@ Authorization helpers:
 - `createContainer(body)` → `POST /api/client/v1/containers` (`serviceId`, `serverId`, optional `metadata`/`options`)
 - `updateContainer(id, body)` → `PATCH /api/client/v1/containers/:id` (`metadata?`, `options?`)
 - `deleteContainer(id)` → `DELETE /api/client/v1/containers/:id`
-- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ContainerRecord` (`serviceId`, `serverId`, `metadata?: ContainerMetadata`), `ContainerMetadata` (`containerId?`, `containerName?`, `status?`, `composeServiceName?` — status/id from Postgres reconcile, never DO reads)
+- `fetchTlsLibrary()` → `GET /api/client/v1/tls` — public cert metadata + `certificatePem`; **never** private keys
+- `createTlsCertificate(body)` → `POST /api/client/v1/tls` (`upload` | `self_signed` | `lets_encrypt`); upload sends PEM once; server seals the key as `tpsecret`
+- `deleteTlsCertificate(id)` → `DELETE /api/client/v1/tls/:id`
+- Hosting PATCH accepts optional `tlsId` (`null` = Auto match by SAN at deploy; pin must cover all hostnames)
+- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ContainerRecord` (`serviceId`, `serverId`, `metadata?: ContainerMetadata`), `ContainerMetadata` (`containerId?`, `containerName?`, `status?`, `composeServiceName?` — status/id from Postgres reconcile, never DO reads), `TlsRecord` (`source`, `metadata`, `certificatePem` — no private key)
 - **Secret write-only rule:** `VariableRecord.value` is always `null` when `isSecret` is true — the UI must never display or pre-fill secret values; use masked placeholders and write-only update forms
 - `fetchServerUpdate(serverId)` → `GET /api/client/v1/servers/:id/update` — returns `ServerUpdateStatus` with `current`/`target` commit identity and `updateAvailable`.
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
