@@ -26,7 +26,6 @@ import {
   deleteServer,
   fetchCommand,
   fetchOrgServers,
-  fetchLicenses,
   fetchServersUpdateStatus,
   formatServerDeleteBlockedError,
   isForbiddenError,
@@ -635,7 +634,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
   const [addServerEligibility, setAddServerEligibility] = useState(() =>
-    resolveServerAddEligibility([]),
+    resolveServerAddEligibility(),
   )
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -1136,26 +1135,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       return
     }
 
-    let cancelled = false
-
-    const loadEligibility = async () => {
-      try {
-        const { licenses } = await fetchLicenses()
-        if (!cancelled) {
-          setAddServerEligibility(resolveServerAddEligibility(licenses))
-        }
-      } catch {
-        if (!cancelled) {
-          setAddServerEligibility(resolveServerAddEligibility([]))
-        }
-      }
-    }
-
-    void loadEligibility()
-
-    return () => {
-      cancelled = true
-    }
+    setAddServerEligibility(resolveServerAddEligibility())
   }, [canOwn, orgId])
 
   // Fetch update status in one batch when servers first appear.

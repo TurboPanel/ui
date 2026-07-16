@@ -1,23 +1,31 @@
 import { useRouter, type Href } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
+import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
 import { useAuth } from '@/lib/auth-context'
 import {
-  deleteProject,
   fetchVisibleProjects,
+  fetchVisibleWorkspaces,
   isForbiddenError,
-  PROJECT_HAS_CHILDREN_ERROR,
   type ProjectRecord,
+  type WorkspaceRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import {
+  ALL_WORKSPACES_SCOPE,
+  newProjectHrefForScope,
+  workspaceDisplayName,
+} from '@/lib/workspace-scope'
+import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 function projectTypeBadge(type: ProjectRecord['metadata']) {
   const projectType = type?.type
@@ -47,17 +55,41 @@ export function ProjectsOverviewSection({
 }>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
+  const workspaceScope = useOptionalWorkspaceScope()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
+
+  const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
+  const scopedWorkspaceId =
+    scopeId === ALL_WORKSPACES_SCOPE ? undefined : scopeId
+  const showWorkspaceLabels = !scopedWorkspaceId
+
+  const scopeWorkspaces = workspaceScope?.workspaces
+  const scopeLabel = workspaceScope?.scope.label
+
+  const workspaceNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    const source =
+      scopeWorkspaces && scopeWorkspaces.length > 0 ? scopeWorkspaces : workspaces
+    for (const workspace of source) {
+      map.set(workspace.id, workspaceDisplayName(workspace))
+    }
+    return map
+  }, [scopeWorkspaces, workspaces])
+
+  const scopedWorkspaceName = scopedWorkspaceId
+    ? (workspaceNameById.get(scopedWorkspaceId) ?? scopeLabel ?? 'this workspace')
+    : null
 
   const loadProjects = async () => {
     setLoading(true)
     setError(null)
     try {
-      const result = await fetchVisibleProjects(workspaceId)
+      const result = await fetchVisibleProjects(scopedWorkspaceId)
       setProjects(result.projects)
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -77,9 +109,19 @@ export function ProjectsOverviewSection({
       setLoading(true)
       setError(null)
       try {
-        const result = await fetchVisibleProjects(workspaceId)
+        const needsWorkspaceNames =
+          showWorkspaceLabels && (!scopeWorkspaces || scopeWorkspaces.length === 0)
+        const [projectsResult, workspacesResult] = await Promise.all([
+          fetchVisibleProjects(scopedWorkspaceId),
+          needsWorkspaceNames
+            ? fetchVisibleWorkspaces()
+            : Promise.resolve({ workspaces: [] as WorkspaceRecord[] }),
+        ])
         if (!cancelled) {
-          setProjects(result.projects)
+          setProjects(projectsResult.projects)
+          if (needsWorkspaceNames) {
+            setWorkspaces(workspacesResult.workspaces)
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -103,40 +145,25 @@ export function ProjectsOverviewSection({
     return () => {
       cancelled = true
     }
-  }, [orgId, workspaceId, handleUnauthorized])
+  }, [
+    orgId,
+    scopedWorkspaceId,
+    showWorkspaceLabels,
+    scopeWorkspaces,
+    handleUnauthorized,
+  ])
 
-  const handleDelete = async (id: string) => {
-    setDeleting((current) => new Set(current).add(id))
-    setError(null)
-    try {
-      await deleteProject(id)
-      await loadProjects()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      const message =
-        err instanceof Error ? err.message : 'Failed to delete project'
-      if (message.includes(PROJECT_HAS_CHILDREN_ERROR)) {
-        setError('This project has environments and cannot be deleted.')
-      } else {
-        setError(message)
-      }
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-    }
+  const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+  const deletingProject = deletingProjectId
+    ? projects.find((project) => project.id === deletingProjectId) ?? null
+    : null
+
+  let headingCopy = 'Projects across every workspace in this organization.'
+  let panelHint = 'All workspaces'
+  if (scopedWorkspaceName) {
+    headingCopy = `Projects in ${scopedWorkspaceName}.`
+    panelHint = scopedWorkspaceName
   }
-
-  const newProjectHref = (
-    workspaceId
-      ? `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`
-      : `/${orgId}/projects/new`
-  ) as Href
 
   let projectListContent
   if (loading && projects.length === 0) {
@@ -172,14 +199,15 @@ export function ProjectsOverviewSection({
                   <Pressable
                     style={[
                       styles.secondaryButton,
-                      deleting.has(project.id) && styles.buttonDisabled,
+                      deletingProjectId === project.id && styles.buttonDisabled,
                     ]}
-                    disabled={deleting.has(project.id)}
-                    onPress={() => void handleDelete(project.id)}
+                    disabled={deletingProjectId === project.id}
+                    onPress={() => {
+                      setError(null)
+                      setDeletingProjectId(project.id)
+                    }}
                   >
-                    <Text style={styles.secondaryButtonText}>
-                      {deleting.has(project.id) ? 'Deleting…' : 'Delete'}
-                    </Text>
+                    <Text style={styles.secondaryButtonText}>Delete</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -189,10 +217,27 @@ export function ProjectsOverviewSection({
                 {project.description}
               </Text>
             ) : null}
+            {showWorkspaceLabels ? (
+              <Text style={orgPanelStyles.detailLine}>
+                <Text style={orgPanelStyles.detailLabel}>Workspace: </Text>
+                {workspaceNameById.get(project.workspaceId) ?? 'Unknown'}
+              </Text>
+            ) : null}
             <Text style={orgPanelStyles.detailLine}>
               <Text style={orgPanelStyles.detailLabel}>Created: </Text>
               {new Date(project.createdAt).toLocaleString()}
             </Text>
+            {deletingProjectId === project.id && deletingProject ? (
+              <ProjectDeletePanel
+                project={deletingProject}
+                onCancel={() => setDeletingProjectId(null)}
+                onDeleted={() => {
+                  setDeletingProjectId(null)
+                  void loadProjects()
+                }}
+                onUnauthorized={handleUnauthorized}
+              />
+            ) : null}
           </View>
         ))}
       </View>
@@ -201,12 +246,15 @@ export function ProjectsOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Projects</Text>
-      <Text style={styles.copy}>
-        Manage projects and their environments for this organization.
-      </Text>
+      <View style={styles.pageHeader}>
+        <View style={styles.pageIntro}>
+          <Text style={styles.heading}>Projects</Text>
+          <Text style={styles.copy}>{headingCopy}</Text>
+        </View>
+        <WorkspaceSwitcher orgId={orgId} />
+      </View>
 
-      <SectionPanel title="Projects" hint="Organization projects">
+      <SectionPanel title="Projects" hint={panelHint}>
         {canOwn ? (
           <Pressable
             style={styles.primaryButton}
@@ -228,6 +276,18 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  pageIntro: {
+    flex: 1,
+    minWidth: 200,
+    gap: spacing.sm,
   },
   heading: {
     color: colors.text,

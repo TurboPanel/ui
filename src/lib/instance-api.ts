@@ -354,8 +354,18 @@ async function apiFetch<T>(
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
     try {
-      const body = await response.json() as { error?: string };
-      if (body.error) detail = body.error;
+      const body = await response.json() as {
+        error?: string
+        issues?: Array<{ message?: string }>
+      };
+      if (body.error === 'compose_invalid' && Array.isArray(body.issues) && body.issues.length > 0) {
+        detail = body.issues
+          .map((issue) => issue.message)
+          .filter((message): message is string => typeof message === 'string' && message.length > 0)
+          .join('; ') || body.error;
+      } else if (body.error) {
+        detail = body.error;
+      }
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
@@ -369,31 +379,13 @@ export async function fetchHealth(): Promise<{ ok: boolean }> {
   return await apiFetch("/api/health");
 }
 
-export type LicenseBoundServer = {
-  id: string
-  displayName: string | null
-  connected: boolean
-}
-
-export type LicenseRecord = {
-  id: string;
-  displayName: string | null;
-  createdAt: string;
-  /** When false, this is the co-located control plane license. */
-  revocable: boolean;
-  boundServer: LicenseBoundServer | null;
-};
-
 export type CreatedLicense = {
   licenseId: string;
   licenseToken: string;
   installCommand: string;
 };
 
-export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/licenses`);
-}
-
+/** Mint a one-shot registration key for the Add Server flow (not listed in the UI). */
 export async function createLicense(
   displayName?: string,
   installBaseUrl?: string,
@@ -404,14 +396,6 @@ export async function createLicense(
   return await apiFetch(`${CLIENT_API}/licenses`, {
     method: "POST",
     body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
-  });
-}
-
-export async function invalidateLicense(
-  licenseId: string,
-): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/licenses/${licenseId}`, {
-    method: "DELETE",
   });
 }
 
@@ -667,6 +651,8 @@ export const WORKSPACE_HAS_CHILDREN_ERROR = "Cannot delete while child resources
 
 export const PROJECT_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
 
+export const PROJECT_HAS_RUNNING_SERVICES_ERROR = "project_has_running_services";
+
 export async function fetchWorkspace(
   id: string,
 ): Promise<{ workspace: WorkspaceRecord }> {
@@ -742,6 +728,7 @@ export async function updateProject(
     displayName?: string;
     description?: string;
     options?: { compose?: ComposeDocument };
+    workspaceId?: string;
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
@@ -1305,6 +1292,8 @@ export type CommandEnqueueResponse = {
   ok: true
   commandId: string
   status: string
+  /** Present on environment.stop so callers can poll without re-resolving placement. */
+  serverId?: string
 }
 
 export async function pingDaemon(
@@ -1347,6 +1336,15 @@ export async function deployEnvironment(
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy`, {
     method: 'POST',
     body: JSON.stringify(body ?? {}),
+  })
+}
+
+export async function stopEnvironment(
+  environmentId: string,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/stop`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 

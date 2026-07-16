@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrgHeader } from '@/components/org/org-header'
 import { OrgSidebar } from '@/components/org/org-sidebar'
+import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
 import { colors, layout } from '@/lib/theme'
 
 export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
@@ -23,43 +24,45 @@ export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
   )
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.root}>
-        {isDesktop ? <OrgSidebar orgId={orgId} /> : null}
+    <WorkspaceScopeProvider orgId={orgId}>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.root}>
+          {isDesktop ? <OrgSidebar orgId={orgId} /> : null}
 
-        {!isDesktop && drawerOpen ? (
-          <>
-            <Pressable
-              style={styles.backdrop}
-              onPress={() => setDrawerOpen(false)}
-            />
-            <View style={styles.drawer}>
-              <OrgSidebar
-                orgId={orgId}
-                onNavigate={() => setDrawerOpen(false)}
+          {!isDesktop && drawerOpen ? (
+            <>
+              <Pressable
+                style={styles.backdrop}
+                onPress={() => setDrawerOpen(false)}
               />
-            </View>
-          </>
-        ) : null}
+              <View style={styles.drawer}>
+                <OrgSidebar
+                  orgId={orgId}
+                  onNavigate={() => setDrawerOpen(false)}
+                />
+              </View>
+            </>
+          ) : null}
 
-        <View style={styles.main}>
-          <OrgHeader
-            onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
-          />
-          <ScrollView
-            style={styles.contentScroll}
-            contentContainerStyle={[
-              styles.content,
-              { maxWidth: contentMaxWidth },
-            ]}
-            contentInsetAdjustmentBehavior="automatic"
-            keyboardShouldPersistTaps="handled"
-          >
-            <Slot />
-          </ScrollView>
+          <View style={styles.main}>
+            <OrgHeader
+              onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
+            />
+            <ScrollView
+              style={styles.contentScroll}
+              contentContainerStyle={[
+                styles.content,
+                { maxWidth: contentMaxWidth },
+              ]}
+              contentInsetAdjustmentBehavior="automatic"
+              keyboardShouldPersistTaps="handled"
+            >
+              <Slot />
+            </ScrollView>
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </WorkspaceScopeProvider>
   )
 }
 

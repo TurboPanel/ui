@@ -1,5 +1,13 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  createElement,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -35,6 +43,8 @@ import {
   mergeComposeOverlay,
   normalizeCompose,
   readComposePlacementServerId,
+  setComposePlacementServerId,
+  stripComposePlacement,
 } from '@/lib/compose'
 import { colors, spacing } from '@/lib/theme'
 
@@ -65,15 +75,13 @@ function formatHostingHostnames(hostings: HostingRecord[]): string {
   return raw.filter(isStringHostname).join(', ')
 }
 
-function pickDefaultServerId(current: string, servers: OrgServerRecord[]): string {
-  if (current) {
-    return current
-  }
-  return servers.find((server) => server.connected)?.id ?? ''
-}
-
 function serverLabel(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname || server.id
+}
+
+function serverOptionLabel(server: OrgServerRecord): string {
+  const base = serverLabel(server)
+  return server.connected ? base : `${base} (offline)`
 }
 
 async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
@@ -280,84 +288,49 @@ function tlsLabel(row: TlsRecord): string {
   return row.displayName?.trim() || row.metadata.dnsNames[0] || row.id.slice(0, 8)
 }
 
-function pinnedPlacementBlockedReason(
+function deployBlockedReason(
   placementServerId: string | null,
   pinnedServer: OrgServerRecord | null,
 ): string | null {
   if (!placementServerId) {
-    return null
+    return 'Select a server for this environment before deploying.'
   }
   if (!pinnedServer) {
-    return 'Pinned server is unavailable. Update project placement to a connected server.'
+    return 'Selected server is unavailable. Choose a connected server.'
   }
   if (!pinnedServer.connected) {
-    return 'Pinned server is offline. Update project placement to a connected server.'
+    return 'Selected server is offline. Choose a connected server.'
   }
   return null
 }
 
-function DeployServerPicker({
-  placementServerId,
-  pinnedServer,
-  servers,
-  serverId,
-  setServerId,
-}: Readonly<{
-  placementServerId: string | null
-  pinnedServer: OrgServerRecord | null
-  servers: OrgServerRecord[]
-  serverId: string
-  setServerId: (id: string) => void
-}>) {
-  if (placementServerId) {
-    const label = pinnedServer
-      ? serverLabel(pinnedServer)
-      : placementServerId
-    const offlineHint =
-      pinnedServer && !pinnedServer.connected ? ' (offline)' : ''
-    const blockedReason = pinnedPlacementBlockedReason(
-      placementServerId,
-      pinnedServer,
-    )
-    return (
-      <View style={styles.serverList}>
-        <View style={[styles.serverOption, styles.serverOptionSelected]}>
-          <Text style={styles.serverOptionText}>
-            {label}
-            {offlineHint}
-          </Text>
-          <Text style={orgPanelStyles.muted}>Pinned by project</Text>
-        </View>
-        {blockedReason ? (
-          <Text style={orgPanelStyles.error}>{blockedReason}</Text>
-        ) : null}
-      </View>
-    )
+function placementDropdownOptions(
+  sortedServers: OrgServerRecord[],
+  placementServerId: string | null,
+): OrgServerRecord[] {
+  const connected = sortedServers.filter((server) => server.connected)
+  if (!placementServerId) {
+    return connected
   }
-
-  if (servers.length === 0) {
-    return (
-      <View style={styles.serverList}>
-        <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
-      </View>
-    )
+  const selected = sortedServers.find((server) => server.id === placementServerId)
+  if (!selected || selected.connected) {
+    return connected
   }
+  return [selected, ...connected]
+}
 
-  return (
-    <View style={styles.serverList}>
-      {servers.map((server) => (
-        <Pressable
-          key={server.id}
-          style={[styles.serverOption, serverId === server.id && styles.serverOptionSelected]}
-          onPress={() => setServerId(server.id)}
-        >
-          <Text style={styles.serverOptionText}>
-            {serverLabel(server)}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
-  )
+const webSelectStyle: CSSProperties = {
+  width: '100%',
+  borderWidth: 1,
+  borderStyle: 'solid',
+  borderColor: colors.border,
+  borderRadius: 6,
+  backgroundColor: colors.bgInput,
+  color: colors.text,
+  fontFamily: 'monospace',
+  fontSize: 13,
+  padding: 10,
+  minHeight: 44,
 }
 
 function HostingHostnameRow({
@@ -431,23 +404,144 @@ function HostingHostnameRow({
   )
 }
 
+function EnvironmentPlacementPanel({
+  placementServerId,
+  sortedServers,
+  savingPlacement,
+  onSavePlacement,
+}: Readonly<{
+  placementServerId: string | null
+  sortedServers: OrgServerRecord[]
+  savingPlacement: boolean
+  onSavePlacement: (serverId: string) => void
+}>) {
+  const options = placementDropdownOptions(sortedServers, placementServerId)
+  const selected = sortedServers.find((server) => server.id === placementServerId) ?? null
+  const selectedOffline = Boolean(selected && !selected.connected)
+
+  let picker
+  if (options.length === 0) {
+    picker = (
+      <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
+    )
+  } else if (Platform.OS === 'web') {
+    picker = createElement(
+      'select',
+      {
+        value: placementServerId ?? '',
+        disabled: savingPlacement,
+        onChange: (event: { target: { value: string } }) => {
+          if (event.target.value) {
+            onSavePlacement(event.target.value)
+          }
+        },
+        style: webSelectStyle,
+        'aria-required': true,
+      },
+      [
+        createElement(
+          'option',
+          { key: '', value: '', disabled: true },
+          'Select a server…',
+        ),
+        ...options.map((server) =>
+          createElement(
+            'option',
+            { key: server.id, value: server.id },
+            serverOptionLabel(server),
+          ),
+        ),
+      ],
+    )
+  } else {
+    picker = (
+      <View style={styles.serverList}>
+        {!placementServerId ? (
+          <Text style={orgPanelStyles.muted}>Select a server…</Text>
+        ) : null}
+        {options.map((server) => {
+          const isSelected = placementServerId === server.id
+          const canSelect = server.connected
+          if (!canSelect) {
+            return (
+              <View
+                key={server.id}
+                style={[
+                  styles.serverOption,
+                  styles.serverOptionDisabled,
+                  isSelected && styles.serverOptionSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.serverOptionText,
+                    styles.serverOptionTextDisabled,
+                  ]}
+                >
+                  {serverOptionLabel(server)}
+                </Text>
+              </View>
+            )
+          }
+          return (
+            <Pressable
+              key={server.id}
+              style={[
+                styles.serverOption,
+                isSelected && styles.serverOptionSelected,
+              ]}
+              disabled={savingPlacement}
+              onPress={() => onSavePlacement(server.id)}
+            >
+              <Text style={styles.serverOptionText}>
+                {serverOptionLabel(server)}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    )
+  }
+
+  return (
+    <SectionPanel
+      title="Server"
+      hint="Required — this environment deploys to one server"
+    >
+      {picker}
+      {!placementServerId ? (
+        <Text style={orgPanelStyles.error}>
+          Select a server before deploying.
+        </Text>
+      ) : null}
+      {selectedOffline ? (
+        <Text style={orgPanelStyles.error}>
+          Selected server is offline. Choose a connected server.
+        </Text>
+      ) : null}
+      {savingPlacement ? (
+        <Text style={orgPanelStyles.muted}>Saving…</Text>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
 function EnvironmentLoadedPanels({
   environment,
   projectId,
   mergedCompose,
   serviceNames,
-  servers,
   allServers,
-  serverId,
-  setServerId,
+  sortedServers,
   placementServerId,
-  pinnedServer,
-  pinnedDeployBlocked,
+  deployBlocked,
   deploying,
   deployStatus,
   onDeploy,
   onSaveCompose,
   savingCompose,
+  savingPlacement,
+  onSavePlacement,
   services,
   hostnames,
   setHostnames,
@@ -457,23 +551,23 @@ function EnvironmentLoadedPanels({
   savingHosting,
   onSaveHostnames,
   containersByService,
+  showEnvironmentPanel = true,
 }: Readonly<{
   environment: EnvironmentRecord
   projectId: string
   mergedCompose: ComposeDocument
   serviceNames: string[]
-  servers: OrgServerRecord[]
   allServers: OrgServerRecord[]
-  serverId: string
-  setServerId: (id: string) => void
+  sortedServers: OrgServerRecord[]
   placementServerId: string | null
-  pinnedServer: OrgServerRecord | null
-  pinnedDeployBlocked: boolean
+  deployBlocked: boolean
   deploying: boolean
   deployStatus: string | null
   onDeploy: () => void
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
+  savingPlacement: boolean
+  onSavePlacement: (serverId: string) => void
   services: ServiceRecord[]
   hostnames: Record<string, string>
   setHostnames: Dispatch<SetStateAction<Record<string, string>>>
@@ -483,6 +577,7 @@ function EnvironmentLoadedPanels({
   savingHosting: string | null
   onSaveHostnames: (composeServiceName: string) => void
   containersByService: Record<string, ContainerRecord[]>
+  showEnvironmentPanel?: boolean
 }>) {
   const hasContainers = services.some(
     (service) => (containersByService[service.id] ?? []).length > 0,
@@ -490,20 +585,22 @@ function EnvironmentLoadedPanels({
 
   return (
     <>
-      <SectionPanel title="Environment" hint="Environment details">
-        <Text style={orgPanelStyles.detailTitle}>
-          {environment.displayName?.trim() || 'Unnamed environment'}
-        </Text>
-        {environment.description ? (
-          <Text style={orgPanelStyles.detailLine}>
-            {environment.description}
+      {showEnvironmentPanel ? (
+        <SectionPanel title="Environment" hint="Environment details">
+          <Text style={orgPanelStyles.detailTitle}>
+            {environment.displayName?.trim() || 'Unnamed environment'}
           </Text>
-        ) : null}
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Project: </Text>
-          {projectId}
-        </Text>
-      </SectionPanel>
+          {environment.description ? (
+            <Text style={orgPanelStyles.detailLine}>
+              {environment.description}
+            </Text>
+          ) : null}
+          <Text style={orgPanelStyles.detailLine}>
+            <Text style={orgPanelStyles.detailLabel}>Project: </Text>
+            {projectId}
+          </Text>
+        </SectionPanel>
+      ) : null}
 
       <SectionPanel title="Compose overlay" hint="Overrides the project compose">
         <ComposeEditorSection
@@ -511,8 +608,16 @@ function EnvironmentLoadedPanels({
           onSave={onSaveCompose}
           saving={savingCompose}
           title="Environment compose overlay"
+          managePlacement
         />
       </SectionPanel>
+
+      <EnvironmentPlacementPanel
+        placementServerId={placementServerId}
+        sortedServers={sortedServers}
+        savingPlacement={savingPlacement}
+        onSavePlacement={onSavePlacement}
+      />
 
       <SectionPanel
         title="Merged runtime compose"
@@ -527,29 +632,25 @@ function EnvironmentLoadedPanels({
         />
       </SectionPanel>
 
-      <SectionPanel title="Deploy" hint="Deploy this environment to a connected server">
-        <DeployServerPicker
-          placementServerId={placementServerId}
-          pinnedServer={pinnedServer}
-          servers={servers}
-          serverId={serverId}
-          setServerId={setServerId}
-        />
+      <SectionPanel
+        title="Deploy"
+        hint="Deploy this environment to its selected server"
+      >
         <Pressable
           style={[
             styles.deployButton,
-            (deploying || pinnedDeployBlocked) && styles.buttonDisabled,
+            (deploying || deployBlocked) && styles.buttonDisabled,
           ]}
-          disabled={
-            deploying ||
-            pinnedDeployBlocked ||
-            (!placementServerId && !serverId)
-          }
+          disabled={deploying || deployBlocked}
           onPress={onDeploy}
         >
-          <Text style={styles.deployButtonText}>{deploying ? 'Deploying…' : 'Deploy'}</Text>
+          <Text style={styles.deployButtonText}>
+            {deploying ? 'Deploying…' : 'Deploy'}
+          </Text>
         </Pressable>
-        {deployStatus ? <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text> : null}
+        {deployStatus ? (
+          <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text>
+        ) : null}
       </SectionPanel>
 
       <SectionPanel title="Hostnames" hint="Map compose services to hostnames">
@@ -625,14 +726,16 @@ function EnvironmentLoadedPanels({
   )
 }
 
-export function EnvironmentDetailSection({
+export function EnvironmentDetailBody({
   orgId,
   projectId,
   environmentId,
+  embedded = false,
 }: Readonly<{
   orgId: string
   projectId: string
   environmentId: string
+  embedded?: boolean
 }>) {
   const { handleUnauthorized } = useAuth()
   const [environment, setEnvironment] = useState<EnvironmentRecord | null>(null)
@@ -640,9 +743,8 @@ export function EnvironmentDetailSection({
   const [error, setError] = useState<string | null>(null)
   const [projectCompose, setProjectCompose] = useState<unknown>(null)
   const [savingCompose, setSavingCompose] = useState(false)
+  const [savingPlacement, setSavingPlacement] = useState(false)
   const [allServers, setAllServers] = useState<OrgServerRecord[]>([])
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [serverId, setServerId] = useState('')
   const [deploying, setDeploying] = useState(false)
   const [deployStatus, setDeployStatus] = useState<string | null>(null)
   const [services, setServices] = useState<ServiceRecord[]>([])
@@ -676,10 +778,8 @@ export function EnvironmentDetailSection({
         setEnvironment(result.environment)
         setProjectCompose(projectResult.project.options?.compose)
         setAllServers(serversResult.servers)
-        setServers(serversResult.servers.filter((server) => server.connected))
         setServices(servicesResult.services)
         setTlsLibrary(tlsResult.tls)
-        setServerId((current) => pickDefaultServerId(current, serversResult.servers))
         const [hostingState, containersState] = await Promise.all([
           fetchHostingsByService(servicesResult.services),
           fetchContainersByService(servicesResult.services),
@@ -718,20 +818,34 @@ export function EnvironmentDetailSection({
   }, [environmentId, handleUnauthorized, projectId])
 
   const mergedCompose = useMemo(
-    () => mergeComposeOverlay(projectCompose, environment?.options?.compose),
+    () =>
+      mergeComposeOverlay(
+        stripComposePlacement(normalizeCompose(projectCompose)),
+        environment?.options?.compose,
+      ),
     [environment?.options?.compose, projectCompose],
   )
   const serviceNames = useMemo(() => composeServiceNames(mergedCompose), [mergedCompose])
   const placementServerId = useMemo(
-    () => readComposePlacementServerId(normalizeCompose(projectCompose)),
-    [projectCompose],
+    () =>
+      readComposePlacementServerId(
+        normalizeCompose(environment?.options?.compose),
+      ),
+    [environment?.options?.compose],
   )
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
     [allServers, placementServerId],
   )
-  const pinnedDeployBlocked =
-    pinnedPlacementBlockedReason(placementServerId, pinnedServer) !== null
+  const deployBlocked =
+    deployBlockedReason(placementServerId, pinnedServer) !== null
+  const sortedServers = useMemo(
+    () =>
+      [...allServers].sort((a, b) =>
+        (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
+      ),
+    [allServers],
+  )
 
   const saveCompose = async (compose: ComposeDocument) => {
     setSavingCompose(true)
@@ -755,27 +869,48 @@ export function EnvironmentDetailSection({
     }
   }
 
-  const deploy = async () => {
-    const blockedReason = pinnedPlacementBlockedReason(
-      placementServerId,
-      pinnedServer,
-    )
-    if (blockedReason) {
-      setDeployStatus(blockedReason)
-      return
+  const savePlacement = async (serverIdToPin: string) => {
+    setSavingPlacement(true)
+    setError(null)
+    try {
+      const compose = setComposePlacementServerId(
+        normalizeCompose(environment?.options?.compose),
+        serverIdToPin,
+      )
+      await updateEnvironment(environmentId, { options: { compose } })
+      setEnvironment((current) =>
+        current
+          ? { ...current, options: { compose } }
+          : current,
+      )
+    } catch (err) {
+      await reportSectionError(
+        err,
+        handleUnauthorized,
+        setError,
+        'Failed to save placement',
+      )
+    } finally {
+      setSavingPlacement(false)
     }
-    const targetServerId = placementServerId ?? serverId
-    if (!targetServerId) {
-      setDeployStatus('Select a connected server.')
+  }
+
+  const deploy = async () => {
+    const blockedReason = deployBlockedReason(placementServerId, pinnedServer)
+    if (blockedReason || !placementServerId) {
+      setDeployStatus(
+        blockedReason ?? 'Select a server for this environment before deploying.',
+      )
       return
     }
     setDeploying(true)
     setDeployStatus('Queueing deployment…')
     try {
-      const result = placementServerId
-        ? await deployEnvironment(environmentId)
-        : await deployEnvironment(environmentId, { serverId })
-      const command = await waitForTerminalCommand(targetServerId, result.commandId)
+      const result = await deployEnvironment(environmentId)
+      const command = await waitForTerminalCommand(
+        placementServerId,
+        result.commandId,
+      )
       setDeployStatus(deployStatusMessage(command))
       if (command.status === 'succeeded') {
         const refreshed = await refreshServicesAndContainersAfterDeploy(environmentId)
@@ -849,19 +984,11 @@ export function EnvironmentDetailSection({
   }
 
   if (loading && !environment) {
-    return (
-      <View style={styles.root}>
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
-      </View>
-    )
+    return <Text style={orgPanelStyles.muted}>Loading…</Text>
   }
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.heading}>
-        {environment?.displayName?.trim() || 'Environment'}
-      </Text>
-
+    <View style={styles.body}>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       {environment ? (
@@ -870,13 +997,10 @@ export function EnvironmentDetailSection({
           projectId={projectId}
           mergedCompose={mergedCompose}
           serviceNames={serviceNames}
-          servers={servers}
           allServers={allServers}
-          serverId={serverId}
-          setServerId={setServerId}
+          sortedServers={sortedServers}
           placementServerId={placementServerId}
-          pinnedServer={pinnedServer}
-          pinnedDeployBlocked={pinnedDeployBlocked}
+          deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
           onDeploy={() => {
@@ -886,6 +1010,10 @@ export function EnvironmentDetailSection({
           }}
           onSaveCompose={saveCompose}
           savingCompose={savingCompose}
+          savingPlacement={savingPlacement}
+          onSavePlacement={(nextServerId) => {
+            void savePlacement(nextServerId)
+          }}
           services={services}
           hostnames={hostnames}
           setHostnames={setHostnames}
@@ -899,6 +1027,7 @@ export function EnvironmentDetailSection({
             })
           }}
           containersByService={containersByService}
+          showEnvironmentPanel={!embedded}
         />
       ) : null}
 
@@ -907,8 +1036,33 @@ export function EnvironmentDetailSection({
   )
 }
 
+export function EnvironmentDetailSection({
+  orgId,
+  projectId,
+  environmentId,
+}: Readonly<{
+  orgId: string
+  projectId: string
+  environmentId: string
+}>) {
+  return (
+    <View style={styles.root}>
+      <Text style={styles.heading}>Environment</Text>
+      <EnvironmentDetailBody
+        orgId={orgId}
+        projectId={projectId}
+        environmentId={environmentId}
+      />
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   root: {
+    width: '100%',
+    gap: spacing.lg,
+  },
+  body: {
     width: '100%',
     gap: spacing.lg,
   },
@@ -937,7 +1091,9 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   serverOptionSelected: { borderColor: colors.accent, backgroundColor: colors.bgActive },
+  serverOptionDisabled: { opacity: 0.6 },
   serverOptionText: { color: colors.text, fontSize: 13, fontFamily: 'monospace' },
+  serverOptionTextDisabled: { color: colors.textMuted },
   deployButton: {
     alignSelf: 'flex-start',
     backgroundColor: colors.accent,

@@ -1,5 +1,3 @@
-import type { LicenseRecord } from '@/lib/instance-api'
-
 export type ServerAddEligibility = {
   canAdd: boolean
   reason: string | null
@@ -10,11 +8,9 @@ export type ServerAddEligibility = {
  *
  * Future: require a free server slot from the subscription quota before
  * provisioning a registration key. Until billing exists, org owners may add
- * servers on self-hosted installs (license minted during the flow).
+ * servers (key minted during the flow; never shown as a license list).
  */
-export function resolveServerAddEligibility(
-  _licenses: LicenseRecord[],
-): ServerAddEligibility {
+export function resolveServerAddEligibility(): ServerAddEligibility {
   // Future: compare subscription.availableServerSlots against enrolled servers.
   return { canAdd: true, reason: null }
 }

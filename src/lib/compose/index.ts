@@ -14,6 +14,8 @@ export {
   composeDocumentToYaml,
   yamlToComposeDocument,
 } from './convert'
+export type { ComposeLintIssue, ComposeLintLevel } from './lint'
+export { blockingComposeLintIssues, lintComposeYaml } from './lint'
 
 import {
   normalizeCompose,
@@ -101,18 +103,7 @@ export function setComposePlacementServerId(
   const keyOrder = [...normalized.presentation.keyOrder]
 
   if (!serverId) {
-    delete data[TURBOPANEL_EXTENSION_KEY]
-    return {
-      version: 1,
-      data,
-      presentation: {
-        keyOrder: keyOrder.filter((key) => key !== TURBOPANEL_EXTENSION_KEY),
-        comments: { ...normalized.presentation.comments },
-        ...(normalized.presentation.blankLines
-          ? { blankLines: { ...normalized.presentation.blankLines } }
-          : {}),
-      },
-    }
+    return stripComposePlacement(normalized)
   }
 
   const existing = isRecord(data[TURBOPANEL_EXTENSION_KEY])
@@ -142,14 +133,52 @@ export function setComposePlacementServerId(
 
 /**
  * Compose document for editor/preview UI: omit `x-turbopanel` placement.
- * Placement is managed via the project Server placement control, not YAML.
+ * Placement is managed via the environment Server placement control, not YAML.
+ * Preserves any unrelated `x-turbopanel` fields.
  */
 export function stripComposePlacement(document: ComposeDocument): ComposeDocument {
-  return setComposePlacementServerId(document, null)
+  const normalized = normalizeCompose(document)
+  const extension = normalized.data[TURBOPANEL_EXTENSION_KEY]
+  if (!isRecord(extension) || !('placement' in extension)) {
+    return normalized
+  }
+
+  const { placement: _removed, ...rest } = extension
+  const data = { ...normalized.data }
+  const keyOrder = [...normalized.presentation.keyOrder]
+
+  if (Object.keys(rest).length === 0) {
+    delete data[TURBOPANEL_EXTENSION_KEY]
+    return {
+      version: 1,
+      data,
+      presentation: {
+        keyOrder: keyOrder.filter((key) => key !== TURBOPANEL_EXTENSION_KEY),
+        comments: { ...normalized.presentation.comments },
+        ...(normalized.presentation.blankLines
+          ? { blankLines: { ...normalized.presentation.blankLines } }
+          : {}),
+      },
+    }
+  }
+
+  data[TURBOPANEL_EXTENSION_KEY] = rest
+  return {
+    version: 1,
+    data,
+    presentation: {
+      keyOrder,
+      comments: { ...normalized.presentation.comments },
+      ...(normalized.presentation.blankLines
+        ? { blankLines: { ...normalized.presentation.blankLines } }
+        : {}),
+    },
+  }
 }
 
 /**
- * Re-apply placement from `source` onto `edited` so compose saves do not wipe a pin.
+ * Re-apply placement from `source` onto `edited` so environment compose saves
+ * do not wipe a pin managed outside the YAML editor.
  */
 export function preserveComposePlacement(
   edited: ComposeDocument,

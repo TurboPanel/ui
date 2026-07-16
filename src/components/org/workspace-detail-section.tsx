@@ -144,12 +144,28 @@ export function WorkspaceDetailSection({
       </SectionPanel>
 
       <SectionPanel title="Projects" hint="Projects in this workspace">
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.push(`/${orgId}/projects/new?workspaceId=${workspaceId}`)}
-        >
-          <Text style={styles.primaryButtonText}>New project</Text>
-        </Pressable>
+        <View style={styles.projectActions}>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() =>
+              router.push(
+                `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`,
+              )
+            }
+          >
+            <Text style={styles.primaryButtonText}>New project</Text>
+          </Pressable>
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={() =>
+              router.push(
+                `/${orgId}/projects?workspaceId=${encodeURIComponent(workspaceId)}`,
+              )
+            }
+          >
+            <Text style={styles.secondaryButtonText}>View in Projects</Text>
+          </Pressable>
+        </View>
         {renderProjectsBody({
           loading,
           projects,
@@ -165,13 +181,19 @@ const styles = StyleSheet.create({
   heading: { color: colors.text, fontSize: 28, fontWeight: '700' },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   list: { gap: spacing.sm },
+  projectActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
     backgroundColor: colors.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: spacing.sm,
   },
   primaryButtonText: { color: colors.buttonText, fontSize: 14, fontWeight: '700' },
   secondaryButton: {

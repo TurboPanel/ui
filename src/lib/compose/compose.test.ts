@@ -120,4 +120,36 @@ x-turbopanel:
     expect(composeDocumentToRuntimeYaml(saved)).not.toContain('# comment')
     expect(composeDocumentToRuntimeYaml(saved)).toContain('x-turbopanel')
   })
+
+  it('stripComposePlacement removes stale project pins without preserve', () => {
+    const projectPin = '11111111-1111-4111-8111-111111111111'
+    const source = yamlToComposeDocument(`services:
+  nginx:
+    image: nginx:alpine
+x-turbopanel:
+  placement:
+    server_id: ${projectPin}
+`)
+    const stripped = stripComposePlacement(source)
+    expect(composeDocumentToYaml(stripped)).not.toContain('x-turbopanel')
+    expect(composeDocumentToRuntimeYaml(stripped)).not.toContain(projectPin)
+  })
+
+  it('environment overlay placement survives strip/preserve round-trip', () => {
+    const envPin = '22222222-2222-4222-8222-222222222222'
+    const overlay = yamlToComposeDocument(`services: {}
+x-turbopanel:
+  placement:
+    server_id: ${envPin}
+`)
+    const edited = yamlToComposeDocument(`services:
+  api:
+    image: node:22
+`)
+    const saved = preserveComposePlacement(edited, overlay)
+    expect(composeDocumentToRuntimeYaml(saved)).toContain(envPin)
+    expect(composeDocumentToYaml(stripComposePlacement(saved))).not.toContain(
+      'x-turbopanel',
+    )
+  })
 })

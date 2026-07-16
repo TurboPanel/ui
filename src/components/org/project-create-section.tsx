@@ -21,6 +21,8 @@ import {
   type WorkspaceRecord,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
+import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
+import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 const DISPLAY_NAME_PATTERN = /^[A-Za-z0-9 ._-]+$/
 
@@ -422,8 +424,16 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
   const { workspaceId } = useLocalSearchParams<{ workspaceId?: string }>()
-  const resolvedWorkspaceId =
-    typeof workspaceId === 'string' ? workspaceId : undefined
+  const workspaceScope = useOptionalWorkspaceScope()
+  const urlWorkspaceId =
+    typeof workspaceId === 'string' && workspaceId.length > 0
+      ? workspaceId
+      : undefined
+  const scopeWorkspaceId =
+    workspaceScope && workspaceScope.scopeId !== ALL_WORKSPACES_SCOPE
+      ? workspaceScope.scopeId
+      : undefined
+  const resolvedWorkspaceId = urlWorkspaceId ?? scopeWorkspaceId
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
@@ -434,18 +444,13 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
   const [workspacesLoading, setWorkspacesLoading] = useState(false)
   const [workspacesError, setWorkspacesError] = useState<string | null>(null)
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<
-    string | undefined
-  >(resolvedWorkspaceId)
+  const [pickedWorkspaceId, setPickedWorkspaceId] = useState<string | undefined>()
+  const selectedWorkspaceId = resolvedWorkspaceId ?? pickedWorkspaceId
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-
-  useEffect(() => {
-    setSelectedWorkspaceId(resolvedWorkspaceId)
-  }, [resolvedWorkspaceId])
 
   useEffect(() => {
     if (resolvedWorkspaceId) {
@@ -558,7 +563,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const handleWorkspaceSelect = (id: string) => {
-    setSelectedWorkspaceId(id)
+    setPickedWorkspaceId(id)
     setFieldErrors((current) => ({
       ...current,
       workspaceId: undefined,
@@ -571,7 +576,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const handleSubmit = async () => {
-    const workspaceIdForCreate = resolvedWorkspaceId ?? selectedWorkspaceId
+    const workspaceIdForCreate = resolvedWorkspaceId ?? pickedWorkspaceId
     if (!workspaceIdForCreate) {
       setApiError('Select a workspace before creating the project.')
       return
@@ -590,7 +595,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     const errors = validateProjectFields({
       displayName,
       resolvedWorkspaceId,
-      selectedWorkspaceId,
+      selectedWorkspaceId: pickedWorkspaceId,
     })
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) {

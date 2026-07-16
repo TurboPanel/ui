@@ -68,6 +68,8 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 - `src/components/org/org-shell.tsx` — responsive shell (sidebar on web, drawer on narrow viewports)
 - `src/components/org/org-sidebar.tsx` — area nav + sub-routes for the active area
 - `src/components/org/org-header.tsx` — page title, user label, sign out
+- `src/components/org/workspace-switcher.tsx` — on the Projects screen; selects a workspace or **All workspaces**, links to Manage workspaces
+- `src/lib/workspace-scope.ts` / `src/lib/workspace-scope-context.tsx` — project filter scope (`?workspaceId=` + remembered selection); not a top-level nav area
 - `src/lib/org-navigation.ts` — area registry (`ORG_AREAS`); add entries + routes together
 
 ### Areas (routes)
@@ -77,19 +79,41 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
-| `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspaces list (`GET /api/client/v1/workspaces`) |
-| `/<orgId>/workspaces/[workspaceId]` | `workspace-detail-section.tsx` | Workspace detail + projects in workspace |
-| `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list (optional `?workspaceId` filter) |
+| `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list; optional `?workspaceId` from the header switcher (omit = **All workspaces**) |
 | `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
-| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + compose editor + environments |
-| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Env overlay compose, deploy, hosting hostnames + TLS Auto/pin, containers (status + host server), variables |
+| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + base compose editor + Workspace "Move to workspace" picker (gated by `organization:own` display hint; server enforces 403), then the **integrated** environments area (`project-environments-section.tsx`) — per-environment server placement lives there |
+| `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Standalone deep-link fallback for a single environment (same body as the embedded tab); the primary flow is the project page, not this route |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
+| `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspace CRUD (reached via switcher **Manage workspaces**, not the sidebar) |
+| `/<orgId>/workspaces/[workspaceId]` | `workspace-detail-section.tsx` | Workspace detail + projects in workspace |
 
 ### Adding a new organization area
 
 1. Add the area (and sub-routes) to `ORG_AREAS` in `src/lib/org-navigation.ts`
 2. Create `src/app/[orgId]/<area>/<subroute>.tsx` route wrappers
 3. Create section components under `src/components/org/`
+
+### Environments (integrated into the project page)
+
+Environments are **not** a separate page/flow — they live inside `project-detail-section.tsx` via `project-environments-section.tsx`, rendered **below** the base Docker Compose editor and workspace panels.
+
+- `ProjectEnvironmentsSection` loads `fetchVisibleEnvironments(projectId)` and renders one active environment at a time.
+- **Tabs** (`EnvironmentTabs`) only render when there is **more than one** environment; with a single environment the tab bar is hidden and the active environment name shows in the toolbar.
+- **Default environment:** when a project has zero environments and the viewer has `organization:own`, the section auto-provisions a single environment named **`Production`** (once per project, guarded by a `useRef` so React StrictMode's double effect invocation does not create duplicates). Non-owners just see an empty-state message.
+- **Rename** (`updateEnvironment(id, { displayName })`), **New environment** (`createEnvironment`), and **Delete** (`deleteEnvironment`, two-press confirm, hidden when only one environment remains) are all inline in the toolbar and gated by `organization:own` (display hint; server enforces 403).
+- The active environment renders `EnvironmentDetailBody` (exported from `environment-detail-section.tsx`) with `embedded` set, which hides the redundant "Environment" meta panel but keeps compose overlay, **required server dropdown** (environment-owned `x-turbopanel.placement.server_id`), merged runtime compose, deploy, hostnames + TLS, **container status**, and variables. Switching tabs remounts the body via `key={environmentId}`.
+- **Server** is a required dropdown on the environment: pick one whole connected server via `updateEnvironment` + `setComposePlacementServerId` on the overlay — not the project base compose, and not at deploy time. Deploy stays disabled until a connected server is selected. Different environments may select different servers.
+- `EnvironmentDetailSection` remains as a thin wrapper (heading + `EnvironmentDetailBody`) for the standalone `/[environmentId]` deep-link route only.
+- **Container status** is shown inline in the active environment's Containers panel (`ContainerStatusBadge`, Postgres-backed `fetchContainers(serviceId)` per service — never DO reads), so no separate environment page is needed to see it.
+
+### Workspaces
+
+- Workspaces are a **project-organization filter**, not a primary sidebar area. The Projects page **workspace switcher** shows the current scope (**All workspaces** or a named workspace). Choosing a workspace opens `/projects?workspaceId=…`; choosing All opens `/projects`.
+- Management CRUD lives at `/workspaces` (list/create/edit/detail) and is reached from the switcher (**Manage workspaces** / empty-state **Create workspace**), not from `ORG_AREAS`.
+- List: `workspaces-overview-section.tsx` (`GET /api/client/v1/workspaces`). Create/edit forms: `workspace-form-section.tsx`. Name validation is shared via `src/lib/workspace-validation.ts`.
+- **First-run empty state:** when the org has zero workspaces and the user can `organization:own`, `WorkspacesOverviewSection` renders the reusable `first-run-wizard.tsx` **above** the list `SectionPanel`. The wizard prefills `"My Workspace"`, creates via `createWorkspace`, then refreshes the list (and invalidates the shared switcher query). Non-owners still see plain `"No workspaces yet."` inside the panel.
+- `FirstRunWizard` is presentational only (title, description, optional notes, optional name field, primary action) and is intended for reuse on other "nothing here yet" screens.
+- Projects overview copy and create links follow the active scope; the all-workspaces view labels each project with its workspace name.
 
 ### Instance API
 
@@ -107,16 +131,17 @@ Authorization helpers:
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `createProject({ type: 'docker-compose' | 'template' | 'managed', … })` — Docker Compose is the default manual compose path (blank removed)
 - `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`)
-- `deployEnvironment(environmentId, body?)` → `POST /api/client/v1/environments/:id/deploy`; `serverId` is optional — when omitted, the instance resolves the target from project compose `x-turbopanel.placement.server_id` (`readComposePlacementServerId` / `setComposePlacementServerId` in `src/lib/compose/`); poll with `fetchCommand(serverId, commandId)` (Postgres only)
-- Compose UI: `compose-editor-section.tsx` (User | Stored | Visual) on project and environment detail; project detail pins placement via `x-turbopanel` on the base compose. **User** edits YAML with `x-turbopanel` hidden (`stripComposePlacement`) and preserves `#` comments on save; **Stored** is a read-only preview of the full document (placement restored) plus the comment-free **runtime** YAML used for deploy; saves re-apply the existing pin (`preserveComposePlacement`) so YAML edits do not wipe placement.
-- `readComposePlacementServerId(document)` / `setComposePlacementServerId(document, serverId | null)` — compose helpers for project server placement (`TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'`)
-- `stripComposePlacement(document)` / `preserveComposePlacement(edited, source)` — hide placement in compose GUI; restore it across compose saves
+- `deployEnvironment(environmentId, body?)` → `POST /api/client/v1/environments/:id/deploy`; the UI always requires an environment server pin first and calls deploy without a body so the instance resolves the target from environment compose `x-turbopanel.placement.server_id` (`readComposePlacementServerId` / `setComposePlacementServerId` in `src/lib/compose/`); poll with `fetchCommand(serverId, commandId)` (Postgres only)
+- `stopEnvironment(environmentId)` → `POST /api/client/v1/environments/:id/stop` — compose down (with volumes) on the placement/metadata server; returns `{ commandId, serverId }` for polling; used by the project-delete wizard before cascade delete
+- Compose UI: `compose-editor-section.tsx` (User | Stored | Visual) on project and environment detail. Environment editors pass `managePlacement` so placement is hidden in User/Visual and restored on save; project editors strip placement on save (hard cut — project base does not own pins). **User** edits YAML with `x-turbopanel` placement hidden (`stripComposePlacement`) and preserves `#` comments on save; a **Compose linter** (`lintComposeYaml` in `src/lib/compose/lint.ts`) runs live on the User/Visual tabs (`ComposeLintPanel`) and flags invalid YAML, unknown top-level/service keys (with edit-distance "did you mean" hints — e.g. `imaage` → `image`), and services missing `image`/`build`, with 1-based line numbers sorted ascending (errors before warnings on the same line); badges/messages are red for errors and yellow for warnings. It gates save — client disables save when blocking issues exist, and the instance rejects `options.compose` with **400** `compose_invalid` + `issues` (same linter; empty-draft “no services” warnings are allowed). **Enter** auto-indents (2 spaces, deeper after `key:`) and **Tab** / **Shift+Tab** indent/outdent via `src/lib/compose/yaml-indent.ts`; comments (`#` full-line or inline, not inside quotes) render slightly muted (`textMuted`), lint error/warning lines tint code red/yellow, and a fixed-width gutter shows a red `●` / yellow `▲` marker beside those lines (spacing reserved even when clean) via a highlight overlay (`src/lib/compose/yaml-highlight.ts`) under a transparent `TextInput` (client-side; save still re-stringifies with the `yaml` package). **Stored** is a read-only preview of the full document (environment placement restored when `managePlacement`) plus the comment-free **runtime** YAML used for deploy.
+- `readComposePlacementServerId(document)` / `setComposePlacementServerId(document, serverId | null)` — compose helpers for **environment** server placement (`TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'`)
+- `stripComposePlacement(document)` / `preserveComposePlacement(edited, source)` — hide placement in compose GUI; restore it across environment compose saves (`managePlacement`)
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `fetchProjectCatalog()` → `GET /api/client/v1/project-catalog` — returns `{ catalog: CatalogSummary[] }`
 - `fetchProject(id)` → `GET /api/client/v1/projects/:id`
 - `createProject(body: CreateProjectBody)` → `POST /api/client/v1/projects`
-- `updateProject(id, body)` → `PATCH /api/client/v1/projects/:id`
-- `deleteProject(id)` → `DELETE /api/client/v1/projects/:id` — `PROJECT_HAS_CHILDREN_ERROR` when environments exist
+- `updateProject(id, body)` → `PATCH /api/client/v1/projects/:id` — body accepts optional `workspaceId` (moves the project to another same-org workspace)
+- `deleteProject(id)` → `DELETE /api/client/v1/projects/:id` — cascade-deletes environments/services/hostings/containers (variables/`managed` cascade via FK); returns **409** `project_has_running_services` (`PROJECT_HAS_RUNNING_SERVICES_ERROR`) when any non-stopped containers remain. Projects overview uses a two-step wizard (`project-delete-panel.tsx`): stop each environment with active containers, then type the project display name to confirm irreversible delete.
 - `fetchVisibleEnvironments(projectId?)` → `GET /api/client/v1/environments`
 - `fetchEnvironment(id)` → `GET /api/client/v1/environments/:id`
 - `createEnvironment(body)` → `POST /api/client/v1/environments`
@@ -147,15 +172,15 @@ Authorization helpers:
 - `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Online** / Offline), and a checkbox column (header = select all).
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) rendered from data-URI SVGs in `src/lib/os-logos.ts`.
 - Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
-- **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks or containers still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`).
+- **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks or containers still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`). Deleting a server also invalidates its one-shot registration key.
 - Batch **Update** targets **selected** updatable servers (not every updatable host).
 - `OrgServerRecord` includes `os` / `osDisplay` / `osLogo` from `GET /api/client/v1/servers`.
 
 #### Servers overview — add server
 
-- **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) opens `AddServerWizard` inline on the servers page — not on Licenses.
-- `resolveServerAddEligibility()` in `src/lib/server-add-eligibility.ts` is the future subscription seat gate; until billing exists, org owners may add servers on self-hosted (registration key minted during the flow).
-- Wizard copy is server-focused ("Add server", registration key + install command); avoid "create license" in the primary action.
+- **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) opens `AddServerWizard` inline on the servers page.
+- `resolveServerAddEligibility()` in `src/lib/server-add-eligibility.ts` is the future subscription seat gate; until billing exists, org owners may add servers (registration key minted during the flow; never listed as licenses).
+- Wizard shows the install command only (key embedded, one-shot); avoid "create license" / license-management copy.
 
 #### Server metrics (`/<orgId>/servers/[serverId]/metrics`)
 
@@ -164,12 +189,6 @@ Authorization helpers:
 - **API** — `fetchServerMetricsSeries` / `fetchServerMetricsSummary` in `src/lib/instance-api.ts`; types `MetricsSeriesResponse`, `MetricsSeriesPoint` (`values`, `sampleCount`, `expectedSampleCount`), `HostMetricKey`, `MetricsBackendKind`, `MetricsBackendUnavailableError`.
 - **O(1) fetch rule** — one combined series call per visible dashboard; refresh restrained (1 h/6 h → 60 s, 24 h → 300 s, longer ranges → no auto-refresh). Use backend `resolutionSeconds` — never fetch thousands of points to discard client-side. Ranges 1 h / 6 h / 24 h / 7 d / 30 d / 90 d, bounded by backend retention. Paired charts only — never all 20 metrics in one view.
 - **Rendered states** — no metrics yet; storage still starting; unsupported OS; backend unavailable (ClickHouse `503`); sample gaps (distinct from zero values); stale/offline server; partial metric availability. Charts are not real-time below the ~60 s collection interval.
-
-#### Licenses (`/<orgId>/servers/licenses`)
-
-- `fetchLicenses()` → `GET /api/client/v1/licenses` (includes optional `boundServer` when exactly one server references the license).
-- `invalidateLicense(id)` → `DELETE /api/client/v1/licenses/:id` (soft invalidate; disconnects bound servers).
-- `licenses-overview-section.tsx` — list + invalidate with confirm; gated by `useCan(..., 'organization:own')`; co-located license shows as non-invalidateable.
 
 #### Server status reads — Postgres only
 

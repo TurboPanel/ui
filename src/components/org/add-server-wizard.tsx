@@ -161,7 +161,6 @@ function CreateStep({
 }
 
 type InstallStepProps = Readonly<{
-  revealed: CreatedLicense
   installBaseUrl: string
   managedUrls: string[]
   displayedInstallCommand: string
@@ -172,7 +171,6 @@ type InstallStepProps = Readonly<{
 }>
 
 function InstallStep({
-  revealed,
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
@@ -184,11 +182,8 @@ function InstallStep({
   return (
     <View style={styles.revealed}>
       <Text style={styles.warning}>
-        Save this registration key — it will not be shown again.
-      </Text>
-      <Text style={styles.secretLabel}>Registration key</Text>
-      <Text selectable style={styles.secretValue}>
-        {revealed.licenseToken}
+        Run this install command on the new server. The registration key is
+        embedded and can only enroll one host.
       </Text>
       <Text style={styles.secretLabel}>Install command</Text>
       {__DEV__ ? (
@@ -485,7 +480,6 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
 
       {step === 'install' && revealed ? (
         <InstallStep
-          revealed={revealed}
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           displayedInstallCommand={displayedInstallCommand}

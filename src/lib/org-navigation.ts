@@ -1,5 +1,12 @@
 export const ORG_AREAS = [
   {
+    id: 'projects',
+    label: 'Projects',
+    pathSegment: 'projects',
+    hint: 'Projects filtered by the workspace switcher',
+    subRoutes: [],
+  },
+  {
     id: 'servers',
     label: 'Servers',
     pathSegment: 'servers',
@@ -12,32 +19,12 @@ export const ORG_AREAS = [
         hint: 'Addresses, interfaces, and connectivity',
       },
       {
-        id: 'licenses',
-        label: 'Licenses',
-        pathSegment: 'licenses',
-        hint: 'Registration keys in use',
-      },
-      {
         id: 'tls',
         label: 'TLS',
         pathSegment: 'tls',
         hint: 'Organization certificate library',
       },
     ],
-  },
-  {
-    id: 'workspaces',
-    label: 'Workspaces',
-    pathSegment: 'workspaces',
-    hint: 'Manage workspaces for this organization',
-    subRoutes: [],
-  },
-  {
-    id: 'projects',
-    label: 'Projects',
-    pathSegment: 'projects',
-    hint: 'Manage projects and environments',
-    subRoutes: [],
   },
   {
     id: 'access',

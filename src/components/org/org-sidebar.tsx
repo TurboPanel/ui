@@ -4,6 +4,8 @@ import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
 import { colors, layout } from '@/lib/theme'
+import { useWorkspaceScope } from '@/lib/workspace-scope-context'
+import { projectsHrefForScope } from '@/lib/workspace-scope'
 
 export function OrgSidebar({
   orgId,
@@ -15,6 +17,7 @@ export function OrgSidebar({
   const { session } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
+  const { scopeId } = useWorkspaceScope()
   const showAdminLink = isAdminSession(session)
   const adminHref = adminAreaHref('networking')
 
@@ -27,9 +30,16 @@ export function OrgSidebar({
 
       <View style={styles.nav}>
         {ORG_AREAS.map((area) => {
-          const areaHref = orgAreaHref(orgId, area.pathSegment)
+          const areaHref =
+            area.id === 'projects'
+              ? projectsHrefForScope(orgId, scopeId)
+              : orgAreaHref(orgId, area.pathSegment)
+          const projectsBase = orgAreaHref(orgId, 'projects')
           const areaActive =
-            pathname === areaHref || pathname.startsWith(`${areaHref}/`)
+            area.id === 'projects'
+              ? pathname === projectsBase ||
+                pathname.startsWith(`${projectsBase}/`)
+              : pathname === areaHref || pathname.startsWith(`${areaHref}/`)
 
           return (
             <View key={area.id} style={styles.areaGroup}>

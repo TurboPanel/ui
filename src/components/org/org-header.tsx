@@ -6,7 +6,9 @@ import { colors, spacing } from '@/lib/theme'
 
 export function OrgHeader({
   onMenuPress,
-}: Readonly<{ onMenuPress?: () => void }>) {
+}: Readonly<{
+  onMenuPress?: () => void
+}>) {
   const pathname = usePathname()
   const { session, signOut } = useAuth()
   const match = orgAreaFromPathname(pathname)
@@ -16,6 +18,8 @@ export function OrgHeader({
     title = `${match.area.label} · ${match.subRoute.label}`
   } else if (match) {
     title = match.area.label
+  } else if (pathname.includes('/workspaces')) {
+    title = 'Workspaces'
   }
 
   return (
@@ -75,6 +79,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     flexShrink: 1,
+    minWidth: 0,
   },
   menuButton: {
     borderColor: colors.borderChip,
@@ -91,6 +96,7 @@ const styles = StyleSheet.create({
   titleBlock: {
     gap: spacing.xs,
     flexShrink: 1,
+    minWidth: 0,
   },
   title: {
     color: colors.text,
@@ -107,6 +113,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
+    flexShrink: 1,
   },
   userLabel: {
     color: colors.textMuted,

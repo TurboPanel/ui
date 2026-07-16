@@ -2,11 +2,14 @@ import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { createWorkspace, fetchWorkspace, updateWorkspace } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
+import {
+  validateWorkspaceDescription,
+  validateWorkspaceName,
+} from '@/lib/workspace-validation'
+import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-
-const DISPLAY_NAME_PATTERN = /^[A-Za-z0-9 ._-]+$/
 
 const webInputStyle = {
   borderWidth: 1,
@@ -30,6 +33,7 @@ export function WorkspaceFormSection({
   mode: 'create' | 'edit'
 }>) {
   const router = useRouter()
+  const workspaceScope = useOptionalWorkspaceScope()
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{
@@ -75,22 +79,15 @@ export function WorkspaceFormSection({
   }, [mode, workspaceId])
 
   const validate = (): { displayName?: string; description?: string } => {
-    const trimmedName = displayName.trim()
     const errors: { displayName?: string; description?: string } = {}
-
-    if (!trimmedName) {
-      errors.displayName = 'Name is required.'
-    } else if (trimmedName.length > 255) {
-      errors.displayName = 'Name must be 255 characters or fewer.'
-    } else if (!DISPLAY_NAME_PATTERN.test(trimmedName)) {
-      errors.displayName =
-        'Name may only contain letters, numbers, spaces, dots, underscores, and hyphens.'
+    const nameError = validateWorkspaceName(displayName)
+    if (nameError) {
+      errors.displayName = nameError
     }
-
-    if (description.length > 255) {
-      errors.description = 'Description must be 255 characters or fewer.'
+    const descriptionError = validateWorkspaceDescription(description)
+    if (descriptionError) {
+      errors.description = descriptionError
     }
-
     return errors
   }
 
@@ -116,6 +113,7 @@ export function WorkspaceFormSection({
           description: trimmedDescription,
         })
       }
+      await workspaceScope?.refreshWorkspaces()
       router.replace(`/${orgId}/workspaces`)
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Failed to save workspace')
