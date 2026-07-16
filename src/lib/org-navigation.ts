@@ -27,6 +27,13 @@ export const ORG_AREAS = [
     ],
   },
   {
+    id: 'principals',
+    label: 'Principals',
+    pathSegment: 'principals',
+    hint: 'System and database accounts assigned to services',
+    subRoutes: [],
+  },
+  {
     id: 'access',
     label: 'Access',
     pathSegment: 'access',

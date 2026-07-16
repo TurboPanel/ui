@@ -83,6 +83,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
 | `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + base compose editor + Workspace "Move to workspace" picker (gated by `organization:own` display hint; server enforces 403), then the **integrated** environments area (`project-environments-section.tsx`) — per-environment server placement lives there |
 | `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Standalone deep-link fallback for a single environment (same body as the embedded tab); the primary flow is the project page, not this route |
+| `/<orgId>/principals` | `principals-overview-section.tsx` | System/database accounts (`GET/POST/PATCH/DELETE /api/client/v1/principals`); password via write-only `POST …/password` |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 | `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspace CRUD (reached via switcher **Manage workspaces**, not the sidebar) |
 | `/<orgId>/workspaces/[workspaceId]` | `workspace-detail-section.tsx` | Workspace detail + projects in workspace |
@@ -161,8 +162,15 @@ Authorization helpers:
 - `createTlsCertificate(body)` → `POST /api/client/v1/tls` (`upload` | `self_signed` | `lets_encrypt`); upload sends PEM once; server seals the key as `tpsecret`
 - `deleteTlsCertificate(id)` → `DELETE /api/client/v1/tls/:id`
 - Hosting PATCH accepts optional `tlsId` (`null` = Auto match by SAN at deploy; pin must cover all hostnames)
-- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ContainerRecord` (`serviceId`, `serverId`, `metadata?: ContainerMetadata`), `ContainerMetadata` (`containerId?`, `containerName?`, `status?`, `composeServiceName?` — status/id from Postgres reconcile, never DO reads), `TlsRecord` (`source`, `metadata`, `certificatePem` — no private key)
+- `fetchPrincipals(serviceId?)` → `GET /api/client/v1/principals` (optional `?serviceId=` filter via `assignment`)
+- `fetchPrincipal(id)` → `GET /api/client/v1/principals/:id`
+- `createPrincipal(body: CreatePrincipalBody)` → `POST /api/client/v1/principals` (`kind` / `provider` / `username` + ≥1 `serviceIds`; does **not** accept `password`)
+- `updatePrincipal(id, body)` → `PATCH /api/client/v1/principals/:id` (metadata and/or replace `serviceIds`; does **not** accept `password`)
+- `deletePrincipal(id)` → `DELETE /api/client/v1/principals/:id`
+- `setPrincipalPassword(id, password)` → `POST /api/client/v1/principals/:id/password` — only password write path
+- Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ContainerRecord` (`serviceId`, `serverId`, `metadata?: ContainerMetadata`), `ContainerMetadata` (`containerId?`, `containerName?`, `status?`, `composeServiceName?` — status/id from Postgres reconcile, never DO reads), `TlsRecord` (`source`, `metadata`, `certificatePem` — no private key), `PrincipalKind` (`system` \| `database`), `PrincipalProvider` (`pam` \| `postgres` \| `mysql` \| `redis`), `PrincipalMetadata` (`uid?` / `gid?` / `home?`), `PrincipalRecord` (includes `serviceIds`; **no `password` field**), `CreatePrincipalBody`
 - **Secret write-only rule:** `VariableRecord.value` is always `null` when `isSecret` is true — the UI must never display or pre-fill secret values; use masked placeholders and write-only update forms
+- **Principal password write-only rule:** `PrincipalRecord` never includes `password`; set/reset only via `setPrincipalPassword` with a masked write-only form — never display or pre-fill an existing password
 - `fetchServerUpdate(serverId)` → `GET /api/client/v1/servers/:id/update` — returns `ServerUpdateStatus` with `current`/`target` commit identity and `updateAvailable`.
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
 - The Update button is gated by `useCan('organization', orgId, 'organization:manage')` as a display hint; the server enforces the real 403. Non-managers see commit rows read-only with no button.

@@ -352,7 +352,7 @@ async function apiFetch<T>(
   });
 
   if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
+    let detail = formatFetchFailureDetail(response.status);
     try {
       const body = await response.json() as {
         error?: string
@@ -364,7 +364,7 @@ async function apiFetch<T>(
           .filter((message): message is string => typeof message === 'string' && message.length > 0)
           .join('; ') || body.error;
       } else if (body.error) {
-        detail = body.error;
+        detail = formatFetchFailureDetail(response.status, body.error);
       }
     } catch {
       // Non-JSON error body — keep the status-only message.
@@ -519,6 +519,10 @@ export type CatalogSummary = {
   description: string;
 };
 
+/**
+ * Secret write-only rule: when `isSecret` is true, `value` is always `null` —
+ * never display or pre-fill secret values; use masked write-only update forms.
+ */
 export type VariableRecord = {
   id: string;
   key: string;
@@ -617,6 +621,49 @@ export type TlsRecord = {
   certificatePem?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type PrincipalKind = 'system' | 'database'
+
+export type PrincipalProvider = 'pam' | 'postgres' | 'mysql' | 'redis'
+
+export type PrincipalMetadata = {
+  uid?: number
+  gid?: number
+  home?: string
+}
+
+/**
+ * Principal identity. Password is write-only and is never included on this
+ * type or any GET response — set/reset only via `setPrincipalPassword` with a
+ * masked write-only form (never display or pre-fill an existing password).
+ */
+export type PrincipalRecord = {
+  id: string
+  kind: PrincipalKind
+  provider: PrincipalProvider
+  username: string
+  metadata?: PrincipalMetadata | null
+  serviceIds: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreatePrincipalBody = {
+  kind: PrincipalKind
+  provider: PrincipalProvider
+  username: string
+  metadata?: PrincipalMetadata
+  serviceIds: string[]
+}
+
+export type UpdatePrincipalBody = {
+  kind?: PrincipalKind
+  provider?: PrincipalProvider
+  username?: string
+  /** Omit to leave unchanged; send `{}` to clear. Null is not accepted by the API. */
+  metadata?: PrincipalMetadata
+  serviceIds?: string[]
 }
 
 export type ContainerMetadata = {
@@ -915,6 +962,56 @@ export async function createTlsCertificate(body: {
 export async function deleteTlsCertificate(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/tls/${id}`, {
     method: 'DELETE',
+  })
+}
+
+export async function fetchPrincipals(
+  serviceId?: string,
+): Promise<{ principals: PrincipalRecord[] }> {
+  const params = serviceId ? new URLSearchParams({ serviceId }) : null
+  const suffix = params ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/principals${suffix}`)
+}
+
+export async function fetchPrincipal(
+  id: string,
+): Promise<{ principal: PrincipalRecord }> {
+  return await apiFetch(`${CLIENT_API}/principals/${id}`)
+}
+
+export async function createPrincipal(
+  body: CreatePrincipalBody,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/principals`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updatePrincipal(
+  id: string,
+  body: UpdatePrincipalBody,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/principals/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deletePrincipal(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/principals/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+/** Write-only password set/reset — never returned by GET. */
+export async function setPrincipalPassword(
+  id: string,
+  password: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/principals/${id}/password`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
   })
 }
 
