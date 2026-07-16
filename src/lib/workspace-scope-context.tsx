@@ -29,17 +29,16 @@ import {
   resolveWorkspaceScope,
   setStoredWorkspaceScopeId,
   type WorkspaceScope,
-  type WorkspaceScopeId,
 } from '@/lib/workspace-scope'
 
 type WorkspaceScopeContextValue = Readonly<{
   orgId: string
   workspaces: WorkspaceRecord[]
   scope: WorkspaceScope
-  scopeId: WorkspaceScopeId
+  scopeId: string
   isLoading: boolean
   error: string | null
-  setScopeId: (scopeId: WorkspaceScopeId) => void
+  setScopeId: (scopeId: string) => void
   refreshWorkspaces: () => Promise<void>
 }>
 
@@ -54,7 +53,7 @@ function isProjectsIndexPath(pathname: string, orgId: string): boolean {
 function initialScopeId(
   orgId: string,
   urlWorkspaceId: string | undefined,
-): WorkspaceScopeId {
+): string {
   if (urlWorkspaceId) {
     return urlWorkspaceId
   }
@@ -75,9 +74,7 @@ export function WorkspaceScopeProvider({
   const params = useLocalSearchParams<{ workspaceId?: string | string[] }>()
   const urlWorkspaceId = parseWorkspaceIdParam(params.workspaceId)
 
-  const [scopeId, setScopeIdState] = useState<WorkspaceScopeId>(
-    initialScopeId(orgId, urlWorkspaceId),
-  )
+  const [scopeId, setScopeId] = useState(initialScopeId(orgId, urlWorkspaceId))
   const [urlSyncKey, setUrlSyncKey] = useState(
     `${pathname}|${urlWorkspaceId ?? ''}`,
   )
@@ -111,7 +108,7 @@ export function WorkspaceScopeProvider({
     if (isProjectsIndexPath(pathname, orgId)) {
       const fromUrl = urlWorkspaceId ?? ALL_WORKSPACES_SCOPE
       if (fromUrl !== scopeId) {
-        setScopeIdState(fromUrl)
+        setScopeId(fromUrl)
         setStoredWorkspaceScopeId(orgId, fromUrl)
       }
     }
@@ -124,7 +121,7 @@ export function WorkspaceScopeProvider({
     workspacesQuery.data !== undefined &&
     resolvedFromList.id !== scopeId
   ) {
-    setScopeIdState(resolvedFromList.id)
+    setScopeId(resolvedFromList.id)
     setStoredWorkspaceScopeId(orgId, resolvedFromList.id)
   }
 
@@ -133,10 +130,10 @@ export function WorkspaceScopeProvider({
     [workspaces, scopeId],
   )
 
-  const setScopeId = useCallback(
-    (next: WorkspaceScopeId) => {
+  const selectScopeId = useCallback(
+    (next: string) => {
       const resolved = resolveWorkspaceScope(workspaces, next)
-      setScopeIdState(resolved.id)
+      setScopeId(resolved.id)
       setStoredWorkspaceScopeId(orgId, resolved.id)
       router.push(projectsHrefForScope(orgId, resolved.id) as Href)
     },
@@ -164,7 +161,7 @@ export function WorkspaceScopeProvider({
       scopeId: scope.id,
       isLoading: workspacesQuery.isLoading,
       error,
-      setScopeId,
+      setScopeId: selectScopeId,
       refreshWorkspaces,
     }),
     [
@@ -173,7 +170,7 @@ export function WorkspaceScopeProvider({
       scope,
       workspacesQuery.isLoading,
       error,
-      setScopeId,
+      selectScopeId,
       refreshWorkspaces,
     ],
   )

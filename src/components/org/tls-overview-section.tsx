@@ -62,64 +62,113 @@ export function TlsOverviewSection({
   }, [handleUnauthorized])
 
   useEffect(() => {
-    void reload()
+    reload().catch(() => {
+      // Errors are surfaced via error state inside reload.
+    })
   }, [reload])
 
-  const onCreate = async () => {
+  const onCreate = () => {
     if (!canManage) return
     setSaving(true)
     setError(null)
-    try {
-      if (source === 'upload') {
-        await createTlsCertificate({
-          source: 'upload',
-          displayName: displayName.trim() || undefined,
-          certificatePem,
-          privateKeyPem,
-        })
-      } else {
-        const names = hostnames
-          .split(',')
-          .map((n) => n.trim())
-          .filter((n) => n.length > 0)
-        await createTlsCertificate({
-          source,
-          displayName: displayName.trim() || undefined,
-          hostnames: names,
-        })
+    const run = async () => {
+      try {
+        if (source === 'upload') {
+          await createTlsCertificate({
+            source: 'upload',
+            displayName: displayName.trim() || undefined,
+            certificatePem,
+            privateKeyPem,
+          })
+        } else {
+          const names = hostnames
+            .split(',')
+            .map((n) => n.trim())
+            .filter((n) => n.length > 0)
+          await createTlsCertificate({
+            source,
+            displayName: displayName.trim() || undefined,
+            hostnames: names,
+          })
+        }
+        setCertificatePem('')
+        setPrivateKeyPem('')
+        setHostnames('')
+        setDisplayName('')
+        await reload()
+      } catch (err) {
+        if (isForbiddenError(err)) {
+          await handleUnauthorized()
+          return
+        }
+        setError(err instanceof Error ? err.message : 'Failed to create certificate')
+      } finally {
+        setSaving(false)
       }
-      setCertificatePem('')
-      setPrivateKeyPem('')
-      setHostnames('')
-      setDisplayName('')
-      await reload()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to create certificate')
-    } finally {
-      setSaving(false)
     }
+    run().catch(() => {
+      // Errors are surfaced via error state inside run.
+    })
   }
 
-  const onDelete = async (id: string) => {
+  const onDelete = (id: string) => {
     if (!canManage) return
     setDeletingId(id)
     setError(null)
-    try {
-      await deleteTlsCertificate(id)
-      await reload()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const run = async () => {
+      try {
+        await deleteTlsCertificate(id)
+        await reload()
+      } catch (err) {
+        if (isForbiddenError(err)) {
+          await handleUnauthorized()
+          return
+        }
+        setError(err instanceof Error ? err.message : 'Failed to delete certificate')
+      } finally {
+        setDeletingId(null)
       }
-      setError(err instanceof Error ? err.message : 'Failed to delete certificate')
-    } finally {
-      setDeletingId(null)
     }
+    run().catch(() => {
+      // Errors are surfaced via error state inside run.
+    })
+  }
+
+  const renderCertificateList = () => {
+    if (loading) {
+      return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    }
+    if (rows.length === 0) {
+      return <Text style={orgPanelStyles.muted}>No certificates yet.</Text>
+    }
+    return rows.map((row) => (
+      <View key={row.id} style={orgPanelStyles.detailCard}>
+        <Text style={orgPanelStyles.detailTitle}>{tlsTitle(row)}</Text>
+        <Text style={orgPanelStyles.muted}>
+          {row.source} · {row.metadata.status}
+        </Text>
+        <Text style={styles.sans}>{formatSans(row)}</Text>
+        {row.metadata.notAfter ? (
+          <Text style={orgPanelStyles.muted}>
+            Expires {new Date(row.metadata.notAfter).toLocaleString()}
+          </Text>
+        ) : null}
+        {canManage ? (
+          <Pressable
+            style={[
+              styles.secondaryButton,
+              deletingId === row.id && styles.buttonDisabled,
+            ]}
+            disabled={deletingId !== null}
+            onPress={() => onDelete(row.id)}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {deletingId === row.id ? 'Deleting…' : 'Delete'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    ))
   }
 
   return (
@@ -128,40 +177,7 @@ export function TlsOverviewSection({
         title="TLS certificates"
         hint="Organization certificate library — pin on hosting or auto-match by SAN"
       >
-        {loading ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
-        ) : rows.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No certificates yet.</Text>
-        ) : (
-          rows.map((row) => (
-            <View key={row.id} style={orgPanelStyles.detailCard}>
-              <Text style={orgPanelStyles.detailTitle}>{tlsTitle(row)}</Text>
-              <Text style={orgPanelStyles.muted}>
-                {row.source} · {row.metadata.status}
-              </Text>
-              <Text style={styles.sans}>{formatSans(row)}</Text>
-              {row.metadata.notAfter ? (
-                <Text style={orgPanelStyles.muted}>
-                  Expires {new Date(row.metadata.notAfter).toLocaleString()}
-                </Text>
-              ) : null}
-              {canManage ? (
-                <Pressable
-                  style={[
-                    styles.secondaryButton,
-                    deletingId === row.id && styles.buttonDisabled,
-                  ]}
-                  disabled={deletingId !== null}
-                  onPress={() => void onDelete(row.id)}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {deletingId === row.id ? 'Deleting…' : 'Delete'}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))
-        )}
+        {renderCertificateList()}
       </SectionPanel>
 
       {canManage ? (
@@ -230,7 +246,7 @@ export function TlsOverviewSection({
           <Pressable
             style={[styles.primaryButton, saving && styles.buttonDisabled]}
             disabled={saving}
-            onPress={() => void onCreate()}
+            onPress={onCreate}
           >
             <Text style={styles.primaryButtonText}>
               {saving ? 'Saving…' : 'Add certificate'}

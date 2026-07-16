@@ -611,7 +611,7 @@ export type TlsRecord = {
   id: string
   organizationId: string
   displayName: string | null
-  source: TlsSource | string
+  source: TlsSource
   metadata: TlsMetadata
   options?: { prefer?: number; autoRenew?: boolean; requestedHostnames?: string[] } | null
   certificatePem?: string | null

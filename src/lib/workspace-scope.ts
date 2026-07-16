@@ -3,11 +3,9 @@ import type { WorkspaceRecord } from '@/lib/instance-api'
 /** Sentinel for the organization-wide (unfiltered) projects view. */
 export const ALL_WORKSPACES_SCOPE = 'all'
 
-/** `'all'` or a workspace UUID. */
-export type WorkspaceScopeId = string
-
 export type WorkspaceScope = Readonly<{
-  id: WorkspaceScopeId
+  /** `'all'` or a workspace UUID. */
+  id: string
   label: string
   workspace: WorkspaceRecord | null
 }>
@@ -46,7 +44,7 @@ export function resolveWorkspaceScope(
 
 export function projectsHrefForScope(
   orgId: string,
-  scopeId: WorkspaceScopeId,
+  scopeId: string,
 ): `/${string}/projects` | `/${string}/projects?workspaceId=${string}` {
   if (scopeId === ALL_WORKSPACES_SCOPE) {
     return `/${orgId}/projects`
@@ -56,7 +54,7 @@ export function projectsHrefForScope(
 
 export function newProjectHrefForScope(
   orgId: string,
-  scopeId: WorkspaceScopeId,
+  scopeId: string,
 ): `/${string}/projects/new` | `/${string}/projects/new?workspaceId=${string}` {
   if (scopeId === ALL_WORKSPACES_SCOPE) {
     return `/${orgId}/projects/new`
@@ -97,7 +95,7 @@ export function getStoredWorkspaceScopeId(orgId: string): string | null {
 
 export function setStoredWorkspaceScopeId(
   orgId: string,
-  scopeId: WorkspaceScopeId,
+  scopeId: string,
 ): void {
   if (typeof localStorage === 'undefined') {
     return
