@@ -66,6 +66,12 @@
       "sourceType": "github",
       "skillPath": "plugins/expo/skills/use-dom/SKILL.md",
       "computedHash": "8eca0e229f16e3499e5dbf791a79f5a5cba1e98b4af88ca495c903930d7f1ba0"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "d37d4a98e33ad19e786a13a7ab44861a98c3b63dc1e1e2a05903efc33e61307f"
     }
   }
 }
