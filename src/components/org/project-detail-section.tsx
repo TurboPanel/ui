@@ -227,9 +227,6 @@ export function ProjectDetailSection({
             title="Workspace"
             hint="Move this project to another workspace"
           >
-            <Text style={orgPanelStyles.detailLine}>
-              {currentWorkspaceLabel}
-            </Text>
             {canOwn ? (
               <View style={styles.serverList}>
                 {sortedWorkspaces.map((ws) => (
@@ -244,7 +241,11 @@ export function ProjectDetailSection({
                   />
                 ))}
               </View>
-            ) : null}
+            ) : (
+              <Text style={orgPanelStyles.detailLine}>
+                {currentWorkspaceLabel}
+              </Text>
+            )}
             {savingWorkspace ? (
               <Text style={orgPanelStyles.muted}>Moving…</Text>
             ) : null}
