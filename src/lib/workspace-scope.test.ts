@@ -35,7 +35,7 @@ describe('ORG_AREAS navigation', () => {
   it('does not list workspaces as a top-level area', () => {
     const areaIds = ORG_AREAS.map((area) => area.id as string)
     expect(areaIds.includes('workspaces')).toBe(false)
-    expect(areaIds).toEqual(['servers', 'projects', 'access'])
+    expect(areaIds).toEqual(['projects', 'servers', 'access'])
   })
 })
 

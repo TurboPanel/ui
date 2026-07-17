@@ -588,7 +588,7 @@ export type HostingRecord = {
   displayName: string | null;
   description: string | null;
   serviceId: string;
-  /** Pinned org TLS id; null/undefined = auto-match by SAN. */
+  /** Pinned org TLS id; null/undefined = basic self-signed (Caddy tls internal). */
   tlsId?: string | null;
   metadata?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
@@ -621,49 +621,6 @@ export type TlsRecord = {
   certificatePem?: string | null
   createdAt: string
   updatedAt: string
-}
-
-export type PrincipalKind = 'system' | 'database'
-
-export type PrincipalProvider = 'pam' | 'postgres' | 'mysql' | 'redis'
-
-export type PrincipalMetadata = {
-  uid?: number
-  gid?: number
-  home?: string
-}
-
-/**
- * Principal identity. Password is write-only and is never included on this
- * type or any GET response — set/reset only via `setPrincipalPassword` with a
- * masked write-only form (never display or pre-fill an existing password).
- */
-export type PrincipalRecord = {
-  id: string
-  kind: PrincipalKind
-  provider: PrincipalProvider
-  username: string
-  metadata?: PrincipalMetadata | null
-  serviceIds: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-export type CreatePrincipalBody = {
-  kind: PrincipalKind
-  provider: PrincipalProvider
-  username: string
-  metadata?: PrincipalMetadata
-  serviceIds: string[]
-}
-
-export type UpdatePrincipalBody = {
-  kind?: PrincipalKind
-  provider?: PrincipalProvider
-  username?: string
-  /** Omit to leave unchanged; send `{}` to clear. Null is not accepted by the API. */
-  metadata?: PrincipalMetadata
-  serviceIds?: string[]
 }
 
 export type ContainerMetadata = {
@@ -965,56 +922,6 @@ export async function deleteTlsCertificate(id: string): Promise<{ ok: true }> {
   })
 }
 
-export async function fetchPrincipals(
-  serviceId?: string,
-): Promise<{ principals: PrincipalRecord[] }> {
-  const params = serviceId ? new URLSearchParams({ serviceId }) : null
-  const suffix = params ? `?${params.toString()}` : ''
-  return await apiFetch(`${CLIENT_API}/principals${suffix}`)
-}
-
-export async function fetchPrincipal(
-  id: string,
-): Promise<{ principal: PrincipalRecord }> {
-  return await apiFetch(`${CLIENT_API}/principals/${id}`)
-}
-
-export async function createPrincipal(
-  body: CreatePrincipalBody,
-): Promise<{ ok: true; id: string }> {
-  return await apiFetch(`${CLIENT_API}/principals`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function updatePrincipal(
-  id: string,
-  body: UpdatePrincipalBody,
-): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/principals/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function deletePrincipal(id: string): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/principals/${id}`, {
-    method: 'DELETE',
-  })
-}
-
-/** Write-only password set/reset — never returned by GET. */
-export async function setPrincipalPassword(
-  id: string,
-  password: string,
-): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/principals/${id}/password`, {
-    method: 'POST',
-    body: JSON.stringify({ password }),
-  })
-}
-
 export async function fetchContainers(
   serviceId?: string,
 ): Promise<{ containers: ContainerRecord[] }> {
@@ -1134,6 +1041,20 @@ export async function applyPublicUrls(urls?: string[]): Promise<ApplyPublicUrlsR
   return await apiFetch(`${ADMIN_API}/instance/public-urls/apply`, {
     method: 'POST',
     body: urls !== undefined ? JSON.stringify({ urls }) : undefined,
+  })
+}
+
+export type ReencryptSecretsResponse = {
+  ok: boolean
+  scanned: number
+  reencrypted: number
+  skipped: number
+  failed: number
+}
+
+export async function applyReencryptSecrets(): Promise<ReencryptSecretsResponse> {
+  return await apiFetch(`${ADMIN_API}/secrets/reencrypt`, {
+    method: 'POST',
   })
 }
 

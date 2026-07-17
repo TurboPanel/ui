@@ -175,7 +175,7 @@ export function TlsOverviewSection({
     <View style={styles.root}>
       <SectionPanel
         title="TLS certificates"
-        hint="Organization certificate library — pin on hosting or auto-match by SAN"
+        hint="Organization certificate library — pin explicitly on hosting (default is basic self-signed)"
       >
         {renderCertificateList()}
       </SectionPanel>

@@ -123,6 +123,19 @@ function isExtensionKey(key: string): boolean {
   return key.startsWith('x-')
 }
 
+/** True for Compose top-level keys (`services`, `networks`, …). */
+export function isComposeTopLevelKey(key: string): boolean {
+  return TOP_LEVEL_KEYS.has(key)
+}
+
+/**
+ * Service-only keys (`restart`, `image`, …) — not also valid at the document root.
+ * Used by the YAML editor to re-indent misplaced service properties on Enter.
+ */
+export function isComposeServicePropertyKey(key: string): boolean {
+  return SERVICE_KEYS.has(key) && !TOP_LEVEL_KEYS.has(key)
+}
+
 function levenshtein(a: string, b: string): number {
   const rows = a.length + 1
   const cols = b.length + 1

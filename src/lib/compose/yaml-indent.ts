@@ -1,3 +1,7 @@
+import {
+  isComposeServicePropertyKey,
+  isComposeTopLevelKey,
+} from './lint'
 import { indexOfYamlComment } from './yaml-highlight'
 
 /** Default YAML indent — matches eemeli/yaml stringify used on save. */
@@ -14,6 +18,25 @@ export type YamlEditResult = {
 export function leadingWhitespace(line: string): string {
   const match = /^[\t ]*/.exec(line)
   return match?.[0] ?? ''
+}
+
+/** Unquoted mapping key on a YAML line, or null. */
+export function parseYamlMappingKey(line: string): string | null {
+  const match = /^[\t ]*([^:#\s][^:#]*?)\s*:/.exec(stripInlineComment(line))
+  if (!match?.[1]) {
+    return null
+  }
+  return match[1].trim()
+}
+
+function isBlankOrCommentLine(line: string): boolean {
+  const trimmed = stripInlineComment(line).trim()
+  return trimmed.length === 0
+}
+
+/** Remove trailing spaces/tabs on every line (keeps line structure). */
+export function trimTrailingWhitespacePerLine(text: string): string {
+  return text.split('\n').map((line) => line.replace(/[ \t]+$/u, '')).join('\n')
 }
 
 /**
@@ -51,8 +74,93 @@ export function indentAfterNewline(lineBeforeCursor: string): string {
 }
 
 /**
- * If `next` is `prev` with a single `\n` inserted, return text with YAML indent
- * after that newline and the cursor after the indent. Otherwise `null`.
+ * Expected indent (space count) for a service property on `lines[lineIndex]`,
+ * inferred from earlier lines under `services:`. Null when not inside a service.
+ */
+export function expectedServicePropertyIndent(
+  lines: readonly string[],
+  lineIndex: number,
+): number | null {
+  for (let index = lineIndex - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? ''
+    if (isBlankOrCommentLine(line)) {
+      continue
+    }
+
+    const indent = leadingWhitespace(line).length
+    const key = parseYamlMappingKey(line)
+
+    if (key && isComposeServicePropertyKey(key)) {
+      return indent
+    }
+
+    if (key === 'services' && lineOpensBlock(line)) {
+      return null
+    }
+
+    if (
+      key &&
+      indent === 0 &&
+      isComposeTopLevelKey(key) &&
+      key !== 'services'
+    ) {
+      return null
+    }
+
+    // Service name (`  nginx:`) — properties nest one level deeper.
+    if (
+      key &&
+      lineOpensBlock(line) &&
+      !isComposeServicePropertyKey(key) &&
+      !isComposeTopLevelKey(key)
+    ) {
+      return indent + YAML_INDENT.length
+    }
+  }
+  return null
+}
+
+/**
+ * Re-indent a service-only key that was left too shallow (e.g. `restart:` at
+ * column 0 while still inside a service). Returns null when no change.
+ */
+export function fixUnderIndentedServiceKeyLine(
+  text: string,
+  lineIndex: number,
+): { text: string; indentDelta: number } | null {
+  const lines = text.split('\n')
+  const line = lines[lineIndex]
+  if (line === undefined) {
+    return null
+  }
+
+  const key = parseYamlMappingKey(line)
+  if (!key || !isComposeServicePropertyKey(key)) {
+    return null
+  }
+
+  const expected = expectedServicePropertyIndent(lines, lineIndex)
+  if (expected === null) {
+    return null
+  }
+
+  const current = leadingWhitespace(line).length
+  if (current >= expected) {
+    return null
+  }
+
+  const indentDelta = expected - current
+  lines[lineIndex] = `${' '.repeat(expected)}${line.trimStart()}`
+  return { text: lines.join('\n'), indentDelta }
+}
+
+/**
+ * If `next` is `prev` with a single `\n` inserted:
+ * - re-indent a misplaced service property on the completed line (when needed)
+ * - right-trim every line (trailing spaces/tabs)
+ * - indent the new line
+ *
+ * Returns null when nothing changed beyond the raw newline.
  */
 export function applyNewlineAutoIndent(
   prev: string,
@@ -76,16 +184,35 @@ export function applyNewlineAutoIndent(
     return null
   }
 
-  const lineStart = prev.lastIndexOf('\n', insertAt - 1) + 1
-  const lineBefore = prev.slice(lineStart, insertAt)
+  let text = next
+  const completedLineIndex = text.slice(0, insertAt).split('\n').length - 1
+  const fixed = fixUnderIndentedServiceKeyLine(text, completedLineIndex)
+  if (fixed) {
+    text = fixed.text
+    insertAt += fixed.indentDelta
+  }
+
+  // Decide new-line indent from the completed line before right-trimming it
+  // (indent-only lines would otherwise collapse to empty and lose context).
+  const lineStart = text.lastIndexOf('\n', insertAt - 1) + 1
+  const lineBefore = text.slice(lineStart, insertAt)
   const indent = indentAfterNewline(lineBefore)
-  if (indent.length === 0) {
+
+  const before = text.slice(0, insertAt)
+  const after = text.slice(insertAt + 1)
+  const trimmedBefore = trimTrailingWhitespacePerLine(before)
+  const trimmedAfter = trimTrailingWhitespacePerLine(after)
+  const didTrim = trimmedBefore !== before || trimmedAfter !== after
+  text = `${trimmedBefore}\n${trimmedAfter}`
+  insertAt = trimmedBefore.length
+
+  if (indent.length === 0 && !fixed && !didTrim) {
     return null
   }
 
-  const text = `${next.slice(0, insertAt + 1)}${indent}${next.slice(insertAt + 1)}`
+  const withIndent = `${text.slice(0, insertAt + 1)}${indent}${text.slice(insertAt + 1)}`
   const cursor = insertAt + 1 + indent.length
-  return { text, selection: { start: cursor, end: cursor } }
+  return { text: withIndent, selection: { start: cursor, end: cursor } }
 }
 
 /**

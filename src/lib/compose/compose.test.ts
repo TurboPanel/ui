@@ -3,6 +3,9 @@ import {
   composeDocumentToRuntimeYaml,
   composeDocumentToYaml,
   preserveComposePlacement,
+  readComposeEditorView,
+  setComposeEditorView,
+  stripComposeManagedExtension,
   stripComposePlacement,
   yamlToComposeDocument,
 } from './index'
@@ -151,5 +154,46 @@ x-turbopanel:
     expect(composeDocumentToYaml(stripComposePlacement(saved))).not.toContain(
       'x-turbopanel',
     )
+  })
+
+  it('stores editor view under x-turbopanel and hides it from the YAML editor', () => {
+    const source = yamlToComposeDocument(`services:
+  nginx:
+    image: nginx:alpine
+`)
+    const withView = setComposeEditorView(source, 'visual')
+    expect(readComposeEditorView(withView)).toBe('visual')
+    expect(composeDocumentToYaml(withView)).toContain('view: visual')
+
+    const visible = stripComposeManagedExtension(withView)
+    expect(composeDocumentToYaml(visible)).not.toContain('x-turbopanel')
+    expect(readComposeEditorView(visible)).toBeNull()
+
+    const restored = setComposeEditorView(visible, 'visual')
+    expect(readComposeEditorView(restored)).toBe('visual')
+  })
+
+  it('preserves editor view when setting placement', () => {
+    const envPin = '22222222-2222-4222-8222-222222222222'
+    const withView = setComposeEditorView(
+      yamlToComposeDocument(`services:
+  api:
+    image: node:22
+`),
+      'visual',
+    )
+    const withPlacement = preserveComposePlacement(
+      withView,
+      yamlToComposeDocument(`services: {}
+x-turbopanel:
+  placement:
+    server_id: ${envPin}
+`),
+    )
+    expect(readComposeEditorView(withPlacement)).toBe('visual')
+    expect(composeDocumentToRuntimeYaml(withPlacement)).toContain(envPin)
+    expect(
+      composeDocumentToYaml(stripComposeManagedExtension(withPlacement)),
+    ).not.toContain('x-turbopanel')
   })
 })

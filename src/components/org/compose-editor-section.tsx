@@ -7,19 +7,24 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
   blockingComposeLintIssues,
-  composeDocumentToRuntimeYaml,
   composeDocumentToYaml,
   lintComposeYaml,
   normalizeCompose,
   preserveComposePlacement,
+  readComposeEditorView,
+  setComposeEditorView,
+  stripComposeManagedExtension,
   stripComposePlacement,
   yamlToComposeDocument,
   type ComposeDocument,
+  type ComposeEditorView,
   type ComposeLintIssue,
 } from '@/lib/compose'
+import type { VisualFieldDef } from '@/lib/compose/visual-fields'
 import {
   applyNewlineAutoIndent,
   applyTabIndent,
@@ -30,7 +35,7 @@ import { colors, spacing } from '@/lib/theme'
 
 type TextSelection = { start: number; end: number }
 
-type EditorTab = 'user' | 'stored' | 'visual'
+type EditorTab = ComposeEditorView
 
 const YAML_LINE_HEIGHT = 20
 const YAML_EDITOR_PADDING = spacing.sm
@@ -38,7 +43,6 @@ const YAML_EDITOR_PADDING = spacing.sm
 const YAML_GUTTER_WIDTH = 14
 const YAML_TEXT_PADDING_LEFT = YAML_EDITOR_PADDING + YAML_GUTTER_WIDTH
 const YAML_MIN_LINES = 14
-const YAML_READONLY_MIN_LINES = 8
 
 function yamlEditorHeight(value: string, minLines: number): number {
   const lineCount = Math.max(value.split('\n').length, minLines)
@@ -141,6 +145,23 @@ function YamlHighlightLayer({
   )
 }
 
+function resolveTextInputDomNode(
+  ref: TextInput | null,
+): HTMLTextAreaElement | HTMLInputElement | null {
+  if (!ref || Platform.OS !== 'web') {
+    return null
+  }
+  if (ref instanceof HTMLTextAreaElement || ref instanceof HTMLInputElement) {
+    return ref
+  }
+  const host = ref as unknown as { _node?: EventTarget | null }
+  const node = host._node
+  if (node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement) {
+    return node
+  }
+  return null
+}
+
 function YamlHighlightedField({
   value,
   editable = true,
@@ -149,7 +170,7 @@ function YamlHighlightedField({
   onChangeText,
   onSelectionChange,
   selection,
-  webKeyProps,
+  onTabKey,
 }: Readonly<{
   value: string
   editable?: boolean
@@ -158,19 +179,106 @@ function YamlHighlightedField({
   onChangeText?: (value: string) => void
   onSelectionChange?: (event: { nativeEvent: { selection: TextSelection } }) => void
   selection?: TextSelection
-  webKeyProps?: Record<string, unknown>
+  /** Web: Tab / Shift+Tab indent (2 spaces). */
+  onTabKey?: (shiftKey: boolean, selection: TextSelection) => void
 }>) {
+  const inputRef = useRef<TextInput>(null)
+  const onTabKeyRef = useRef(onTabKey)
+  const selectionRef = useRef(selection)
+  const tabHandledAtRef = useRef(0)
+  onTabKeyRef.current = onTabKey
+  selectionRef.current = selection
   const height = yamlEditorHeight(value, minLines)
   const lineCount = value.split('\n').length
   const lineLevels = useMemo(
     () => (lintIssues && lintIssues.length > 0 ? lintLevelByLine(lintIssues) : undefined),
     [lintIssues],
   )
+
+  const emitTabKey = (shiftKey: boolean, caret: TextSelection) => {
+    const now = Date.now()
+    if (now - tabHandledAtRef.current < 50) {
+      return
+    }
+    tabHandledAtRef.current = now
+    onTabKeyRef.current?.(shiftKey, caret)
+  }
+
+  // Capture-phase listener so Tab indents instead of moving focus (RN Web).
+  useEffect(() => {
+    if (!editable || Platform.OS !== 'web') {
+      return
+    }
+
+    let node: HTMLTextAreaElement | HTMLInputElement | null = null
+    let raf = 0
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      if (!node) {
+        return
+      }
+      const start = node.selectionStart ?? 0
+      const end = node.selectionEnd ?? start
+      emitTabKey(event.shiftKey, { start, end })
+    }
+
+    const attach = () => {
+      node = resolveTextInputDomNode(inputRef.current)
+      if (!node) {
+        return false
+      }
+      node.addEventListener('keydown', handleKeyDown, true)
+      return true
+    }
+
+    if (!attach()) {
+      raf = requestAnimationFrame(() => {
+        attach()
+      })
+    }
+
+    return () => {
+      if (raf) {
+        cancelAnimationFrame(raf)
+      }
+      node?.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [editable])
+
+  const webKeyProps =
+    Platform.OS === 'web' && editable && onTabKey
+      ? {
+          onKeyDown: (event: {
+            key: string
+            shiftKey: boolean
+            preventDefault: () => void
+            stopPropagation?: () => void
+          }) => {
+            if (event.key !== 'Tab') {
+              return
+            }
+            event.preventDefault()
+            event.stopPropagation?.()
+            const node = resolveTextInputDomNode(inputRef.current)
+            const fallback = selectionRef.current
+            const start = node?.selectionStart ?? fallback?.start ?? 0
+            const end = node?.selectionEnd ?? fallback?.end ?? start
+            emitTabKey(event.shiftKey, { start, end })
+          },
+        }
+      : {}
+
   return (
     <View style={[styles.yamlEditor, { minHeight: height }]}>
       <YamlLintGutter lineCount={lineCount} lineLevels={lineLevels} />
       <YamlHighlightLayer value={value} lineLevels={lineLevels} />
       <TextInput
+        ref={inputRef}
         multiline
         autoCapitalize="none"
         autoCorrect={false}
@@ -204,42 +312,6 @@ function servicesFrom(document: ComposeDocument): Record<string, Record<string, 
     }
   }
   return result
-}
-
-function servicePorts(value: unknown): string {
-  return Array.isArray(value) ? value.map(String).join(', ') : ''
-}
-
-function editedDocument(
-  tab: EditorTab,
-  yaml: string,
-  draft: ComposeDocument,
-): ComposeDocument {
-  if (tab === 'user') {
-    return yamlToComposeDocument(yaml)
-  }
-  return draft
-}
-
-function storedPreviewDocument(
-  tab: EditorTab,
-  yaml: string,
-  draft: ComposeDocument,
-  source: unknown,
-  managePlacement: boolean,
-): ComposeDocument {
-  try {
-    const edited = editedDocument(tab, yaml, draft)
-    if (!managePlacement) {
-      return stripComposePlacement(edited)
-    }
-    return preserveComposePlacement(edited, source)
-  } catch {
-    if (!managePlacement) {
-      return stripComposePlacement(draft)
-    }
-    return preserveComposePlacement(draft, source)
-  }
 }
 
 function countLabel(count: number, noun: string): string | null {
@@ -322,10 +394,14 @@ export function ComposeEditorSection({
   managePlacement?: boolean
 }>) {
   const source = normalizeCompose(document)
-  const [tab, setTab] = useState<EditorTab>('user')
-  const [draft, setDraft] = useState<ComposeDocument>(() => stripComposePlacement(source))
+  const [tab, setTab] = useState<EditorTab>(
+    () => readComposeEditorView(source) ?? 'editor',
+  )
+  const [draft, setDraft] = useState<ComposeDocument>(() =>
+    stripComposeManagedExtension(source),
+  )
   const [yaml, setYaml] = useState(() =>
-    composeDocumentToYaml(stripComposePlacement(source)),
+    composeDocumentToYaml(stripComposeManagedExtension(source)),
   )
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<TextSelection>({ start: 0, end: 0 })
@@ -336,9 +412,12 @@ export function ComposeEditorSection({
   selectionRef.current = selection
 
   useEffect(() => {
-    const normalized = stripComposePlacement(normalizeCompose(document))
-    setDraft(normalized)
-    setYaml(composeDocumentToYaml(normalized))
+    const visible = stripComposeManagedExtension(normalizeCompose(document))
+    setDraft(visible)
+    setYaml(composeDocumentToYaml(visible))
+    // Tab preference is loaded on mount (and on remount when environment changes).
+    // Do not reset it here — placement saves refresh `document` and would wipe an
+    // unsaved Editor/Visual switch.
   }, [document])
 
   const applyYamlEdit = (text: string, nextSelection: TextSelection) => {
@@ -366,50 +445,42 @@ export function ComposeEditorSection({
     selectionRef.current = next
   }
 
-  const handleYamlTabKey = (shiftKey: boolean) => {
+  const handleYamlTabKey = (shiftKey: boolean, caret: TextSelection) => {
+    selectionRef.current = caret
+    setSelection(caret)
     const result = shiftKey
-      ? applyTabOutdent(yamlRef.current, selectionRef.current)
-      : applyTabIndent(yamlRef.current, selectionRef.current)
+      ? applyTabOutdent(yamlRef.current, caret)
+      : applyTabIndent(yamlRef.current, caret)
     applyYamlEdit(result.text, result.selection)
   }
 
-  // React Native Web forwards keydown to the underlying textarea (Tab would otherwise blur).
-  const yamlWebKeyProps = Platform.OS === 'web'
-    ? {
-        onKeyDown: (event: { key: string; shiftKey: boolean; preventDefault: () => void }) => {
-          if (event.key !== 'Tab') {
-            return
-          }
-          event.preventDefault()
-          handleYamlTabKey(event.shiftKey)
-        },
-      }
-    : {}
-
   const updateDraft = (next: ComposeDocument) => {
-    const visible = stripComposePlacement(next)
+    const visible = stripComposeManagedExtension(next)
     setDraft(visible)
     setYaml(composeDocumentToYaml(visible))
     setServiceNameDrafts({})
     setError(null)
   }
 
-  const resolveStoredPreview = (): ComposeDocument =>
-    storedPreviewDocument(tab, yaml, draft, document, managePlacement)
-
-  const documentForSave = (edited: ComposeDocument): ComposeDocument => {
+  const documentForSave = (
+    edited: ComposeDocument,
+    view: EditorTab,
+  ): ComposeDocument => {
+    const withView = setComposeEditorView(edited, view)
     if (managePlacement) {
-      return preserveComposePlacement(edited, document)
+      return preserveComposePlacement(withView, document)
     }
-    return stripComposePlacement(edited)
+    return stripComposePlacement(withView)
   }
 
   const handleSave = async () => {
     try {
-      const edited = tab === 'user' ? yamlToComposeDocument(yaml) : draft
-      const next = documentForSave(edited)
+      const edited = tab === 'editor' ? yamlToComposeDocument(yaml) : draft
+      const next = documentForSave(edited, tab)
       const blocking = blockingComposeLintIssues(
-        lintComposeYaml(composeDocumentToYaml(stripComposePlacement(next))),
+        lintComposeYaml(
+          composeDocumentToYaml(stripComposeManagedExtension(next)),
+        ),
       )
       if (blocking.length > 0) {
         setError('Fix compose issues before saving')
@@ -435,6 +506,34 @@ export function ComposeEditorSection({
         },
       },
     })
+  }
+
+  const clearServiceField = (name: string, key: string) => {
+    const services = servicesFrom(draft)
+    const current = services[name]
+    if (!current || !Object.hasOwn(current, key)) {
+      return
+    }
+    const { [key]: _removed, ...remaining } = current
+    updateDraft({
+      ...draft,
+      data: {
+        ...draft.data,
+        services: {
+          ...services,
+          [name]: remaining,
+        },
+      },
+    })
+  }
+
+  const addServiceField = (name: string, field: VisualFieldDef) => {
+    const services = servicesFrom(draft)
+    const current = services[name]
+    if (!current || Object.hasOwn(current, field.key)) {
+      return
+    }
+    updateService(name, { [field.key]: field.defaultValue })
   }
 
   const renameService = (name: string, nextName: string) => {
@@ -483,12 +582,7 @@ export function ComposeEditorSection({
     })
   }
 
-  const storedPreview = tab === 'stored' ? resolveStoredPreview() : null
-  const storedYaml = storedPreview ? composeDocumentToYaml(storedPreview) : ''
-  const runtimeYaml = storedPreview ? composeDocumentToRuntimeYaml(storedPreview) : ''
-
   const lintIssues = useMemo<ComposeLintIssue[]>(() => {
-    if (tab === 'stored') return []
     const lintSource = tab === 'visual' ? composeDocumentToYaml(draft) : yaml
     return lintComposeYaml(lintSource)
   }, [tab, yaml, draft])
@@ -500,17 +594,18 @@ export function ComposeEditorSection({
         <Text style={styles.title}>{title}</Text>
         <View style={styles.tabs}>
           {([
-            ['user', 'User'],
-            ['stored', 'Stored'],
+            ['editor', 'Editor'],
             ['visual', 'Visual'],
           ] as const).map(([entry, label]) => (
             <Pressable
               key={entry}
               style={[styles.tab, tab === entry && styles.tabActive]}
               onPress={() => {
-                if (tab === 'user' && entry !== 'user') {
+                if (tab === 'editor' && entry !== 'editor') {
                   try {
-                    const parsed = stripComposePlacement(yamlToComposeDocument(yaml))
+                    const parsed = stripComposeManagedExtension(
+                      yamlToComposeDocument(yaml),
+                    )
                     setDraft(parsed)
                     setYaml(composeDocumentToYaml(parsed))
                     setError(null)
@@ -519,7 +614,7 @@ export function ComposeEditorSection({
                     return
                   }
                 }
-                if (entry === 'user' && tab === 'visual') {
+                if (entry === 'editor' && tab === 'visual') {
                   setYaml(composeDocumentToYaml(draft))
                 }
                 setTab(entry)
@@ -533,7 +628,7 @@ export function ComposeEditorSection({
         </View>
       </View>
 
-      {tab === 'user' ? (
+      {tab === 'editor' ? (
         <YamlHighlightedField
           value={yaml}
           editable={!saving}
@@ -541,73 +636,27 @@ export function ComposeEditorSection({
           onChangeText={handleYamlChange}
           onSelectionChange={handleYamlSelectionChange}
           selection={selection}
-          webKeyProps={yamlWebKeyProps}
+          onTabKey={handleYamlTabKey}
         />
-      ) : null}
-
-      {tab === 'stored' ? (
-        <>
-          <Text style={styles.hint}>
-            {managePlacement
-              ? 'What is stored (including environment placement). Runtime deploy drops presentation-only comments.'
-              : 'What is stored. Runtime deploy drops presentation-only comments.'}
-          </Text>
-          <Text style={styles.subheading}>Stored</Text>
-          <YamlHighlightedField
-            value={storedYaml}
-            editable={false}
-            minLines={YAML_READONLY_MIN_LINES}
-          />
-          <Text style={styles.subheading}>Runtime (deployed)</Text>
-          <YamlHighlightedField
-            value={runtimeYaml}
-            editable={false}
-            minLines={YAML_READONLY_MIN_LINES}
-          />
-        </>
       ) : null}
 
       {tab === 'visual' ? (
         <View style={styles.serviceList}>
           {Object.entries(servicesFrom(draft)).map(([name, service]) => (
-            <View key={name} style={orgPanelStyles.detailCard}>
-              <View style={styles.serviceHeader}>
-                <TextInput
-                  value={serviceNameDrafts[name] ?? name}
-                  onChangeText={(value) =>
-                    setServiceNameDrafts((current) => ({ ...current, [name]: value }))
-                  }
-                  onEndEditing={(event) => renameService(name, event.nativeEvent.text)}
-                  editable={!saving}
-                  style={styles.serviceNameInput}
-                />
-                <Pressable onPress={() => removeService(name)}>
-                  <Text style={styles.removeText}>Remove</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.label}>Image</Text>
-              <TextInput
-                value={typeof service.image === 'string' ? service.image : ''}
-                onChangeText={(image) => updateService(name, { image })}
-                editable={!saving}
-                placeholder="nginx:alpine"
-                placeholderTextColor={colors.textDim}
-                style={styles.input}
-              />
-              <Text style={styles.label}>Ports</Text>
-              <TextInput
-                value={servicePorts(service.ports)}
-                onChangeText={(ports) =>
-                  updateService(name, {
-                    ports: ports.split(',').map((port) => port.trim()).filter(Boolean),
-                  })
-                }
-                editable={!saving}
-                placeholder="8080:80, 8443:443"
-                placeholderTextColor={colors.textDim}
-                style={styles.input}
-              />
-            </View>
+            <ComposeVisualServiceCard
+              key={name}
+              service={service}
+              nameDraft={serviceNameDrafts[name] ?? name}
+              saving={saving}
+              onNameDraftChange={(value) =>
+                setServiceNameDrafts((current) => ({ ...current, [name]: value }))
+              }
+              onRename={(nextName) => renameService(name, nextName)}
+              onRemoveService={() => removeService(name)}
+              onPatchService={(patch) => updateService(name, patch)}
+              onClearField={(key) => clearServiceField(name, key)}
+              onAddField={(field) => addServiceField(name, field)}
+            />
           ))}
           <Pressable style={styles.secondaryButton} onPress={addService} disabled={saving}>
             <Text style={styles.secondaryButtonText}>Add service</Text>
@@ -615,20 +664,18 @@ export function ComposeEditorSection({
         </View>
       ) : null}
 
-      {tab !== 'stored' ? <ComposeLintPanel issues={lintIssues} /> : null}
+      <ComposeLintPanel issues={lintIssues} />
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      {tab !== 'stored' ? (
-        <Pressable
-          style={[styles.saveButton, (saving || saveBlocked) && styles.buttonDisabled]}
-          onPress={() => void handleSave()}
-          disabled={saving || saveBlocked}
-        >
-          <Text style={styles.saveButtonText}>
-            {saveButtonLabel(saving, saveBlocked)}
-          </Text>
-        </Pressable>
-      ) : null}
+      <Pressable
+        style={[styles.saveButton, (saving || saveBlocked) && styles.buttonDisabled]}
+        onPress={() => void handleSave()}
+        disabled={saving || saveBlocked}
+      >
+        <Text style={styles.saveButtonText}>
+          {saveButtonLabel(saving, saveBlocked)}
+        </Text>
+      </Pressable>
     </View>
   )
 }
@@ -637,8 +684,6 @@ const styles = StyleSheet.create({
   root: { gap: spacing.sm },
   header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  hint: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
-  subheading: { color: colors.text, fontSize: 13, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { borderWidth: 1, borderColor: colors.borderChip, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
   tabActive: { borderColor: colors.accent, backgroundColor: colors.bgActive },
@@ -758,20 +803,6 @@ const styles = StyleSheet.create({
   lintMessageError: { color: colors.errorText },
   lintMessageWarning: { color: colors.pending },
   serviceList: { gap: spacing.sm },
-  serviceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  serviceNameInput: { color: colors.accent, fontFamily: 'monospace', fontSize: 13, fontWeight: '600', flex: 1 },
-  removeText: { color: colors.errorText, fontSize: 12, fontWeight: '600' },
-  label: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontFamily: 'monospace',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
   saveButton: { alignSelf: 'flex-start', borderRadius: 8, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 10 },
   saveButtonText: { color: colors.buttonText, fontSize: 14, fontWeight: '700' },
   secondaryButton: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, borderColor: colors.borderChip, paddingHorizontal: 10, paddingVertical: 7 },

@@ -5,6 +5,7 @@ import {
   applyTabOutdent,
   indentAfterNewline,
   lineOpensBlock,
+  trimTrailingWhitespacePerLine,
   YAML_INDENT,
 } from './yaml-indent'
 
@@ -62,13 +63,68 @@ describe('applyNewlineAutoIndent', () => {
     expect(result?.text).toBe('services:\n  nginx:\n    image: nginx\n    ')
   })
 
+  it('re-indents a misplaced service key like restart on Enter', () => {
+    const prev = `services:
+  nginx:
+    image: nginx
+restart: always # hehe`
+    const next = `${prev}\n`
+    const result = applyNewlineAutoIndent(prev, next)
+    expect(result?.text).toBe(`services:
+  nginx:
+    image: nginx
+    restart: always # hehe
+    `)
+  })
+
+  it('re-indents restart left at the service-name column', () => {
+    const prev = `services:
+  nginx:
+    image: nginx
+  restart: always`
+    const next = `${prev}\n`
+    const result = applyNewlineAutoIndent(prev, next)
+    expect(result?.text).toBe(`services:
+  nginx:
+    image: nginx
+    restart: always
+    `)
+  })
+
+  it('does not pull top-level networks into a service', () => {
+    const prev = `services:
+  nginx:
+    image: nginx
+networks:`
+    const next = `${prev}\n`
+    const result = applyNewlineAutoIndent(prev, next)
+    expect(result?.text).toBe(`services:
+  nginx:
+    image: nginx
+networks:
+  `)
+  })
+
+  it('right-trims every line when leaving via Enter', () => {
+    const prev = 'services:  \n  nginx:  \n    image: nginx   '
+    const next = `${prev}\n`
+    const result = applyNewlineAutoIndent(prev, next)
+    expect(result?.text).toBe('services:\n  nginx:\n    image: nginx\n    ')
+  })
+
   it('returns null for non-newline edits', () => {
     expect(applyNewlineAutoIndent('services:', 'services:x')).toBeNull()
     expect(applyNewlineAutoIndent('a', 'ab')).toBeNull()
   })
 
-  it('returns null when no indent is needed', () => {
+  it('returns null when no indent or trim is needed', () => {
     expect(applyNewlineAutoIndent('image: nginx', 'image: nginx\n')).toBeNull()
+  })
+})
+
+describe('trimTrailingWhitespacePerLine', () => {
+  it('strips spaces and tabs at end of each line', () => {
+    expect(trimTrailingWhitespacePerLine('a  \n  b\t\n c')).toBe('a\n  b\n c')
   })
 })
 

@@ -13,6 +13,13 @@ export const ADMIN_AREAS = [
     hint: 'Email provider and SMTP/Mailgun configuration',
     subRoutes: [],
   },
+  {
+    id: 'secrets',
+    label: 'Secrets',
+    pathSegment: 'secrets',
+    hint: 'Rotate at-rest secret encryption',
+    subRoutes: [],
+  },
 ] as const
 
 export type AdminAreaId = (typeof ADMIN_AREAS)[number]['id']

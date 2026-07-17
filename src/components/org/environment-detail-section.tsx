@@ -372,13 +372,18 @@ function HostingHostnameRow({
         style={styles.hostnamesInput}
       />
       <Text style={styles.tlsLabel}>TLS certificate</Text>
+      <Text style={styles.tlsHint}>
+        Default is a basic self-signed cert. Pick a library certificate to use
+        an upload, org self-signed, or Let's Encrypt cert — nothing is requested
+        automatically.
+      </Text>
       <View style={styles.tlsOptions}>
         <Pressable
           style={[styles.tlsChip, tlsId === null && styles.tlsChipActive]}
           disabled={disabled}
           onPress={() => onTlsChange(null)}
         >
-          <Text style={styles.tlsChipText}>Auto</Text>
+          <Text style={styles.tlsChipText}>Self-signed</Text>
         </Pressable>
         {covering.map((row) => (
           <Pressable
@@ -1119,6 +1124,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  tlsHint: {
+    color: colors.textDim,
+    fontSize: 11,
+    lineHeight: 16,
     marginBottom: spacing.xs,
   },
   tlsOptions: {
