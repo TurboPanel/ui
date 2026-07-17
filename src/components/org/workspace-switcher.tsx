@@ -14,7 +14,6 @@ import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import {
   ALL_WORKSPACES_SCOPE,
   manageWorkspacesHref,
-  newWorkspaceHref,
   workspaceDisplayName,
 } from '@/lib/workspace-scope'
 
@@ -60,7 +59,7 @@ export function WorkspaceSwitcher({
 
   const goCreate = () => {
     close()
-    router.push(newWorkspaceHref(orgId) as Href)
+    router.push(manageWorkspacesHref(orgId) as Href)
   }
 
   let triggerLabel = scope.label
@@ -72,23 +71,25 @@ export function WorkspaceSwitcher({
     <View style={[styles.menu, isCompact && styles.menuSheet]}>
       <Text style={styles.menuHeading}>Switch workspace</Text>
 
-      <Pressable
-        style={[
-          styles.menuItem,
-          scope.id === ALL_WORKSPACES_SCOPE && styles.menuItemActive,
-        ]}
-        onPress={selectAll}
-      >
-        <Text
+      {workspaces.length > 1 ? (
+        <Pressable
           style={[
-            styles.menuItemLabel,
-            scope.id === ALL_WORKSPACES_SCOPE && styles.menuItemLabelActive,
+            styles.menuItem,
+            scope.id === ALL_WORKSPACES_SCOPE && styles.menuItemActive,
           ]}
+          onPress={selectAll}
         >
-          All workspaces
-        </Text>
-        <Text style={styles.menuItemHint}>Every project in this organization</Text>
-      </Pressable>
+          <Text
+            style={[
+              styles.menuItemLabel,
+              scope.id === ALL_WORKSPACES_SCOPE && styles.menuItemLabelActive,
+            ]}
+          >
+            All workspaces
+          </Text>
+          <Text style={styles.menuItemHint}>Every project in this organization</Text>
+        </Pressable>
+      ) : null}
 
       {workspaces.length === 0 && !isLoading ? (
         <Text style={styles.emptyHint}>No workspaces yet.</Text>
@@ -122,7 +123,7 @@ export function WorkspaceSwitcher({
         <Text style={styles.menuActionLabel}>Manage workspaces</Text>
       </Pressable>
 
-      {canOwn && workspaces.length === 0 ? (
+      {canOwn ? (
         <Pressable style={styles.menuActionPrimary} onPress={goCreate}>
           <Text style={styles.menuActionPrimaryLabel}>Create workspace</Text>
         </Pressable>

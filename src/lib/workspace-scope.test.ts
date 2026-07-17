@@ -40,7 +40,7 @@ describe('ORG_AREAS navigation', () => {
 })
 
 describe('resolveWorkspaceScope', () => {
-  it('defaults to all workspaces', () => {
+  it('defaults to all workspaces when multiple exist', () => {
     expect(resolveWorkspaceScope(WORKSPACES, null)).toEqual({
       id: ALL_WORKSPACES_SCOPE,
       label: 'All workspaces',
@@ -51,6 +51,25 @@ describe('resolveWorkspaceScope', () => {
     )
   })
 
+  it('uses the sole workspace instead of all when only one exists', () => {
+    const sole = [WORKSPACES[0]!]
+    expect(resolveWorkspaceScope(sole, null)).toEqual({
+      id: 'ws-a',
+      label: 'Alpha',
+      workspace: WORKSPACES[0],
+    })
+    expect(resolveWorkspaceScope(sole, ALL_WORKSPACES_SCOPE)).toEqual({
+      id: 'ws-a',
+      label: 'Alpha',
+      workspace: WORKSPACES[0],
+    })
+    expect(resolveWorkspaceScope(sole, 'missing')).toEqual({
+      id: 'ws-a',
+      label: 'Alpha',
+      workspace: WORKSPACES[0],
+    })
+  })
+
   it('resolves a known workspace', () => {
     expect(resolveWorkspaceScope(WORKSPACES, 'ws-a')).toEqual({
       id: 'ws-a',
@@ -59,7 +78,7 @@ describe('resolveWorkspaceScope', () => {
     })
   })
 
-  it('falls back to all workspaces for unknown ids', () => {
+  it('falls back to all workspaces for unknown ids when multiple exist', () => {
     expect(resolveWorkspaceScope(WORKSPACES, 'missing').id).toBe(
       ALL_WORKSPACES_SCOPE,
     )

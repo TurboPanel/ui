@@ -31,10 +31,19 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
+// Client mirror of the canonical server password policy in the instance repo
+// (`src/client/authn/install-state.ts` → `validateSuperadminPassword` /
+// `PASSWORD_SPECIAL_CHARS_PATTERN` / `PASSWORD_MIN_LENGTH`). The server enforces
+// the same structural rules on every password-setting path (install, sign-up,
+// password reset), so the API rejects weak passwords even if this UI check is
+// bypassed. Keep the two in lockstep — do not weaken one without the other.
+const PASSWORD_MIN_LENGTH = 8
+const PASSWORD_SPECIAL_CHARS_PATTERN = /[$!@%&*#^()_+=-]/
+
 function validatePassword(password: string): PasswordValidation {
-  const hasMinLength = password.length >= 8
+  const hasMinLength = password.length >= PASSWORD_MIN_LENGTH
   const hasNumber = /\d/.test(password)
-  const hasSpecialChar = /[$!@%&*#^()_+=-]/.test(password)
+  const hasSpecialChar = PASSWORD_SPECIAL_CHARS_PATTERN.test(password)
   const noLeadingTrailingWhitespace = password === password.trim()
   return {
     hasMinLength,

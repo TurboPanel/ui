@@ -68,8 +68,8 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 - `src/components/org/org-shell.tsx` — responsive shell (sidebar on web, drawer on narrow viewports)
 - `src/components/org/org-sidebar.tsx` — area nav + sub-routes for the active area
 - `src/components/org/org-header.tsx` — page title, user label, sign out
-- `src/components/org/workspace-switcher.tsx` — on the Projects screen; selects a workspace or **All workspaces**, links to Manage workspaces
-- `src/lib/workspace-scope.ts` / `src/lib/workspace-scope-context.tsx` — project filter scope (`?workspaceId=` + remembered selection); not a top-level nav area
+- `src/components/org/workspace-switcher.tsx` — on the Projects screen; selects a workspace (or **All workspaces** when more than one exists), links to Manage / Create workspace
+- `src/lib/workspace-scope.ts` / `src/lib/workspace-scope-context.tsx` — project filter scope (`?workspaceId=` + remembered selection); not a top-level nav area. When the org has exactly one workspace, scope resolves to that workspace (label shows its name, not “All workspaces”).
 - `src/lib/org-navigation.ts` — area registry (`ORG_AREAS`); add entries + routes together
 
 ### Areas (routes)
@@ -79,7 +79,7 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
-| `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list; optional `?workspaceId` from the header switcher (omit = **All workspaces**) |
+| `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list; optional `?workspaceId` from the header switcher (omit = **All workspaces** when multiple exist; sole workspace is selected automatically) |
 | `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
 | `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + base compose editor + Workspace "Move to workspace" picker (gated by `organization:own` display hint; server enforces 403), then the **integrated** environments area (`project-environments-section.tsx`) — per-environment server placement lives there |
 | `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Standalone deep-link fallback for a single environment (same body as the embedded tab); the primary flow is the project page, not this route |
@@ -108,11 +108,11 @@ Environments are **not** a separate page/flow — they live inside `project-deta
 
 ### Workspaces
 
-- Workspaces are a **project-organization filter**, not a primary sidebar area. The Projects page **workspace switcher** shows the current scope (**All workspaces** or a named workspace). Choosing a workspace opens `/projects?workspaceId=…`; choosing All opens `/projects`.
-- Management CRUD lives at `/workspaces` (list/create/edit/detail) and is reached from the switcher (**Manage workspaces** / empty-state **Create workspace**), not from `ORG_AREAS`.
-- List: `workspaces-overview-section.tsx` (`GET /api/client/v1/workspaces`). Create/edit forms: `workspace-form-section.tsx`. Name validation is shared via `src/lib/workspace-validation.ts`.
-- **First-run empty state:** when the org has zero workspaces and the user can `organization:own`, `WorkspacesOverviewSection` renders the reusable `first-run-wizard.tsx` **above** the list `SectionPanel`. The wizard prefills `"My Workspace"`, creates via `createWorkspace`, then refreshes the list (and invalidates the shared switcher query). Non-owners still see plain `"No workspaces yet."` inside the panel.
-- `FirstRunWizard` is presentational only (title, description, optional notes, optional name field, primary action) and is intended for reuse on other "nothing here yet" screens.
+- Workspaces are a **project-organization filter**, not a primary sidebar area. The Projects page **workspace switcher** shows the current scope (a named workspace, or **All workspaces** when more than one exists). Choosing a workspace opens `/projects?workspaceId=…`; choosing All opens `/projects`. With a single workspace, the switcher label is that workspace’s name (typically **Default Workspace** from org provision) and the “All workspaces” menu item is hidden.
+- Management CRUD lives at `/workspaces` (list/create/edit/detail) and is reached from the switcher (**Manage workspaces** / **Create workspace**), not from `ORG_AREAS`.
+- List: `workspaces-overview-section.tsx` (`GET /api/client/v1/workspaces`). Edit forms: `workspace-form-section.tsx`. Name validation is shared via `src/lib/workspace-validation.ts`.
+- **Create workspace wizard:** when the user can `organization:own`, `WorkspacesOverviewSection` renders the reusable `first-run-wizard.tsx` **above** the list `SectionPanel` as a friendly inline create form (title “Create a workspace”). Creates via `createWorkspace`, then refreshes the list + shared switcher query. New orgs already have a **Default Workspace** from install / Workers sign-up — this wizard is for adding more. Non-owners see the list only (empty copy when none exist).
+- `FirstRunWizard` is presentational only (title, description, optional notes, optional name field, primary action) and is intended for reuse on other guided create screens.
 - Projects overview copy and create links follow the active scope; the all-workspaces view labels each project with its workspace name.
 
 ### Instance API

@@ -21,8 +21,8 @@ import { colors, spacing } from '@/lib/theme'
 import { validateWorkspaceName } from '@/lib/workspace-validation'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
-const FIRST_RUN_NOTES = [
-  'All of your projects can live in the same workspace.',
+const CREATE_WORKSPACE_NOTES = [
+  'Group projects by team, client, environment, or however you like.',
   'You can create as many workspaces as you want.',
   'Projects can be moved between workspaces at any time.',
 ] as const
@@ -35,9 +35,9 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
-  const [firstRunName, setFirstRunName] = useState('My Workspace')
-  const [creatingFirst, setCreatingFirst] = useState(false)
-  const [firstRunError, setFirstRunError] = useState<string | null>(null)
+  const [createName, setCreateName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const loadWorkspaces = async () => {
     setLoading(true)
@@ -85,25 +85,26 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     }
   }, [orgId])
 
-  const handleCreateFirstWorkspace = async () => {
-    const nameError = validateWorkspaceName(firstRunName)
+  const handleCreateWorkspace = async () => {
+    const nameError = validateWorkspaceName(createName)
     if (nameError) {
-      setFirstRunError(nameError)
+      setCreateError(nameError)
       return
     }
 
-    setCreatingFirst(true)
-    setFirstRunError(null)
+    setCreating(true)
+    setCreateError(null)
     try {
-      await createWorkspace({ displayName: firstRunName.trim() })
+      await createWorkspace({ displayName: createName.trim() })
+      setCreateName('')
       await loadWorkspaces()
       await workspaceScope?.refreshWorkspaces()
     } catch (err) {
-      setFirstRunError(
+      setCreateError(
         err instanceof Error ? err.message : 'Failed to create workspace',
       )
     } finally {
-      setCreatingFirst(false)
+      setCreating(false)
     }
   }
 
@@ -131,22 +132,15 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     }
   }
 
-  const showFirstRunWizard =
-    !loading && workspaces.length === 0 && canOwn
-
   let workspaceListContent
   if (loading && workspaces.length === 0) {
     workspaceListContent = (
       <Text style={orgPanelStyles.muted}>Loading…</Text>
     )
   } else if (workspaces.length === 0) {
-    if (canOwn) {
-      workspaceListContent = null
-    } else {
-      workspaceListContent = (
-        <Text style={orgPanelStyles.muted}>No workspaces yet.</Text>
-      )
-    }
+    workspaceListContent = (
+      <Text style={orgPanelStyles.muted}>No workspaces yet.</Text>
+    )
   } else {
     workspaceListContent = (
       <View style={styles.list}>
@@ -200,39 +194,30 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     <View style={styles.root}>
       <Text style={styles.heading}>Workspaces</Text>
       <Text style={styles.copy}>
-        Create and edit workspaces here. Use the workspace switcher on the
-        Projects screen to filter projects by workspace or view all workspaces.
+        New organizations start with a Default Workspace. Create more here, then
+        use the workspace switcher on Projects to filter by workspace.
       </Text>
 
-      {showFirstRunWizard ? (
+      {canOwn ? (
         <FirstRunWizard
-          title="Create your first workspace"
-          description="A workspace is a place to organize projects — by team, client, environment, or however you like. There's no wrong way to start: put everything in one workspace, or split things up from day one."
-          notes={FIRST_RUN_NOTES}
-          nameValue={firstRunName}
+          title="Create a workspace"
+          description="A workspace is a place to organize projects — by team, client, environment, or however you like."
+          notes={CREATE_WORKSPACE_NOTES}
+          nameValue={createName}
           onNameChange={(text) => {
-            setFirstRunName(text)
-            setFirstRunError(null)
+            setCreateName(text)
+            setCreateError(null)
           }}
-          namePlaceholder="My Workspace"
+          namePlaceholder="Workspace name"
           nameLabel="Workspace name"
           primaryActionLabel="Create workspace"
-          onPrimaryAction={() => void handleCreateFirstWorkspace()}
-          submitting={creatingFirst}
-          error={firstRunError}
+          onPrimaryAction={() => void handleCreateWorkspace()}
+          submitting={creating}
+          error={createError}
         />
       ) : null}
 
       <SectionPanel title="Workspaces" hint="Organization workspaces">
-        {canOwn ? (
-          <Pressable
-            style={styles.primaryButton}
-            onPress={() => router.push(`/${orgId}/workspaces/new`)}
-          >
-            <Text style={styles.primaryButtonText}>New workspace</Text>
-          </Pressable>
-        ) : null}
-
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
         {workspaceListContent}
@@ -269,21 +254,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgActive,
-    marginBottom: spacing.sm,
-  },
-  primaryButtonText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '600',
   },
   secondaryButton: {
     alignSelf: 'flex-start',

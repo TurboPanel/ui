@@ -14,25 +14,44 @@ export function workspaceDisplayName(workspace: WorkspaceRecord): string {
   return workspace.displayName?.trim() || 'Unnamed workspace'
 }
 
+function soleWorkspaceScope(
+  workspaces: readonly WorkspaceRecord[],
+): WorkspaceScope | null {
+  if (workspaces.length !== 1) {
+    return null
+  }
+  const workspace = workspaces[0]
+  if (!workspace) {
+    return null
+  }
+  return {
+    id: workspace.id,
+    label: workspaceDisplayName(workspace),
+    workspace,
+  }
+}
+
+function allWorkspacesScope(): WorkspaceScope {
+  return {
+    id: ALL_WORKSPACES_SCOPE,
+    label: 'All workspaces',
+    workspace: null,
+  }
+}
+
 export function resolveWorkspaceScope(
   workspaces: readonly WorkspaceRecord[],
   requestedId: string | null | undefined,
 ): WorkspaceScope {
+  const sole = soleWorkspaceScope(workspaces)
+
   if (!requestedId || requestedId === ALL_WORKSPACES_SCOPE) {
-    return {
-      id: ALL_WORKSPACES_SCOPE,
-      label: 'All workspaces',
-      workspace: null,
-    }
+    return sole ?? allWorkspacesScope()
   }
 
   const workspace = workspaces.find((entry) => entry.id === requestedId) ?? null
   if (!workspace) {
-    return {
-      id: ALL_WORKSPACES_SCOPE,
-      label: 'All workspaces',
-      workspace: null,
-    }
+    return sole ?? allWorkspacesScope()
   }
 
   return {
