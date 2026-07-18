@@ -1263,6 +1263,28 @@ export async function saveEmailSettings(
   return { ok: true, settings: raw.settings ?? {} }
 }
 
+export type SignupSettingsResponse = {
+  enabled: boolean
+  dbValue: '0' | '1' | null
+  isEnvForced: boolean
+  envOverride: string | null
+}
+
+const ADMIN_SIGNUP_SETTINGS_URL = `${ADMIN_API}/settings/signup`
+
+export async function fetchSignupSettings(): Promise<SignupSettingsResponse> {
+  return await apiFetch<SignupSettingsResponse>(ADMIN_SIGNUP_SETTINGS_URL)
+}
+
+export async function saveSignupSettings(
+  enabled: boolean,
+): Promise<SignupSettingsResponse> {
+  return await apiFetch<SignupSettingsResponse>(ADMIN_SIGNUP_SETTINGS_URL, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
 export type CommandStatus =
   | 'queued'
   | 'dispatching'

@@ -219,6 +219,8 @@ Instance-wide administration for users with the `admin` or `superadmin` role.
 | Route | Component | Purpose |
 |-------|-----------|---------|
 | `/admin/networking` | `control-plane-urls-section.tsx` | Control-plane public URLs and TLS cert SANs |
+| `/admin/email` | `email-settings-section.tsx` | System email provider (SMTP / Mailgun) |
+| `/admin/signup` | `signup-settings-section.tsx` | Public sign-up enable/disable (`IS_SIGNUP_ENABLED` DB setting) |
 | `/admin/secrets` | `secrets-reencrypt-section.tsx` | Superadmin **Re-encrypt secrets** sweep — re-seals at-rest `tpsecret` blobs (variables, TLS keys, principal passwords) onto the current data-encryption key version |
 
 ### Instance API
@@ -228,6 +230,7 @@ Admin helpers in `src/lib/instance-api.ts` (`ADMIN_API = '/api/admin/v1'`):
 - `fetchPublicUrls()` → `GET /api/admin/v1/instance/public-urls`
 - `savePublicUrls(urls)` → `PUT /api/admin/v1/instance/public-urls`
 - `applyPublicUrls(urls?)` → `POST /api/admin/v1/instance/public-urls/apply` (Deno self-hosted only)
+- `fetchSignupSettings()` / `saveSignupSettings(enabled)` → `GET/PUT /api/admin/v1/settings/signup` — panel toggle for public sign-up (`IS_SIGNUP_ENABLED`); **409** when env force override is set
 - `applyReencryptSecrets()` → `POST /api/admin/v1/secrets/reencrypt` (superadmin only; returns `{ ok, scanned, reencrypted, skipped, failed }`)
 
 When apply returns 422 with `"cert apply is not applicable on this runtime"` (Workers), hide the Apply button and show an informational note instead.

@@ -14,6 +14,13 @@ export const ADMIN_AREAS = [
     subRoutes: [],
   },
   {
+    id: 'signup',
+    label: 'Sign-up',
+    pathSegment: 'signup',
+    hint: 'Public account creation toggle',
+    subRoutes: [],
+  },
+  {
     id: 'secrets',
     label: 'Secrets',
     pathSegment: 'secrets',
