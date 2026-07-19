@@ -43,6 +43,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tanstack/react-query-devtools": "^5.91.2",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "~56.0.14",
@@ -59,6 +60,7 @@
     "web": "expo start --web --clear",
     "lint": "expo lint",
     "test": "vitest run",
+    "os-logos": "node scripts/render-os-logos.mjs",
     "export": "expo export --platform web",
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types"

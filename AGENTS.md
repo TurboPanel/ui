@@ -171,7 +171,7 @@ Authorization helpers:
 #### Servers overview table
 
 - `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Online** / Offline), and a checkbox column (header = select all).
-- OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) rendered from data-URI SVGs in `src/lib/os-logos.ts`.
+- OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`. Sources are SVGs under `assets/os/src/`; regenerate with `pnpm os-logos` (see `assets/os/README.md`).
 - Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
 - **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks or containers still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`). Deleting a server also invalidates its one-shot registration key.
 - Batch **Update** targets **selected** updatable servers (not every updatable host).
