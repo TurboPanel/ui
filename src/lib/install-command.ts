@@ -84,6 +84,22 @@ function encodeLicenseArg(licenseId: string, licenseToken: string): string {
     .replaceAll('=', '')
 }
 
+function buildInstallPipeline(opts: {
+  curlUrl: string
+  licenseArg: string
+  host: string
+  insecureTls?: boolean
+  curlInsecure?: boolean
+}): string {
+  const curl = opts.curlInsecure ? 'curl -fsSLk' : 'curl -fsSL'
+  const envParts = [
+    `TURBOPANEL_LICENSE=${opts.licenseArg}`,
+    `TURBOPANEL_HOST=${opts.host}`,
+  ]
+  if (opts.insecureTls) envParts.push('TURBOPANEL_INSECURE_TLS=1')
+  return `${curl} ${opts.curlUrl} | ${envParts.join(' ')} sh`
+}
+
 /** Rebuild a dev install command (run.sh + downloads on the same public host). */
 export function buildInstallCommandWithBaseUrl(opts: {
   licenseId: string
@@ -93,15 +109,19 @@ export function buildInstallCommandWithBaseUrl(opts: {
   const base = trimTrailingSlash(opts.baseUrl.trim())
   const licenseArg = encodeLicenseArg(opts.licenseId, opts.licenseToken)
   if (base.startsWith('http://')) {
-    return (
-      `curl -fsSL ${base}/run.sh | ` +
-      `sh -s -- --license ${licenseArg} --host ${base}`
-    )
+    return buildInstallPipeline({
+      curlUrl: `${base}/run.sh`,
+      licenseArg,
+      host: base,
+    })
   }
-  return (
-    `curl -fsSLk ${base}/run.sh | ` +
-    `sh -s -- --license ${licenseArg} --host ${base} --insecure-tls`
-  )
+  return buildInstallPipeline({
+    curlUrl: `${base}/run.sh`,
+    licenseArg,
+    host: base,
+    insecureTls: true,
+    curlInsecure: true,
+  })
 }
 
 export function resolveDisplayedInstallCommand(

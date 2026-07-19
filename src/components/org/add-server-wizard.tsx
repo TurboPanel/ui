@@ -132,7 +132,7 @@ function CreateStep({
             editable={!creating}
           />
           <Text style={orgPanelStyles.muted}>
-            Used for --host and download URLs in the install command.
+            Used for TURBOPANEL_HOST and download URLs in the install command.
           </Text>
         </>
       ) : null}
