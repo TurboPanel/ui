@@ -1396,8 +1396,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   osLogoBesideName: {
-    width: 14,
-    height: 18,
+    width: 18,
+    height: 24,
     flexShrink: 0,
     alignSelf: 'center',
     marginRight: spacing.xs,

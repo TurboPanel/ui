@@ -25,8 +25,8 @@ const SRC_DIR = join(ROOT, 'assets/os/src')
 const OUT_DIR = join(ROOT, 'assets/os')
 
 /** Logical CSS pixels for the servers-table mark (style width × height). */
-const LOGICAL_WIDTH = 14
-const LOGICAL_HEIGHT = 18
+const LOGICAL_WIDTH = 18
+const LOGICAL_HEIGHT = 24
 const SCALES = [1, 2, 3]
 
 const VIEW_BOX_RE = /viewBox\s*=\s*["']\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s*["']/i

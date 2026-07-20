@@ -1090,7 +1090,6 @@ export type DaemonCellSnapshot = {
   hostname?: string
   machineId?: string
   remoteAddress?: string
-  sessionId?: string
   keyId?: string
   connected: boolean
   connectedAt?: string

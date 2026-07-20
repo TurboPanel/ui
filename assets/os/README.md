@@ -9,7 +9,7 @@ Committed PNGs next to this README are density variants for Expo / React Native:
 | `<slug>@2x.png` | 2× | most retina / HiDPI |
 | `<slug>@3x.png` | 3× | iPhone / high-DPI phones |
 
-Logical size is **14×18** CSS pixels (see `scripts/render-os-logos.mjs` and
+Logical size is **18×24** CSS pixels (see `scripts/render-os-logos.mjs` and
 `osLogoBesideName` in the servers table). Metro picks the right file from a
 single `require('@/assets/os/<slug>.png')`.
 
