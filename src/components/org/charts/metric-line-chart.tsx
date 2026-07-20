@@ -36,6 +36,11 @@ type MetricLineChartProps = Readonly<{
 const Y_AXIS_WIDTH = 48
 const Y_SECTIONS = 4
 const X_LABEL_COUNT = 5
+/** Room for a stub tick + compact time label under the plot. */
+const X_AXIS_LABELS_HEIGHT = 24
+/** Wide enough for compact ticks like `1:05 PM` / `Mar 3`. */
+const X_TICK_WIDTH = 64
+const X_TICK_MARK_HEIGHT = 4
 
 type ChartPoint = Readonly<{ value: number | undefined }>
 
@@ -110,24 +115,35 @@ function defaultXTickLabel(tMs: number): string {
   })
 }
 
-function buildXAxisLabels(
-  pointCount: number,
-  xDomainMs: readonly [number, number],
-  xTickFormat: ((ms: number) => string) | undefined,
-): string[] {
-  const labels = new Array<string>(pointCount).fill('')
-  if (pointCount === 0) return labels
+type XAxisTick = Readonly<{ key: string; label: string; left: number }>
 
+/**
+ * Build overlay ticks. gifted-charts pins each `xAxisLabelTexts[i]` into a
+ * `width: spacing` box — with ~60 points that is ~6px, so "1:05 PM" reads as
+ * "1". We draw ticks ourselves across the plot width instead.
+ *
+ * Every label is centered on its domain fraction so spacing stays even — do not
+ * left/right-align the ends or the text blocks look bunched.
+ */
+function buildXAxisTicks(
+  xDomainMs: readonly [number, number],
+  plotWidth: number,
+  xTickFormat: ((ms: number) => string) | undefined,
+): XAxisTick[] {
+  if (plotWidth <= 0) return []
   const format = xTickFormat ?? defaultXTickLabel
   const [startMs, endMs] = xDomainMs
   const denom = X_LABEL_COUNT - 1
+  const ticks: XAxisTick[] = []
   for (let i = 0; i < X_LABEL_COUNT; i += 1) {
-    const index =
-      pointCount === 1 ? 0 : Math.round((i * (pointCount - 1)) / denom)
     const fraction = i / denom
-    labels[index] = format(startMs + (endMs - startMs) * fraction)
+    ticks.push({
+      key: `x-${i}`,
+      label: format(startMs + (endMs - startMs) * fraction),
+      left: fraction * plotWidth,
+    })
   }
-  return labels
+  return ticks
 }
 
 function toChartData(points: MetricLineSeries['points']): ChartPoint[] {
@@ -231,7 +247,7 @@ export function MetricLineChart({
   const spacing = Math.max(1, chartWidth / Math.max(1, pointCount - 1))
 
   const yAxis = computeYAxisConfig(series, yDomain, yFormat)
-  const xAxisLabelTexts = buildXAxisLabels(pointCount, xDomainMs, xTickFormat)
+  const xAxisTicks = buildXAxisTicks(xDomainMs, chartWidth, xTickFormat)
 
   const dataProps = isSingle
     ? { data: firstSeries ? toChartData(firstSeries.points) : [] }
@@ -312,8 +328,8 @@ export function MetricLineChart({
             stepValue={yAxis.stepValue}
             yAxisLabelTexts={yAxis.yAxisLabelTexts}
             yAxisLabelWidth={Y_AXIS_WIDTH}
-            xAxisLabelTexts={xAxisLabelTexts}
-            xAxisLabelsHeight={20}
+            xAxisLabelTexts={[]}
+            xAxisLabelsHeight={X_AXIS_LABELS_HEIGHT}
             rulesColor={colors.borderArea}
             yAxisColor={colors.borderArea}
             xAxisColor={colors.borderMuted}
@@ -321,12 +337,40 @@ export function MetricLineChart({
             xAxisThickness={1}
             backgroundColor="transparent"
             yAxisTextStyle={{ color: colors.textDim, fontSize: 10 }}
-            xAxisLabelTextStyle={{ color: colors.textDim, fontSize: 10 }}
             pointerConfig={buildPointerConfig(
               series.map((entry) => ({ key: entry.key, color: entry.color })),
               yFormat,
             )}
           />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.xAxisOverlay,
+              {
+                left: Y_AXIS_WIDTH,
+                width: chartWidth,
+                height: X_AXIS_LABELS_HEIGHT,
+              },
+            ]}
+          >
+            {xAxisTicks.map((tick) => (
+              <View
+                key={tick.key}
+                style={[
+                  styles.xAxisTick,
+                  {
+                    left: tick.left,
+                    transform: [{ translateX: -X_TICK_WIDTH / 2 }],
+                  },
+                ]}
+              >
+                <View style={styles.xAxisTickMark} />
+                <Text style={styles.xAxisTickText} numberOfLines={1}>
+                  {tick.label}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       ) : null}
     </View>
@@ -348,5 +392,28 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     backgroundColor: 'rgba(224, 179, 65, 0.12)',
+  },
+  xAxisOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    zIndex: 1,
+    overflow: 'visible',
+  },
+  xAxisTick: {
+    position: 'absolute',
+    top: 0,
+    width: X_TICK_WIDTH,
+    alignItems: 'center',
+  },
+  xAxisTickMark: {
+    width: 1,
+    height: X_TICK_MARK_HEIGHT,
+    backgroundColor: colors.borderMuted,
+    marginBottom: 2,
+  },
+  xAxisTickText: {
+    color: colors.textDim,
+    fontSize: 10,
+    textAlign: 'center',
   },
 })

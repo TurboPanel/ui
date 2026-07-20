@@ -259,6 +259,8 @@ function normalizeMetricsGrid(data: MetricsSeriesResponse): {
 
   const bucketMs = resolutionSeconds * 1000
   const startMs = bucketFloor(fromMs, resolutionSeconds)
+  // Half-open [from, to) on bucket starts — same as instance computeSeriesGapCount.
+  // Inclusive end always expects the in-progress `to` bucket (1 h @ 60 s → 61).
   const endMs = bucketFloor(toMs, resolutionSeconds)
   const defaultExpected = defaultExpectedSamplesPerBucket(resolutionSeconds)
 
@@ -273,7 +275,7 @@ function normalizeMetricsGrid(data: MetricsSeriesResponse): {
   const gapBands: MetricGapBand[] = []
   let expectedSamples = 0
 
-  for (let bucket = startMs; bucket <= endMs; bucket += bucketMs) {
+  for (let bucket = startMs; bucket < endMs; bucket += bucketMs) {
     const existing = pointByBucket.get(bucket)
     const band = { fromMs: bucket, toMs: bucket + bucketMs }
 

@@ -103,10 +103,12 @@ export function formatAxisTime(
   rangeId: MetricsRangeId,
 ): string {
   const shortRange = rangeId === '1h' || rangeId === '6h' || rangeId === '24h'
+  // Omit zone — gifted-charts clips each tick to ~point spacing; "1:05 PM CDT"
+  // collapses to "1" on a 60-point 1h chart.
   return formatLocalDateTime(ms, {
     includeDate: !shortRange,
     includeSeconds: false,
-    timeZoneName: undefined,
+    timeZoneName: null,
   })
 }
 

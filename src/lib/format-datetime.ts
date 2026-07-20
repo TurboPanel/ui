@@ -7,8 +7,11 @@ export type FormatLocalDateTimeOptions = {
   includeSeconds?: boolean
   /** IANA zone override; default is the runtime local zone. */
   timeZone?: string
-  /** How to render the zone label. Default `short` (e.g. PDT). */
-  timeZoneName?: 'short' | 'long'
+  /**
+   * How to render the zone label. Default `short` (e.g. PDT).
+   * Pass `null` to omit the zone (compact axis ticks).
+   */
+  timeZoneName?: 'short' | 'long' | null
   /** Returned when the input is missing or not parseable. Default `—`. */
   fallback?: string
 }
@@ -45,7 +48,10 @@ export function formatLocalDateTime(
     hour: 'numeric',
     minute: '2-digit',
     second: includeSeconds ? '2-digit' : undefined,
-    timeZoneName,
+  }
+
+  if (timeZoneName) {
+    formatOptions.timeZoneName = timeZoneName
   }
 
   if (includeDate) {
