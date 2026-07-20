@@ -30,6 +30,22 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - **React Query** `^5.90.14` — module-level `QueryClient` in `src/app/_layout.tsx`; `useAuthStatus()` hook in `src/lib/query-client.ts`.
 - **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.
 
+## Design system (ui-ux-pro-max)
+
+Visual source of truth for UI work:
+
+- **Tokens:** `src/lib/theme.ts` (`colors`, `spacing`, `layout`) — components use these, not one-off hex.
+- **Master + page overrides:** `design-system/turbopanel/MASTER.md` and `design-system/turbopanel/pages/*.md`. When building a page, read MASTER, then the page file if it exists (page wins).
+- **Skill install:** Cursor skill at `.cursor/skills/ui-ux-pro-max/` (CLI: `uipro init --ai cursor`). Search via:
+
+```bash
+python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --design-system -p "TurboPanel"
+python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain style|color|typography|ux|chart|icons
+python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack react-native
+```
+
+North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables — not light SaaS / purple gradients / cyberpunk neon.
+
 ## End-user auth & first-run install (self-hosted)
 
 - **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers`.
@@ -170,7 +186,7 @@ Authorization helpers:
 
 #### Servers overview table
 
-- `servers-overview-section.tsx` renders a selectable table: Name/UUID, Linux (`osDisplay` + optional `osLogo`), Connected From (IP then geo on two lines), Connected Since, Status (**Online** / Offline), and a checkbox column (header = select all).
+- `servers-overview-section.tsx` renders a selectable table: Name (display name / hostname; OS logo beside the name — no UUID), Status (**Online** with country flag when known / Offline), and a checkbox column (header = select all). Connected Since is omitted (platform-only). Clicking **Online** toggles IP + city/region/country under the badge; co-located `__direct__` addresses are hidden.
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`. Sources are SVGs under `assets/os/src/`; regenerate with `pnpm os-logos` (see `assets/os/README.md`).
 - Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
 - **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks or containers still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`). Deleting a server also invalidates its one-shot registration key.

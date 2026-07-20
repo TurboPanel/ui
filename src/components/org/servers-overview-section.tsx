@@ -39,10 +39,6 @@ import {
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import {
-  formatElapsedSince,
-  formatLocalDateTime,
-} from '@/lib/format-datetime'
 import { useCan } from '@/lib/query-client'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
@@ -360,17 +356,6 @@ function checkboxMark(checked: boolean, indeterminate: boolean) {
   return null
 }
 
-function formatLocationCell(geo: OrgServerRecord['geo']): string {
-  const flag = countryCodeToFlagEmoji(geo?.country)
-  const location = formatServerGeoLocation(geo)
-  const countryCode = formatServerGeoCountryCode(geo)
-  const parts = [location, countryCode].filter(Boolean)
-  if (!flag && parts.length === 0) return EMPTY_CELL
-  const trailing = parts.join(', ')
-  if (flag && trailing) return `${flag} ${trailing}`
-  return flag || trailing || EMPTY_CELL
-}
-
 function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
   if (server.osLogo) return server.osLogo
   const id = server.os?.id?.toLowerCase()
@@ -382,12 +367,20 @@ function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
   return null
 }
 
-function formatConnectedSinceCell(
-  connected: boolean,
-  connectedAt: string | null,
-): string {
-  if (!connected || !connectedAt) return EMPTY_CELL
-  return `${formatLocalDateTime(connectedAt)} (${formatElapsedSince(connectedAt)})`
+/** City, region, country for the Online status disclosure (no flag — flag sits on the badge). */
+function formatConnectionDetailLocation(geo: OrgServerRecord['geo']): string {
+  const location = formatServerGeoLocation(geo)
+  const country = formatServerGeoCountryCode(geo)
+  return [location, country].filter(Boolean).join(', ')
+}
+
+/** Public dial address for the Online disclosure; hide co-located socket marker. */
+function formatConnectionDetailAddress(
+  remoteAddress: string | null | undefined,
+): string | null {
+  const value = remoteAddress?.trim()
+  if (!value || value === '__direct__') return null
+  return value
 }
 
 function SelectionCheckbox({
@@ -581,13 +574,7 @@ function ServersTable({
       <View style={styles.table}>
         <View style={[styles.tableRow, styles.tableHeaderRow]}>
           <View style={[styles.tableCell, styles.colName]}>
-            <Text style={styles.tableHeaderText}>Name / UUID</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colConnectedFrom]}>
-            <Text style={styles.tableHeaderText}>Connected From</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colConnected]}>
-            <Text style={styles.tableHeaderText}>Connected Since</Text>
+            <Text style={styles.tableHeaderText}>Name</Text>
           </View>
           <View style={[styles.tableCell, styles.colStatus]}>
             <Text style={styles.tableHeaderText}>Status</Text>
@@ -1376,18 +1363,10 @@ const styles = StyleSheet.create({
     minWidth: 220,
     gap: 2,
   },
-  colConnectedFrom: {
-    flex: 1.8,
-    minWidth: 140,
-    gap: 2,
-  },
-  colConnected: {
-    flex: 1.8,
-    minWidth: 150,
-  },
   colStatus: {
-    flex: 0.9,
-    minWidth: 90,
+    flex: 1.4,
+    minWidth: 140,
+    gap: 4,
   },
   colCheck: {
     width: 40,
@@ -1426,11 +1405,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flexShrink: 1,
   },
-  uuidText: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
   cellText: {
     color: colors.textBody,
     fontSize: 13,
@@ -1441,6 +1415,9 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -1465,6 +1442,17 @@ const styles = StyleSheet.create({
   },
   statusTextOffline: {
     color: colors.textDim,
+  },
+  statusFlag: {
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  statusOnlineHit: {
+    alignSelf: 'flex-start',
+  },
+  statusDetails: {
+    gap: 2,
+    paddingLeft: 2,
   },
   checkboxHit: {
     padding: 2,
@@ -1686,71 +1674,72 @@ function ServerNameCell({
           <Text style={styles.nameText} numberOfLines={1}>
             {serverTitle(server)}
           </Text>
-          <Text style={styles.uuidText} selectable numberOfLines={1}>
-            {server.id}
-          </Text>
         </View>
       </Pressable>
     </View>
   )
 }
 
-function ServerConnectedFromCell({
+function ServerStatusCell({
   server,
 }: Readonly<{ server: OrgServerRecord }>) {
-  const location = formatLocationCell(server.geo)
-  const ip =
-    server.connected && server.remoteAddress
-      ? server.remoteAddress
-      : EMPTY_CELL
-  const empty = ip === EMPTY_CELL && location === EMPTY_CELL
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const flag = countryCodeToFlagEmoji(server.geo?.country)
+  const address = formatConnectionDetailAddress(server.remoteAddress)
+  const location = formatConnectionDetailLocation(server.geo)
+  const hasDetails = Boolean(address || location)
 
-  if (empty) {
+  if (!server.connected) {
     return (
-      <View style={[styles.tableCell, styles.colConnectedFrom]}>
-        <Text style={styles.cellTextMuted}>{EMPTY_CELL}</Text>
+      <View style={[styles.tableCell, styles.colStatus]}>
+        <View style={[styles.statusBadge, styles.statusOffline]}>
+          <Text style={[styles.statusText, styles.statusTextOffline]}>
+            Offline
+          </Text>
+        </View>
       </View>
     )
   }
 
-  return (
-    <View style={[styles.tableCell, styles.colConnectedFrom]}>
-      <Text
-        style={ip === EMPTY_CELL ? styles.cellTextMuted : styles.cellText}
-        selectable={ip !== EMPTY_CELL}
-        numberOfLines={1}
-      >
-        {ip}
-      </Text>
-      {location !== EMPTY_CELL ? (
-        <Text style={styles.cellTextMuted} numberOfLines={1}>
-          {location}
-        </Text>
-      ) : null}
+  const badge = (
+    <View style={[styles.statusBadge, styles.statusOnline]}>
+      <Text style={[styles.statusText, styles.statusTextOnline]}>Online</Text>
+      {flag ? <Text style={styles.statusFlag}>{flag}</Text> : null}
     </View>
   )
-}
 
-function ServerStatusBadge({
-  connected,
-}: Readonly<{ connected: boolean }>) {
   return (
     <View style={[styles.tableCell, styles.colStatus]}>
-      <View
-        style={[
-          styles.statusBadge,
-          connected ? styles.statusOnline : styles.statusOffline,
-        ]}
-      >
-        <Text
-          style={[
-            styles.statusText,
-            connected ? styles.statusTextOnline : styles.statusTextOffline,
-          ]}
+      {hasDetails ? (
+        <Pressable
+          onPress={() => setDetailsOpen((open) => !open)}
+          style={styles.statusOnlineHit}
+          accessibilityRole="button"
+          accessibilityLabel={
+            detailsOpen
+              ? 'Hide connection details'
+              : 'Show connection details'
+          }
         >
-          {connected ? 'Online' : 'Offline'}
-        </Text>
-      </View>
+          {badge}
+        </Pressable>
+      ) : (
+        badge
+      )}
+      {detailsOpen && hasDetails ? (
+        <View style={styles.statusDetails}>
+          {address ? (
+            <Text style={styles.cellText} selectable numberOfLines={1}>
+              {address}
+            </Text>
+          ) : null}
+          {location ? (
+            <Text style={styles.cellTextMuted} numberOfLines={2}>
+              {location}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -1959,10 +1948,6 @@ function OrgServerTableRow({
   deleteError: string | null
 }>) {
   const viewModel = deriveServerUpdateViewModel(server, updateState)
-  const connectedSince = formatConnectedSinceCell(
-    server.connected,
-    server.connectedAt,
-  )
 
   return (
     <View style={styles.tableRowWrap}>
@@ -1974,20 +1959,7 @@ function OrgServerTableRow({
           expanded={expanded}
           onToggleExpanded={onToggleExpanded}
         />
-        <ServerConnectedFromCell server={server} />
-        <View style={[styles.tableCell, styles.colConnected]}>
-          <Text
-            style={
-              connectedSince === EMPTY_CELL
-                ? styles.cellTextMuted
-                : styles.cellText
-            }
-            numberOfLines={2}
-          >
-            {connectedSince}
-          </Text>
-        </View>
-        <ServerStatusBadge connected={server.connected} />
+        <ServerStatusCell server={server} />
         <View style={[styles.tableCell, styles.colCheck]}>
           <SelectionCheckbox
             checked={selected}
