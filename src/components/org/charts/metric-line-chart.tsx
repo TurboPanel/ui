@@ -61,11 +61,13 @@ function computeYDomain(
   }
   if (min === max) {
     const pad = min === 0 ? 1 : Math.abs(min) * 0.1
-    return [min - pad, max + pad]
+    // Host metrics are non-negative; never pad the axis below zero.
+    return [Math.max(0, min - pad), max + pad]
   }
 
   const pad = (max - min) * 0.08
-  return [min - pad, max + pad]
+  // Same floor: an 8% pad under a near-zero series used to paint −KiB/s labels.
+  return [Math.max(0, min - pad), max + pad]
 }
 
 type YAxisConfig = Readonly<{
