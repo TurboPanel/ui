@@ -76,12 +76,54 @@ function trimTrailingSlash(url: string): string {
   return url.replace(/\/$/, '')
 }
 
+/** POSIX single-quote escaping for shell arguments and env values. */
+export function shellQuote(value: string): string {
+  const escaped = value.replaceAll("'", String.raw`'\''`)
+  return `'${escaped}'`
+}
+
 function encodeLicenseArg(licenseId: string, licenseToken: string): string {
   const combined = `${licenseId}:${licenseToken}`
   return btoa(combined)
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replaceAll('=', '')
+}
+
+function hasNonOriginUrlParts(url: URL): boolean {
+  return (
+    (url.pathname !== '/' && url.pathname !== '') ||
+    Boolean(url.search) ||
+    Boolean(url.hash)
+  )
+}
+
+/**
+ * Validate an edited install base URL with the same origin rules as the
+ * instance `parseInstallBaseUrl` / `publicUrlEntryToInstallOrigin` helpers:
+ * http(s) scheme, no credentials, no path/query/hash.
+ *
+ * Dev UI rebuilds allow plaintext `http:` (mirrors the instance
+ * `{ allowHttp: true }` developer-surface allowance).
+ */
+export function parseInstallBaseUrl(
+  value: string | undefined,
+  opts: { allowHttp?: boolean } = {},
+): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    if (url.protocol === 'http:' && !opts.allowHttp) return null
+    const host = url.hostname.replace(/^\[/, '').replace(/\]$/, '')
+    if (!host || host === 'null') return null
+    if (url.username || url.password) return null
+    if (hasNonOriginUrlParts(url)) return null
+    return trimTrailingSlash(url.origin)
+  } catch {
+    return null
+  }
 }
 
 function buildInstallPipeline(opts: {
@@ -93,18 +135,23 @@ function buildInstallPipeline(opts: {
 }): string {
   const curl = opts.curlInsecure ? 'curl -fsSLk' : 'curl -fsSL'
   const envParts = [
-    `TURBOPANEL_LICENSE=${opts.licenseArg}`,
-    `TURBOPANEL_HOST=${opts.host}`,
+    `TURBOPANEL_LICENSE=${shellQuote(opts.licenseArg)}`,
+    `TURBOPANEL_HOST=${shellQuote(opts.host)}`,
   ]
   if (opts.insecureTls) envParts.push('TURBOPANEL_INSECURE_TLS=1')
-  return `${curl} ${opts.curlUrl} | ${envParts.join(' ')} sh`
+  return `${curl} ${shellQuote(opts.curlUrl)} | ${envParts.join(' ')} sh`
 }
 
-/** Rebuild a dev install command (run.sh + downloads on the same public host). */
+/**
+ * Rebuild a dev install command (run.sh + downloads on the same public host).
+ * `baseUrl` must already be a validated origin from {@link parseInstallBaseUrl}.
+ */
 export function buildInstallCommandWithBaseUrl(opts: {
   licenseId: string
   licenseToken: string
   baseUrl: string
+  /** Self-signed / platform-CA HTTPS: curl -k + TURBOPANEL_INSECURE_TLS. */
+  insecureTls?: boolean
 }): string {
   const base = trimTrailingSlash(opts.baseUrl.trim())
   const licenseArg = encodeLicenseArg(opts.licenseId, opts.licenseToken)
@@ -115,12 +162,13 @@ export function buildInstallCommandWithBaseUrl(opts: {
       host: base,
     })
   }
+  const insecureTls = opts.insecureTls ?? true
   return buildInstallPipeline({
     curlUrl: `${base}/run.sh`,
     licenseArg,
     host: base,
-    insecureTls: true,
-    curlInsecure: true,
+    insecureTls,
+    curlInsecure: insecureTls,
   })
 }
 
@@ -130,9 +178,14 @@ export function resolveDisplayedInstallCommand(
 ): string {
   const trimmed = installBaseUrl.trim()
   if (!trimmed) return revealed.installCommand
+
+  // Reject untrusted / injectable edits — fall back to the server-built command.
+  const validated = parseInstallBaseUrl(trimmed, { allowHttp: true })
+  if (!validated) return revealed.installCommand
+
   return buildInstallCommandWithBaseUrl({
     licenseId: revealed.licenseId,
     licenseToken: revealed.licenseToken,
-    baseUrl: trimmed,
+    baseUrl: validated,
   })
 }

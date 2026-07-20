@@ -156,15 +156,16 @@ function SignupSuccess({
       {isEmailVerificationEnabled ? (
         <>
           <Text color="$color" fontSize="$5" marginBottom="$2">
-            Check your email to verify your account before signing in.
+            Check your inbox to continue.
           </Text>
           <Text color="$gray10" fontSize="$3" marginBottom="$4">
-            We sent a verification link to your inbox.
+            If this email can be used for a new account, we sent a verification link.
+            You can also try signing in if you already have an account.
           </Text>
         </>
       ) : (
         <Text color="$color" fontSize="$5" marginBottom="$4">
-          Account created! Please sign in.
+          You can sign in now. If this email was already registered, use your existing password.
         </Text>
       )}
       <Button onPress={onContinue} theme="accent" size="$4">
