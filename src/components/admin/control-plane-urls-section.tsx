@@ -317,7 +317,7 @@ function ApplyAvailabilityNote({
   if (applyNotAvailable) {
     return (
       <Text style={orgPanelStyles.muted}>
-        Cert apply is not available on this runtime (Cloudflare Workers).
+        Cert apply is not available on High Availability control planes.
         Save URLs here; apply TLS changes on your self-hosted instance.
       </Text>
     )

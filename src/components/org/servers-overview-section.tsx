@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,7 @@ import {
   type ActiveCommand,
   type ServerCommandState,
 } from '@/components/org/server-commands-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
   deleteServer,
@@ -454,6 +455,7 @@ function ServersOverviewToolbar({
   onAddServer,
   anyUpdateInProgress,
   batchUpdating,
+  selectedCount,
   selectedUpdatableCount,
   onTriggerSelectedUpdates,
 }: Readonly<{
@@ -464,6 +466,7 @@ function ServersOverviewToolbar({
   onAddServer: () => void
   anyUpdateInProgress: boolean
   batchUpdating: boolean
+  selectedCount: number
   selectedUpdatableCount: number
   onTriggerSelectedUpdates: () => void
 }>) {
@@ -474,35 +477,52 @@ function ServersOverviewToolbar({
     anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
 
   return (
-    <View style={styles.toolbarRow}>
-      {canOwn ? (
-        <Pressable
-          style={[
-            styles.addServerButton,
-            addDisabled && styles.addServerButtonDisabled,
-          ]}
-          disabled={addDisabled}
-          onPress={onAddServer}
-        >
-          <Text style={styles.addServerButtonText}>+ Server</Text>
-        </Pressable>
-      ) : null}
-      {canManage ? (
-        <TouchableOpacity
-          style={[
-            styles.updateButton,
-            updateDisabled && styles.updateButtonDisabled,
-          ]}
-          onPress={onTriggerSelectedUpdates}
-          disabled={updateDisabled}
-        >
-          {batchUpdating ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : null}
-          <Text style={styles.updateButtonText}>
-            {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
-          </Text>
-        </TouchableOpacity>
+    <View
+      style={[
+        styles.toolbarWrap,
+        selectedCount > 0 && styles.toolbarWrapPinned,
+      ]}
+    >
+      <View style={styles.toolbarRow}>
+        {canOwn ? (
+          <Pressable
+            style={({ pressed }) => [
+              orgPanelStyles.toolbarBtnPrimary,
+              addDisabled && styles.buttonDisabled,
+              pressed && !addDisabled && styles.buttonPressed,
+              webPointer,
+            ]}
+            disabled={addDisabled}
+            onPress={onAddServer}
+          >
+            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>+ Server</Text>
+          </Pressable>
+        ) : null}
+        {canManage ? (
+          <TouchableOpacity
+            style={[
+              orgPanelStyles.toolbarBtnSecondary,
+              updateDisabled && styles.buttonDisabled,
+            ]}
+            onPress={onTriggerSelectedUpdates}
+            disabled={updateDisabled}
+          >
+            {batchUpdating ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : null}
+            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+              {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {selectedCount > 0 ? (
+        <Text style={styles.selectionHint}>
+          {selectedCount} selected
+          {selectedUpdatableCount > 0
+            ? ` · ${selectedUpdatableCount} updatable`
+            : ''}
+        </Text>
       ) : null}
     </View>
   )
@@ -554,13 +574,21 @@ function ServersTable({
   deleteErrors: Map<string, string>
 }>) {
   if (loading && servers.length === 0) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return (
+      <View style={styles.loadingRow}>
+        <ActivityIndicator size="small" color={colors.accent} />
+        <Text style={orgPanelStyles.muted}>Loading fleet…</Text>
+      </View>
+    )
   }
   if (servers.length === 0) {
     return (
-      <Text style={orgPanelStyles.muted}>
-        No servers are assigned to this organization yet.
-      </Text>
+      <View style={orgPanelStyles.statePanel}>
+        <Text style={orgPanelStyles.statePanelTitle}>No servers yet</Text>
+        <Text style={orgPanelStyles.muted}>
+          Add a host to start deploying projects to your fleet.
+        </Text>
+      </View>
     )
   }
 
@@ -574,7 +602,7 @@ function ServersTable({
       <View style={styles.table}>
         <View style={[styles.tableRow, styles.tableHeaderRow]}>
           <View style={[styles.tableCell, styles.colName]}>
-            <Text style={styles.tableHeaderText}>Name</Text>
+            <Text style={styles.tableHeaderText}>Host</Text>
           </View>
           <View style={[styles.tableCell, styles.colStatus]}>
             <Text style={styles.tableHeaderText}>Status</Text>
@@ -588,11 +616,12 @@ function ServersTable({
             />
           </View>
         </View>
-        {servers.map((server) => (
+        {servers.map((server, index) => (
           <OrgServerTableRow
             key={server.id}
             orgId={orgId}
             server={server}
+            rowIndex={index}
             selected={selectedIds.has(server.id)}
             expanded={expandedIds.has(server.id)}
             updateState={updateStates.get(server.id) ?? defaultUpdateState}
@@ -1206,15 +1235,20 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     })
   }
 
+  const hostLabel = servers.length === 1 ? 'host' : 'hosts'
+  const fleetHint = loading
+    ? 'Loading hosts…'
+    : `${servers.length} ${hostLabel} · Postgres-backed status`
+
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Servers overview</Text>
-      <Text style={styles.copy}>
-        Hosts assigned to your organization. Connection status refreshes
-        periodically.
+      <Text style={orgPanelStyles.pageTitle}>Servers overview</Text>
+      <Text style={orgPanelStyles.pageCopy}>
+        Connected hosts in your fleet. Expand a row for diagnostics, metrics, and
+        commands.
       </Text>
 
-      <SectionPanel title="Your servers" hint={`Organization ${orgId}`}>
+      <SectionPanel title="Fleet" hint={fleetHint} accent>
         <ServersOverviewToolbar
           canOwn={canOwn}
           canManage={canManage}
@@ -1223,6 +1257,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           onAddServer={() => setShowAddServerWizard(true)}
           anyUpdateInProgress={anyUpdateInProgress}
           batchUpdating={batchUpdating}
+          selectedCount={selectedIds.size}
           selectedUpdatableCount={selectedUpdatableCount}
           onTriggerSelectedUpdates={handleTriggerSelectedUpdatesPress}
         />
@@ -1270,44 +1305,49 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
+  buttonDisabled: {
+    opacity: 0.5,
   },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
+  buttonPressed: {
+    opacity: 0.88,
   },
-  batchUpdateRow: {
+  toolbarWrap: {
+    gap: spacing.xs,
     marginBottom: spacing.sm,
-    alignSelf: 'stretch',
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderArea,
+  },
+  toolbarWrapPinned: {
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'sticky',
+          top: 0,
+          zIndex: 3,
+          backgroundColor: colors.bgArea,
+          paddingTop: spacing.xs,
+        } as const)
+      : {}),
+    borderBottomColor: colors.accent,
   },
   toolbarRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
     alignSelf: 'stretch',
   },
-  addServerButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.bgActive,
+  selectionHint: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
-  addServerButtonDisabled: {
-    opacity: 0.5,
-  },
-  addServerButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
   tableScroll: {
     width: '100%',
@@ -1323,7 +1363,7 @@ const styles = StyleSheet.create({
     minWidth: 860,
     borderWidth: 1,
     borderColor: colors.borderMuted,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   tableRowWrap: {
@@ -1341,8 +1381,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     gap: spacing.sm,
   },
+  tableRowEven: {
+    backgroundColor: colors.bgInset,
+  },
+  tableRowHovered: {
+    backgroundColor: colors.bgSecondary,
+  },
+  tableRowSelected: {
+    backgroundColor: colors.bgActive,
+  },
   tableHeaderRow: {
     backgroundColor: colors.bgSecondary,
+    paddingVertical: spacing.xs,
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
+        } as const)
+      : {}),
   },
   tableRowExpanded: {
     borderBottomWidth: 0,
@@ -1399,10 +1456,19 @@ const styles = StyleSheet.create({
     width: 12,
     alignSelf: 'center',
   },
+  expandChevronOpen: {
+    color: colors.accent,
+  },
   nameText: {
     color: colors.textTitle,
     fontSize: 14,
     fontWeight: '600',
+    flexShrink: 1,
+  },
+  hostnameSubtext: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
     flexShrink: 1,
   },
   cellText: {
@@ -1422,6 +1488,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusDotOnline: {
+    backgroundColor: colors.accent,
+  },
+  statusDotOffline: {
+    backgroundColor: colors.textFaint,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
   },
   statusOnline: {
     borderColor: colors.accent,
@@ -1482,7 +1561,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInset,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
   },
   osDetailRow: {
     gap: 2,
@@ -1598,17 +1679,20 @@ const styles = StyleSheet.create({
   },
   metricsButton: {
     alignSelf: 'flex-start',
-    borderColor: colors.borderChip,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderColor: colors.accent,
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginTop: spacing.sm,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.bgActive,
   },
   metricsButtonText: {
-    color: colors.textChip,
+    color: colors.accent,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   deleteButton: {
     alignSelf: 'flex-start',
@@ -1636,6 +1720,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  expandedActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderArea,
+  },
 })
 
 function ServerNameCell({
@@ -1650,18 +1743,28 @@ function ServerNameCell({
   const osProduct =
     formatServerOsProductName(server.os, server.osDisplay) ?? EMPTY_CELL
   const logo = osLogoSource(resolveOsLogoKey(server))
+  const title = serverTitle(server)
+  const hostname = server.hostname?.trim()
+  const showHostname =
+    hostname != null && hostname.length > 0 && hostname !== title
 
   return (
     <View style={[styles.tableCell, styles.colName]}>
       <Pressable
         onPress={onToggleExpanded}
-        style={styles.nameButton}
+        style={({ pressed }) => [
+          styles.nameButton,
+          pressed && styles.buttonPressed,
+          webPointer,
+        ]}
         accessibilityRole="button"
         accessibilityLabel={
           expanded ? 'Collapse server details' : 'Expand server details'
         }
       >
-        <Text style={styles.expandChevron}>{expanded ? '▾' : '▸'}</Text>
+        <Text style={[styles.expandChevron, expanded && styles.expandChevronOpen]}>
+          {expanded ? '▾' : '▸'}
+        </Text>
         {logo ? (
           <Image
             source={logo}
@@ -1672,8 +1775,13 @@ function ServerNameCell({
         ) : null}
         <View style={styles.nameBlock}>
           <Text style={styles.nameText} numberOfLines={1}>
-            {serverTitle(server)}
+            {title}
           </Text>
+          {showHostname ? (
+            <Text style={styles.hostnameSubtext} numberOfLines={1}>
+              {hostname}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
     </View>
@@ -1693,6 +1801,7 @@ function ServerStatusCell({
     return (
       <View style={[styles.tableCell, styles.colStatus]}>
         <View style={[styles.statusBadge, styles.statusOffline]}>
+          <View style={[styles.statusDot, styles.statusDotOffline]} />
           <Text style={[styles.statusText, styles.statusTextOffline]}>
             Offline
           </Text>
@@ -1703,6 +1812,7 @@ function ServerStatusCell({
 
   const badge = (
     <View style={[styles.statusBadge, styles.statusOnline]}>
+      <View style={[styles.statusDot, styles.statusDotOnline]} />
       <Text style={[styles.statusText, styles.statusTextOnline]}>Online</Text>
       {flag ? <Text style={styles.statusFlag}>{flag}</Text> : null}
     </View>
@@ -1843,8 +1953,8 @@ function ExpandedServerPanel({
   return (
     <View style={styles.expandedPanel}>
       {osFull ? (
-        <View style={styles.osDetailRow}>
-          <Text style={orgPanelStyles.detailLabel}>Operating system</Text>
+        <View style={orgPanelStyles.expandedSection}>
+          <Text style={orgPanelStyles.detailTitle}>Operating system</Text>
           <Text style={orgPanelStyles.detailLine}>{osFull}</Text>
         </View>
       ) : null}
@@ -1854,7 +1964,8 @@ function ExpandedServerPanel({
           updates are disabled — use local git instead.
         </Text>
       ) : null}
-      <ServerUpdatePanel
+      <View style={orgPanelStyles.expandedSection}>
+        <ServerUpdatePanel
         server={server}
         updateState={updateState}
         updateData={viewModel.updateData}
@@ -1869,25 +1980,34 @@ function ExpandedServerPanel({
         onTriggerUpdate={onTriggerUpdate}
         onResetUpdateStatus={onResetUpdateStatus}
       />
-      <ServerCommandsPanel
-        server={server}
-        canManage={canManage}
-        showReboot={!viewModel.colocated}
-        commandState={commandState}
-        onPing={() => runCommand(() => onPing(server.id))}
-        onSetHostname={(hostname) =>
-          runCommand(() => onSetHostname(server.id, hostname))
-        }
-        onReboot={() => runCommand(() => onReboot(server.id))}
-      />
-      <TouchableOpacity
-        style={styles.metricsButton}
-        onPress={() => router.push(serverMetricsHref(orgId, server.id))}
-        accessibilityRole="button"
-        accessibilityLabel="View server metrics"
-      >
-        <Text style={styles.metricsButtonText}>Metrics</Text>
-      </TouchableOpacity>
+      </View>
+      <View style={orgPanelStyles.expandedSection}>
+        <ServerCommandsPanel
+          server={server}
+          canManage={canManage}
+          showReboot={!viewModel.colocated}
+          commandState={commandState}
+          onPing={() => runCommand(() => onPing(server.id))}
+          onSetHostname={(hostname) =>
+            runCommand(() => onSetHostname(server.id, hostname))
+          }
+          onReboot={() => runCommand(() => onReboot(server.id))}
+        />
+      </View>
+      <View style={styles.expandedActionsRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.metricsButton,
+            pressed && styles.buttonPressed,
+            webPointer,
+          ]}
+          onPress={() => router.push(serverMetricsHref(orgId, server.id))}
+          accessibilityRole="button"
+          accessibilityLabel="View server metrics"
+        >
+          <Text style={styles.metricsButtonText}>View metrics</Text>
+        </Pressable>
+      </View>
       {canManage && viewModel.colocated ? (
         <Text style={orgPanelStyles.muted}>
           The co-located control plane server cannot be deleted.
@@ -1913,6 +2033,7 @@ function ExpandedServerPanel({
 function OrgServerTableRow({
   orgId,
   server,
+  rowIndex,
   selected,
   expanded,
   updateState,
@@ -1931,6 +2052,7 @@ function OrgServerTableRow({
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
+  rowIndex: number
   selected: boolean
   expanded: boolean
   updateState: UpdateState
@@ -1948,11 +2070,20 @@ function OrgServerTableRow({
   deleteError: string | null
 }>) {
   const viewModel = deriveServerUpdateViewModel(server, updateState)
+  const [rowHovered, setRowHovered] = useState(false)
 
   return (
     <View style={styles.tableRowWrap}>
       <View
-        style={[styles.tableRow, expanded ? styles.tableRowExpanded : null]}
+        onPointerEnter={() => setRowHovered(true)}
+        onPointerLeave={() => setRowHovered(false)}
+        style={[
+          styles.tableRow,
+          rowIndex % 2 === 1 ? styles.tableRowEven : null,
+          selected ? styles.tableRowSelected : null,
+          expanded ? styles.tableRowExpanded : null,
+          rowHovered && !expanded ? styles.tableRowHovered : null,
+        ]}
       >
         <ServerNameCell
           server={server}
@@ -2149,7 +2280,7 @@ function ServerUpdatePanel({
 }>) {
   return (
     <View style={styles.updatePanel}>
-      <Text style={styles.updateHeading}>Daemon version</Text>
+      <Text style={orgPanelStyles.detailTitle}>Daemon version</Text>
 
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Running: </Text>

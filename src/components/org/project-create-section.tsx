@@ -9,14 +9,19 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { ProductionBadge } from '@/components/org/production-badge'
+import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
+import { emptyComposeDocument, type ComposeDocument } from '@/lib/compose'
 import {
   createProject,
   fetchProjectCatalog,
   fetchVisibleWorkspaces,
   isForbiddenError,
+  updateProject,
   type CatalogSummary,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
@@ -39,6 +44,7 @@ const webInputStyle = {
 } as const
 
 type ProjectType = 'docker-compose' | 'template' | 'managed'
+type WizardStep = 1 | 2 | 3 | 4
 
 type FieldErrors = {
   displayName?: string
@@ -49,21 +55,26 @@ const TYPE_OPTIONS: {
   type: ProjectType
   label: string
   description: string
+  marker: string
 }[] = [
   {
     type: 'docker-compose',
     label: 'Docker Compose',
-    description: 'Write your own Docker Compose configuration with a default environment.',
+    marker: 'Compose',
+    description:
+      'Define a base stack once. TurboPanel creates a Production environment automatically.',
   },
   {
     type: 'template',
     label: 'From Template',
-    description: 'Scaffold from a catalog template with default compose options.',
+    marker: 'Tpl',
+    description: 'Start from a catalog template with sensible defaults.',
   },
   {
     type: 'managed',
     label: 'Managed App',
-    description: 'Deploy a managed application from the project catalog.',
+    marker: 'App',
+    description: 'One-click apps from the TurboPanel catalog.',
   },
 ]
 
@@ -116,12 +127,51 @@ function inputStyle(hasError: boolean) {
   ]
 }
 
+function wizardProgressLabels(
+  selectedType: ProjectType | null,
+): readonly string[] {
+  if (selectedType === 'docker-compose') {
+    return ['Type', 'Details', 'Base compose']
+  }
+  if (selectedType) {
+    return ['Type', 'Catalog', 'Details']
+  }
+  return ['Type']
+}
+
+function wizardActiveIndex(
+  step: WizardStep,
+  selectedType: ProjectType | null,
+): number {
+  if (selectedType === 'docker-compose') {
+    if (step === 1) return 0
+    if (step === 3) return 1
+    return 2
+  }
+  if (step === 1) return 0
+  if (step === 2) return 1
+  return 2
+}
+
+function WizardProgress({
+  step,
+  selectedType,
+}: Readonly<{ step: WizardStep; selectedType: ProjectType | null }>) {
+  const labels = wizardProgressLabels(selectedType)
+  const activeIndex = wizardActiveIndex(step, selectedType)
+  return <WizardStepIndicator labels={labels} activeIndex={activeIndex} />
+}
+
 function TypeStep({
   onSelect,
 }: Readonly<{ onSelect: (type: ProjectType) => void }>) {
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Choose project type</Text>
+      <Text style={styles.stepTitle}>What are you deploying?</Text>
+      <Text style={styles.stepLead}>
+        Most teams start with Docker Compose — you edit a shared base file, then
+        pin each environment to a server.
+      </Text>
       <View style={styles.typeGrid}>
         {TYPE_OPTIONS.map((option) => (
           <Pressable
@@ -129,6 +179,14 @@ function TypeStep({
             style={styles.typeCard}
             onPress={() => onSelect(option.type)}
           >
+            <View style={styles.typeCardHeader}>
+              <View style={styles.typeMarker}>
+                <Text style={styles.typeMarkerText}>{option.marker}</Text>
+              </View>
+              {option.type === 'docker-compose' ? (
+                <ProductionBadge compact />
+              ) : null}
+            </View>
             <Text style={styles.typeCardLabel}>{option.label}</Text>
             <Text style={styles.typeCardDescription}>{option.description}</Text>
           </Pressable>
@@ -323,6 +381,7 @@ function WorkspacePicker({
 }
 
 function DetailsStep({
+  selectedType,
   selectedCode,
   resolvedWorkspaceId,
   workspacesLoading,
@@ -337,8 +396,10 @@ function DetailsStep({
   submitting,
   onDisplayNameChange,
   onDescriptionChange,
-  onSubmit,
+  onContinue,
+  continueLabel,
 }: Readonly<{
+  selectedType: ProjectType | null
   selectedCode: string | null
   resolvedWorkspaceId?: string
   workspacesLoading: boolean
@@ -353,11 +414,21 @@ function DetailsStep({
   submitting: boolean
   onDisplayNameChange: (value: string) => void
   onDescriptionChange: (value: string) => void
-  onSubmit: () => void
+  onContinue: () => void
+  continueLabel: string
 }>) {
   return (
     <View style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Project details</Text>
+      <View style={styles.detailsHeader}>
+        <Text style={styles.stepTitle}>Project details</Text>
+        {selectedType === 'docker-compose' ? <ProductionBadge compact /> : null}
+      </View>
+      {selectedType === 'docker-compose' ? (
+        <Text style={styles.stepLead}>
+          A Production environment is created automatically. Next you define the
+          shared base compose every environment inherits.
+        </Text>
+      ) : null}
       {selectedCode ? (
         <Text style={orgPanelStyles.muted}>Catalog: {selectedCode}</Text>
       ) : null}
@@ -410,10 +481,51 @@ function DetailsStep({
       <Pressable
         style={[styles.primaryButton, submitting && styles.buttonDisabled]}
         disabled={submitting}
-        onPress={onSubmit}
+        onPress={onContinue}
       >
         <Text style={styles.primaryButtonText}>
-          {submitting ? 'Creating…' : 'Create project'}
+          {submitting ? 'Creating…' : continueLabel}
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function ComposeSetupStep({
+  composeDraft,
+  onComposeChange,
+  saving,
+  apiError,
+  submitting,
+  onCreate,
+}: Readonly<{
+  composeDraft: ComposeDocument
+  onComposeChange: (document: ComposeDocument) => void
+  saving: boolean
+  apiError: string | null
+  submitting: boolean
+  onCreate: () => void
+}>) {
+  return (
+    <View style={styles.stepContent}>
+      <ComposeBasePanel
+        document={composeDraft}
+        onSave={async (document) => {
+          onComposeChange(document)
+        }}
+        saving={saving}
+        showQuickStarts
+        onQuickStart={onComposeChange}
+        defaultEditorView="visual"
+      />
+      {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
+      <Pressable
+        style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+        disabled={submitting}
+        onPress={onCreate}
+      >
+        <Text style={styles.primaryButtonText}>
+          {submitting ? 'Creating project…' : 'Create project'}
         </Text>
       </Pressable>
     </View>
@@ -435,7 +547,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       : undefined
   const resolvedWorkspaceId = urlWorkspaceId ?? scopeWorkspaceId
 
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<WizardStep>(1)
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<CatalogSummary[]>([])
@@ -448,6 +560,9 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const selectedWorkspaceId = resolvedWorkspaceId ?? pickedWorkspaceId
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
+  const [composeDraft, setComposeDraft] = useState<ComposeDocument>(() =>
+    emptyComposeDocument(),
+  )
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -541,6 +656,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const handleBack = () => {
     setApiError(null)
+    if (step === 4) {
+      setStep(3)
+      return
+    }
     if (step === 3 && selectedType === 'docker-compose') {
       setStep(1)
       setSelectedType(null)
@@ -575,10 +694,32 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     setFieldErrors({})
   }
 
-  const handleSubmit = async () => {
+  const createProjectRequest = async () => {
+    const workspaceIdForCreate = resolvedWorkspaceId ?? pickedWorkspaceId
+    if (!workspaceIdForCreate || !selectedType) {
+      return
+    }
+
+    const trimmedDescription = description.trim()
+    const result = await createProject({
+      workspaceId: workspaceIdForCreate,
+      type: selectedType,
+      displayName: displayName.trim(),
+      ...(trimmedDescription ? { description: trimmedDescription } : {}),
+      ...(selectedCode ? { code: selectedCode } : {}),
+    })
+
+    if (selectedType === 'docker-compose') {
+      await updateProject(result.id, { options: { compose: composeDraft } })
+    }
+
+    router.replace(`/${orgId}/projects/${result.id}`)
+  }
+
+  const handleDetailsContinue = async () => {
     const workspaceIdForCreate = resolvedWorkspaceId ?? pickedWorkspaceId
     if (!workspaceIdForCreate) {
-      setApiError('Select a workspace before creating the project.')
+      setApiError('Select a workspace before continuing.')
       return
     }
     if (!selectedType) {
@@ -602,18 +743,16 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       return
     }
 
+    if (selectedType === 'docker-compose') {
+      setApiError(null)
+      setStep(4)
+      return
+    }
+
     setSubmitting(true)
     setApiError(null)
     try {
-      const trimmedDescription = description.trim()
-      const result = await createProject({
-        workspaceId: workspaceIdForCreate,
-        type: selectedType,
-        displayName: displayName.trim(),
-        ...(trimmedDescription ? { description: trimmedDescription } : {}),
-        ...(selectedCode ? { code: selectedCode } : {}),
-      })
-      router.replace(`/${orgId}/projects/${result.id}`)
+      await createProjectRequest()
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
@@ -627,11 +766,34 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     }
   }
 
+  const handleComposeCreate = async () => {
+    setSubmitting(true)
+    setApiError(null)
+    try {
+      await createProjectRequest()
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setApiError(
+        err instanceof Error ? err.message : 'Failed to create project',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const detailsContinueLabel =
+    selectedType === 'docker-compose' ? 'Continue to base compose' : 'Create project'
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>New project</Text>
 
-      <SectionPanel title="New project">
+      <SectionPanel title="Create project" hint="Step-by-step wizard">
+        <WizardProgress step={step} selectedType={selectedType} />
+
         {step > 1 ? (
           <Pressable style={styles.backButton} onPress={handleBack}>
             <Text style={styles.backButtonText}>← Back</Text>
@@ -652,6 +814,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
         {step === 3 ? (
           <DetailsStep
+            selectedType={selectedType}
             selectedCode={selectedCode}
             resolvedWorkspaceId={resolvedWorkspaceId}
             workspacesLoading={workspacesLoading}
@@ -666,7 +829,19 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
             submitting={submitting}
             onDisplayNameChange={handleDisplayNameChange}
             onDescriptionChange={setDescription}
-            onSubmit={() => void handleSubmit()}
+            onContinue={() => void handleDetailsContinue()}
+            continueLabel={detailsContinueLabel}
+          />
+        ) : null}
+
+        {step === 4 ? (
+          <ComposeSetupStep
+            composeDraft={composeDraft}
+            onComposeChange={setComposeDraft}
+            saving={false}
+            apiError={apiError}
+            submitting={submitting}
+            onCreate={() => void handleComposeCreate()}
           />
         ) : null}
       </SectionPanel>
@@ -683,6 +858,38 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 28,
     fontWeight: '700',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  progressItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.borderChip,
+  },
+  progressDotDone: {
+    backgroundColor: colors.accent,
+  },
+  progressDotActive: {
+    backgroundColor: colors.accent,
+    transform: [{ scale: 1.15 }],
+  },
+  progressLabel: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  progressLabelActive: {
+    color: colors.textBody,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -701,6 +908,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  stepLead: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
   typeGrid: {
     gap: spacing.sm,
   },
@@ -711,6 +929,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
     padding: spacing.md,
     gap: spacing.xs,
+  },
+  typeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  typeMarker: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+    backgroundColor: colors.bgInput,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  typeMarkerText: {
+    color: colors.command,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   typeCardLabel: {
     color: colors.text,

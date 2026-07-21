@@ -6,7 +6,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native'
 import { LineChart } from 'react-native-gifted-charts'
-import { colors } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 export type MetricLineSeries = Readonly<{
   key: string
@@ -31,16 +31,12 @@ type MetricLineChartProps = Readonly<{
   xTickFormat?: (ms: number) => string
 }>
 
-// Left gutter reserved for the Y-axis labels; matches the previous SVG left
-// padding so charts keep the same visual alignment inside `ChartCard`.
-const Y_AXIS_WIDTH = 48
+const Y_AXIS_WIDTH = 52
 const Y_SECTIONS = 4
 const X_LABEL_COUNT = 5
-/** Room for a stub tick + compact time label under the plot. */
-const X_AXIS_LABELS_HEIGHT = 24
-/** Wide enough for compact ticks like `1:05 PM` / `Mar 3`. */
-const X_TICK_WIDTH = 64
-const X_TICK_MARK_HEIGHT = 4
+const X_AXIS_LABELS_HEIGHT = 28
+const X_TICK_WIDTH = 68
+const X_TICK_MARK_HEIGHT = 5
 
 type ChartPoint = Readonly<{ value: number | undefined }>
 
@@ -66,12 +62,10 @@ function computeYDomain(
   }
   if (min === max) {
     const pad = min === 0 ? 1 : Math.abs(min) * 0.1
-    // Host metrics are non-negative; never pad the axis below zero.
     return [Math.max(0, min - pad), max + pad]
   }
 
   const pad = (max - min) * 0.08
-  // Same floor: an 8% pad under a near-zero series used to paint −KiB/s labels.
   return [Math.max(0, min - pad), max + pad]
 }
 
@@ -89,10 +83,6 @@ function computeYAxisConfig(
   yFormat: (value: number) => string,
 ): YAxisConfig {
   const [domainMin, domainMax] = computeYDomain(series, yDomain)
-  // gifted-charts subtracts `yAxisOffset` from every value during data
-  // sanitisation, so the axis maximum must be the shifted range rather than the
-  // absolute domain maximum — otherwise charts with a non-zero lower bound
-  // collapse toward the bottom.
   const rawRange = domainMax - domainMin
   const range = Number.isFinite(rawRange) && rawRange > 0 ? rawRange : 1
   const stepValue = range / Y_SECTIONS
@@ -117,14 +107,6 @@ function defaultXTickLabel(tMs: number): string {
 
 type XAxisTick = Readonly<{ key: string; label: string; left: number }>
 
-/**
- * Build overlay ticks. gifted-charts pins each `xAxisLabelTexts[i]` into a
- * `width: spacing` box — with ~60 points that is ~6px, so "1:05 PM" reads as
- * "1". We draw ticks ourselves across the plot width instead.
- *
- * Every label is centered on its domain fraction so spacing stays even — do not
- * left/right-align the ends or the text blocks look bunched.
- */
 function buildXAxisTicks(
   xDomainMs: readonly [number, number],
   plotWidth: number,
@@ -150,7 +132,6 @@ function toChartData(points: MetricLineSeries['points']): ChartPoint[] {
   return points.map((point) => ({ value: point.value ?? undefined }))
 }
 
-/** Map a gap band onto the plot area (right of the Y-axis gutter). */
 function gapBandLayout(
   band: MetricGapBand,
   xDomainMs: readonly [number, number],
@@ -171,30 +152,53 @@ function gapBandLayout(
 
 const pointerStyles = StyleSheet.create({
   card: {
-    minWidth: 60,
-    borderRadius: 6,
+    minWidth: 72,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderMuted,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 2,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 3,
+    shadowColor: colors.bg,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
-  text: {
-    fontSize: 11,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  swatch: {
+    width: 6,
+    height: 6,
+    borderRadius: 2,
+  },
+  label: {
+    color: colors.textDim,
+    fontSize: 10,
     fontWeight: '600',
+    flex: 1,
+  },
+  value: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'monospace',
   },
 })
 
 function buildPointerConfig(
-  legend: readonly Readonly<{ key: string; color: string }>[],
+  legend: readonly Readonly<{ key: string; label: string; color: string }>[],
   yFormat: (value: number) => string,
 ) {
   return {
     pointerStripColor: colors.borderMuted,
     pointerStripWidth: 1,
+    pointerStripUptoDataPoint: true,
     pointerColor: colors.accent,
     radius: 4,
+    pointerLabelWidth: 120,
     autoAdjustPointerLabelPosition: true,
     pointerLabelComponent: (
       items: readonly ({ value?: number } | undefined)[],
@@ -205,15 +209,25 @@ function buildPointerConfig(
           if (value === undefined || value === null) return null
           const entry = legend[index]
           return (
-            <Text
-              key={entry?.key ?? entry?.color ?? 'series'}
-              style={[
-                pointerStyles.text,
-                { color: entry?.color ?? colors.textBody },
-              ]}
-            >
-              {yFormat(value)}
-            </Text>
+            <View key={entry?.key ?? `series-${index}`} style={pointerStyles.row}>
+              <View
+                style={[
+                  pointerStyles.swatch,
+                  { backgroundColor: entry?.color ?? colors.textBody },
+                ]}
+              />
+              <Text style={pointerStyles.label} numberOfLines={1}>
+                {entry?.label ?? 'Value'}
+              </Text>
+              <Text
+                style={[
+                  pointerStyles.value,
+                  { color: entry?.color ?? colors.textBody },
+                ]}
+              >
+                {yFormat(value)}
+              </Text>
+            </View>
           )
         })}
       </View>
@@ -243,7 +257,7 @@ export function MetricLineChart({
   const pointCount = firstSeries ? firstSeries.points.length : 0
 
   const chartWidth = Math.max(1, measuredWidth - Y_AXIS_WIDTH)
-  const chartHeight = Math.max(1, height - 40)
+  const chartHeight = Math.max(1, height - 44)
   const spacing = Math.max(1, chartWidth / Math.max(1, pointCount - 1))
 
   const yAxis = computeYAxisConfig(series, yDomain, yFormat)
@@ -267,13 +281,20 @@ export function MetricLineChart({
           color: firstSeries.color,
           startFillColor1: firstSeries.color,
           endFillColor1: firstSeries.color,
-          startOpacity1: 0.15,
+          startOpacity1: 0.28,
           endOpacity1: 0.02,
+          gradientDirection: 'vertical',
         }
       : {}
 
   const singleColorProps =
-    isSingle && firstSeries ? { color: firstSeries.color } : {}
+    isSingle && firstSeries ? { color: firstSeries.color, thickness: 2 } : {}
+
+  const pointerLegend = series.map((entry) => ({
+    key: entry.key,
+    label: entry.label,
+    color: entry.color,
+  }))
 
   return (
     <View style={{ width: '100%', height }} onLayout={handleLayout}>
@@ -317,9 +338,11 @@ export function MetricLineChart({
             endSpacing={0}
             adjustToWidth
             disableScroll
-            thickness={2}
             curved
             hideDataPoints
+            hideRules={false}
+            rulesType="solid"
+            rulesThickness={1}
             interpolateMissingValues={false}
             extrapolateMissingValues={false}
             maxValue={yAxis.maxValue}
@@ -331,16 +354,13 @@ export function MetricLineChart({
             xAxisLabelTexts={[]}
             xAxisLabelsHeight={X_AXIS_LABELS_HEIGHT}
             rulesColor={colors.borderArea}
-            yAxisColor={colors.borderArea}
+            yAxisColor="transparent"
             xAxisColor={colors.borderMuted}
-            yAxisThickness={1}
+            yAxisThickness={0}
             xAxisThickness={1}
             backgroundColor="transparent"
-            yAxisTextStyle={{ color: colors.textDim, fontSize: 10 }}
-            pointerConfig={buildPointerConfig(
-              series.map((entry) => ({ key: entry.key, color: entry.color })),
-              yFormat,
-            )}
+            yAxisTextStyle={styles.yAxisText}
+            pointerConfig={buildPointerConfig(pointerLegend, yFormat)}
           />
           <View
             pointerEvents="none"
@@ -384,14 +404,17 @@ const styles = StyleSheet.create({
   },
   gapLayer: {
     position: 'absolute',
-    top: 0,
+    top: spacing.xs,
     zIndex: 0,
   },
   gapBand: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(224, 179, 65, 0.12)',
+    backgroundColor: 'rgba(224, 179, 65, 0.14)',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(224, 179, 65, 0.28)',
   },
   xAxisOverlay: {
     position: 'absolute',
@@ -409,11 +432,18 @@ const styles = StyleSheet.create({
     width: 1,
     height: X_TICK_MARK_HEIGHT,
     backgroundColor: colors.borderMuted,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   xAxisTickText: {
     color: colors.textDim,
     fontSize: 10,
+    fontFamily: 'monospace',
     textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  yAxisText: {
+    color: colors.textDim,
+    fontSize: 10,
+    fontFamily: 'monospace',
   },
 })

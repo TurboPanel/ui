@@ -5,8 +5,16 @@ import {
   ORG_ID_HEADER,
 } from '@/lib/org-context'
 import type { ComposeDocument } from '@/lib/compose'
+import type {
+  CreateManagedServiceBody,
+  ManagedServiceRecord,
+} from '@/lib/managed-services'
 
 export type { ComposeDocument } from '@/lib/compose'
+export type {
+  CreateManagedServiceBody,
+  ManagedServiceRecord,
+} from '@/lib/managed-services'
 
 const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
@@ -1567,4 +1575,35 @@ export async function fetchServerMetricsSummary(
     query,
     organizationId,
   )
+}
+
+export async function fetchManagedServices(options?: {
+  serverId?: string
+}): Promise<{ managedServices: ManagedServiceRecord[] }> {
+  const params = options?.serverId
+    ? new URLSearchParams({ serverId: options.serverId })
+    : null
+  const suffix = params ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/managed-services${suffix}`)
+}
+
+export async function fetchManagedService(
+  id: string,
+): Promise<{ managedService: ManagedServiceRecord }> {
+  return await apiFetch(`${CLIENT_API}/managed-services/${id}`)
+}
+
+export async function createManagedService(
+  body: CreateManagedServiceBody,
+): Promise<{ ok: true; managedService: ManagedServiceRecord }> {
+  return await apiFetch(`${CLIENT_API}/managed-services`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteManagedService(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/managed-services/${id}`, {
+    method: 'DELETE',
+  })
 }

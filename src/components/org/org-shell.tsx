@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrgHeader } from '@/components/org/org-header'
 import { OrgSidebar } from '@/components/org/org-sidebar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
-import { colors, layout } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
   const { width } = useWindowDimensions()
@@ -27,13 +27,19 @@ export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
     <WorkspaceScopeProvider orgId={orgId}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.root}>
-          {isDesktop ? <OrgSidebar orgId={orgId} /> : null}
+          {isDesktop ? (
+            <View style={styles.sidebarSlot}>
+              <OrgSidebar orgId={orgId} />
+            </View>
+          ) : null}
 
           {!isDesktop && drawerOpen ? (
             <>
               <Pressable
                 style={styles.backdrop}
                 onPress={() => setDrawerOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close navigation menu"
               />
               <View style={styles.drawer}>
                 <OrgSidebar
@@ -76,9 +82,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.bg,
   },
+  sidebarSlot: {
+    flexShrink: 0,
+    alignSelf: 'stretch',
+  },
   main: {
     flex: 1,
     minWidth: 0,
+    backgroundColor: colors.bg,
   },
   contentScroll: {
     flex: 1,
@@ -87,11 +98,11 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     paddingHorizontal: layout.contentGutter,
-    paddingVertical: 20,
-    gap: 12,
+    paddingVertical: spacing.xl,
+    gap: spacing.md,
   },
   backdrop: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.overlay,
     zIndex: 10,
   },
@@ -100,7 +111,10 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
+    width: layout.sidebarWidth,
     zIndex: 11,
-    boxShadow: '2px 0 8px rgba(0, 0, 0, 0.4)',
+    borderRightWidth: 1,
+    borderRightColor: colors.borderSubtle,
+    boxShadow: '4px 0 24px rgba(0, 0, 0, 0.5)',
   },
 })

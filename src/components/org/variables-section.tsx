@@ -42,6 +42,40 @@ function displayVariableValue(variable: VariableRecord): string {
   return variable.value ?? ''
 }
 
+const VARIABLE_PRESETS = [
+  { key: 'PORT', value: '3000', isSecret: false },
+  { key: 'NODE_ENV', value: 'production', isSecret: false },
+  { key: 'DATABASE_URL', value: '', isSecret: true },
+  { key: 'REDIS_URL', value: '', isSecret: true },
+  { key: 'APP_SECRET', value: '', isSecret: true },
+] as const
+
+function VariablePresetRow({
+  onPick,
+}: Readonly<{
+  onPick: (preset: (typeof VARIABLE_PRESETS)[number]) => void
+}>) {
+  return (
+    <View style={styles.presetSection}>
+      <Text style={styles.presetLabel}>Common keys</Text>
+      <View style={styles.presetRow}>
+        {VARIABLE_PRESETS.map((preset) => (
+          <Pressable
+            key={preset.key}
+            style={styles.presetChip}
+            onPress={() => onPick(preset)}
+          >
+            <Text style={styles.presetChipText}>{preset.key}</Text>
+            {preset.isSecret ? (
+              <Text style={styles.presetChipHint}>secret</Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  )
+}
+
 function inputStyle(hasError: boolean) {
   return [
     Platform.OS === 'web'
@@ -395,11 +429,19 @@ function VariablesListContent({
   }
 
   if (variables.length === 0) {
-    return <Text style={orgPanelStyles.muted}>No variables yet.</Text>
+    return (
+      <Text style={orgPanelStyles.muted}>
+        No variables yet — add keys your compose references with {'${KEY}'}.
+      </Text>
+    )
   }
 
   return (
     <View style={styles.list}>
+      <View style={styles.tableHeader}>
+        <Text style={styles.tableHeaderCell}>Key</Text>
+        <Text style={styles.tableHeaderCell}>Value</Text>
+      </View>
       {variables.map((variable) => (
         <VariableCard
           key={variable.id}
@@ -736,7 +778,22 @@ export function VariablesSection({
   }
 
   return (
-    <SectionPanel title="Variables" hint="Environment variables">
+    <SectionPanel
+      title="Variables"
+      hint="Injected into compose at deploy — lower scopes override"
+    >
+      {canOwn ? (
+        <VariablePresetRow
+          onPick={(preset) => {
+            setShowAddForm(true)
+            setNewKey(preset.key)
+            setNewValue(preset.value)
+            setNewIsSecret(preset.isSecret)
+            setAddFieldError(null)
+          }}
+        />
+      ) : null}
+
       {canOwn ? (
         <Pressable
           style={styles.primaryButton}
@@ -800,6 +857,60 @@ export function VariablesSection({
 const styles = StyleSheet.create({
   list: {
     gap: 8,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderArea,
+  },
+  tableHeaderCell: {
+    flex: 1,
+    color: colors.textLabel,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  presetSection: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  presetLabel: {
+    color: colors.textLabel,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  presetChipText: {
+    color: colors.command,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+  },
+  presetChipHint: {
+    color: colors.pending,
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   variableHeader: {
     flexDirection: 'row',

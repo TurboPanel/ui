@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ComposeEditorSection } from '@/components/org/compose-editor-section'
+import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -206,7 +207,7 @@ export function ProjectDetailSection({
 
       {project ? (
         <>
-          <SectionPanel title="Project" hint="Project details">
+          <SectionPanel title="Project" hint="Name, workspace, and metadata">
             <View style={styles.headerRow}>
               <Text style={orgPanelStyles.detailTitle}>
                 {project.displayName?.trim() || 'Unnamed project'}
@@ -216,12 +217,28 @@ export function ProjectDetailSection({
             {project.description ? (
               <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
             ) : null}
-            <ComposeEditorSection
-              document={project.options?.compose}
-              onSave={saveCompose}
-              saving={savingCompose}
-            />
           </SectionPanel>
+
+          {project.metadata?.type === 'docker-compose' ||
+          project.metadata?.type == null ? (
+            <SectionPanel
+              title="Base compose"
+              hint="Shared template — environments add overlays"
+              accent
+            >
+              <ComposeBasePanel
+                document={project.options?.compose}
+                onSave={saveCompose}
+                saving={savingCompose}
+                showQuickStarts={canOwn}
+              />
+            </SectionPanel>
+          ) : null}
+
+          {project.metadata?.type === 'docker-compose' ||
+          project.metadata?.type == null ? (
+            <ProjectVariablesSection orgId={orgId} projectId={project.id} />
+          ) : null}
 
           <SectionPanel
             title="Workspace"

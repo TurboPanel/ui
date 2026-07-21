@@ -109,13 +109,18 @@ function PingLatencyBlock({
   latency,
 }: Readonly<{ latency: PingLatencyBreakdown }>) {
   return (
-    <View style={styles.latencyBlock}>
-      {LATENCY_ROWS.map(({ key, label }) => (
-        <Text key={key} style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>{label}: </Text>
-          {formatLatencyMs(latency[key])}
-        </Text>
-      ))}
+    <View style={orgPanelStyles.detailCard}>
+      <Text style={orgPanelStyles.detailTitle}>Latency breakdown</Text>
+      <View style={styles.latencyGrid}>
+        {LATENCY_ROWS.map(({ key, label }) => (
+          <View key={key} style={styles.latencyRow}>
+            <Text style={styles.latencyLabel}>{label}</Text>
+            <Text style={styles.latencyValue}>
+              {formatLatencyMs(latency[key])}
+            </Text>
+          </View>
+        ))}
+      </View>
     </View>
   )
 }
@@ -167,12 +172,15 @@ function RebootControls({
     <TouchableOpacity
       style={[
         styles.actionButton,
+        styles.actionButtonDanger,
         (!connected || commandInFlight) && styles.actionButtonDisabled,
       ]}
       onPress={onRequestConfirm}
       disabled={!connected || commandInFlight}
     >
-      <Text style={styles.actionButtonText}>Reboot server</Text>
+      <Text style={[styles.actionButtonText, styles.actionButtonTextDanger]}>
+        Reboot server
+      </Text>
     </TouchableOpacity>
   )
 }
@@ -300,9 +308,10 @@ export function ServerCommandsPanel({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.sectionHeading}>Commands</Text>
+      <Text style={orgPanelStyles.detailTitle}>Commands</Text>
 
-      <View style={styles.commandRow}>
+      <View style={styles.actionBar}>
+        <View style={styles.commandRow}>
         <TouchableOpacity
           style={[
             styles.actionButton,
@@ -338,6 +347,7 @@ export function ServerCommandsPanel({
             onCancel={() => setConfirmingReboot(false)}
           />
         ) : null}
+        </View>
       </View>
 
       {showRebootProgress ? (
@@ -380,13 +390,15 @@ export function ServerCommandsPanel({
 
 const styles = StyleSheet.create({
   root: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  sectionHeading: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
+  actionBar: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgInset,
+    padding: spacing.sm,
+    gap: spacing.sm,
   },
   commandRow: {
     flexDirection: 'row',
@@ -404,6 +416,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: colors.bgActive,
   },
+  actionButtonDanger: {
+    borderColor: colors.error,
+    backgroundColor: colors.bgSecondary,
+  },
   actionButtonDisabled: {
     opacity: 0.5,
   },
@@ -411,6 +427,9 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 12,
     fontWeight: '600',
+  },
+  actionButtonTextDanger: {
+    color: colors.error,
   },
   confirmRow: {
     flexDirection: 'row',
@@ -439,17 +458,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  latencyBlock: {
-    gap: 2,
-    marginTop: spacing.xs,
-  },
   errorText: {
     color: colors.errorText,
     fontSize: 12,
   },
   hostnameBlock: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     gap: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderArea,
   },
   label: {
     color: colors.textBody,
@@ -469,5 +487,29 @@ const styles = StyleSheet.create({
   },
   inputDisabled: {
     opacity: 0.5,
+  },
+  latencyGrid: {
+    gap: spacing.xs,
+  },
+  latencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderArea,
+  },
+  latencyLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+  },
+  latencyValue: {
+    color: colors.stdout,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    fontWeight: '700',
   },
 })

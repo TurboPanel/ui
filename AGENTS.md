@@ -46,6 +46,20 @@ python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack react-n
 
 North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables — not light SaaS / purple gradients / cyberpunk neon.
 
+### UI overhaul roadmap (web)
+
+| Phase | Scope | Status |
+|-------|--------|--------|
+| **1** | Design system pages, compose create wizard + base panel, shell polish, HA terminology, managed-services UI, variables presets | **Shipped** |
+| **2** | Compose flow rail + wizard step indicator, project variables panel, managed provision API wired, Expo SDK 56.0.16 | **Shipped** |
+| **3** | Org VPC (WireGuard), read replicas, move services between servers, managed DB user provisioning, daemon `managed.provision` command | Planned |
+
+**Shell polish (Phase 1):** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org sidebar brand stripe + sub-nav rail; header eyebrow + user chip. Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
+
+Canonical page overrides: `design-system/turbopanel/pages/project-create.md`, `managed-services.md`, `variables.md`, `projects.md`, `servers.md`.
+
+**Platform copy:** user-facing “Workers / Cloudflare / edge” → **High Availability** (`src/lib/platform-copy.ts`). Backend identifiers unchanged.
+
 ## End-user auth & first-run install (self-hosted)
 
 - **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/servers`.

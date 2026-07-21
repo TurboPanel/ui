@@ -56,43 +56,46 @@ export function FirstRunWizard({
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.description}>{description}</Text>
+      <View style={styles.cardStripe} />
+      <View style={styles.cardBody}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.description}>{description}</Text>
 
-      {notes && notes.length > 0 ? (
-        <View style={styles.notes}>
-          {notes.map((note) => (
-            <NoteRow key={note} text={note} />
-          ))}
-        </View>
-      ) : null}
+        {notes && notes.length > 0 ? (
+          <View style={styles.notes}>
+            {notes.map((note) => (
+              <NoteRow key={note} text={note} />
+            ))}
+          </View>
+        ) : null}
 
-      {onNameChange ? (
-        <View style={styles.field}>
-          {nameLabel ? <Text style={styles.label}>{nameLabel}</Text> : null}
-          <TextInput
-            style={Platform.OS === 'web' ? webInputStyle : styles.input}
-            value={nameValue ?? ''}
-            onChangeText={onNameChange}
-            placeholder={namePlaceholder}
-            placeholderTextColor={colors.textDim}
-            autoCapitalize="words"
-            autoCorrect={false}
-            editable={!busy}
-            maxLength={255}
-          />
-        </View>
-      ) : null}
+        {onNameChange ? (
+          <View style={styles.field}>
+            {nameLabel ? <Text style={styles.label}>{nameLabel}</Text> : null}
+            <TextInput
+              style={Platform.OS === 'web' ? webInputStyle : styles.input}
+              value={nameValue ?? ''}
+              onChangeText={onNameChange}
+              placeholder={namePlaceholder}
+              placeholderTextColor={colors.textDim}
+              autoCapitalize="words"
+              autoCorrect={false}
+              editable={!busy}
+              maxLength={255}
+            />
+          </View>
+        ) : null}
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-      <Pressable
-        style={[styles.primaryButton, busy && styles.buttonDisabled]}
-        disabled={busy}
-        onPress={onPrimaryAction}
-      >
-        <Text style={styles.primaryButtonText}>{actionLabel}</Text>
-      </Pressable>
+        <Pressable
+          style={[styles.primaryButton, busy && styles.buttonDisabled]}
+          disabled={busy}
+          onPress={onPrimaryAction}
+        >
+          <Text style={styles.primaryButtonText}>{actionLabel}</Text>
+        </Pressable>
+      </View>
     </View>
   )
 }
@@ -100,10 +103,20 @@ export function FirstRunWizard({
 const styles = StyleSheet.create({
   card: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'stretch',
     backgroundColor: colors.bgActive,
-    borderColor: colors.accent,
+    borderColor: colors.borderMuted,
     borderWidth: 1,
     borderRadius: 10,
+    overflow: 'hidden',
+  },
+  cardStripe: {
+    width: 3,
+    backgroundColor: colors.accent,
+  },
+  cardBody: {
+    flex: 1,
     padding: spacing.lg,
     gap: spacing.md,
   },

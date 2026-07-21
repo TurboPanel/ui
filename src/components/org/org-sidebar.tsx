@@ -3,7 +3,8 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
-import { colors, layout } from '@/lib/theme'
+import { webPointer } from '@/components/org/org-panel-styles'
+import { colors, layout, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import { projectsHrefForScope } from '@/lib/workspace-scope'
 
@@ -20,12 +21,20 @@ export function OrgSidebar({
   const { scopeId } = useWorkspaceScope()
   const showAdminLink = isAdminSession(session)
   const adminHref = adminAreaHref('networking')
+  const adminActive =
+    pathname === adminHref || pathname.startsWith('/admin/')
 
   return (
     <View style={styles.sidebar}>
       <View style={styles.brand}>
-        <Text style={styles.brandTitle}>TurboPanel</Text>
-        <Text style={styles.brandHint}>Organization console</Text>
+        <View style={styles.brandStripe} />
+        <View style={styles.brandCopy}>
+          <View style={styles.brandTitleRow}>
+            <View style={styles.brandDot} />
+            <Text style={styles.brandTitle}>TurboPanel</Text>
+          </View>
+          <Text style={styles.brandHint}>Ops console</Text>
+        </View>
       </View>
 
       <View style={styles.nav}>
@@ -44,14 +53,23 @@ export function OrgSidebar({
           return (
             <View key={area.id} style={styles.areaGroup}>
               <Pressable
-                style={[styles.areaItem, areaActive && styles.areaItemActive]}
+                style={({ pressed }) => [
+                  styles.areaItem,
+                  areaActive && styles.areaItemActive,
+                  pressed && styles.itemPressed,
+                  webPointer,
+                ]}
                 onPress={() => {
                   router.push(areaHref as Href)
                   onNavigate?.()
                 }}
               >
+                {areaActive ? <View style={styles.areaActiveBar} /> : null}
                 <Text
-                  style={[styles.areaLabel, areaActive && styles.areaLabelActive]}
+                  style={[
+                    styles.areaLabel,
+                    areaActive && styles.areaLabelActive,
+                  ]}
                 >
                   {area.label}
                 </Text>
@@ -59,37 +77,42 @@ export function OrgSidebar({
 
               {areaActive && area.subRoutes.length > 0 ? (
                 <View style={styles.subNav}>
-                  {area.subRoutes.map((subRoute) => {
-                    const subHref = orgRouteHref(
-                      orgId,
-                      area.pathSegment,
-                      subRoute.pathSegment,
-                    )
-                    const subActive = pathname === subHref
+                  <View style={styles.subNavRail} />
+                  <View style={styles.subNavItems}>
+                    {area.subRoutes.map((subRoute) => {
+                      const subHref = orgRouteHref(
+                        orgId,
+                        area.pathSegment,
+                        subRoute.pathSegment,
+                      )
+                      const subActive = pathname === subHref
 
-                    return (
-                      <Pressable
-                        key={subRoute.id}
-                        style={[
-                          styles.subItem,
-                          subActive && styles.subItemActive,
-                        ]}
-                        onPress={() => {
-                          router.push(subHref as Href)
-                          onNavigate?.()
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.subLabel,
-                            subActive && styles.subLabelActive,
+                      return (
+                        <Pressable
+                          key={subRoute.id}
+                          style={({ pressed }) => [
+                            styles.subItem,
+                            subActive && styles.subItemActive,
+                            pressed && styles.itemPressed,
+                            webPointer,
                           ]}
+                          onPress={() => {
+                            router.push(subHref as Href)
+                            onNavigate?.()
+                          }}
                         >
-                          {subRoute.label}
-                        </Text>
-                      </Pressable>
-                    )
-                  })}
+                          <Text
+                            style={[
+                              styles.subLabel,
+                              subActive && styles.subLabelActive,
+                            ]}
+                          >
+                            {subRoute.label}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -99,22 +122,24 @@ export function OrgSidebar({
 
       {showAdminLink ? (
         <View style={styles.adminNav}>
+          <Text style={styles.adminNavLabel}>Platform</Text>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.adminItem,
-              (pathname === adminHref || pathname.startsWith('/admin/')) &&
-                styles.adminItemActive,
+              adminActive && styles.adminItemActive,
+              pressed && styles.itemPressed,
+              webPointer,
             ]}
             onPress={() => {
               router.push(adminHref as Href)
               onNavigate?.()
             }}
           >
+            {adminActive ? <View style={styles.areaActiveBar} /> : null}
             <Text
               style={[
                 styles.adminLabel,
-                (pathname === adminHref || pathname.startsWith('/admin/')) &&
-                  styles.adminLabelActive,
+                adminActive && styles.adminLabelActive,
               ]}
             >
               Admin
@@ -130,69 +155,118 @@ const styles = StyleSheet.create({
   sidebar: {
     width: layout.sidebarWidth,
     flexShrink: 0,
+    alignSelf: 'stretch',
     backgroundColor: colors.bgSidebar,
     borderRightWidth: 1,
-    borderRightColor: colors.border,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    gap: 20,
+    borderRightColor: colors.borderSubtle,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   brand: {
-    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.xs,
+  },
+  brandStripe: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+    marginRight: spacing.sm,
+  },
+  brandCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  brandTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  brandDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
   },
   brandTitle: {
     color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   brandHint: {
     color: colors.textDim,
     fontSize: 11,
-    marginTop: 4,
+    marginLeft: 14,
   },
   nav: {
-    gap: 8,
+    flex: 1,
+    gap: spacing.xs,
   },
   areaGroup: {
-    gap: 4,
+    gap: 2,
   },
   areaItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: spacing.md,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
   areaItemActive: {
     borderColor: colors.borderMuted,
     backgroundColor: colors.bgSecondary,
   },
+  areaActiveBar: {
+    position: 'absolute',
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 2,
+    borderRadius: 1,
+    backgroundColor: colors.accent,
+  },
   areaLabel: {
     color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   areaLabelActive: {
     color: colors.text,
   },
   subNav: {
+    flexDirection: 'row',
+    paddingLeft: spacing.md,
+    marginTop: 2,
+  },
+  subNavRail: {
+    width: 1,
+    backgroundColor: colors.borderArea,
+    marginRight: spacing.sm,
+    marginVertical: 4,
+  },
+  subNavItems: {
+    flex: 1,
     gap: 2,
-    paddingLeft: 10,
   },
   subItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: spacing.md,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   subItemActive: {
-    borderColor: colors.accent,
+    borderColor: colors.borderMuted,
     backgroundColor: colors.bgActive,
   },
   subLabel: {
     color: colors.textDim,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   subLabelActive: {
@@ -200,16 +274,28 @@ const styles = StyleSheet.create({
   },
   adminNav: {
     marginTop: 'auto',
-    paddingTop: 12,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderSubtle,
+    gap: spacing.xs,
+  },
+  adminNavLabel: {
+    color: colors.textFaint,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.md,
   },
   adminItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: spacing.md,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
   adminItemActive: {
     borderColor: colors.borderMuted,
@@ -217,10 +303,13 @@ const styles = StyleSheet.create({
   },
   adminLabel: {
     color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   adminLabelActive: {
     color: colors.text,
+  },
+  itemPressed: {
+    opacity: 0.85,
   },
 })

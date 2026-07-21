@@ -13,6 +13,12 @@ export const ORG_AREAS = [
     hint: 'Managed hosts and fleet status',
     subRoutes: [
       {
+        id: 'managed',
+        label: 'Managed',
+        pathSegment: 'managed',
+        hint: 'Databases and caches on your servers',
+      },
+      {
         id: 'networks',
         label: 'Networks',
         pathSegment: 'networks',

@@ -64,3 +64,10 @@ example
 .pnpm-store/
 # co-located dev host stamp (normalize-dev-checkout.sh)
 .turbopanel-checkout-stamp
+
+# Python bytecode (ui-ux-pro-max skill scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.agents/skills/**/__pycache__/
+.agents/skills/**/*.pyc

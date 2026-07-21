@@ -5,17 +5,22 @@ import { colors } from '@/lib/theme'
 export function SectionPanel({
   title,
   hint,
+  accent,
   children,
 }: Readonly<{
   title: string
   hint?: string
+  accent?: boolean
   children: ReactNode
 }>) {
   return (
     <View style={styles.area}>
-      <View style={styles.areaHeader}>
-        <Text style={styles.areaTitle}>{title}</Text>
-        {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
+      <View style={[styles.areaHeader, accent && styles.areaHeaderAccent]}>
+        {accent ? <View style={styles.accentStripe} /> : null}
+        <View style={styles.areaHeaderCopy}>
+          <Text style={styles.areaTitle}>{title}</Text>
+          {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
+        </View>
       </View>
       <View style={styles.areaBody}>{children}</View>
     </View>
@@ -31,11 +36,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   areaHeader: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'stretch',
     borderBottomWidth: 1,
     borderBottomColor: colors.borderArea,
     backgroundColor: colors.bgAreaHeader,
+  },
+  areaHeaderAccent: {
+    backgroundColor: colors.bgActive,
+  },
+  accentStripe: {
+    width: 3,
+    backgroundColor: colors.accent,
+  },
+  areaHeaderCopy: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   areaTitle: {
     color: colors.textTitle,

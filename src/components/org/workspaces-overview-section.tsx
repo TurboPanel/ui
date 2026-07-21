@@ -192,7 +192,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Workspaces</Text>
+      <Text style={orgPanelStyles.pageTitle}>Workspaces</Text>
       <Text style={styles.copy}>
         New organizations start with a Default Workspace. Create more here, then
         use the workspace switcher on Projects to filter by workspace.

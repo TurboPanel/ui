@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
   createLicense,
@@ -36,6 +36,59 @@ function isAuthorizationError(err: unknown): boolean {
 }
 
 type WizardStep = 'create' | 'install' | 'waiting'
+
+const WIZARD_STEPS: ReadonlyArray<{ id: WizardStep; label: string }> = [
+  { id: 'create', label: 'Name' },
+  { id: 'install', label: 'Install' },
+  { id: 'waiting', label: 'Connect' },
+]
+
+function WizardStepIndicator({ step }: Readonly<{ step: WizardStep }>) {
+  const activeIndex = WIZARD_STEPS.findIndex((entry) => entry.id === step)
+
+  return (
+    <View style={styles.stepRow}>
+      {WIZARD_STEPS.map((entry, index) => {
+        const done = index < activeIndex
+        const active = entry.id === step
+        return (
+          <View key={entry.id} style={styles.stepItem}>
+            <View
+              style={[
+                styles.stepDot,
+                done && styles.stepDotDone,
+                active && styles.stepDotActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.stepDotText,
+                  done && styles.stepDotTextDone,
+                  active && styles.stepDotTextActive,
+                ]}
+              >
+                {index + 1}
+              </Text>
+            </View>
+            <Text
+              style={[styles.stepLabel, active && styles.stepLabelActive]}
+            >
+              {entry.label}
+            </Text>
+            {index < WIZARD_STEPS.length - 1 ? (
+              <View
+                style={[
+                  styles.stepConnector,
+                  index < activeIndex && styles.stepConnectorDone,
+                ]}
+              />
+            ) : null}
+          </View>
+        )
+      })}
+    </View>
+  )
+}
 
 type AddServerWizardProps = Readonly<{
   onComplete: () => void
@@ -138,7 +191,13 @@ function CreateStep({
       ) : null}
       <View style={styles.formActions}>
         <Pressable
-          style={[styles.primaryButton, creating && styles.buttonDisabled]}
+          style={({ pressed }) => [
+            orgPanelStyles.toolbarBtnPrimary,
+            styles.primaryButtonFill,
+            creating && styles.buttonDisabled,
+            pressed && styles.buttonPressed,
+            webPointer,
+          ]}
           disabled={creating}
           onPress={onContinue}
         >
@@ -148,11 +207,15 @@ function CreateStep({
         </Pressable>
         {onCancel ? (
           <Pressable
-            style={styles.secondaryButton}
+            style={({ pressed }) => [
+              orgPanelStyles.toolbarBtnSecondary,
+              pressed && styles.buttonPressed,
+              webPointer,
+            ]}
             disabled={creating}
             onPress={onCancel}
           >
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
+            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
           </Pressable>
         ) : null}
       </View>
@@ -181,10 +244,12 @@ function InstallStep({
 }: InstallStepProps) {
   return (
     <View style={styles.revealed}>
-      <Text style={styles.warning}>
-        Run this install command on the new server. The registration key is
-        embedded and can only enroll one host.
-      </Text>
+      <View style={orgPanelStyles.calloutWarning}>
+        <Text style={orgPanelStyles.calloutWarningText}>
+          Run this install command on the new server. The registration key is
+          embedded and can only enroll one host.
+        </Text>
+      </View>
       <Text style={styles.secretLabel}>Install command</Text>
       {__DEV__ ? (
         <DevInstallUrlFields
@@ -193,10 +258,19 @@ function InstallStep({
           onChange={onInstallBaseUrlChange}
         />
       ) : null}
-      <Text selectable style={styles.secretValue}>
-        {displayedInstallCommand}
-      </Text>
-      <Pressable style={styles.secondaryButton} onPress={onCopyInstallCommand}>
+      <View style={orgPanelStyles.commandCodeBlock}>
+        <Text selectable style={styles.secretValue}>
+          {displayedInstallCommand}
+        </Text>
+      </View>
+      <Pressable
+        style={({ pressed }) => [
+          styles.secondaryButton,
+          pressed && styles.buttonPressed,
+          webPointer,
+        ]}
+        onPress={onCopyInstallCommand}
+      >
         <Text style={styles.secondaryButtonText}>
           {installCommandCopied
             ? 'Copied install command'
@@ -206,7 +280,15 @@ function InstallStep({
       <Text style={orgPanelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
-      <Pressable style={styles.primaryButton} onPress={onContinue}>
+      <Pressable
+        style={({ pressed }) => [
+          orgPanelStyles.toolbarBtnPrimary,
+          styles.primaryButtonFill,
+          pressed && styles.buttonPressed,
+          webPointer,
+        ]}
+        onPress={onContinue}
+      >
         <Text style={styles.primaryButtonText}>Continue</Text>
       </Pressable>
     </View>
@@ -235,7 +317,15 @@ function WaitingStep({
       <View style={styles.waiting}>
         <Text style={orgPanelStyles.error}>{pollError}</Text>
         <View style={styles.waitingActions}>
-          <Pressable style={styles.primaryButton} onPress={onRetry}>
+          <Pressable
+            style={({ pressed }) => [
+              orgPanelStyles.toolbarBtnPrimary,
+              styles.primaryButtonFill,
+              pressed && styles.buttonPressed,
+              webPointer,
+            ]}
+            onPress={onRetry}
+          >
             <Text style={styles.primaryButtonText}>Retry</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={onCancel}>
@@ -264,13 +354,24 @@ function WaitingStep({
 
   return (
     <View style={styles.waiting}>
-      <Text style={styles.success}>
-        ✓ Server connected —{' '}
-        <Text style={styles.successHostname}>
-          {connectedServer.hostname?.trim() || connectedServer.id}
+      <View style={styles.successRow}>
+        <View style={styles.successDot} />
+        <Text style={styles.success}>
+          Server connected —{' '}
+          <Text style={styles.successHostname}>
+            {connectedServer.hostname?.trim() || connectedServer.id}
+          </Text>
         </Text>
-      </Text>
-      <Pressable style={styles.primaryButton} onPress={onFinish}>
+      </View>
+      <Pressable
+        style={({ pressed }) => [
+          orgPanelStyles.toolbarBtnPrimary,
+          styles.primaryButtonFill,
+          pressed && styles.buttonPressed,
+          webPointer,
+        ]}
+        onPress={onFinish}
+      >
         <Text style={styles.primaryButtonText}>Done</Text>
       </Pressable>
     </View>
@@ -463,7 +564,9 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
     <SectionPanel
       title="Add server"
       hint="Install the TurboPanel daemon on a new host"
+      accent
     >
+      <WizardStepIndicator step={step} />
       {step === 'create' ? (
         <CreateStep
           displayName={displayName}
@@ -534,12 +637,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     minHeight: 44,
   },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
+  primaryButtonFill: {
     backgroundColor: colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.accent,
   },
   primaryButtonText: {
     color: colors.buttonText,
@@ -562,6 +662,83 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
+  buttonPressed: {
+    opacity: 0.88,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderArea,
+  },
+  stepItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  stepDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  stepDotDone: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  stepDotText: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  stepDotTextActive: {
+    color: colors.accent,
+  },
+  stepDotTextDone: {
+    color: colors.buttonText,
+  },
+  stepLabel: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  stepLabelActive: {
+    color: colors.text,
+  },
+  stepConnector: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.borderArea,
+    marginHorizontal: 2,
+  },
+  stepConnectorDone: {
+    backgroundColor: colors.accent,
+  },
+  successRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  successDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
   revealed: {
     gap: spacing.sm,
   },
@@ -577,11 +754,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  warning: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
   },
   secretLabel: {
     color: colors.textMuted,

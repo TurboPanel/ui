@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ActivityIndicator,
@@ -15,7 +15,8 @@ import {
   type MetricGapBand,
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { SectionPanel } from '@/components/org/section-panel'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   formatAxisTime,
   formatBytes,
@@ -66,9 +67,9 @@ const SERIES_COLORS = [
   colors.accent,
   colors.command,
   colors.pending,
-  '#c792ea',
-  '#f78c6c',
-  '#82aaff',
+  colors.errorSoft,
+  colors.log,
+  colors.textChip,
 ] as const
 
 type ChartDefinition = Readonly<{
@@ -176,6 +177,50 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatUptimeSeconds(v),
   },
 ]
+
+type ChartGroupDefinition = Readonly<{
+  id: string
+  label: string
+  hint: string
+  chartIds: readonly string[]
+}>
+
+const CHART_GROUPS: readonly ChartGroupDefinition[] = [
+  {
+    id: 'compute',
+    label: 'Compute',
+    hint: 'CPU and load average',
+    chartIds: ['cpu', 'load'],
+  },
+  {
+    id: 'memory',
+    label: 'Memory',
+    hint: 'RAM and swap utilization',
+    chartIds: ['memory-percent', 'memory-bytes'],
+  },
+  {
+    id: 'disk',
+    label: 'Disk',
+    hint: 'Usage, throughput, and I/O ops',
+    chartIds: ['disk-percent', 'disk-throughput', 'disk-ops'],
+  },
+  {
+    id: 'network',
+    label: 'Network',
+    hint: 'Receive and transmit throughput',
+    chartIds: ['network'],
+  },
+  {
+    id: 'system',
+    label: 'System',
+    hint: 'Process count and uptime',
+    chartIds: ['processes', 'uptime'],
+  },
+]
+
+const CHARTS_BY_ID = new Map(
+  CHART_DEFINITIONS.map((definition) => [definition.id, definition]),
+)
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -369,9 +414,9 @@ function metricsBackendLabel(backend: MetricsBackendKind): string {
 function metricsNotConfiguredCopy(backend: MetricsBackendKind): string {
   if (backend === 'analytics-engine') {
     return (
-      'Metrics charts are unavailable. Wrangler dev does not emulate Analytics Engine ' +
-      'locally — switch to Deno instance mode (ClickHouse) for local metrics charts. ' +
-      'On deployed Workers, chart queries also need TURBOPANEL_ANALYTICS_ENGINE_API_TOKEN.'
+      'Metrics charts are unavailable. Local dev does not emulate High Availability ' +
+      'metrics storage — switch to self-hosted mode (ClickHouse) for local charts, or ' +
+      'configure analytics on your HA deployment.'
     )
   }
   if (backend === 'clickhouse') {
@@ -403,12 +448,6 @@ function resolveViewState(
   return 'charts'
 }
 
-function formatGapSuffix(gapCount: number): string {
-  if (gapCount <= 0) return ''
-  const noun = gapCount === 1 ? 'gap' : 'gaps'
-  return ` · ${gapCount} ${noun}`
-}
-
 function metricsErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return 'Failed to load metrics'
@@ -423,25 +462,107 @@ function RangePicker({
 }>) {
   return (
     <View style={styles.rangeRow}>
-      {RANGE_OPTIONS.map((option) => {
-        const active = option.id === rangeId
-        return (
-          <Pressable
-            key={option.id}
-            onPress={() => onChange(option.id)}
-            style={[styles.rangeChip, active ? styles.rangeChipActive : null]}
-          >
-            <Text
-              style={[
-                styles.rangeChipText,
-                active ? styles.rangeChipTextActive : null,
+      <Text style={styles.rangeLabel}>Time range</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        {RANGE_OPTIONS.map((option) => {
+          const active = option.id === rangeId
+          return (
+            <Pressable
+              key={option.id}
+              onPress={() => onChange(option.id)}
+              style={({ pressed }) => [
+                orgPanelStyles.segmentChip,
+                active ? orgPanelStyles.segmentChipActive : null,
+                pressed && styles.rangeChipPressed,
+                webPointer,
               ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`Show ${option.label} range`}
             >
-              {option.label}
-            </Text>
-          </Pressable>
-        )
-      })}
+              <Text
+                style={[
+                  orgPanelStyles.segmentChipText,
+                  active ? orgPanelStyles.segmentChipTextActive : null,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      <Text style={styles.rangeHint}>
+        Shorter ranges auto-refresh while this page is open.
+      </Text>
+    </View>
+  )
+}
+
+type StateTone = 'neutral' | 'warn' | 'error' | 'info'
+
+function stateToneStyles(tone: StateTone): {
+  border: string
+  stripe: string
+  title: string
+} {
+  switch (tone) {
+    case 'warn':
+      return {
+        border: colors.pending,
+        stripe: colors.pending,
+        title: colors.pending,
+      }
+    case 'error':
+      return {
+        border: colors.error,
+        stripe: colors.error,
+        title: colors.errorText,
+      }
+    case 'info':
+      return {
+        border: colors.command,
+        stripe: colors.command,
+        title: colors.command,
+      }
+    default:
+      return {
+        border: colors.borderArea,
+        stripe: colors.accent,
+        title: colors.textTitle,
+      }
+  }
+}
+
+function MetricsStateBlock({
+  title,
+  body,
+  tone = 'neutral',
+  action,
+}: Readonly<{
+  title: string
+  body: string
+  tone?: StateTone
+  action?: ReactNode
+}>) {
+  const toneStyle = stateToneStyles(tone)
+
+  return (
+    <View
+      style={[
+        orgPanelStyles.statePanel,
+        styles.stateBlock,
+        {
+          borderColor: toneStyle.border,
+          borderLeftColor: toneStyle.stripe,
+        },
+      ]}
+    >
+      <Text style={[orgPanelStyles.statePanelTitle, { color: toneStyle.title }]}>
+        {title}
+      </Text>
+      <Text style={orgPanelStyles.muted}>{body}</Text>
+      {action}
     </View>
   )
 }
@@ -471,41 +592,62 @@ function MetricsStatusMessages({
 
   return (
     <>
-      {isLoading && !hasData ? <ActivityIndicator color={colors.accent} /> : null}
-
-      {showGenericError ? (
-        <Text style={orgPanelStyles.error}>
-          {metricsErrorMessage(queryError)}
-        </Text>
-      ) : null}
-
-      {viewState === 'unsupported-os' ? (
-        <Text style={orgPanelStyles.muted}>
-          Server metrics not supported on this OS
-        </Text>
-      ) : null}
-
-      {viewState === 'backend-unavailable' ? (
-        <View style={styles.stateBlock}>
-          <Text style={orgPanelStyles.error}>
-            Metrics store unavailable ({metricsBackendLabel(unavailableBackend)})
-          </Text>
-          <Pressable style={styles.retryButton} onPress={onRetry}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </Pressable>
+      {isLoading && !hasData ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={orgPanelStyles.muted}>Loading metrics…</Text>
         </View>
       ) : null}
 
+      {showGenericError ? (
+        <MetricsStateBlock
+          tone="error"
+          title="Could not load metrics"
+          body={metricsErrorMessage(queryError)}
+        />
+      ) : null}
+
+      {viewState === 'unsupported-os' ? (
+        <MetricsStateBlock
+          tone="warn"
+          title="Unsupported operating system"
+          body="Server metrics are collected from Linux hosts only. This server reports a non-Linux OS family."
+        />
+      ) : null}
+
+      {viewState === 'backend-unavailable' ? (
+        <MetricsStateBlock
+          tone="error"
+          title="Metrics store unavailable"
+          body={`Could not reach ${metricsBackendLabel(unavailableBackend)}. Charts will resume when storage is reachable.`}
+          action={
+            <Pressable
+              style={({ pressed }) => [
+                orgPanelStyles.toolbarBtnSecondary,
+                pressed && styles.rangeChipPressed,
+                webPointer,
+              ]}
+              onPress={onRetry}
+            >
+              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Retry</Text>
+            </Pressable>
+          }
+        />
+      ) : null}
+
       {viewState === 'not-configured' ? (
-        <Text style={orgPanelStyles.muted}>
-          {metricsNotConfiguredCopy(backend)}
-        </Text>
+        <MetricsStateBlock
+          tone="info"
+          title="Metrics not configured"
+          body={metricsNotConfiguredCopy(backend)}
+        />
       ) : null}
 
       {viewState === 'no-data' ? (
-        <Text style={orgPanelStyles.muted}>
-          No server metrics yet — samples appear ~1 min after the daemon connects
-        </Text>
+        <MetricsStateBlock
+          title="Waiting for first samples"
+          body="No server metrics yet. Samples appear about one minute after the daemon connects and begins reporting."
+        />
       ) : null}
     </>
   )
@@ -532,11 +674,13 @@ function MetricsChartCard({
     color: entry.color,
     lastValue: lastFormattedValue([entry], definition.yFormat),
   }))
+  const headline = lastFormattedValue(series, definition.yFormat)
 
   return (
     <ChartCard
       title={definition.title}
       subtitle={definition.unit}
+      headline={unavailable ? undefined : headline}
       legend={<ChartLegend entries={legendEntries} />}
       unavailable={unavailable}
     >
@@ -551,6 +695,75 @@ function MetricsChartCard({
         xTickFormat={xTickFormat}
       />
     </ChartCard>
+  )
+}
+
+function CollapsibleChartGroup({
+  group,
+  defaultExpanded,
+  twoColumn,
+  points,
+  chartDomainMs,
+  gapBands,
+  xTickFormat,
+}: Readonly<{
+  group: ChartGroupDefinition
+  defaultExpanded: boolean
+  twoColumn: boolean
+  points: MetricsSeriesPoint[]
+  chartDomainMs: readonly [number, number]
+  gapBands: MetricGapBand[]
+  xTickFormat: (ms: number) => string
+}>) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const charts = group.chartIds
+    .map((id) => CHARTS_BY_ID.get(id))
+    .filter((entry): entry is ChartDefinition => entry != null)
+
+  if (charts.length === 0) return null
+
+  return (
+    <View style={styles.chartGroup}>
+      <Pressable
+        onPress={() => setExpanded((open) => !open)}
+        style={({ pressed }) => [
+          styles.chartGroupHeader,
+          expanded && styles.chartGroupHeaderExpanded,
+          pressed && styles.rangeChipPressed,
+          webPointer,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${group.label} charts`}
+      >
+        <Text style={[styles.chartGroupChevron, expanded && styles.chartGroupChevronOpen]}>
+          {expanded ? '▾' : '▸'}
+        </Text>
+        <View style={styles.chartGroupCopy}>
+          <Text style={styles.chartGroupTitle}>{group.label}</Text>
+          <Text style={styles.chartGroupHint}>{group.hint}</Text>
+        </View>
+        <View style={[styles.chartGroupCount, expanded && styles.chartGroupCountActive]}>
+          <Text style={[styles.chartGroupCountText, expanded && styles.chartGroupCountTextActive]}>
+            {charts.length}
+          </Text>
+        </View>
+      </Pressable>
+      {expanded ? (
+        <View style={[styles.chartGrid, twoColumn ? styles.chartGridTwo : null]}>
+          {charts.map((definition) => (
+            <MetricsChartCard
+              key={definition.id}
+              definition={definition}
+              points={points}
+              chartDomainMs={chartDomainMs}
+              gapBands={gapBands}
+              xTickFormat={xTickFormat}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
   )
 }
 
@@ -579,45 +792,93 @@ function MetricsCharts({
   const gapBands = normalizedMetrics?.gapBands ?? []
   const xTickFormat = (ms: number) => formatAxisTime(ms, rangeId)
 
+  const coveragePercent =
+    expectedSamples > 0 ? (presentSamples / expectedSamples) * 100 : 0
+  const gapPercent = Math.max(0, 100 - coveragePercent)
+
   return (
     <>
       <View style={styles.coverageStrip}>
-        <Text style={styles.coverageText}>
-          Coverage {coverageLabel ?? '—'}
-          {formatGapSuffix(data.gapCount)}
-        </Text>
-        <Text style={styles.coverageMeta}>
-          Updated ~every minute · resolution {resolutionLabel}
-        </Text>
+        <View style={styles.coverageHeader}>
+          <Text style={styles.coverageText}>
+            Sample coverage {coverageLabel ?? '—'}
+          </Text>
+          {data.gapCount > 0 ? (
+            <View style={styles.gapBadge}>
+              <Text style={styles.gapBadgeText}>
+                {data.gapCount} {data.gapCount === 1 ? 'gap' : 'gaps'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.coverageBarTrack}>
+          <View
+            style={[
+              styles.coverageBarFill,
+              { width: `${Math.min(100, coveragePercent)}%` },
+            ]}
+          />
+          {gapPercent > 0 ? (
+            <View
+              style={[
+                styles.coverageBarGap,
+                {
+                  left: `${Math.min(100, coveragePercent)}%`,
+                  width: `${Math.min(100 - coveragePercent, gapPercent)}%`,
+                },
+              ]}
+            />
+          ) : null}
+        </View>
+        <View style={styles.coverageMetaRow}>
+          <Text style={styles.coverageMeta}>
+            Resolution {resolutionLabel} · ~60 s cadence
+          </Text>
+          <Text style={styles.coverageMetaDim}>
+            Amber bands = missing samples (not zero)
+          </Text>
+        </View>
       </View>
 
-      <View style={[styles.chartGrid, twoColumn ? styles.chartGridTwo : null]}>
-        {CHART_DEFINITIONS.map((definition) => (
-          <MetricsChartCard
-            key={definition.id}
-            definition={definition}
-            points={points}
-            chartDomainMs={chartDomainMs}
-            gapBands={gapBands}
-            xTickFormat={xTickFormat}
-          />
-        ))}
+      {CHART_GROUPS.map((group, index) => (
+        <CollapsibleChartGroup
+          key={group.id}
+          group={group}
+          defaultExpanded={index < 2}
+          twoColumn={twoColumn}
+          points={points}
+          chartDomainMs={chartDomainMs}
+          gapBands={gapBands}
+          xTickFormat={xTickFormat}
+        />
+      ))}
 
-        <ChartCard title="Sample coverage" subtitle="coverage">
-          <View style={styles.coverageChartMeta}>
-            <Text style={styles.coverageDetail}>
-              Present: {presentSamples}
-            </Text>
-            <Text style={styles.coverageDetail}>Gaps: {data.gapCount}</Text>
-            <Text style={styles.coverageDetail}>
-              Expected: {expectedSamples || '—'}
-            </Text>
-            <Text style={styles.coverageDetail}>
-              Coverage: {coverageLabel ?? '—'}
+      <SectionPanel title="Coverage detail" hint="Gap accounting for this range">
+        <View style={styles.coverageChartMeta}>
+          <View style={styles.coverageStat}>
+            <Text style={styles.coverageStatLabel}>Present</Text>
+            <Text style={styles.coverageStatValue}>{presentSamples}</Text>
+          </View>
+          <View style={styles.coverageStat}>
+            <Text style={styles.coverageStatLabel}>Gaps</Text>
+            <Text style={[styles.coverageStatValue, styles.coverageStatGap]}>
+              {data.gapCount}
             </Text>
           </View>
-        </ChartCard>
-      </View>
+          <View style={styles.coverageStat}>
+            <Text style={styles.coverageStatLabel}>Expected</Text>
+            <Text style={styles.coverageStatValue}>
+              {expectedSamples || '—'}
+            </Text>
+          </View>
+          <View style={styles.coverageStat}>
+            <Text style={styles.coverageStatLabel}>Coverage</Text>
+            <Text style={[styles.coverageStatValue, styles.coverageStatAccent]}>
+              {coverageLabel ?? '—'}
+            </Text>
+          </View>
+        </View>
+      </SectionPanel>
     </>
   )
 }
@@ -715,21 +976,34 @@ export function ServerMetricsSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>
+      <Text style={orgPanelStyles.pageTitle}>
         {server ? serverTitle(server) : 'Server'} · Metrics
       </Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageCopy}>
         Host metrics sampled about once per minute. Charts use the backend
         resolution for this range — not live sub-second data.
       </Text>
 
-      <RangePicker rangeId={rangeId} onChange={setRangeId} />
+      <SectionPanel title="Time range" hint="Auto-refresh on shorter ranges" accent>
+        <RangePicker rangeId={rangeId} onChange={setRangeId} />
+      </SectionPanel>
+
+      {metricsQuery.isFetching && data ? (
+        <View style={styles.refetchBanner}>
+          <ActivityIndicator size="small" color={colors.accent} />
+          <Text style={orgPanelStyles.muted}>Refreshing charts…</Text>
+        </View>
+      ) : null}
 
       {stale && viewState === 'charts' ? (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>
-            Server offline — data may be stale
-          </Text>
+          <View style={styles.offlineBannerDot} />
+          <View style={styles.offlineBannerCopy}>
+            <Text style={styles.offlineBannerTitle}>Server offline</Text>
+            <Text style={styles.offlineBannerText}>
+              Charts may show stale data until the host reconnects.
+            </Text>
+          </View>
         </View>
       ) : null}
 
@@ -764,86 +1038,216 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 22,
-  },
   rangeRow: {
+    gap: spacing.sm,
+  },
+  rangeLabel: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  rangeHint: {
+    color: colors.textFaint,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  rangeChipPressed: {
+    opacity: 0.88,
+  },
+  loadingRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.sm,
+    paddingVertical: spacing.sm,
   },
-  rangeChip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  rangeChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
-  },
-  rangeChipText: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  rangeChipTextActive: {
-    color: colors.accent,
-  },
-  offlineBanner: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.pending,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  offlineBannerText: {
-    color: colors.pending,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  stateBlock: {
+  refetchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  retryButtonText: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  coverageStrip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderArea,
     backgroundColor: colors.bgInset,
+    alignSelf: 'flex-start',
+  },
+  stateBlock: {
+    borderLeftWidth: 3,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.pending,
+    backgroundColor: colors.bgSecondary,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 4,
+    paddingVertical: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.pending,
+  },
+  offlineBannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.pending,
+    marginTop: 4,
+  },
+  offlineBannerCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  offlineBannerTitle: {
+    color: colors.pending,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  offlineBannerText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  coverageStrip: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgInset,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: spacing.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+  },
+  coverageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   coverageText: {
     color: colors.textBody,
     fontSize: 13,
     fontWeight: '600',
   },
+  gapBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.pending,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  gapBadgeText: {
+    color: colors.pending,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  coverageBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.bgSecondary,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  coverageBarFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  coverageBarGap: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(224, 179, 65, 0.45)',
+  },
+  coverageMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
   coverageMeta: {
     color: colors.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  coverageMetaDim: {
+    color: colors.textFaint,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  chartGroup: {
+    gap: spacing.sm,
+  },
+  chartGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgAreaHeader,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  chartGroupHeaderExpanded: {
+    borderColor: colors.borderMuted,
+    backgroundColor: colors.bgActive,
+  },
+  chartGroupChevron: {
+    color: colors.textDim,
     fontSize: 12,
+    width: 12,
+  },
+  chartGroupChevronOpen: {
+    color: colors.accent,
+  },
+  chartGroupCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  chartGroupTitle: {
+    color: colors.textTitle,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chartGroupHint: {
+    color: colors.textDim,
+    fontSize: 12,
+  },
+  chartGroupCount: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    minWidth: 24,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  chartGroupCountActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgPanel,
+  },
+  chartGroupCountText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chartGroupCountTextActive: {
+    color: colors.accent,
   },
   chartGrid: {
     gap: spacing.lg,
@@ -853,11 +1257,38 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   coverageChartMeta: {
-    gap: spacing.xs,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
-  coverageDetail: {
-    color: colors.textMuted,
-    fontSize: 13,
+  coverageStat: {
+    flexGrow: 1,
+    minWidth: 120,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgInset,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    gap: 2,
+  },
+  coverageStatLabel: {
+    color: colors.textDim,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  coverageStatValue: {
+    color: colors.textBody,
+    fontSize: 15,
+    fontWeight: '700',
     fontFamily: 'monospace',
+  },
+  coverageStatGap: {
+    color: colors.pending,
+  },
+  coverageStatAccent: {
+    color: colors.accent,
   },
 })

@@ -10,7 +10,7 @@
 ## Layout
 
 - Overview: workspace switcher + project list (workspace label when viewing all)  
-- Detail: base compose editor → environments section below (not a separate top-level area)  
+- Detail: **Base compose** panel (quick starts + editor) → environments section below  
 - Single environment: hide tab bar; show name in toolbar  
 - Deploy disabled until a **connected** server is pinned on the environment
 

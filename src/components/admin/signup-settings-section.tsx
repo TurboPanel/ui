@@ -52,7 +52,7 @@ export function SignupSettingsSection() {
       <Text style={styles.heading}>Sign-up</Text>
       <Text style={styles.copy}>
         Control whether public account creation is available on the sign-in
-        page. Changes apply immediately — no Worker redeploy required.
+        page. Changes apply immediately on High Availability — no redeploy required.
       </Text>
 
       <SectionPanel

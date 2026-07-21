@@ -489,7 +489,7 @@ export function AccessOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Access</Text>
+      <Text style={orgPanelStyles.pageTitle}>Access</Text>
       <Text style={styles.copy}>
         Manage permission grants for organizations and teams.
       </Text>

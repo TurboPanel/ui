@@ -248,8 +248,8 @@ export function ProjectsOverviewSection({
     <View style={styles.root}>
       <View style={styles.pageHeader}>
         <View style={styles.pageIntro}>
-          <Text style={styles.heading}>Projects</Text>
-          <Text style={styles.copy}>{headingCopy}</Text>
+          <Text style={orgPanelStyles.pageTitle}>Projects</Text>
+          <Text style={orgPanelStyles.pageCopy}>{headingCopy}</Text>
         </View>
         <WorkspaceSwitcher orgId={orgId} />
       </View>
