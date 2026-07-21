@@ -3,6 +3,7 @@ import {
   applyNewlineAutoIndent,
   applyTabIndent,
   applyTabOutdent,
+  fixComposeYamlIndentation,
   indentAfterNewline,
   lineOpensBlock,
   trimTrailingWhitespacePerLine,
@@ -128,11 +129,50 @@ describe('trimTrailingWhitespacePerLine', () => {
   })
 })
 
+describe('fixComposeYamlIndentation', () => {
+  it('nests service names and properties under services', () => {
+    const broken = `services:
+nginx:
+  image: nginx`
+    const fixed = fixComposeYamlIndentation(broken)
+    expect(fixed?.text).toBe(`services:
+  nginx:
+    image: nginx`)
+    expect(fixed?.selection).toEqual({
+      start: fixed?.text.length ?? 0,
+      end: fixed?.text.length ?? 0,
+    })
+  })
+
+  it('does not pull a new top-level section into a service', () => {
+    const source = `services:
+  nginx:
+    image: nginx
+networks:
+  front: {}`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+
+  it('returns null when indentation is already valid', () => {
+    const source = `services:
+  nginx:
+    image: nginx`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+})
+
 describe('applyTabIndent / applyTabOutdent', () => {
   it('inserts two spaces at the caret', () => {
     expect(applyTabIndent('nginx:', { start: 0, end: 0 })).toEqual({
       text: '  nginx:',
       selection: { start: 2, end: 2 },
+    })
+  })
+
+  it('indents the whole line when the caret is in leading whitespace', () => {
+    expect(applyTabIndent('nginx:\nimage: nginx', { start: 7, end: 7 })).toEqual({
+      text: 'nginx:\n  image: nginx',
+      selection: { start: 9, end: 9 },
     })
   })
 

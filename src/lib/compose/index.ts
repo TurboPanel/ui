@@ -5,8 +5,12 @@ export type {
 } from './types'
 export {
   emptyComposeDocument,
+  isBlankComposeData,
   isComposeDocument,
+  isComposeEditorView,
   normalizeCompose,
+  pruneBlankComposeData,
+  type ComposeEditorView,
 } from './types'
 export {
   ComposeParseError,
@@ -47,12 +51,51 @@ export {
 } from './visual-fields'
 
 import {
+  isBlankComposeData,
+  isComposeEditorView,
   normalizeCompose,
+  type ComposeComment,
   type ComposeDocument,
+  type ComposeEditorView,
+  type ComposePresentation,
 } from './types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Preserve editor-only presentation metadata when rebuilding key order / comments. */
+function clonePresentationMetadata(
+  source: ComposePresentation,
+): Pick<ComposePresentation, 'blankLines' | 'documentCommentBefore' | 'documentComment' | 'editorView'> {
+  return {
+    ...(source.blankLines ? { blankLines: { ...source.blankLines } } : {}),
+    ...(typeof source.documentCommentBefore === 'string' &&
+        source.documentCommentBefore.length > 0
+      ? { documentCommentBefore: source.documentCommentBefore }
+      : {}),
+    ...(typeof source.documentComment === 'string' && source.documentComment.length > 0
+      ? { documentComment: source.documentComment }
+      : {}),
+    ...(source.editorView ? { editorView: source.editorView } : {}),
+  }
+}
+
+function buildPresentation(
+  source: ComposePresentation,
+  patch: {
+    keyOrder: string[]
+    comments: Record<string, ComposeComment>
+  },
+  editorView?: ComposeEditorView,
+): ComposePresentation {
+  const nextEditorView = editorView ?? source.editorView
+  return {
+    keyOrder: patch.keyOrder,
+    comments: patch.comments,
+    ...clonePresentationMetadata(source),
+    ...(nextEditorView ? { editorView: nextEditorView } : {}),
+  }
 }
 
 function deepMerge(
@@ -75,47 +118,42 @@ export function mergeComposeOverlay(
 ): ComposeDocument {
   const baseDocument = normalizeCompose(base)
   const overlayDocument = normalizeCompose(overlay)
-  const overlayKeys = Object.keys(overlayDocument.data)
-  const overlayIsEmpty = overlayKeys.length === 0 ||
-    (overlayKeys.length === 1 &&
-      isRecord(overlayDocument.data.services) &&
-      Object.keys(overlayDocument.data.services).length === 0)
-
-  if (overlayIsEmpty) {
+  if (isBlankComposeData(overlayDocument.data)) {
     return baseDocument
   }
 
   const data = deepMerge(baseDocument.data, overlayDocument.data)
+  const editorView =
+    overlayDocument.presentation.editorView ?? baseDocument.presentation.editorView
   return {
     version: 1,
     data,
-    presentation: {
-      keyOrder: [...new Set([
-        ...baseDocument.presentation.keyOrder,
-        ...overlayDocument.presentation.keyOrder,
-        ...Object.keys(data),
-      ])],
-      comments: {
-        ...baseDocument.presentation.comments,
-        ...overlayDocument.presentation.comments,
+    presentation: buildPresentation(
+      baseDocument.presentation,
+      {
+        keyOrder: [...new Set([
+          ...baseDocument.presentation.keyOrder,
+          ...overlayDocument.presentation.keyOrder,
+          ...Object.keys(data),
+        ])],
+        comments: {
+          ...baseDocument.presentation.comments,
+          ...overlayDocument.presentation.comments,
+        },
       },
-    },
+      editorView,
+    ),
   }
 }
 
 /** Mirror of instance `src/lib/compose/placement.ts`. */
 export const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
 
-/** Compose Editor | Visual tab preference stored under `x-turbopanel.view`. */
-export type ComposeEditorView = 'editor' | 'visual'
+/** Compose Editor | Visual tab preference lives in `presentation.editorView` only. */
+export type { ComposeEditorView } from './types'
 
 export type ComposeTurbopanelExtension = {
   placement?: { server_id?: string }
-  view?: ComposeEditorView
-}
-
-export function isComposeEditorView(value: unknown): value is ComposeEditorView {
-  return value === 'editor' || value === 'visual'
 }
 
 function withTurbopanelExtension(
@@ -132,13 +170,10 @@ function withTurbopanelExtension(
   return {
     version: 1,
     data,
-    presentation: {
+    presentation: buildPresentation(normalized.presentation, {
       keyOrder,
       comments: { ...normalized.presentation.comments },
-      ...(normalized.presentation.blankLines
-        ? { blankLines: { ...normalized.presentation.blankLines } }
-        : {}),
-    },
+    }),
   }
 }
 
@@ -161,13 +196,10 @@ function stripTurbopanelField(
     return {
       version: 1,
       data,
-      presentation: {
+      presentation: buildPresentation(normalized.presentation, {
         keyOrder: keyOrder.filter((key) => key !== TURBOPANEL_EXTENSION_KEY),
         comments: { ...normalized.presentation.comments },
-        ...(normalized.presentation.blankLines
-          ? { blankLines: { ...normalized.presentation.blankLines } }
-          : {}),
-      },
+      }),
     }
   }
 
@@ -175,13 +207,10 @@ function stripTurbopanelField(
   return {
     version: 1,
     data,
-    presentation: {
+    presentation: buildPresentation(normalized.presentation, {
       keyOrder,
       comments: { ...normalized.presentation.comments },
-      ...(normalized.presentation.blankLines
-        ? { blankLines: { ...normalized.presentation.blankLines } }
-        : {}),
-    },
+    }),
   }
 }
 
@@ -230,9 +259,10 @@ export function stripComposePlacement(document: ComposeDocument): ComposeDocumen
 export function readComposeEditorView(
   document: ComposeDocument,
 ): ComposeEditorView | null {
-  const extension = document.data[TURBOPANEL_EXTENSION_KEY]
-  if (!isRecord(extension)) return null
-  return isComposeEditorView(extension.view) ? extension.view : null
+  const normalized = normalizeCompose(document)
+  return isComposeEditorView(normalized.presentation.editorView)
+    ? normalized.presentation.editorView
+    : null
 }
 
 export function setComposeEditorView(
@@ -240,15 +270,23 @@ export function setComposeEditorView(
   view: ComposeEditorView,
 ): ComposeDocument {
   const normalized = normalizeCompose(document)
-  const existing = isRecord(normalized.data[TURBOPANEL_EXTENSION_KEY])
-    ? normalized.data[TURBOPANEL_EXTENSION_KEY]
-    : {}
-  return withTurbopanelExtension(normalized, { ...existing, view })
+  return {
+    version: 1,
+    data: { ...normalized.data },
+    presentation: buildPresentation(
+      normalized.presentation,
+      {
+        keyOrder: [...normalized.presentation.keyOrder],
+        comments: { ...normalized.presentation.comments },
+      },
+      view,
+    ),
+  }
 }
 
-/** Hide `x-turbopanel.view` from the YAML editor (managed by Editor/Visual tabs). */
+/** Drop legacy `x-turbopanel.view` from compose data when present in old saves. */
 export function stripComposeEditorView(document: ComposeDocument): ComposeDocument {
-  return stripTurbopanelField(document, 'view')
+  return normalizeCompose(document)
 }
 
 /**

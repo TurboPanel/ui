@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   Platform,
   Pressable,
@@ -29,6 +29,8 @@ import {
   applyNewlineAutoIndent,
   applyTabIndent,
   applyTabOutdent,
+  canFixComposeYamlIndentation,
+  fixComposeYamlIndentation,
 } from '@/lib/compose/yaml-indent'
 import { splitYamlLineHighlight } from '@/lib/compose/yaml-highlight'
 import { colors, spacing } from '@/lib/theme'
@@ -162,32 +164,40 @@ function resolveTextInputDomNode(
   return null
 }
 
+function setTextInputSelection(
+  ref: TextInput | null,
+  selection: TextSelection,
+): void {
+  const node = resolveTextInputDomNode(ref)
+  if (!node) {
+    return
+  }
+  node.selectionStart = selection.start
+  node.selectionEnd = selection.end
+}
+
 function YamlHighlightedField({
+  inputRef,
   value,
   editable = true,
   minLines = YAML_MIN_LINES,
   lintIssues,
   onChangeText,
   onSelectionChange,
-  selection,
   onTabKey,
 }: Readonly<{
+  inputRef: RefObject<TextInput | null>
   value: string
   editable?: boolean
   minLines?: number
   lintIssues?: readonly ComposeLintIssue[]
   onChangeText?: (value: string) => void
   onSelectionChange?: (event: { nativeEvent: { selection: TextSelection } }) => void
-  selection?: TextSelection
   /** Web: Tab / Shift+Tab indent (2 spaces). */
   onTabKey?: (shiftKey: boolean, selection: TextSelection) => void
 }>) {
-  const inputRef = useRef<TextInput>(null)
   const onTabKeyRef = useRef(onTabKey)
-  const selectionRef = useRef(selection)
-  const tabHandledAtRef = useRef(0)
   onTabKeyRef.current = onTabKey
-  selectionRef.current = selection
   const height = yamlEditorHeight(value, minLines)
   const lineCount = value.split('\n').length
   const lineLevels = useMemo(
@@ -195,18 +205,9 @@ function YamlHighlightedField({
     [lintIssues],
   )
 
-  const emitTabKey = (shiftKey: boolean, caret: TextSelection) => {
-    const now = Date.now()
-    if (now - tabHandledAtRef.current < 50) {
-      return
-    }
-    tabHandledAtRef.current = now
-    onTabKeyRef.current?.(shiftKey, caret)
-  }
-
   // Capture-phase listener so Tab indents instead of moving focus (RN Web).
   useEffect(() => {
-    if (!editable || Platform.OS !== 'web') {
+    if (!editable || Platform.OS !== 'web' || !onTabKeyRef.current) {
       return
     }
 
@@ -224,7 +225,7 @@ function YamlHighlightedField({
       }
       const start = node.selectionStart ?? 0
       const end = node.selectionEnd ?? start
-      emitTabKey(event.shiftKey, { start, end })
+      onTabKeyRef.current?.(event.shiftKey, { start, end })
     }
 
     const attach = () => {
@@ -248,30 +249,7 @@ function YamlHighlightedField({
       }
       node?.removeEventListener('keydown', handleKeyDown, true)
     }
-  }, [editable])
-
-  const webKeyProps =
-    Platform.OS === 'web' && editable && onTabKey
-      ? {
-          onKeyDown: (event: {
-            key: string
-            shiftKey: boolean
-            preventDefault: () => void
-            stopPropagation?: () => void
-          }) => {
-            if (event.key !== 'Tab') {
-              return
-            }
-            event.preventDefault()
-            event.stopPropagation?.()
-            const node = resolveTextInputDomNode(inputRef.current)
-            const fallback = selectionRef.current
-            const start = node?.selectionStart ?? fallback?.start ?? 0
-            const end = node?.selectionEnd ?? fallback?.end ?? start
-            emitTabKey(event.shiftKey, { start, end })
-          },
-        }
-      : {}
+  }, [editable, inputRef])
 
   return (
     <View style={[styles.yamlEditor, { minHeight: height }]}>
@@ -285,7 +263,6 @@ function YamlHighlightedField({
         value={value}
         onChangeText={onChangeText}
         onSelectionChange={onSelectionChange}
-        selection={editable ? selection : undefined}
         editable={editable}
         scrollEnabled={false}
         style={[
@@ -294,7 +271,6 @@ function YamlHighlightedField({
           Platform.OS === 'web' ? ({ caretColor: colors.text } as { caretColor: string }) : null,
         ]}
         textAlignVertical="top"
-        {...webKeyProps}
       />
     </View>
   )
@@ -322,6 +298,14 @@ function countLabel(count: number, noun: string): string | null {
   return `${count} ${noun}${plural}`
 }
 
+function serviceCountLabel(count: number): string {
+  return count === 1 ? '1 service' : `${count} services`
+}
+
+function countComposeServices(document: ComposeDocument): number {
+  return Object.keys(servicesFrom(document)).length
+}
+
 function saveButtonLabel(saving: boolean, saveBlocked: boolean): string {
   if (saving) {
     return 'Saving…'
@@ -334,8 +318,14 @@ function saveButtonLabel(saving: boolean, saveBlocked: boolean): string {
 
 function ComposeLintPanel({
   issues,
-}: Readonly<{ issues: readonly ComposeLintIssue[] }>) {
-  if (issues.length === 0) {
+  indentFixAvailable,
+  onFixIndentation,
+}: Readonly<{
+  issues: readonly ComposeLintIssue[]
+  indentFixAvailable: boolean
+  onFixIndentation?: () => void
+}>) {
+  if (issues.length === 0 && !indentFixAvailable) {
     return null
   }
 
@@ -350,7 +340,17 @@ function ComposeLintPanel({
 
   return (
     <View style={styles.lintPanel}>
-      <Text style={styles.lintSummary}>Compose issues — {summary}</Text>
+      {issues.length > 0 ? (
+        <Text style={styles.lintSummary}>Compose issues — {summary}</Text>
+      ) : null}
+      {indentFixAvailable && onFixIndentation ? (
+        <Pressable
+          style={[orgPanelStyles.toolbarBtnSecondary, styles.lintFixButton]}
+          onPress={onFixIndentation}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Fix indentation</Text>
+        </Pressable>
+      ) : null}
       {issues.map((issue) => {
         const isError = issue.level === 'error'
         return (
@@ -378,6 +378,8 @@ function ComposeLintPanel({
     </View>
   )
 }
+
+const LINT_DEBOUNCE_MS = 150
 
 export function ComposeEditorSection({
   document,
@@ -407,12 +409,12 @@ export function ComposeEditorSection({
     composeDocumentToYaml(stripComposeManagedExtension(source)),
   )
   const [error, setError] = useState<string | null>(null)
-  const [selection, setSelection] = useState<TextSelection>({ start: 0, end: 0 })
+  const [lintYaml, setLintYaml] = useState('')
+  const yamlInputRef = useRef<TextInput>(null)
+  const selectionRef = useRef<TextSelection>({ start: 0, end: 0 })
   const [serviceNameDrafts, setServiceNameDrafts] = useState<Record<string, string>>({})
   const yamlRef = useRef(yaml)
-  const selectionRef = useRef(selection)
   yamlRef.current = yaml
-  selectionRef.current = selection
 
   useEffect(() => {
     const visible = stripComposeManagedExtension(normalizeCompose(document))
@@ -423,11 +425,28 @@ export function ComposeEditorSection({
     // unsaved Editor/Visual switch.
   }, [document])
 
+  useEffect(() => {
+    if (tab !== 'editor') {
+      setLintYaml(composeDocumentToYaml(draft))
+      return
+    }
+    const timer = globalThis.setTimeout(() => {
+      setLintYaml(yaml)
+    }, LINT_DEBOUNCE_MS)
+    return () => {
+      globalThis.clearTimeout(timer)
+    }
+  }, [yaml, draft, tab])
+
   const applyYamlEdit = (text: string, nextSelection: TextSelection) => {
     setYaml(text)
-    setSelection(nextSelection)
     selectionRef.current = nextSelection
     setError(null)
+    if (Platform.OS === 'web') {
+      requestAnimationFrame(() => {
+        setTextInputSelection(yamlInputRef.current, nextSelection)
+      })
+    }
   }
 
   const handleYamlChange = (value: string) => {
@@ -443,14 +462,11 @@ export function ComposeEditorSection({
   const handleYamlSelectionChange = (event: {
     nativeEvent: { selection: TextSelection }
   }) => {
-    const next = event.nativeEvent.selection
-    setSelection(next)
-    selectionRef.current = next
+    selectionRef.current = event.nativeEvent.selection
   }
 
   const handleYamlTabKey = (shiftKey: boolean, caret: TextSelection) => {
     selectionRef.current = caret
-    setSelection(caret)
     const result = shiftKey
       ? applyTabOutdent(yamlRef.current, caret)
       : applyTabIndent(yamlRef.current, caret)
@@ -567,7 +583,13 @@ export function ComposeEditorSection({
   const removeService = (name: string) => {
     const services = servicesFrom(draft)
     const { [name]: _, ...remaining } = services
-    updateDraft({ ...draft, data: { ...draft.data, services: remaining } })
+    const data = { ...draft.data }
+    if (Object.keys(remaining).length === 0) {
+      delete data.services
+    } else {
+      data.services = remaining
+    }
+    updateDraft({ ...draft, data })
   }
 
   const addService = () => {
@@ -586,15 +608,36 @@ export function ComposeEditorSection({
   }
 
   const lintIssues = useMemo<ComposeLintIssue[]>(() => {
-    const lintSource = tab === 'visual' ? composeDocumentToYaml(draft) : yaml
+    const lintSource = tab === 'visual' ? composeDocumentToYaml(draft) : lintYaml
     return lintComposeYaml(lintSource)
+  }, [tab, lintYaml, draft])
+  const displayLintIssues = useMemo(
+    () => blockingComposeLintIssues(lintIssues),
+    [lintIssues],
+  )
+  const indentFixAvailable = useMemo(
+    () => tab === 'editor' && canFixComposeYamlIndentation(lintYaml),
+    [tab, lintYaml],
+  )
+  const saveBlocked = displayLintIssues.length > 0
+  const serviceCount = useMemo(() => {
+    if (tab === 'visual') {
+      return countComposeServices(draft)
+    }
+    try {
+      return countComposeServices(yamlToComposeDocument(yaml))
+    } catch {
+      return countComposeServices(draft)
+    }
   }, [tab, yaml, draft])
-  const saveBlocked = blockingComposeLintIssues(lintIssues).length > 0
 
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.serviceCount}>{serviceCountLabel(serviceCount)}</Text>
+        </View>
         <View style={styles.tabs}>
           {([
             ['editor', 'Editor'],
@@ -633,12 +676,12 @@ export function ComposeEditorSection({
 
       {tab === 'editor' ? (
         <YamlHighlightedField
+          inputRef={yamlInputRef}
           value={yaml}
           editable={!saving}
-          lintIssues={lintIssues}
+          lintIssues={displayLintIssues}
           onChangeText={handleYamlChange}
           onSelectionChange={handleYamlSelectionChange}
-          selection={selection}
           onTabKey={handleYamlTabKey}
         />
       ) : null}
@@ -667,7 +710,16 @@ export function ComposeEditorSection({
         </View>
       ) : null}
 
-      <ComposeLintPanel issues={lintIssues} />
+      <ComposeLintPanel
+        issues={displayLintIssues}
+        indentFixAvailable={indentFixAvailable}
+        onFixIndentation={() => {
+          const fixed = fixComposeYamlIndentation(yaml, selectionRef.current)
+          if (fixed) {
+            applyYamlEdit(fixed.text, fixed.selection)
+          }
+        }}
+      />
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
       <Pressable
@@ -686,7 +738,9 @@ export function ComposeEditorSection({
 const styles = StyleSheet.create({
   root: { gap: spacing.sm },
   header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
+  headerTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing.sm },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  serviceCount: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { borderWidth: 1, borderColor: colors.borderChip, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
   tabActive: { borderColor: colors.accent, backgroundColor: colors.bgActive },
@@ -781,6 +835,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.bgInput,
     padding: spacing.sm,
+  },
+  lintFixButton: {
+    alignSelf: 'flex-start',
   },
   lintSummary: { color: colors.text, fontSize: 12, fontWeight: '700' },
   lintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },

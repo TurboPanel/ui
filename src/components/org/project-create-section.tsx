@@ -10,7 +10,6 @@ import {
   View,
 } from 'react-native'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
-import { ProductionBadge } from '@/components/org/production-badge'
 import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -131,7 +130,7 @@ function wizardProgressLabels(
   selectedType: ProjectType | null,
 ): readonly string[] {
   if (selectedType === 'docker-compose') {
-    return ['Type', 'Details', 'Base compose']
+    return ['Type', 'Details', 'Compose']
   }
   if (selectedType) {
     return ['Type', 'Catalog', 'Details']
@@ -183,9 +182,6 @@ function TypeStep({
               <View style={styles.typeMarker}>
                 <Text style={styles.typeMarkerText}>{option.marker}</Text>
               </View>
-              {option.type === 'docker-compose' ? (
-                <ProductionBadge compact />
-              ) : null}
             </View>
             <Text style={styles.typeCardLabel}>{option.label}</Text>
             <Text style={styles.typeCardDescription}>{option.description}</Text>
@@ -419,14 +415,11 @@ function DetailsStep({
 }>) {
   return (
     <View style={styles.stepContent}>
-      <View style={styles.detailsHeader}>
-        <Text style={styles.stepTitle}>Project details</Text>
-        {selectedType === 'docker-compose' ? <ProductionBadge compact /> : null}
-      </View>
+      <Text style={styles.stepTitle}>Project details</Text>
       {selectedType === 'docker-compose' ? (
         <Text style={styles.stepLead}>
           A Production environment is created automatically. Next you define the
-          shared base compose every environment inherits.
+          shared compose stack every environment inherits.
         </Text>
       ) : null}
       {selectedCode ? (
@@ -514,8 +507,6 @@ function ComposeSetupStep({
           onComposeChange(document)
         }}
         saving={saving}
-        showQuickStarts
-        onQuickStart={onComposeChange}
         defaultEditorView="visual"
       />
       {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
@@ -785,7 +776,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const detailsContinueLabel =
-    selectedType === 'docker-compose' ? 'Continue to base compose' : 'Create project'
+    selectedType === 'docker-compose' ? 'Continue to compose' : 'Create project'
 
   return (
     <View style={styles.root}>
@@ -912,12 +903,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 20,
-  },
-  detailsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
   },
   typeGrid: {
     gap: spacing.sm,

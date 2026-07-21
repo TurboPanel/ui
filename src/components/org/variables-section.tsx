@@ -88,20 +88,90 @@ function inputStyle(hasError: boolean) {
   ]
 }
 
+function trimOnBlur(
+  value: string,
+  setter: (next: string) => void,
+): { onBlur: () => void } {
+  return {
+    onBlur: () => {
+      const trimmed = value.trim()
+      if (trimmed !== value) {
+        setter(trimmed)
+      }
+    },
+  }
+}
+
+function VariableToggleRow({
+  label,
+  checked,
+  disabled,
+  onToggle,
+}: Readonly<{
+  label: string
+  checked: boolean
+  disabled: boolean
+  onToggle: () => void
+}>) {
+  return (
+    <Pressable style={styles.toggleRow} disabled={disabled} onPress={onToggle}>
+      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+        {checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+      </View>
+      <Text style={styles.toggleLabel}>{label}</Text>
+    </Pressable>
+  )
+}
+
+function VariableFlagBadges({
+  variable,
+}: Readonly<{ variable: VariableRecord }>) {
+  const flags: string[] = []
+  if (variable.isLiteral) flags.push('literal')
+  if (variable.forBuild) flags.push('build')
+  if (!variable.forRuntime) flags.push('runtime off')
+  if (flags.length === 0) return null
+  return (
+    <View style={styles.flagRow}>
+      {flags.map((flag) => (
+        <View key={flag} style={styles.flagBadge}>
+          <Text style={styles.flagBadgeText}>{flag}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
 function VariableEditForm({
   editKey,
   editValue,
+  editDescription,
+  editIsLiteral,
+  editForBuild,
+  editForRuntime,
   editSaving,
   onKeyChange,
   onValueChange,
+  onDescriptionChange,
+  onToggleLiteral,
+  onToggleForBuild,
+  onToggleForRuntime,
   onSave,
   onCancel,
 }: Readonly<{
   editKey: string
   editValue: string
+  editDescription: string
+  editIsLiteral: boolean
+  editForBuild: boolean
+  editForRuntime: boolean
   editSaving: boolean
   onKeyChange: (value: string) => void
   onValueChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onToggleLiteral: () => void
+  onToggleForBuild: () => void
+  onToggleForRuntime: () => void
   onSave: () => void
   onCancel: () => void
 }>) {
@@ -113,22 +183,56 @@ function VariableEditForm({
           style={inputStyle(false)}
           value={editKey}
           onChangeText={onKeyChange}
+          {...trimOnBlur(editKey, onKeyChange)}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!editSaving}
         />
       </View>
       <View style={styles.field}>
-        <Text style={styles.label}>Value</Text>
+        <Text style={styles.label}>Description</Text>
         <TextInput
           style={inputStyle(false)}
+          value={editDescription}
+          onChangeText={onDescriptionChange}
+          {...trimOnBlur(editDescription, onDescriptionChange)}
+          placeholder="Optional note"
+          placeholderTextColor={colors.textDim}
+          editable={!editSaving}
+        />
+      </View>
+      <View style={styles.field}>
+        <Text style={styles.label}>Value</Text>
+        <TextInput
+          style={[inputStyle(false), styles.multilineInput]}
           value={editValue}
           onChangeText={onValueChange}
+          {...trimOnBlur(editValue, onValueChange)}
+          multiline
+          numberOfLines={4}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!editSaving}
         />
       </View>
+      <VariableToggleRow
+        label="Literal (no compose escaping)"
+        checked={editIsLiteral}
+        disabled={editSaving}
+        onToggle={onToggleLiteral}
+      />
+      <VariableToggleRow
+        label="Available at build time"
+        checked={editForBuild}
+        disabled={editSaving}
+        onToggle={onToggleForBuild}
+      />
+      <VariableToggleRow
+        label="Available at runtime"
+        checked={editForRuntime}
+        disabled={editSaving}
+        onToggle={onToggleForRuntime}
+      />
       <View style={styles.rowActions}>
         <Pressable
           style={[styles.submitButton, editSaving && styles.buttonDisabled]}
@@ -287,6 +391,13 @@ function VariableDisplayCard({
         <Text style={orgPanelStyles.detailLabel}>Value: </Text>
         {displayVariableValue(variable)}
       </Text>
+      {variable.description ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Description: </Text>
+          {variable.description}
+        </Text>
+      ) : null}
+      <VariableFlagBadges variable={variable} />
     </>
   )
 }
@@ -299,11 +410,19 @@ function VariableCard({
   isDeleting,
   editKey,
   editValue,
+  editDescription,
+  editIsLiteral,
+  editForBuild,
+  editForRuntime,
   editSaving,
   secretNewValue,
   secretSaving,
   onEditKeyChange,
   onEditValueChange,
+  onEditDescriptionChange,
+  onToggleEditLiteral,
+  onToggleEditForBuild,
+  onToggleEditForRuntime,
   onSaveEdit,
   onCancelEdit,
   onSecretValueChange,
@@ -320,11 +439,19 @@ function VariableCard({
   isDeleting: boolean
   editKey: string
   editValue: string
+  editDescription: string
+  editIsLiteral: boolean
+  editForBuild: boolean
+  editForRuntime: boolean
   editSaving: boolean
   secretNewValue: string
   secretSaving: boolean
   onEditKeyChange: (value: string) => void
   onEditValueChange: (value: string) => void
+  onEditDescriptionChange: (value: string) => void
+  onToggleEditLiteral: () => void
+  onToggleEditForBuild: () => void
+  onToggleEditForRuntime: () => void
   onSaveEdit: () => void
   onCancelEdit: () => void
   onSecretValueChange: (value: string) => void
@@ -340,9 +467,17 @@ function VariableCard({
         <VariableEditForm
           editKey={editKey}
           editValue={editValue}
+          editDescription={editDescription}
+          editIsLiteral={editIsLiteral}
+          editForBuild={editForBuild}
+          editForRuntime={editForRuntime}
           editSaving={editSaving}
           onKeyChange={onEditKeyChange}
           onValueChange={onEditValueChange}
+          onDescriptionChange={onEditDescriptionChange}
+          onToggleLiteral={onToggleEditLiteral}
+          onToggleForBuild={onToggleEditForBuild}
+          onToggleForRuntime={onToggleEditForRuntime}
           onSave={onSaveEdit}
           onCancel={onCancelEdit}
         />
@@ -388,11 +523,19 @@ function VariablesListContent({
   updatingSecretId,
   editKey,
   editValue,
+  editDescription,
+  editIsLiteral,
+  editForBuild,
+  editForRuntime,
   editSaving,
   secretNewValue,
   secretSaving,
   onEditKeyChange,
   onEditValueChange,
+  onEditDescriptionChange,
+  onToggleEditLiteral,
+  onToggleEditForBuild,
+  onToggleEditForRuntime,
   onSaveEdit,
   onCancelEdit,
   onSecretValueChange,
@@ -410,11 +553,19 @@ function VariablesListContent({
   updatingSecretId: string | null
   editKey: string
   editValue: string
+  editDescription: string
+  editIsLiteral: boolean
+  editForBuild: boolean
+  editForRuntime: boolean
   editSaving: boolean
   secretNewValue: string
   secretSaving: boolean
   onEditKeyChange: (value: string) => void
   onEditValueChange: (value: string) => void
+  onEditDescriptionChange: (value: string) => void
+  onToggleEditLiteral: () => void
+  onToggleEditForBuild: () => void
+  onToggleEditForRuntime: () => void
   onSaveEdit: () => void
   onCancelEdit: () => void
   onSecretValueChange: (value: string) => void
@@ -452,11 +603,19 @@ function VariablesListContent({
           isDeleting={deleting.has(variable.id)}
           editKey={editKey}
           editValue={editValue}
+          editDescription={editDescription}
+          editIsLiteral={editIsLiteral}
+          editForBuild={editForBuild}
+          editForRuntime={editForRuntime}
           editSaving={editSaving}
           secretNewValue={secretNewValue}
           secretSaving={secretSaving}
           onEditKeyChange={onEditKeyChange}
           onEditValueChange={onEditValueChange}
+          onEditDescriptionChange={onEditDescriptionChange}
+          onToggleEditLiteral={onToggleEditLiteral}
+          onToggleEditForBuild={onToggleEditForBuild}
+          onToggleEditForRuntime={onToggleEditForRuntime}
           onSaveEdit={onSaveEdit}
           onCancelEdit={onCancelEdit}
           onSecretValueChange={onSecretValueChange}
@@ -474,22 +633,38 @@ function VariablesListContent({
 function AddVariableForm({
   newKey,
   newValue,
+  newDescription,
   newIsSecret,
+  newIsLiteral,
+  newForBuild,
+  newForRuntime,
   addFieldError,
   adding,
   onKeyChange,
   onValueChange,
+  onDescriptionChange,
   onToggleSecret,
+  onToggleLiteral,
+  onToggleForBuild,
+  onToggleForRuntime,
   onSubmit,
 }: Readonly<{
   newKey: string
   newValue: string
+  newDescription: string
   newIsSecret: boolean
+  newIsLiteral: boolean
+  newForBuild: boolean
+  newForRuntime: boolean
   addFieldError: string | null
   adding: boolean
   onKeyChange: (value: string) => void
   onValueChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
   onToggleSecret: () => void
+  onToggleLiteral: () => void
+  onToggleForBuild: () => void
+  onToggleForRuntime: () => void
   onSubmit: () => void
 }>) {
   return (
@@ -500,6 +675,7 @@ function AddVariableForm({
           style={inputStyle(Boolean(addFieldError))}
           value={newKey}
           onChangeText={onKeyChange}
+          {...trimOnBlur(newKey, onKeyChange)}
           placeholder="e.g. DATABASE_URL"
           placeholderTextColor={colors.textDim}
           autoCapitalize="none"
@@ -508,11 +684,24 @@ function AddVariableForm({
         />
       </View>
       <View style={styles.field}>
-        <Text style={styles.label}>Value</Text>
+        <Text style={styles.label}>Description</Text>
         <TextInput
           style={inputStyle(false)}
+          value={newDescription}
+          onChangeText={onDescriptionChange}
+          {...trimOnBlur(newDescription, onDescriptionChange)}
+          placeholder="Optional note"
+          placeholderTextColor={colors.textDim}
+          editable={!adding}
+        />
+      </View>
+      <View style={styles.field}>
+        <Text style={styles.label}>Value</Text>
+        <TextInput
+          style={[inputStyle(false), styles.multilineInput]}
           value={newValue}
           onChangeText={onValueChange}
+          {...trimOnBlur(newValue, onValueChange)}
           placeholder={
             newIsSecret ? 'Secret value (write-only)' : 'Plaintext value'
           }
@@ -521,16 +710,34 @@ function AddVariableForm({
           autoCorrect={false}
           editable={!adding}
           secureTextEntry={newIsSecret}
+          multiline
+          numberOfLines={4}
         />
       </View>
-      <Pressable style={styles.toggleRow} onPress={onToggleSecret}>
-        <View
-          style={[styles.checkbox, newIsSecret && styles.checkboxChecked]}
-        >
-          {newIsSecret ? <Text style={styles.checkboxMark}>✓</Text> : null}
-        </View>
-        <Text style={styles.toggleLabel}>Secret</Text>
-      </Pressable>
+      <VariableToggleRow
+        label="Secret"
+        checked={newIsSecret}
+        disabled={adding}
+        onToggle={onToggleSecret}
+      />
+      <VariableToggleRow
+        label="Literal (no compose escaping)"
+        checked={newIsLiteral}
+        disabled={adding}
+        onToggle={onToggleLiteral}
+      />
+      <VariableToggleRow
+        label="Available at build time"
+        checked={newForBuild}
+        disabled={adding}
+        onToggle={onToggleForBuild}
+      />
+      <VariableToggleRow
+        label="Available at runtime"
+        checked={newForRuntime}
+        disabled={adding}
+        onToggle={onToggleForRuntime}
+      />
       {addFieldError ? (
         <Text style={styles.fieldError}>{addFieldError}</Text>
       ) : null}
@@ -563,12 +770,20 @@ export function VariablesSection({
   const [showAddForm, setShowAddForm] = useState(false)
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [newIsSecret, setNewIsSecret] = useState(false)
+  const [newIsLiteral, setNewIsLiteral] = useState(false)
+  const [newForBuild, setNewForBuild] = useState(false)
+  const [newForRuntime, setNewForRuntime] = useState(true)
   const [addFieldError, setAddFieldError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editKey, setEditKey] = useState('')
   const [editValue, setEditValue] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editIsLiteral, setEditIsLiteral] = useState(false)
+  const [editForBuild, setEditForBuild] = useState(false)
+  const [editForRuntime, setEditForRuntime] = useState(true)
   const [editSaving, setEditSaving] = useState(false)
   const [updatingSecretId, setUpdatingSecretId] = useState<string | null>(null)
   const [secretNewValue, setSecretNewValue] = useState('')
@@ -666,7 +881,8 @@ export function VariablesSection({
       setAddFieldError('Key is required.')
       return
     }
-    if (!newValue && !newIsSecret) {
+    const trimmedValue = newValue.trim()
+    if (!trimmedValue && !newIsSecret) {
       setAddFieldError('Value is required for non-secret variables.')
       return
     }
@@ -678,12 +894,22 @@ export function VariablesSection({
       await createVariable({
         ...parentField,
         key: trimmedKey,
-        value: newValue,
+        value: trimmedValue,
         isSecret: newIsSecret,
+        isLiteral: newIsLiteral,
+        forBuild: newForBuild,
+        forRuntime: newForRuntime,
+        ...(newDescription.trim()
+          ? { description: newDescription.trim() }
+          : {}),
       } satisfies CreateVariableBody)
       setNewKey('')
       setNewValue('')
+      setNewDescription('')
       setNewIsSecret(false)
+      setNewIsLiteral(false)
+      setNewForBuild(false)
+      setNewForRuntime(true)
       setShowAddForm(false)
       await loadVariables()
     } catch (err) {
@@ -706,6 +932,10 @@ export function VariablesSection({
     setEditingId(variable.id)
     setEditKey(variable.key)
     setEditValue(variable.value ?? '')
+    setEditDescription(variable.description ?? '')
+    setEditIsLiteral(variable.isLiteral)
+    setEditForBuild(variable.forBuild)
+    setEditForRuntime(variable.forRuntime)
     setUpdatingSecretId(null)
     setSecretNewValue('')
   }
@@ -731,7 +961,11 @@ export function VariablesSection({
     try {
       await updateVariable(editingId, {
         key: trimmedKey,
-        value: editValue,
+        value: editValue.trim(),
+        description: editDescription.trim() || null,
+        isLiteral: editIsLiteral,
+        forBuild: editForBuild,
+        forRuntime: editForRuntime,
       })
       setEditingId(null)
       await loadVariables()
@@ -811,7 +1045,11 @@ export function VariablesSection({
         <AddVariableForm
           newKey={newKey}
           newValue={newValue}
+          newDescription={newDescription}
           newIsSecret={newIsSecret}
+          newIsLiteral={newIsLiteral}
+          newForBuild={newForBuild}
+          newForRuntime={newForRuntime}
           addFieldError={addFieldError}
           adding={adding}
           onKeyChange={(t) => {
@@ -819,7 +1057,11 @@ export function VariablesSection({
             setAddFieldError(null)
           }}
           onValueChange={setNewValue}
+          onDescriptionChange={setNewDescription}
           onToggleSecret={() => setNewIsSecret((current) => !current)}
+          onToggleLiteral={() => setNewIsLiteral((current) => !current)}
+          onToggleForBuild={() => setNewForBuild((current) => !current)}
+          onToggleForRuntime={() => setNewForRuntime((current) => !current)}
           onSubmit={() => void handleAddVariable()}
         />
       ) : null}
@@ -833,11 +1075,19 @@ export function VariablesSection({
         updatingSecretId={updatingSecretId}
         editKey={editKey}
         editValue={editValue}
+        editDescription={editDescription}
+        editIsLiteral={editIsLiteral}
+        editForBuild={editForBuild}
+        editForRuntime={editForRuntime}
         editSaving={editSaving}
         secretNewValue={secretNewValue}
         secretSaving={secretSaving}
         onEditKeyChange={setEditKey}
         onEditValueChange={setEditValue}
+        onEditDescriptionChange={setEditDescription}
+        onToggleEditLiteral={() => setEditIsLiteral((current) => !current)}
+        onToggleEditForBuild={() => setEditForBuild((current) => !current)}
+        onToggleEditForRuntime={() => setEditForRuntime((current) => !current)}
         onSaveEdit={() => void handleSaveEdit()}
         onCancelEdit={() => setEditingId(null)}
         onSecretValueChange={setSecretNewValue}
@@ -1049,5 +1299,29 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  multilineInput: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  flagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  flagBadge: {
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  flagBadgeText: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
 })

@@ -34,6 +34,148 @@ function isBlankOrCommentLine(line: string): boolean {
   return trimmed.length === 0
 }
 
+/**
+ * Expected leading spaces for an under-indented line nested under a preceding
+ * block opener. Returns null when the line is already indented enough or when
+ * the expected depth cannot be inferred safely.
+ */
+export function expectedIndentForLine(
+  lines: readonly string[],
+  lineIndex: number,
+): number | null {
+  const line = lines[lineIndex]
+  if (line === undefined || isBlankOrCommentLine(line)) {
+    return null
+  }
+
+  const currentIndent = leadingWhitespace(line).length
+  const currentKey = parseYamlMappingKey(line)
+  if (!currentKey) {
+    return null
+  }
+
+  if (currentIndent === 0 && isComposeTopLevelKey(currentKey)) {
+    return null
+  }
+
+  for (let index = lineIndex - 1; index >= 0; index -= 1) {
+    const previous = lines[index] ?? ''
+    if (isBlankOrCommentLine(previous)) {
+      continue
+    }
+
+    if (!lineOpensBlock(previous)) {
+      continue
+    }
+
+    const previousIndent = leadingWhitespace(previous).length
+    const childIndent = previousIndent + YAML_INDENT.length
+    if (currentIndent >= childIndent) {
+      return null
+    }
+
+    const previousKey = parseYamlMappingKey(previous)
+    if (
+      currentIndent === 0 &&
+      isComposeTopLevelKey(currentKey) &&
+      previousIndent === 0 &&
+      previousKey &&
+      isComposeTopLevelKey(previousKey)
+    ) {
+      return null
+    }
+
+    return childIndent
+  }
+
+  return null
+}
+
+function lineStartOffset(text: string, lineIndex: number): number {
+  if (lineIndex <= 0) {
+    return 0
+  }
+  let offset = 0
+  for (let index = 0; index < lineIndex; index += 1) {
+    offset = text.indexOf('\n', offset) + 1
+  }
+  return offset
+}
+
+function adjustSelectionForLineIndent(
+  selection: { start: number; end: number },
+  lineStart: number,
+  indentDelta: number,
+): { start: number; end: number } {
+  if (indentDelta <= 0) {
+    return selection
+  }
+  return {
+    start: selection.start >= lineStart ? selection.start + indentDelta : selection.start,
+    end: selection.end >= lineStart ? selection.end + indentDelta : selection.end,
+  }
+}
+
+/**
+ * Fix common compose under-indent mistakes (service names/properties left at
+ * column 0 or one level too shallow). Returns null when nothing changed.
+ */
+export function fixComposeYamlIndentation(
+  text: string,
+  selection?: { start: number; end: number },
+): YamlEditResult | null {
+  const lines = text.split('\n')
+  let changed = false
+  let nextSelection = selection ?? { start: text.length, end: text.length }
+
+  for (let pass = 0; pass < lines.length + 1; pass += 1) {
+    let passChanged = false
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const line = lines[lineIndex]
+      if (line === undefined) {
+        continue
+      }
+
+      const expected = expectedIndentForLine(lines, lineIndex)
+      if (expected === null) {
+        continue
+      }
+
+      const current = leadingWhitespace(line).length
+      if (current >= expected) {
+        continue
+      }
+
+      const indentDelta = expected - current
+      lines[lineIndex] = `${' '.repeat(expected)}${line.trimStart()}`
+      nextSelection = adjustSelectionForLineIndent(
+        nextSelection,
+        lineStartOffset(text, lineIndex),
+        indentDelta,
+      )
+      passChanged = true
+      changed = true
+    }
+    if (!passChanged) {
+      break
+    }
+  }
+
+  if (!changed) {
+    return null
+  }
+
+  return {
+    text: lines.join('\n'),
+    selection: nextSelection,
+  }
+}
+
+/** True when {@link fixComposeYamlIndentation} would rewrite the YAML. */
+export function canFixComposeYamlIndentation(text: string): boolean {
+  return fixComposeYamlIndentation(text) !== null
+}
+
 /** Remove trailing spaces/tabs on every line (keeps line structure). */
 export function trimTrailingWhitespacePerLine(text: string): string {
   return text.split('\n').map((line) => line.replace(/[ \t]+$/u, '')).join('\n')
@@ -217,6 +359,7 @@ export function applyNewlineAutoIndent(
 
 /**
  * Insert two spaces at the cursor, or indent every line in a multi-line selection.
+ * When the caret sits in a line's leading whitespace, the whole line is indented.
  */
 export function applyTabIndent(
   text: string,
@@ -226,6 +369,18 @@ export function applyTabIndent(
   if (start !== end) {
     return transformSelectedLines(text, start, end, (line) => `${YAML_INDENT}${line}`)
   }
+
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1
+  const lineEndIndex = text.indexOf('\n', lineStart)
+  const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex
+  const line = text.slice(lineStart, lineEnd)
+  const caretColumn = start - lineStart
+  const leading = leadingWhitespace(line).length
+
+  if (caretColumn <= leading) {
+    return transformSelectedLines(text, start, end, (entry) => `${YAML_INDENT}${entry}`)
+  }
+
   const next = `${text.slice(0, start)}${YAML_INDENT}${text.slice(end)}`
   const cursor = start + YAML_INDENT.length
   return { text: next, selection: { start: cursor, end: cursor } }

@@ -535,6 +535,9 @@ export type VariableRecord = {
   id: string;
   key: string;
   isSecret: boolean;
+  isLiteral: boolean;
+  forBuild: boolean;
+  forRuntime: boolean;
   value: string | null;
   organizationId: string | null;
   workspaceId: string | null;
@@ -561,6 +564,9 @@ export type CreateVariableBody = {
   key: string;
   value?: string;
   isSecret?: boolean;
+  isLiteral?: boolean;
+  forBuild?: boolean;
+  forRuntime?: boolean;
   description?: string;
 } & (
   | { organizationId: string }
@@ -580,13 +586,38 @@ export type CreateProjectBody = {
   code?: string;
 };
 
+export type HealthCheckPolicy = 'disabled' | 'warn' | 'required';
+
+export type ServiceOptions = {
+  preDeployCommand?: string;
+  postDeployCommand?: string;
+  build?: {
+    disableCache?: boolean;
+  };
+  container?: {
+    name?: string;
+  };
+  operations?: {
+    stopGracePeriodSeconds?: number;
+    maxRestartAttempts?: number;
+  };
+  healthCheck?: {
+    policy?: HealthCheckPolicy;
+  };
+  resources?: {
+    cpus?: number;
+    memoryBytes?: number;
+    memoryReservationBytes?: number;
+  };
+};
+
 export type ServiceRecord = {
   id: string;
   displayName: string | null;
   description: string | null;
   environmentId: string;
   metadata?: Record<string, unknown> | null;
-  options?: Record<string, unknown> | null;
+  options?: ServiceOptions | Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -821,7 +852,15 @@ export async function createVariable(
 
 export async function updateVariable(
   id: string,
-  body: { key?: string; value?: string; isSecret?: boolean },
+  body: {
+    key?: string;
+    value?: string;
+    isSecret?: boolean;
+    isLiteral?: boolean;
+    forBuild?: boolean;
+    forRuntime?: boolean;
+    description?: string | null;
+  },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/variables/${id}`, {
     method: "PATCH",
@@ -849,12 +888,22 @@ export async function createService(
     displayName?: string
     description?: string
     metadata?: Record<string, unknown>
-    options?: Record<string, unknown>
+    options?: ServiceOptions | Record<string, unknown>
   },
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/services`, {
     method: 'POST',
     body: JSON.stringify({ environmentId, ...body }),
+  })
+}
+
+export async function updateService(
+  id: string,
+  body: { options?: ServiceOptions },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/services/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
   })
 }
 
@@ -1376,13 +1425,265 @@ export async function fetchCommand(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/${commandId}`)
 }
 
+export class DeployHealthCheckMissingError extends Error {
+  readonly code = 'health_check_missing'
+  readonly required: boolean
+  readonly services: string[]
+
+  constructor(required: boolean, services: string[]) {
+    super('health_check_missing')
+    this.name = 'DeployHealthCheckMissingError'
+    this.required = required
+    this.services = services
+  }
+}
+
+export type ResourceLimitViolation = {
+  scope: 'organization' | 'server'
+  field: string
+  limit: number
+  requested: number
+}
+
+export class DeployResourceLimitExceededError extends Error {
+  readonly code = 'resource_limit_exceeded'
+  readonly violations: ResourceLimitViolation[]
+
+  constructor(violations: ResourceLimitViolation[]) {
+    super('resource_limit_exceeded')
+    this.name = 'DeployResourceLimitExceededError'
+    this.violations = violations
+  }
+}
+
+type DeployConflictBody = {
+  error?: string
+  required?: boolean
+  services?: string[]
+  violations?: ResourceLimitViolation[]
+}
+
+async function throwIfDeployConflict(response: Response): Promise<void> {
+  if (response.status !== 409) {
+    return
+  }
+  try {
+    const errorBody = await response.json() as DeployConflictBody
+    if (errorBody.error === 'health_check_missing') {
+      throw new DeployHealthCheckMissingError(
+        errorBody.required === true,
+        Array.isArray(errorBody.services) ? errorBody.services : [],
+      )
+    }
+    if (errorBody.error === 'resource_limit_exceeded') {
+      throw new DeployResourceLimitExceededError(
+        Array.isArray(errorBody.violations) ? errorBody.violations : [],
+      )
+    }
+  } catch (err) {
+    if (
+      err instanceof DeployHealthCheckMissingError ||
+      err instanceof DeployResourceLimitExceededError
+    ) {
+      throw err
+    }
+    // Fall through to generic error handling.
+  }
+}
+
+async function throwClientFetchFailed(path: string, response: Response): Promise<never> {
+  let detail = formatFetchFailureDetail(response.status)
+  try {
+    const errorBody = await response.json() as { error?: string }
+    if (errorBody.error) {
+      detail = formatFetchFailureDetail(response.status, errorBody.error)
+    }
+  } catch {
+    // Non-JSON error body.
+  }
+  throw new Error(`${path} failed: ${detail}`)
+}
+
 export async function deployEnvironment(
   environmentId: string,
-  body?: { serverId?: string },
+  body?: { acknowledgeHealthCheckWarnings?: boolean },
 ): Promise<CommandEnqueueResponse> {
-  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy`, {
+  const path = `${CLIENT_API}/environments/${environmentId}/deploy`
+  const resolvedOrgId = getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const response = await fetch(path, {
     method: 'POST',
+    credentials: 'include',
+    headers,
     body: JSON.stringify(body ?? {}),
+  })
+
+  await throwIfDeployConflict(response)
+
+  if (!response.ok) {
+    await throwClientFetchFailed(path, response)
+  }
+
+  return await response.json() as CommandEnqueueResponse
+}
+
+export type StorageKind = 'docker_volume' | 'bind_mount' | 'file' | 'directory'
+
+export type StorageRecord = {
+  id: string
+  organizationId: string
+  projectId: string | null
+  environmentId: string | null
+  serviceId: string | null
+  serverId: string
+  kind: StorageKind
+  name: string
+  sourcePath: string | null
+  destinationPath: string | null
+  principalId: string | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateStorageBody = {
+  environmentId?: string
+  projectId?: string
+  serviceId?: string
+  serverId: string
+  kind: StorageKind
+  name: string
+  sourcePath?: string
+  destinationPath?: string
+  principalId?: string | null
+  metadata?: Record<string, unknown>
+  options?: Record<string, unknown>
+}
+
+export async function fetchStorage(
+  parentFilter:
+    | { environmentId: string }
+    | { projectId: string }
+    | { serviceId: string },
+): Promise<{ storage: StorageRecord[] }> {
+  const params = new URLSearchParams(
+    Object.entries(parentFilter).map(([key, value]) => [key, value]),
+  )
+  return await apiFetch(`${CLIENT_API}/storage?${params.toString()}`)
+}
+
+export async function createStorage(
+  body: CreateStorageBody,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/storage`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateStorage(
+  id: string,
+  body: {
+    name?: string
+    sourcePath?: string
+    destinationPath?: string
+    serverId?: string
+    principalId?: string | null
+    metadata?: Record<string, unknown>
+    options?: Record<string, unknown>
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/storage/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteStorage(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/storage/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export type ProjectPrincipalRecord = {
+  id: string
+  kind: string
+  provider: string
+  username: string
+  projectId: string | null
+  metadata: { uid?: number; gid?: number; home?: string } | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export async function fetchProjectPrincipals(
+  projectId: string,
+): Promise<{ principals: ProjectPrincipalRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`)
+}
+
+export async function createProjectPrincipal(
+  projectId: string,
+  body: { username: string; options?: Record<string, unknown> },
+): Promise<{ ok: true; id: string; uid: number; gid: number }> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteProjectPrincipal(
+  projectId: string,
+  id: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export type ResourceLimits = {
+  maxCpus?: number
+  maxMemoryBytes?: number
+  maxServicesPerEnvironment?: number
+}
+
+export async function fetchOrgResourceLimits(
+  organizationId: string,
+): Promise<{ resourceLimits: ResourceLimits }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${organizationId}/resource-limits`)
+}
+
+export async function saveOrgResourceLimits(
+  organizationId: string,
+  resourceLimits: ResourceLimits,
+): Promise<{ ok: true; resourceLimits: ResourceLimits }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${organizationId}/resource-limits`, {
+    method: 'PUT',
+    body: JSON.stringify({ resourceLimits }),
+  })
+}
+
+export async function fetchServerResourceLimits(
+  serverId: string,
+): Promise<{ resourceLimits: ResourceLimits }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/resource-limits`)
+}
+
+export async function saveServerResourceLimits(
+  serverId: string,
+  resourceLimits: ResourceLimits,
+): Promise<{ ok: true; resourceLimits: ResourceLimits }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/resource-limits`, {
+    method: 'PUT',
+    body: JSON.stringify({ resourceLimits }),
   })
 }
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   composeDocumentToRuntimeYaml,
   composeDocumentToYaml,
+  emptyComposeDocument,
+  normalizeCompose,
   preserveComposePlacement,
   readComposeEditorView,
   setComposeEditorView,
@@ -39,6 +41,19 @@ services:
     expect(roundTrip.startsWith('# test\n')).toBe(true)
     expect(roundTrip).toContain('# test\n\nservices:')
     expect(roundTrip).toContain('image: nginx # herpin and derpin 2')
+  })
+
+  it('setComposeEditorView keeps documentCommentBefore through save metadata', () => {
+    const source = `# herpin and derpin
+
+services:
+  nginx:
+    image: nginx:latest
+`
+    const parsed = yamlToComposeDocument(source)
+    const saved = setComposeEditorView(parsed, 'editor')
+    expect(saved.presentation.documentCommentBefore).toContain('herpin')
+    expect(composeDocumentToYaml(saved)).toContain('# herpin and derpin\n\nservices:')
   })
 
   it('keeps leading comments glued to the first key when there is no blank line', () => {
@@ -156,21 +171,36 @@ x-turbopanel:
     )
   })
 
-  it('stores editor view under x-turbopanel and hides it from the YAML editor', () => {
+  it('stores editor view in presentation only, not x-turbopanel', () => {
     const source = yamlToComposeDocument(`services:
   nginx:
     image: nginx:alpine
 `)
     const withView = setComposeEditorView(source, 'visual')
     expect(readComposeEditorView(withView)).toBe('visual')
-    expect(composeDocumentToYaml(withView)).toContain('view: visual')
+    expect(withView.presentation.editorView).toBe('visual')
+    expect(composeDocumentToYaml(withView)).not.toContain('x-turbopanel')
 
     const visible = stripComposeManagedExtension(withView)
     expect(composeDocumentToYaml(visible)).not.toContain('x-turbopanel')
-    expect(readComposeEditorView(visible)).toBeNull()
+    expect(readComposeEditorView(visible)).toBe('visual')
 
-    const restored = setComposeEditorView(visible, 'visual')
-    expect(readComposeEditorView(restored)).toBe('visual')
+    const restored = setComposeEditorView(visible, 'editor')
+    expect(readComposeEditorView(restored)).toBe('editor')
+  })
+
+  it('migrates legacy x-turbopanel.view into presentation on normalize', () => {
+    const migrated = normalizeCompose({
+      version: 1,
+      data: {
+        services: { nginx: { image: 'nginx:alpine' } },
+        'x-turbopanel': { view: 'visual' },
+      },
+      presentation: { keyOrder: ['services', 'x-turbopanel'], comments: {} },
+    })
+    expect(migrated.presentation.editorView).toBe('visual')
+    expect(migrated.data['x-turbopanel']).toBeUndefined()
+    expect(composeDocumentToYaml(migrated)).not.toContain('x-turbopanel')
   })
 
   it('preserves editor view when setting placement', () => {
@@ -195,5 +225,14 @@ x-turbopanel:
     expect(
       composeDocumentToYaml(stripComposeManagedExtension(withPlacement)),
     ).not.toContain('x-turbopanel')
+  })
+})
+
+describe('blank compose drafts', () => {
+  it('treats services: {} as an empty draft', () => {
+    const doc = yamlToComposeDocument('services: {}\n')
+    expect(doc).toEqual(emptyComposeDocument())
+    expect(composeDocumentToYaml(doc)).toBe('\n')
+    expect(composeDocumentToRuntimeYaml(doc)).toBe('\n')
   })
 })

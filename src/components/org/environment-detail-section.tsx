@@ -9,6 +9,8 @@ import {
 } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
+import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
+import { StorageSection } from '@/components/org/storage-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { VariablesSection } from '@/components/org/variables-section'
@@ -16,6 +18,7 @@ import { useAuth } from '@/lib/auth-context'
 import {
   createHosting,
   createService,
+  DeployHealthCheckMissingError,
   deployEnvironment,
   fetchContainers,
   fetchEnvironment,
@@ -47,6 +50,72 @@ import {
   stripComposePlacement,
 } from '@/lib/compose'
 import { colors, spacing } from '@/lib/theme'
+import { useCan } from '@/lib/query-client'
+
+type HostingEditorState = {
+  hostnames: string
+  tlsId: string | null
+  forceHttps: boolean
+  gzip: boolean
+  brotli: boolean
+  stripPrefix: string
+  pathPrefix: string
+  targetPort: string
+}
+
+function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
+  const options = hostings[0]?.options
+  const proxy =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? (options.proxy as Record<string, unknown> | undefined)
+      : undefined
+  const targetPort =
+    options &&
+    typeof options === 'object' &&
+    !Array.isArray(options) &&
+    typeof options.targetPort === 'number'
+      ? String(options.targetPort)
+      : ''
+  const pathPrefix =
+    options &&
+    typeof options === 'object' &&
+    !Array.isArray(options) &&
+    typeof options.pathPrefix === 'string'
+      ? options.pathPrefix
+      : ''
+  return {
+    hostnames: formatHostingHostnames(hostings),
+    tlsId: hostings[0]?.tlsId ?? null,
+    forceHttps: proxy?.forceHttps !== false,
+    gzip: proxy?.gzip !== false,
+    brotli: proxy?.brotli === true,
+    stripPrefix: typeof proxy?.stripPrefix === 'string' ? proxy.stripPrefix : '',
+    pathPrefix,
+    targetPort,
+  }
+}
+
+function buildHostingOptions(editor: HostingEditorState): Record<string, unknown> {
+  const options: Record<string, unknown> = {
+    hostnames: parseHostnameList(editor.hostnames),
+    proxy: {
+      forceHttps: editor.forceHttps,
+      gzip: editor.gzip,
+      brotli: editor.brotli,
+      ...(editor.stripPrefix.trim()
+        ? { stripPrefix: editor.stripPrefix.trim() }
+        : {}),
+    },
+  }
+  if (editor.pathPrefix.trim()) {
+    options.pathPrefix = editor.pathPrefix.trim()
+  }
+  const port = Number.parseInt(editor.targetPort.trim(), 10)
+  if (Number.isFinite(port) && port > 0) {
+    options.targetPort = port
+  }
+  return options
+}
 
 const TERMINAL_COMMAND_STATUSES = new Set<CommandRecord['status']>([
   'succeeded',
@@ -86,8 +155,7 @@ function serverOptionLabel(server: OrgServerRecord): string {
 
 async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
   byService: Record<string, HostingRecord[]>
-  hostnames: Record<string, string>
-  tlsPins: Record<string, string | null>
+  editors: Record<string, HostingEditorState>
 }> {
   const entries = await Promise.all(
     services.map(async (service) => {
@@ -97,11 +165,11 @@ async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
   )
   return {
     byService: Object.fromEntries(entries),
-    hostnames: Object.fromEntries(
-      entries.map(([serviceId, hostings]) => [serviceId, formatHostingHostnames(hostings)]),
-    ),
-    tlsPins: Object.fromEntries(
-      entries.map(([serviceId, hostings]) => [serviceId, hostings[0]?.tlsId ?? null]),
+    editors: Object.fromEntries(
+      entries.map(([serviceId, hostings]) => [
+        serviceId,
+        readHostingEditor(hostings),
+      ]),
     ),
   }
 }
@@ -179,6 +247,19 @@ function parseHostnameList(value: string): string[] {
     .split(',')
     .map((hostname) => hostname.trim())
     .filter(Boolean)
+}
+
+function upsertServiceById(
+  current: ServiceRecord[],
+  nextService: ServiceRecord,
+): ServiceRecord[] {
+  const index = current.findIndex((row) => row.id === nextService.id)
+  if (index === -1) {
+    return [...current, nextService]
+  }
+  const copy = [...current]
+  copy[index] = nextService
+  return copy
 }
 
 async function waitForTerminalCommand(
@@ -263,16 +344,16 @@ async function reportSectionError(
 async function upsertHosting(
   serviceId: string,
   composeServiceName: string,
-  options: { hostnames: string[] },
+  editor: HostingEditorState,
   hostingsByService: Record<string, HostingRecord[]>,
-  tlsId: string | null,
 ): Promise<void> {
   const existing = hostingsByService[serviceId]?.[0]
+  const options = buildHostingOptions(editor)
   if (existing) {
     await updateHosting(existing.id, {
       metadata: { composeServiceName },
       options,
-      tlsId,
+      tlsId: editor.tlsId,
     })
     return
   }
@@ -280,7 +361,7 @@ async function upsertHosting(
     displayName: composeServiceName,
     metadata: { composeServiceName },
     options,
-    tlsId,
+    tlsId: editor.tlsId,
   })
 }
 
@@ -291,7 +372,11 @@ function tlsLabel(row: TlsRecord): string {
 function deployBlockedReason(
   placementServerId: string | null,
   pinnedServer: OrgServerRecord | null,
+  serviceCount: number,
 ): string | null {
+  if (serviceCount === 0) {
+    return 'Add at least one service to Compose before deploying.'
+  }
   if (!placementServerId) {
     return 'Select a server for this environment before deploying.'
   }
@@ -333,28 +418,45 @@ const webSelectStyle: CSSProperties = {
   minHeight: 44,
 }
 
-function HostingHostnameRow({
+function ProxyToggle({
+  label,
+  checked,
+  disabled,
+  onToggle,
+}: Readonly<{
+  label: string
+  checked: boolean
+  disabled: boolean
+  onToggle: () => void
+}>) {
+  return (
+    <Pressable style={styles.proxyToggleRow} disabled={disabled} onPress={onToggle}>
+      <View style={[styles.proxyCheckbox, checked && styles.proxyCheckboxChecked]}>
+        {checked ? <Text style={styles.proxyCheckboxMark}>✓</Text> : null}
+      </View>
+      <Text style={styles.proxyToggleLabel}>{label}</Text>
+    </Pressable>
+  )
+}
+
+function HostingPanelRow({
   composeServiceName,
-  value,
-  tlsId,
+  editor,
   tlsOptions,
   saving,
   disabled,
   onChange,
-  onTlsChange,
   onSave,
 }: Readonly<{
   composeServiceName: string
-  value: string
-  tlsId: string | null
+  editor: HostingEditorState
   tlsOptions: TlsRecord[]
   saving: boolean
   disabled: boolean
-  onChange: (value: string) => void
-  onTlsChange: (tlsId: string | null) => void
+  onChange: (patch: Partial<HostingEditorState>) => void
   onSave: () => void
 }>) {
-  const hostnames = parseHostnameList(value)
+  const hostnames = parseHostnameList(editor.hostnames)
   const covering = tlsOptions.filter(
     (row) =>
       row.metadata.status === 'ready' &&
@@ -365,8 +467,8 @@ function HostingHostnameRow({
     <View style={orgPanelStyles.detailCard}>
       <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
       <TextInput
-        value={value}
-        onChangeText={onChange}
+        value={editor.hostnames}
+        onChangeText={(value) => onChange({ hostnames: value })}
         placeholder="app.example.com, www.example.com"
         placeholderTextColor={colors.textDim}
         style={styles.hostnamesInput}
@@ -379,30 +481,79 @@ function HostingHostnameRow({
       </Text>
       <View style={styles.tlsOptions}>
         <Pressable
-          style={[styles.tlsChip, tlsId === null && styles.tlsChipActive]}
+          style={[styles.tlsChip, editor.tlsId === null && styles.tlsChipActive]}
           disabled={disabled}
-          onPress={() => onTlsChange(null)}
+          onPress={() => onChange({ tlsId: null })}
         >
           <Text style={styles.tlsChipText}>Self-signed</Text>
         </Pressable>
         {covering.map((row) => (
           <Pressable
             key={row.id}
-            style={[styles.tlsChip, tlsId === row.id && styles.tlsChipActive]}
+            style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
             disabled={disabled}
-            onPress={() => onTlsChange(row.id)}
+            onPress={() => onChange({ tlsId: row.id })}
           >
             <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
           </Pressable>
         ))}
       </View>
+
+      <Text style={styles.tlsLabel}>Proxy</Text>
+      <ProxyToggle
+        label="Force HTTPS"
+        checked={editor.forceHttps}
+        disabled={disabled}
+        onToggle={() => onChange({ forceHttps: !editor.forceHttps })}
+      />
+      <ProxyToggle
+        label="Gzip"
+        checked={editor.gzip}
+        disabled={disabled}
+        onToggle={() => onChange({ gzip: !editor.gzip })}
+      />
+      <ProxyToggle
+        label="Brotli"
+        checked={editor.brotli}
+        disabled={disabled}
+        onToggle={() => onChange({ brotli: !editor.brotli })}
+      />
+
+      <Text style={styles.fieldLabel}>Strip prefix</Text>
+      <TextInput
+        value={editor.stripPrefix}
+        onChangeText={(value) => onChange({ stripPrefix: value })}
+        placeholder="/api"
+        placeholderTextColor={colors.textDim}
+        style={styles.hostnamesInput}
+        autoCapitalize="none"
+      />
+      <Text style={styles.fieldLabel}>Path prefix</Text>
+      <TextInput
+        value={editor.pathPrefix}
+        onChangeText={(value) => onChange({ pathPrefix: value })}
+        placeholder="/"
+        placeholderTextColor={colors.textDim}
+        style={styles.hostnamesInput}
+        autoCapitalize="none"
+      />
+      <Text style={styles.fieldLabel}>Target port</Text>
+      <TextInput
+        value={editor.targetPort}
+        onChangeText={(value) => onChange({ targetPort: value })}
+        placeholder="8080"
+        placeholderTextColor={colors.textDim}
+        style={styles.hostnamesInput}
+        keyboardType="number-pad"
+      />
+
       <Pressable
         style={[styles.saveHostingButton, saving && styles.buttonDisabled]}
         disabled={disabled}
         onPress={onSave}
       >
         <Text style={styles.saveHostingButtonText}>
-          {saving ? 'Saving…' : 'Save hostnames'}
+          {saving ? 'Saving…' : 'Save hosting'}
         </Text>
       </Pressable>
     </View>
@@ -531,9 +682,57 @@ function EnvironmentPlacementPanel({
   )
 }
 
+function HealthCheckAckModal({
+  services,
+  required,
+  deploying,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  services: string[]
+  required: boolean
+  deploying: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}>) {
+  const serviceList = services.join(', ')
+  return (
+    <View style={styles.modalBackdrop}>
+      <View style={styles.modalCard}>
+        <Text style={orgPanelStyles.detailTitle}>
+          {required ? 'Health checks required' : 'Health checks missing'}
+        </Text>
+        <Text style={orgPanelStyles.detailLine}>
+          {required
+            ? 'These services require a Compose healthcheck before deploy can continue:'
+            : 'These services have no healthcheck configured. You can deploy anyway:'}
+        </Text>
+        <Text style={styles.modalServices}>{serviceList || 'Unknown services'}</Text>
+        <View style={styles.modalActions}>
+          <Pressable style={styles.modalSecondaryButton} disabled={deploying} onPress={onCancel}>
+            <Text style={styles.modalSecondaryText}>Cancel</Text>
+          </Pressable>
+          {!required ? (
+            <Pressable
+              style={[styles.modalPrimaryButton, deploying && styles.buttonDisabled]}
+              disabled={deploying}
+              onPress={onConfirm}
+            >
+              <Text style={styles.modalPrimaryText}>
+                {deploying ? 'Deploying…' : 'Deploy anyway'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  )
+}
+
 function EnvironmentLoadedPanels({
   environment,
   projectId,
+  orgId,
   mergedCompose,
   serviceNames,
   allServers,
@@ -548,18 +747,19 @@ function EnvironmentLoadedPanels({
   savingPlacement,
   onSavePlacement,
   services,
-  hostnames,
-  setHostnames,
-  tlsPins,
-  setTlsPins,
+  setServices,
+  hostingEditors,
+  setHostingEditors,
   tlsLibrary,
   savingHosting,
-  onSaveHostnames,
+  onSaveHosting,
   containersByService,
+  canManage,
   showEnvironmentPanel = true,
 }: Readonly<{
   environment: EnvironmentRecord
   projectId: string
+  orgId: string
   mergedCompose: ComposeDocument
   serviceNames: string[]
   allServers: OrgServerRecord[]
@@ -574,14 +774,14 @@ function EnvironmentLoadedPanels({
   savingPlacement: boolean
   onSavePlacement: (serverId: string) => void
   services: ServiceRecord[]
-  hostnames: Record<string, string>
-  setHostnames: Dispatch<SetStateAction<Record<string, string>>>
-  tlsPins: Record<string, string | null>
-  setTlsPins: Dispatch<SetStateAction<Record<string, string | null>>>
+  setServices: Dispatch<SetStateAction<ServiceRecord[]>>
+  hostingEditors: Record<string, HostingEditorState>
+  setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
   tlsLibrary: TlsRecord[]
   savingHosting: string | null
-  onSaveHostnames: (composeServiceName: string) => void
+  onSaveHosting: (composeServiceName: string) => void
   containersByService: Record<string, ContainerRecord[]>
+  canManage: boolean
   showEnvironmentPanel?: boolean
 }>) {
   const hasContainers = services.some(
@@ -658,7 +858,7 @@ function EnvironmentLoadedPanels({
         ) : null}
       </SectionPanel>
 
-      <SectionPanel title="Hostnames" hint="Map compose services to hostnames">
+      <SectionPanel title="Hostnames" hint="Map compose services to hostnames and proxy settings">
         {serviceNames.length === 0 ? (
           <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
         ) : (
@@ -667,29 +867,63 @@ function EnvironmentLoadedPanels({
               const service = services.find(
                 (item) => item.metadata?.composeServiceName === composeServiceName,
               )
-              const serviceId = service?.id ?? composeServiceName
+              const serviceKey = service?.id ?? composeServiceName
+              const editor =
+                hostingEditors[serviceKey] ??
+                readHostingEditor([])
               return (
-                <HostingHostnameRow
+                <HostingPanelRow
                   key={composeServiceName}
                   composeServiceName={composeServiceName}
-                  value={hostnames[serviceId] ?? ''}
-                  tlsId={tlsPins[serviceId] ?? null}
+                  editor={editor}
                   tlsOptions={tlsLibrary}
                   saving={savingHosting === composeServiceName}
                   disabled={savingHosting !== null}
-                  onChange={(value) =>
-                    setHostnames((current) => ({ ...current, [serviceId]: value }))
+                  onChange={(patch) =>
+                    setHostingEditors((current) => ({
+                      ...current,
+                      [serviceKey]: { ...editor, ...patch },
+                    }))
                   }
-                  onTlsChange={(nextTlsId) =>
-                    setTlsPins((current) => ({ ...current, [serviceId]: nextTlsId }))
-                  }
-                  onSave={() => onSaveHostnames(composeServiceName)}
+                  onSave={() => onSaveHosting(composeServiceName)}
                 />
               )
             })}
           </View>
         )}
       </SectionPanel>
+
+      <SectionPanel title="Service settings" hint="Per-service deploy options">
+        {serviceNames.length === 0 ? (
+          <Text style={orgPanelStyles.muted}>Add services to Compose first.</Text>
+        ) : (
+          <View style={styles.hostingList}>
+            {serviceNames.map((composeServiceName) => {
+              const service = services.find(
+                (item) => item.metadata?.composeServiceName === composeServiceName,
+              )
+              return (
+                <ServiceSettingsPanel
+                  key={composeServiceName}
+                  environmentId={environment.id}
+                  composeServiceName={composeServiceName}
+                  service={service}
+                  canManage={canManage}
+                  onServiceChange={(nextService) =>
+                    setServices((current) => upsertServiceById(current, nextService))
+                  }
+                />
+              )
+            })}
+          </View>
+        )}
+      </SectionPanel>
+
+      <StorageSection
+        orgId={orgId}
+        environmentId={environment.id}
+        defaultServerId={placementServerId}
+      />
 
       <SectionPanel title="Containers" hint="Deployed containers and their status">
         {!hasContainers ? (
@@ -743,6 +977,7 @@ export function EnvironmentDetailBody({
   embedded?: boolean
 }>) {
   const { handleUnauthorized } = useAuth()
+  const canManage = useCan('organization', orgId, 'organization:manage')
   const [environment, setEnvironment] = useState<EnvironmentRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -754,10 +989,13 @@ export function EnvironmentDetailBody({
   const [deployStatus, setDeployStatus] = useState<string | null>(null)
   const [services, setServices] = useState<ServiceRecord[]>([])
   const [hostingsByService, setHostingsByService] = useState<Record<string, HostingRecord[]>>({})
-  const [hostnames, setHostnames] = useState<Record<string, string>>({})
-  const [tlsPins, setTlsPins] = useState<Record<string, string | null>>({})
+  const [hostingEditors, setHostingEditors] = useState<Record<string, HostingEditorState>>({})
   const [tlsLibrary, setTlsLibrary] = useState<TlsRecord[]>([])
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
+  const [healthCheckPrompt, setHealthCheckPrompt] = useState<{
+    services: string[]
+    required: boolean
+  } | null>(null)
   const [containersByService, setContainersByService] = useState<
     Record<string, ContainerRecord[]>
   >({})
@@ -793,8 +1031,7 @@ export function EnvironmentDetailBody({
           return
         }
         setHostingsByService(hostingState.byService)
-        setHostnames(hostingState.hostnames)
-        setTlsPins(hostingState.tlsPins)
+        setHostingEditors(hostingState.editors)
         setContainersByService(containersState)
       } catch (err) {
         if (cancelled) {
@@ -843,7 +1080,7 @@ export function EnvironmentDetailBody({
     [allServers, placementServerId],
   )
   const deployBlocked =
-    deployBlockedReason(placementServerId, pinnedServer) !== null
+    deployBlockedReason(placementServerId, pinnedServer, serviceNames.length) !== null
   const sortedServers = useMemo(
     () =>
       [...allServers].sort((a, b) =>
@@ -900,8 +1137,12 @@ export function EnvironmentDetailBody({
     }
   }
 
-  const deploy = async () => {
-    const blockedReason = deployBlockedReason(placementServerId, pinnedServer)
+  const runDeploy = async (acknowledgeHealthCheckWarnings = false) => {
+    const blockedReason = deployBlockedReason(
+      placementServerId,
+      pinnedServer,
+      serviceNames.length,
+    )
     if (blockedReason || !placementServerId) {
       setDeployStatus(
         blockedReason ?? 'Select a server for this environment before deploying.',
@@ -911,7 +1152,12 @@ export function EnvironmentDetailBody({
     setDeploying(true)
     setDeployStatus('Queueing deployment…')
     try {
-      const result = await deployEnvironment(environmentId)
+      const result = await deployEnvironment(environmentId, {
+        ...(acknowledgeHealthCheckWarnings
+          ? { acknowledgeHealthCheckWarnings: true }
+          : {}),
+      })
+      setHealthCheckPrompt(null)
       const command = await waitForTerminalCommand(
         placementServerId,
         result.commandId,
@@ -923,6 +1169,18 @@ export function EnvironmentDetailBody({
         setContainersByService(refreshed.containersByService)
       }
     } catch (err) {
+      if (err instanceof DeployHealthCheckMissingError) {
+        setHealthCheckPrompt({
+          services: err.services,
+          required: err.required,
+        })
+        setDeployStatus(
+          err.required
+            ? 'Deploy blocked — add healthchecks to required services.'
+            : 'Confirm deploy without healthchecks.',
+        )
+        return
+      }
       if (isForbiddenError(err)) {
         await handleUnauthorized()
         return
@@ -933,7 +1191,11 @@ export function EnvironmentDetailBody({
     }
   }
 
-  const saveHostnames = async (composeServiceName: string) => {
+  const deploy = async () => {
+    await runDeploy(false)
+  }
+
+  const saveHosting = async (composeServiceName: string) => {
     setSavingHosting(composeServiceName)
     setError(null)
     try {
@@ -947,33 +1209,26 @@ export function EnvironmentDetailBody({
         })).id,
       }
       const serviceKey = service?.id ?? composeServiceName
-      const options = {
-        hostnames: parseHostnameList(hostnames[serviceKey] ?? ''),
-      }
-      const tlsId = tlsPins[serviceKey] ?? null
+      const editor = hostingEditors[serviceKey] ?? readHostingEditor([])
       await upsertHosting(
         resolvedService.id,
         composeServiceName,
-        options,
+        editor,
         hostingsByService,
-        tlsId,
       )
       const [servicesResult, hostingsResult] = await Promise.all([
         fetchVisibleServices(environmentId),
         fetchVisibleHostings(resolvedService.id),
       ])
       setServices(servicesResult.services)
+      const nextEditor = readHostingEditor(hostingsResult.hostings)
       setHostingsByService((current) => ({
         ...current,
         [resolvedService.id]: hostingsResult.hostings,
       }))
-      setHostnames((current) => ({
+      setHostingEditors((current) => ({
         ...current,
-        [resolvedService.id]: options.hostnames.join(', '),
-      }))
-      setTlsPins((current) => ({
-        ...current,
-        [resolvedService.id]: hostingsResult.hostings[0]?.tlsId ?? tlsId,
+        [resolvedService.id]: nextEditor,
       }))
       setContainersByService(await fetchContainersByService(servicesResult.services))
     } catch (err) {
@@ -1000,6 +1255,7 @@ export function EnvironmentDetailBody({
         <EnvironmentLoadedPanels
           environment={environment}
           projectId={projectId}
+          orgId={orgId}
           mergedCompose={mergedCompose}
           serviceNames={serviceNames}
           allServers={allServers}
@@ -1020,19 +1276,33 @@ export function EnvironmentDetailBody({
             void savePlacement(nextServerId)
           }}
           services={services}
-          hostnames={hostnames}
-          setHostnames={setHostnames}
-          tlsPins={tlsPins}
-          setTlsPins={setTlsPins}
+          setServices={setServices}
+          hostingEditors={hostingEditors}
+          setHostingEditors={setHostingEditors}
           tlsLibrary={tlsLibrary}
           savingHosting={savingHosting}
-          onSaveHostnames={(composeServiceName) => {
-            saveHostnames(composeServiceName).catch(() => {
+          onSaveHosting={(composeServiceName) => {
+            saveHosting(composeServiceName).catch(() => {
               // Errors are surfaced via setError.
             })
           }}
           containersByService={containersByService}
+          canManage={canManage}
           showEnvironmentPanel={!embedded}
+        />
+      ) : null}
+
+      {healthCheckPrompt ? (
+        <HealthCheckAckModal
+          services={healthCheckPrompt.services}
+          required={healthCheckPrompt.required}
+          deploying={deploying}
+          onCancel={() => setHealthCheckPrompt(null)}
+          onConfirm={() => {
+            runDeploy(true).catch(() => {
+              // Errors are surfaced via deployStatus.
+            })
+          }}
         />
       ) : null}
 
@@ -1184,6 +1454,98 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  fieldLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  proxyToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  proxyCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proxyCheckboxChecked: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  proxyCheckboxMark: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  proxyToggleLabel: {
+    color: colors.textBody,
+    fontSize: 13,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    zIndex: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 480,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.bgSecondary,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  modalServices: {
+    color: colors.command,
+    fontFamily: 'monospace',
+    fontSize: 13,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  modalPrimaryButton: {
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  modalPrimaryText: {
+    color: colors.buttonText,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalSecondaryButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  modalSecondaryText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
   },
 })
 
