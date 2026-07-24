@@ -905,7 +905,8 @@ function resolveChartDomainMs(
 export function ServerMetricsSection({
   orgId,
   serverId,
-}: Readonly<{ orgId: string; serverId: string }>) {
+  embedded = false,
+}: Readonly<{ orgId: string; serverId: string; embedded?: boolean }>) {
   const { width } = useWindowDimensions()
   const [rangeId, setRangeId] = useState<MetricsRangeId>('1h')
   const timing = rangeQueryTiming(rangeId)
@@ -976,13 +977,17 @@ export function ServerMetricsSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>
-        {server ? serverTitle(server) : 'Server'} · Metrics
-      </Text>
-      <Text style={orgPanelStyles.pageCopy}>
-        Host metrics sampled about once per minute. Charts use the backend
-        resolution for this range — not live sub-second data.
-      </Text>
+      {!embedded ? (
+        <>
+          <Text style={orgPanelStyles.pageTitle}>
+            {server ? serverTitle(server) : 'Server'} · Metrics
+          </Text>
+          <Text style={orgPanelStyles.pageCopy}>
+            Host metrics sampled about once per minute. Charts use the backend
+            resolution for this range — not live sub-second data.
+          </Text>
+        </>
+      ) : null}
 
       <SectionPanel title="Time range" hint="Auto-refresh on shorter ranges" accent>
         <RangePicker rangeId={rangeId} onChange={setRangeId} />

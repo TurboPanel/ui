@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import {
@@ -13,339 +13,38 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
-import {
-  COMMAND_POLL_MS,
-  defaultServerCommandState,
-  isTerminalCommandStatus,
-  ServerCommandsPanel,
-  type ActiveCommand,
-  type ServerCommandState,
-} from '@/components/org/server-commands-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
-  deleteServer,
-  fetchCommand,
   fetchOrgServers,
   fetchServersUpdateStatus,
-  formatServerDeleteBlockedError,
   isForbiddenError,
-  pingDaemon,
-  rebootServer,
-  resetServerUpdateStatus,
-  setServerHostname,
-  triggerAllServerUpdates,
   triggerServerUpdate,
   type OrgServerRecord,
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
+import { serverDetailHref } from '@/lib/org-navigation'
 import { useCan } from '@/lib/query-client'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
-import {
-  countryCodeToFlagEmoji,
-  formatServerGeoCountryCode,
-  formatServerGeoLocation,
-} from '@/lib/server-geo'
+import { countryCodeToFlagEmoji } from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
-import { serverMetricsHref } from '@/lib/org-navigation'
 
 type UpdateState = {
   loading: boolean
   triggering: boolean
-  resetting: boolean
   data: ServerUpdateStatus | null
   error: string | null
 }
 
-type UpdateBadgeVariant =
-  | 'updating'
-  | 'error'
-  | 'colocated'
-  | 'unknown'
-  | 'available'
-  | 'current'
-
-function resolveUpdateBadgeVariant(input: {
-  status: ServerUpdateStatus['status'] | undefined
-  targetStatus: ServerUpdateStatus['targetStatus'] | undefined
-  updateAvailable: boolean | undefined
-  colocated: boolean
-  showUpdateErrorBadge: boolean
-  runningVersionUnknown: boolean
-}): UpdateBadgeVariant {
-  if (input.status === 'updating') return 'updating'
-  if (input.showUpdateErrorBadge) return 'error'
-  if (input.colocated) return 'colocated'
-  if (input.targetStatus === 'unknown' || input.runningVersionUnknown) {
-    return 'unknown'
-  }
-  if (input.updateAvailable) return 'available'
-  return 'current'
-}
-
-function updateBadgeLabel(
-  variant: UpdateBadgeVariant,
-  runningVersionUnknown: boolean,
-): string {
-  switch (variant) {
-    case 'updating':
-      return 'Update in progress'
-    case 'error':
-      return 'Update error'
-    case 'colocated':
-      return 'Co-located host'
-    case 'unknown':
-      return runningVersionUnknown ? 'Version unknown' : 'Target unavailable'
-    case 'available':
-      return 'Update available'
-    case 'current':
-      return 'Up to date'
-  }
-}
-
-function updateButtonLabel(input: {
-  isUpdateStatusLoading: boolean
-  isUpdateInProgress: boolean
-  connected: boolean
-  targetKnown: boolean
-  colocated: boolean
-  updateAvailable: boolean | undefined
-}): string {
-  if (input.isUpdateStatusLoading) return 'Loading…'
-  if (input.isUpdateInProgress) return 'Updating…'
-  if (!input.connected) return 'Offline'
-  if (!input.targetKnown) return 'Target unknown'
-  if (input.colocated) return 'Not updatable'
-  if (!input.updateAvailable) return 'Up to date'
-  return 'Update'
-}
-
-function selectedUpdateButtonLabel(
-  batchUpdating: boolean,
-  selectedUpdatableCount: number,
-): string {
-  if (batchUpdating) return 'Updating…'
-  if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
-  return 'Update'
-}
-
-function resetUpdateButtonLabel(
-  resetting: boolean,
-  status: ServerUpdateStatus['status'] | undefined,
-): string {
-  if (resetting) return 'Resetting…'
-  if (status === 'updating') return 'Clear stuck update'
-  return 'Reset status'
-}
-
-function applyCommandPollResult(
-  current: ServerCommandState,
-  activeCommand: ActiveCommand,
-  record: Awaited<ReturnType<typeof fetchCommand>>,
-  onRebootSucceeded: () => void,
-): ServerCommandState | null {
-  if (current.activeCommand?.commandId !== activeCommand.commandId) {
-    return null
-  }
-
-  const updated: ServerCommandState = {
-    ...current,
-    commandRecord: record,
-  }
-
-  if (!isTerminalCommandStatus(record.status)) {
-    return updated
-  }
-
-  updated.activeCommand = null
-  if (activeCommand.kind === 'ping') {
-    updated.pingRunning = false
-    if (record.status !== 'succeeded') {
-      updated.pingError = record.error ?? `Ping ${record.status}`
-    }
-    return updated
-  }
-  if (activeCommand.kind === 'reboot') {
-    updated.rebootRunning = false
-    if (record.status !== 'succeeded') {
-      updated.rebootError = record.error ?? `Reboot ${record.status}`
-    } else {
-      onRebootSucceeded()
-    }
-    return updated
-  }
-
-  updated.hostnameRunning = false
-  if (record.status === 'succeeded') {
-    onRebootSucceeded()
-  } else {
-    updated.hostnameError = record.error ?? `Hostname change ${record.status}`
-  }
-  return updated
-}
-
-function reportServersRefreshError(
-  err: unknown,
-  options: { silent?: boolean } | undefined,
-  setError: (message: string) => void,
-): void {
-  if (!options?.silent) {
-    setError(err instanceof Error ? err.message : 'Failed to load servers')
-  }
-}
-
-async function pollSingleServerCommand(
-  serverId: string,
-  activeCommand: ActiveCommand,
-  isCancelled: () => boolean,
-  applyResult: (
-    serverId: string,
-    activeCommand: ActiveCommand,
-    record: Awaited<ReturnType<typeof fetchCommand>>,
-  ) => void,
-  onError: (
-    serverId: string,
-    kind: ActiveCommand['kind'],
-    err: unknown,
-  ) => Promise<void>,
-): Promise<void> {
-  try {
-    const record = await fetchCommand(serverId, activeCommand.commandId)
-    if (isCancelled()) return
-    applyResult(serverId, activeCommand, record)
-  } catch (err) {
-    if (isCancelled()) return
-    await onError(serverId, activeCommand.kind, err)
-  }
-}
-
-function mergeCommandPollState(
-  prev: Map<string, ServerCommandState>,
-  serverId: string,
-  activeCommand: ActiveCommand,
-  record: Awaited<ReturnType<typeof fetchCommand>>,
-  onRefresh: () => void,
-): Map<string, ServerCommandState> {
-  const current = prev.get(serverId)
-  if (!current) return prev
-  const updated = applyCommandPollResult(
-    current,
-    activeCommand,
-    record,
-    onRefresh,
-  )
-  if (!updated) return prev
-  const next = new Map(prev)
-  next.set(serverId, updated)
-  return next
-}
-
-const defaultUpdateState: UpdateState = {
-  loading: false,
-  triggering: false,
-  resetting: false,
-  data: null,
-  error: null,
-}
-
-async function pollInFlightCommands(
-  commandStates: Map<string, ServerCommandState>,
-  isCancelled: () => boolean,
-  applyResult: (
-    serverId: string,
-    activeCommand: ActiveCommand,
-    record: Awaited<ReturnType<typeof fetchCommand>>,
-  ) => void,
-  onError: (
-    serverId: string,
-    kind: ActiveCommand['kind'],
-    err: unknown,
-  ) => Promise<void>,
-): Promise<void> {
-  for (const [serverId, state] of commandStates.entries()) {
-    if (!state.activeCommand) continue
-    await pollSingleServerCommand(
-      serverId,
-      state.activeCommand,
-      isCancelled,
-      applyResult,
-      onError,
-    )
-  }
-}
-
-function isColocatedServer(
-  server: OrgServerRecord,
-  updateData?: ServerUpdateStatus | null,
-): boolean {
-  return (
-    server.colocatedWithInstance === true ||
-    updateData?.colocatedWithInstance === true ||
-    updateData?.updateBlocked === true
-  )
-}
-
-function shortCommit(commit?: string | null): string {
-  return commit ? commit.slice(0, 12) : 'Unknown'
-}
-
-function deriveServerUpdateViewModel(
-  server: OrgServerRecord,
-  updateState: UpdateState,
-) {
-  const updateData = updateState.data
-  const colocated = isColocatedServer(server, updateData)
-  const isUpdateStatusLoading = updateState.loading && updateData === null
-  const isUpdateInProgress =
-    updateState.triggering ||
-    updateState.resetting ||
-    updateData?.status === 'updating'
-  const canResetUpdateStatus =
-    updateData?.canResetUpdateStatus === true && !updateState.resetting
-  const showUpdateErrorBadge =
-    updateData?.status === 'error' && !updateData?.updateAvailable
-  const targetKnown = updateData?.targetStatus === 'ok'
-  const runningVersionUnknown =
-    targetKnown &&
-    server.connected &&
-    !colocated &&
-    !updateData?.current?.commit
-  const badgeVariant = resolveUpdateBadgeVariant({
-    status: updateData?.status,
-    targetStatus: updateData?.targetStatus,
-    updateAvailable: updateData?.updateAvailable,
-    colocated,
-    showUpdateErrorBadge,
-    runningVersionUnknown,
-  })
-
-  return {
-    updateData,
-    colocated,
-    isUpdateStatusLoading,
-    isUpdateInProgress,
-    canResetUpdateStatus,
-    targetKnown,
-    runningVersionUnknown,
-    badgeVariant,
-  }
-}
-
-// The servers list reflects coarse presence from the Postgres projection, which
-// changes about as often as one daemon heartbeat. Poll it slowly rather than at
-// a constant 5s; a push-based update path can replace this entirely later.
 const SERVERS_REFRESH_MS = 30_000
-// Only poll per-server update status while an update is actively in progress.
 const UPDATE_PROGRESS_POLL_MS = 5_000
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
 }
-
-const EMPTY_CELL = '—'
 
 function checkboxMark(checked: boolean, indeterminate: boolean) {
   if (indeterminate) {
@@ -361,58 +60,18 @@ function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
   if (server.osLogo) return server.osLogo
   const id = server.os?.id?.toLowerCase()
   if (server.os?.variant === 'raspberry-pi-os') return 'raspberry-pi-os'
-  if (id === 'raspbian' || id === 'raspberrypi' || id === 'raspios') {
-    return 'raspberry-pi-os'
-  }
   if (id === 'debian') return 'debian'
   return null
 }
 
-/** City, region, country for the Online status disclosure (no flag — flag sits on the badge). */
-function formatConnectionDetailLocation(geo: OrgServerRecord['geo']): string {
-  const location = formatServerGeoLocation(geo)
-  const country = formatServerGeoCountryCode(geo)
-  return [location, country].filter(Boolean).join(', ')
-}
-
-/** Public dial address for the Online disclosure; hide co-located socket marker. */
-function formatConnectionDetailAddress(
-  remoteAddress: string | null | undefined,
-): string | null {
-  const value = remoteAddress?.trim()
-  if (!value || value === '__direct__') return null
-  return value
-}
-
-function SelectionCheckbox({
-  checked,
-  indeterminate = false,
-  onPress,
-  accessibilityLabel,
-}: Readonly<{
-  checked: boolean
-  indeterminate?: boolean
-  onPress: () => void
-  accessibilityLabel: string
-}>) {
+function isColocatedServer(
+  server: OrgServerRecord,
+  updateData?: ServerUpdateStatus | null,
+): boolean {
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: indeterminate ? 'mixed' : checked }}
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={8}
-      style={styles.checkboxHit}
-    >
-      <View
-        style={[
-          styles.checkbox,
-          (checked || indeterminate) && styles.checkboxChecked,
-        ]}
-      >
-        {checkboxMark(checked, indeterminate)}
-      </View>
-    </Pressable>
+    server.colocatedWithInstance === true ||
+    updateData?.colocatedWithInstance === true ||
+    updateData?.updateBlocked === true
   )
 }
 
@@ -445,6 +104,54 @@ function isTerminalUpdateState(status: ServerUpdateStatus): boolean {
     return true
   }
   return status.status === 'idle'
+}
+
+function selectedUpdateButtonLabel(
+  batchUpdating: boolean,
+  selectedUpdatableCount: number,
+): string {
+  if (batchUpdating) return 'Updating…'
+  if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
+  return 'Update'
+}
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  onPress,
+  accessibilityLabel,
+  stopPropagation,
+}: Readonly<{
+  checked: boolean
+  indeterminate?: boolean
+  onPress: () => void
+  accessibilityLabel: string
+  stopPropagation?: boolean
+}>) {
+  return (
+    <Pressable
+      onPress={(event) => {
+        if (stopPropagation && 'stopPropagation' in event) {
+          ;(event as { stopPropagation?: () => void }).stopPropagation?.()
+        }
+        onPress()
+      }}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: indeterminate ? 'mixed' : checked }}
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      style={styles.checkboxHit}
+    >
+      <View
+        style={[
+          styles.checkbox,
+          (checked || indeterminate) && styles.checkboxChecked,
+        ]}
+      >
+        {checkboxMark(checked, indeterminate)}
+      </View>
+    </Pressable>
+  )
 }
 
 function ServersOverviewToolbar({
@@ -528,119 +235,118 @@ function ServersOverviewToolbar({
   )
 }
 
-function ServersTable({
-  orgId,
-  loading,
-  servers,
-  allSelected,
-  someSelected,
-  selectedIds,
-  expandedIds,
-  updateStates,
-  canManage,
-  getCommandState,
-  onToggleSelectAll,
-  onToggleSelected,
-  onToggleExpanded,
-  onTriggerUpdate,
-  onResetUpdateStatus,
-  onPing,
-  onSetHostname,
-  onReboot,
-  onDelete,
-  deletingIds,
-  deleteErrors,
-}: Readonly<{
-  orgId: string
-  loading: boolean
-  servers: OrgServerRecord[]
-  allSelected: boolean
-  someSelected: boolean
-  selectedIds: Set<string>
-  expandedIds: Set<string>
-  updateStates: Map<string, UpdateState>
-  canManage: boolean
-  getCommandState: (serverId: string) => ServerCommandState
-  onToggleSelectAll: () => void
-  onToggleSelected: (serverId: string) => void
-  onToggleExpanded: (serverId: string) => void
-  onTriggerUpdate: (serverId: string) => Promise<void>
-  onResetUpdateStatus: (serverId: string) => Promise<void>
-  onPing: (serverId: string) => Promise<void>
-  onSetHostname: (serverId: string, hostname: string) => Promise<void>
-  onReboot: (serverId: string) => Promise<void>
-  onDelete: (serverId: string) => Promise<void>
-  deletingIds: Set<string>
-  deleteErrors: Map<string, string>
-}>) {
-  if (loading && servers.length === 0) {
-    return (
-      <View style={styles.loadingRow}>
-        <ActivityIndicator size="small" color={colors.accent} />
-        <Text style={orgPanelStyles.muted}>Loading fleet…</Text>
-      </View>
-    )
-  }
-  if (servers.length === 0) {
-    return (
-      <View style={orgPanelStyles.statePanel}>
-        <Text style={orgPanelStyles.statePanelTitle}>No servers yet</Text>
-        <Text style={orgPanelStyles.muted}>
-          Add a host to start deploying projects to your fleet.
+function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const osProduct =
+    formatServerOsProductName(server.os, server.osDisplay) ?? '—'
+  const logo = osLogoSource(resolveOsLogoKey(server))
+  const title = serverTitle(server)
+  const hostname = server.hostname?.trim()
+  const showHostname =
+    hostname != null && hostname.length > 0 && hostname !== title
+
+  return (
+    <View style={[styles.tableCell, styles.colName, styles.nameButton]}>
+      {logo ? (
+        <Image
+          source={logo}
+          style={styles.osLogoBesideName}
+          contentFit="contain"
+          accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
+        />
+      ) : null}
+      <View style={styles.nameBlock}>
+        <Text style={styles.nameText} numberOfLines={1}>
+          {title}
         </Text>
+        {showHostname ? (
+          <Text style={styles.hostnameSubtext} numberOfLines={1}>
+            {hostname}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
+function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const flag = countryCodeToFlagEmoji(server.geo?.country)
+
+  if (!server.connected) {
+    return (
+      <View style={[styles.tableCell, styles.colStatus]}>
+        <View style={[styles.statusBadge, styles.statusOffline]}>
+          <View style={[styles.statusDot, styles.statusDotOffline]} />
+          <Text style={[styles.statusText, styles.statusTextOffline]}>
+            Offline
+          </Text>
+        </View>
       </View>
     )
   }
 
   return (
-    <ScrollView
-      horizontal
-      nestedScrollEnabled
-      style={styles.tableScroll}
-      contentContainerStyle={styles.tableScrollContent}
-    >
-      <View style={styles.table}>
-        <View style={[styles.tableRow, styles.tableHeaderRow]}>
-          <View style={[styles.tableCell, styles.colName]}>
-            <Text style={styles.tableHeaderText}>Host</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colStatus]}>
-            <Text style={styles.tableHeaderText}>Status</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colCheck]}>
-            <SelectionCheckbox
-              checked={allSelected}
-              indeterminate={someSelected}
-              onPress={onToggleSelectAll}
-              accessibilityLabel="Select all servers"
-            />
-          </View>
-        </View>
-        {servers.map((server, index) => (
-          <OrgServerTableRow
-            key={server.id}
-            orgId={orgId}
-            server={server}
-            rowIndex={index}
-            selected={selectedIds.has(server.id)}
-            expanded={expandedIds.has(server.id)}
-            updateState={updateStates.get(server.id) ?? defaultUpdateState}
-            canManage={canManage}
-            commandState={getCommandState(server.id)}
-            onToggleSelected={() => onToggleSelected(server.id)}
-            onToggleExpanded={() => onToggleExpanded(server.id)}
-            onTriggerUpdate={onTriggerUpdate}
-            onResetUpdateStatus={onResetUpdateStatus}
-            onPing={onPing}
-            onSetHostname={onSetHostname}
-            onReboot={onReboot}
-            onDelete={onDelete}
-            deleting={deletingIds.has(server.id)}
-            deleteError={deleteErrors.get(server.id) ?? null}
-          />
-        ))}
+    <View style={[styles.tableCell, styles.colStatus]}>
+      <View style={[styles.statusBadge, styles.statusOnline]}>
+        <View style={[styles.statusDot, styles.statusDotOnline]} />
+        <Text style={[styles.statusText, styles.statusTextOnline]}>Online</Text>
+        {flag ? <Text style={styles.statusFlag}>{flag}</Text> : null}
       </View>
-    </ScrollView>
+    </View>
+  )
+}
+
+function OrgServerTableRow({
+  orgId,
+  server,
+  rowIndex,
+  selected,
+  onToggleSelected,
+}: Readonly<{
+  orgId: string
+  server: OrgServerRecord
+  rowIndex: number
+  selected: boolean
+  onToggleSelected: () => void
+}>) {
+  const router = useRouter()
+  const [rowHovered, setRowHovered] = useState(false)
+
+  return (
+    <Pressable
+      onPress={() => router.push(serverDetailHref(orgId, server.id))}
+      onPointerEnter={() => setRowHovered(true)}
+      onPointerLeave={() => setRowHovered(false)}
+      style={({ pressed }) => [
+        styles.tableRow,
+        rowIndex % 2 === 1 ? styles.tableRowEven : null,
+        selected ? styles.tableRowSelected : null,
+        rowHovered ? styles.tableRowHovered : null,
+        pressed && styles.buttonPressed,
+        webPointer,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${serverTitle(server)}`}
+    >
+      <ServerNameCell server={server} />
+      <ServerStatusCell server={server} />
+      <Pressable
+        onPress={(event) => {
+          event.stopPropagation?.()
+          onToggleSelected()
+        }}
+        style={[styles.tableCell, styles.colCheck]}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: selected }}
+        accessibilityLabel={`Select ${serverTitle(server)}`}
+        hitSlop={8}
+      >
+        <View
+          style={[styles.checkbox, selected && styles.checkboxChecked]}
+        >
+          {checkboxMark(selected, false)}
+        </View>
+      </Pressable>
+    </Pressable>
   )
 }
 
@@ -660,23 +366,12 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   )
   const [batchUpdating, setBatchUpdating] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const [commandStates, setCommandStates] = useState<
-    Map<string, ServerCommandState>
-  >(new Map())
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
-  const [deleteErrors, setDeleteErrors] = useState<Map<string, string>>(
-    new Map(),
-  )
-
-  const commandStatesRef = useRef(commandStates)
-  commandStatesRef.current = commandStates
 
   const mergeUpdateEntry = (
     prev: Map<string, UpdateState>,
     serverId: string,
     data: ServerUpdateStatus,
-    options?: { preserveTriggering?: boolean; loading?: boolean },
+    options?: { preserveTriggering?: boolean },
   ): Map<string, UpdateState> => {
     const current = prev.get(serverId)
     const preserveTriggering =
@@ -684,9 +379,8 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       (current?.triggering ?? false) &&
       !isTerminalUpdateState(data)
     return new Map(prev).set(serverId, {
-      loading: options?.loading ?? false,
+      loading: false,
       triggering: preserveTriggering || data.status === 'updating',
-      resetting: false,
       data,
       error: null,
     })
@@ -706,7 +400,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           next = new Map(next).set(serverId, {
             loading: true,
             triggering: current?.triggering ?? false,
-            resetting: current?.resetting ?? false,
             data: current?.data ?? null,
             error: null,
           })
@@ -741,7 +434,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
             next = new Map(next).set(serverId, {
               loading: false,
               triggering: current?.triggering ?? false,
-              resetting: false,
               data: current?.data ?? null,
               error: message,
             })
@@ -749,45 +441,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           return next
         })
       }
-    }
-  }
-
-  const loadUpdateData = async (
-    serverId: string,
-    options?: { silent?: boolean },
-  ): Promise<void> => {
-    await loadAllUpdateData([serverId], options)
-  }
-
-  const handleTriggerUpdate = async (serverId: string): Promise<void> => {
-    const current = updateStates.get(serverId)
-    setUpdateStates((prev) =>
-      new Map(prev).set(serverId, {
-        loading: current?.loading ?? false,
-        triggering: true,
-        resetting: false,
-        data: current?.data ?? null,
-        error: null,
-      }),
-    )
-    try {
-      await triggerServerUpdate(serverId)
-      void loadUpdateData(serverId, { silent: true })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      const message =
-        err instanceof Error ? err.message : 'Failed to trigger update'
-      setUpdateStates((prev) =>
-        new Map(prev).set(serverId, {
-          loading: false,
-          triggering: false,
-          resetting: false,
-          data: current?.data ?? null,
-          error: message,
-        }),
-      )
     }
   }
 
@@ -806,7 +459,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         next = new Map(next).set(server.id, {
           loading: current?.loading ?? false,
           triggering: true,
-          resetting: false,
           data: current?.data ?? null,
           error: null,
         })
@@ -815,67 +467,55 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     })
 
     try {
-      await triggerAllServerUpdates()
-      void loadAllUpdateData(
-        targets.map((server) => server.id),
-        { silent: true },
+      const results = await Promise.allSettled(
+        targets.map((server) => triggerServerUpdate(server.id)),
       )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      const message =
-        err instanceof Error ? err.message : 'Failed to trigger updates'
+
+      let sawForbidden = false
       setUpdateStates((prev) => {
         let next = prev
-        for (const server of targets) {
+        for (let index = 0; index < targets.length; index++) {
+          const server = targets[index]
+          const result = results[index]
           const current = prev.get(server.id)
+          if (result.status === 'fulfilled') {
+            next = new Map(next).set(server.id, {
+              loading: current?.loading ?? false,
+              triggering: true,
+              data: current?.data ?? null,
+              error: null,
+            })
+            continue
+          }
+          const reason = result.reason
+          if (isForbiddenError(reason)) {
+            sawForbidden = true
+          }
+          const message =
+            reason instanceof Error ? reason.message : 'Failed to trigger update'
           next = new Map(next).set(server.id, {
             loading: false,
             triggering: false,
-            resetting: false,
             data: current?.data ?? null,
             error: message,
           })
         }
         return next
       })
-    } finally {
-      setBatchUpdating(false)
-    }
-  }
 
-  const handleResetUpdateStatus = async (serverId: string): Promise<void> => {
-    const current = updateStates.get(serverId)
-    setUpdateStates((prev) =>
-      new Map(prev).set(serverId, {
-        loading: current?.loading ?? false,
-        triggering: false,
-        resetting: true,
-        data: current?.data ?? null,
-        error: null,
-      }),
-    )
-    try {
-      const result = await resetServerUpdateStatus(serverId)
-      setUpdateStates((prev) =>
-        mergeUpdateEntry(prev, serverId, result, { loading: false }),
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
+      if (sawForbidden) {
         await handleUnauthorized()
       }
-      const message =
-        err instanceof Error ? err.message : 'Failed to reset update status'
-      setUpdateStates((prev) =>
-        new Map(prev).set(serverId, {
-          loading: false,
-          triggering: false,
-          resetting: false,
-          data: current?.data ?? null,
-          error: message,
-        }),
-      )
+
+      const anySucceeded = results.some((result) => result.status === 'fulfilled')
+      if (anySucceeded) {
+        void loadAllUpdateData(
+          targets.map((server) => server.id),
+          { silent: true },
+        )
+      }
+    } finally {
+      setBatchUpdating(false)
     }
   }
 
@@ -906,8 +546,8 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         setError(
           err instanceof Error ? err.message : 'Access to servers was denied',
         )
-      } else {
-        reportServersRefreshError(err, options, setError)
+      } else if (!options?.silent) {
+        setError(err instanceof Error ? err.message : 'Failed to load servers')
       }
     } finally {
       if (!options?.silent && !options?.isCancelled?.()) {
@@ -916,229 +556,13 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     }
   }
 
-  const getCommandState = (serverId: string): ServerCommandState =>
-    commandStates.get(serverId) ?? defaultServerCommandState()
-
-  const patchCommandState = (
-    serverId: string,
-    patch: Partial<ServerCommandState>,
-  ): void => {
-    setCommandStates((prev) => {
-      const next = new Map(prev)
-      const current = prev.get(serverId) ?? defaultServerCommandState()
-      next.set(serverId, { ...current, ...patch })
-      return next
-    })
-  }
-
-  const handleCommandPollError = async (
-    serverId: string,
-    kind: ActiveCommand['kind'],
-    err: unknown,
-  ): Promise<void> => {
-    if (isForbiddenError(err)) {
-      await handleUnauthorized()
-    }
-    const message = err instanceof Error ? err.message : 'Command poll failed'
-    if (kind === 'ping') {
-      patchCommandState(serverId, {
-        pingError: message,
-        pingRunning: false,
-        activeCommand: null,
-      })
-    } else if (kind === 'reboot') {
-      patchCommandState(serverId, {
-        rebootError: message,
-        rebootRunning: false,
-        activeCommand: null,
-      })
-    } else {
-      patchCommandState(serverId, {
-        hostnameError: message,
-        hostnameRunning: false,
-        activeCommand: null,
-      })
-    }
-  }
-
-  const handlePing = async (serverId: string): Promise<void> => {
-    patchCommandState(serverId, {
-      pingError: null,
-      commandRecord: null,
-      pingRunning: true,
-    })
-    try {
-      const result = await pingDaemon(serverId)
-      patchCommandState(serverId, {
-        activeCommand: { commandId: result.commandId, kind: 'ping' },
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      patchCommandState(serverId, {
-        pingError: err instanceof Error ? err.message : 'Failed to ping daemon',
-        pingRunning: false,
-      })
-    }
-  }
-
-  const handleReboot = async (serverId: string): Promise<void> => {
-    patchCommandState(serverId, {
-      rebootError: null,
-      commandRecord: null,
-      rebootRunning: true,
-    })
-    try {
-      const result = await rebootServer(serverId)
-      patchCommandState(serverId, {
-        activeCommand: { commandId: result.commandId, kind: 'reboot' },
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      patchCommandState(serverId, {
-        rebootError:
-          err instanceof Error ? err.message : 'Failed to reboot server',
-        rebootRunning: false,
-      })
-    }
-  }
-
-  const handleSetHostname = async (
-    serverId: string,
-    hostname: string,
-  ): Promise<void> => {
-    if (!hostname) {
-      patchCommandState(serverId, { hostnameError: 'Hostname is required' })
-      return
-    }
-
-    patchCommandState(serverId, {
-      hostnameError: null,
-      commandRecord: null,
-      hostnameRunning: true,
-    })
-    try {
-      const result = await setServerHostname(serverId, hostname)
-      patchCommandState(serverId, {
-        activeCommand: { commandId: result.commandId, kind: 'hostname' },
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      patchCommandState(serverId, {
-        hostnameError:
-          err instanceof Error ? err.message : 'Failed to change hostname',
-        hostnameRunning: false,
-      })
-    }
-  }
-
-  const handleDelete = async (serverId: string): Promise<void> => {
-    setDeletingIds((current) => new Set(current).add(serverId))
-    setDeleteErrors((current) => {
-      const next = new Map(current)
-      next.delete(serverId)
-      return next
-    })
-    try {
-      await deleteServer(serverId, orgId)
-      setServers((current) => current.filter((entry) => entry.id !== serverId))
-      setSelectedIds((current) => {
-        const next = new Set(current)
-        next.delete(serverId)
-        return next
-      })
-      setExpandedIds((current) => {
-        const next = new Set(current)
-        next.delete(serverId)
-        return next
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setDeleteErrors((current) => new Map(current).set(
-        serverId,
-        formatServerDeleteBlockedError(err),
-      ))
-    } finally {
-      setDeletingIds((current) => {
-        const next = new Set(current)
-        next.delete(serverId)
-        return next
-      })
-    }
-  }
-
-  const inFlightCommandsKey = [...commandStates.entries()]
-    .filter(([, state]) => state.activeCommand !== null)
-    .map(([serverId, state]) => `${serverId}:${state.activeCommand!.commandId}`)
-    .sort((a, b) => a.localeCompare(b))
-    .join(',')
-
-  // Single timer polls every in-flight command; re-runs only when that set changes.
-  useEffect(() => {
-    if (!inFlightCommandsKey) return
-
-    let cancelled = false
-
-    const onPollRefresh = (): void => {
-      void refreshServers({ silent: true })
-    }
-
-    const applyPollResult = (
-      serverId: string,
-      activeCommand: ActiveCommand,
-      record: Awaited<ReturnType<typeof fetchCommand>>,
-    ): void => {
-      setCommandStates((prev) =>
-        mergeCommandPollState(
-          prev,
-          serverId,
-          activeCommand,
-          record,
-          onPollRefresh,
-        ),
-      )
-    }
-
-    const runPoll = (): void => {
-      void pollInFlightCommands(
-        commandStatesRef.current,
-        () => cancelled,
-        applyPollResult,
-        handleCommandPollError,
-      )
-    }
-
-    runPoll()
-    const timer = setInterval(runPoll, COMMAND_POLL_MS)
-
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inFlightCommandsKey, handleUnauthorized])
-
   useEffect(() => {
     let cancelled = false
-
-    const load = async () => {
-      await refreshServers({ isCancelled: () => cancelled })
-    }
-
-    void load()
+    void refreshServers({ isCancelled: () => cancelled })
     const timer = setInterval(
       () => void refreshServers({ silent: true, isCancelled: () => cancelled }),
       SERVERS_REFRESH_MS,
     )
-
     return () => {
       cancelled = true
       clearInterval(timer)
@@ -1147,14 +571,10 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   }, [orgId, handleUnauthorized])
 
   useEffect(() => {
-    if (!canOwn) {
-      return
-    }
-
+    if (!canOwn) return
     setAddServerEligibility(resolveServerAddEligibility())
   }, [canOwn, orgId])
 
-  // Fetch update status in one batch when servers first appear.
   useEffect(() => {
     const pendingIds = servers
       .map((server) => server.id)
@@ -1164,9 +584,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servers])
 
-  // While an update is actively in progress, poll just those servers until they
-  // reach a terminal state; the effect re-runs and clears the timer once none
-  // remain in progress.
   useEffect(() => {
     const inProgressIds = [...updateStates.entries()]
       .filter(([, state]) => state.triggering || state.data?.status === 'updating')
@@ -1207,33 +624,11 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     })
   }
 
-  const toggleExpanded = (serverId: string): void => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(serverId)) next.delete(serverId)
-      else next.add(serverId)
-      return next
-    })
-  }
-
   const anyUpdateInProgress =
     batchUpdating ||
     [...updateStates.values()].some(
       (state) => state.triggering || state.data?.status === 'updating',
     )
-
-  const handleTriggerSelectedUpdatesPress = () => {
-    handleTriggerSelectedUpdates().catch(() => {
-      // Errors surface via update state.
-    })
-  }
-
-  const handleWizardComplete = () => {
-    setShowAddServerWizard(false)
-    refreshServers().catch(() => {
-      // Errors surface via section error state.
-    })
-  }
 
   const hostLabel = servers.length === 1 ? 'host' : 'hosts'
   const fleetHint = loading
@@ -1244,8 +639,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Servers overview</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Connected hosts in your fleet. Expand a row for diagnostics, metrics, and
-        commands.
+        Select hosts to update, or open a server for its control panel.
       </Text>
 
       <SectionPanel title="Fleet" hint={fleetHint} accent>
@@ -1259,40 +653,80 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           batchUpdating={batchUpdating}
           selectedCount={selectedIds.size}
           selectedUpdatableCount={selectedUpdatableCount}
-          onTriggerSelectedUpdates={handleTriggerSelectedUpdatesPress}
+          onTriggerSelectedUpdates={() => {
+            handleTriggerSelectedUpdates().catch(() => {
+              // Errors surface via update state.
+            })
+          }}
         />
         {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
           <Text style={orgPanelStyles.muted}>{addServerEligibility.reason}</Text>
         ) : null}
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-        <ServersTable
-          orgId={orgId}
-          loading={loading}
-          servers={servers}
-          allSelected={allSelected}
-          someSelected={someSelected}
-          selectedIds={selectedIds}
-          expandedIds={expandedIds}
-          updateStates={updateStates}
-          canManage={canManage}
-          getCommandState={getCommandState}
-          onToggleSelectAll={toggleSelectAll}
-          onToggleSelected={toggleSelected}
-          onToggleExpanded={toggleExpanded}
-          onTriggerUpdate={handleTriggerUpdate}
-          onResetUpdateStatus={handleResetUpdateStatus}
-          onPing={handlePing}
-          onSetHostname={handleSetHostname}
-          onReboot={handleReboot}
-          onDelete={handleDelete}
-          deletingIds={deletingIds}
-          deleteErrors={deleteErrors}
-        />
+
+        {loading && servers.length === 0 ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text style={orgPanelStyles.muted}>Loading fleet…</Text>
+          </View>
+        ) : null}
+
+        {!loading && servers.length === 0 ? (
+          <View style={orgPanelStyles.statePanel}>
+            <Text style={orgPanelStyles.statePanelTitle}>No servers yet</Text>
+            <Text style={orgPanelStyles.muted}>
+              Add a host to start deploying projects to your fleet.
+            </Text>
+          </View>
+        ) : null}
+
+        {servers.length > 0 ? (
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            style={styles.tableScroll}
+            contentContainerStyle={styles.tableScrollContent}
+          >
+            <View style={styles.table}>
+              <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                <View style={[styles.tableCell, styles.colName]}>
+                  <Text style={styles.tableHeaderText}>Host</Text>
+                </View>
+                <View style={[styles.tableCell, styles.colStatus]}>
+                  <Text style={styles.tableHeaderText}>Status</Text>
+                </View>
+                <View style={[styles.tableCell, styles.colCheck]}>
+                  <SelectionCheckbox
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    onPress={toggleSelectAll}
+                    accessibilityLabel="Select all servers"
+                  />
+                </View>
+              </View>
+              {servers.map((server, index) => (
+                <OrgServerTableRow
+                  key={server.id}
+                  orgId={orgId}
+                  server={server}
+                  rowIndex={index}
+                  selected={selectedIds.has(server.id)}
+                  onToggleSelected={() => toggleSelected(server.id)}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        ) : null}
       </SectionPanel>
 
       {canOwn && showAddServerWizard ? (
         <AddServerWizard
-          onComplete={handleWizardComplete}
+          onComplete={() => {
+            setShowAddServerWizard(false)
+            refreshServers().catch(() => {
+              // Errors surface via section error state.
+            })
+          }}
           onDismiss={() => setShowAddServerWizard(false)}
         />
       ) : null}
@@ -1360,15 +794,11 @@ const styles = StyleSheet.create({
   table: {
     flexGrow: 1,
     width: '100%',
-    minWidth: 860,
+    minWidth: 640,
     borderWidth: 1,
     borderColor: colors.borderMuted,
     borderRadius: 10,
     overflow: 'hidden',
-  },
-  tableRowWrap: {
-    width: '100%',
-    alignSelf: 'stretch',
   },
   tableRow: {
     flexDirection: 'row',
@@ -1400,9 +830,6 @@ const styles = StyleSheet.create({
           zIndex: 2,
         } as const)
       : {}),
-  },
-  tableRowExpanded: {
-    borderBottomWidth: 0,
   },
   tableCell: {
     justifyContent: 'center',
@@ -1450,15 +877,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 2,
   },
-  expandChevron: {
-    color: colors.textDim,
-    fontSize: 12,
-    width: 12,
-    alignSelf: 'center',
-  },
-  expandChevronOpen: {
-    color: colors.accent,
-  },
   nameText: {
     color: colors.textTitle,
     fontSize: 14,
@@ -1470,14 +888,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
     flexShrink: 1,
-  },
-  cellText: {
-    color: colors.textBody,
-    fontSize: 13,
-  },
-  cellTextMuted: {
-    color: colors.textDim,
-    fontSize: 13,
   },
   statusBadge: {
     alignSelf: 'flex-start',
@@ -1526,13 +936,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 16,
   },
-  statusOnlineHit: {
-    alignSelf: 'flex-start',
-  },
-  statusDetails: {
-    gap: 2,
-    paddingLeft: 2,
-  },
   checkboxHit: {
     padding: 2,
   },
@@ -1555,814 +958,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  expandedPanel: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgInset,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.accent,
-  },
-  osDetailRow: {
-    gap: 2,
-  },
-  updatePanel: {
-    gap: spacing.xs,
-  },
-  errorText: {
-    color: colors.errorText,
-    fontSize: 12,
-  },
-  updateHeading: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  updateBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  updateBadgeAvailable: {
-    borderColor: colors.pending,
-    backgroundColor: colors.bgSecondary,
-  },
-  updateBadgeUpdating: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
-  },
-  updateBadgeError: {
-    borderColor: colors.error,
-    backgroundColor: colors.bgSecondary,
-  },
-  updateBadgeCurrent: {
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-  },
-  updateBadgeUnknown: {
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-  },
-  updateBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  updateBadgeTextAvailable: {
-    color: colors.pending,
-  },
-  updateBadgeTextUpdating: {
-    color: colors.accent,
-  },
-  updateBadgeTextError: {
-    color: colors.error,
-  },
-  updateBadgeTextCurrent: {
-    color: colors.textDim,
-  },
-  updateBadgeTextUnknown: {
-    color: colors.textDim,
-  },
-  updateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgActive,
-  },
-  updateButtonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  resetUpdateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  resetUpdateButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  updateButtonDisabled: {
-    opacity: 0.5,
-  },
-  updateButtonText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cellRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  deleteSection: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  metricsButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderColor: colors.accent,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.bgActive,
-  },
-  metricsButtonText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  deleteButton: {
-    alignSelf: 'flex-start',
-    borderColor: colors.error,
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  deleteButtonText: {
-    color: colors.error,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  confirmRow: {
-    gap: spacing.sm,
-  },
-  mutedButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  mutedButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  expandedActionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderArea,
-  },
 })
-
-function ServerNameCell({
-  server,
-  expanded,
-  onToggleExpanded,
-}: Readonly<{
-  server: OrgServerRecord
-  expanded: boolean
-  onToggleExpanded: () => void
-}>) {
-  const osProduct =
-    formatServerOsProductName(server.os, server.osDisplay) ?? EMPTY_CELL
-  const logo = osLogoSource(resolveOsLogoKey(server))
-  const title = serverTitle(server)
-  const hostname = server.hostname?.trim()
-  const showHostname =
-    hostname != null && hostname.length > 0 && hostname !== title
-
-  return (
-    <View style={[styles.tableCell, styles.colName]}>
-      <Pressable
-        onPress={onToggleExpanded}
-        style={({ pressed }) => [
-          styles.nameButton,
-          pressed && styles.buttonPressed,
-          webPointer,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={
-          expanded ? 'Collapse server details' : 'Expand server details'
-        }
-      >
-        <Text style={[styles.expandChevron, expanded && styles.expandChevronOpen]}>
-          {expanded ? '▾' : '▸'}
-        </Text>
-        {logo ? (
-          <Image
-            source={logo}
-            style={styles.osLogoBesideName}
-            contentFit="contain"
-            accessibilityLabel={osProduct === EMPTY_CELL ? 'OS' : osProduct}
-          />
-        ) : null}
-        <View style={styles.nameBlock}>
-          <Text style={styles.nameText} numberOfLines={1}>
-            {title}
-          </Text>
-          {showHostname ? (
-            <Text style={styles.hostnameSubtext} numberOfLines={1}>
-              {hostname}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
-    </View>
-  )
-}
-
-function ServerStatusCell({
-  server,
-}: Readonly<{ server: OrgServerRecord }>) {
-  const [detailsOpen, setDetailsOpen] = useState(false)
-  const flag = countryCodeToFlagEmoji(server.geo?.country)
-  const address = formatConnectionDetailAddress(server.remoteAddress)
-  const location = formatConnectionDetailLocation(server.geo)
-  const hasDetails = Boolean(address || location)
-
-  if (!server.connected) {
-    return (
-      <View style={[styles.tableCell, styles.colStatus]}>
-        <View style={[styles.statusBadge, styles.statusOffline]}>
-          <View style={[styles.statusDot, styles.statusDotOffline]} />
-          <Text style={[styles.statusText, styles.statusTextOffline]}>
-            Offline
-          </Text>
-        </View>
-      </View>
-    )
-  }
-
-  const badge = (
-    <View style={[styles.statusBadge, styles.statusOnline]}>
-      <View style={[styles.statusDot, styles.statusDotOnline]} />
-      <Text style={[styles.statusText, styles.statusTextOnline]}>Online</Text>
-      {flag ? <Text style={styles.statusFlag}>{flag}</Text> : null}
-    </View>
-  )
-
-  return (
-    <View style={[styles.tableCell, styles.colStatus]}>
-      {hasDetails ? (
-        <Pressable
-          onPress={() => setDetailsOpen((open) => !open)}
-          style={styles.statusOnlineHit}
-          accessibilityRole="button"
-          accessibilityLabel={
-            detailsOpen
-              ? 'Hide connection details'
-              : 'Show connection details'
-          }
-        >
-          {badge}
-        </Pressable>
-      ) : (
-        badge
-      )}
-      {detailsOpen && hasDetails ? (
-        <View style={styles.statusDetails}>
-          {address ? (
-            <Text style={styles.cellText} selectable numberOfLines={1}>
-              {address}
-            </Text>
-          ) : null}
-          {location ? (
-            <Text style={styles.cellTextMuted} numberOfLines={2}>
-              {location}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
-function ServerDeleteControls({
-  deleting,
-  deleteError,
-  confirmingDelete,
-  onRequestConfirm,
-  onCancelConfirm,
-  onConfirmDelete,
-}: Readonly<{
-  deleting: boolean
-  deleteError: string | null
-  confirmingDelete: boolean
-  onRequestConfirm: () => void
-  onCancelConfirm: () => void
-  onConfirmDelete: () => void
-}>) {
-  let action: ReactNode
-  if (deleting) {
-    action = (
-      <View style={styles.cellRow}>
-        <ActivityIndicator size="small" color={colors.textMuted} />
-        <Text style={orgPanelStyles.muted}>Deleting…</Text>
-      </View>
-    )
-  } else if (confirmingDelete) {
-    action = (
-      <View style={styles.confirmRow}>
-        <Text style={orgPanelStyles.muted}>
-          Permanently remove this server from the organization?
-        </Text>
-        <TouchableOpacity style={styles.deleteButton} onPress={onConfirmDelete}>
-          <Text style={styles.deleteButtonText}>Confirm delete</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mutedButton} onPress={onCancelConfirm}>
-          <Text style={styles.mutedButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  } else {
-    action = (
-      <TouchableOpacity style={styles.deleteButton} onPress={onRequestConfirm}>
-        <Text style={styles.deleteButtonText}>Delete server</Text>
-      </TouchableOpacity>
-    )
-  }
-
-  return (
-    <View style={styles.deleteSection}>
-      {deleteError ? (
-        <Text style={orgPanelStyles.error}>{deleteError}</Text>
-      ) : null}
-      {action}
-    </View>
-  )
-}
-
-function ExpandedServerPanel({
-  orgId,
-  server,
-  updateState,
-  viewModel,
-  canManage,
-  commandState,
-  onTriggerUpdate,
-  onResetUpdateStatus,
-  onPing,
-  onSetHostname,
-  onReboot,
-  onDelete,
-  deleting,
-  deleteError,
-}: Readonly<{
-  orgId: string
-  server: OrgServerRecord
-  updateState: UpdateState
-  viewModel: ReturnType<typeof deriveServerUpdateViewModel>
-  canManage: boolean
-  commandState: ServerCommandState
-  onTriggerUpdate: (serverId: string) => Promise<void>
-  onResetUpdateStatus: (serverId: string) => Promise<void>
-  onPing: (serverId: string) => Promise<void>
-  onSetHostname: (serverId: string, hostname: string) => Promise<void>
-  onReboot: (serverId: string) => Promise<void>
-  onDelete: (serverId: string) => Promise<void>
-  deleting: boolean
-  deleteError: string | null
-}>) {
-  const router = useRouter()
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const osFull = server.osDisplay?.trim() || null
-
-  const runCommand = (action: () => Promise<void>) => {
-    action().catch(() => {
-      // Errors surface via command / delete state.
-    })
-  }
-
-  return (
-    <View style={styles.expandedPanel}>
-      {osFull ? (
-        <View style={orgPanelStyles.expandedSection}>
-          <Text style={orgPanelStyles.detailTitle}>Operating system</Text>
-          <Text style={orgPanelStyles.detailLine}>{osFull}</Text>
-        </View>
-      ) : null}
-      {viewModel.colocated ? (
-        <Text style={orgPanelStyles.muted}>
-          This server runs on the same host as the control plane. Remote trunk
-          updates are disabled — use local git instead.
-        </Text>
-      ) : null}
-      <View style={orgPanelStyles.expandedSection}>
-        <ServerUpdatePanel
-        server={server}
-        updateState={updateState}
-        updateData={viewModel.updateData}
-        colocated={viewModel.colocated}
-        canManage={canManage}
-        isUpdateStatusLoading={viewModel.isUpdateStatusLoading}
-        isUpdateInProgress={viewModel.isUpdateInProgress}
-        canResetUpdateStatus={viewModel.canResetUpdateStatus}
-        targetKnown={viewModel.targetKnown}
-        runningVersionUnknown={viewModel.runningVersionUnknown}
-        badgeVariant={viewModel.badgeVariant}
-        onTriggerUpdate={onTriggerUpdate}
-        onResetUpdateStatus={onResetUpdateStatus}
-      />
-      </View>
-      <View style={orgPanelStyles.expandedSection}>
-        <ServerCommandsPanel
-          server={server}
-          canManage={canManage}
-          showReboot={!viewModel.colocated}
-          commandState={commandState}
-          onPing={() => runCommand(() => onPing(server.id))}
-          onSetHostname={(hostname) =>
-            runCommand(() => onSetHostname(server.id, hostname))
-          }
-          onReboot={() => runCommand(() => onReboot(server.id))}
-        />
-      </View>
-      <View style={styles.expandedActionsRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.metricsButton,
-            pressed && styles.buttonPressed,
-            webPointer,
-          ]}
-          onPress={() => router.push(serverMetricsHref(orgId, server.id))}
-          accessibilityRole="button"
-          accessibilityLabel="View server metrics"
-        >
-          <Text style={styles.metricsButtonText}>View metrics</Text>
-        </Pressable>
-      </View>
-      {canManage && viewModel.colocated ? (
-        <Text style={orgPanelStyles.muted}>
-          The co-located control plane server cannot be deleted.
-        </Text>
-      ) : null}
-      {canManage && !viewModel.colocated ? (
-        <ServerDeleteControls
-          deleting={deleting}
-          deleteError={deleteError}
-          confirmingDelete={confirmingDelete}
-          onRequestConfirm={() => setConfirmingDelete(true)}
-          onCancelConfirm={() => setConfirmingDelete(false)}
-          onConfirmDelete={() => {
-            setConfirmingDelete(false)
-            runCommand(() => onDelete(server.id))
-          }}
-        />
-      ) : null}
-    </View>
-  )
-}
-
-function OrgServerTableRow({
-  orgId,
-  server,
-  rowIndex,
-  selected,
-  expanded,
-  updateState,
-  canManage,
-  commandState,
-  onToggleSelected,
-  onToggleExpanded,
-  onTriggerUpdate,
-  onResetUpdateStatus,
-  onPing,
-  onSetHostname,
-  onReboot,
-  onDelete,
-  deleting,
-  deleteError,
-}: Readonly<{
-  orgId: string
-  server: OrgServerRecord
-  rowIndex: number
-  selected: boolean
-  expanded: boolean
-  updateState: UpdateState
-  canManage: boolean
-  commandState: ServerCommandState
-  onToggleSelected: () => void
-  onToggleExpanded: () => void
-  onTriggerUpdate: (serverId: string) => Promise<void>
-  onResetUpdateStatus: (serverId: string) => Promise<void>
-  onPing: (serverId: string) => Promise<void>
-  onSetHostname: (serverId: string, hostname: string) => Promise<void>
-  onReboot: (serverId: string) => Promise<void>
-  onDelete: (serverId: string) => Promise<void>
-  deleting: boolean
-  deleteError: string | null
-}>) {
-  const viewModel = deriveServerUpdateViewModel(server, updateState)
-  const [rowHovered, setRowHovered] = useState(false)
-
-  return (
-    <View style={styles.tableRowWrap}>
-      <View
-        onPointerEnter={() => setRowHovered(true)}
-        onPointerLeave={() => setRowHovered(false)}
-        style={[
-          styles.tableRow,
-          rowIndex % 2 === 1 ? styles.tableRowEven : null,
-          selected ? styles.tableRowSelected : null,
-          expanded ? styles.tableRowExpanded : null,
-          rowHovered && !expanded ? styles.tableRowHovered : null,
-        ]}
-      >
-        <ServerNameCell
-          server={server}
-          expanded={expanded}
-          onToggleExpanded={onToggleExpanded}
-        />
-        <ServerStatusCell server={server} />
-        <View style={[styles.tableCell, styles.colCheck]}>
-          <SelectionCheckbox
-            checked={selected}
-            onPress={onToggleSelected}
-            accessibilityLabel={`Select ${serverTitle(server)}`}
-          />
-        </View>
-      </View>
-      {expanded ? (
-        <ExpandedServerPanel
-          orgId={orgId}
-          server={server}
-          updateState={updateState}
-          viewModel={viewModel}
-          canManage={canManage}
-          commandState={commandState}
-          onTriggerUpdate={onTriggerUpdate}
-          onResetUpdateStatus={onResetUpdateStatus}
-          onPing={onPing}
-          onSetHostname={onSetHostname}
-          onReboot={onReboot}
-          onDelete={onDelete}
-          deleting={deleting}
-          deleteError={deleteError}
-        />
-      ) : null}
-    </View>
-  )
-}
-
-function ServerUpdateStatus({
-  updateData,
-  colocated,
-  isUpdateStatusLoading,
-  runningVersionUnknown,
-  badgeVariant,
-}: Readonly<{
-  updateData: ServerUpdateStatus | null
-  colocated: boolean
-  isUpdateStatusLoading: boolean
-  runningVersionUnknown: boolean
-  badgeVariant: UpdateBadgeVariant
-}>) {
-  const badgePresentation = pickUpdateBadgeStyles(badgeVariant, styles)
-
-  if (isUpdateStatusLoading) {
-    return (
-      <View style={styles.cellRow}>
-        <ActivityIndicator size="small" color={colors.textMuted} />
-        <Text style={orgPanelStyles.muted}>Loading update status…</Text>
-      </View>
-    )
-  }
-
-  if (!updateData) return null
-
-  return (
-    <>
-      <View style={[styles.updateBadge, badgePresentation.container]}>
-        <Text style={[styles.updateBadgeText, badgePresentation.text]}>
-          {updateBadgeLabel(badgeVariant, runningVersionUnknown)}
-        </Text>
-      </View>
-      {updateData.lastUpdateError && updateData.updateAvailable && !colocated ? (
-        <Text style={orgPanelStyles.muted}>
-          Last attempt: {updateData.lastUpdateError}
-        </Text>
-      ) : null}
-    </>
-  )
-}
-
-function ServerUpdateActions({
-  server,
-  updateState,
-  updateData,
-  colocated,
-  canManage,
-  isUpdateStatusLoading,
-  isUpdateInProgress,
-  canResetUpdateStatus,
-  targetKnown,
-  onTriggerUpdate,
-  onResetUpdateStatus,
-}: Readonly<{
-  server: OrgServerRecord
-  updateState: UpdateState
-  updateData: ServerUpdateStatus | null
-  colocated: boolean
-  canManage: boolean
-  isUpdateStatusLoading: boolean
-  isUpdateInProgress: boolean
-  canResetUpdateStatus: boolean
-  targetKnown: boolean
-  onTriggerUpdate: (serverId: string) => Promise<void>
-  onResetUpdateStatus: (serverId: string) => Promise<void>
-}>) {
-  if (!canManage) return null
-
-  const updateButtonDisabled =
-    isUpdateStatusLoading ||
-    isUpdateInProgress ||
-    !server.connected ||
-    !targetKnown ||
-    colocated ||
-    !updateData?.updateAvailable
-
-  return (
-    <View style={styles.updateButtonRow}>
-      <TouchableOpacity
-        style={[
-          styles.updateButton,
-          updateButtonDisabled && styles.updateButtonDisabled,
-        ]}
-        onPress={() => void onTriggerUpdate(server.id)}
-        disabled={updateButtonDisabled}
-      >
-        {isUpdateStatusLoading ||
-        (isUpdateInProgress && updateState.triggering) ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : null}
-        <Text style={styles.updateButtonText}>
-          {updateButtonLabel({
-            isUpdateStatusLoading,
-            isUpdateInProgress:
-              updateState.triggering || updateData?.status === 'updating',
-            connected: server.connected,
-            targetKnown,
-            colocated,
-            updateAvailable: updateData?.updateAvailable,
-          })}
-        </Text>
-      </TouchableOpacity>
-
-      {canResetUpdateStatus ? (
-        <TouchableOpacity
-          style={[
-            styles.resetUpdateButton,
-            updateState.resetting && styles.updateButtonDisabled,
-          ]}
-          onPress={() => void onResetUpdateStatus(server.id)}
-          disabled={updateState.resetting}
-        >
-          {updateState.resetting ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : null}
-          <Text style={styles.resetUpdateButtonText}>
-            {resetUpdateButtonLabel(
-              updateState.resetting,
-              updateData?.status,
-            )}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  )
-}
-
-function ServerUpdatePanel({
-  server,
-  updateState,
-  updateData,
-  colocated,
-  canManage,
-  isUpdateStatusLoading,
-  isUpdateInProgress,
-  canResetUpdateStatus,
-  targetKnown,
-  runningVersionUnknown,
-  badgeVariant,
-  onTriggerUpdate,
-  onResetUpdateStatus,
-}: Readonly<{
-  server: OrgServerRecord
-  updateState: UpdateState
-  updateData: ServerUpdateStatus | null
-  colocated: boolean
-  canManage: boolean
-  isUpdateStatusLoading: boolean
-  isUpdateInProgress: boolean
-  canResetUpdateStatus: boolean
-  targetKnown: boolean
-  runningVersionUnknown: boolean
-  badgeVariant: UpdateBadgeVariant
-  onTriggerUpdate: (serverId: string) => Promise<void>
-  onResetUpdateStatus: (serverId: string) => Promise<void>
-}>) {
-  return (
-    <View style={styles.updatePanel}>
-      <Text style={orgPanelStyles.detailTitle}>Daemon version</Text>
-
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Running: </Text>
-        {shortCommit(updateData?.current?.commit)}
-      </Text>
-
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Trunk: </Text>
-        {updateData?.targetStatus === 'unknown'
-          ? 'Unknown'
-          : shortCommit(updateData?.target?.commit)}
-      </Text>
-
-      {updateData?.targetStatus === 'unknown' && updateData.targetError ? (
-        <Text style={orgPanelStyles.muted}>{updateData.targetError}</Text>
-      ) : null}
-
-      {updateData?.updateBlocked && updateData.updateBlockedReason ? (
-        <Text style={orgPanelStyles.muted}>
-          {updateData.updateBlockedReason}
-        </Text>
-      ) : null}
-
-      <ServerUpdateStatus
-        updateData={updateData}
-        colocated={colocated}
-        isUpdateStatusLoading={isUpdateStatusLoading}
-        runningVersionUnknown={runningVersionUnknown}
-        badgeVariant={badgeVariant}
-      />
-
-      <ServerUpdateActions
-        server={server}
-        updateState={updateState}
-        updateData={updateData}
-        colocated={colocated}
-        canManage={canManage}
-        isUpdateStatusLoading={isUpdateStatusLoading}
-        isUpdateInProgress={isUpdateInProgress}
-        canResetUpdateStatus={canResetUpdateStatus}
-        targetKnown={targetKnown}
-        onTriggerUpdate={onTriggerUpdate}
-        onResetUpdateStatus={onResetUpdateStatus}
-      />
-
-      {updateState.error ? (
-        <Text style={styles.errorText}>{updateState.error}</Text>
-      ) : null}
-    </View>
-  )
-}
-
-function pickUpdateBadgeStyles(
-  variant: UpdateBadgeVariant,
-  s: typeof styles,
-): { container: object; text: object } {
-  switch (variant) {
-    case 'updating':
-      return {
-        container: s.updateBadgeUpdating,
-        text: s.updateBadgeTextUpdating,
-      }
-    case 'error':
-      return {
-        container: s.updateBadgeError,
-        text: s.updateBadgeTextError,
-      }
-    case 'colocated':
-    case 'current':
-      return {
-        container: s.updateBadgeCurrent,
-        text: s.updateBadgeTextCurrent,
-      }
-    case 'unknown':
-      return {
-        container: s.updateBadgeUnknown,
-        text: s.updateBadgeTextUnknown,
-      }
-    case 'available':
-      return {
-        container: s.updateBadgeAvailable,
-        text: s.updateBadgeTextAvailable,
-      }
-  }
-}

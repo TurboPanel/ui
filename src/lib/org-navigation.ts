@@ -13,6 +13,12 @@ export const ORG_AREAS = [
     hint: 'Managed hosts and fleet status',
     subRoutes: [
       {
+        id: 'settings',
+        label: 'Settings',
+        pathSegment: 'settings',
+        hint: 'Fleet defaults such as the default server timezone',
+      },
+      {
         id: 'managed',
         label: 'Managed',
         pathSegment: 'managed',
@@ -71,6 +77,46 @@ export function serverMetricsHref(
   return `/${orgId}/servers/${serverId}/metrics`
 }
 
+export function serverDetailHref(
+  orgId: string,
+  serverId: string,
+): `/${string}/servers/${string}` {
+  return `/${orgId}/servers/${serverId}`
+}
+
+export const SERVER_DETAIL_TAB_IDS = [
+  'overview',
+  'control',
+  'time',
+  'network',
+  'metrics',
+] as const
+
+export type ServerDetailTabId = (typeof SERVER_DETAIL_TAB_IDS)[number]
+
+export const SERVER_DETAIL_TAB_LABELS: Record<ServerDetailTabId, string> = {
+  overview: 'Overview',
+  control: 'Control',
+  time: 'Time',
+  network: 'Network',
+  metrics: 'Metrics',
+}
+
+export function serverDetailTabHref(
+  orgId: string,
+  serverId: string,
+  tabId: ServerDetailTabId,
+): string {
+  return `${serverDetailHref(orgId, serverId)}?tab=${tabId}`
+}
+
+const SERVER_DETAIL_SUB_ROUTE = {
+  id: 'server-detail',
+  label: 'Server',
+  pathSegment: '',
+  hint: 'Server control panel',
+} as const
+
 const SERVER_METRICS_SUB_ROUTE = {
   id: 'metrics',
   label: 'Metrics',
@@ -96,6 +142,16 @@ export function orgAreaFromPathname(pathname: string) {
     parts[3] === 'metrics'
   ) {
     return { area, subRoute: SERVER_METRICS_SUB_ROUTE }
+  }
+
+  if (areaSegment === 'servers' && parts.length >= 3) {
+    const maybeSub = parts[2]
+    const knownSub = area.subRoutes.some(
+      (entry) => entry.pathSegment === maybeSub,
+    )
+    if (!knownSub && maybeSub !== 'metrics') {
+      return { area, subRoute: SERVER_DETAIL_SUB_ROUTE }
+    }
   }
 
   const subRouteSegment = parts[2]

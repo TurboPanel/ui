@@ -189,6 +189,24 @@ export type ServerOsMetadata = {
 
 export type ServerOsLogoKey = 'debian' | 'raspberry-pi-os'
 
+export type ServerAddresses = {
+  privateIpv4: string[]
+  privateIpv6: string[]
+  publicIpv4: string[]
+  publicIpv6: string[]
+}
+
+export type ServerTimeSync = {
+  timezone?: string
+  ntpEnabled?: boolean
+  ntpSynced?: boolean
+  ntpServers?: string[]
+  fallbackNtpServers?: string[]
+  capturedAt?: string
+}
+
+export type ServerTimezoneSource = 'server' | 'organization' | null
+
 export type OrgServerRecord = {
   id: string;
   displayName: string | null;
@@ -209,10 +227,87 @@ export type OrgServerRecord = {
   /** Logo key for the OS column (`debian` / `raspberry-pi-os`). */
   osLogo: ServerOsLogoKey | null;
   colocatedWithInstance?: boolean;
+  addresses: ServerAddresses | null;
+  timeSync: ServerTimeSync | null;
+  timezone: string | null;
+  timezoneSource: ServerTimezoneSource;
 };
+
+export type ServerDetailRecord = OrgServerRecord & {
+  orgDefaultTimezone: string | null
+  enforceServerTimezone: boolean
+  colocatedWithInstance: boolean
+}
+
+export type NtpSetInput = {
+  enabled?: boolean
+  servers?: string[]
+  fallbackServers?: string[]
+}
+
+export type OrgDefaultTimezoneSettings = {
+  defaultServerTimezone: string | null
+  enforceServerTimezone: boolean
+}
 
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
   return await apiFetch(`${CLIENT_API}/servers`);
+}
+
+export async function fetchServer(serverId: string): Promise<ServerDetailRecord> {
+  const body = await apiFetch<{ ok: true; server: ServerDetailRecord }>(
+    `${CLIENT_API}/servers/${serverId}`,
+  )
+  return body.server
+}
+
+export async function setServerTimezone(
+  serverId: string,
+  timezone: string,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/timezone`, {
+    method: 'POST',
+    body: JSON.stringify({ timezone }),
+  })
+}
+
+/**
+ * Applies NTP settings on the daemon. The body must include at least one of
+ * `enabled`, `servers`, or `fallbackServers` — otherwise the instance returns 400.
+ */
+export async function setServerNtp(
+  serverId: string,
+  input: NtpSetInput,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/ntp`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function fetchTimezones(): Promise<{ timezones: string[] }> {
+  return await apiFetch(`${CLIENT_API}/timezones`)
+}
+
+export async function fetchOrgDefaultTimezone(
+  orgId: string,
+): Promise<OrgDefaultTimezoneSettings> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/default-timezone`,
+  )
+}
+
+export async function saveOrgDefaultTimezone(
+  orgId: string,
+  patch: Partial<OrgDefaultTimezoneSettings>,
+): Promise<OrgDefaultTimezoneSettings> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/default-timezone`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    },
+  )
 }
 
 export type ServerDeleteBlocker = {
@@ -1113,13 +1208,6 @@ export async function applyReencryptSecrets(): Promise<ReencryptSecretsResponse>
   return await apiFetch(`${ADMIN_API}/secrets/reencrypt`, {
     method: 'POST',
   })
-}
-
-export type ServerAddresses = {
-  privateIpv4: string[]
-  privateIpv6: string[]
-  publicIpv4: string[]
-  publicIpv6: string[]
 }
 
 export type ServerCpuCores = {

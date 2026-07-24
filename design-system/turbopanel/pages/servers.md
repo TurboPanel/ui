@@ -3,15 +3,16 @@
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/servers`.
 
 **Route:** `src/app/[orgId]/servers` → `servers-overview-section.tsx`  
-**Job:** Fleet glance — who is online, OS, batch update, add server, expand for commands.
+**Job:** Fleet glance — who is online, OS, batch update, add server; row opens server detail.
 
 ---
 
 ## Layout
 
 - One job: **fleet table**, not a dashboard of widgets  
-- Collapsed table is the default; expand reveals version / commands / metrics link / delete  
+- Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar inside accent `SectionPanel` ("Fleet"): **+ Server** (own-gated) + batch Update for selected updatable hosts  
+- **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
 - Page title uses shared `orgPanelStyles.pageTitle` / `pageCopy`; route context lives in `OrgHeader` eyebrow  
 - No hero, no stat strip, no decorative bento above the table
 
@@ -28,16 +29,9 @@
 - Hostname subtext (monospace) when distinct from display name  
 - Alternating row tint (`bgInset`) for scanability  
 - OS logo beside name (density-aware PNGs) — no UUID in the primary column  
-- Online badge: accent dot + label + optional flag; tap expands IP + geo under the badge (hide `__direct__`)  
-- Offline badge: hollow dot + muted label
-
-## Expand row
-
-- Left accent stripe on expanded panel (`accent` 2px)  
-- Subsections in `orgPanelStyles.expandedSection` cards: OS, daemon version, commands  
-- Commands panel uses uppercase `detailTitle`; latency breakdown in `detailCard`  
-- Reboot uses danger-styled button (error border/text)  
-- **View metrics** as accent primary action in footer row (links to `/servers/[serverId]/metrics`)
+- Online badge: accent dot + label + optional flag (no expand disclosure on this page)  
+- Offline badge: hollow dot + muted label  
+- Checkbox stops propagation — row press does not toggle selection
 
 ## Add server wizard
 
@@ -47,21 +41,22 @@
 
 ## Motion
 
-- Row expand: instant (content swap); press opacity ~0.88 on toolbar/nav  
+- Row press opacity ~0.88; no expand animation on this page  
 - Status dot is geometric — no perpetual pulse on historical/offline rows  
-- Command poll feedback inline under buttons (shared 2s coordinator) — no modal spam
+- Batch update uses shared in-progress poll only — no modal spam
 
 ## Components
 
 - Reuse `orgPanelStyles` toolbar buttons, `SectionPanel` accent stripe, `AddServerWizard`  
-- Delete: two-step confirm; surface `server_has_blockers` clearly  
+- Commands, delete, per-host update detail, time/network, and metrics live on the **server detail** page
 
 ## Charts
 
-- Not on this page — **View metrics** links out to `/servers/[serverId]/metrics`
+- Not on this page — use the **Metrics** tab on server detail (or legacy `/servers/[id]/metrics` deep link)
 
 ## Anti-patterns (page-specific)
 
 - ❌ Calling `fetchServerCell` / DO reads  
 - ❌ Per-server status polling loops  
 - ❌ Showing registration keys after the wizard is dismissed  
+- ❌ Expand rows for commands on the fleet table

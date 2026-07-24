@@ -108,7 +108,9 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 
 | Route | Component | Purpose |
 |-------|-----------|---------|
-| `/<orgId>/servers` | `servers-overview-section.tsx` | Servers assigned to the signed-in org (`GET /api/client/v1/servers`) |
+| `/<orgId>/servers` | `servers-overview-section.tsx` | Lean fleet table — batch update, row opens control panel |
+| `/<orgId>/servers/[serverId]` | `server-detail-section.tsx` | Server control panel (Overview, Control, Time, Network, Metrics tabs) |
+| `/<orgId>/servers/settings` | `server-timezone-settings-section.tsx` | Org default server timezone + enforce toggle |
 | `/<orgId>/servers/networks` | `networks-overview-section.tsx` | Networks sub-page under Servers |
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
 | `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list; optional `?workspaceId` from the header switcher (omit = **All workspaces** when multiple exist; sole workspace is selected automatically) |
@@ -198,16 +200,25 @@ Authorization helpers:
 - **Principal password write-only rule:** principals are not a public org-console surface. Hosting/database-user flows create them behind the scenes; passwords are sealed as `tpsecret` at rest and must never be displayed or pre-filled after the optional show-once generate step.
 - `fetchServerUpdate(serverId)` → `GET /api/client/v1/servers/:id/update` — returns `ServerUpdateStatus` with `current`/`target` commit identity and `updateAvailable`.
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
+- `fetchServer(serverId)` → `GET /api/client/v1/servers/:id` — unwraps `{ ok, server }` → `ServerDetailRecord` (Postgres-backed detail read; never `fetchServerCell`).
+- `setServerTimezone(serverId, timezone)` → `POST /api/client/v1/servers/:id/timezone` — `CommandEnqueueResponse`.
+- `setServerNtp(serverId, input)` → `POST /api/client/v1/servers/:id/ntp` — at least one of `enabled` / `servers` / `fallbackServers` required.
+- `fetchTimezones()` → `GET /api/client/v1/timezones` — `{ timezones: string[] }`.
+- `fetchOrgDefaultTimezone(orgId)` / `saveOrgDefaultTimezone(orgId, patch)` → `GET|PUT /api/client/v1/organizations/:orgId/default-timezone`.
 - The Update button is gated by `useCan('organization', orgId, 'organization:manage')` as a display hint; the server enforces the real 403. Non-managers see commit rows read-only with no button.
 
 #### Servers overview table
 
-- `servers-overview-section.tsx` renders a selectable table: Name (display name / hostname; OS logo beside the name — no UUID), Status (**Online** with country flag when known / Offline), and a checkbox column (header = select all). Connected Since is omitted (platform-only). Clicking **Online** toggles IP + city/region/country under the badge; co-located `__direct__` addresses are hidden.
-- OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`. Sources are SVGs under `assets/os/src/`; regenerate with `pnpm os-logos` (see `assets/os/README.md`).
-- Row expand reveals daemon version / Update / Ping / hostname / reboot / **Delete server** (manage-gated; co-located server blocked). Collapsed table is the default.
-- **Delete server** — `deleteServer(serverId)` → `DELETE /api/client/v1/servers/:id`; two-step confirm in expanded row; 409 `server_has_blockers` when networks or containers still reference the server (`ServerDeleteBlockedError` + `formatServerDeleteBlockedError()`). Deleting a server also invalidates its one-shot registration key.
-- Batch **Update** targets **selected** updatable servers (not every updatable host).
-- `OrgServerRecord` includes `os` / `osDisplay` / `osLogo` from `GET /api/client/v1/servers`.
+- `servers-overview-section.tsx` renders a lean selectable table: Host (display name / hostname; OS logo — no UUID), Status (**Online** with country flag when known / Offline), checkbox column (header = select all). Row press navigates to `/<orgId>/servers/[serverId]`; checkbox uses `stopPropagation` so selection does not navigate.
+- OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`.
+- Batch **Update** targets **selected** updatable hosts only; per-host commands, delete, time/network, and metrics live on the server detail page.
+- `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `addresses`, `timeSync`, `timezone`, and `timezoneSource` (Postgres projection).
+
+#### Server control panel (`/<orgId>/servers/[serverId]`)
+
+- `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`).
+- Single command poll timer (`COMMAND_POLL_MS`) for ping, hostname, reboot, timezone, and NTP on this page; terminal hostname/reboot/timezone/NTP success invalidates `['server', serverId]`.
+- Legacy deep link `/<orgId>/servers/[serverId]/metrics` unchanged; Metrics tab embeds `ServerMetricsSection` with `embedded`.
 
 #### Servers overview — add server
 
@@ -271,7 +282,7 @@ When apply returns 422 with `"cert apply is not applicable on this runtime"` (Wo
 
 ## Command Pipeline UI
 
-Per-server command actions are implemented in `src/components/org/server-commands-panel.tsx` (presentational UI) with orchestration in `src/components/org/servers-overview-section.tsx`. Commands follow a create-then-poll pattern: the UI calls the create endpoint, receives a `commandId`, then polls `fetchCommand` until the status is terminal (`succeeded`, `failed`, or `timed_out`). A single shared timer in `servers-overview-section.tsx` coalesces polling for all in-flight commands — no per-server intervals.
+Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab; orchestration and polling live in `src/components/org/server-detail-section.tsx`. Commands follow a create-then-poll pattern: the UI calls the create endpoint, receives a `commandId`, then polls `fetchCommand` until the status is terminal (`succeeded`, `failed`, or `timed_out`). A single shared timer on the detail page coalesces polling for all in-flight commands on that host — no per-server intervals on the fleet overview.
 
 ### API helpers — `src/lib/instance-api.ts`
 
