@@ -213,7 +213,7 @@ Authorization helpers:
 
 - **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) opens `AddServerWizard` inline on the servers page.
 - `resolveServerAddEligibility()` in `src/lib/server-add-eligibility.ts` is the future subscription seat gate; until billing exists, org owners may add servers (registration key minted during the flow; never listed as licenses).
-- Wizard shows the install command only (key embedded, one-shot); avoid "create license" / license-management copy. Production shape: `curl -fsSL 'trbp.nl/run.sh' | TURBOPANEL_LICENSE='…' sh` (dev rebuild via `resolveDisplayedInstallCommand` / `buildInstallCommandWithBaseUrl` validates the edited origin, shell-quotes all values, and adds `TURBOPANEL_HOST` / `TURBOPANEL_INSECURE_TLS=1` for self-signed HTTPS).
+- Wizard shows the install command only (key embedded, one-shot); avoid "create license" / license-management copy. Production shape: `curl -fsSL trbp.nl/run.sh | TURBOPANEL_LICENSE=… sh` (dev rebuild via `resolveDisplayedInstallCommand` / `buildInstallCommandWithBaseUrl` validates the edited origin, emits values unquoted, and adds `TURBOPANEL_HOST` / `TURBOPANEL_INSECURE_TLS=1` for self-signed HTTPS).
 
 #### Server metrics (`/<orgId>/servers/[serverId]/metrics`)
 

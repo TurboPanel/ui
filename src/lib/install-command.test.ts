@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
-  shellQuote,
 } from './install-command'
 
 const revealed = {
   licenseId: 'license-id',
   licenseToken: 'token',
-  installCommand:
-    "curl -fsSL 'trbp.nl/run.sh' | TURBOPANEL_LICENSE='abc' sh",
+  installCommand: 'curl -fsSL trbp.nl/run.sh | TURBOPANEL_LICENSE=abc sh',
 }
 
 describe('parseInstallBaseUrl', () => {
@@ -75,7 +73,7 @@ describe('resolveDisplayedInstallCommand', () => {
     ).toBe(revealed.installCommand)
   })
 
-  it('quotes validated HTTPS origins in the rebuilt pipeline', () => {
+  it('emits unquoted validated HTTPS origins in the rebuilt pipeline', () => {
     const command = resolveDisplayedInstallCommand(
       revealed,
       'https://panel.example.com:8443',
@@ -86,24 +84,24 @@ describe('resolveDisplayedInstallCommand', () => {
       .replaceAll('=', '')
 
     expect(command).toContain(
-      `curl -fsSLk ${shellQuote('https://panel.example.com:8443/run.sh')}`,
+      'curl -fsSLk https://panel.example.com:8443/run.sh',
     )
     expect(command).toContain(
-      `TURBOPANEL_HOST=${shellQuote('https://panel.example.com:8443')}`,
+      'TURBOPANEL_HOST=https://panel.example.com:8443',
     )
-    expect(command).toContain(`TURBOPANEL_LICENSE=${shellQuote(licenseArg)}`)
+    expect(command).toContain(`TURBOPANEL_LICENSE=${licenseArg}`)
     expect(command).toContain('TURBOPANEL_INSECURE_TLS=1')
+    expect(command).not.toContain("'")
   })
 
-  it('quotes validated HTTP origins without insecure TLS flags', () => {
+  it('emits unquoted validated HTTP origins without insecure TLS flags', () => {
     const command = resolveDisplayedInstallCommand(
       revealed,
       'http://dev.example.com:8880',
     )
-    expect(command).toContain(
-      `curl -fsSL ${shellQuote('http://dev.example.com:8880/run.sh')}`,
-    )
+    expect(command).toContain('curl -fsSL http://dev.example.com:8880/run.sh')
     expect(command).not.toContain('curl -fsSLk')
     expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
+    expect(command).not.toContain("'")
   })
 })

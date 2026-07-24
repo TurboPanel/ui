@@ -76,12 +76,6 @@ function trimTrailingSlash(url: string): string {
   return url.replace(/\/$/, '')
 }
 
-/** POSIX single-quote escaping for shell arguments and env values. */
-export function shellQuote(value: string): string {
-  const escaped = value.replaceAll("'", String.raw`'\''`)
-  return `'${escaped}'`
-}
-
 function encodeLicenseArg(licenseId: string, licenseToken: string): string {
   const combined = `${licenseId}:${licenseToken}`
   return btoa(combined)
@@ -126,6 +120,10 @@ export function parseInstallBaseUrl(
   }
 }
 
+/**
+ * Build the install pipeline. Values are emitted unquoted; callers must pass a
+ * validated origin and base64url license (no shell metacharacters).
+ */
 function buildInstallPipeline(opts: {
   curlUrl: string
   licenseArg: string
@@ -135,11 +133,11 @@ function buildInstallPipeline(opts: {
 }): string {
   const curl = opts.curlInsecure ? 'curl -fsSLk' : 'curl -fsSL'
   const envParts = [
-    `TURBOPANEL_LICENSE=${shellQuote(opts.licenseArg)}`,
-    `TURBOPANEL_HOST=${shellQuote(opts.host)}`,
+    `TURBOPANEL_LICENSE=${opts.licenseArg}`,
+    `TURBOPANEL_HOST=${opts.host}`,
   ]
   if (opts.insecureTls) envParts.push('TURBOPANEL_INSECURE_TLS=1')
-  return `${curl} ${shellQuote(opts.curlUrl)} | ${envParts.join(' ')} sh`
+  return `${curl} ${opts.curlUrl} | ${envParts.join(' ')} sh`
 }
 
 /**
