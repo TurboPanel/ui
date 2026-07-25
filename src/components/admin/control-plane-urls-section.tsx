@@ -15,6 +15,7 @@ import {
   isForbiddenError,
   savePublicUrls,
 } from '@/lib/instance-api'
+import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { colors, spacing } from '@/lib/theme'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
@@ -316,10 +317,7 @@ function ApplyAvailabilityNote({
 }: Readonly<{ applyNotAvailable: boolean }>) {
   if (applyNotAvailable) {
     return (
-      <Text style={orgPanelStyles.muted}>
-        Cert apply is not available on High Availability control planes.
-        Save URLs here; apply TLS changes on your self-hosted instance.
-      </Text>
+      <Text style={orgPanelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
     )
   }
 

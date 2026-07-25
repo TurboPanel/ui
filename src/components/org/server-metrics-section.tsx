@@ -39,6 +39,7 @@ import {
   type MetricsSeriesPoint,
   type MetricsSeriesResponse,
 } from '@/lib/instance-api'
+import { HA_METRICS_LOCAL_NOTE } from '@/lib/platform-copy'
 import { useForbiddenRecovery } from '@/lib/query-client'
 import { colors, layout, spacing } from '@/lib/theme'
 
@@ -413,11 +414,7 @@ function metricsBackendLabel(backend: MetricsBackendKind): string {
 
 function metricsNotConfiguredCopy(backend: MetricsBackendKind): string {
   if (backend === 'analytics-engine') {
-    return (
-      'Metrics charts are unavailable. Local dev does not emulate High Availability ' +
-      'metrics storage — switch to self-hosted mode (ClickHouse) for local charts, or ' +
-      'configure analytics on your HA deployment.'
-    )
+    return `Metrics charts are unavailable. ${HA_METRICS_LOCAL_NOTE}`
   }
   if (backend === 'clickhouse') {
     return 'Metrics storage is still starting up (ClickHouse). Retry in a moment.'

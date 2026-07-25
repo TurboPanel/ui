@@ -11,6 +11,7 @@ import {
   type SignupSettingsResponse,
 } from '@/lib/instance-api'
 import { useForbiddenRecovery } from '@/lib/query-client'
+import { HA_SIGNUP_SETTINGS_NOTE } from '@/lib/platform-copy'
 import { colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -52,7 +53,7 @@ export function SignupSettingsSection() {
       <Text style={styles.heading}>Sign-up</Text>
       <Text style={styles.copy}>
         Control whether public account creation is available on the sign-in
-        page. Changes apply immediately on High Availability — no redeploy required.
+        page. {HA_SIGNUP_SETTINGS_NOTE}
       </Text>
 
       <SectionPanel

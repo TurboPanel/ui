@@ -38,7 +38,7 @@
 | Loading | Accent spinner; charts hidden until first payload |
 | Unsupported OS | `statePanel` — non-Linux only |
 | Backend unavailable | `statePanel` + Retry (ClickHouse / Analytics Engine label) |
-| Not configured | HA vs self-hosted copy via `platform-copy` patterns |
+| Not configured | TurboPanel High Availability vs self-hosted copy via `platform-copy` patterns |
 | No data | Waiting for first samples (~1 min after connect) |
 | Offline server | Pending left-border banner when charts still render |
 | Per-chart unavailable | Muted inline message inside card — not empty plot |

@@ -50,7 +50,7 @@ North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables �
 
 | Phase | Scope | Status |
 |-------|--------|--------|
-| **1** | Design system pages, compose create wizard + base panel, shell polish, HA terminology, variables presets | **Shipped** |
+| **1** | Design system pages, compose create wizard + base panel, shell polish, TurboPanel High Availability terminology, variables presets | **Shipped** |
 | **2** | Compose flow rail + wizard step indicator, project variables panel, managed provision API wired, environment-scoped managed connection UI, Expo SDK 56.0.16 | **Shipped** |
 | **3** | Org VPC (WireGuard) UI, read replicas, move services between servers, managed DB user provisioning, daemon `managed.provision` command | **Partial** — VPN/peer console shipped; remaining items planned |
 
@@ -60,7 +60,7 @@ North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables �
 
 Canonical page overrides: `design-system/turbopanel/pages/project-create.md`, `managed-services.md`, `variables.md`, `projects.md`, `servers.md`, `service-settings.md`.
 
-**Platform copy:** user-facing “Workers / Cloudflare / edge” → **High Availability** (`src/lib/platform-copy.ts`). Backend identifiers unchanged.
+**Platform copy:** user-facing “Workers / Cloudflare / edge” → **TurboPanel High Availability** (`src/lib/platform-copy.ts`). Never use bare “High Availability” or “HA” in UI copy. Backend identifiers unchanged.
 
 ## End-user auth & first-run install (self-hosted)
 
