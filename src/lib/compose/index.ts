@@ -25,6 +25,17 @@ export {
   isComposeTopLevelKey,
   lintComposeYaml,
 } from './lint'
+export type {
+  ComposeServiceKind,
+  ComposeServiceTurbopanelExtension,
+  TraditionalWebEngine,
+} from './service-kind'
+export {
+  isTraditionalWebComposeService,
+  parseServiceTurbopanelExtension,
+  readServiceTurbopanelExtension,
+  TURBOPANEL_SERVICE_EXTENSION_KEY,
+} from './service-kind'
 export type { ComposeImageRef } from './image-ref'
 export {
   emptyComposeImageRef,

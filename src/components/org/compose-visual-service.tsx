@@ -24,6 +24,14 @@ import {
   type ComposeRestartPolicy,
   type VisualFieldDef,
 } from '@/lib/compose/visual-fields'
+import {
+  isTraditionalWebComposeService,
+  patchServiceTurbopanelExtension,
+  readServiceTurbopanelExtension,
+  TRADITIONAL_WEB_ENGINE_OPTIONS,
+  TURBOPANEL_SERVICE_EXTENSION_KEY,
+  type TraditionalWebEngine,
+} from '@/lib/compose/service-kind'
 import { colors, spacing } from '@/lib/theme'
 
 const webSelectStyle: CSSProperties = {
@@ -49,6 +57,18 @@ const RESTART_OPTION_LABELS: Record<ComposeRestartPolicy, string> = {
 
 function servicePorts(value: unknown): string {
   return Array.isArray(value) ? value.map(String).join(', ') : ''
+}
+
+function traditionalWebEngineHint(
+  engine: TraditionalWebEngine | undefined,
+): string {
+  if (engine === 'openlitespeed') {
+    return 'Files are served from the host document root via OpenLiteSpeed (static only — no PHP hints); hosting Caddy terminates TLS.'
+  }
+  if (engine === 'apache') {
+    return 'Files are served from the host document root via Apache (mod_php when PHP hints or hosting options are set); hosting Caddy terminates TLS.'
+  }
+  return 'Files are served from the host document root via nginx; hosting Caddy terminates TLS.'
 }
 
 function OptionSelect({
@@ -362,11 +382,43 @@ export function ComposeVisualServiceCard({
     }
   }, [service.image])
 
-  const addable = addableVisualFields(service)
-  const showRestart = serviceHasVisualField(service, visualFieldById('restart'))
-  const showPorts = serviceHasVisualField(service, visualFieldById('ports'))
-  const showRegistryAdd = !registryOpen
+  const traditional = isTraditionalWebComposeService(service)
+  const extension = readServiceTurbopanelExtension(service) ?? {}
+  const addable = traditional ? [] : addableVisualFields(service)
+  const showRestart =
+    !traditional && serviceHasVisualField(service, visualFieldById('restart'))
+  const showPorts =
+    !traditional && serviceHasVisualField(service, visualFieldById('ports'))
+  const showRegistryAdd = !traditional && !registryOpen
   const hasAddChips = addable.length > 0 || showRegistryAdd
+
+  const applyExtension = (
+    patch: Parameters<typeof patchServiceTurbopanelExtension>[1],
+  ) => {
+    const next = patchServiceTurbopanelExtension(service, patch)
+    const extensionValue = next[TURBOPANEL_SERVICE_EXTENSION_KEY]
+    if (extensionValue === undefined) {
+      onClearField(TURBOPANEL_SERVICE_EXTENSION_KEY)
+      return
+    }
+    onPatchService({ [TURBOPANEL_SERVICE_EXTENSION_KEY]: extensionValue })
+  }
+
+  const applyKind = (serviceKind: 'container' | 'traditional-web') => {
+    if (serviceKind === 'traditional-web') {
+      applyExtension({
+        serviceKind: 'traditional-web',
+        engine: extension.engine ?? 'nginx',
+        root: extension.root ?? 'public',
+      })
+      onClearField('image')
+      return
+    }
+    applyExtension({ serviceKind: 'container' })
+    if (typeof service.image !== 'string' || service.image.trim() === '') {
+      onPatchService({ image: 'nginx:alpine' })
+    }
+  }
 
   return (
     <View style={orgPanelStyles.detailCard}>
@@ -383,13 +435,79 @@ export function ComposeVisualServiceCard({
         </Pressable>
       </View>
 
-      <ImageRefFields
-        value={service.image}
-        disabled={saving}
-        registryOpen={registryOpen}
-        onRegistryOpenChange={setRegistryOpen}
-        onChange={(image) => onPatchService({ image })}
-      />
+      <View style={styles.fieldBlock}>
+        <Text style={styles.label}>Service kind</Text>
+        <OptionSelect
+          value={traditional ? 'traditional-web' : 'container'}
+          options={[
+            { value: 'container', label: 'Container (Docker)' },
+            { value: 'traditional-web', label: 'Traditional web (host nginx/Apache/OLS)' },
+          ]}
+          disabled={saving}
+          onChange={(value) => {
+            if (value === 'container' || value === 'traditional-web') {
+              applyKind(value)
+            }
+          }}
+        />
+      </View>
+
+      {traditional ? (
+        <>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Web engine</Text>
+            <OptionSelect
+              value={extension.engine ?? 'nginx'}
+              options={TRADITIONAL_WEB_ENGINE_OPTIONS.map((entry) => ({
+                value: entry.value,
+                label: entry.label,
+              }))}
+              disabled={saving}
+              onChange={(value) => {
+                const engine = value as TraditionalWebEngine
+                applyExtension({
+                  serviceKind: 'traditional-web',
+                  engine,
+                  root: extension.root ?? 'public',
+                })
+              }}
+            />
+            <Text style={styles.hint}>
+              {traditionalWebEngineHint(extension.engine)}
+            </Text>
+          </View>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Document root</Text>
+            <TextInput
+              value={extension.root ?? 'public'}
+              onChangeText={(root) =>
+                applyExtension({
+                  serviceKind: 'traditional-web',
+                  engine: extension.engine ?? 'nginx',
+                  root: root.trim() || 'public',
+                })
+              }
+              editable={!saving}
+              placeholder="public"
+              placeholderTextColor={colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
+            <Text style={styles.hint}>
+              Relative path under the site directory on the server (default public).
+            </Text>
+          </View>
+        </>
+      ) : (
+        <ImageRefFields
+          value={service.image}
+          disabled={saving}
+          registryOpen={registryOpen}
+          onRegistryOpenChange={setRegistryOpen}
+          onChange={(image) => onPatchService({ image })}
+        />
+      )}
 
       {showRestart ? (
         <RestartField

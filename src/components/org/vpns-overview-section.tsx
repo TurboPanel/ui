@@ -1,0 +1,476 @@
+import { useRouter } from 'expo-router'
+import { useMemo, useState } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { SectionPanel } from '@/components/org/section-panel'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { useAuth } from '@/lib/auth-context'
+import {
+  createVpn,
+  deleteVpn,
+  fetchNetworks,
+  fetchVpns,
+  isForbiddenError,
+  updateVpn,
+  type NetworkRecord,
+  type VpnRecord,
+} from '@/lib/instance-api'
+import { vpnDetailHref } from '@/lib/org-navigation'
+import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { colors, spacing } from '@/lib/theme'
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
+
+function vpnTitle(vpn: VpnRecord): string {
+  return vpn.displayName?.trim() || 'Unnamed VPN'
+}
+
+function networkLabel(network: NetworkRecord | undefined): string {
+  if (!network) return '—'
+  return network.displayName?.trim() || network.cidr?.trim() || network.id
+}
+
+function VpnCard({
+  vpn,
+  networkName,
+  canManage,
+  renaming,
+  confirmDelete,
+  onOpen,
+  onRename,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
+}: Readonly<{
+  vpn: VpnRecord
+  networkName: string
+  canManage: boolean
+  renaming: boolean
+  confirmDelete: boolean
+  onOpen: () => void
+  onRename: (displayName: string) => void
+  onRequestDelete: () => void
+  onConfirmDelete: () => void
+  onCancelDelete: () => void
+}>) {
+  const [draftName, setDraftName] = useState(vpn.displayName?.trim() ?? '')
+
+  return (
+    <Pressable
+      style={[orgPanelStyles.detailCard, webPointer]}
+      onPress={onOpen}
+    >
+      <Text style={orgPanelStyles.detailTitle}>{vpnTitle(vpn)}</Text>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Network: </Text>
+        {networkName}
+      </Text>
+      <Text style={orgPanelStyles.muted}>Open to manage peers and apply.</Text>
+
+      {canManage ? (
+        <View style={styles.cardActions} onStartShouldSetResponder={() => true}>
+          <TextInput
+            value={draftName}
+            onChangeText={setDraftName}
+            placeholder="Display name"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+            onPressIn={(event) => event.stopPropagation?.()}
+          />
+          <View style={styles.actionsRow}>
+            <Pressable
+              style={[
+                orgPanelStyles.toolbarBtnSecondary,
+                renaming && styles.buttonDisabled,
+                webPointer,
+              ]}
+              disabled={renaming}
+              onPress={(event) => {
+                event.stopPropagation?.()
+                onRename(draftName.trim())
+              }}
+            >
+              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                {renaming ? 'Saving…' : 'Rename'}
+              </Text>
+            </Pressable>
+            {confirmDelete ? (
+              <>
+                <Pressable
+                  style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
+                  onPress={(event) => {
+                    event.stopPropagation?.()
+                    onConfirmDelete()
+                  }}
+                >
+                  <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+                    Confirm delete
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+                  onPress={(event) => {
+                    event.stopPropagation?.()
+                    onCancelDelete()
+                  }}
+                >
+                  <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                    Cancel
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+                onPress={(event) => {
+                  event.stopPropagation?.()
+                  onRequestDelete()
+                }}
+              >
+                <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Delete</Text>
+              </Pressable>
+            )}
+          </View>
+          {confirmDelete ? (
+            <Text style={orgPanelStyles.muted}>
+              Deletes this VPN and its peers. WireGuard configs already applied
+              on hosts are not torn down automatically.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </Pressable>
+  )
+}
+
+function NetworkChip({
+  label,
+  active,
+  onPress,
+  disabled,
+}: Readonly<{
+  label: string
+  active: boolean
+  onPress: () => void
+  disabled?: boolean
+}>) {
+  return (
+    <Pressable
+      style={[
+        styles.chip,
+        active && styles.chipActive,
+        disabled && styles.buttonDisabled,
+        webPointer,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
+export function VpnsOverviewSection({
+  orgId,
+}: Readonly<{ orgId: string }>) {
+  const router = useRouter()
+  const { handleUnauthorized } = useAuth()
+  const queryClient = useQueryClient()
+  const canManage = useCan('organization', orgId, 'organization:manage')
+  const [error, setError] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState('')
+  const [networkId, setNetworkId] = useState<string | null>(null)
+  const [meshCidr, setMeshCidr] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+
+  const vpnsQuery = useQuery({
+    queryKey: ['org', orgId, 'vpns'],
+    queryFn: fetchVpns,
+  })
+  const networksQuery = useQuery({
+    queryKey: ['org', orgId, 'networks', 'vpn'],
+    queryFn: () => fetchNetworks({ kind: 'vpn' }),
+  })
+  useForbiddenRecovery(vpnsQuery.error)
+  useForbiddenRecovery(networksQuery.error)
+
+  const createMutation = useMutation({
+    mutationFn: () => {
+      const trimmedCidr = meshCidr.trim()
+      return createVpn({
+        displayName: displayName.trim() || undefined,
+        ...(trimmedCidr
+          ? { meshCidr: trimmedCidr }
+          : { networkId }),
+      })
+    },
+    onSuccess: async () => {
+      setError(null)
+      setDisplayName('')
+      setNetworkId(null)
+      setMeshCidr('')
+      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
+      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'networks'] })
+    },
+    onError: async (err) => {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(errorMessage(err, 'Failed to create VPN'))
+    },
+  })
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      updateVpn(id, { displayName: name || null }),
+    onSuccess: async () => {
+      setError(null)
+      setRenamingId(null)
+      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
+    },
+    onError: async (err) => {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(errorMessage(err, 'Failed to rename VPN'))
+      setRenamingId(null)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteVpn(id),
+    onSuccess: async () => {
+      setError(null)
+      setConfirmDeleteId(null)
+      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
+    },
+    onError: async (err) => {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(errorMessage(err, 'Failed to delete VPN'))
+    },
+  })
+
+  const vpns = vpnsQuery.data?.vpns ?? []
+  const vpnNetworks = networksQuery.data?.networks ?? []
+  const networkById = useMemo(() => {
+    const map = new Map<string, NetworkRecord>()
+    for (const network of vpnNetworks) {
+      map.set(network.id, network)
+    }
+    return map
+  }, [vpnNetworks])
+
+  const loading = vpnsQuery.isLoading
+
+  return (
+    <View style={styles.root}>
+      <Text style={orgPanelStyles.pageTitle}>VPNs</Text>
+      <Text style={orgPanelStyles.pageCopy}>
+        WireGuard meshes that link datacenters through peer servers. Not every
+        host needs to be a peer — more peers per site improve redundancy.
+      </Text>
+
+      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {vpnsQuery.isError && !error ? (
+        <Text style={orgPanelStyles.error}>
+          {errorMessage(vpnsQuery.error, 'Failed to load VPNs')}
+        </Text>
+      ) : null}
+
+      {canManage ? (
+        <SectionPanel title="Create VPN" hint="Manage-gated">
+          <Text style={styles.fieldLabel}>Display name</Text>
+          <TextInput
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="e.g. Org mesh"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <Text style={styles.fieldLabel}>VPN network (optional)</Text>
+          <Text style={orgPanelStyles.muted}>
+            Enter a mesh CIDR to auto-create a VPN network row, or link an
+            existing VPN network from Networks.
+          </Text>
+          <Text style={styles.fieldLabel}>Mesh CIDR</Text>
+          <TextInput
+            value={meshCidr}
+            onChangeText={(text) => {
+              setMeshCidr(text)
+              if (text.trim().length > 0) setNetworkId(null)
+            }}
+            placeholder="e.g. 10.200.0.0/24"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>
+            Or link existing
+          </Text>
+          <View style={styles.chipRow}>
+            <NetworkChip
+              label="None"
+              active={networkId === null && meshCidr.trim().length === 0}
+              onPress={() => {
+                setNetworkId(null)
+                setMeshCidr('')
+              }}
+            />
+            {vpnNetworks.map((network) => (
+              <NetworkChip
+                key={network.id}
+                label={networkLabel(network)}
+                active={networkId === network.id}
+                onPress={() => {
+                  setNetworkId(network.id)
+                  setMeshCidr('')
+                }}
+                disabled={meshCidr.trim().length > 0}
+              />
+            ))}
+          </View>
+          <Pressable
+            style={[
+              orgPanelStyles.toolbarBtnPrimary,
+              createMutation.isPending && styles.buttonDisabled,
+              webPointer,
+            ]}
+            disabled={createMutation.isPending}
+            onPress={() => createMutation.mutate()}
+          >
+            {createMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Create VPN</Text>
+            )}
+          </Pressable>
+        </SectionPanel>
+      ) : null}
+
+      <SectionPanel
+        title="VPN meshes"
+        hint={loading ? 'Loading…' : `${vpns.length} mesh(es)`}
+      >
+        {loading && vpns.length === 0 ? (
+          <Text style={orgPanelStyles.muted}>Loading VPNs…</Text>
+        ) : null}
+        {!loading && vpns.length === 0 ? (
+          <Text style={orgPanelStyles.muted}>
+            No VPNs yet. Create a mesh, add peer servers, then apply WireGuard.
+          </Text>
+        ) : null}
+        <View style={styles.list}>
+          {vpns.map((vpn) => (
+            <VpnCard
+              key={vpn.id}
+              vpn={vpn}
+              networkName={
+                vpn.networkId
+                  ? networkLabel(networkById.get(vpn.networkId))
+                  : '—'
+              }
+              canManage={canManage}
+              renaming={renamingId === vpn.id}
+              confirmDelete={confirmDeleteId === vpn.id}
+              onOpen={() => router.push(vpnDetailHref(orgId, vpn.id))}
+              onRename={(name) => {
+                setRenamingId(vpn.id)
+                renameMutation.mutate({ id: vpn.id, name })
+              }}
+              onRequestDelete={() => setConfirmDeleteId(vpn.id)}
+              onConfirmDelete={() => deleteMutation.mutate(vpn.id)}
+              onCancelDelete={() => setConfirmDeleteId(null)}
+            />
+          ))}
+        </View>
+      </SectionPanel>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  root: {
+    width: '100%',
+    gap: spacing.lg,
+  },
+  list: {
+    gap: 8,
+  },
+  cardActions: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  fieldLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    backgroundColor: colors.bgInput,
+    color: colors.text,
+    fontSize: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: spacing.sm,
+    minHeight: 44,
+  },
+  buttonDisabled: {
+    opacity: 0.55,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+    backgroundColor: colors.bgInset,
+  },
+  chipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgSecondary,
+  },
+  chipText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chipTextActive: {
+    color: colors.accent,
+  },
+})

@@ -14,7 +14,7 @@ export function ProjectVariablesSection({
           Inherited by all environments unless overridden at a lower scope
         </Text>
       </View>
-      <VariablesSection orgId={orgId} parentField={{ projectId }} />
+      <VariablesSection orgId={orgId} parentField={{ projectId }} embedded />
     </SectionPanel>
   )
 }

@@ -757,9 +757,24 @@ function AddVariableForm({
 export function VariablesSection({
   orgId,
   parentField,
+  title = 'Variables',
+  hint = 'Injected into compose at deploy — lower scopes override',
+  embedded = false,
+  showPresets = true,
 }: Readonly<{
   orgId: string
   parentField: VariableParentFilter
+  /** Panel title (ignored when `embedded`). */
+  title?: string
+  /** Panel hint (ignored when `embedded`). */
+  hint?: string
+  /**
+   * When true, render the editor body without a surrounding `SectionPanel`
+   * (for nesting under hosting / service cards).
+   */
+  embedded?: boolean
+  /** Common-key preset chips above the add form. */
+  showPresets?: boolean
 }>) {
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
@@ -1011,12 +1026,9 @@ export function VariablesSection({
     }
   }
 
-  return (
-    <SectionPanel
-      title="Variables"
-      hint="Injected into compose at deploy — lower scopes override"
-    >
-      {canOwn ? (
+  const body = (
+    <>
+      {showPresets && canOwn ? (
         <VariablePresetRow
           onPick={(preset) => {
             setShowAddForm(true)
@@ -1100,11 +1112,25 @@ export function VariablesSection({
         onSecretUpdate={startSecretUpdate}
         onDelete={(id) => void handleDeleteVariable(id)}
       />
+    </>
+  )
+
+  if (embedded) {
+    return <View style={styles.embedded}>{body}</View>
+  }
+
+  return (
+    <SectionPanel title={title} hint={hint}>
+      {body}
     </SectionPanel>
   )
 }
 
 const styles = StyleSheet.create({
+  embedded: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   list: {
     gap: 8,
   },

@@ -1,28 +1,115 @@
-import { useRouter } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
   createNetwork,
   deleteNetwork,
+  fetchDatacenters,
   fetchNetworks,
   fetchOrgServers,
   isForbiddenError,
+  type DatacenterRecord,
+  type NetworkKind,
   type NetworkRecord,
   type OrgServerRecord,
 } from '@/lib/instance-api'
+import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+
+const NETWORK_KINDS: NetworkKind[] = ['datacenter', 'server', 'docker', 'vpn']
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
+}
+
+function networkTitle(network: NetworkRecord): string {
+  const dockerName = readDockerNetworkName(network)
+  if (dockerName) return network.displayName?.trim() || dockerName
+  return network.displayName?.trim() || network.cidr?.trim() || network.id
+}
+
+function readDockerNetworkName(network: NetworkRecord): string | null {
+  const options = network.options
+  if (options && typeof options === 'object' && !Array.isArray(options)) {
+    const raw = (options as { dockerNetworkName?: unknown }).dockerNetworkName
+    if (typeof raw === 'string' && raw.trim().length > 0) return raw.trim()
+  }
+  return null
+}
+
+function kindLabel(kind: NetworkKind): string {
+  switch (kind) {
+    case 'datacenter':
+      return 'Datacenter'
+    case 'server':
+      return 'Server'
+    case 'docker':
+      return 'Docker'
+    case 'vpn':
+      return 'VPN'
+  }
+}
+
+export function NetworkListItem({
+  network,
+  isDeleting,
+  onDelete,
+  showDelete = true,
+}: Readonly<{
+  network: NetworkRecord
+  isDeleting?: boolean
+  onDelete?: (networkId: string) => void
+  showDelete?: boolean
+}>) {
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <View style={styles.cardHeader}>
+        <Text style={orgPanelStyles.detailTitle}>{networkTitle(network)}</Text>
+        {showDelete && onDelete ? (
+          <Pressable
+            style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
+            disabled={isDeleting}
+            onPress={() => onDelete(network.id)}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.badgeRow}>
+        <Text style={styles.badge}>{kindLabel(network.kind)}</Text>
+        {(() => {
+          const dockerName = readDockerNetworkName(network)
+          return dockerName ? (
+            <Text style={styles.mono} selectable>
+              {dockerName}
+            </Text>
+          ) : null
+        })()}
+        {network.cidr ? (
+          <Text style={styles.mono} selectable>
+            {network.cidr}
+          </Text>
+        ) : (
+          <Text style={orgPanelStyles.muted}>No CIDR</Text>
+        )}
+      </View>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+        {new Date(network.createdAt).toLocaleString()}
+      </Text>
+    </View>
+  )
 }
 
 function ServerPickerList({
@@ -44,6 +131,7 @@ function ServerPickerList({
             style={[
               orgPanelStyles.detailCard,
               isSelected && styles.selectedCard,
+              webPointer,
             ]}
             onPress={() => onSelect(server.id)}
           >
@@ -54,10 +142,6 @@ function ServerPickerList({
               <Text style={orgPanelStyles.detailLabel}>Status: </Text>
               {server.connected ? 'Online' : 'Offline'}
             </Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>ID: </Text>
-              <Text selectable>{server.id}</Text>
-            </Text>
           </Pressable>
         )
       })}
@@ -65,171 +149,302 @@ function ServerPickerList({
   )
 }
 
-function ServerPickerContent({
-  servers,
-  serversLoading,
-  selectedServerId,
+function DatacenterPickerList({
+  datacenters,
+  selectedId,
   onSelect,
 }: Readonly<{
-  servers: OrgServerRecord[]
-  serversLoading: boolean
-  selectedServerId: string
+  datacenters: DatacenterRecord[]
+  selectedId: string
   onSelect: (id: string) => void
 }>) {
-  if (serversLoading && servers.length === 0) {
-    return <Text style={orgPanelStyles.muted}>Loading servers…</Text>
-  }
-  if (servers.length === 0) {
-    return (
-      <Text style={orgPanelStyles.muted}>
-        No servers are assigned to this organization yet.
-      </Text>
-    )
-  }
-  return (
-    <ServerPickerList
-      servers={servers}
-      selectedServerId={selectedServerId}
-      onSelect={onSelect}
-    />
-  )
-}
-
-function NetworkCard({
-  network,
-  isDeleting,
-  onDelete,
-}: Readonly<{
-  network: NetworkRecord
-  isDeleting: boolean
-  onDelete: (networkId: string) => void
-}>) {
-  return (
-    <View style={orgPanelStyles.detailCard}>
-      <View style={styles.cardHeader}>
-        <Text style={orgPanelStyles.detailTitle}>{network.id}</Text>
-        <Pressable
-          style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
-          disabled={isDeleting}
-          onPress={() => onDelete(network.id)}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {isDeleting ? 'Deleting…' : 'Delete'}
-          </Text>
-        </Pressable>
-      </View>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-        {new Date(network.createdAt).toLocaleString()}
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Updated: </Text>
-        {new Date(network.updatedAt).toLocaleString()}
-      </Text>
-    </View>
-  )
-}
-
-function NetworksListContent({
-  networks,
-  networksLoading,
-  deleting,
-  onDelete,
-}: Readonly<{
-  networks: NetworkRecord[]
-  networksLoading: boolean
-  deleting: Set<string>
-  onDelete: (networkId: string) => void
-}>) {
-  if (networksLoading && networks.length === 0) {
-    return <Text style={orgPanelStyles.muted}>Loading networks…</Text>
-  }
-  if (networks.length === 0) {
-    return (
-      <Text style={orgPanelStyles.muted}>
-        No networks for this server yet.
-      </Text>
-    )
-  }
   return (
     <View style={styles.list}>
-      {networks.map((network) => (
-        <NetworkCard
-          key={network.id}
-          network={network}
-          isDeleting={deleting.has(network.id)}
-          onDelete={onDelete}
-        />
-      ))}
+      {datacenters.map((row) => {
+        const isSelected = row.id === selectedId
+        return (
+          <Pressable
+            key={row.id}
+            style={[
+              orgPanelStyles.detailCard,
+              isSelected && styles.selectedCard,
+              webPointer,
+            ]}
+            onPress={() => onSelect(row.id)}
+          >
+            <Text style={orgPanelStyles.detailTitle}>
+              {row.displayName?.trim() || row.id}
+            </Text>
+            {row.description?.trim() ? (
+              <Text style={orgPanelStyles.detailLine}>{row.description}</Text>
+            ) : null}
+          </Pressable>
+        )
+      })}
     </View>
   )
 }
 
-function NetworksPanel({
-  selectedServerId,
-  selectedServer,
-  networks,
-  networksLoading,
-  networksError,
-  creating,
-  deleting,
-  onCreate,
-  onRefresh,
-  onDelete,
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: Readonly<{ label: string; active: boolean; onPress: () => void }>) {
+  return (
+    <Pressable
+      style={[styles.chip, active && styles.chipActive, webPointer]}
+      onPress={onPress}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
+type NetworkListFilters = {
+  kind?: NetworkKind
+  datacenterId?: string
+  serverId?: string
+}
+
+function buildNetworkListFilters(
+  kindFilter: NetworkKind | 'all',
+  datacenterFilter: string,
+  serverFilter: string,
+): NetworkListFilters {
+  const filters: NetworkListFilters = {}
+  if (kindFilter !== 'all') filters.kind = kindFilter
+  if (datacenterFilter) filters.datacenterId = datacenterFilter
+  if (serverFilter) filters.serverId = serverFilter
+  return filters
+}
+
+type CreateNetworkFormState = Readonly<{
+  organizationId: string
+  kind: NetworkKind
+  displayName: string
+  cidr: string
+  serverId: string
+  datacenterId: string
+  dockerNetworkName: string
+}>
+
+function buildCreateNetworkBody(form: CreateNetworkFormState) {
+  const body: Parameters<typeof createNetwork>[0] = {
+    organizationId: form.organizationId,
+    kind: form.kind,
+    displayName: form.displayName.trim() || undefined,
+    cidr: form.cidr.trim() || undefined,
+  }
+  if (
+    (form.kind === 'server' || form.kind === 'docker') &&
+    form.serverId
+  ) {
+    body.serverId = form.serverId
+  }
+  if (form.kind === 'datacenter' && form.datacenterId) {
+    body.datacenterId = form.datacenterId
+  }
+  const dockerName = form.dockerNetworkName.trim()
+  if (form.kind === 'docker' && dockerName) {
+    body.options = { dockerNetworkName: dockerName }
+  }
+  return body
+}
+
+function CreateNetworkKindFields({
+  kind,
+  servers,
+  datacenters,
+  serverId,
+  datacenterId,
+  dockerNetworkName,
+  onServerIdChange,
+  onDatacenterIdChange,
+  onDockerNetworkNameChange,
 }: Readonly<{
-  selectedServerId: string
-  selectedServer: OrgServerRecord | null
-  networks: NetworkRecord[]
-  networksLoading: boolean
-  networksError: string | null
-  creating: boolean
-  deleting: Set<string>
-  onCreate: () => void
-  onRefresh: () => void
-  onDelete: (networkId: string) => void
+  kind: NetworkKind
+  servers: OrgServerRecord[]
+  datacenters: DatacenterRecord[]
+  serverId: string
+  datacenterId: string
+  dockerNetworkName: string
+  onServerIdChange: (id: string) => void
+  onDatacenterIdChange: (id: string) => void
+  onDockerNetworkNameChange: (name: string) => void
 }>) {
-  const hint = selectedServer
-    ? serverTitle(selectedServer)
-    : `Server ${selectedServerId}`
+  if (kind === 'server') {
+    return (
+      <>
+        <Text style={styles.fieldLabel}>Server</Text>
+        <ServerPickerList
+          servers={servers}
+          selectedServerId={serverId}
+          onSelect={onServerIdChange}
+        />
+      </>
+    )
+  }
+  if (kind === 'datacenter') {
+    return (
+      <>
+        <Text style={styles.fieldLabel}>Datacenter</Text>
+        <DatacenterPickerList
+          datacenters={datacenters}
+          selectedId={datacenterId}
+          onSelect={onDatacenterIdChange}
+        />
+      </>
+    )
+  }
+  if (kind !== 'docker') return null
+  return (
+    <>
+      <Text style={styles.fieldLabel}>Server</Text>
+      <Text style={orgPanelStyles.muted}>
+        External Docker networks are registered per server (or org-wide when no
+        server is selected). Compose must use the same name in networks.*.name.
+      </Text>
+      <ServerPickerList
+        servers={servers}
+        selectedServerId={serverId}
+        onSelect={onServerIdChange}
+      />
+      <Text style={styles.fieldLabel}>Docker network name</Text>
+      <TextInput
+        value={dockerNetworkName}
+        onChangeText={onDockerNetworkNameChange}
+        placeholder="turbopanel-shared"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </>
+  )
+}
+
+function CreateNetworkPanel({
+  orgId,
+  servers,
+  datacenters,
+  creating,
+  onCreate,
+}: Readonly<{
+  orgId: string
+  servers: OrgServerRecord[]
+  datacenters: DatacenterRecord[]
+  creating: boolean
+  onCreate: (form: CreateNetworkFormState) => Promise<boolean>
+}>) {
+  const [kind, setKind] = useState<NetworkKind>('server')
+  const [displayName, setDisplayName] = useState('')
+  const [cidr, setCidr] = useState('')
+  const [serverId, setServerId] = useState('')
+  const [datacenterId, setDatacenterId] = useState('')
+  const [dockerNetworkName, setDockerNetworkName] = useState('')
+
+  const resetForm = () => {
+    setDisplayName('')
+    setCidr('')
+    setServerId('')
+    setDatacenterId('')
+    setDockerNetworkName('')
+  }
 
   return (
-    <SectionPanel title="Networks" hint={hint}>
-      {networksError ? (
-        <Text style={orgPanelStyles.error}>{networksError}</Text>
-      ) : null}
-
-      <View style={styles.actionsRow}>
-        <Pressable
-          style={[styles.primaryButton, creating && styles.buttonDisabled]}
-          disabled={creating}
-          onPress={onCreate}
-        >
-          {creating ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : null}
-          <Text style={styles.primaryButtonText}>
-            {creating ? 'Creating…' : 'Create network'}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
-          disabled={networksLoading}
-          onPress={onRefresh}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {networksLoading ? 'Refreshing…' : 'Refresh'}
-          </Text>
-        </Pressable>
+    <SectionPanel title="Create network" hint="Manage-gated">
+      <Text style={styles.fieldLabel}>Kind</Text>
+      <View style={styles.chipRow}>
+        {NETWORK_KINDS.map((networkKind) => (
+          <FilterChip
+            key={networkKind}
+            label={kindLabel(networkKind)}
+            active={kind === networkKind}
+            onPress={() => setKind(networkKind)}
+          />
+        ))}
       </View>
-
-      <NetworksListContent
-        networks={networks}
-        networksLoading={networksLoading}
-        deleting={deleting}
-        onDelete={onDelete}
+      <Text style={styles.fieldLabel}>Display name</Text>
+      <TextInput
+        value={displayName}
+        onChangeText={setDisplayName}
+        placeholder="Optional name"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
       />
+      <Text style={styles.fieldLabel}>CIDR</Text>
+      <TextInput
+        value={cidr}
+        onChangeText={setCidr}
+        placeholder="e.g. 10.0.0.0/24"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <CreateNetworkKindFields
+        kind={kind}
+        servers={servers}
+        datacenters={datacenters}
+        serverId={serverId}
+        datacenterId={datacenterId}
+        dockerNetworkName={dockerNetworkName}
+        onServerIdChange={setServerId}
+        onDatacenterIdChange={setDatacenterId}
+        onDockerNetworkNameChange={setDockerNetworkName}
+      />
+      <Pressable
+        style={[
+          orgPanelStyles.toolbarBtnPrimary,
+          creating && styles.buttonDisabled,
+          webPointer,
+        ]}
+        disabled={creating}
+        onPress={() => {
+          onCreate({
+            organizationId: orgId,
+            kind,
+            displayName,
+            cidr,
+            serverId,
+            datacenterId,
+            dockerNetworkName,
+          })
+            .then((created) => {
+              if (created) resetForm()
+            })
+            .catch(() => {
+              // Errors are surfaced via error state.
+            })
+        }}
+      >
+        {creating ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : (
+          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+            Create network
+          </Text>
+        )}
+      </Pressable>
     </SectionPanel>
   )
+}
+
+function NetworksEmptyHint({
+  loading,
+  count,
+}: Readonly<{ loading: boolean; count: number }>) {
+  if (loading && count === 0) {
+    return <Text style={orgPanelStyles.muted}>Loading networks…</Text>
+  }
+  if (!loading && count === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>No networks match these filters.</Text>
+    )
+  }
+  return null
 }
 
 export function NetworksOverviewSection({
@@ -237,115 +452,100 @@ export function NetworksOverviewSection({
   serverId,
 }: Readonly<{
   orgId: string
-  serverId: string
+  /** Optional pre-filter when linked from a server detail page. */
+  serverId?: string
 }>) {
-  const router = useRouter()
   const { handleUnauthorized } = useAuth()
+  const canManage = useCan('organization', orgId, 'organization:manage')
   const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [serversLoading, setServersLoading] = useState(true)
-  const [serversError, setServersError] = useState<string | null>(null)
+  const [datacenters, setDatacenters] = useState<DatacenterRecord[]>([])
   const [networks, setNetworks] = useState<NetworkRecord[]>([])
-  const [networksLoading, setNetworksLoading] = useState(false)
-  const [networksError, setNetworksError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [kindFilter, setKindFilter] = useState<NetworkKind | 'all'>('all')
+  const [datacenterFilter, setDatacenterFilter] = useState<string>('')
+  const [serverFilter, setServerFilter] = useState<string>(serverId?.trim() ?? '')
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
 
-  const selectedServerId = serverId.trim()
-  const selectedServer = servers.find((row) => row.id === selectedServerId) ?? null
-
-  const loadServers = useCallback(async () => {
-    setServersLoading(true)
-    setServersError(null)
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
-      const result = await fetchOrgServers()
-      setServers(result.servers)
+      const filters = buildNetworkListFilters(
+        kindFilter,
+        datacenterFilter,
+        serverFilter,
+      )
+      const [networksResult, serversResult, datacentersResult] =
+        await Promise.all([
+          fetchNetworks(filters),
+          fetchOrgServers(),
+          fetchDatacenters(),
+        ])
+      setNetworks(networksResult.networks)
+      setServers(serversResult.servers)
+      setDatacenters(datacentersResult.datacenters)
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
+        return
       }
-      setServersError(
-        err instanceof Error ? err.message : 'Failed to load servers',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to load networks')
     } finally {
-      setServersLoading(false)
+      setLoading(false)
     }
-  }, [handleUnauthorized])
-
-  const loadNetworks = useCallback(async () => {
-    if (!selectedServerId) return
-
-    setNetworksLoading(true)
-    setNetworksError(null)
-    try {
-      const result = await fetchNetworks(selectedServerId)
-      setNetworks(result.networks)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      setNetworksError(
-        err instanceof Error ? err.message : 'Failed to load networks',
-      )
-    } finally {
-      setNetworksLoading(false)
-    }
-  }, [handleUnauthorized, selectedServerId])
+  }, [
+    datacenterFilter,
+    handleUnauthorized,
+    kindFilter,
+    serverFilter,
+  ])
 
   useEffect(() => {
-    loadServers().catch(() => {
-      // Errors are surfaced via serversError state inside loadServers.
+    load().catch(() => {
+      // Errors are surfaced via error state inside load.
     })
-  }, [loadServers, orgId])
+  }, [load, orgId])
 
   useEffect(() => {
-    if (!selectedServerId) {
-      setNetworks([])
-      setNetworksError(null)
-      return
-    }
+    const pinned = serverId?.trim()
+    if (pinned) setServerFilter(pinned)
+  }, [serverId])
 
-    loadNetworks().catch(() => {
-      // Errors are surfaced via networksError state inside loadNetworks.
-    })
-  }, [loadNetworks, selectedServerId])
-
-  const handleSelectServer = (id: string) => {
-    router.setParams({ serverId: id })
-  }
-
-  const handleCreateNetwork = async () => {
-    if (!selectedServerId) return
-
+  const handleCreate = async (form: CreateNetworkFormState): Promise<boolean> => {
+    if (!canManage) return false
     setCreating(true)
-    setNetworksError(null)
+    setError(null)
     try {
-      await createNetwork(selectedServerId)
-      await loadNetworks()
+      await createNetwork(buildCreateNetworkBody(form))
+      await load()
+      return true
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
+        return false
       }
-      setNetworksError(
-        err instanceof Error ? err.message : 'Failed to create network',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to create network')
+      return false
     } finally {
       setCreating(false)
     }
   }
 
-  const handleDeleteNetwork = async (networkId: string) => {
+  const handleDelete = async (networkId: string) => {
+    if (!canManage) return
     setDeleting((current) => new Set(current).add(networkId))
-    setNetworksError(null)
+    setError(null)
     try {
       await deleteNetwork(networkId)
-      await loadNetworks()
+      await load()
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
+        return
       }
-      setNetworksError(
-        err instanceof Error ? err.message : 'Failed to delete network',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to delete network')
     } finally {
       setDeleting((current) => {
         const next = new Set(current)
@@ -355,52 +555,114 @@ export function NetworksOverviewSection({
     }
   }
 
+  const serverOptions = useMemo(
+    () =>
+      [{ id: '', label: 'All servers' }].concat(
+        servers.map((server) => ({
+          id: server.id,
+          label: serverTitle(server),
+        })),
+      ),
+    [servers],
+  )
+
+  const datacenterOptions = useMemo(
+    () =>
+      [{ id: '', label: 'All datacenters' }].concat(
+        datacenters.map((row) => ({
+          id: row.id,
+          label: row.displayName?.trim() || row.id,
+        })),
+      ),
+    [datacenters],
+  )
+
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Networks</Text>
-      <Text style={styles.copy}>
-        Networks are scoped to a single managed server. Select a server to list
-        and create networks.
+      <Text style={orgPanelStyles.pageTitle}>Networks</Text>
+      <Text style={orgPanelStyles.pageCopy}>
+        Organization networks across datacenters, servers, Docker, and VPN meshes.
       </Text>
 
-      <SectionPanel title="Server" hint={`Organization ${orgId}`}>
-        {serversError ? (
-          <Text style={orgPanelStyles.error}>{serversError}</Text>
-        ) : null}
-        <ServerPickerContent
-          servers={servers}
-          serversLoading={serversLoading}
-          selectedServerId={selectedServerId}
-          onSelect={handleSelectServer}
-        />
+      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+
+      <SectionPanel title="Filters" hint="Optional scope narrowing">
+        <View style={styles.chipRow}>
+          <FilterChip
+            label="All"
+            active={kindFilter === 'all'}
+            onPress={() => setKindFilter('all')}
+          />
+          {NETWORK_KINDS.map((kind) => (
+            <FilterChip
+              key={kind}
+              label={kindLabel(kind)}
+              active={kindFilter === kind}
+              onPress={() => setKindFilter(kind)}
+            />
+          ))}
+        </View>
+        <View style={styles.filterRow}>
+          <View style={styles.filterCol}>
+            <Text style={styles.fieldLabel}>Datacenter</Text>
+            <View style={styles.chipRow}>
+              {datacenterOptions.map((option) => (
+                <FilterChip
+                  key={option.id || 'all-dc'}
+                  label={option.label}
+                  active={datacenterFilter === option.id}
+                  onPress={() => setDatacenterFilter(option.id)}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={styles.filterCol}>
+            <Text style={styles.fieldLabel}>Server</Text>
+            <View style={styles.chipRow}>
+              {serverOptions.map((option) => (
+                <FilterChip
+                  key={option.id || 'all-srv'}
+                  label={option.label}
+                  active={serverFilter === option.id}
+                  onPress={() => setServerFilter(option.id)}
+                />
+              ))}
+            </View>
+          </View>
+        </View>
       </SectionPanel>
 
-      {selectedServerId ? (
-        <NetworksPanel
-          selectedServerId={selectedServerId}
-          selectedServer={selectedServer}
-          networks={networks}
-          networksLoading={networksLoading}
-          networksError={networksError}
+      {canManage ? (
+        <CreateNetworkPanel
+          orgId={orgId}
+          servers={servers}
+          datacenters={datacenters}
           creating={creating}
-          deleting={deleting}
-          onCreate={() => {
-            handleCreateNetwork().catch(() => {
-              // Errors are surfaced via networksError state.
-            })
-          }}
-          onRefresh={() => {
-            loadNetworks().catch(() => {
-              // Errors are surfaced via networksError state.
-            })
-          }}
-          onDelete={(networkId) => {
-            handleDeleteNetwork(networkId).catch(() => {
-              // Errors are surfaced via networksError state.
-            })
-          }}
+          onCreate={handleCreate}
         />
       ) : null}
+
+      <SectionPanel
+        title="Networks"
+        hint={loading ? 'Loading…' : `${networks.length} network(s)`}
+      >
+        <NetworksEmptyHint loading={loading} count={networks.length} />
+        <View style={styles.list}>
+          {networks.map((network) => (
+            <NetworkListItem
+              key={network.id}
+              network={network}
+              isDeleting={deleting.has(network.id)}
+              showDelete={canManage}
+              onDelete={(id) => {
+                handleDelete(id).catch(() => {
+                  // Errors are surfaced via error state.
+                })
+              }}
+            />
+          ))}
+        </View>
+      </SectionPanel>
     </View>
   )
 }
@@ -410,27 +672,11 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
   list: {
     gap: 8,
   },
   selectedCard: {
     borderColor: colors.accent,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -438,22 +684,82 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  primaryButton: {
+  badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  badge: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: colors.bgSecondary,
+  },
+  mono: {
+    color: colors.text,
+    fontFamily: 'monospace',
+    fontSize: 13,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.xs,
-    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  chip: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.borderChip,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    backgroundColor: colors.bgSecondary,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  chipActive: {
+    borderColor: colors.accent,
     backgroundColor: colors.bgActive,
   },
-  primaryButtonText: {
-    color: colors.accent,
+  chipText: {
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
+  },
+  chipTextActive: {
+    color: colors.accent,
+  },
+  filterRow: {
+    gap: spacing.md,
+  },
+  filterCol: {
+    gap: spacing.xs,
+  },
+  fieldLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    backgroundColor: colors.bgInput,
+    color: colors.text,
+    fontSize: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: spacing.sm,
+    minHeight: 44,
   },
   secondaryButton: {
     alignSelf: 'flex-start',

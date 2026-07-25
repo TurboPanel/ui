@@ -23,6 +23,7 @@ import {
   deployEnvironment,
   fetchContainers,
   fetchEnvironment,
+  fetchIps,
   fetchOrgServers,
   fetchProject,
   fetchTlsLibrary,
@@ -37,6 +38,7 @@ import {
   type ContainerRecord,
   type EnvironmentRecord,
   type HostingRecord,
+  type IpRecord,
   type OrgServerRecord,
   type ProjectRecord,
   type ServiceRecord,
@@ -55,60 +57,190 @@ import {
 import { colors, spacing } from '@/lib/theme'
 import { useCan } from '@/lib/query-client'
 
+type HostingBind = 'public' | 'datacenter' | 'local'
+type HostingProtocol = 'http' | 'tcp' | 'udp'
+
 type HostingEditorState = {
   hostnames: string
   tlsId: string | null
+  ipId: string | null
+  bind: HostingBind
   forceHttps: boolean
   gzip: boolean
   brotli: boolean
   stripPrefix: string
   pathPrefix: string
   targetPort: string
+  protocol: HostingProtocol
+  /** Comma-separated `published[:target]` pairs; target defaults to published when omitted. */
+  ports: string
+  /** Multiline KEY=VALUE for options.web.env (HTTP hostings). */
+  webEnvLines: string
+  phpVersion: string
+  phpMemoryLimit: string
+  phpMaxExecutionTime: string
+}
+
+function formatWebEnvLines(web: unknown): string {
+  if (!web || typeof web !== 'object' || Array.isArray(web)) return ''
+  const env = (web as { env?: unknown }).env
+  if (!env || typeof env !== 'object' || Array.isArray(env)) return ''
+  return Object.entries(env as Record<string, string>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n')
+}
+
+function parseWebEnvLines(text: string): Record<string, string> | undefined {
+  const env: Record<string, string> = {}
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) continue
+    const key = trimmed.slice(0, eq).trim()
+    env[key] = trimmed.slice(eq + 1).trim()
+  }
+  return Object.keys(env).length > 0 ? env : undefined
+}
+
+function readWebOptions(optionsRecord: Record<string, unknown> | null): {
+  webEnvLines: string
+  phpVersion: string
+  phpMemoryLimit: string
+  phpMaxExecutionTime: string
+} {
+  const web = optionsRecord?.web
+  const php =
+    web && typeof web === 'object' && !Array.isArray(web)
+      ? (web as { php?: unknown }).php
+      : undefined
+  const phpRecord =
+    php && typeof php === 'object' && !Array.isArray(php)
+      ? (php as Record<string, unknown>)
+      : undefined
+  return {
+    webEnvLines: formatWebEnvLines(web),
+    phpVersion: typeof phpRecord?.version === 'string' ? phpRecord.version : '',
+    phpMemoryLimit:
+      typeof phpRecord?.memoryLimit === 'string' ? phpRecord.memoryLimit : '',
+    phpMaxExecutionTime:
+      typeof phpRecord?.maxExecutionTime === 'number'
+        ? String(phpRecord.maxExecutionTime)
+        : '',
+  }
+}
+
+function readHostingProtocol(
+  options: Record<string, unknown> | null | undefined,
+): HostingProtocol {
+  const protocol = options?.protocol
+  return protocol === 'tcp' || protocol === 'udp' ? protocol : 'http'
+}
+
+function formatHostingPorts(options: Record<string, unknown> | null | undefined): string {
+  const raw = options?.ports
+  if (!Array.isArray(raw)) {
+    return ''
+  }
+  return raw
+    .filter(
+      (entry): entry is { published: number; target: number } =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as { published?: unknown }).published === 'number' &&
+        typeof (entry as { target?: unknown }).target === 'number',
+    )
+    .map((entry) =>
+      entry.published === entry.target ? String(entry.published) : `${entry.published}:${entry.target}`,
+    )
+    .join(', ')
+}
+
+/** Parses `"5432, 5433:5432"` into port mappings; shorthand `published` implies `target === published`. */
+function parsePortsList(value: string): { published: number; target: number }[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [publishedRaw, targetRaw] = entry.split(':').map((part) => part.trim())
+      const published = Number.parseInt(publishedRaw ?? '', 10)
+      const target = targetRaw ? Number.parseInt(targetRaw, 10) : published
+      return { published, target }
+    })
+    .filter(
+      (port) =>
+        Number.isInteger(port.published) &&
+        port.published >= 1 &&
+        port.published <= 65535 &&
+        Number.isInteger(port.target) &&
+        port.target >= 1 &&
+        port.target <= 65535,
+    )
+}
+
+function readHostingBind(options: Record<string, unknown> | null | undefined): HostingBind {
+  const bind = options?.bind
+  if (bind === 'datacenter' || bind === 'local' || bind === 'public') {
+    return bind
+  }
+  return 'public'
 }
 
 function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
   const options = hostings[0]?.options
-  const proxy =
+  const optionsRecord =
     options && typeof options === 'object' && !Array.isArray(options)
-      ? (options.proxy as Record<string, unknown> | undefined)
+      ? (options as Record<string, unknown>)
+      : null
+  const proxy =
+    optionsRecord?.proxy &&
+    typeof optionsRecord.proxy === 'object' &&
+    !Array.isArray(optionsRecord.proxy)
+      ? (optionsRecord.proxy as Record<string, unknown>)
       : undefined
   const targetPort =
-    options &&
-    typeof options === 'object' &&
-    !Array.isArray(options) &&
-    typeof options.targetPort === 'number'
-      ? String(options.targetPort)
+    typeof optionsRecord?.targetPort === 'number'
+      ? String(optionsRecord.targetPort)
       : ''
   const pathPrefix =
-    options &&
-    typeof options === 'object' &&
-    !Array.isArray(options) &&
-    typeof options.pathPrefix === 'string'
-      ? options.pathPrefix
+    typeof optionsRecord?.pathPrefix === 'string'
+      ? optionsRecord.pathPrefix
       : ''
   return {
     hostnames: formatHostingHostnames(hostings),
     tlsId: hostings[0]?.tlsId ?? null,
+    ipId: hostings[0]?.ipId ?? null,
+    bind: readHostingBind(optionsRecord),
     forceHttps: proxy?.forceHttps !== false,
     gzip: proxy?.gzip !== false,
     brotli: proxy?.brotli === true,
     stripPrefix: typeof proxy?.stripPrefix === 'string' ? proxy.stripPrefix : '',
     pathPrefix,
     targetPort,
+    protocol: readHostingProtocol(optionsRecord),
+    ports: formatHostingPorts(optionsRecord),
+    ...readWebOptions(optionsRecord),
   }
 }
 
 function buildHostingOptions(editor: HostingEditorState): Record<string, unknown> {
   const options: Record<string, unknown> = {
-    hostnames: parseHostnameList(editor.hostnames),
-    proxy: {
-      forceHttps: editor.forceHttps,
-      gzip: editor.gzip,
-      brotli: editor.brotli,
-      ...(editor.stripPrefix.trim()
-        ? { stripPrefix: editor.stripPrefix.trim() }
-        : {}),
-    },
+    bind: editor.bind,
+  }
+  if (editor.protocol === 'tcp' || editor.protocol === 'udp') {
+    options.protocol = editor.protocol
+    options.hostnames = []
+    options.ports = parsePortsList(editor.ports)
+    return options
+  }
+  options.hostnames = parseHostnameList(editor.hostnames)
+  options.proxy = {
+    forceHttps: editor.forceHttps,
+    gzip: editor.gzip,
+    brotli: editor.brotli,
+    ...(editor.stripPrefix.trim() ? { stripPrefix: editor.stripPrefix.trim() } : {}),
   }
   if (editor.pathPrefix.trim()) {
     options.pathPrefix = editor.pathPrefix.trim()
@@ -116,6 +248,21 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
   const port = Number.parseInt(editor.targetPort.trim(), 10)
   if (Number.isFinite(port) && port > 0) {
     options.targetPort = port
+  }
+  const staticEnv = parseWebEnvLines(editor.webEnvLines)
+  const phpVersion = editor.phpVersion.trim()
+  const phpMemoryLimit = editor.phpMemoryLimit.trim()
+  const phpMaxRaw = editor.phpMaxExecutionTime.trim()
+  const phpMax = phpMaxRaw ? Number.parseInt(phpMaxRaw, 10) : Number.NaN
+  const php: Record<string, string | number> = {}
+  if (phpVersion) php.version = phpVersion
+  if (phpMemoryLimit) php.memoryLimit = phpMemoryLimit
+  if (Number.isInteger(phpMax) && phpMax > 0) php.maxExecutionTime = phpMax
+  if (staticEnv || Object.keys(php).length > 0) {
+    options.web = {
+      ...(staticEnv ? { env: staticEnv } : {}),
+      ...(Object.keys(php).length > 0 ? { php } : {}),
+    }
   }
   return options
 }
@@ -357,6 +504,7 @@ async function upsertHosting(
       metadata: { composeServiceName },
       options,
       tlsId: editor.tlsId,
+      ipId: editor.ipId,
     })
     return
   }
@@ -365,6 +513,7 @@ async function upsertHosting(
     metadata: { composeServiceName },
     options,
     tlsId: editor.tlsId,
+    ipId: editor.ipId,
   })
 }
 
@@ -443,17 +592,24 @@ function ProxyToggle({
 }
 
 function HostingPanelRow({
+  orgId,
   composeServiceName,
+  hostingId,
   editor,
   tlsOptions,
+  publicIps,
   saving,
   disabled,
   onChange,
   onSave,
 }: Readonly<{
+  orgId: string
   composeServiceName: string
+  /** Persisted hosting row id; null until the first successful save. */
+  hostingId: string | null
   editor: HostingEditorState
   tlsOptions: TlsRecord[]
+  publicIps: IpRecord[]
   saving: boolean
   disabled: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
@@ -466,89 +622,262 @@ function HostingPanelRow({
       coversAllHostnames(row.metadata.dnsNames, hostnames),
   )
 
+  const isHttp = editor.protocol === 'http'
+
   return (
     <View style={orgPanelStyles.detailCard}>
       <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
-      <TextInput
-        value={editor.hostnames}
-        onChangeText={(value) => onChange({ hostnames: value })}
-        placeholder="app.example.com, www.example.com"
-        placeholderTextColor={colors.textDim}
-        style={styles.hostnamesInput}
-      />
-      <Text style={styles.tlsLabel}>TLS certificate</Text>
+
+      <Text style={styles.tlsLabel}>Protocol</Text>
       <Text style={styles.tlsHint}>
-        Default is a basic self-signed cert. Pick a library certificate to use
-        an upload, org self-signed, or Let's Encrypt cert — nothing is requested
-        automatically.
+        Http routes hostnames through Traefik + Caddy with TLS. Tcp/Udp publish
+        raw port(s) straight through Traefik — no hostname or TLS routing
+        (databases, game servers, relays).
       </Text>
       <View style={styles.tlsOptions}>
-        <Pressable
-          style={[styles.tlsChip, editor.tlsId === null && styles.tlsChipActive]}
-          disabled={disabled}
-          onPress={() => onChange({ tlsId: null })}
-        >
-          <Text style={styles.tlsChipText}>Self-signed</Text>
-        </Pressable>
-        {covering.map((row) => (
+        {(
+          [
+            { id: 'http' as const, label: 'Http' },
+            { id: 'tcp' as const, label: 'Tcp' },
+            { id: 'udp' as const, label: 'Udp' },
+          ] as const
+        ).map((option) => (
           <Pressable
-            key={row.id}
-            style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
+            key={option.id}
+            style={[
+              styles.tlsChip,
+              editor.protocol === option.id && styles.tlsChipActive,
+            ]}
             disabled={disabled}
-            onPress={() => onChange({ tlsId: row.id })}
+            onPress={() => onChange({ protocol: option.id })}
           >
-            <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
+            <Text style={styles.tlsChipText}>{option.label}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.tlsLabel}>Proxy</Text>
-      <ProxyToggle
-        label="Force HTTPS"
-        checked={editor.forceHttps}
-        disabled={disabled}
-        onToggle={() => onChange({ forceHttps: !editor.forceHttps })}
-      />
-      <ProxyToggle
-        label="Gzip"
-        checked={editor.gzip}
-        disabled={disabled}
-        onToggle={() => onChange({ gzip: !editor.gzip })}
-      />
-      <ProxyToggle
-        label="Brotli"
-        checked={editor.brotli}
-        disabled={disabled}
-        onToggle={() => onChange({ brotli: !editor.brotli })}
-      />
+      {isHttp ? (
+        <TextInput
+          value={editor.hostnames}
+          onChangeText={(value) => onChange({ hostnames: value })}
+          placeholder="app.example.com, www.example.com"
+          placeholderTextColor={colors.textDim}
+          style={styles.hostnamesInput}
+        />
+      ) : (
+        <>
+          <Text style={styles.fieldLabel}>Ports</Text>
+          <Text style={styles.tlsHint}>
+            Comma-separated published[:target] pairs. Target defaults to
+            published when omitted (e.g. "5432, 8443:8080").
+          </Text>
+          <TextInput
+            value={editor.ports}
+            onChangeText={(value) => onChange({ ports: value })}
+            placeholder="5432, 8443:8080"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+        </>
+      )}
 
-      <Text style={styles.fieldLabel}>Strip prefix</Text>
-      <TextInput
-        value={editor.stripPrefix}
-        onChangeText={(value) => onChange({ stripPrefix: value })}
-        placeholder="/api"
-        placeholderTextColor={colors.textDim}
-        style={styles.hostnamesInput}
-        autoCapitalize="none"
-      />
-      <Text style={styles.fieldLabel}>Path prefix</Text>
-      <TextInput
-        value={editor.pathPrefix}
-        onChangeText={(value) => onChange({ pathPrefix: value })}
-        placeholder="/"
-        placeholderTextColor={colors.textDim}
-        style={styles.hostnamesInput}
-        autoCapitalize="none"
-      />
-      <Text style={styles.fieldLabel}>Target port</Text>
-      <TextInput
-        value={editor.targetPort}
-        onChangeText={(value) => onChange({ targetPort: value })}
-        placeholder="8080"
-        placeholderTextColor={colors.textDim}
-        style={styles.hostnamesInput}
-        keyboardType="number-pad"
-      />
+      {isHttp ? (
+        <>
+          <Text style={styles.tlsLabel}>TLS certificate</Text>
+          <Text style={styles.tlsHint}>
+            Default is a basic self-signed cert. Pick a library certificate to use
+            an upload, org self-signed, or Let's Encrypt cert — nothing is requested
+            automatically.
+          </Text>
+          <View style={styles.tlsOptions}>
+            <Pressable
+              style={[styles.tlsChip, editor.tlsId === null && styles.tlsChipActive]}
+              disabled={disabled}
+              onPress={() => onChange({ tlsId: null })}
+            >
+              <Text style={styles.tlsChipText}>Self-signed</Text>
+            </Pressable>
+            {covering.map((row) => (
+              <Pressable
+                key={row.id}
+                style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
+                disabled={disabled}
+                onPress={() => onChange({ tlsId: row.id })}
+              >
+                <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      <Text style={styles.tlsLabel}>Bind</Text>
+      <Text style={styles.tlsHint}>
+        Public — reachable on the internet. Datacenter — private network only.
+        Local — this server only (127.x).
+      </Text>
+      <View style={styles.tlsOptions}>
+        {(
+          [
+            { id: 'public' as const, label: 'Public' },
+            { id: 'datacenter' as const, label: 'Datacenter' },
+            { id: 'local' as const, label: 'Local' },
+          ] as const
+        ).map((option) => (
+          <Pressable
+            key={option.id}
+            style={[
+              styles.tlsChip,
+              editor.bind === option.id && styles.tlsChipActive,
+            ]}
+            disabled={disabled}
+            onPress={() =>
+              onChange({
+                bind: option.id,
+                ...(option.id !== 'public' ? { ipId: null } : {}),
+              })
+            }
+          >
+            <Text style={styles.tlsChipText}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {editor.bind === 'public' ? (
+        <>
+          <Text style={styles.tlsLabel}>Public IP</Text>
+          <Text style={styles.tlsHint}>
+            Pin a managed public address, or leave Any interface for the server
+            to choose.
+          </Text>
+          <View style={styles.tlsOptions}>
+            <Pressable
+              style={[styles.tlsChip, editor.ipId === null && styles.tlsChipActive]}
+              disabled={disabled}
+              onPress={() => onChange({ ipId: null })}
+            >
+              <Text style={styles.tlsChipText}>Any interface</Text>
+            </Pressable>
+            {publicIps.map((ip) => (
+              <Pressable
+                key={ip.id}
+                style={[
+                  styles.tlsChip,
+                  editor.ipId === ip.id && styles.tlsChipActive,
+                ]}
+                disabled={disabled}
+                onPress={() => onChange({ ipId: ip.id })}
+              >
+                <Text style={styles.tlsChipText}>
+                  {ip.displayName?.trim() || ip.address}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {isHttp ? (
+        <>
+          <Text style={styles.tlsLabel}>Proxy</Text>
+          <ProxyToggle
+            label="Force HTTPS"
+            checked={editor.forceHttps}
+            disabled={disabled}
+            onToggle={() => onChange({ forceHttps: !editor.forceHttps })}
+          />
+          <ProxyToggle
+            label="Gzip"
+            checked={editor.gzip}
+            disabled={disabled}
+            onToggle={() => onChange({ gzip: !editor.gzip })}
+          />
+          <ProxyToggle
+            label="Brotli"
+            checked={editor.brotli}
+            disabled={disabled}
+            onToggle={() => onChange({ brotli: !editor.brotli })}
+          />
+
+          <Text style={styles.fieldLabel}>Strip prefix</Text>
+          <TextInput
+            value={editor.stripPrefix}
+            onChangeText={(value) => onChange({ stripPrefix: value })}
+            placeholder="/api"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+          <Text style={styles.fieldLabel}>Path prefix</Text>
+          <Text style={orgPanelStyles.muted}>
+            Optional. Same hostname on another hosting can use a different prefix (e.g. `/` for static nginx, `/php` for a PHP site).
+          </Text>
+          <TextInput
+            value={editor.pathPrefix}
+            onChangeText={(value) => onChange({ pathPrefix: value })}
+            placeholder="/"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+          <Text style={styles.fieldLabel}>Target port</Text>
+          <TextInput
+            value={editor.targetPort}
+            onChangeText={(value) => onChange({ targetPort: value })}
+            placeholder="8080"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            keyboardType="number-pad"
+          />
+
+          <Text style={styles.fieldLabel}>Web environment</Text>
+          <Text style={orgPanelStyles.muted}>
+            Static KEY=VALUE pairs for host-native stacks (traditional-web). Hosting
+            variables marked for runtime merge at deploy; entries here override on
+            collision.
+          </Text>
+          <TextInput
+            value={editor.webEnvLines}
+            onChangeText={(value) => onChange({ webEnvLines: value })}
+            placeholder={'APP_ENV=production\n# comments allowed'}
+            placeholderTextColor={colors.textDim}
+            style={[styles.hostnamesInput, styles.webEnvInput]}
+            autoCapitalize="none"
+            multiline
+          />
+
+          <Text style={styles.fieldLabel}>PHP settings (optional)</Text>
+          <Text style={orgPanelStyles.muted}>
+            Applied on Apache traditional-web deploys via mod_php (version package
+            + memory_limit / max_execution_time). Ignored for nginx static sites.
+          </Text>
+          <TextInput
+            value={editor.phpVersion}
+            onChangeText={(value) => onChange({ phpVersion: value })}
+            placeholder="8.4"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+          <TextInput
+            value={editor.phpMemoryLimit}
+            onChangeText={(value) => onChange({ phpMemoryLimit: value })}
+            placeholder="256M"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+          <TextInput
+            value={editor.phpMaxExecutionTime}
+            onChangeText={(value) => onChange({ phpMaxExecutionTime: value })}
+            placeholder="30"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            keyboardType="number-pad"
+          />
+        </>
+      ) : null}
 
       <Pressable
         style={[styles.saveHostingButton, saving && styles.buttonDisabled]}
@@ -559,6 +888,24 @@ function HostingPanelRow({
           {saving ? 'Saving…' : 'Save hosting'}
         </Text>
       </Pressable>
+
+      <Text style={styles.tlsLabel}>Hosting variables</Text>
+      <Text style={styles.tlsHint}>
+        Hostname-scoped overrides for this service. Applied at deploy after
+        service scope (compose injects at the service level).
+      </Text>
+      {hostingId ? (
+        <VariablesSection
+          orgId={orgId}
+          parentField={{ hostingId }}
+          embedded
+          showPresets={false}
+        />
+      ) : (
+        <Text style={orgPanelStyles.muted}>
+          Save hosting first to add hostname-scoped variables.
+        </Text>
+      )}
     </View>
   )
 }
@@ -756,7 +1103,9 @@ function EnvironmentLoadedPanels({
   setServices,
   hostingEditors,
   setHostingEditors,
+  hostingsByService,
   tlsLibrary,
+  publicIps,
   savingHosting,
   onSaveHosting,
   containersByService,
@@ -786,7 +1135,9 @@ function EnvironmentLoadedPanels({
   setServices: Dispatch<SetStateAction<ServiceRecord[]>>
   hostingEditors: Record<string, HostingEditorState>
   setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
+  hostingsByService: Record<string, HostingRecord[]>
   tlsLibrary: TlsRecord[]
+  publicIps: IpRecord[]
   savingHosting: string | null
   onSaveHosting: (composeServiceName: string) => void
   containersByService: Record<string, ContainerRecord[]>
@@ -879,7 +1230,10 @@ function EnvironmentLoadedPanels({
         ) : null}
       </SectionPanel>
 
-      <SectionPanel title="Hostnames" hint="Map compose services to hostnames and proxy settings">
+      <SectionPanel
+        title="Hosting"
+        hint="Map compose services to hostnames (http) or raw ports (tcp/udp)"
+      >
         {serviceNames.length === 0 ? (
           <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
         ) : (
@@ -892,12 +1246,16 @@ function EnvironmentLoadedPanels({
               const editor =
                 hostingEditors[serviceKey] ??
                 readHostingEditor([])
+              const hostingId = hostingsByService[serviceKey]?.[0]?.id ?? null
               return (
                 <HostingPanelRow
                   key={composeServiceName}
+                  orgId={orgId}
                   composeServiceName={composeServiceName}
+                  hostingId={hostingId}
                   editor={editor}
                   tlsOptions={tlsLibrary}
+                  publicIps={publicIps}
                   saving={savingHosting === composeServiceName}
                   disabled={savingHosting !== null}
                   onChange={(patch) =>
@@ -1016,6 +1374,7 @@ export function EnvironmentDetailBody({
   const [hostingsByService, setHostingsByService] = useState<Record<string, HostingRecord[]>>({})
   const [hostingEditors, setHostingEditors] = useState<Record<string, HostingEditorState>>({})
   const [tlsLibrary, setTlsLibrary] = useState<TlsRecord[]>([])
+  const [publicIps, setPublicIps] = useState<IpRecord[]>([])
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [healthCheckPrompt, setHealthCheckPrompt] = useState<{
     services: string[]
@@ -1032,14 +1391,21 @@ export function EnvironmentDetailBody({
       setLoading(true)
       setError(null)
       try {
-        const [result, projectResult, serversResult, servicesResult, tlsResult] =
-          await Promise.all([
-            fetchEnvironment(environmentId),
-            fetchProject(projectId),
-            fetchOrgServers(),
-            fetchVisibleServices(environmentId),
-            fetchTlsLibrary(),
-          ])
+        const [
+          result,
+          projectResult,
+          serversResult,
+          servicesResult,
+          tlsResult,
+          ipsResult,
+        ] = await Promise.all([
+          fetchEnvironment(environmentId),
+          fetchProject(projectId),
+          fetchOrgServers(),
+          fetchVisibleServices(environmentId),
+          fetchTlsLibrary(),
+          fetchIps({ scope: 'public' }),
+        ])
         if (cancelled) {
           return
         }
@@ -1050,6 +1416,7 @@ export function EnvironmentDetailBody({
         setAllServers(serversResult.servers)
         setServices(servicesResult.services)
         setTlsLibrary(tlsResult.tls)
+        setPublicIps(ipsResult.ips)
         const [hostingState, containersState] = await Promise.all([
           fetchHostingsByService(servicesResult.services),
           fetchContainersByService(servicesResult.services),
@@ -1309,7 +1676,9 @@ export function EnvironmentDetailBody({
           setServices={setServices}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}
+          hostingsByService={hostingsByService}
           tlsLibrary={tlsLibrary}
+          publicIps={publicIps}
           savingHosting={savingHosting}
           onSaveHosting={(composeServiceName) => {
             saveHosting(composeServiceName).catch(() => {
@@ -1419,6 +1788,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  webEnvInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
   tlsLabel: {
     color: colors.textMuted,

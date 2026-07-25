@@ -16,6 +16,7 @@ import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
+  fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServersUpdateStatus,
   isForbiddenError,
@@ -113,6 +114,24 @@ function selectedUpdateButtonLabel(
   if (batchUpdating) return 'Updating…'
   if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
   return 'Update'
+}
+
+function pruneSelectedServerIds(
+  prev: Set<string>,
+  servers: readonly OrgServerRecord[],
+): Set<string> {
+  if (prev.size === 0) return prev
+  const next = new Set<string>()
+  for (const server of servers) {
+    if (prev.has(server.id)) next.add(server.id)
+  }
+  return next.size === prev.size ? prev : next
+}
+
+function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
+  if (err instanceof Error) return err.message
+  if (forbidden) return 'Access to servers was denied'
+  return 'Failed to load servers'
 }
 
 function SelectionCheckbox({
@@ -223,6 +242,9 @@ function ServersOverviewToolbar({
           </TouchableOpacity>
         ) : null}
       </View>
+      {canOwn && addServerEligibility.reason ? (
+        <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
+      ) : null}
       {selectedCount > 0 ? (
         <Text style={styles.selectionHint}>
           {selectedCount} selected
@@ -525,34 +547,25 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     silent?: boolean
     isCancelled?: () => boolean
   }): Promise<void> => {
+    const cancelled = (): boolean => options?.isCancelled?.() === true
     if (!options?.silent) {
       setLoading(true)
       setError(null)
     }
     try {
       const result = await fetchOrgServers()
-      if (options?.isCancelled?.()) return
+      if (cancelled()) return
       setServers(result.servers)
-      setSelectedIds((prev) => {
-        if (prev.size === 0) return prev
-        const next = new Set<string>()
-        for (const server of result.servers) {
-          if (prev.has(server.id)) next.add(server.id)
-        }
-        return next.size === prev.size ? prev : next
-      })
+      setSelectedIds((prev) => pruneSelectedServerIds(prev, result.servers))
     } catch (err) {
-      if (options?.isCancelled?.()) return
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        setError(
-          err instanceof Error ? err.message : 'Access to servers was denied',
-        )
-      } else if (!options?.silent) {
-        setError(err instanceof Error ? err.message : 'Failed to load servers')
+      if (cancelled()) return
+      const forbidden = isForbiddenError(err)
+      if (forbidden) await handleUnauthorized()
+      if (forbidden || !options?.silent) {
+        setError(serversRefreshErrorMessage(err, forbidden))
       }
     } finally {
-      if (!options?.silent && !options?.isCancelled?.()) {
+      if (!options?.silent && !cancelled()) {
         setLoading(false)
       }
     }
@@ -574,8 +587,25 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   useEffect(() => {
     if (!canOwn) return
-    setAddServerEligibility(resolveServerAddEligibility())
-  }, [canOwn, orgId])
+    let cancelled = false
+    void fetchOrgServerCapacity(orgId)
+      .then((capacity) => {
+        if (cancelled) return
+        setAddServerEligibility(resolveServerAddEligibility(capacity))
+      })
+      .catch(async (err) => {
+        if (cancelled) return
+        if (isForbiddenError(err)) {
+          await handleUnauthorized()
+          return
+        }
+        // Fail open for the display hint — POST /licenses still enforces.
+        setAddServerEligibility(resolveServerAddEligibility())
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [canOwn, orgId, handleUnauthorized, servers.length])
 
   useEffect(() => {
     const pendingIds = servers
@@ -778,6 +808,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     fontFamily: 'monospace',
+  },
+  capacityHint: {
+    color: colors.pending,
+    fontSize: 12,
+    fontWeight: '600',
   },
   loadingRow: {
     flexDirection: 'row',

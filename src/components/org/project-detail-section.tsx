@@ -11,12 +11,17 @@ import {
   deleteProjectPrincipal,
   fetchProject,
   fetchProjectPrincipals,
+  fetchVisibleEnvironments,
+  fetchVisibleServices,
   fetchVisibleWorkspaces,
   isForbiddenError,
   updateProject,
+  updateProjectPrincipalAssignments,
   type ComposeDocument,
+  type EnvironmentRecord,
   type ProjectPrincipalRecord,
   type ProjectRecord,
+  type ServiceRecord,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
@@ -34,6 +39,29 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
+type ProjectServiceOption = {
+  id: string
+  label: string
+}
+
+function readComposeServiceName(metadata: ServiceRecord['metadata']): string | undefined {
+  if (metadata && typeof metadata === 'object' && 'composeServiceName' in metadata) {
+    const name = metadata.composeServiceName
+    return typeof name === 'string' ? name : undefined
+  }
+  return undefined
+}
+
+function formatServiceOptionLabel(
+  environment: EnvironmentRecord,
+  service: ServiceRecord,
+): string {
+  const envName = environment.displayName ?? 'Environment'
+  const compose = readComposeServiceName(service.metadata)
+  const serviceName = service.displayName ?? compose ?? service.id.slice(0, 8)
+  return `${envName} · ${serviceName}`
+}
+
 function ProjectPrincipalsSection({
   projectId,
   canManage,
@@ -43,18 +71,37 @@ function ProjectPrincipalsSection({
 }>) {
   const { handleUnauthorized } = useAuth()
   const [principals, setPrincipals] = useState<ProjectPrincipalRecord[]>([])
+  const [serviceOptions, setServiceOptions] = useState<ProjectServiceOption[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [username, setUsername] = useState('')
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
+  const [savingAssignments, setSavingAssignments] = useState<Set<string>>(() => new Set())
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const result = await fetchProjectPrincipals(projectId)
-      setPrincipals(result.principals)
+      const [principalResult, envResult] = await Promise.all([
+        fetchProjectPrincipals(projectId),
+        fetchVisibleEnvironments(projectId),
+      ])
+      setPrincipals(principalResult.principals)
+
+      const envs = envResult.environments
+      const serviceLists = await Promise.all(
+        envs.map(async (env) => {
+          const { services } = await fetchVisibleServices(env.id)
+          return services.map((service) => ({
+            id: service.id,
+            label: formatServiceOptionLabel(env, service),
+          }))
+        }),
+      )
+      const flat = serviceLists.flat()
+      flat.sort((a, b) => a.label.localeCompare(b.label))
+      setServiceOptions(flat)
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
@@ -69,6 +116,37 @@ function ProjectPrincipalsSection({
   useEffect(() => {
     void load()
   }, [projectId, handleUnauthorized])
+
+  const toggleServiceAssignment = async (principalId: string, serviceId: string) => {
+    const row = principals.find((p) => p.id === principalId)
+    if (!row) return
+    const next = row.serviceIds.includes(serviceId)
+      ? row.serviceIds.filter((id) => id !== serviceId)
+      : [...row.serviceIds, serviceId].sort((a, b) => a.localeCompare(b))
+
+    setSavingAssignments((current) => new Set(current).add(principalId))
+    setError(null)
+    try {
+      const result = await updateProjectPrincipalAssignments(projectId, principalId, next)
+      setPrincipals((current) =>
+        current.map((p) =>
+          p.id === principalId ? { ...p, serviceIds: result.serviceIds } : p
+        ),
+      )
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(err instanceof Error ? err.message : 'Failed to update assignments')
+    } finally {
+      setSavingAssignments((current) => {
+        const copy = new Set(current)
+        copy.delete(principalId)
+        return copy
+      })
+    }
+  }
 
   const handleAdd = async () => {
     const trimmed = username.trim()
@@ -117,7 +195,7 @@ function ProjectPrincipalsSection({
   return (
     <SectionPanel
       title="Project principals"
-      hint="System accounts scoped to this project (stub)"
+      hint="Linux system users for this project. Assign services so deploy ensures the account on the host (storage chown and run-as follow in later phases)."
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
       {loading && principals.length === 0 ? (
@@ -134,6 +212,44 @@ function ProjectPrincipalsSection({
               <Text style={orgPanelStyles.detailLabel}>UID/GID: </Text>
               {row.metadata?.uid ?? '—'} / {row.metadata?.gid ?? '—'}
             </Text>
+            {serviceOptions.length > 0 ? (
+              <View style={styles.serviceAssignRow}>
+                <Text style={orgPanelStyles.detailLabel}>Services</Text>
+                <View style={styles.serviceChipRow}>
+                  {serviceOptions.map((option) => {
+                    const assigned = row.serviceIds.includes(option.id)
+                    const disabled =
+                      !canManage || savingAssignments.has(row.id)
+                    return (
+                      <Pressable
+                        key={option.id}
+                        disabled={disabled}
+                        style={[
+                          styles.serviceChip,
+                          assigned && styles.serviceChipOn,
+                          disabled && styles.buttonDisabled,
+                        ]}
+                        onPress={() => {
+                          void toggleServiceAssignment(row.id, option.id)
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.serviceChipText,
+                            assigned && styles.serviceChipTextOn,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+                {savingAssignments.has(row.id) ? (
+                  <Text style={orgPanelStyles.muted}>Saving assignments…</Text>
+                ) : null}
+              </View>
+            ) : null}
             {canManage ? (
               <Pressable
                 style={[styles.principalDelete, deleting.has(row.id) && styles.buttonDisabled]}
@@ -726,6 +842,35 @@ const styles = StyleSheet.create({
   principalList: {
     gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  serviceAssignRow: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  serviceChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  serviceChip: {
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 6,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  serviceChipOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  serviceChipText: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  serviceChipTextOn: {
+    color: colors.accent,
+    fontWeight: '600',
   },
   principalForm: {
     gap: spacing.sm,

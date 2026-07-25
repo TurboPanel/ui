@@ -156,7 +156,7 @@ export function WorkspaceSwitcher({
         <View style={styles.backdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={close} />
           {isCompact ? (
-            <View style={styles.sheetWrap} pointerEvents="box-none">
+            <View style={styles.sheetWrap}>
               {menuBody}
             </View>
           ) : (
@@ -165,7 +165,6 @@ export function WorkspaceSwitcher({
                 styles.desktopMenuWrap,
                 { top: menuPosition.top, left: menuPosition.left },
               ]}
-              pointerEvents="box-none"
             >
               {menuBody}
             </View>
@@ -212,11 +211,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 300,
     zIndex: 2,
+    pointerEvents: 'box-none',
   },
   sheetWrap: {
     marginTop: 'auto',
     padding: spacing.md,
     zIndex: 2,
+    pointerEvents: 'box-none',
   },
   menu: {
     borderWidth: 1,

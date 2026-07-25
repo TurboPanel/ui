@@ -8,8 +8,8 @@ export default function ServersNetworksScreen() {
   }>()
 
   const resolvedServerId = Array.isArray(serverId)
-    ? (serverId[0] ?? '')
-    : (serverId ?? '')
+    ? serverId[0]
+    : serverId
 
   return (
     <NetworksOverviewSection

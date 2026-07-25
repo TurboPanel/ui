@@ -1,5 +1,4 @@
 import { formatFetchFailureDetail } from '@/lib/fetch-error-detail'
-export { isForbiddenError } from '@/lib/fetch-error-detail'
 import {
   getActiveOrganizationId,
   ORG_ID_HEADER,
@@ -9,6 +8,7 @@ import type {
   ManagedEnvironmentRecord,
   ProvisionManagedBody,
 } from '@/lib/managed-services'
+export { isForbiddenError } from '@/lib/fetch-error-detail'
 
 export type { ComposeDocument } from '@/lib/compose'
 export type {
@@ -235,6 +235,8 @@ export type OrgServerRecord = {
   timeSync: ServerTimeSync | null;
   timezone: string | null;
   timezoneSource: ServerTimezoneSource;
+  datacenterId: string | null;
+  datacenterDisplayName: string | null;
 };
 
 export type ServerDetailRecord = OrgServerRecord & {
@@ -263,6 +265,19 @@ export async function fetchServer(serverId: string): Promise<ServerDetailRecord>
     `${CLIENT_API}/servers/${serverId}`,
   )
   return body.server
+}
+
+export async function updateServer(
+  serverId: string,
+  body: {
+    displayName?: string | null
+    datacenterId?: string | null
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function setServerTimezone(
@@ -310,6 +325,35 @@ export async function saveOrgDefaultTimezone(
     {
       method: 'PUT',
       body: JSON.stringify(patch),
+    },
+  )
+}
+
+export type OrgServerCapacity = {
+  maxServers: number | null
+  serverCount: number
+  reservedSeatCount: number
+  usedSeats: number
+  availableSeats: number | null
+}
+
+export async function fetchOrgServerCapacity(
+  orgId: string,
+): Promise<OrgServerCapacity> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/server-capacity`,
+  )
+}
+
+export async function saveOrgServerCapacity(
+  orgId: string,
+  maxServers: number | null,
+): Promise<OrgServerCapacity & { ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/server-capacity`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ maxServers }),
     },
   )
 }
@@ -463,7 +507,7 @@ async function apiFetch<T>(
     try {
       const body = await response.json() as {
         error?: string
-        issues?: Array<{ message?: string }>
+        issues?: { message?: string }[]
       };
       if (body.error === 'compose_invalid' && Array.isArray(body.issues) && body.issues.length > 0) {
         detail = body.issues
@@ -492,6 +536,43 @@ export type CreatedLicense = {
   installCommand: string;
 };
 
+export class ServerCapacityExceededError extends Error {
+  readonly code = 'server_capacity_exceeded'
+  readonly maxServers: number | null
+  readonly usedSeats: number
+
+  constructor(maxServers: number | null, usedSeats: number) {
+    super(
+      maxServers === null
+        ? 'Server capacity exceeded'
+        : `Server limit reached (${usedSeats} of ${maxServers})`,
+    )
+    this.name = 'ServerCapacityExceededError'
+    this.maxServers = maxServers
+    this.usedSeats = usedSeats
+  }
+}
+
+function throwIfLicenseCreateFailed(
+  status: number,
+  errorBody: {
+    error?: string
+    maxServers?: number | null
+    usedSeats?: number
+  },
+): never {
+  if (status === 409 && errorBody.error === 'server_capacity_exceeded') {
+    throw new ServerCapacityExceededError(
+      typeof errorBody.maxServers === 'number' ? errorBody.maxServers : null,
+      typeof errorBody.usedSeats === 'number' ? errorBody.usedSeats : 0,
+    )
+  }
+  const detail = errorBody.error
+    ? formatFetchFailureDetail(status, errorBody.error)
+    : formatFetchFailureDetail(status)
+  throw new Error(`${CLIENT_API}/licenses failed: ${detail}`)
+}
+
 /** Mint a one-shot registration key for the Add Server flow (not listed in the UI). */
 export async function createLicense(
   displayName?: string,
@@ -500,10 +581,37 @@ export async function createLicense(
   const body: Record<string, string> = {}
   if (displayName) body.displayName = displayName
   if (installBaseUrl?.trim()) body.installBaseUrl = installBaseUrl.trim()
-  return await apiFetch(`${CLIENT_API}/licenses`, {
-    method: "POST",
+
+  const resolvedOrgId = getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const response = await fetch(`${CLIENT_API}/licenses`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
     body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
-  });
+  })
+
+  if (!response.ok) {
+    let errorBody: {
+      error?: string
+      maxServers?: number | null
+      usedSeats?: number
+    } = {}
+    try {
+      errorBody = await response.json() as typeof errorBody
+    } catch {
+      // Non-JSON error body — keep the status-only message.
+    }
+    throwIfLicenseCreateFailed(response.status, errorBody)
+  }
+
+  return await response.json() as CreatedLicense
 }
 
 export type PermissionKey =
@@ -730,6 +838,8 @@ export type HostingRecord = {
   serviceId: string;
   /** Pinned org TLS id; null/undefined = basic self-signed (Caddy tls internal). */
   tlsId?: string | null;
+  /** Pinned public IP id; null/undefined = any interface (server resolves bind). */
+  ipId?: string | null;
   metadata?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
   createdAt: string;
@@ -780,12 +890,95 @@ export type ContainerRecord = {
   updatedAt: string;
 };
 
+export type NetworkKind = 'datacenter' | 'server' | 'docker' | 'vpn'
+
 export type NetworkRecord = {
-  id: string;
-  serverId: string;
-  createdAt: string;
-  updatedAt: string;
-};
+  id: string
+  organizationId: string
+  datacenterId: string | null
+  serverId: string | null
+  kind: NetworkKind
+  cidr: string | null
+  displayName: string | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type DatacenterOptions = {
+  defaultServerTimezone?: string | null
+  enforceServerTimezone?: boolean
+}
+
+export type DatacenterNameSuggestion = {
+  displayName: string
+  serverCount: number
+  serverIds: string[]
+  serverLabels: string[]
+  geo: ServerGeo
+}
+
+export type DatacenterRecord = {
+  id: string
+  displayName: string | null
+  description: string | null
+  organizationId: string
+  metadata: Record<string, unknown> | null
+  options: DatacenterOptions | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type IpVersion = 4 | 6
+export type IpAllocation = 'dedicated' | 'shared'
+export type IpScope = 'public' | 'datacenter' | 'loopback'
+
+export type IpRecord = {
+  id: string
+  organizationId: string
+  datacenterId: string | null
+  networkId: string | null
+  serverId: string | null
+  address: string
+  version: IpVersion
+  allocation: IpAllocation
+  scope: IpScope
+  displayName: string | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type VpnRecord = {
+  id: string
+  organizationId: string
+  networkId: string | null
+  displayName: string | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Peer public surface — never includes `presharedKey`. */
+export type PeerRecord = {
+  id: string
+  vpnId: string
+  serverId: string
+  ipId: string | null
+  publicKey: string
+  tunnelAddress: string | null
+  listenPort: number | null
+  endpoint: string | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export const IP_IN_USE_ERROR = 'ip_in_use'
 
 export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceRecord[] }> {
   return await apiFetch(`${CLIENT_API}/workspaces`);
@@ -1023,6 +1216,7 @@ export async function createHosting(
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
     tlsId?: string | null
+    ipId?: string | null
   },
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
@@ -1034,6 +1228,7 @@ export async function createHosting(
       ...(body?.metadata !== undefined ? { metadata: body.metadata } : {}),
       ...(body?.options !== undefined ? { options: body.options } : {}),
       ...(body?.tlsId !== undefined ? { tlsId: body.tlsId } : {}),
+      ...(body?.ipId !== undefined ? { ipId: body.ipId } : {}),
     }),
   });
 }
@@ -1046,6 +1241,7 @@ export async function updateHosting(
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
     tlsId?: string | null
+    ipId?: string | null
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
@@ -1125,28 +1321,323 @@ export async function deleteContainer(id: string): Promise<{ ok: true }> {
   });
 }
 
-export async function fetchNetworks(
-  serverId: string,
-): Promise<{ networks: NetworkRecord[] }> {
-  const params = new URLSearchParams({ serverId });
-  return await apiFetch(`${CLIENT_API}/networks?${params.toString()}`);
+export async function fetchDatacenterNameSuggestions(options?: {
+  unassignedOnly?: boolean
+  limit?: number
+}): Promise<{ suggestions: DatacenterNameSuggestion[] }> {
+  const params = new URLSearchParams()
+  if (options?.unassignedOnly === false) {
+    params.set('unassignedOnly', '0')
+  }
+  if (options?.limit != null) {
+    params.set('limit', String(options.limit))
+  }
+  const query = params.toString()
+  const suffix = query ? `?${query}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/datacenters/name-suggestions${suffix}`,
+  )
 }
 
-export async function createNetwork(
-  serverId: string,
-): Promise<{ ok: true; id: string }> {
+export async function fetchDatacenters(): Promise<{
+  datacenters: DatacenterRecord[]
+}> {
+  return await apiFetch(`${CLIENT_API}/datacenters`)
+}
+
+export async function fetchDatacenter(
+  id: string,
+): Promise<{ datacenter: DatacenterRecord }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${id}`)
+}
+
+export async function createDatacenter(body: {
+  displayName?: string
+  description?: string
+  metadata?: Record<string, unknown>
+  options?: DatacenterOptions
+  sourceServerId?: string
+  assignServerIds?: string[]
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/datacenters`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateDatacenter(
+  id: string,
+  body: Partial<{
+    displayName: string | null
+    description: string | null
+    metadata: Record<string, unknown> | null
+    options: DatacenterOptions | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteDatacenter(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchIps(filters?: {
+  datacenterId?: string
+  serverId?: string
+  networkId?: string
+  scope?: IpScope
+  allocation?: IpAllocation
+}): Promise<{ ips: IpRecord[] }> {
+  const params = new URLSearchParams()
+  if (filters?.datacenterId) params.set('datacenterId', filters.datacenterId)
+  if (filters?.serverId) params.set('serverId', filters.serverId)
+  if (filters?.networkId) params.set('networkId', filters.networkId)
+  if (filters?.scope) params.set('scope', filters.scope)
+  if (filters?.allocation) params.set('allocation', filters.allocation)
+  const query = params.toString()
+  const suffix = query ? `?${query}` : ''
+  return await apiFetch(`${CLIENT_API}/ips${suffix}`)
+}
+
+export async function fetchIp(id: string): Promise<{ ip: IpRecord }> {
+  return await apiFetch(`${CLIENT_API}/ips/${id}`)
+}
+
+export async function createIp(body: {
+  address: string
+  allocation: IpAllocation
+  scope: IpScope
+  displayName?: string
+  datacenterId?: string | null
+  networkId?: string | null
+  serverId?: string | null
+  metadata?: Record<string, unknown>
+  options?: Record<string, unknown>
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/ips`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateIp(
+  id: string,
+  body: Partial<{
+    displayName: string | null
+    datacenterId: string | null
+    networkId: string | null
+    serverId: string | null
+    metadata: Record<string, unknown> | null
+    options: Record<string, unknown> | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/ips/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteIp(id: string): Promise<{ ok: true }> {
+  const path = `${CLIENT_API}/ips/${id}`
+  try {
+    return await apiFetch<{ ok: true }>(path, { method: 'DELETE' })
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes('HTTP 409') &&
+      err.message.includes(IP_IN_USE_ERROR)
+    ) {
+      throw new Error(
+        'This address is pinned to a hosting — unassign it first.',
+      )
+    }
+    throw err
+  }
+}
+
+export async function fetchNetworks(filters?: {
+  organizationId?: string
+  datacenterId?: string
+  serverId?: string
+  kind?: NetworkKind
+}): Promise<{ networks: NetworkRecord[] }> {
+  const params = new URLSearchParams()
+  if (filters?.organizationId) params.set('organizationId', filters.organizationId)
+  if (filters?.datacenterId) params.set('datacenterId', filters.datacenterId)
+  if (filters?.serverId) params.set('serverId', filters.serverId)
+  if (filters?.kind) params.set('kind', filters.kind)
+  const query = params.toString()
+  const suffix = query ? `?${query}` : ''
+  return await apiFetch(`${CLIENT_API}/networks${suffix}`)
+}
+
+export async function createNetwork(body: {
+  organizationId: string
+  kind: NetworkKind
+  datacenterId?: string | null
+  serverId?: string | null
+  cidr?: string | null
+  displayName?: string
+  metadata?: Record<string, unknown>
+  options?: Record<string, unknown>
+}): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/networks`, {
-    method: "POST",
-    body: JSON.stringify({ serverId }),
-  });
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateNetwork(
+  id: string,
+  body: Partial<{
+    kind: NetworkKind
+    datacenterId: string | null
+    serverId: string | null
+    cidr: string | null
+    displayName: string | null
+    metadata: Record<string, unknown> | null
+    options: Record<string, unknown> | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/networks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deleteNetwork(
   networkId: string,
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/networks/${networkId}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
+}
+
+export async function fetchVpns(): Promise<{ vpns: VpnRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/vpns`)
+}
+
+export async function fetchVpn(id: string): Promise<{ vpn: VpnRecord }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${id}`)
+}
+
+export async function createVpn(body: {
+  displayName?: string
+  networkId?: string | null
+  meshCidr?: string
+  metadata?: Record<string, unknown>
+  options?: Record<string, unknown>
+}): Promise<{ ok: true; id: string; networkId?: string }> {
+  return await apiFetch(`${CLIENT_API}/vpns`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateVpn(
+  id: string,
+  body: Partial<{
+    displayName: string | null
+    networkId: string | null
+    metadata: Record<string, unknown> | null
+    options: Record<string, unknown> | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteVpn(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchPeers(
+  vpnId: string,
+): Promise<{ peers: PeerRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers`)
+}
+
+export async function createPeer(
+  vpnId: string,
+  body: {
+    serverId: string
+    publicKey: string
+    ipId?: string | null
+    tunnelAddress?: string | null
+    listenPort?: number | null
+    endpoint?: string | null
+    /** Write-only — never returned on PeerRecord. */
+    presharedKey?: string
+    metadata?: Record<string, unknown>
+    options?: Record<string, unknown>
+  },
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updatePeer(
+  vpnId: string,
+  peerId: string,
+  body: Partial<{
+    serverId: string
+    publicKey: string
+    ipId: string | null
+    tunnelAddress: string | null
+    listenPort: number | null
+    endpoint: string | null
+    /** Write-only — never returned on PeerRecord. */
+    presharedKey: string | null
+    metadata: Record<string, unknown> | null
+    options: Record<string, unknown> | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers/${peerId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deletePeer(
+  vpnId: string,
+  peerId: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers/${peerId}`, {
+    method: 'DELETE',
+  })
+}
+
+export type VpnApplyPeerResult = {
+  peerId: string
+  serverId: string
+  commandId?: string
+  status: 'queued' | 'failed'
+  error?: string
+}
+
+export type VpnApplyResponse = {
+  ok: true
+  vpnId: string
+  interfaceName: string
+  results: VpnApplyPeerResult[]
+}
+
+/** Enqueue `server.wireguard.apply` on each peer host for this VPN mesh. */
+export async function applyVpn(vpnId: string): Promise<VpnApplyResponse> {
+  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/apply`, {
+    method: 'POST',
+  })
 }
 
 export async function createAccessGrant(
@@ -1335,14 +1826,12 @@ export type ServerBatchUpdateStatus = {
   target: (ServerUpdateCommit & { manifestUrl?: string }) | null
   targetStatus: 'ok' | 'unknown'
   targetError?: string
-  servers: Array<
-    ServerUpdateStatus & { serverId: string }
-  >
+  servers: (ServerUpdateStatus & { serverId: string })[]
 }
 
 export type ServerBatchUpdateTriggerResult = {
   ok: boolean
-  results: Array<{
+  results: {
     serverId: string
     ok: boolean
     queued?: boolean
@@ -1350,7 +1839,7 @@ export type ServerBatchUpdateTriggerResult = {
     requestId?: string
     channel?: string
     error?: string
-  }>
+  }[]
 }
 
 export async function fetchServerUpdate(
@@ -1714,6 +2203,7 @@ export type ProjectPrincipalRecord = {
   projectId: string | null
   metadata: { uid?: number; gid?: number; home?: string } | null
   options: Record<string, unknown> | null
+  serviceIds: string[]
   createdAt: string
   updatedAt: string
 }
@@ -1726,11 +2216,22 @@ export async function fetchProjectPrincipals(
 
 export async function createProjectPrincipal(
   projectId: string,
-  body: { username: string; options?: Record<string, unknown> },
-): Promise<{ ok: true; id: string; uid: number; gid: number }> {
+  body: { username: string; serviceIds?: string[]; options?: Record<string, unknown> },
+): Promise<{ ok: true; id: string; uid: number; gid: number; serviceIds?: string[] }> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`, {
     method: 'POST',
     body: JSON.stringify(body),
+  })
+}
+
+export async function updateProjectPrincipalAssignments(
+  projectId: string,
+  principalId: string,
+  serviceIds: string[],
+): Promise<{ ok: true; serviceIds: string[] }> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ serviceIds }),
   })
 }
 

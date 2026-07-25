@@ -25,6 +25,24 @@ export const ORG_AREAS = [
         hint: 'Addresses, interfaces, and connectivity',
       },
       {
+        id: 'datacenters',
+        label: 'Datacenters',
+        pathSegment: 'datacenters',
+        hint: 'Physical locations grouping servers on a private network',
+      },
+      {
+        id: 'ips',
+        label: 'IP addresses',
+        pathSegment: 'ips',
+        hint: 'Managed address pool for ingress and internal routing',
+      },
+      {
+        id: 'vpns',
+        label: 'VPNs',
+        pathSegment: 'vpns',
+        hint: 'WireGuard meshes linking datacenters via peer servers',
+      },
+      {
         id: 'tls',
         label: 'TLS',
         pathSegment: 'tls',
@@ -76,6 +94,20 @@ export function serverDetailHref(
   serverId: string,
 ): `/${string}/servers/${string}` {
   return `/${orgId}/servers/${serverId}`
+}
+
+export function datacenterDetailHref(
+  orgId: string,
+  datacenterId: string,
+): `/${string}/servers/datacenters/${string}` {
+  return `/${orgId}/servers/datacenters/${datacenterId}`
+}
+
+export function vpnDetailHref(
+  orgId: string,
+  vpnId: string,
+): `/${string}/servers/vpns/${string}` {
+  return `/${orgId}/servers/vpns/${vpnId}`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [

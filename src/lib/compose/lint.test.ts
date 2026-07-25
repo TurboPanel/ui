@@ -46,6 +46,16 @@ describe('lintComposeYaml', () => {
     expect(missing?.message).toContain('build')
   })
 
+  it('allows traditional-web services without image or build', () => {
+    const source = `services:
+  site:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: nginx
+`
+    expect(lintComposeYaml(source)).toEqual([])
+  })
+
   it('orders issues by line number', () => {
     const source = `services:
   # ok

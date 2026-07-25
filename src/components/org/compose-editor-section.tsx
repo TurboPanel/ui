@@ -106,7 +106,7 @@ function YamlLintGutter({
     )
   }
   return (
-    <View style={styles.yamlGutter} pointerEvents="none">
+    <View style={styles.yamlGutter}>
       {rows}
     </View>
   )
@@ -121,7 +121,7 @@ function YamlHighlightLayer({
 }>) {
   const lines = value.split('\n')
   return (
-    <Text style={styles.yamlHighlight} pointerEvents="none">
+    <Text style={styles.yamlHighlight}>
       {lines.map((line, lineIndex) => {
         const lintLevel = lineLevels?.get(lineIndex + 1)
         const segments = splitYamlLineHighlight(line)
@@ -766,6 +766,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 13,
     lineHeight: YAML_LINE_HEIGHT,
+    pointerEvents: 'none',
   },
   yamlGutter: {
     position: 'absolute',
@@ -774,6 +775,7 @@ const styles = StyleSheet.create({
     width: YAML_TEXT_PADDING_LEFT,
     paddingLeft: 2,
     zIndex: 1,
+    pointerEvents: 'none',
   },
   yamlGutterRow: {
     height: YAML_LINE_HEIGHT,

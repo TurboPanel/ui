@@ -160,10 +160,7 @@ const pointerStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 3,
-    shadowColor: colors.bg,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.4)',
   },
   row: {
     flexDirection: 'row',
@@ -302,7 +299,6 @@ export function MetricLineChart({
         <View style={styles.chartFrame}>
           {gapBands && gapBands.length > 0 ? (
             <View
-              pointerEvents="none"
               style={[
                 styles.gapLayer,
                 {
@@ -363,7 +359,6 @@ export function MetricLineChart({
             pointerConfig={buildPointerConfig(pointerLegend, yFormat)}
           />
           <View
-            pointerEvents="none"
             style={[
               styles.xAxisOverlay,
               {
@@ -406,6 +401,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xs,
     zIndex: 0,
+    pointerEvents: 'none',
   },
   gapBand: {
     position: 'absolute',
@@ -421,6 +417,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 1,
     overflow: 'visible',
+    pointerEvents: 'none',
   },
   xAxisTick: {
     position: 'absolute',
