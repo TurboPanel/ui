@@ -245,24 +245,26 @@ function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
     hostname != null && hostname.length > 0 && hostname !== title
 
   return (
-    <View style={[styles.tableCell, styles.colName, styles.nameButton]}>
-      {logo ? (
-        <Image
-          source={logo}
-          style={styles.osLogoBesideName}
-          contentFit="contain"
-          accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
-        />
-      ) : null}
-      <View style={styles.nameBlock}>
-        <Text style={styles.nameText} numberOfLines={1}>
-          {title}
-        </Text>
-        {showHostname ? (
-          <Text style={styles.hostnameSubtext} numberOfLines={1}>
-            {hostname}
-          </Text>
+    <View style={[styles.tableCell, styles.colName]}>
+      <View style={styles.nameButton}>
+        {logo ? (
+          <Image
+            source={logo}
+            style={styles.osLogoBesideName}
+            contentFit="contain"
+            accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
+          />
         ) : null}
+        <View style={styles.nameBlock}>
+          <Text style={styles.nameText} numberOfLines={1}>
+            {title}
+          </Text>
+          {showHostname ? (
+            <Text style={styles.hostnameSubtext} numberOfLines={1}>
+              {hostname}
+            </Text>
+          ) : null}
+        </View>
       </View>
     </View>
   )
@@ -851,6 +853,7 @@ const styles = StyleSheet.create({
     flex: 1.4,
     minWidth: 140,
     gap: 4,
+    alignItems: 'flex-start',
   },
   colCheck: {
     width: 40,
@@ -870,7 +873,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flex: 1,
+    alignSelf: 'stretch',
   },
   nameBlock: {
     flex: 1,
