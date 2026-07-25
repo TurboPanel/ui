@@ -1,6 +1,6 @@
 /**
- * Managed database UI types — rows live in the `managed` table
- * (`server_id` for standalone services; `project_id` for catalog apps).
+ * Managed database UI types — rows live in the `managed` table keyed by
+ * `environment_id` for engine projects created from the catalog.
  */
 
 export type ManagedServiceEngine =
@@ -25,6 +25,7 @@ export type ManagedServiceCatalogEntry = {
   defaultPort: number
 }
 
+/** Display metadata for managed engine catalog cards (mirrors instance catalog options). */
 export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
   {
     engine: 'postgres',
@@ -63,21 +64,43 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
   },
 ]
 
-export type ManagedServiceRecord = {
+export type ManagedEnvironmentRecord = {
   id: string
-  engine: ManagedServiceEngine | null
+  environmentId: string | null
   displayName: string | null
-  serverId: string | null
-  serverDisplayName: string | null
-  status: ManagedServiceStatus
+  engine: ManagedServiceEngine | null
+  status: 'provisioning' | 'ready' | 'failed'
   host: string | null
   port: number | null
+  serverId: string | null
+  metadata: Record<string, unknown>
+  options: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
 }
 
-export type CreateManagedServiceBody = {
-  engine: ManagedServiceEngine
-  serverId: string
+export type ProvisionManagedBody = {
   displayName?: string
+}
+
+export function managedCatalogEntryForCode(
+  code: string,
+): ManagedServiceCatalogEntry | undefined {
+  return MANAGED_SERVICE_CATALOG.find((entry) => entry.engine === code)
+}
+
+export function sortManagedCatalogEntries<T extends { code: string }>(
+  entries: readonly T[],
+): T[] {
+  return [...entries].sort((a, b) => {
+    const aEntry = managedCatalogEntryForCode(a.code)
+    const bEntry = managedCatalogEntryForCode(b.code)
+    const aAvailable = aEntry?.status === 'available'
+    const bAvailable = bEntry?.status === 'available'
+    if (aAvailable && !bAvailable) return -1
+    if (bAvailable && !aAvailable) return 1
+    const aLabel = aEntry?.label ?? a.code
+    const bLabel = bEntry?.label ?? b.code
+    return aLabel.localeCompare(bLabel)
+  })
 }

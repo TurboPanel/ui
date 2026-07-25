@@ -50,8 +50,8 @@ North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables �
 
 | Phase | Scope | Status |
 |-------|--------|--------|
-| **1** | Design system pages, compose create wizard + base panel, shell polish, HA terminology, managed-services UI, variables presets | **Shipped** |
-| **2** | Compose flow rail + wizard step indicator, project variables panel, managed provision API wired, Expo SDK 56.0.16 | **Shipped** |
+| **1** | Design system pages, compose create wizard + base panel, shell polish, HA terminology, variables presets | **Shipped** |
+| **2** | Compose flow rail + wizard step indicator, project variables panel, managed provision API wired, environment-scoped managed connection UI, Expo SDK 56.0.16 | **Shipped** |
 | **3** | Org VPC (WireGuard), read replicas, move services between servers, managed DB user provisioning, daemon `managed.provision` command | Planned |
 
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, health-check deploy ack modal, storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
@@ -139,6 +139,7 @@ Environments are **not** a separate page/flow — they live inside `project-deta
 - **Server** is a required dropdown on the environment: pick one whole connected server via `updateEnvironment` + `setComposePlacementServerId` on the overlay — not the project base compose, and not at deploy time. Deploy stays disabled until a connected server is selected. Different environments may select different servers.
 - `EnvironmentDetailSection` remains as a thin wrapper (heading + `EnvironmentDetailBody`) for the standalone `/[environmentId]` deep-link route only.
 - **Container status** is shown inline in the active environment's Containers panel (`ContainerStatusBadge`, Postgres-backed `fetchContainers(serviceId)` per service — never DO reads), so no separate environment page is needed to see it.
+- **Managed connection:** for managed **engine** projects (`metadata.type === 'managed'` and `metadata.code` in `MANAGED_SERVICE_CATALOG`), `EnvironmentDetailBody` renders `ManagedConnectionPanel` (engine label falls back to project `code` before provision; provision gated on compose placement server pin, same pattern as Deploy). Legacy project-scoped managed apps are excluded from the create catalog and this panel.
 
 ### Workspaces
 
@@ -181,6 +182,8 @@ Authorization helpers:
 - `createEnvironment(body)` → `POST /api/client/v1/environments`
 - `updateEnvironment(id, body)` → `PATCH /api/client/v1/environments/:id`
 - `deleteEnvironment(id)` → `DELETE /api/client/v1/environments/:id`
+- `fetchEnvironmentManaged(environmentId)` → `GET /api/client/v1/environments/:id/managed` — `{ managed: ManagedEnvironmentRecord | null }`
+- `provisionEnvironmentManaged(environmentId, body?)` → `POST /api/client/v1/environments/:id/managed/provision` — requires placement pin; returns `{ ok, alreadyProvisioned?, managed }`
 - `fetchVariables(environmentId)` → `GET /api/client/v1/variables?environmentId=`
 - `fetchVariable(id)` → `GET /api/client/v1/variables/:id`
 - `createVariable(body)` → `POST /api/client/v1/variables`

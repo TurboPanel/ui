@@ -24,6 +24,11 @@ import {
   type CatalogSummary,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
+import {
+  managedCatalogEntryForCode,
+  sortManagedCatalogEntries,
+  type ManagedServiceStatus,
+} from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
@@ -85,7 +90,12 @@ function filterCatalogByType(
     return catalog.filter((entry) => entry.kind === 'template')
   }
   if (selectedType === 'managed') {
-    return catalog.filter((entry) => entry.kind === 'managed')
+    // Engine catalog only — exclude legacy project-scoped apps (e.g. wordpress-mysql).
+    return catalog.filter(
+      (entry) =>
+        entry.kind === 'managed' &&
+        managedCatalogEntryForCode(entry.code) !== undefined,
+    )
   }
   return []
 }
@@ -192,32 +202,87 @@ function TypeStep({
   )
 }
 
+function catalogEntryStatusLabel(status: ManagedServiceStatus): string {
+  switch (status) {
+    case 'available':
+      return 'Available'
+    case 'coming-soon':
+      return 'Coming soon'
+    default:
+      return status
+  }
+}
+
 function CatalogList({
   entries,
   selectedCode,
   onSelect,
+  managedEngineCards,
 }: Readonly<{
   entries: CatalogSummary[]
   selectedCode: string | null
   onSelect: (code: string) => void
+  managedEngineCards?: boolean
 }>) {
   return (
     <ScrollView style={styles.catalogScroll}>
       <View style={styles.catalogList}>
-        {entries.map((entry) => (
-          <Pressable
-            key={entry.code}
-            style={[
-              styles.catalogCard,
-              selectedCode === entry.code && styles.catalogCardSelected,
-            ]}
-            onPress={() => onSelect(entry.code)}
-          >
-            <Text style={styles.catalogTitle}>{entry.displayName}</Text>
-            <Text style={styles.catalogCode}>{entry.code}</Text>
-            <Text style={styles.catalogDescription}>{entry.description}</Text>
-          </Pressable>
-        ))}
+        {entries.map((entry) => {
+          const catalogMeta = managedEngineCards
+            ? managedCatalogEntryForCode(entry.code)
+            : undefined
+          // Managed step only lists engine codes; unknown codes must not be selectable.
+          const selectable = managedEngineCards
+            ? catalogMeta?.status === 'available'
+            : true
+          const comingSoon = catalogMeta?.status === 'coming-soon'
+          return (
+            <Pressable
+              key={entry.code}
+              style={[
+                styles.catalogCard,
+                selectedCode === entry.code && styles.catalogCardSelected,
+                !selectable && styles.catalogCardDisabled,
+              ]}
+              disabled={!selectable}
+              onPress={() => onSelect(entry.code)}
+            >
+              <View style={styles.catalogCardHeader}>
+                <Text style={styles.catalogTitle}>
+                  {catalogMeta?.label ?? entry.displayName}
+                </Text>
+                {catalogMeta ? (
+                  <View
+                    style={[
+                      styles.catalogStatusPill,
+                      catalogMeta.status === 'available' && styles.catalogStatusPillLive,
+                      comingSoon && styles.catalogStatusPillMuted,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.catalogStatusPillText,
+                        catalogMeta.status === 'available' &&
+                          styles.catalogStatusPillTextLive,
+                      ]}
+                    >
+                      {catalogEntryStatusLabel(catalogMeta.status)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.catalogCode}>{entry.code}</Text>
+              <Text style={styles.catalogDescription}>
+                {catalogMeta?.description ?? entry.description}
+              </Text>
+              {catalogMeta ? (
+                <Text style={orgPanelStyles.muted}>
+                  Default port {catalogMeta.defaultPort}
+                </Text>
+              ) : null}
+            </Pressable>
+          )
+        })}
       </View>
     </ScrollView>
   )
@@ -228,11 +293,13 @@ function CatalogStepBody({
   entries,
   selectedCode,
   onSelect,
+  managedEngineCards,
 }: Readonly<{
   loading: boolean
   entries: CatalogSummary[]
   selectedCode: string | null
   onSelect: (code: string) => void
+  managedEngineCards?: boolean
 }>) {
   if (loading) {
     return <Text style={orgPanelStyles.muted}>Loading catalog…</Text>
@@ -249,6 +316,7 @@ function CatalogStepBody({
       entries={entries}
       selectedCode={selectedCode}
       onSelect={onSelect}
+      managedEngineCards={managedEngineCards}
     />
   )
 }
@@ -259,12 +327,14 @@ function CatalogStep({
   entries,
   selectedCode,
   onSelect,
+  managedEngineCards,
 }: Readonly<{
   loading: boolean
   error: string | null
   entries: CatalogSummary[]
   selectedCode: string | null
   onSelect: (code: string) => void
+  managedEngineCards?: boolean
 }>) {
   return (
     <View style={styles.stepContent}>
@@ -275,6 +345,7 @@ function CatalogStep({
         entries={entries}
         selectedCode={selectedCode}
         onSelect={onSelect}
+        managedEngineCards={managedEngineCards}
       />
     </View>
   )
@@ -637,6 +708,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }, [step, selectedType, handleUnauthorized])
 
   const filteredCatalog = filterCatalogByType(catalog, selectedType)
+  const catalogEntriesForStep =
+    selectedType === 'managed'
+      ? sortManagedCatalogEntries(filteredCatalog)
+      : filteredCatalog
 
   const handleTypeSelect = (type: ProjectType) => {
     setSelectedType(type)
@@ -797,9 +872,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           <CatalogStep
             loading={catalogLoading}
             error={catalogError}
-            entries={filteredCatalog}
+            entries={catalogEntriesForStep}
             selectedCode={selectedCode}
             onSelect={handleCatalogSelect}
+            managedEngineCards={selectedType === 'managed'}
           />
         ) : null}
 
@@ -963,6 +1039,39 @@ const styles = StyleSheet.create({
   catalogCardSelected: {
     borderColor: colors.accent,
     backgroundColor: colors.bgActive,
+  },
+  catalogCardDisabled: {
+    opacity: 0.72,
+  },
+  catalogCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  catalogStatusPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  catalogStatusPillLive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  catalogStatusPillMuted: {
+    backgroundColor: colors.bgInset,
+  },
+  catalogStatusPillText: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  catalogStatusPillTextLive: {
+    color: colors.accent,
   },
   catalogTitle: {
     color: colors.text,

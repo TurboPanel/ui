@@ -19,12 +19,6 @@ export const ORG_AREAS = [
         hint: 'Fleet defaults such as the default server timezone',
       },
       {
-        id: 'managed',
-        label: 'Managed',
-        pathSegment: 'managed',
-        hint: 'Databases and caches on your servers',
-      },
-      {
         id: 'networks',
         label: 'Networks',
         pathSegment: 'networks',

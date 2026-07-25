@@ -6,14 +6,18 @@ import {
 } from '@/lib/org-context'
 import type { ComposeDocument } from '@/lib/compose'
 import type {
-  CreateManagedServiceBody,
-  ManagedServiceRecord,
+  ManagedEnvironmentRecord,
+  ProvisionManagedBody,
 } from '@/lib/managed-services'
 
 export type { ComposeDocument } from '@/lib/compose'
 export type {
-  CreateManagedServiceBody,
-  ManagedServiceRecord,
+  ManagedEnvironmentRecord,
+  ProvisionManagedBody,
+} from '@/lib/managed-services'
+export type {
+  ManagedServiceEngine,
+  ManagedServiceStatus,
 } from '@/lib/managed-services'
 
 const CLIENT_API = "/api/client/v1";
@@ -607,6 +611,8 @@ export type ProjectRecord = {
   workspaceId: string;
   metadata: {
     type?: 'docker-compose' | 'managed' | 'template' | null;
+    /** Managed engine catalog code (`postgres`, …); absent on legacy project-scoped apps. */
+    code?: string;
     managed_id?: string;
   } | null;
   /** `options.compose` is a versioned ComposeDocument. */
@@ -1966,33 +1972,25 @@ export async function fetchServerMetricsSummary(
   )
 }
 
-export async function fetchManagedServices(options?: {
-  serverId?: string
-}): Promise<{ managedServices: ManagedServiceRecord[] }> {
-  const params = options?.serverId
-    ? new URLSearchParams({ serverId: options.serverId })
-    : null
-  const suffix = params ? `?${params.toString()}` : ''
-  return await apiFetch(`${CLIENT_API}/managed-services${suffix}`)
+export async function fetchEnvironmentManaged(
+  environmentId: string,
+): Promise<{ managed: ManagedEnvironmentRecord | null }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`)
 }
 
-export async function fetchManagedService(
-  id: string,
-): Promise<{ managedService: ManagedServiceRecord }> {
-  return await apiFetch(`${CLIENT_API}/managed-services/${id}`)
-}
-
-export async function createManagedService(
-  body: CreateManagedServiceBody,
-): Promise<{ ok: true; managedService: ManagedServiceRecord }> {
-  return await apiFetch(`${CLIENT_API}/managed-services`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function deleteManagedService(id: string): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/managed-services/${id}`, {
-    method: 'DELETE',
-  })
+export async function provisionEnvironmentManaged(
+  environmentId: string,
+  body?: ProvisionManagedBody,
+): Promise<{
+  ok: true
+  alreadyProvisioned?: boolean
+  managed: ManagedEnvironmentRecord
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/provision`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    },
+  )
 }

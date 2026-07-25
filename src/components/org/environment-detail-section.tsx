@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
+import { ManagedConnectionPanel } from '@/components/org/managed-connection-panel'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -37,9 +38,11 @@ import {
   type EnvironmentRecord,
   type HostingRecord,
   type OrgServerRecord,
+  type ProjectRecord,
   type ServiceRecord,
   type TlsRecord,
 } from '@/lib/instance-api'
+import { managedCatalogEntryForCode } from '@/lib/managed-services'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
@@ -733,11 +736,14 @@ function EnvironmentLoadedPanels({
   environment,
   projectId,
   orgId,
+  projectType,
+  projectEngineCode,
   mergedCompose,
   serviceNames,
   allServers,
   sortedServers,
   placementServerId,
+  pinnedServer,
   deployBlocked,
   deploying,
   deployStatus,
@@ -760,11 +766,14 @@ function EnvironmentLoadedPanels({
   environment: EnvironmentRecord
   projectId: string
   orgId: string
+  projectType: NonNullable<ProjectRecord['metadata']>['type'] | null
+  projectEngineCode: string | null
   mergedCompose: ComposeDocument
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
   placementServerId: string | null
+  pinnedServer: OrgServerRecord | null
   deployBlocked: boolean
   deploying: boolean
   deployStatus: string | null
@@ -836,6 +845,18 @@ function EnvironmentLoadedPanels({
           textAlignVertical="top"
         />
       </SectionPanel>
+
+      {projectType === 'managed' &&
+      projectEngineCode &&
+      managedCatalogEntryForCode(projectEngineCode) ? (
+        <ManagedConnectionPanel
+          environmentId={environment.id}
+          engineCode={projectEngineCode}
+          canManage={canManage}
+          placementServerId={placementServerId}
+          pinnedServer={pinnedServer}
+        />
+      ) : null}
 
       <SectionPanel
         title="Deploy"
@@ -982,6 +1003,10 @@ export function EnvironmentDetailBody({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [projectCompose, setProjectCompose] = useState<unknown>(null)
+  const [projectType, setProjectType] = useState<
+    NonNullable<ProjectRecord['metadata']>['type'] | null
+  >(null)
+  const [projectEngineCode, setProjectEngineCode] = useState<string | null>(null)
   const [savingCompose, setSavingCompose] = useState(false)
   const [savingPlacement, setSavingPlacement] = useState(false)
   const [allServers, setAllServers] = useState<OrgServerRecord[]>([])
@@ -1020,6 +1045,8 @@ export function EnvironmentDetailBody({
         }
         setEnvironment(result.environment)
         setProjectCompose(projectResult.project.options?.compose)
+        setProjectType(projectResult.project.metadata?.type ?? null)
+        setProjectEngineCode(projectResult.project.metadata?.code ?? null)
         setAllServers(serversResult.servers)
         setServices(servicesResult.services)
         setTlsLibrary(tlsResult.tls)
@@ -1256,11 +1283,14 @@ export function EnvironmentDetailBody({
           environment={environment}
           projectId={projectId}
           orgId={orgId}
+          projectType={projectType}
+          projectEngineCode={projectEngineCode}
           mergedCompose={mergedCompose}
           serviceNames={serviceNames}
           allServers={allServers}
           sortedServers={sortedServers}
           placementServerId={placementServerId}
+          pinnedServer={pinnedServer}
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
