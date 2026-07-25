@@ -24,6 +24,19 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 - Do not leave **`TODO`** in code — use `Future:` in a normal comment (`typescript:S1135`).
 - Avoid widening unions with bare **`string`** when a literal union exists (`typescript:S6571`).
 
+## At a glance
+
+| Need | Go to |
+|------|--------|
+| **Any visual / UX work** | [Design system (ui-ux-pro-max)](#design-system-ui-ux-pro-max) — mandatory skill + MASTER/page workflow |
+| Stack / fonts / Tamagui | [Stack](#stack) |
+| Auth, install, sign-up | [End-user auth & first-run install](#end-user-auth--first-run-install-self-hosted) |
+| Org routes & shell | [Organization console](#organization-console-organizationid) |
+| API helpers & contracts | [Instance API](#instance-api) (under Organization console) + `src/lib/instance-api.ts` |
+| Admin surface | [Admin area](#admin-area-admin) |
+| Commands / polling | [Command Pipeline UI](#command-pipeline-ui) |
+| Deploy modes | [Build output & deployment](#build-output--deployment-dev-vs-prod) |
+
 ## Stack
 
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
@@ -32,19 +45,108 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 ## Design system (ui-ux-pro-max)
 
-Visual source of truth for UI work:
+This repo is the **signed-in product console** (org + admin + install/sign-in), not the public marketing site. Visual work must follow the installed **ui-ux-pro-max** skill and the persisted TurboPanel console design system. Do not invent a parallel look from generic SaaS defaults or from `~/website`.
 
-- **Tokens:** `src/lib/theme.ts` (`colors`, `spacing`, `layout`) — components use these, not one-off hex.
-- **Master + page overrides:** `design-system/turbopanel/MASTER.md` and `design-system/turbopanel/pages/*.md`. When building a page, read MASTER, then the page file if it exists (page wins).
-- **Skill install:** Cursor skill at `.cursor/skills/ui-ux-pro-max/` (CLI: `uipro init --ai cursor`). Search via:
+### This repo vs marketing site (`~/website`)
+
+| | **ui** (this repo) | **website** (`~/website`) |
+| --- | --- | --- |
+| Surface | Org console, admin, install/sign-in product UI | Marketing pages, landing/heroes, docs chrome, pricing/roadmap |
+| North star | Dark-first **OLED** ops console, dense tables | Fast, trustworthy, **light-first** marketing + readable docs (dark mode supported) |
+| Design system | `design-system/turbopanel/` | `design-system/turbopanel-website/` |
+| Skill path (**canonical**) | `.agents/skills/ui-ux-pro-max/` | `.agents/skills/ui-ux-pro-max/` |
+| Skill mirror (UI only) | `.cursor/skills/ui-ux-pro-max/` exists but **diverges** — do not use for `search.py` | _(none)_ |
+| Tokens | `src/lib/theme.ts` (Tamagui: `colors`, `spacing`, `layout`) | `--tp-*` in `src/app/globals.css` |
+| Stack search | `--stack react-native` | `--stack nextjs` |
+
+Shared brand cue only: accent green **`#3dd68c`**. Do **not** copy light-first marketing layout, Plus Jakarta display rules, or website Master into the console — and do not apply OLED console density / Tamagui patterns to the marketing site.
+
+### When to use (mandatory)
+
+Invoke the skill **before designing or changing visuals** when the task touches any of:
+
+- New pages, routes, or org/admin areas
+- Visual redesigns; layout / spacing / typography / color
+- New or refactored components with visible chrome (panels, tables, forms, empty states, wizards)
+- Charts / data visualization, navigation chrome, motion / transitions
+- UX / accessibility / consistency reviews of existing UI
+
+Skip the skill for pure non-visual work (API wiring with no UI change, types-only, fetch/query logic, copy-only string tweaks that do not affect layout) — unless the change alters how something looks, moves, or is interacted with. If you touch JSX layout or styles, use the skill.
+
+### Canonical paths
+
+| What | Path |
+| --- | --- |
+| Skill (read first) | [`.agents/skills/ui-ux-pro-max/SKILL.md`](.agents/skills/ui-ux-pro-max/SKILL.md) |
+| Search CLI | `.agents/skills/ui-ux-pro-max/scripts/search.py` |
+| Cursor mirror (stale) | `.cursor/skills/ui-ux-pro-max/` — older/divergent copy; **ignore for search** |
+| Master (global SoT) | [`design-system/turbopanel/MASTER.md`](design-system/turbopanel/MASTER.md) |
+| Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
+| Runtime tokens | `src/lib/theme.ts` — no one-off hex in components |
+| Shared panel patterns | `src/components/org/org-panel-styles.ts` |
+
+**Page overrides that exist today** (do not invent others): `sign-in.md`, `servers.md`, `server-detail.md`, `server-metrics.md`, `datacenters.md`, `vpns.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
+
+### Mandatory first steps
+
+From the **ui repo root**, before building or restyling UI:
+
+1. **Read** `.agents/skills/ui-ux-pro-max/SKILL.md` (workflow, domains, anti-pattern priorities).
+2. **Search** the skill DB (prefer `python3` if `python` is missing):
 
 ```bash
-python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --design-system -p "TurboPanel"
-python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain style|color|typography|ux|chart|icons
-python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack react-native
+# Persisted console system — start here for page/chrome work
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py \
+  "devops control plane dark dense dashboard" --design-system -p "TurboPanel"
+
+# Domain deep-dives as needed
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain style
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain color
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain typography
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain chart
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain icons
+
+# Stack guidance for this repo (Expo / React Native web + native)
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack react-native
 ```
 
-North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables — not light SaaS / purple gradients / cyberpunk neon.
+3. **Read** `design-system/turbopanel/MASTER.md`, then `pages/<page>.md` if it exists (page overrides Master).
+4. **Reuse** existing org/admin patterns (`org-panel-styles.ts`, neighboring section components) before inventing new chrome.
+5. **Implement** with `theme.ts` tokens — no one-off hex in components. Match empty/loading/chart states already documented on that page when present (e.g. `server-metrics.md`).
+
+Do **not** regenerate Master with `--persist --force` unless an explicit redesign was requested. Master already exists and is curated.
+
+### Decision order
+
+Apply in this order (later steps only fill gaps; they do not override earlier project rules):
+
+1. **Product constraints** (below) + platform-copy rules — non-negotiable brand / palette / density
+2. Page override `design-system/turbopanel/pages/<page>.md` (if present)
+3. Master `design-system/turbopanel/MASTER.md`
+4. Skill guidance (`SKILL.md` + `search.py`) — required for a11y, interaction, UX, and `--stack react-native`; do **not** let generic skill palettes replace TurboPanel tokens
+5. Existing org/admin component patterns in this repo
+6. New code
+
+### Product constraints (keep)
+
+These are non-negotiable for the console (detail lives in Master):
+
+- Dark-first **OLED** console; accent / CTA green **`#3dd68c`** (`colors.accent`); dense ops tables
+- Soft elevation / hairline borders — **not** light SaaS, purple gradients, or cyberpunk neon
+- Design dials already chosen: variance ~4, motion ~4, density ~8 (dashboard)
+- Tokens only from `src/lib/theme.ts` — no parallel hex systems
+- **Platform copy:** user-facing “Workers / Cloudflare / edge” → **TurboPanel High Availability** (`src/lib/platform-copy.ts`). Never bare “High Availability” or “HA” in UI copy. Backend identifiers unchanged.
+
+### Anti-patterns / do-not
+
+- Skip the skill and freestyle a purple/indigo SaaS or cream+serif “AI default” look
+- Apply `~/website` light-first marketing / docs chrome / Plus Jakarta hero rules to the console
+- Raw hex in components when a `theme.ts` token exists
+- Ignore a page override when one exists for the surface you’re editing
+- Silent `--persist --force` of Master (discards curated decisions)
+- Decorative card stacks, emoji-as-icons, status conveyed by color alone
+- Copy website search project name (`TurboPanel Website`) or `--stack nextjs` into this repo
 
 ### UI overhaul roadmap (web)
 
@@ -57,10 +159,6 @@ North star: dark-first OLED console, accent green `#3dd68c`, dense ops tables �
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, health-check deploy ack modal, storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
 
 **Shell polish (Phase 1):** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org sidebar brand stripe + sub-nav rail; header eyebrow + user chip. Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
-
-Canonical page overrides: `design-system/turbopanel/pages/project-create.md`, `managed-services.md`, `variables.md`, `projects.md`, `servers.md`, `service-settings.md`.
-
-**Platform copy:** user-facing “Workers / Cloudflare / edge” → **TurboPanel High Availability** (`src/lib/platform-copy.ts`). Never use bare “High Availability” or “HA” in UI copy. Backend identifiers unchanged.
 
 ## End-user auth & first-run install (self-hosted)
 
@@ -204,7 +302,7 @@ Authorization helpers:
 - `createTlsCertificate(body)` → `POST /api/client/v1/tls` (`upload` | `self_signed` | `lets_encrypt`); upload sends PEM once; server seals the key as `tpsecret`
 - `deleteTlsCertificate(id)` → `DELETE /api/client/v1/tls/:id`
 - Hosting PATCH accepts optional `tlsId` (`null` = basic self-signed via Caddy `tls internal`; pin a library cert explicitly — Let's Encrypt is never selected unless you pin an LE cert) and optional `ipId` (`null` = any interface) plus `options.bind` (`public` | `datacenter` | `local`). The Hostnames editor shows bind chips; the public-IP picker appears only when bind is `public`.
-- `options.protocol` (`http` default/omitted, or `tcp` | `udp`) plus `options.ports` (`{ published, target }[]`) let a hosting publish raw ports through Traefik instead of routing hostnames — used for non-HTTP docker services (Postgres, game servers, UDP relays). The **Hosting** panel (`environment-detail-section.tsx`, `HostingPanelRow`) shows a Protocol chip row (Http/Tcp/Udp) above the rest of the form; picking Tcp/Udp swaps the Hostnames input for a single-line `Ports` text field (comma-separated `published[:target]`, e.g. `5432, 8443:8080` — target defaults to published when omitted, parsed client-side by `parsePortsList`) and hides the TLS-certificate and Proxy/strip-prefix/path-prefix/target-port sections (all HTTP-only). Bind + Public IP pickers apply to both protocols unchanged. Server-side validation (`deploy-validation.ts` in the instance repo) rejects an empty `ports[]` for `tcp`/`udp` at deploy time — see `../instance/AGENTS.md` → Command Pipeline and `../daemon/AGENTS.md` → Tenant deploy & hosting ingress for the full contract.
+- `options.protocol` (`http` default/omitted, or `tcp` | `udp`) plus `options.ports` (`{ published, target }[]`) let a hosting publish raw ports through Traefik instead of routing hostnames — used for non-HTTP docker services (Postgres, game servers, UDP relays). The **Hosting** panel (`environment-detail-section.tsx`, `HostingPanelRow`) shows a Protocol chip row (Http/Tcp/Udp) above the rest of the form; picking Tcp/Udp swaps the Hostnames input for a single-line `Ports` text field (comma-separated `published[:target]`, e.g. `5432, 8443:8080` — target defaults to published when omitted, parsed client-side by `parsePortsList`) and hides the TLS-certificate and Proxy/strip-prefix/path-prefix/target-port sections (all HTTP-only). Bind + Public IP pickers apply to both protocols unchanged. Server-side validation (`deploy-validation.ts` in the instance repo) rejects an empty `ports[]` for `tcp`/`udp` at deploy time — see `../instance/AGENTS.md` → Command Pipeline and `../daemon/AGENTS.md` → Tenant deploy & hosting ingress for the full contract. For HTTP hostings, the panel is **engine-aware** via `resolveHostingServiceContext` (`src/lib/compose/hosting-service-context.ts`) on the merged compose service: badge shows Container vs Traditional web · engine; Apache shows PHP + web.env (SetEnv) fields; nginx/OLS hide PHP (OLS also hides web.env) unless stale values need clearing; containers prefer Hosting variables and surface `TURBOPANEL_TRADITIONAL_WEB_*` bridge-env hints when traditional-web siblings exist; path-prefix copy lists sibling traditional-web services for shared-hostname static+PHP setups.
 - `fetchDatacenters()` / `fetchDatacenter(id)` / `createDatacenter` / `updateDatacenter` / `deleteDatacenter` → `/api/client/v1/datacenters`; `fetchDatacenterNameSuggestions()` derives editable names from unassigned-server geo/ASN metadata; delete returns **409** `datacenter_has_networks` until scoped networks are removed or reassigned (servers/IPs unpin via SET NULL).
 - `fetchIps(filters?)` / `fetchIp` / `createIp` (never send `version`) / `updateIp` / `deleteIp` → `/api/client/v1/ips`; `updateIp` accepts display name + scope FKs only (`address` / `allocation` / `scope` are immutable after create); delete surfaces **409** `ip_in_use` as "This address is pinned to a hosting — unassign it first."
 - `fetchNetworks(filters?)` / `createNetwork` / `updateNetwork` / `deleteNetwork` → `/api/client/v1/networks` (org-scoped; optional `organizationId` / `datacenterId` / `serverId` / `kind`)

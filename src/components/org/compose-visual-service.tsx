@@ -63,12 +63,12 @@ function traditionalWebEngineHint(
   engine: TraditionalWebEngine | undefined,
 ): string {
   if (engine === 'openlitespeed') {
-    return 'Files are served from the host document root via OpenLiteSpeed (static only — no PHP hints); hosting Caddy terminates TLS.'
+    return 'Files are served from the host document root via OpenLiteSpeed (static only — no PHP or web-env injection); hosting Caddy terminates TLS. Pair with Apache on a path prefix when you need PHP.'
   }
   if (engine === 'apache') {
-    return 'Files are served from the host document root via Apache (mod_php when PHP hints or hosting options are set); hosting Caddy terminates TLS.'
+    return 'Files are served from the host document root via Apache (mod_php + SetEnv when hosting PHP/web.env options are set); hosting Caddy terminates TLS.'
   }
-  return 'Files are served from the host document root via nginx; hosting Caddy terminates TLS.'
+  return 'Files are served from the host document root via nginx (static; PHP settings ignored — use Apache for mod_php); hosting Caddy terminates TLS.'
 }
 
 function OptionSelect({

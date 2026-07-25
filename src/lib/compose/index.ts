@@ -36,6 +36,21 @@ export {
   readServiceTurbopanelExtension,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
 } from './service-kind'
+export type {
+  HostingPhpApplicability,
+  HostingServiceContext,
+  HostingWebEnvMode,
+} from './hosting-service-context'
+export {
+  hostingDockerBridgeHint,
+  hostingPathPrefixHint,
+  hostingPhpSectionCopy,
+  hostingServiceKindLabel,
+  hostingWebEnvSectionCopy,
+  resolveHostingServiceContext,
+  shouldRevealOptionalHostingFields,
+  traditionalWebEnvKeyForService,
+} from './hosting-service-context'
 export type { ComposeImageRef } from './image-ref'
 export {
   emptyComposeImageRef,

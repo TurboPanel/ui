@@ -48,11 +48,19 @@ import { managedCatalogEntryForCode } from '@/lib/managed-services'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
+  hostingDockerBridgeHint,
+  hostingPathPrefixHint,
+  hostingPhpSectionCopy,
+  hostingServiceKindLabel,
+  hostingWebEnvSectionCopy,
   mergeComposeOverlay,
   normalizeCompose,
   readComposePlacementServerId,
+  resolveHostingServiceContext,
   setComposePlacementServerId,
+  shouldRevealOptionalHostingFields,
   stripComposePlacement,
+  type HostingServiceContext,
 } from '@/lib/compose'
 import { colors, spacing } from '@/lib/theme'
 import { useCan } from '@/lib/query-client'
@@ -591,9 +599,102 @@ function ProxyToggle({
   )
 }
 
+function HostingWebEnvAndPhpFields({
+  serviceContext,
+  editor,
+  onChange,
+}: Readonly<{
+  serviceContext: HostingServiceContext
+  editor: HostingEditorState
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  const phpCopy = hostingPhpSectionCopy(serviceContext)
+  const webEnvCopy = hostingWebEnvSectionCopy(serviceContext)
+  const hasPhpValues =
+    editor.phpVersion.trim().length > 0 ||
+    editor.phpMemoryLimit.trim().length > 0 ||
+    editor.phpMaxExecutionTime.trim().length > 0
+  const hasWebEnvValues = editor.webEnvLines.trim().length > 0
+  const showPhpFields = shouldRevealOptionalHostingFields(
+    phpCopy.showFields,
+    hasPhpValues,
+  )
+  const showWebEnvFields = shouldRevealOptionalHostingFields(
+    webEnvCopy.showFields,
+    hasWebEnvValues,
+  )
+
+  return (
+    <>
+      <Text style={styles.fieldLabel}>{webEnvCopy.title}</Text>
+      <Text style={orgPanelStyles.muted}>{webEnvCopy.hint}</Text>
+      {showWebEnvFields ? (
+        <>
+          {!webEnvCopy.showFields && hasWebEnvValues ? (
+            <Text style={styles.staleFieldWarn}>
+              Stored values are ignored for this service kind — clear them
+              before save if you no longer need them.
+            </Text>
+          ) : null}
+          <TextInput
+            value={editor.webEnvLines}
+            onChangeText={(value) => onChange({ webEnvLines: value })}
+            placeholder={'APP_ENV=production\n# comments allowed'}
+            placeholderTextColor={colors.textDim}
+            style={[styles.hostnamesInput, styles.webEnvInput]}
+            autoCapitalize="none"
+            multiline
+          />
+        </>
+      ) : null}
+
+      <Text style={styles.fieldLabel}>{phpCopy.title}</Text>
+      <Text style={orgPanelStyles.muted}>{phpCopy.hint}</Text>
+      {showPhpFields ? (
+        <>
+          {!phpCopy.showFields && hasPhpValues ? (
+            <Text style={styles.staleFieldWarn}>
+              Stored PHP values are ignored for this engine — clear them
+              before save if you no longer need them.
+            </Text>
+          ) : null}
+          <Text style={styles.fieldLabel}>PHP version</Text>
+          <TextInput
+            value={editor.phpVersion}
+            onChangeText={(value) => onChange({ phpVersion: value })}
+            placeholder="8.4"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+          <Text style={styles.fieldLabel}>Memory limit</Text>
+          <TextInput
+            value={editor.phpMemoryLimit}
+            onChangeText={(value) => onChange({ phpMemoryLimit: value })}
+            placeholder="256M"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            autoCapitalize="none"
+          />
+          <Text style={styles.fieldLabel}>Max execution time (seconds)</Text>
+          <TextInput
+            value={editor.phpMaxExecutionTime}
+            onChangeText={(value) => onChange({ phpMaxExecutionTime: value })}
+            placeholder="30"
+            placeholderTextColor={colors.textDim}
+            style={styles.hostnamesInput}
+            keyboardType="number-pad"
+          />
+        </>
+      ) : null}
+    </>
+  )
+}
+
 function HostingPanelRow({
   orgId,
   composeServiceName,
+  serviceContext,
   hostingId,
   editor,
   tlsOptions,
@@ -605,6 +706,7 @@ function HostingPanelRow({
 }: Readonly<{
   orgId: string
   composeServiceName: string
+  serviceContext: HostingServiceContext
   /** Persisted hosting row id; null until the first successful save. */
   hostingId: string | null
   editor: HostingEditorState
@@ -623,10 +725,18 @@ function HostingPanelRow({
   )
 
   const isHttp = editor.protocol === 'http'
+  const kindLabel = hostingServiceKindLabel(serviceContext)
+  const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
 
   return (
     <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
+      <View style={styles.hostingTitleRow}>
+        <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
+        <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
+      </View>
+      {dockerBridgeHint ? (
+        <Text style={styles.tlsHint}>{dockerBridgeHint}</Text>
+      ) : null}
 
       <Text style={styles.tlsLabel}>Protocol</Text>
       <Text style={styles.tlsHint}>
@@ -811,7 +921,7 @@ function HostingPanelRow({
           />
           <Text style={styles.fieldLabel}>Path prefix</Text>
           <Text style={orgPanelStyles.muted}>
-            Optional. Same hostname on another hosting can use a different prefix (e.g. `/` for static nginx, `/php` for a PHP site).
+            {hostingPathPrefixHint(serviceContext)}
           </Text>
           <TextInput
             value={editor.pathPrefix}
@@ -831,50 +941,10 @@ function HostingPanelRow({
             keyboardType="number-pad"
           />
 
-          <Text style={styles.fieldLabel}>Web environment</Text>
-          <Text style={orgPanelStyles.muted}>
-            Static KEY=VALUE pairs for host-native stacks (traditional-web). Hosting
-            variables marked for runtime merge at deploy; entries here override on
-            collision.
-          </Text>
-          <TextInput
-            value={editor.webEnvLines}
-            onChangeText={(value) => onChange({ webEnvLines: value })}
-            placeholder={'APP_ENV=production\n# comments allowed'}
-            placeholderTextColor={colors.textDim}
-            style={[styles.hostnamesInput, styles.webEnvInput]}
-            autoCapitalize="none"
-            multiline
-          />
-
-          <Text style={styles.fieldLabel}>PHP settings (optional)</Text>
-          <Text style={orgPanelStyles.muted}>
-            Applied on Apache traditional-web deploys via mod_php (version package
-            + memory_limit / max_execution_time). Ignored for nginx static sites.
-          </Text>
-          <TextInput
-            value={editor.phpVersion}
-            onChangeText={(value) => onChange({ phpVersion: value })}
-            placeholder="8.4"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
-            autoCapitalize="none"
-          />
-          <TextInput
-            value={editor.phpMemoryLimit}
-            onChangeText={(value) => onChange({ phpMemoryLimit: value })}
-            placeholder="256M"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
-            autoCapitalize="none"
-          />
-          <TextInput
-            value={editor.phpMaxExecutionTime}
-            onChangeText={(value) => onChange({ phpMaxExecutionTime: value })}
-            placeholder="30"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
-            keyboardType="number-pad"
+          <HostingWebEnvAndPhpFields
+            serviceContext={serviceContext}
+            editor={editor}
+            onChange={onChange}
           />
         </>
       ) : null}
@@ -1252,6 +1322,10 @@ function EnvironmentLoadedPanels({
                   key={composeServiceName}
                   orgId={orgId}
                   composeServiceName={composeServiceName}
+                  serviceContext={resolveHostingServiceContext(
+                    mergedCompose,
+                    composeServiceName,
+                  )}
                   hostingId={hostingId}
                   editor={editor}
                   tlsOptions={tlsLibrary}
@@ -1778,6 +1852,31 @@ const styles = StyleSheet.create({
   },
   deployButtonText: { color: colors.buttonText, fontSize: 14, fontWeight: '700' },
   hostingList: { gap: spacing.sm },
+  hostingTitleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  serviceKindBadge: {
+    color: colors.command,
+    fontSize: 11,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 6,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    overflow: 'hidden',
+  },
+  staleFieldWarn: {
+    color: colors.pending,
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: spacing.xs,
+  },
   hostnamesInput: {
     borderWidth: 1,
     borderColor: colors.border,

@@ -13,6 +13,10 @@ Use this Skill when the task involves **UI structure, visual design decisions, i
 
 Skip it for pure backend logic, API/database design, non-visual performance work, infrastructure/DevOps, or non-visual scripts — unless the task changes how something **looks, feels, moves, or is interacted with**.
 
+### TurboPanel console (this repo)
+
+Project-specific contract for **when/how/what to read** lives in [`AGENTS.md`](../../../AGENTS.md) → **Design system (ui-ux-pro-max)**. Persisted SoT: [`design-system/turbopanel/MASTER.md`](../../../design-system/turbopanel/MASTER.md) + `pages/`. Run search from `.agents/skills/ui-ux-pro-max/scripts/search.py` (not the divergent `.cursor/skills/` mirror). Do not confuse with the marketing site in `~/website` (different Master, light-first). Prefer that AGENTS section over improvising a new design system for this console.
+
 ## Rule Categories by Priority
 
 *Follow priority 1→10 to decide which category to focus on first; use `--domain <Domain>` to query full details. The full rule text for every category lives in `references/quick-reference.md` — read it on demand rather than loading it every time.*
