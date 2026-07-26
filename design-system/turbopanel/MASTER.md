@@ -205,7 +205,6 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 1. Check `design-system/turbopanel/pages/<page>.md` for overrides (page wins).  
 2. Read this MASTER.  
-3. Run supplemental ui-ux-pro-max searches as needed (canonical path only — do not let results override page overrides or this Master):  
+3. Run supplemental ui-ux-pro-max searches as needed (do not let results override page overrides or this Master):  
    `python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain <domain>`  
-   The `.cursor/skills/ui-ux-pro-max/` tree is a **stale** mirror; **do not use it for search**.  
 4. Implement against `src/lib/theme.ts` + existing org shell patterns.

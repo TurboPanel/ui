@@ -25,7 +25,7 @@ import {
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
-const NETWORK_KINDS: NetworkKind[] = ['datacenter', 'server', 'docker', 'vpn']
+const NETWORK_KINDS: NetworkKind[] = ['datacenter', 'server', 'docker']
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -54,8 +54,6 @@ function kindLabel(kind: NetworkKind): string {
       return 'Server'
     case 'docker':
       return 'Docker'
-    case 'vpn':
-      return 'VPN'
   }
 }
 
@@ -230,6 +228,12 @@ type CreateNetworkFormState = Readonly<{
   dockerNetworkName: string
 }>
 
+function createScopeReady(form: CreateNetworkFormState): boolean {
+  if (form.kind === 'datacenter') return form.datacenterId.length > 0
+  if (form.kind === 'server') return form.serverId.length > 0
+  return true
+}
+
 function buildCreateNetworkBody(form: CreateNetworkFormState) {
   const body: Parameters<typeof createNetwork>[0] = {
     organizationId: form.organizationId,
@@ -237,10 +241,7 @@ function buildCreateNetworkBody(form: CreateNetworkFormState) {
     displayName: form.displayName.trim() || undefined,
     cidr: form.cidr.trim() || undefined,
   }
-  if (
-    (form.kind === 'server' || form.kind === 'docker') &&
-    form.serverId
-  ) {
+  if (form.kind === 'server' && form.serverId) {
     body.serverId = form.serverId
   }
   if (form.kind === 'datacenter' && form.datacenterId) {
@@ -301,17 +302,11 @@ function CreateNetworkKindFields({
   if (kind !== 'docker') return null
   return (
     <>
-      <Text style={styles.fieldLabel}>Server</Text>
-      <Text style={orgPanelStyles.muted}>
-        External Docker networks are registered per server (or org-wide when no
-        server is selected). Compose must use the same name in networks.*.name.
-      </Text>
-      <ServerPickerList
-        servers={servers}
-        selectedServerId={serverId}
-        onSelect={onServerIdChange}
-      />
       <Text style={styles.fieldLabel}>Docker network name</Text>
+      <Text style={orgPanelStyles.muted}>
+        Org-scoped external Docker network. Compose must use the same name in
+        networks.*.name.
+      </Text>
       <TextInput
         value={dockerNetworkName}
         onChangeText={onDockerNetworkNameChange}
@@ -352,6 +347,18 @@ function CreateNetworkPanel({
     setDatacenterId('')
     setDockerNetworkName('')
   }
+
+  const form: CreateNetworkFormState = {
+    organizationId: orgId,
+    kind,
+    displayName,
+    cidr,
+    serverId,
+    datacenterId,
+    dockerNetworkName,
+  }
+  const scopeReady = createScopeReady(form)
+  const createDisabled = creating || !scopeReady
 
   return (
     <SectionPanel title="Create network" hint="Manage-gated">
@@ -398,20 +405,12 @@ function CreateNetworkPanel({
       <Pressable
         style={[
           orgPanelStyles.toolbarBtnPrimary,
-          creating && styles.buttonDisabled,
+          createDisabled && styles.buttonDisabled,
           webPointer,
         ]}
-        disabled={creating}
+        disabled={createDisabled}
         onPress={() => {
-          onCreate({
-            organizationId: orgId,
-            kind,
-            displayName,
-            cidr,
-            serverId,
-            datacenterId,
-            dockerNetworkName,
-          })
+          onCreate(form)
             .then((created) => {
               if (created) resetForm()
             })
@@ -581,7 +580,8 @@ export function NetworksOverviewSection({
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Networks</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Organization networks across datacenters, servers, Docker, and VPN meshes.
+        Organization networks across datacenters, servers, and Docker. Manage VPN
+        meshes on the VPNs page.
       </Text>
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}

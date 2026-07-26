@@ -17,6 +17,7 @@ import {
   fetchIps,
   fetchNetworks,
   fetchOrgServers,
+  fetchVpns,
   isForbiddenError,
   updateIp,
   type DatacenterRecord,
@@ -25,11 +26,12 @@ import {
   type IpScope,
   type NetworkRecord,
   type OrgServerRecord,
+  type VpnRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
-const SCOPES: IpScope[] = ['public', 'datacenter', 'loopback']
+const SCOPES: IpScope[] = ['public', 'datacenter', 'loopback', 'vpn']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
 /** Simple client pre-check; server `ip-address.ts` is authoritative. */
@@ -57,11 +59,168 @@ function FilterChip({
   )
 }
 
+function vpnTitle(vpn: VpnRecord): string {
+  return vpn.displayName?.trim() || 'Unnamed VPN'
+}
+
+function buildIpListFilters(
+  scopeFilter: IpScope | 'all',
+  allocationFilter: IpAllocation | 'all',
+  datacenterFilter: string,
+): {
+  scope?: IpScope
+  allocation?: IpAllocation
+  datacenterId?: string
+} {
+  const filters: {
+    scope?: IpScope
+    allocation?: IpAllocation
+    datacenterId?: string
+  } = {}
+  if (scopeFilter !== 'all') filters.scope = scopeFilter
+  if (allocationFilter !== 'all') filters.allocation = allocationFilter
+  if (datacenterFilter) filters.datacenterId = datacenterFilter
+  return filters
+}
+
+function buildCreateIpBody(input: Readonly<{
+  address: string
+  allocation: IpAllocation
+  scope: IpScope
+  displayName: string
+  createVpnId: string
+  createDatacenterId: string
+  createNetworkId: string
+  createServerId: string
+}>) {
+  const body: Parameters<typeof createIp>[0] = {
+    address: input.address,
+    allocation: input.allocation,
+    scope: input.scope,
+    displayName: input.displayName.trim() || undefined,
+  }
+  if (input.scope === 'vpn') {
+    body.vpnId = input.createVpnId
+    return body
+  }
+  if (input.createDatacenterId) body.datacenterId = input.createDatacenterId
+  if (input.createNetworkId) body.networkId = input.createNetworkId
+  if (input.createServerId) body.serverId = input.createServerId
+  return body
+}
+
+function CreateIpScopeFields({
+  scope,
+  vpns,
+  datacenters,
+  networks,
+  servers,
+  createVpnId,
+  createDatacenterId,
+  createNetworkId,
+  createServerId,
+  onVpnIdChange,
+  onDatacenterIdChange,
+  onNetworkIdChange,
+  onServerIdChange,
+}: Readonly<{
+  scope: IpScope
+  vpns: VpnRecord[]
+  datacenters: DatacenterRecord[]
+  networks: NetworkRecord[]
+  servers: OrgServerRecord[]
+  createVpnId: string
+  createDatacenterId: string
+  createNetworkId: string
+  createServerId: string
+  onVpnIdChange: (id: string) => void
+  onDatacenterIdChange: (id: string) => void
+  onNetworkIdChange: (id: string) => void
+  onServerIdChange: (id: string) => void
+}>) {
+  if (scope === 'vpn') {
+    return (
+      <>
+        <Text style={styles.fieldLabel}>VPN</Text>
+        <View style={styles.chipRow}>
+          {vpns.length === 0 ? (
+            <Text style={orgPanelStyles.muted}>
+              Create a VPN mesh first on the VPNs page.
+            </Text>
+          ) : (
+            vpns.map((vpn) => (
+              <FilterChip
+                key={vpn.id}
+                label={vpnTitle(vpn)}
+                active={createVpnId === vpn.id}
+                onPress={() => onVpnIdChange(vpn.id)}
+              />
+            ))
+          )}
+        </View>
+      </>
+    )
+  }
+  return (
+    <>
+      <Text style={styles.fieldLabel}>Datacenter (optional)</Text>
+      <View style={styles.chipRow}>
+        <FilterChip
+          label="None"
+          active={createDatacenterId === ''}
+          onPress={() => onDatacenterIdChange('')}
+        />
+        {datacenters.map((row) => (
+          <FilterChip
+            key={row.id}
+            label={row.displayName?.trim() || row.id}
+            active={createDatacenterId === row.id}
+            onPress={() => onDatacenterIdChange(row.id)}
+          />
+        ))}
+      </View>
+      <Text style={styles.fieldLabel}>Network (optional)</Text>
+      <View style={styles.chipRow}>
+        <FilterChip
+          label="None"
+          active={createNetworkId === ''}
+          onPress={() => onNetworkIdChange('')}
+        />
+        {networks.map((row) => (
+          <FilterChip
+            key={row.id}
+            label={row.displayName?.trim() || row.cidr || row.id}
+            active={createNetworkId === row.id}
+            onPress={() => onNetworkIdChange(row.id)}
+          />
+        ))}
+      </View>
+      <Text style={styles.fieldLabel}>Server (optional)</Text>
+      <View style={styles.chipRow}>
+        <FilterChip
+          label="None"
+          active={createServerId === ''}
+          onPress={() => onServerIdChange('')}
+        />
+        {servers.map((server) => (
+          <FilterChip
+            key={server.id}
+            label={serverTitle(server)}
+            active={createServerId === server.id}
+            onPress={() => onServerIdChange(server.id)}
+          />
+        ))}
+      </View>
+    </>
+  )
+}
+
 export function IpListRow({
   ip,
   serverLabel,
   networkLabel,
   datacenterLabel,
+  vpnLabel,
   isDeleting,
   onDelete,
   showDelete = true,
@@ -72,6 +231,7 @@ export function IpListRow({
   serverLabel?: string | null
   networkLabel?: string | null
   datacenterLabel?: string | null
+  vpnLabel?: string | null
   isDeleting?: boolean
   onDelete?: (ipId: string) => void
   showDelete?: boolean
@@ -126,6 +286,18 @@ export function IpListRow({
         <Text style={orgPanelStyles.detailLabel}>Datacenter: </Text>
         {datacenterLabel ?? '—'}
       </Text>
+      {ip.vpnId ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>VPN: </Text>
+          {vpnLabel ?? '—'}
+        </Text>
+      ) : null}
+      {ip.scope === 'vpn' ? (
+        <Text style={orgPanelStyles.muted}>
+          Mesh-managed address — override or remove the peer on the VPN detail
+          page. Released when the peer is removed.
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -269,6 +441,7 @@ export function IpsOverviewSection({
   const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [networks, setNetworks] = useState<NetworkRecord[]>([])
   const [datacenters, setDatacenters] = useState<DatacenterRecord[]>([])
+  const [vpns, setVpns] = useState<VpnRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scopeFilter, setScopeFilter] = useState<IpScope | 'all'>('all')
@@ -285,6 +458,7 @@ export function IpsOverviewSection({
   const [createDatacenterId, setCreateDatacenterId] = useState('')
   const [createNetworkId, setCreateNetworkId] = useState('')
   const [createServerId, setCreateServerId] = useState('')
+  const [createVpnId, setCreateVpnId] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAddress, setEditAddress] = useState('')
   const [editDisplayName, setEditDisplayName] = useState('')
@@ -299,26 +473,29 @@ export function IpsOverviewSection({
     setLoading(true)
     setError(null)
     try {
-      const filters: {
-        scope?: IpScope
-        allocation?: IpAllocation
-        datacenterId?: string
-      } = {}
-      if (scopeFilter !== 'all') filters.scope = scopeFilter
-      if (allocationFilter !== 'all') filters.allocation = allocationFilter
-      if (datacenterFilter) filters.datacenterId = datacenterFilter
-
-      const [ipsResult, serversResult, networksResult, datacentersResult] =
-        await Promise.all([
-          fetchIps(filters),
-          fetchOrgServers(),
-          fetchNetworks(),
-          fetchDatacenters(),
-        ])
+      const filters = buildIpListFilters(
+        scopeFilter,
+        allocationFilter,
+        datacenterFilter,
+      )
+      const [
+        ipsResult,
+        serversResult,
+        networksResult,
+        datacentersResult,
+        vpnsResult,
+      ] = await Promise.all([
+        fetchIps(filters),
+        fetchOrgServers(),
+        fetchNetworks(),
+        fetchDatacenters(),
+        fetchVpns(),
+      ])
       setIps(ipsResult.ips)
       setServers(serversResult.servers)
       setNetworks(networksResult.networks)
       setDatacenters(datacentersResult.datacenters)
+      setVpns(vpnsResult.vpns)
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
@@ -359,6 +536,32 @@ export function IpsOverviewSection({
     return map
   }, [datacenters])
 
+  const vpnById = useMemo(() => {
+    const map = new Map<string, VpnRecord>()
+    for (const vpn of vpns) map.set(vpn.id, vpn)
+    return map
+  }, [vpns])
+
+  const handleCreateScopeChange = (next: IpScope) => {
+    setScope(next)
+    if (next === 'vpn') {
+      setCreateDatacenterId('')
+      setCreateNetworkId('')
+      setCreateServerId('')
+      return
+    }
+    setCreateVpnId('')
+  }
+
+  const resetCreateForm = () => {
+    setAddress('')
+    setDisplayName('')
+    setCreateDatacenterId('')
+    setCreateNetworkId('')
+    setCreateServerId('')
+    setCreateVpnId('')
+  }
+
   const handleCreate = async () => {
     if (!canManage) return
     const trimmed = address.trim()
@@ -366,23 +569,26 @@ export function IpsOverviewSection({
       setError('Enter a valid IPv4/IPv6 address or CIDR.')
       return
     }
+    if (scope === 'vpn' && !createVpnId) {
+      setError('Select a VPN for vpn-scoped addresses.')
+      return
+    }
     setCreating(true)
     setError(null)
     try {
-      await createIp({
-        address: trimmed,
-        allocation,
-        scope,
-        displayName: displayName.trim() || undefined,
-        ...(createDatacenterId ? { datacenterId: createDatacenterId } : {}),
-        ...(createNetworkId ? { networkId: createNetworkId } : {}),
-        ...(createServerId ? { serverId: createServerId } : {}),
-      })
-      setAddress('')
-      setDisplayName('')
-      setCreateDatacenterId('')
-      setCreateNetworkId('')
-      setCreateServerId('')
+      await createIp(
+        buildCreateIpBody({
+          address: trimmed,
+          allocation,
+          scope,
+          displayName,
+          createVpnId,
+          createDatacenterId,
+          createNetworkId,
+          createServerId,
+        }),
+      )
+      resetCreateForm()
       await load()
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -397,6 +603,8 @@ export function IpsOverviewSection({
 
   const handleDelete = async (ipId: string) => {
     if (!canManage) return
+    const target = ips.find((row) => row.id === ipId)
+    if (target?.scope === 'vpn') return
     setDeleting((current) => new Set(current).add(ipId))
     setError(null)
     try {
@@ -421,6 +629,7 @@ export function IpsOverviewSection({
   }
 
   const beginEdit = (ip: IpRecord) => {
+    if (ip.scope === 'vpn') return
     setEditingId(ip.id)
     setEditAddress(ip.address)
     setEditDisplayName(ip.displayName ?? '')
@@ -559,65 +768,33 @@ export function IpsOverviewSection({
                 key={value}
                 label={value}
                 active={scope === value}
-                onPress={() => setScope(value)}
+                onPress={() => handleCreateScopeChange(value)}
               />
             ))}
           </View>
-          <Text style={styles.fieldLabel}>Datacenter (optional)</Text>
-          <View style={styles.chipRow}>
-            <FilterChip
-              label="None"
-              active={createDatacenterId === ''}
-              onPress={() => setCreateDatacenterId('')}
-            />
-            {datacenters.map((row) => (
-              <FilterChip
-                key={row.id}
-                label={row.displayName?.trim() || row.id}
-                active={createDatacenterId === row.id}
-                onPress={() => setCreateDatacenterId(row.id)}
-              />
-            ))}
-          </View>
-          <Text style={styles.fieldLabel}>Network (optional)</Text>
-          <View style={styles.chipRow}>
-            <FilterChip
-              label="None"
-              active={createNetworkId === ''}
-              onPress={() => setCreateNetworkId('')}
-            />
-            {networks.map((row) => (
-              <FilterChip
-                key={row.id}
-                label={row.displayName?.trim() || row.cidr || row.id}
-                active={createNetworkId === row.id}
-                onPress={() => setCreateNetworkId(row.id)}
-              />
-            ))}
-          </View>
-          <Text style={styles.fieldLabel}>Server (optional)</Text>
-          <View style={styles.chipRow}>
-            <FilterChip
-              label="None"
-              active={createServerId === ''}
-              onPress={() => setCreateServerId('')}
-            />
-            {servers.map((server) => (
-              <FilterChip
-                key={server.id}
-                label={serverTitle(server)}
-                active={createServerId === server.id}
-                onPress={() => setCreateServerId(server.id)}
-              />
-            ))}
-          </View>
+          <CreateIpScopeFields
+            scope={scope}
+            vpns={vpns}
+            datacenters={datacenters}
+            networks={networks}
+            servers={servers}
+            createVpnId={createVpnId}
+            createDatacenterId={createDatacenterId}
+            createNetworkId={createNetworkId}
+            createServerId={createServerId}
+            onVpnIdChange={setCreateVpnId}
+            onDatacenterIdChange={setCreateDatacenterId}
+            onNetworkIdChange={setCreateNetworkId}
+            onServerIdChange={setCreateServerId}
+          />
           <Pressable
             style={[
               orgPanelStyles.toolbarBtnPrimary,
-              creating && styles.buttonDisabled,
+              (creating || (scope === 'vpn' && !createVpnId)) &&
+                styles.buttonDisabled,
               webPointer,
             ]}
-            disabled={creating}
+            disabled={creating || (scope === 'vpn' && !createVpnId)}
             onPress={() => {
               handleCreate().catch(() => {
                 // Errors are surfaced via error state.
@@ -650,6 +827,7 @@ export function IpsOverviewSection({
             const datacenter = ip.datacenterId
               ? datacenterById.get(ip.datacenterId)
               : null
+            const vpn = ip.vpnId ? vpnById.get(ip.vpnId) : null
             if (editingId === ip.id) {
               return (
                 <IpEditPanel
@@ -678,6 +856,9 @@ export function IpsOverviewSection({
                 />
               )
             }
+            // Mesh overlay rows are managed via VPN peer override/remove —
+            // not the flat IP edit/delete actions.
+            const isMeshManaged = ip.scope === 'vpn'
             return (
               <IpListRow
                 key={ip.id}
@@ -687,9 +868,10 @@ export function IpsOverviewSection({
                   network?.displayName?.trim() || network?.cidr || null
                 }
                 datacenterLabel={datacenter?.displayName?.trim() || null}
+                vpnLabel={vpn ? vpnTitle(vpn) : null}
                 isDeleting={deleting.has(ip.id)}
-                showDelete={canManage}
-                showEdit={canManage}
+                showDelete={canManage && !isMeshManaged}
+                showEdit={canManage && !isMeshManaged}
                 onEdit={() => beginEdit(ip)}
                 onDelete={(id) => {
                   handleDelete(id).catch(() => {

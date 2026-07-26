@@ -211,14 +211,15 @@ export function ServiceSettingsPanel({
       if (!resolved) {
         const created = await createService(environmentId, {
           displayName: composeServiceName,
-          metadata: { composeServiceName },
+          composeServiceName,
         })
         resolved = {
           id: created.id,
           displayName: composeServiceName,
           description: null,
           environmentId,
-          metadata: { composeServiceName },
+          composeServiceName,
+          metadata: null,
           options: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

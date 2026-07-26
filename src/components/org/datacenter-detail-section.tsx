@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { NetworkListItem } from '@/components/org/networks-overview-section'
@@ -12,7 +17,9 @@ import {
   fetchIps,
   fetchNetworks,
   fetchOrgServers,
+  fetchPeers,
   fetchTimezones,
+  fetchVpns,
   isForbiddenError,
   updateDatacenter,
   updateServer,
@@ -20,9 +27,15 @@ import {
   type IpRecord,
   type NetworkRecord,
   type OrgServerRecord,
+  type PeerRecord,
+  type VpnRecord,
 } from '@/lib/instance-api'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import {
+  overlayAddressForPeer,
+  resolvePrimaryGatewayByDatacenter,
+} from '@/lib/vpn-mesh'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -165,6 +178,176 @@ function DatacenterNetworksPanel({
             network={network}
             showDelete={false}
           />
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
+type MeshGatewayRow = {
+  peer: PeerRecord
+  vpn: VpnRecord
+  serverLabel: string
+  overlayAddress: string | null
+  isPrimary: boolean
+}
+
+function collectSiteCidrs(networks: readonly NetworkRecord[]): string[] {
+  const siteCidrs: string[] = []
+  for (const network of networks) {
+    if (network.kind !== 'datacenter') continue
+    const cidr = network.cidr?.trim()
+    if (cidr) siteCidrs.push(cidr)
+  }
+  siteCidrs.sort((a, b) => a.localeCompare(b))
+  return siteCidrs
+}
+
+function collectPeersFromQueries(
+  peerQueries: ReadonlyArray<{ data?: { peers: PeerRecord[] } }>,
+): PeerRecord[] {
+  const allPeers: PeerRecord[] = []
+  for (const peerQuery of peerQueries) {
+    const peers = peerQuery.data?.peers
+    if (peers) allPeers.push(...peers)
+  }
+  return allPeers
+}
+
+function groupPeersByVpnId(
+  peers: readonly PeerRecord[],
+): Map<string, PeerRecord[]> {
+  const byVpn = new Map<string, PeerRecord[]>()
+  for (const peer of peers) {
+    const list = byVpn.get(peer.vpnId) ?? []
+    list.push(peer)
+    byVpn.set(peer.vpnId, list)
+  }
+  return byVpn
+}
+
+/** Primary gateway peer IDs resolved per VPN (mirrors apply-prep for one mesh). */
+function collectPrimaryPeerIds(
+  peers: readonly PeerRecord[],
+  serverById: ReadonlyMap<
+    string,
+    { connected: boolean; datacenterId: string | null }
+  >,
+): Set<string> {
+  const primaryPeerIds = new Set<string>()
+  for (const group of groupPeersByVpnId(peers).values()) {
+    for (const peerId of resolvePrimaryGatewayByDatacenter(
+      group,
+      serverById,
+    ).values()) {
+      primaryPeerIds.add(peerId)
+    }
+  }
+  return primaryPeerIds
+}
+
+function buildMeshGatewayRows(input: {
+  peers: readonly PeerRecord[]
+  servers: readonly OrgServerRecord[]
+  vpnById: ReadonlyMap<string, VpnRecord>
+  ipById: ReadonlyMap<string, IpRecord>
+  datacenterId: string
+  primaryPeerIds: ReadonlySet<string>
+}): MeshGatewayRow[] {
+  const rows: MeshGatewayRow[] = []
+  for (const peer of input.peers) {
+    if (peer.role !== 'gateway') continue
+    const server = input.servers.find((row) => row.id === peer.serverId)
+    if (!server) continue
+    if (server.datacenterId !== input.datacenterId) continue
+    const vpn = input.vpnById.get(peer.vpnId)
+    if (!vpn) continue
+    rows.push({
+      peer,
+      vpn,
+      serverLabel: serverTitle(server),
+      overlayAddress: overlayAddressForPeer(peer, input.ipById),
+      isPrimary: input.primaryPeerIds.has(peer.id),
+    })
+  }
+  rows.sort((a, b) => {
+    const nameCmp = (a.vpn.displayName ?? a.vpn.id).localeCompare(
+      b.vpn.displayName ?? b.vpn.id,
+    )
+    if (nameCmp !== 0) return nameCmp
+    return a.serverLabel.localeCompare(b.serverLabel)
+  })
+  return rows
+}
+
+function MeshGatewaysPanel({
+  rows,
+  siteCidrs,
+  loading,
+}: Readonly<{
+  rows: MeshGatewayRow[]
+  siteCidrs: string[]
+  loading: boolean
+}>) {
+  const missingSiteCidr = rows.length > 0 && siteCidrs.length === 0
+
+  return (
+    <SectionPanel
+      title="Mesh gateways"
+      hint={`${rows.length} gateway(s) at this site`}
+    >
+      {loading && rows.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>Loading mesh gateways…</Text>
+      ) : null}
+      {!loading && rows.length === 0 ? (
+        <View style={orgPanelStyles.statePanel}>
+          <Text style={orgPanelStyles.muted}>
+            No mesh gateway here — this site is not reachable over the VPN.
+          </Text>
+        </View>
+      ) : null}
+
+      {siteCidrs.length > 0 ? (
+        <View style={styles.siteCidrBlock}>
+          <Text style={orgPanelStyles.detailTitle}>Advertised site CIDRs</Text>
+          {siteCidrs.map((cidr) => (
+            <Text key={cidr} style={orgPanelStyles.detailLine} selectable>
+              {cidr}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
+      {missingSiteCidr ? (
+        <View style={orgPanelStyles.calloutWarning}>
+          <Text style={orgPanelStyles.calloutWarningText}>
+            This site has a mesh gateway but no datacenter network CIDR.
+            Apply will fail until a datacenter-scoped network advertises the
+            site prefix (gateway_datacenter_cidr_required).
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.list}>
+        {rows.map((row) => (
+          <View key={row.peer.id} style={orgPanelStyles.detailCard}>
+            <View style={styles.gatewayTitleRow}>
+              <Text style={orgPanelStyles.detailTitle}>
+                {row.vpn.displayName?.trim() || 'Unnamed mesh'}
+              </Text>
+              {row.isPrimary ? (
+                <Text style={styles.primaryBadge}>Primary</Text>
+              ) : null}
+            </View>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Gateway: </Text>
+              {row.serverLabel}
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Overlay: </Text>
+              {row.overlayAddress ?? '—'}
+            </Text>
+          </View>
         ))}
       </View>
     </SectionPanel>
@@ -334,11 +517,33 @@ export function DatacenterDetailSection({
     queryFn: fetchTimezones,
     staleTime: Number.POSITIVE_INFINITY,
   })
+  const vpnsQuery = useQuery({
+    queryKey: ['org', orgId, 'vpns'],
+    queryFn: fetchVpns,
+  })
+  const vpnIpsQuery = useQuery({
+    queryKey: ['org', orgId, 'ips', { scope: 'vpn' }],
+    queryFn: () => fetchIps({ scope: 'vpn' }),
+  })
+  const vpns = vpnsQuery.data?.vpns ?? []
+  const peerQueries = useQueries({
+    queries: vpns.map((vpn) => ({
+      queryKey: ['org', orgId, 'vpn', vpn.id, 'peers'],
+      queryFn: () => fetchPeers(vpn.id),
+      enabled: vpnsQuery.isSuccess,
+    })),
+  })
+
+  const peerQueryError =
+    peerQueries.find((query) => query.error)?.error ?? null
 
   useForbiddenRecovery(datacenterQuery.error)
   useForbiddenRecovery(serversQuery.error)
   useForbiddenRecovery(networksQuery.error)
   useForbiddenRecovery(ipsQuery.error)
+  useForbiddenRecovery(vpnsQuery.error)
+  useForbiddenRecovery(vpnIpsQuery.error)
+  useForbiddenRecovery(peerQueryError)
 
   const invalidateAll = async () => {
     await Promise.all([
@@ -420,6 +625,36 @@ export function DatacenterDetailSection({
   const unassignedServers = servers.filter((server) => !server.datacenterId)
   const networks = networksQuery.data?.networks ?? []
   const ips = ipsQuery.data?.ips ?? []
+  const siteCidrs = collectSiteCidrs(networks)
+
+  const serverById = new Map(
+    servers.map((server) => [
+      server.id,
+      {
+        connected: server.connected,
+        datacenterId: server.datacenterId,
+      },
+    ]),
+  )
+  const ipById = new Map(
+    (vpnIpsQuery.data?.ips ?? []).map((ip) => [ip.id, ip]),
+  )
+  const vpnById = new Map(vpns.map((vpn) => [vpn.id, vpn]))
+  const allPeers = collectPeersFromQueries(peerQueries)
+  const primaryPeerIds = collectPrimaryPeerIds(allPeers, serverById)
+  const meshGatewayRows = buildMeshGatewayRows({
+    peers: allPeers,
+    servers,
+    vpnById,
+    ipById,
+    datacenterId,
+    primaryPeerIds,
+  })
+
+  const meshGatewaysLoading =
+    vpnsQuery.isLoading ||
+    vpnIpsQuery.isLoading ||
+    peerQueries.some((query) => query.isLoading)
 
   // draftTimezone uses undefined = "no draft"; null = explicit "None".
   let effectiveTimezone = datacenter?.options?.defaultServerTimezone ?? null
@@ -469,6 +704,12 @@ export function DatacenterDetailSection({
         loading={networksQuery.isLoading}
       />
 
+      <MeshGatewaysPanel
+        rows={meshGatewayRows}
+        siteCidrs={siteCidrs}
+        loading={meshGatewaysLoading}
+      />
+
       <DatacenterIpPoolPanel
         ips={ips}
         servers={servers}
@@ -502,6 +743,24 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 8,
+  },
+  siteCidrBlock: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  gatewayTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  primaryBadge: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   assignBlock: {
     marginTop: spacing.md,

@@ -1,0 +1,43 @@
+---
+description: How to use the ui-ux-pro-max skill for TurboPanel console visual work
+alwaysApply: true
+---
+
+# UI/UX skill (product console)
+
+This repo is the **signed-in OLED ops console** (Tamagui / Expo). Visual work must follow **ui-ux-pro-max** plus the persisted design system — never invent a parallel look or copy `~/website` marketing chrome.
+
+## Canonical skill path (only this one)
+
+| What | Path |
+| --- | --- |
+| Skill | `.agents/skills/ui-ux-pro-max/SKILL.md` |
+| Search CLI | `.agents/skills/ui-ux-pro-max/scripts/search.py` |
+| Master | `design-system/turbopanel/MASTER.md` |
+| Page overrides | `design-system/turbopanel/pages/<page>.md` (wins over Master) |
+| Tokens | `src/lib/theme.ts` |
+
+Do **not** install or search a second copy under `.cursor/skills/ui-ux-pro-max/`. Expo/platform skills live under `.agents/skills/`; unrelated design toolkit skills under `.cursor/skills/` are not a substitute for this workflow.
+
+## When to use
+
+**Before** new pages/routes, redesigns, chrome/components, charts, nav, motion, or UX/a11y reviews. Skip only for pure non-visual work (API/types/fetch with no layout change).
+
+## Mandatory first steps
+
+From the **ui repo root**:
+
+1. Read `.agents/skills/ui-ux-pro-max/SKILL.md`
+2. Search (prefer `python3`):
+
+```bash
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py \
+  "devops control plane dark dense dashboard" --design-system -p "TurboPanel"
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain style
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack react-native
+```
+
+3. Read `design-system/turbopanel/MASTER.md`, then `pages/<page>.md` if it exists
+4. Reuse `org-panel-styles.ts` / neighboring org components; implement with `theme.ts` tokens only
+
+Full contract: `AGENTS.md` → **Design system (ui-ux-pro-max)**. Do not `--persist --force` Master unless an explicit redesign was requested.

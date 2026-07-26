@@ -175,32 +175,8 @@ export function mergeComposeOverlay(
 /** Mirror of instance `src/lib/compose/placement.ts`. */
 export const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
 
-/** Compose Editor | Visual tab preference lives in `presentation.editorView` only. */
-export type { ComposeEditorView } from './types'
-
 export type ComposeTurbopanelExtension = {
   placement?: { server_id?: string }
-}
-
-function withTurbopanelExtension(
-  document: ComposeDocument,
-  extension: Record<string, unknown>,
-): ComposeDocument {
-  const normalized = normalizeCompose(document)
-  const data = { ...normalized.data }
-  const keyOrder = [...normalized.presentation.keyOrder]
-  data[TURBOPANEL_EXTENSION_KEY] = extension
-  if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
-    keyOrder.push(TURBOPANEL_EXTENSION_KEY)
-  }
-  return {
-    version: 1,
-    data,
-    presentation: buildPresentation(normalized.presentation, {
-      keyOrder,
-      comments: { ...normalized.presentation.comments },
-    }),
-  }
 }
 
 function stripTurbopanelField(
@@ -240,42 +216,11 @@ function stripTurbopanelField(
   }
 }
 
-export function readComposePlacementServerId(
-  document: ComposeDocument,
-): string | null {
-  const extension = document.data[TURBOPANEL_EXTENSION_KEY]
-  if (!isRecord(extension)) return null
-  const placement = extension.placement
-  if (!isRecord(placement)) return null
-  const serverId = placement.server_id
-  if (typeof serverId !== 'string') return null
-  const trimmed = serverId.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-export function setComposePlacementServerId(
-  document: ComposeDocument,
-  serverId: string | null,
-): ComposeDocument {
-  const normalized = normalizeCompose(document)
-
-  if (!serverId) {
-    return stripComposePlacement(normalized)
-  }
-
-  const existing = isRecord(normalized.data[TURBOPANEL_EXTENSION_KEY])
-    ? normalized.data[TURBOPANEL_EXTENSION_KEY]
-    : {}
-  const existingPlacement = isRecord(existing.placement) ? existing.placement : {}
-  return withTurbopanelExtension(normalized, {
-    ...existing,
-    placement: { ...existingPlacement, server_id: serverId },
-  })
-}
-
 /**
  * Compose document for editor/preview UI: omit `x-turbopanel` placement.
- * Placement is managed via the environment Server placement control, not YAML.
+ * Placement lives on `EnvironmentRecord.serverId`, never in compose. This is
+ * an input-sanitization path only — it strips any placement a client might
+ * still submit embedded in compose before it reaches the editor or save path.
  * Preserves any unrelated `x-turbopanel` fields.
  */
 export function stripComposePlacement(document: ComposeDocument): ComposeDocument {
@@ -310,31 +255,13 @@ export function setComposeEditorView(
   }
 }
 
-/** Drop legacy `x-turbopanel.view` from compose data when present in old saves. */
-export function stripComposeEditorView(document: ComposeDocument): ComposeDocument {
-  return normalizeCompose(document)
-}
-
 /**
- * Fields managed outside the YAML textarea: placement (Server control) and
- * editor view (Editor/Visual tabs).
+ * Fields managed outside the YAML textarea: placement (Server control).
+ * Editor view lives in `presentation.editorView` and is not part of compose YAML.
  */
 export function stripComposeManagedExtension(
   document: ComposeDocument,
 ): ComposeDocument {
-  return stripComposeEditorView(stripComposePlacement(document))
+  return stripComposePlacement(document)
 }
 
-/**
- * Re-apply placement from `source` onto `edited` so environment compose saves
- * do not wipe a pin managed outside the YAML editor.
- */
-export function preserveComposePlacement(
-  edited: ComposeDocument,
-  source: unknown,
-): ComposeDocument {
-  return setComposePlacementServerId(
-    edited,
-    readComposePlacementServerId(normalizeCompose(source)),
-  )
-}

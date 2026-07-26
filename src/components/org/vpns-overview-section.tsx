@@ -8,18 +8,23 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
   createVpn,
   deleteVpn,
-  fetchNetworks,
+  fetchPeers,
   fetchVpns,
   isForbiddenError,
   updateVpn,
-  type NetworkRecord,
+  VPN_CIDR_IN_USE_ERROR,
   type VpnRecord,
 } from '@/lib/instance-api'
 import { vpnDetailHref } from '@/lib/org-navigation'
@@ -30,18 +35,21 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
 }
 
+function friendlyCreateError(err: unknown): string {
+  const message = errorMessage(err, 'Failed to create VPN')
+  if (message.includes(VPN_CIDR_IN_USE_ERROR)) {
+    return 'Another mesh already uses that CIDR.'
+  }
+  return message
+}
+
 function vpnTitle(vpn: VpnRecord): string {
   return vpn.displayName?.trim() || 'Unnamed VPN'
 }
 
-function networkLabel(network: NetworkRecord | undefined): string {
-  if (!network) return '—'
-  return network.displayName?.trim() || network.cidr?.trim() || network.id
-}
-
 function VpnCard({
   vpn,
-  networkName,
+  peerCountLabel,
   canManage,
   renaming,
   confirmDelete,
@@ -52,7 +60,7 @@ function VpnCard({
   onCancelDelete,
 }: Readonly<{
   vpn: VpnRecord
-  networkName: string
+  peerCountLabel: string
   canManage: boolean
   renaming: boolean
   confirmDelete: boolean
@@ -71,8 +79,12 @@ function VpnCard({
     >
       <Text style={orgPanelStyles.detailTitle}>{vpnTitle(vpn)}</Text>
       <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Network: </Text>
-        {networkName}
+        <Text style={orgPanelStyles.detailLabel}>CIDR: </Text>
+        <Text style={styles.mono}>{vpn.cidr}</Text>
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Peers · gateways: </Text>
+        {peerCountLabel}
       </Text>
       <Text style={orgPanelStyles.muted}>Open to manage peers and apply.</Text>
 
@@ -152,35 +164,6 @@ function VpnCard({
   )
 }
 
-function NetworkChip({
-  label,
-  active,
-  onPress,
-  disabled,
-}: Readonly<{
-  label: string
-  active: boolean
-  onPress: () => void
-  disabled?: boolean
-}>) {
-  return (
-    <Pressable
-      style={[
-        styles.chip,
-        active && styles.chipActive,
-        disabled && styles.buttonDisabled,
-        webPointer,
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
 export function VpnsOverviewSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
@@ -190,7 +173,6 @@ export function VpnsOverviewSection({
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState('')
-  const [networkId, setNetworkId] = useState<string | null>(null)
   const [meshCidr, setMeshCidr] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -199,37 +181,56 @@ export function VpnsOverviewSection({
     queryKey: ['org', orgId, 'vpns'],
     queryFn: fetchVpns,
   })
-  const networksQuery = useQuery({
-    queryKey: ['org', orgId, 'networks', 'vpn'],
-    queryFn: () => fetchNetworks({ kind: 'vpn' }),
-  })
   useForbiddenRecovery(vpnsQuery.error)
-  useForbiddenRecovery(networksQuery.error)
+
+  const vpns = vpnsQuery.data?.vpns ?? []
+
+  const peerQueries = useQueries({
+    queries: vpns.map((vpn) => ({
+      queryKey: ['org', orgId, 'vpns', vpn.id, 'peers'],
+      queryFn: () => fetchPeers(vpn.id),
+      enabled: vpns.length > 0,
+    })),
+  })
+
+  const peerCountByVpnId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (let i = 0; i < vpns.length; i++) {
+      const vpn = vpns[i]
+      const query = peerQueries[i]
+      if (!vpn) continue
+      if (!query || query.isLoading || query.isPending) {
+        map.set(vpn.id, '—')
+        continue
+      }
+      const peers = query.data?.peers ?? []
+      const gateways = peers.filter((p) => p.role === 'gateway').length
+      map.set(vpn.id, `${peers.length} · ${gateways}`)
+    }
+    return map
+  }, [peerQueries, vpns])
+
+  const peerQueryError = peerQueries.find((q) => q.error)?.error ?? null
+  useForbiddenRecovery(peerQueryError)
 
   const createMutation = useMutation({
-    mutationFn: () => {
-      const trimmedCidr = meshCidr.trim()
-      return createVpn({
+    mutationFn: () =>
+      createVpn({
         displayName: displayName.trim() || undefined,
-        ...(trimmedCidr
-          ? { meshCidr: trimmedCidr }
-          : { networkId }),
-      })
-    },
+        cidr: meshCidr.trim(),
+      }),
     onSuccess: async () => {
       setError(null)
       setDisplayName('')
-      setNetworkId(null)
       setMeshCidr('')
       await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
-      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'networks'] })
     },
     onError: async (err) => {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
         return
       }
-      setError(errorMessage(err, 'Failed to create VPN'))
+      setError(friendlyCreateError(err))
     },
   })
 
@@ -267,17 +268,9 @@ export function VpnsOverviewSection({
     },
   })
 
-  const vpns = vpnsQuery.data?.vpns ?? []
-  const vpnNetworks = networksQuery.data?.networks ?? []
-  const networkById = useMemo(() => {
-    const map = new Map<string, NetworkRecord>()
-    for (const network of vpnNetworks) {
-      map.set(network.id, network)
-    }
-    return map
-  }, [vpnNetworks])
-
   const loading = vpnsQuery.isLoading
+  const createDisabled =
+    createMutation.isPending || meshCidr.trim().length === 0
 
   return (
     <View style={styles.root}>
@@ -304,56 +297,28 @@ export function VpnsOverviewSection({
             placeholderTextColor={colors.textDim}
             style={styles.input}
           />
-          <Text style={styles.fieldLabel}>VPN network (optional)</Text>
-          <Text style={orgPanelStyles.muted}>
-            Enter a mesh CIDR to auto-create a VPN network row, or link an
-            existing VPN network from Networks.
-          </Text>
           <Text style={styles.fieldLabel}>Mesh CIDR</Text>
+          <Text style={orgPanelStyles.muted}>
+            Required overlay prefix. Peer interface addresses are allocated from
+            this CIDR.
+          </Text>
           <TextInput
             value={meshCidr}
-            onChangeText={(text) => {
-              setMeshCidr(text)
-              if (text.trim().length > 0) setNetworkId(null)
-            }}
+            onChangeText={setMeshCidr}
+            // NOSONAR typescript:S1313 — example mesh CIDR placeholder only
             placeholder="e.g. 10.200.0.0/24"
             placeholderTextColor={colors.textDim}
             style={styles.input}
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>
-            Or link existing
-          </Text>
-          <View style={styles.chipRow}>
-            <NetworkChip
-              label="None"
-              active={networkId === null && meshCidr.trim().length === 0}
-              onPress={() => {
-                setNetworkId(null)
-                setMeshCidr('')
-              }}
-            />
-            {vpnNetworks.map((network) => (
-              <NetworkChip
-                key={network.id}
-                label={networkLabel(network)}
-                active={networkId === network.id}
-                onPress={() => {
-                  setNetworkId(network.id)
-                  setMeshCidr('')
-                }}
-                disabled={meshCidr.trim().length > 0}
-              />
-            ))}
-          </View>
           <Pressable
             style={[
               orgPanelStyles.toolbarBtnPrimary,
-              createMutation.isPending && styles.buttonDisabled,
+              createDisabled && styles.buttonDisabled,
               webPointer,
             ]}
-            disabled={createMutation.isPending}
+            disabled={createDisabled}
             onPress={() => createMutation.mutate()}
           >
             {createMutation.isPending ? (
@@ -382,11 +347,7 @@ export function VpnsOverviewSection({
             <VpnCard
               key={vpn.id}
               vpn={vpn}
-              networkName={
-                vpn.networkId
-                  ? networkLabel(networkById.get(vpn.networkId))
-                  : '—'
-              }
+              peerCountLabel={peerCountByVpnId.get(vpn.id) ?? '—'}
               canManage={canManage}
               renaming={renamingId === vpn.id}
               confirmDelete={confirmDeleteId === vpn.id}
@@ -441,36 +402,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     minHeight: 44,
   },
+  mono: {
+    fontFamily: 'monospace',
+    color: colors.textBody,
+  },
   buttonDisabled: {
     opacity: 0.55,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.borderArea,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 44,
-    justifyContent: 'center',
-    backgroundColor: colors.bgInset,
-  },
-  chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgSecondary,
-  },
-  chipText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: colors.accent,
   },
 })

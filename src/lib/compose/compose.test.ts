@@ -4,7 +4,6 @@ import {
   composeDocumentToYaml,
   emptyComposeDocument,
   normalizeCompose,
-  preserveComposePlacement,
   readComposeEditorView,
   setComposeEditorView,
   stripComposeManagedExtension,
@@ -117,7 +116,7 @@ services:
     expect(roundTrip).toContain('# Set the timezone')
   })
 
-  it('user strip hides placement while preserve restores it on save', () => {
+  it('stripComposePlacement hides placement while preserving comments', () => {
     const source = yamlToComposeDocument(`services:
   # comment
   nginx:
@@ -131,15 +130,9 @@ x-turbopanel:
     expect(userYaml).not.toContain('x-turbopanel')
     expect(userYaml).toContain('# comment')
     expect(userYaml).toContain('# line comment')
-
-    const saved = preserveComposePlacement(yamlToComposeDocument(userYaml), source)
-    expect(composeDocumentToYaml(saved)).toContain('x-turbopanel')
-    expect(composeDocumentToYaml(saved)).toContain('# comment')
-    expect(composeDocumentToRuntimeYaml(saved)).not.toContain('# comment')
-    expect(composeDocumentToRuntimeYaml(saved)).toContain('x-turbopanel')
   })
 
-  it('stripComposePlacement removes stale project pins without preserve', () => {
+  it('stripComposePlacement removes stale project pins', () => {
     const projectPin = '11111111-1111-4111-8111-111111111111'
     const source = yamlToComposeDocument(`services:
   nginx:
@@ -151,24 +144,6 @@ x-turbopanel:
     const stripped = stripComposePlacement(source)
     expect(composeDocumentToYaml(stripped)).not.toContain('x-turbopanel')
     expect(composeDocumentToRuntimeYaml(stripped)).not.toContain(projectPin)
-  })
-
-  it('environment overlay placement survives strip/preserve round-trip', () => {
-    const envPin = '22222222-2222-4222-8222-222222222222'
-    const overlay = yamlToComposeDocument(`services: {}
-x-turbopanel:
-  placement:
-    server_id: ${envPin}
-`)
-    const edited = yamlToComposeDocument(`services:
-  api:
-    image: node:22
-`)
-    const saved = preserveComposePlacement(edited, overlay)
-    expect(composeDocumentToRuntimeYaml(saved)).toContain(envPin)
-    expect(composeDocumentToYaml(stripComposePlacement(saved))).not.toContain(
-      'x-turbopanel',
-    )
   })
 
   it('stores editor view in presentation only, not x-turbopanel', () => {
@@ -189,8 +164,8 @@ x-turbopanel:
     expect(readComposeEditorView(restored)).toBe('editor')
   })
 
-  it('migrates legacy x-turbopanel.view into presentation on normalize', () => {
-    const migrated = normalizeCompose({
+  it('does not migrate legacy x-turbopanel.view into presentation', () => {
+    const normalized = normalizeCompose({
       version: 1,
       data: {
         services: { nginx: { image: 'nginx:alpine' } },
@@ -198,34 +173,10 @@ x-turbopanel:
       },
       presentation: { keyOrder: ['services', 'x-turbopanel'], comments: {} },
     })
-    expect(migrated.presentation.editorView).toBe('visual')
-    expect(migrated.data['x-turbopanel']).toBeUndefined()
-    expect(composeDocumentToYaml(migrated)).not.toContain('x-turbopanel')
+    expect(normalized.presentation.editorView).toBeUndefined()
+    expect(normalized.data['x-turbopanel']).toEqual({ view: 'visual' })
   })
 
-  it('preserves editor view when setting placement', () => {
-    const envPin = '22222222-2222-4222-8222-222222222222'
-    const withView = setComposeEditorView(
-      yamlToComposeDocument(`services:
-  api:
-    image: node:22
-`),
-      'visual',
-    )
-    const withPlacement = preserveComposePlacement(
-      withView,
-      yamlToComposeDocument(`services: {}
-x-turbopanel:
-  placement:
-    server_id: ${envPin}
-`),
-    )
-    expect(readComposeEditorView(withPlacement)).toBe('visual')
-    expect(composeDocumentToRuntimeYaml(withPlacement)).toContain(envPin)
-    expect(
-      composeDocumentToYaml(stripComposeManagedExtension(withPlacement)),
-    ).not.toContain('x-turbopanel')
-  })
 })
 
 describe('blank compose drafts', () => {

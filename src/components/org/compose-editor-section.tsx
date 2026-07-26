@@ -14,7 +14,6 @@ import {
   composeDocumentToYaml,
   lintComposeYaml,
   normalizeCompose,
-  preserveComposePlacement,
   readComposeEditorView,
   setComposeEditorView,
   stripComposeManagedExtension,
@@ -386,15 +385,12 @@ export function ComposeEditorSection({
   onSave,
   saving = false,
   title = 'Docker Compose',
-  managePlacement = false,
   defaultView = 'editor',
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
   saving?: boolean
   title?: string
-  /** When true, hide/preserve environment-owned placement across YAML edits. */
-  managePlacement?: boolean
   /** Initial editor tab when compose has no saved view preference. */
   defaultView?: ComposeEditorView
 }>) {
@@ -485,11 +481,7 @@ export function ComposeEditorSection({
     edited: ComposeDocument,
     view: EditorTab,
   ): ComposeDocument => {
-    const withView = setComposeEditorView(edited, view)
-    if (managePlacement) {
-      return preserveComposePlacement(withView, document)
-    }
-    return stripComposePlacement(withView)
+    return stripComposePlacement(setComposeEditorView(edited, view))
   }
 
   const handleSave = async () => {

@@ -1,8 +1,9 @@
+import { useRouter, type Href } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { IpListRow } from '@/components/org/ips-overview-section'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   formatServerGeoCountryCode,
   formatServerGeoLocation,
@@ -11,8 +12,12 @@ import {
   fetchDatacenters,
   fetchIps,
   fetchNetworks,
+  fetchVpns,
+  type IpRecord,
   type ServerDetailRecord,
+  type VpnRecord,
 } from '@/lib/instance-api'
+import { vpnDetailHref } from '@/lib/org-navigation'
 import { useForbiddenRecovery } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
@@ -65,9 +70,77 @@ function DatacenterPrivateAddress({
   )
 }
 
+function vpnTitle(vpn: VpnRecord): string {
+  return vpn.displayName?.trim() || 'Unnamed mesh'
+}
+
+function ServerMeshMembershipPanel({
+  orgId,
+  rows,
+  loading,
+}: Readonly<{
+  orgId: string
+  rows: { vpn: VpnRecord; address: string }[]
+  loading: boolean
+}>) {
+  const router = useRouter()
+
+  return (
+    <SectionPanel title="Mesh" hint="VPN overlay membership for this host">
+      {loading && rows.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>Loading mesh membership…</Text>
+      ) : null}
+      {!loading && rows.length === 0 ? (
+        <View style={orgPanelStyles.statePanel}>
+          <Text style={orgPanelStyles.muted}>Not a peer on any mesh.</Text>
+        </View>
+      ) : null}
+      <View style={styles.list}>
+        {rows.map(({ vpn, address }) => (
+          <View key={vpn.id} style={orgPanelStyles.detailCard}>
+            <Pressable
+              style={webPointer}
+              onPress={() =>
+                router.push(vpnDetailHref(orgId, vpn.id) as Href)
+              }
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${vpnTitle(vpn)}`}
+            >
+              <Text style={orgPanelStyles.detailTitle}>{vpnTitle(vpn)}</Text>
+            </Pressable>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Overlay: </Text>
+              <Text style={styles.mono} selectable>
+                {address}
+              </Text>
+            </Text>
+          </View>
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
+function buildMeshRows(
+  ips: readonly IpRecord[],
+  vpns: readonly VpnRecord[],
+): { vpn: VpnRecord; address: string }[] {
+  const vpnById = new Map(vpns.map((vpn) => [vpn.id, vpn]))
+  const rows: { vpn: VpnRecord; address: string }[] = []
+  for (const ip of ips) {
+    if (!ip.vpnId) continue
+    const vpn = vpnById.get(ip.vpnId)
+    if (!vpn) continue
+    rows.push({ vpn, address: ip.address })
+  }
+  rows.sort((a, b) => vpnTitle(a.vpn).localeCompare(vpnTitle(b.vpn)))
+  return rows
+}
+
 export function ServerNetworkSection({
+  orgId,
   server,
-}: Readonly<{ server: ServerDetailRecord }>) {
+}: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
   const addresses = server.addresses
   const hasLists =
     addresses != null &&
@@ -85,6 +158,18 @@ export function ServerNetworkSection({
     queryFn: () => fetchIps({ serverId: server.id, scope: 'datacenter' }),
   })
   useForbiddenRecovery(datacenterIpsQuery.error)
+
+  const vpnIpsQuery = useQuery({
+    queryKey: ['server', server.id, 'ips', { scope: 'vpn' }],
+    queryFn: () => fetchIps({ serverId: server.id, scope: 'vpn' }),
+  })
+  useForbiddenRecovery(vpnIpsQuery.error)
+
+  const vpnsQuery = useQuery({
+    queryKey: ['org', orgId, 'vpns'],
+    queryFn: fetchVpns,
+  })
+  useForbiddenRecovery(vpnsQuery.error)
 
   const serverManagedIpsQuery = useQuery({
     queryKey: ['server', server.id, 'ips', 'managed'],
@@ -117,7 +202,16 @@ export function ServerNetworkSection({
   const datacenterById = new Map(
     (serverManagedIpsQuery.data?.datacenters ?? []).map((row) => [row.id, row]),
   )
-  const managedIps = serverManagedIpsQuery.data?.ips ?? []
+  // VPN overlay rows belong in the Mesh panel only — keep Managed addresses
+  // for public / datacenter / loopback pool assignments.
+  const managedIps = (serverManagedIpsQuery.data?.ips ?? []).filter(
+    (ip) => ip.scope !== 'vpn',
+  )
+  const meshRows = buildMeshRows(
+    vpnIpsQuery.data?.ips ?? [],
+    vpnsQuery.data?.vpns ?? [],
+  )
+  const meshLoading = vpnIpsQuery.isLoading || vpnsQuery.isLoading
 
   return (
     <View style={styles.root}>
@@ -134,6 +228,12 @@ export function ServerNetworkSection({
           address={privateAddress}
         />
       </SectionPanel>
+
+      <ServerMeshMembershipPanel
+        orgId={orgId}
+        rows={meshRows}
+        loading={meshLoading}
+      />
 
       <SectionPanel
         title="Managed addresses"

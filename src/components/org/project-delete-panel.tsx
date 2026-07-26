@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { readComposePlacementServerId } from '@/lib/compose'
 import {
   deleteProject,
   fetchCommand,
@@ -56,26 +55,11 @@ function projectConfirmName(project: ProjectRecord): string {
   return project.displayName?.trim() || 'Unnamed project'
 }
 
-function readMetadataServerId(metadata: Record<string, unknown> | null): string | null {
-  if (!metadata || typeof metadata.serverId !== 'string') return null
-  const trimmed = metadata.serverId.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
 function resolveEnvServerId(
   environment: EnvironmentRecord,
   containers: ContainerRecord[],
 ): string | null {
-  try {
-    const placement = environment.options?.compose
-      ? readComposePlacementServerId(environment.options.compose)
-      : null
-    if (placement) return placement
-  } catch {
-    // ignore invalid compose
-  }
-  const fromMeta = readMetadataServerId(environment.metadata)
-  if (fromMeta) return fromMeta
+  if (environment.serverId) return environment.serverId
   return containers.find((row) => row.serverId)?.serverId ?? null
 }
 
@@ -90,7 +74,7 @@ async function loadActiveEnvRows(projectId: string): Promise<EnvStopRow[]> {
     )
     const containers = containerLists.flatMap((result) => result.containers)
     const active = containers.filter((container) =>
-      isActiveContainerStatus(container.metadata?.status),
+      isActiveContainerStatus(container.status),
     )
     if (active.length === 0) continue
     rows.push({

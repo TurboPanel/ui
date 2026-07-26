@@ -6,7 +6,7 @@
 - List → `datacenters-overview-section.tsx`
 - Detail → `datacenter-detail-section.tsx`
 
-**Job:** Group servers on a private network; manage member hosts, scoped networks/IPs, and per-datacenter timezone defaults.
+**Job:** Group servers on a private network; manage member hosts, scoped networks/IPs, mesh gateways, and per-datacenter timezone defaults.
 
 ---
 
@@ -22,17 +22,19 @@
 
 ## Detail layout (stacked panels)
 
-Four `SectionPanel`s, one purpose each — no cards-as-decoration beyond interactive rows:
+Five `SectionPanel`s, one purpose each — no cards-as-decoration beyond interactive rows:
 
 1. **Member servers** — filtered org servers; assign unassigned hosts (`PATCH` `{ datacenterId }`); Unassign (`{ datacenterId: null }`)
 2. **Networks** — `fetchNetworks({ datacenterId })` via shared `NetworkListItem` (kind badge + monospace CIDR)
-3. **IP pool** — `fetchIps({ datacenterId })` via shared `IpListRow`
-4. **Timezone** — `ServerTimezonePicker` + enforce toggle (same pattern as org fleet settings); copy: enforcing datacenter default beats org default for members
+3. **Mesh gateways** — `fetchVpns()` + bounded `useQueries` peers per mesh (never per server); rows for gateways whose server is in this datacenter (mesh name, gateway server, overlay address, **Primary** badge from `resolvePrimaryGatewayByDatacenter`); show advertised site CIDRs from datacenter-kind networks; empty: “No mesh gateway here — this site is not reachable over the VPN.”; `calloutWarning` when gateways exist but no datacenter CIDR (pre-flight for `gateway_datacenter_cidr_required`)
+4. **IP pool** — `fetchIps({ datacenterId })` via shared `IpListRow`
+5. **Timezone** — `ServerTimezonePicker` + enforce toggle (same pattern as org fleet settings); copy: enforcing datacenter default beats org default for members
 
 All mutations gated by `useCan('organization', orgId, 'organization:manage')` as a display hint.
 
 ## Anti-patterns (page-specific)
 
 - ❌ N+1 server/IP fetches per datacenter card
+- ❌ Unbounded peer fan-out — peer queries are bounded by mesh count, never fleet size
 - ❌ Showing WireGuard `presharedKey` anywhere
 - ❌ Duplicate server-assignment UI on the server Network tab (that tab is display-only for datacenter + private address)

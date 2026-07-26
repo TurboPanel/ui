@@ -705,6 +705,8 @@ export type EnvironmentRecord = {
   displayName: string | null;
   description: string | null;
   projectId: string;
+  /** Whole-server placement pin — single source of truth (not compose). */
+  serverId: string | null;
   metadata: Record<string, unknown> | null;
   /** `options.compose` is a versioned ComposeDocument. */
   options: { compose?: ComposeDocument } | null;
@@ -719,9 +721,8 @@ export type ProjectRecord = {
   workspaceId: string;
   metadata: {
     type?: 'docker-compose' | 'managed' | 'template' | null;
-    /** Managed engine catalog code (`postgres`, …); absent on legacy project-scoped apps. */
+    /** Managed engine catalog code (`postgres`, …). */
     code?: string;
-    managed_id?: string;
   } | null;
   /** `options.compose` is a versioned ComposeDocument. */
   options: { compose?: ComposeDocument } | null;
@@ -825,6 +826,7 @@ export type ServiceRecord = {
   displayName: string | null;
   description: string | null;
   environmentId: string;
+  composeServiceName?: string | null;
   metadata?: Record<string, unknown> | null;
   options?: ServiceOptions | Record<string, unknown> | null;
   createdAt: string;
@@ -873,24 +875,21 @@ export type TlsRecord = {
   updatedAt: string
 }
 
-export type ContainerMetadata = {
-  containerId?: string;
-  containerName?: string;
-  status?: string;
-  composeServiceName?: string;
-};
-
 export type ContainerRecord = {
   id: string;
   serviceId: string;
   serverId: string;
-  metadata?: ContainerMetadata | null;
+  containerId: string;
+  containerName: string;
+  status: string;
+  composeServiceName: string;
+  metadata?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type NetworkKind = 'datacenter' | 'server' | 'docker' | 'vpn'
+export type NetworkKind = 'datacenter' | 'server' | 'docker'
 
 export type NetworkRecord = {
   id: string
@@ -932,7 +931,7 @@ export type DatacenterRecord = {
 
 export type IpVersion = 4 | 6
 export type IpAllocation = 'dedicated' | 'shared'
-export type IpScope = 'public' | 'datacenter' | 'loopback'
+export type IpScope = 'public' | 'datacenter' | 'loopback' | 'vpn'
 
 export type IpRecord = {
   id: string
@@ -940,7 +939,9 @@ export type IpRecord = {
   datacenterId: string | null
   networkId: string | null
   serverId: string | null
+  vpnId: string | null
   address: string
+  /** Server-derived from `address`, read-only — never send on create. */
   version: IpVersion
   allocation: IpAllocation
   scope: IpScope
@@ -954,7 +955,7 @@ export type IpRecord = {
 export type VpnRecord = {
   id: string
   organizationId: string
-  networkId: string | null
+  cidr: string
   displayName: string | null
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
@@ -962,14 +963,17 @@ export type VpnRecord = {
   updatedAt: string
 }
 
+export type PeerRole = 'gateway' | 'member'
+
 /** Peer public surface — never includes `presharedKey`. */
 export type PeerRecord = {
   id: string
   vpnId: string
   serverId: string
-  ipId: string | null
+  endpointIpId: string | null
+  tunnelIpId: string | null
+  role: PeerRole
   publicKey: string
-  tunnelAddress: string | null
   listenPort: number | null
   endpoint: string | null
   metadata: Record<string, unknown> | null
@@ -979,6 +983,14 @@ export type PeerRecord = {
 }
 
 export const IP_IN_USE_ERROR = 'ip_in_use'
+export const VPN_ADDRESS_POOL_EXHAUSTED_ERROR = 'vpn_address_pool_exhausted'
+export const VPN_ADDRESS_CONFLICT_ERROR = 'vpn_address_conflict'
+export const PEER_TUNNEL_IP_CONFLICT_ERROR = 'peer_tunnel_ip_conflict'
+export const VPN_CIDR_IN_USE_ERROR = 'vpn_cidr_in_use'
+export const VPN_CIDR_EXCLUDES_ADDRESSES_ERROR = 'vpn_cidr_excludes_addresses'
+export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
+export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR =
+  'gateway_datacenter_cidr_required'
 
 export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceRecord[] }> {
   return await apiFetch(`${CLIENT_API}/workspaces`);
@@ -1090,6 +1102,7 @@ export async function createEnvironment(body: {
   projectId: string;
   displayName?: string;
   description?: string;
+  serverId?: string | null;
   metadata?: Record<string, unknown>;
   options?: { compose?: ComposeDocument };
 }): Promise<{ ok: true; id: string }> {
@@ -1104,6 +1117,8 @@ export async function updateEnvironment(
   body: {
     displayName?: string;
     description?: string;
+    /** Whole-server placement pin; `null` clears it. */
+    serverId?: string | null;
     metadata?: Record<string, unknown>;
     options?: { compose?: ComposeDocument };
   },
@@ -1181,6 +1196,7 @@ export async function createService(
   body: {
     displayName?: string
     description?: string
+    composeServiceName?: string
     metadata?: Record<string, unknown>
     options?: ServiceOptions | Record<string, unknown>
   },
@@ -1193,7 +1209,11 @@ export async function createService(
 
 export async function updateService(
   id: string,
-  body: { options?: ServiceOptions },
+  body: {
+    composeServiceName?: string | null
+    options?: ServiceOptions
+    metadata?: Record<string, unknown> | null
+  },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/services/${id}`, {
     method: 'PATCH',
@@ -1293,7 +1313,11 @@ export async function fetchContainer(
 export async function createContainer(body: {
   serviceId: string;
   serverId: string;
-  metadata?: ContainerMetadata;
+  containerId: string;
+  containerName: string;
+  status: string;
+  composeServiceName: string;
+  metadata?: Record<string, unknown>;
   options?: Record<string, unknown>;
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/containers`, {
@@ -1305,7 +1329,11 @@ export async function createContainer(body: {
 export async function updateContainer(
   id: string,
   body: {
-    metadata?: ContainerMetadata;
+    containerId?: string;
+    containerName?: string;
+    status?: string;
+    composeServiceName?: string;
+    metadata?: Record<string, unknown> | null;
     options?: Record<string, unknown>;
   },
 ): Promise<{ ok: true }> {
@@ -1390,6 +1418,7 @@ export async function fetchIps(filters?: {
   datacenterId?: string
   serverId?: string
   networkId?: string
+  vpnId?: string
   scope?: IpScope
   allocation?: IpAllocation
 }): Promise<{ ips: IpRecord[] }> {
@@ -1397,6 +1426,7 @@ export async function fetchIps(filters?: {
   if (filters?.datacenterId) params.set('datacenterId', filters.datacenterId)
   if (filters?.serverId) params.set('serverId', filters.serverId)
   if (filters?.networkId) params.set('networkId', filters.networkId)
+  if (filters?.vpnId) params.set('vpnId', filters.vpnId)
   if (filters?.scope) params.set('scope', filters.scope)
   if (filters?.allocation) params.set('allocation', filters.allocation)
   const query = params.toString()
@@ -1416,6 +1446,7 @@ export async function createIp(body: {
   datacenterId?: string | null
   networkId?: string | null
   serverId?: string | null
+  vpnId?: string | null
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
 }): Promise<{ ok: true; id: string }> {
@@ -1432,6 +1463,7 @@ export async function updateIp(
     datacenterId: string | null
     networkId: string | null
     serverId: string | null
+    vpnId: string | null
     metadata: Record<string, unknown> | null
     options: Record<string, unknown> | null
   }>,
@@ -1528,11 +1560,10 @@ export async function fetchVpn(id: string): Promise<{ vpn: VpnRecord }> {
 
 export async function createVpn(body: {
   displayName?: string
-  networkId?: string | null
-  meshCidr?: string
+  cidr: string
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
-}): Promise<{ ok: true; id: string; networkId?: string }> {
+}): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/vpns`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -1543,7 +1574,7 @@ export async function updateVpn(
   id: string,
   body: Partial<{
     displayName: string | null
-    networkId: string | null
+    cidr: string
     metadata: Record<string, unknown> | null
     options: Record<string, unknown> | null
   }>,
@@ -1571,8 +1602,14 @@ export async function createPeer(
   body: {
     serverId: string
     publicKey: string
-    ipId?: string | null
-    tunnelAddress?: string | null
+    role?: PeerRole
+    endpointIpId?: string | null
+    /**
+     * Optional overlay row — omit to auto-allocate from vpn.cidr.
+     * Do not send `null` (clearing is rejected).
+     */
+    tunnelIpId?: string
+    tunnelAddress?: string
     listenPort?: number | null
     endpoint?: string | null
     /** Write-only — never returned on PeerRecord. */
@@ -1593,8 +1630,10 @@ export async function updatePeer(
   body: Partial<{
     serverId: string
     publicKey: string
-    ipId: string | null
-    tunnelAddress: string | null
+    role: PeerRole
+    endpointIpId: string | null
+    /** Replacement overlay row — clearing with `null` is rejected. */
+    tunnelIpId: string
     listenPort: number | null
     endpoint: string | null
     /** Write-only — never returned on PeerRecord. */

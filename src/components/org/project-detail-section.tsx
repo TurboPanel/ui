@@ -44,21 +44,13 @@ type ProjectServiceOption = {
   label: string
 }
 
-function readComposeServiceName(metadata: ServiceRecord['metadata']): string | undefined {
-  if (metadata && typeof metadata === 'object' && 'composeServiceName' in metadata) {
-    const name = metadata.composeServiceName
-    return typeof name === 'string' ? name : undefined
-  }
-  return undefined
-}
-
 function formatServiceOptionLabel(
   environment: EnvironmentRecord,
   service: ServiceRecord,
 ): string {
   const envName = environment.displayName ?? 'Environment'
-  const compose = readComposeServiceName(service.metadata)
-  const serviceName = service.displayName ?? compose ?? service.id.slice(0, 8)
+  const serviceName =
+    service.displayName ?? service.composeServiceName ?? service.id.slice(0, 8)
   return `${envName} · ${serviceName}`
 }
 

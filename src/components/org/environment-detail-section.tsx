@@ -55,9 +55,7 @@ import {
   hostingWebEnvSectionCopy,
   mergeComposeOverlay,
   normalizeCompose,
-  readComposePlacementServerId,
   resolveHostingServiceContext,
-  setComposePlacementServerId,
   shouldRevealOptionalHostingFields,
   stripComposePlacement,
   type HostingServiceContext,
@@ -364,11 +362,7 @@ function containerStatusVariant(status?: string): ContainerStatusVariant {
 }
 
 function containerDisplayName(container: ContainerRecord): string {
-  return (
-    container.metadata?.containerName ??
-    container.metadata?.composeServiceName ??
-    container.id
-  )
+  return container.containerName || container.composeServiceName || container.id
 }
 
 function containerHostLabel(
@@ -1243,7 +1237,6 @@ function EnvironmentLoadedPanels({
           onSave={onSaveCompose}
           saving={savingCompose}
           title="Environment compose overlay"
-          managePlacement
         />
       </SectionPanel>
 
@@ -1310,7 +1303,7 @@ function EnvironmentLoadedPanels({
           <View style={styles.hostingList}>
             {serviceNames.map((composeServiceName) => {
               const service = services.find(
-                (item) => item.metadata?.composeServiceName === composeServiceName,
+                (item) => item.composeServiceName === composeServiceName,
               )
               const serviceKey = service?.id ?? composeServiceName
               const editor =
@@ -1353,7 +1346,7 @@ function EnvironmentLoadedPanels({
           <View style={styles.hostingList}>
             {serviceNames.map((composeServiceName) => {
               const service = services.find(
-                (item) => item.metadata?.composeServiceName === composeServiceName,
+                (item) => item.composeServiceName === composeServiceName,
               )
               return (
                 <ServiceSettingsPanel
@@ -1392,7 +1385,7 @@ function EnvironmentLoadedPanels({
                 <View key={service.id} style={orgPanelStyles.detailCard}>
                   <Text style={orgPanelStyles.detailTitle}>
                     {service.displayName?.trim() ||
-                      String(service.metadata?.composeServiceName ?? service.id)}
+                      String(service.composeServiceName ?? service.id)}
                   </Text>
                   {containers.map((container) => (
                     <View key={container.id} style={styles.containerRow}>
@@ -1400,7 +1393,7 @@ function EnvironmentLoadedPanels({
                         <Text style={orgPanelStyles.detailLine}>
                           {containerDisplayName(container)}
                         </Text>
-                        <ContainerStatusBadge status={container.metadata?.status} />
+                        <ContainerStatusBadge status={container.status} />
                       </View>
                       <Text style={orgPanelStyles.detailLine}>
                         <Text style={orgPanelStyles.detailLabel}>Host: </Text>
@@ -1536,13 +1529,7 @@ export function EnvironmentDetailBody({
     [environment?.options?.compose, projectCompose],
   )
   const serviceNames = useMemo(() => composeServiceNames(mergedCompose), [mergedCompose])
-  const placementServerId = useMemo(
-    () =>
-      readComposePlacementServerId(
-        normalizeCompose(environment?.options?.compose),
-      ),
-    [environment?.options?.compose],
-  )
+  const placementServerId = environment?.serverId ?? null
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
     [allServers, placementServerId],
@@ -1583,14 +1570,10 @@ export function EnvironmentDetailBody({
     setSavingPlacement(true)
     setError(null)
     try {
-      const compose = setComposePlacementServerId(
-        normalizeCompose(environment?.options?.compose),
-        serverIdToPin,
-      )
-      await updateEnvironment(environmentId, { options: { compose } })
+      await updateEnvironment(environmentId, { serverId: serverIdToPin })
       setEnvironment((current) =>
         current
-          ? { ...current, options: { compose } }
+          ? { ...current, serverId: serverIdToPin }
           : current,
       )
     } catch (err) {
@@ -1668,12 +1651,12 @@ export function EnvironmentDetailBody({
     setError(null)
     try {
       const service = services.find(
-        (item) => item.metadata?.composeServiceName === composeServiceName,
+        (item) => item.composeServiceName === composeServiceName,
       )
       const resolvedService = service ?? {
         id: (await createService(environmentId, {
           displayName: composeServiceName,
-          metadata: { composeServiceName },
+          composeServiceName,
         })).id,
       }
       const serviceKey = service?.id ?? composeServiceName

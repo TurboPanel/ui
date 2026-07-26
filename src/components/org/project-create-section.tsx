@@ -90,7 +90,6 @@ function filterCatalogByType(
     return catalog.filter((entry) => entry.kind === 'template')
   }
   if (selectedType === 'managed') {
-    // Engine catalog only — exclude legacy project-scoped apps (e.g. wordpress-mysql).
     return catalog.filter(
       (entry) =>
         entry.kind === 'managed' &&

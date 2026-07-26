@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react'
 import { Link, useRouter, useLocalSearchParams } from 'expo-router'
 import { Image } from 'expo-image'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -53,7 +58,6 @@ import {
 } from '@/lib/instance-api'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
 import { osLogoSource } from '@/lib/os-logos'
-import { formatServerOsProductName } from '@/lib/server-os-display'
 import {
   countryCodeToFlagEmoji,
   formatServerGeoAsn,
@@ -281,7 +285,7 @@ function renderDetailTabBody(
         />
       )
     case 'network':
-      return <ServerNetworkSection server={input.server} />
+      return <ServerNetworkSection orgId={input.orgId} server={input.server} />
     case 'metrics':
       return (
         <ServerMetricsSection
@@ -337,6 +341,351 @@ function deriveServerUpdateViewModel(
   }
 }
 
+function isControlCommandKind(
+  kind: DetailPollCommand['kind'],
+): kind is ActiveCommand['kind'] {
+  return kind === 'ping' || kind === 'hostname' || kind === 'reboot'
+}
+
+function removePollCommandById(
+  prev: DetailPollCommand[],
+  commandId: string,
+): DetailPollCommand[] {
+  return prev.filter((item) => item.commandId !== commandId)
+}
+
+function applyTerminalPollSuccess(
+  entry: DetailPollCommand,
+  record: Awaited<ReturnType<typeof fetchCommand>>,
+  handlers: Readonly<{
+    onRefreshServer: () => void
+    setCommandState: Dispatch<SetStateAction<ServerCommandState>>
+    setTimezonePollError: (error: string | null) => void
+    setNtpPollError: (error: string | null) => void
+  }>,
+): void {
+  if (isControlCommandKind(entry.kind)) {
+    handlers.setCommandState((prev) => {
+      const active = prev.activeCommand
+      if (active?.commandId !== entry.commandId) {
+        return prev
+      }
+      return (
+        applyDetailCommandPollResult(prev, active, record, handlers.onRefreshServer) ??
+        prev
+      )
+    })
+    return
+  }
+
+  if (entry.kind === 'timezone') {
+    if (record.status === 'succeeded') {
+      handlers.setTimezonePollError(null)
+      handlers.onRefreshServer()
+      return
+    }
+    handlers.setTimezonePollError(
+      record.error ?? `Timezone change ${record.status}`,
+    )
+    return
+  }
+
+  if (record.status === 'succeeded') {
+    handlers.setNtpPollError(null)
+    handlers.onRefreshServer()
+    return
+  }
+  handlers.setNtpPollError(record.error ?? `NTP change ${record.status}`)
+}
+
+function applyPollFailure(
+  entry: DetailPollCommand,
+  err: unknown,
+  handlers: Readonly<{
+    patchCommand: (patch: Partial<ServerCommandState>) => void
+    setTimezonePollError: (error: string | null) => void
+    setNtpPollError: (error: string | null) => void
+  }>,
+): void {
+  if (isControlCommandKind(entry.kind)) {
+    handlers.patchCommand({
+      activeCommand: null,
+      pingRunning: false,
+      hostnameRunning: false,
+      rebootRunning: false,
+    })
+    return
+  }
+  if (entry.kind === 'timezone') {
+    handlers.setTimezonePollError(
+      err instanceof Error ? err.message : 'Failed to poll timezone command',
+    )
+    return
+  }
+  handlers.setNtpPollError(
+    err instanceof Error ? err.message : 'Failed to poll NTP command',
+  )
+}
+
+type PollHandlers = Readonly<{
+  onRefreshServer: () => void
+  setCommandState: Dispatch<SetStateAction<ServerCommandState>>
+  setTimezonePollError: (error: string | null) => void
+  setNtpPollError: (error: string | null) => void
+  patchCommand: (patch: Partial<ServerCommandState>) => void
+}>
+
+type PollCancelledRef = { current: boolean }
+
+async function pollSingleCommand(
+  entry: DetailPollCommand,
+  input: Readonly<{
+    serverId: string
+    cancelledRef: PollCancelledRef
+    handleUnauthorized: () => Promise<void>
+    pollHandlers: PollHandlers
+    onSettled: (commandId: string) => void
+  }>,
+): Promise<void> {
+  try {
+    const record = await fetchCommand(input.serverId, entry.commandId)
+    if (input.cancelledRef.current) return
+    if (!isTerminalCommandStatus(record.status)) return
+    applyTerminalPollSuccess(entry, record, input.pollHandlers)
+    input.onSettled(entry.commandId)
+  } catch (err) {
+    if (input.cancelledRef.current) return
+    if (isForbiddenError(err)) {
+      await input.handleUnauthorized()
+    }
+    applyPollFailure(entry, err, input.pollHandlers)
+    input.onSettled(entry.commandId)
+  }
+}
+
+function renderServerDeletePanel(input: Readonly<{
+  canManage: boolean
+  colocated: boolean
+  deleting: boolean
+  deleteError: string | null
+  confirmingDelete: boolean
+  onRequestConfirm: () => void
+  onCancel: () => void
+  onConfirm: () => void
+}>): ReactNode {
+  if (!input.canManage) return null
+  if (input.colocated) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        The co-located control plane server cannot be deleted.
+      </Text>
+    )
+  }
+  return (
+    <ServerDeletePanel
+      deleting={input.deleting}
+      deleteError={input.deleteError}
+      confirming={input.confirmingDelete}
+      onRequestConfirm={input.onRequestConfirm}
+      onCancel={input.onCancel}
+      onConfirm={input.onConfirm}
+    />
+  )
+}
+
+function ServerDetailLoading(): ReactNode {
+  return (
+    <View style={styles.loadingRow}>
+      <ActivityIndicator size="small" color={colors.accent} />
+      <Text style={orgPanelStyles.muted}>Loading server…</Text>
+    </View>
+  )
+}
+
+function ServerDetailError({ message }: Readonly<{ message: string }>): ReactNode {
+  return <Text style={orgPanelStyles.error}>{message}</Text>
+}
+
+function createLoadUpdate(input: Readonly<{
+  serverId: string
+  handleUnauthorized: () => Promise<void>
+  setUpdateState: Dispatch<SetStateAction<UpdateState>>
+}>): (options?: { silent?: boolean }) => Promise<void> {
+  return async (options) => {
+    if (!options?.silent) {
+      input.setUpdateState((prev) => ({ ...prev, loading: true, error: null }))
+    }
+    try {
+      const data = await fetchServerUpdate(input.serverId)
+      input.setUpdateState({
+        loading: false,
+        triggering: data.status === 'updating',
+        resetting: false,
+        data,
+        error: null,
+      })
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await input.handleUnauthorized()
+      }
+      if (!options?.silent) {
+        input.setUpdateState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err instanceof Error ? err.message : 'Failed to load update status',
+        }))
+      }
+    }
+  }
+}
+
+type CommandHandlerDeps = Readonly<{
+  serverId: string
+  patchCommand: (patch: Partial<ServerCommandState>) => void
+  registerPollCommand: (entry: DetailPollCommand) => void
+  handleUnauthorized: () => Promise<void>
+}>
+
+function createPingHandler(input: CommandHandlerDeps): () => void {
+  return () => {
+    input.patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
+    pingDaemon(input.serverId)
+      .then((result) => {
+        const entry: DetailPollCommand = { commandId: result.commandId, kind: 'ping' }
+        input.registerPollCommand(entry)
+        input.patchCommand({ activeCommand: entry })
+      })
+      .catch(async (err) => {
+        if (isForbiddenError(err)) await input.handleUnauthorized()
+        input.patchCommand({
+          pingError: err instanceof Error ? err.message : 'Ping failed',
+          pingRunning: false,
+        })
+      })
+  }
+}
+
+function createSetHostnameHandler(input: CommandHandlerDeps): (hostname: string) => void {
+  return (host) => {
+    if (!host) {
+      input.patchCommand({ hostnameError: 'Hostname is required' })
+      return
+    }
+    input.patchCommand({ hostnameError: null, hostnameRunning: true, commandRecord: null })
+    setServerHostname(input.serverId, host)
+      .then((result) => {
+        const entry: DetailPollCommand = { commandId: result.commandId, kind: 'hostname' }
+        input.registerPollCommand(entry)
+        input.patchCommand({ activeCommand: entry })
+      })
+      .catch(async (err) => {
+        if (isForbiddenError(err)) await input.handleUnauthorized()
+        input.patchCommand({
+          hostnameError: err instanceof Error ? err.message : 'Hostname change failed',
+          hostnameRunning: false,
+        })
+      })
+  }
+}
+
+function createRebootHandler(input: CommandHandlerDeps): () => void {
+  return () => {
+    input.patchCommand({ rebootError: null, rebootRunning: true, commandRecord: null })
+    rebootServer(input.serverId)
+      .then((result) => {
+        const entry: DetailPollCommand = { commandId: result.commandId, kind: 'reboot' }
+        input.registerPollCommand(entry)
+        input.patchCommand({ activeCommand: entry })
+      })
+      .catch(async (err) => {
+        if (isForbiddenError(err)) await input.handleUnauthorized()
+        input.patchCommand({
+          rebootError: err instanceof Error ? err.message : 'Reboot failed',
+          rebootRunning: false,
+        })
+      })
+  }
+}
+
+function createTriggerUpdateHandler(input: Readonly<{
+  serverId: string
+  setUpdateState: Dispatch<SetStateAction<UpdateState>>
+  loadUpdate: (options?: { silent?: boolean }) => Promise<void>
+  handleUnauthorized: () => Promise<void>
+}>): () => void {
+  return () => {
+    input.setUpdateState((prev) => ({ ...prev, triggering: true, error: null }))
+    triggerServerUpdate(input.serverId)
+      .then(() =>
+        input.loadUpdate({ silent: true }).catch(() => {
+          /* silent refresh after trigger */
+        }),
+      )
+      .catch(async (err) => {
+        if (isForbiddenError(err)) await input.handleUnauthorized()
+        input.setUpdateState((prev) => ({
+          ...prev,
+          triggering: false,
+          error: err instanceof Error ? err.message : 'Update failed',
+        }))
+      })
+  }
+}
+
+function createResetUpdateHandler(input: Readonly<{
+  serverId: string
+  setUpdateState: Dispatch<SetStateAction<UpdateState>>
+  handleUnauthorized: () => Promise<void>
+}>): () => void {
+  return () => {
+    input.setUpdateState((prev) => ({ ...prev, resetting: true, error: null }))
+    resetServerUpdateStatus(input.serverId)
+      .then((data) =>
+        input.setUpdateState({
+          loading: false,
+          triggering: data.status === 'updating',
+          resetting: false,
+          data,
+          error: null,
+        }),
+      )
+      .catch(async (err) => {
+        if (isForbiddenError(err)) await input.handleUnauthorized()
+        input.setUpdateState((prev) => ({
+          ...prev,
+          resetting: false,
+          error: err instanceof Error ? err.message : 'Reset failed',
+        }))
+      })
+  }
+}
+
+function createDeleteHandler(input: Readonly<{
+  serverId: string
+  orgId: string
+  router: ReturnType<typeof useRouter>
+  handleUnauthorized: () => Promise<void>
+  setDeleting: Dispatch<SetStateAction<boolean>>
+  setDeleteError: Dispatch<SetStateAction<string | null>>
+}>): () => Promise<void> {
+  return async () => {
+    input.setDeleting(true)
+    input.setDeleteError(null)
+    try {
+      await deleteServer(input.serverId, input.orgId)
+      input.router.replace(defaultOrgDashboardHref(input.orgId))
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await input.handleUnauthorized()
+        return
+      }
+      input.setDeleteError(formatServerDeleteBlockedError(err))
+    } finally {
+      input.setDeleting(false)
+    }
+  }
+}
+
 export function ServerDetailSection({
   orgId,
   serverId,
@@ -373,41 +722,15 @@ export function ServerDetailSection({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
-  const commandStateRef = useRef(commandState)
-  commandStateRef.current = commandState
-
   const server = serverQuery.data
 
-  const loadUpdate = async (options?: { silent?: boolean }) => {
-    if (!options?.silent) {
-      setUpdateState((prev) => ({ ...prev, loading: true, error: null }))
-    }
-    try {
-      const data = await fetchServerUpdate(serverId)
-      setUpdateState({
-        loading: false,
-        triggering: data.status === 'updating',
-        resetting: false,
-        data,
-        error: null,
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      if (!options?.silent) {
-        setUpdateState((prev) => ({
-          ...prev,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load update status',
-        }))
-      }
-    }
-  }
+  const loadUpdate = createLoadUpdate({ serverId, handleUnauthorized, setUpdateState })
 
   useEffect(() => {
     if (!serverId) return
-    void loadUpdate()
+    loadUpdate().catch(() => {
+      /* loadUpdate reports failures via updateState */
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId])
 
@@ -416,14 +739,20 @@ export function ServerDetailSection({
       return
     }
     const timer = setInterval(() => {
-      void loadUpdate({ silent: true })
+      loadUpdate({ silent: true }).catch(() => {
+        /* silent progress poll */
+      })
     }, UPDATE_PROGRESS_POLL_MS)
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateState.data?.status, updateState.triggering, serverId])
 
   const invalidateServer = () => {
-    void queryClient.invalidateQueries({ queryKey: ['server', serverId] })
+    queryClient
+      .invalidateQueries({ queryKey: ['server', serverId] })
+      .catch(() => {
+        /* refresh is best-effort */
+      })
   }
 
   const patchCommand = (patch: Partial<ServerCommandState>) => {
@@ -443,96 +772,42 @@ export function ServerDetailSection({
 
   useEffect(() => {
     if (pollCommands.length === 0) return
-    let cancelled = false
 
-    const onRefreshServer = () => {
-      invalidateServer()
+    const cancelledRef: PollCancelledRef = { current: false }
+    const pollHandlers: PollHandlers = {
+      onRefreshServer: invalidateServer,
+      setCommandState,
+      setTimezonePollError,
+      setNtpPollError,
+      patchCommand,
+    }
+    const onSettled = (commandId: string) => {
+      setPollCommands((prev) => removePollCommandById(prev, commandId))
     }
 
-    const pollAll = async () => {
-      for (const entry of pollCommands) {
-        try {
-          const record = await fetchCommand(serverId, entry.commandId)
-          if (cancelled) return
-          if (!isTerminalCommandStatus(record.status)) continue
+    const pollAll = () =>
+      Promise.all(
+        pollCommands.map((entry) =>
+          pollSingleCommand(entry, {
+            serverId,
+            cancelledRef,
+            handleUnauthorized,
+            pollHandlers,
+            onSettled,
+          }),
+        ),
+      )
 
-          if (
-            entry.kind === 'ping' ||
-            entry.kind === 'hostname' ||
-            entry.kind === 'reboot'
-          ) {
-            setCommandState((prev) => {
-              const active = prev.activeCommand
-              if (!active || active.commandId !== entry.commandId) {
-                return prev
-              }
-              const updated = applyDetailCommandPollResult(
-                prev,
-                active,
-                record,
-                onRefreshServer,
-              )
-              return updated ?? prev
-            })
-          } else if (entry.kind === 'timezone') {
-            if (record.status === 'succeeded') {
-              setTimezonePollError(null)
-              onRefreshServer()
-            } else {
-              setTimezonePollError(
-                record.error ?? `Timezone change ${record.status}`,
-              )
-            }
-          } else if (entry.kind === 'ntp') {
-            if (record.status === 'succeeded') {
-              setNtpPollError(null)
-              onRefreshServer()
-            } else {
-              setNtpPollError(record.error ?? `NTP change ${record.status}`)
-            }
-          }
-
-          setPollCommands((prev) =>
-            prev.filter((item) => item.commandId !== entry.commandId),
-          )
-        } catch (err) {
-          if (cancelled) return
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-          }
-          if (
-            entry.kind === 'ping' ||
-            entry.kind === 'hostname' ||
-            entry.kind === 'reboot'
-          ) {
-            patchCommand({
-              activeCommand: null,
-              pingRunning: false,
-              hostnameRunning: false,
-              rebootRunning: false,
-            })
-          } else if (entry.kind === 'timezone') {
-            setTimezonePollError(
-              err instanceof Error
-                ? err.message
-                : 'Failed to poll timezone command',
-            )
-          } else if (entry.kind === 'ntp') {
-            setNtpPollError(
-              err instanceof Error ? err.message : 'Failed to poll NTP command',
-            )
-          }
-          setPollCommands((prev) =>
-            prev.filter((item) => item.commandId !== entry.commandId),
-          )
-        }
-      }
-    }
-
-    void pollAll()
-    const timer = setInterval(() => void pollAll(), COMMAND_POLL_MS)
+    pollAll().catch(() => {
+      /* per-entry errors handled inside pollSingleCommand */
+    })
+    const timer = setInterval(() => {
+      pollAll().catch(() => {
+        /* per-entry errors handled inside pollSingleCommand */
+      })
+    }, COMMAND_POLL_MS)
     return () => {
-      cancelled = true
+      cancelledRef.current = true
       clearInterval(timer)
     }
   }, [pollCommands, serverId, handleUnauthorized, queryClient])
@@ -542,22 +817,15 @@ export function ServerDetailSection({
   }
 
   if (serverQuery.isLoading && !server) {
-    return (
-      <View style={styles.loadingRow}>
-        <ActivityIndicator size="small" color={colors.accent} />
-        <Text style={orgPanelStyles.muted}>Loading server…</Text>
-      </View>
-    )
+    return <ServerDetailLoading />
   }
 
   if (serverQuery.isError || !server) {
-    return (
-      <Text style={orgPanelStyles.error}>
-        {serverQuery.error instanceof Error
-          ? serverQuery.error.message
-          : 'Failed to load server'}
-      </Text>
-    )
+    const message =
+      serverQuery.error instanceof Error
+        ? serverQuery.error.message
+        : 'Failed to load server'
+    return <ServerDetailError message={message} />
   }
 
   const updateVm = deriveServerUpdateViewModel(server, updateState)
@@ -567,41 +835,46 @@ export function ServerDetailSection({
   const hostname = server.hostname?.trim()
   const daemonCommit = shortCommit(updateState.data?.current?.commit)
 
-  const handleDelete = async () => {
-    setDeleting(true)
-    setDeleteError(null)
-    try {
-      await deleteServer(serverId, orgId)
-      router.replace(defaultOrgDashboardHref(orgId))
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setDeleteError(formatServerDeleteBlockedError(err))
-    } finally {
-      setDeleting(false)
-    }
-  }
+  const handleDelete = createDeleteHandler({
+    serverId,
+    orgId,
+    router,
+    handleUnauthorized,
+    setDeleting,
+    setDeleteError,
+  })
 
-  const deletePanel =
-    canManage && !updateVm.colocated ? (
-      <ServerDeletePanel
-        deleting={deleting}
-        deleteError={deleteError}
-        confirming={confirmingDelete}
-        onRequestConfirm={() => setConfirmingDelete(true)}
-        onCancel={() => setConfirmingDelete(false)}
-        onConfirm={() => {
-          setConfirmingDelete(false)
-          void handleDelete()
-        }}
-      />
-    ) : canManage && updateVm.colocated ? (
-      <Text style={orgPanelStyles.muted}>
-        The co-located control plane server cannot be deleted.
-      </Text>
-    ) : null
+  const onPing = createPingHandler({ serverId, patchCommand, registerPollCommand, handleUnauthorized })
+  const onSetHostname = createSetHostnameHandler({
+    serverId,
+    patchCommand,
+    registerPollCommand,
+    handleUnauthorized,
+  })
+  const onReboot = createRebootHandler({ serverId, patchCommand, registerPollCommand, handleUnauthorized })
+  const onTriggerUpdate = createTriggerUpdateHandler({
+    serverId,
+    setUpdateState,
+    loadUpdate,
+    handleUnauthorized,
+  })
+  const onResetUpdate = createResetUpdateHandler({ serverId, setUpdateState, handleUnauthorized })
+
+  const deletePanel = renderServerDeletePanel({
+    canManage,
+    colocated: updateVm.colocated,
+    deleting,
+    deleteError,
+    confirmingDelete,
+    onRequestConfirm: () => setConfirmingDelete(true),
+    onCancel: () => setConfirmingDelete(false),
+    onConfirm: () => {
+      setConfirmingDelete(false)
+      handleDelete().catch(() => {
+        /* handleDelete reports failures via deleteError */
+      })
+    },
+  })
 
   return (
     <View style={styles.root}>
@@ -681,102 +954,11 @@ export function ServerDetailSection({
         ntpPollError: ntpPollError,
         updateState,
         updateVm,
-        onPing: () => {
-          patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
-          pingDaemon(serverId)
-            .then((result) => {
-              const entry: DetailPollCommand = {
-                commandId: result.commandId,
-                kind: 'ping',
-              }
-              registerPollCommand(entry)
-              patchCommand({ activeCommand: entry })
-            })
-            .catch(async (err) => {
-              if (isForbiddenError(err)) await handleUnauthorized()
-              patchCommand({
-                pingError: err instanceof Error ? err.message : 'Ping failed',
-                pingRunning: false,
-              })
-            })
-        },
-        onSetHostname: (host) => {
-          if (!host) {
-            patchCommand({ hostnameError: 'Hostname is required' })
-            return
-          }
-          patchCommand({ hostnameError: null, hostnameRunning: true, commandRecord: null })
-          setServerHostname(serverId, host)
-            .then((result) => {
-              const entry: DetailPollCommand = {
-                commandId: result.commandId,
-                kind: 'hostname',
-              }
-              registerPollCommand(entry)
-              patchCommand({ activeCommand: entry })
-            })
-            .catch(async (err) => {
-              if (isForbiddenError(err)) await handleUnauthorized()
-              patchCommand({
-                hostnameError:
-                  err instanceof Error ? err.message : 'Hostname change failed',
-                hostnameRunning: false,
-              })
-            })
-        },
-        onReboot: () => {
-          patchCommand({ rebootError: null, rebootRunning: true, commandRecord: null })
-          rebootServer(serverId)
-            .then((result) => {
-              const entry: DetailPollCommand = {
-                commandId: result.commandId,
-                kind: 'reboot',
-              }
-              registerPollCommand(entry)
-              patchCommand({ activeCommand: entry })
-            })
-            .catch(async (err) => {
-              if (isForbiddenError(err)) await handleUnauthorized()
-              patchCommand({
-                rebootError: err instanceof Error ? err.message : 'Reboot failed',
-                rebootRunning: false,
-              })
-            })
-        },
-        onTriggerUpdate: () => {
-          setUpdateState((prev) => ({ ...prev, triggering: true, error: null }))
-          triggerServerUpdate(serverId)
-            .then(() => void loadUpdate({ silent: true }))
-            .catch(async (err) => {
-              if (isForbiddenError(err)) await handleUnauthorized()
-              setUpdateState((prev) => ({
-                ...prev,
-                triggering: false,
-                error: err instanceof Error ? err.message : 'Update failed',
-              }))
-            })
-        },
-        onResetUpdate: () => {
-          setUpdateState((prev) => ({ ...prev, resetting: true, error: null }))
-          resetServerUpdateStatus(serverId)
-            .then((data) =>
-              setUpdateState({
-                loading: false,
-                triggering: data.status === 'updating',
-                resetting: false,
-                data,
-                error: null,
-              }),
-            )
-            .catch(async (err) => {
-              if (isForbiddenError(err)) await handleUnauthorized()
-              setUpdateState((prev) => ({
-                ...prev,
-                resetting: false,
-                error: err instanceof Error ? err.message : 'Reset failed',
-              }))
-            })
-        },
+        onPing,
+        onSetHostname,
+        onReboot,
+        onTriggerUpdate,
+        onResetUpdate,
         onEnqueueCommand: (response, kind) => {
           if (kind === 'timezone') {
             setTimezonePollError(null)

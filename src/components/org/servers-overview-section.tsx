@@ -11,27 +11,51 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useQuery } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
+  fetchIps,
   fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServersUpdateStatus,
+  fetchVpns,
   isForbiddenError,
   triggerServerUpdate,
+  type IpRecord,
   type OrgServerRecord,
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { serverDetailHref } from '@/lib/org-navigation'
-import { useCan } from '@/lib/query-client'
+import { useCan, useForbiddenRecovery } from '@/lib/query-client'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
 import { countryCodeToFlagEmoji } from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
+
+/** Group VPN-scope overlay addresses by server — O(1) page-level fan-in. */
+function overlayByServerId(
+  ips: readonly IpRecord[],
+  vpnIds: ReadonlySet<string>,
+): Map<string, string> {
+  const grouped = new Map<string, string[]>()
+  for (const ip of ips) {
+    if (!ip.serverId || !ip.vpnId || !vpnIds.has(ip.vpnId)) continue
+    const list = grouped.get(ip.serverId) ?? []
+    list.push(ip.address)
+    grouped.set(ip.serverId, list)
+  }
+  const result = new Map<string, string>()
+  for (const [serverId, addresses] of grouped) {
+    addresses.sort((a, b) => a.localeCompare(b))
+    result.set(serverId, addresses.join(', '))
+  }
+  return result
+}
 
 type UpdateState = {
   loading: boolean
@@ -319,17 +343,31 @@ function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   )
 }
 
+function ServerMeshCell({
+  overlayAddress,
+}: Readonly<{ overlayAddress: string | null }>) {
+  return (
+    <View style={[styles.tableCell, styles.colMesh]}>
+      <Text style={styles.meshText} numberOfLines={1}>
+        {overlayAddress ?? '—'}
+      </Text>
+    </View>
+  )
+}
+
 function OrgServerTableRow({
   orgId,
   server,
   rowIndex,
   selected,
+  overlayAddress,
   onToggleSelected,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
   rowIndex: number
   selected: boolean
+  overlayAddress: string | null
   onToggleSelected: () => void
 }>) {
   const router = useRouter()
@@ -353,6 +391,7 @@ function OrgServerTableRow({
     >
       <ServerNameCell server={server} />
       <ServerStatusCell server={server} />
+      <ServerMeshCell overlayAddress={overlayAddress} />
       <Pressable
         onPress={(event) => {
           event.stopPropagation?.()
@@ -378,6 +417,23 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
+
+  const vpnIpsQuery = useQuery({
+    queryKey: ['org', orgId, 'ips', { scope: 'vpn' }],
+    queryFn: () => fetchIps({ scope: 'vpn' }),
+  })
+  const vpnsQuery = useQuery({
+    queryKey: ['org', orgId, 'vpns'],
+    queryFn: fetchVpns,
+  })
+  useForbiddenRecovery(vpnIpsQuery.error)
+  useForbiddenRecovery(vpnsQuery.error)
+
+  const meshOverlayByServer = overlayByServerId(
+    vpnIpsQuery.data?.ips ?? [],
+    new Set((vpnsQuery.data?.vpns ?? []).map((vpn) => vpn.id)),
+  )
+
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
   const [addServerEligibility, setAddServerEligibility] = useState(() =>
     resolveServerAddEligibility(),
@@ -727,6 +783,9 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
                 <View style={[styles.tableCell, styles.colStatus]}>
                   <Text style={styles.tableHeaderText}>Status</Text>
                 </View>
+                <View style={[styles.tableCell, styles.colMesh]}>
+                  <Text style={styles.tableHeaderText}>Mesh</Text>
+                </View>
                 <View style={[styles.tableCell, styles.colCheck]}>
                   <SelectionCheckbox
                     checked={allSelected}
@@ -743,6 +802,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
                   server={server}
                   rowIndex={index}
                   selected={selectedIds.has(server.id)}
+                  overlayAddress={meshOverlayByServer.get(server.id) ?? null}
                   onToggleSelected={() => toggleSelected(server.id)}
                 />
               ))}
@@ -889,6 +949,17 @@ const styles = StyleSheet.create({
     minWidth: 140,
     gap: 4,
     alignItems: 'flex-start',
+  },
+  colMesh: {
+    flex: 1.2,
+    minWidth: 120,
+    alignItems: 'flex-start',
+  },
+  meshText: {
+    color: colors.stdout,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    lineHeight: 16,
   },
   colCheck: {
     width: 40,
