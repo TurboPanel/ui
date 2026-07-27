@@ -5,19 +5,30 @@ import {
 } from '@/lib/org-context'
 import type { ComposeDocument } from '@/lib/compose'
 import type {
+  ManagedBackupRecord,
+  ManagedBindScope,
+  ManagedDetailResponse,
   ManagedEnvironmentRecord,
-  ProvisionManagedBody,
+  ManagedListRecord,
+  ManagedSettings,
+  ManagedUserRecord,
 } from '@/lib/managed-services'
 export { isForbiddenError } from '@/lib/fetch-error-detail'
 
 export type { ComposeDocument } from '@/lib/compose'
 export type {
+  ManagedBackupRecord,
+  ManagedBindScope,
+  ManagedConnectionInfo,
+  ManagedDetailResponse,
+  ManagedEngineAvailability,
   ManagedEnvironmentRecord,
-  ProvisionManagedBody,
-} from '@/lib/managed-services'
-export type {
+  ManagedListRecord,
+  ManagedServerSummary,
   ManagedServiceEngine,
-  ManagedServiceStatus,
+  ManagedSettings,
+  ManagedStatus,
+  ManagedUserRecord,
 } from '@/lib/managed-services'
 
 const CLIENT_API = "/api/client/v1";
@@ -794,7 +805,16 @@ export type CreateProjectBody = {
   description?: string;
   type?: 'docker-compose' | 'template' | 'managed';
   code?: string;
+  /** Pins the scaffolded Production environment when creating a managed project. */
+  serverId?: string;
 };
+
+export type ManagedCommandResponse = {
+  ok: true
+  commandId: string
+  status: 'queued'
+  serverId: string
+}
 
 export type HealthCheckPolicy = 'disabled' | 'warn' | 'required';
 
@@ -973,7 +993,8 @@ export type PeerRecord = {
   endpointIpId: string | null
   tunnelIpId: string | null
   role: PeerRole
-  publicKey: string
+  /** Null until the daemon reports a key after Apply. */
+  publicKey: string | null
   listenPort: number | null
   endpoint: string | null
   metadata: Record<string, unknown> | null
@@ -1601,7 +1622,8 @@ export async function createPeer(
   vpnId: string,
   body: {
     serverId: string
-    publicKey: string
+    /** Optional — omit so the daemon generates the keypair on Apply. */
+    publicKey?: string
     role?: PeerRole
     endpointIpId?: string | null
     /**
@@ -2514,23 +2536,276 @@ export async function fetchServerMetricsSummary(
 
 export async function fetchEnvironmentManaged(
   environmentId: string,
-): Promise<{ managed: ManagedEnvironmentRecord | null }> {
+): Promise<ManagedDetailResponse> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`)
 }
 
-export async function provisionEnvironmentManaged(
+/**
+ * Create (or return already-provisioned) managed service for an environment.
+ * When present, `rootPassword` is **show-once** — never persist it beyond the
+ * reveal UI.
+ */
+export async function createEnvironmentManaged(
   environmentId: string,
-  body?: ProvisionManagedBody,
+  body?: {
+    displayName?: string
+    exposure?: {
+      enabled: boolean
+      publishedPort?: number
+      bind?: ManagedBindScope
+    }
+  },
 ): Promise<{
   ok: true
-  alreadyProvisioned?: boolean
   managed: ManagedEnvironmentRecord
+  commandId?: string
+  serverId?: string
+  rootPassword?: string
+  alreadyProvisioned?: boolean
 }> {
   return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/provision`,
+    `${CLIENT_API}/environments/${environmentId}/managed`,
     {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
     },
+  )
+}
+
+export async function updateEnvironmentManaged(
+  environmentId: string,
+  body: { settings: ManagedSettings },
+): Promise<{
+  ok: true
+  managed: ManagedEnvironmentRecord
+  settings: ManagedSettings
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function applyEnvironmentManaged(
+  environmentId: string,
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/apply`,
+    { method: 'POST', body: JSON.stringify({}) },
+  )
+}
+
+export async function runManagedLifecycle(
+  environmentId: string,
+  action: 'start' | 'stop' | 'restart',
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/lifecycle`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    },
+  )
+}
+
+export async function deleteEnvironmentManaged(
+  environmentId: string,
+): Promise<{
+  ok: true
+  deleted: boolean
+  commandId?: string
+  serverId?: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed`,
+    { method: 'DELETE' },
+  )
+}
+
+/**
+ * Rotate the managed root password. The returned `rootPassword` is
+ * **show-once** — never persist it beyond the reveal UI.
+ */
+export async function rotateManagedRootPassword(
+  environmentId: string,
+): Promise<{
+  ok: true
+  rootPassword: string
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/root-password`,
+    { method: 'POST', body: JSON.stringify({}) },
+  )
+}
+
+export async function fetchManagedUsers(
+  environmentId: string,
+): Promise<{ users: ManagedUserRecord[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users`,
+  )
+}
+
+/**
+ * Create a managed DB user. The returned `password` is **show-once** — never
+ * persist it beyond the reveal UI.
+ */
+export async function createManagedUser(
+  environmentId: string,
+  body: {
+    username: string
+    databases: string[]
+    privileges?: string[]
+  },
+): Promise<{
+  ok: true
+  user: ManagedUserRecord
+  password: string
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function deleteManagedUser(
+  environmentId: string,
+  principalId: string,
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function fetchManagedDatabases(
+  environmentId: string,
+): Promise<{ databases: string[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/databases`,
+  )
+}
+
+export async function createManagedDatabase(
+  environmentId: string,
+  body: { name: string },
+): Promise<{
+  ok: true
+  databases: string[]
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/databases`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function deleteManagedDatabase(
+  environmentId: string,
+  name: string,
+): Promise<{
+  ok: true
+  databases: string[]
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/databases/${encodeURIComponent(name)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function fetchManagedStatus(
+  environmentId: string,
+): Promise<{
+  status: ManagedEnvironmentRecord['status']
+  host: string | null
+  port: number | null
+  containers: ContainerRecord[]
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/status`,
+  )
+}
+
+export async function fetchManagedLogs(
+  environmentId: string,
+  tail?: number,
+): Promise<{ logs: string }> {
+  const query =
+    typeof tail === 'number' ? `?tail=${encodeURIComponent(String(tail))}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/logs${query}`,
+  )
+}
+
+/**
+ * Org-wide managed service list (Postgres-backed). Single O(1) call for the
+ * Managed overview table — never fan out per-row status or Durable Object reads.
+ */
+export async function fetchOrganizationManaged(
+  orgId: string,
+): Promise<{ managed: ManagedListRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/managed`)
+}
+
+/**
+ * Backup metadata only — the daemon streams dumps to its own state dir; there
+ * is no download endpoint and no dump bytes ever cross this API.
+ */
+export async function fetchManagedBackups(
+  environmentId: string,
+): Promise<{ backups: ManagedBackupRecord[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/backups`,
+  )
+}
+
+export async function createManagedBackup(
+  environmentId: string,
+  body?: { database?: string },
+): Promise<{
+  ok: true
+  backupId: string
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/backups`,
+    { method: 'POST', body: JSON.stringify(body ?? {}) },
+  )
+}
+
+export async function deleteManagedBackup(
+  environmentId: string,
+  backupId: string,
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/backups/${encodeURIComponent(backupId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function restoreManagedBackup(
+  environmentId: string,
+  backupId: string,
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/backups/${encodeURIComponent(backupId)}/restore`,
+    { method: 'POST', body: JSON.stringify({}) },
   )
 }

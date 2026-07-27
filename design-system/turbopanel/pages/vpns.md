@@ -21,9 +21,9 @@
 ## Detail layout (stacked panels)
 
 1. **Mesh (CIDR)** — monospace `vpn.cidr`; manage-gated edit via `updateVpn({ cidr })`; every peer interface takes this prefix
-2. **Peers (role · overlay address · site · primary)** — Role chip (Gateway / Member), read-only overlay from `tunnelIpId`, site from `server.datacenterDisplayName`, Primary badge from `resolvePrimaryGatewayByDatacenter`; Endpoint IP picker; manage can override overlay (`createIp` scope=`vpn` → `updatePeer({ tunnelIpId })`) + remove
-3. **Add peer (role, auto-assigned overlay)** — server picker, public key, Role chip (default Member), optional tunnel address (“Leave blank to auto-assign from the mesh CIDR”), optional listen port / endpoint / Endpoint IP / write-only PSK
-4. **Apply WireGuard** — `POST …/apply`; show interface name + per-peer queued/failed results (command ids); surface friendly prepare errors (`gateway_datacenter_required`, `gateway_datacenter_cidr_required`, …) above the rows. Never show or re-display `presharedKey`.
+2. **Peers (role · overlay address · site · primary)** — Role chip (Gateway / Member), read-only overlay from `tunnelIpId`, site from `server.datacenterDisplayName`, Primary badge from `resolvePrimaryGatewayByDatacenter`; listen port / endpoint shown read-only (auto-configured); public key shows **Pending** until Apply reconciles the daemon key; manage can override overlay (`createIp` scope=`vpn` → `updatePeer({ tunnelIpId })`) + remove
+3. **Add peer** — server picker, Role chip (default Member), optional tunnel address (“Leave blank to auto-assign from the mesh CIDR”). No public key / listen port / endpoint / PSK inputs — instance defaults port `51820`, picks the server’s public IP as endpoint, and the daemon generates keys on Apply
+4. **Apply WireGuard** — `POST …/apply`; show interface name + per-peer queued/failed results (command ids); surface friendly prepare errors (`gateway_datacenter_required`, `gateway_datacenter_cidr_required`, …) above the rows. Bootstrap pass may omit peers without keys; once all keys reconcile, the consumer enqueues a follow-up full mesh apply. Never show or re-display `presharedKey`.
 
 All mutations gated by `useCan('organization', orgId, 'organization:manage')` as a display hint.
 
@@ -31,4 +31,5 @@ All mutations gated by `useCan('organization', orgId, 'organization:manage')` as
 
 - ❌ Peer counts via one bounded `useQueries` per mesh — never per server (fleet-sized N+1)
 - ❌ Showing WireGuard `presharedKey` anywhere after write
+- ❌ Asking operators for public keys, listen ports, endpoints, or PSKs on Add peer
 - ❌ Polling Durable Objects for apply status — use Postgres command records if/when polling is added

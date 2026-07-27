@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Platform,
   Pressable,
@@ -10,24 +10,32 @@ import {
   View,
 } from 'react-native'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import { emptyComposeDocument, type ComposeDocument } from '@/lib/compose'
+import { withGuardedAction } from '@/lib/guarded-action'
 import {
+  createEnvironmentManaged,
   createProject,
+  fetchOrgServers,
   fetchProjectCatalog,
+  fetchVisibleEnvironments,
   fetchVisibleWorkspaces,
   isForbiddenError,
   updateProject,
   type CatalogSummary,
+  type OrgServerRecord,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
 import {
+  isValidPublishedPort,
   managedCatalogEntryForCode,
+  managedErrorMessage,
   sortManagedCatalogEntries,
-  type ManagedServiceStatus,
+  type ManagedEngineAvailability,
 } from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
@@ -49,6 +57,7 @@ const webInputStyle = {
 
 type ProjectType = 'docker-compose' | 'template' | 'managed'
 type WizardStep = 1 | 2 | 3 | 4
+type ManagedWizardStep = 'engine' | 'details' | 'placement' | 'secret'
 
 type FieldErrors = {
   displayName?: string
@@ -201,14 +210,12 @@ function TypeStep({
   )
 }
 
-function catalogEntryStatusLabel(status: ManagedServiceStatus): string {
+function catalogEntryStatusLabel(status: ManagedEngineAvailability): string {
   switch (status) {
     case 'available':
       return 'Available'
     case 'coming-soon':
       return 'Coming soon'
-    default:
-      return status
   }
 }
 
@@ -235,6 +242,7 @@ function CatalogList({
             ? catalogMeta?.status === 'available'
             : true
           const comingSoon = catalogMeta?.status === 'coming-soon'
+          const availability = catalogMeta?.status
           return (
             <Pressable
               key={entry.code}
@@ -250,22 +258,22 @@ function CatalogList({
                 <Text style={styles.catalogTitle}>
                   {catalogMeta?.label ?? entry.displayName}
                 </Text>
-                {catalogMeta ? (
+                {catalogMeta && availability ? (
                   <View
                     style={[
                       styles.catalogStatusPill,
-                      catalogMeta.status === 'available' && styles.catalogStatusPillLive,
+                      availability === 'available' && styles.catalogStatusPillLive,
                       comingSoon && styles.catalogStatusPillMuted,
                     ]}
                   >
                     <Text
                       style={[
                         styles.catalogStatusPillText,
-                        catalogMeta.status === 'available' &&
+                        availability === 'available' &&
                           styles.catalogStatusPillTextLive,
                       ]}
                     >
-                      {catalogEntryStatusLabel(catalogMeta.status)}
+                      {catalogEntryStatusLabel(availability)}
                     </Text>
                   </View>
                 ) : null}
@@ -276,7 +284,7 @@ function CatalogList({
               </Text>
               {catalogMeta ? (
                 <Text style={orgPanelStyles.muted}>
-                  Default port {catalogMeta.defaultPort}
+                  Default port {catalogMeta.defaultPort} · {catalogMeta.defaultImage}
                 </Text>
               ) : null}
             </Pressable>
@@ -593,10 +601,644 @@ function ComposeSetupStep({
   )
 }
 
+function ManagedDetailsStep({
+  selectedCode,
+  resolvedWorkspaceId,
+  workspacesLoading,
+  workspacesError,
+  workspaces,
+  selectedWorkspaceId,
+  onWorkspaceSelect,
+  displayName,
+  fieldErrors,
+  apiError,
+  onDisplayNameChange,
+  onContinue,
+}: Readonly<{
+  selectedCode: string | null
+  resolvedWorkspaceId?: string
+  workspacesLoading: boolean
+  workspacesError: string | null
+  workspaces: WorkspaceRecord[]
+  selectedWorkspaceId?: string
+  onWorkspaceSelect: (workspaceId: string) => void
+  displayName: string
+  fieldErrors: FieldErrors
+  apiError: string | null
+  onDisplayNameChange: (value: string) => void
+  onContinue: () => void
+}>) {
+  const catalogMeta = selectedCode
+    ? managedCatalogEntryForCode(selectedCode)
+    : undefined
+  return (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>Project details</Text>
+      {catalogMeta ? (
+        <Text style={orgPanelStyles.muted}>
+          {catalogMeta.label} · port {catalogMeta.defaultPort}
+        </Text>
+      ) : null}
+
+      {!resolvedWorkspaceId ? (
+        <WorkspacePicker
+          loading={workspacesLoading}
+          error={workspacesError}
+          workspaces={workspaces}
+          selectedWorkspaceId={selectedWorkspaceId}
+          workspaceError={fieldErrors.workspaceId}
+          onSelect={onWorkspaceSelect}
+        />
+      ) : null}
+
+      <View style={styles.field}>
+        <Text style={styles.label}>Name *</Text>
+        <TextInput
+          style={inputStyle(Boolean(fieldErrors.displayName))}
+          value={displayName}
+          onChangeText={onDisplayNameChange}
+          placeholder="e.g. production-db"
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={255}
+        />
+        {fieldErrors.displayName ? (
+          <Text style={styles.fieldError}>{fieldErrors.displayName}</Text>
+        ) : null}
+      </View>
+
+      {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
+
+      <Pressable style={styles.primaryButton} onPress={onContinue}>
+        <Text style={styles.primaryButtonText}>Continue</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function ManagedPlacementStep({
+  servers,
+  serversLoading,
+  serversError,
+  selectedServerId,
+  onSelectServer,
+  expose,
+  onToggleExpose,
+  publishedPort,
+  onPublishedPortChange,
+  defaultPort,
+  apiError,
+  strandedProjectId,
+  onOpenStranded,
+  submitting,
+  onSubmit,
+}: Readonly<{
+  servers: OrgServerRecord[]
+  serversLoading: boolean
+  serversError: string | null
+  selectedServerId: string | null
+  onSelectServer: (serverId: string) => void
+  expose: boolean
+  onToggleExpose: () => void
+  publishedPort: string
+  onPublishedPortChange: (value: string) => void
+  defaultPort: number
+  apiError: string | null
+  strandedProjectId: string | null
+  onOpenStranded: () => void
+  submitting: boolean
+  onSubmit: () => void
+}>) {
+  return (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>Choose a server</Text>
+      <Text style={styles.stepLead}>
+        The managed service runs on one connected server. Offline hosts cannot
+        be selected.
+      </Text>
+      {serversError ? <Text style={orgPanelStyles.error}>{serversError}</Text> : null}
+      {serversLoading ? (
+        <Text style={orgPanelStyles.muted}>Loading servers…</Text>
+      ) : (
+        <View style={styles.workspaceList}>
+          {servers.map((server) => {
+            const selected = server.id === selectedServerId
+            const offline = !server.connected
+            return (
+              <Pressable
+                key={server.id}
+                style={[
+                  styles.workspaceCard,
+                  selected && styles.workspaceCardSelected,
+                  offline && styles.catalogCardDisabled,
+                ]}
+                disabled={offline || submitting}
+                onPress={() => onSelectServer(server.id)}
+              >
+                <Text style={styles.workspaceCardLabel}>
+                  {server.displayName?.trim() ||
+                    server.hostname ||
+                    server.id}
+                </Text>
+                {offline ? (
+                  <Text style={styles.workspaceCardDescription}>Offline</Text>
+                ) : null}
+              </Pressable>
+            )
+          })}
+        </View>
+      )}
+
+      <Pressable
+        style={styles.exposeToggle}
+        onPress={onToggleExpose}
+        disabled={submitting}
+      >
+        <View style={[styles.exposeCheckbox, expose && styles.exposeCheckboxChecked]}>
+          {expose ? <Text style={styles.exposeCheckmark}>✓</Text> : null}
+        </View>
+        <Text style={styles.exposeLabel}>Expose on port</Text>
+      </Pressable>
+      {expose ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>Published port</Text>
+          <TextInput
+            style={inputStyle(false)}
+            value={publishedPort}
+            onChangeText={onPublishedPortChange}
+            keyboardType="numeric"
+            placeholder={String(defaultPort)}
+            placeholderTextColor={colors.textDim}
+            editable={!submitting}
+          />
+        </View>
+      ) : null}
+
+      {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
+      {strandedProjectId ? (
+        <Pressable style={styles.secondaryButton} onPress={onOpenStranded}>
+          <Text style={styles.secondaryButtonText}>Open project</Text>
+        </Pressable>
+      ) : null}
+
+      <Pressable
+        style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+        disabled={submitting || !selectedServerId}
+        onPress={onSubmit}
+      >
+        <Text style={styles.primaryButtonText}>
+          {submitting ? 'Creating…' : 'Create managed service'}
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function managedStepIndex(step: ManagedWizardStep): number {
+  switch (step) {
+    case 'engine':
+      return 1
+    case 'details':
+      return 2
+    case 'placement':
+    case 'secret':
+      return 3
+  }
+}
+
+function ManagedSecretStep({
+  rootPassword,
+  rootUsername,
+  onDone,
+}: Readonly<{
+  rootPassword: string | null
+  rootUsername: string | undefined
+  onDone: () => void
+}>) {
+  if (rootPassword) {
+    return (
+      <View style={styles.stepContent}>
+        <Text style={styles.stepTitle}>Save your root password</Text>
+        <SecretReveal
+          username={rootUsername}
+          password={rootPassword}
+          onContinue={onDone}
+          continueLabel="Continue to project"
+        />
+      </View>
+    )
+  }
+  return (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepLead}>
+        Managed service created. Passwords are not shown again after this
+        step.
+      </Text>
+      <Pressable style={styles.primaryButton} onPress={onDone}>
+        <Text style={styles.primaryButtonText}>Continue to project</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+type WizardView =
+  | 'type'
+  | 'managed-engine'
+  | 'managed-details'
+  | 'managed-placement'
+  | 'managed-secret'
+  | 'catalog'
+  | 'details'
+  | 'compose'
+
+function resolveWizardView(
+  isManagedPath: boolean,
+  managedStep: ManagedWizardStep | null,
+  step: WizardStep,
+): WizardView {
+  if (isManagedPath && managedStep) {
+    if (managedStep === 'engine') return 'managed-engine'
+    if (managedStep === 'details') return 'managed-details'
+    if (managedStep === 'placement') return 'managed-placement'
+    return 'managed-secret'
+  }
+  switch (step) {
+    case 1:
+      return 'type'
+    case 2:
+      return 'catalog'
+    case 3:
+      return 'details'
+    default:
+      return 'compose'
+  }
+}
+
+type WizardStepRenderProps = {
+  onTypeSelect: (type: ProjectType) => void
+  catalogLoading: boolean
+  catalogError: string | null
+  catalogEntriesForStep: CatalogSummary[]
+  selectedCode: string | null
+  onCatalogSelect: (code: string) => void
+  selectedType: ProjectType | null
+  resolvedWorkspaceId?: string
+  workspacesLoading: boolean
+  workspacesError: string | null
+  workspaces: WorkspaceRecord[]
+  selectedWorkspaceId?: string
+  onWorkspaceSelect: (workspaceId: string) => void
+  displayName: string
+  description: string
+  fieldErrors: FieldErrors
+  apiError: string | null
+  submitting: boolean
+  onDisplayNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onDetailsContinue: () => void
+  detailsContinueLabel: string
+  onManagedDetailsContinue: () => void
+  servers: OrgServerRecord[]
+  serversLoading: boolean
+  serversError: string | null
+  selectedServerId: string | null
+  onSelectServer: (serverId: string) => void
+  expose: boolean
+  onToggleExpose: () => void
+  publishedPort: string
+  onPublishedPortChange: (value: string) => void
+  defaultPort: number
+  createdProjectId: string | null
+  onOpenStranded: () => void
+  onManagedSubmit: () => void
+  rootPassword: string | null
+  rootUsername: string | undefined
+  onManagedSecretDone: () => void
+  composeDraft: ComposeDocument
+  onComposeChange: (document: ComposeDocument) => void
+  onComposeCreate: () => void
+}
+
+/** Renders exactly one wizard step body for `view`; kept as a flat switch
+ * (no nesting) in its own function so the wizard component's own cognitive
+ * complexity stays low regardless of how many steps exist. */
+function renderWizardStep(view: WizardView, props: WizardStepRenderProps) {
+  switch (view) {
+    case 'type':
+      return <TypeStep onSelect={props.onTypeSelect} />
+    case 'managed-engine':
+      return (
+        <CatalogStep
+          loading={props.catalogLoading}
+          error={props.catalogError}
+          entries={props.catalogEntriesForStep}
+          selectedCode={props.selectedCode}
+          onSelect={props.onCatalogSelect}
+          managedEngineCards
+        />
+      )
+    case 'managed-details':
+      return (
+        <ManagedDetailsStep
+          selectedCode={props.selectedCode}
+          resolvedWorkspaceId={props.resolvedWorkspaceId}
+          workspacesLoading={props.workspacesLoading}
+          workspacesError={props.workspacesError}
+          workspaces={props.workspaces}
+          selectedWorkspaceId={props.selectedWorkspaceId}
+          onWorkspaceSelect={props.onWorkspaceSelect}
+          displayName={props.displayName}
+          fieldErrors={props.fieldErrors}
+          apiError={props.apiError}
+          onDisplayNameChange={props.onDisplayNameChange}
+          onContinue={props.onManagedDetailsContinue}
+        />
+      )
+    case 'managed-placement':
+      return (
+        <ManagedPlacementStep
+          servers={props.servers}
+          serversLoading={props.serversLoading}
+          serversError={props.serversError}
+          selectedServerId={props.selectedServerId}
+          onSelectServer={props.onSelectServer}
+          expose={props.expose}
+          onToggleExpose={props.onToggleExpose}
+          publishedPort={props.publishedPort}
+          onPublishedPortChange={props.onPublishedPortChange}
+          defaultPort={props.defaultPort}
+          apiError={props.apiError}
+          strandedProjectId={props.createdProjectId}
+          onOpenStranded={props.onOpenStranded}
+          submitting={props.submitting}
+          onSubmit={props.onManagedSubmit}
+        />
+      )
+    case 'managed-secret':
+      return (
+        <ManagedSecretStep
+          rootPassword={props.rootPassword}
+          rootUsername={props.rootUsername}
+          onDone={props.onManagedSecretDone}
+        />
+      )
+    case 'catalog':
+      return (
+        <CatalogStep
+          loading={props.catalogLoading}
+          error={props.catalogError}
+          entries={props.catalogEntriesForStep}
+          selectedCode={props.selectedCode}
+          onSelect={props.onCatalogSelect}
+          managedEngineCards={false}
+        />
+      )
+    case 'details':
+      return (
+        <DetailsStep
+          selectedType={props.selectedType}
+          selectedCode={props.selectedCode}
+          resolvedWorkspaceId={props.resolvedWorkspaceId}
+          workspacesLoading={props.workspacesLoading}
+          workspacesError={props.workspacesError}
+          workspaces={props.workspaces}
+          selectedWorkspaceId={props.selectedWorkspaceId}
+          onWorkspaceSelect={props.onWorkspaceSelect}
+          displayName={props.displayName}
+          description={props.description}
+          fieldErrors={props.fieldErrors}
+          apiError={props.apiError}
+          submitting={props.submitting}
+          onDisplayNameChange={props.onDisplayNameChange}
+          onDescriptionChange={props.onDescriptionChange}
+          onContinue={props.onDetailsContinue}
+          continueLabel={props.detailsContinueLabel}
+        />
+      )
+    case 'compose':
+      return (
+        <ComposeSetupStep
+          composeDraft={props.composeDraft}
+          onComposeChange={props.onComposeChange}
+          saving={false}
+          apiError={props.apiError}
+          submitting={props.submitting}
+          onCreate={props.onComposeCreate}
+        />
+      )
+  }
+}
+
+function resolveInitialStep(type: ProjectType): {
+  step: WizardStep
+  managedStep: ManagedWizardStep | null
+} {
+  if (type === 'managed') {
+    return { step: 1, managedStep: 'engine' }
+  }
+  return { step: type === 'docker-compose' ? 3 : 2, managedStep: null }
+}
+
+/** Preselect a project type from `?type=` (e.g. managed overview → managed branch). */
+function resolveTypeSearchParam(
+  typeParam: string | string[] | undefined,
+): ProjectType | null {
+  const value = Array.isArray(typeParam) ? typeParam[0] : typeParam
+  if (value === 'managed' || value === 'docker-compose' || value === 'template') {
+    return value
+  }
+  return null
+}
+
+type BackTransition = {
+  managedStep?: ManagedWizardStep | null
+  selectedType?: ProjectType | null
+  selectedCode?: string | null
+  step?: WizardStep
+}
+
+/** Pure decision table for the Back button — kept outside the component so
+ * its own (deep) branching is assessed on its own complexity budget. */
+function resolveBackTransition(
+  isManagedPath: boolean,
+  managedStep: ManagedWizardStep | null,
+  step: WizardStep,
+  selectedType: ProjectType | null,
+): BackTransition {
+  if (isManagedPath && managedStep) {
+    if (managedStep === 'secret') return {}
+    if (managedStep === 'placement') return { managedStep: 'details' }
+    if (managedStep === 'details') return { managedStep: 'engine' }
+    return {
+      managedStep: null,
+      selectedType: null,
+      selectedCode: null,
+      step: 1,
+    }
+  }
+  if (step === 4) return { step: 3 }
+  if (step === 3 && selectedType === 'docker-compose') {
+    return { step: 1, selectedType: null }
+  }
+  if (step === 3) return { step: 2 }
+  if (step === 2) return { step: 1, selectedType: null, selectedCode: null }
+  return {}
+}
+
+function applyBackTransition(
+  transition: BackTransition,
+  setManagedStep: (value: ManagedWizardStep | null) => void,
+  setSelectedType: (value: ProjectType | null) => void,
+  setSelectedCode: (value: string | null) => void,
+  setStep: (value: WizardStep) => void,
+) {
+  if (transition.managedStep !== undefined) setManagedStep(transition.managedStep)
+  if (transition.selectedType !== undefined) setSelectedType(transition.selectedType)
+  if (transition.selectedCode !== undefined) setSelectedCode(transition.selectedCode)
+  if (transition.step !== undefined) setStep(transition.step)
+}
+
+/**
+ * Each `use*Loader` hook below owns one "load on mount, cancel-safe, forbidden-
+ * aware" data fetch as an isolated function so its cancellation/error-handling
+ * branching never counts against `ProjectCreateSection`'s own complexity.
+ */
+function useWorkspacesLoader(
+  resolvedWorkspaceId: string | undefined,
+  handleUnauthorized: () => Promise<void>,
+): { workspaces: WorkspaceRecord[]; loading: boolean; error: string | null } {
+  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (resolvedWorkspaceId) {
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      const result = await withGuardedAction(
+        fetchVisibleWorkspaces,
+        handleUnauthorized,
+        'Failed to load workspaces',
+      )
+      if (cancelled) return
+      if (result.ok) {
+        setWorkspaces(result.value.workspaces)
+      } else if (result.error) {
+        setError(result.error)
+      }
+      setLoading(false)
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [resolvedWorkspaceId, handleUnauthorized])
+
+  return { workspaces, loading, error }
+}
+
+function useCatalogLoader(
+  step: WizardStep,
+  managedStep: ManagedWizardStep | null,
+  selectedType: ProjectType | null,
+  handleUnauthorized: () => Promise<void>,
+): { catalog: CatalogSummary[]; loading: boolean; error: string | null } {
+  const [catalog, setCatalog] = useState<CatalogSummary[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const needsCatalog =
+      (step === 2 && selectedType === 'template') ||
+      (managedStep === 'engine' && selectedType === 'managed')
+    if (!needsCatalog) {
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      const result = await withGuardedAction(
+        fetchProjectCatalog,
+        handleUnauthorized,
+        'Failed to load catalog',
+      )
+      if (cancelled) return
+      if (result.ok) {
+        setCatalog(result.value.catalog)
+      } else if (result.error) {
+        setError(result.error)
+      }
+      setLoading(false)
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [step, managedStep, selectedType, handleUnauthorized])
+
+  return { catalog, loading, error }
+}
+
+function useServersLoader(
+  managedStep: ManagedWizardStep | null,
+  handleUnauthorized: () => Promise<void>,
+): {
+  servers: OrgServerRecord[]
+  loading: boolean
+  error: string | null
+  selectedServerId: string | null
+  setSelectedServerId: (value: string | null) => void
+} {
+  const [servers, setServers] = useState<OrgServerRecord[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (managedStep !== 'placement') {
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      const result = await withGuardedAction(
+        fetchOrgServers,
+        handleUnauthorized,
+        'Failed to load servers',
+      )
+      if (cancelled) return
+      if (result.ok) {
+        setServers(result.value.servers)
+        const connected = result.value.servers.find((row) => row.connected)
+        setSelectedServerId(connected?.id ?? null)
+      } else if (result.error) {
+        setError(result.error)
+      }
+      setLoading(false)
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [managedStep, handleUnauthorized])
+
+  return { servers, loading, error, selectedServerId, setSelectedServerId }
+}
+
 export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const { handleUnauthorized } = useAuth()
-  const { workspaceId } = useLocalSearchParams<{ workspaceId?: string }>()
+  const { workspaceId, type: typeParam } = useLocalSearchParams<{
+    workspaceId?: string
+    type?: string
+  }>()
   const workspaceScope = useOptionalWorkspaceScope()
   const urlWorkspaceId =
     typeof workspaceId === 'string' && workspaceId.length > 0
@@ -607,18 +1249,20 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       ? workspaceScope.scopeId
       : undefined
   const resolvedWorkspaceId = urlWorkspaceId ?? scopeWorkspaceId
+  const initialType = resolveTypeSearchParam(typeParam)
+  const initialStep = initialType
+    ? resolveInitialStep(initialType)
+    : { step: 1 as WizardStep, managedStep: null }
 
-  const [step, setStep] = useState<WizardStep>(1)
-  const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
+  const [step, setStep] = useState<WizardStep>(initialStep.step)
+  const [managedStep, setManagedStep] = useState<ManagedWizardStep | null>(
+    initialStep.managedStep,
+  )
+  const [selectedType, setSelectedType] = useState<ProjectType | null>(
+    initialType,
+  )
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
-  const [catalog, setCatalog] = useState<CatalogSummary[]>([])
-  const [catalogLoading, setCatalogLoading] = useState(false)
-  const [catalogError, setCatalogError] = useState<string | null>(null)
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
-  const [workspacesLoading, setWorkspacesLoading] = useState(false)
-  const [workspacesError, setWorkspacesError] = useState<string | null>(null)
   const [pickedWorkspaceId, setPickedWorkspaceId] = useState<string | undefined>()
-  const selectedWorkspaceId = resolvedWorkspaceId ?? pickedWorkspaceId
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [composeDraft, setComposeDraft] = useState<ComposeDocument>(() =>
@@ -627,84 +1271,46 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [expose, setExpose] = useState(false)
+  const [publishedPort, setPublishedPort] = useState('')
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
+  const [rootPassword, setRootPassword] = useState<string | null>(null)
+  const managedSubmitGuard = useRef(false)
+  const isManagedPath = selectedType === 'managed' && managedStep !== null
+  const managedCatalogMeta = selectedCode
+    ? managedCatalogEntryForCode(selectedCode)
+    : undefined
+  const selectedWorkspaceId = resolvedWorkspaceId ?? pickedWorkspaceId
+
+  const {
+    workspaces,
+    loading: workspacesLoading,
+    error: workspacesError,
+  } = useWorkspacesLoader(resolvedWorkspaceId, handleUnauthorized)
+  const {
+    catalog,
+    loading: catalogLoading,
+    error: catalogError,
+  } = useCatalogLoader(step, managedStep, selectedType, handleUnauthorized)
+  const {
+    servers,
+    loading: serversLoading,
+    error: serversError,
+    selectedServerId,
+    setSelectedServerId,
+  } = useServersLoader(managedStep, handleUnauthorized)
 
   useEffect(() => {
-    if (resolvedWorkspaceId) {
-      return
+    if (managedCatalogMeta?.defaultPort != null && !publishedPort) {
+      setPublishedPort(String(managedCatalogMeta.defaultPort))
     }
-
-    let cancelled = false
-
-    const load = async () => {
-      setWorkspacesLoading(true)
-      setWorkspacesError(null)
-      try {
-        const result = await fetchVisibleWorkspaces()
-        if (!cancelled) {
-          setWorkspaces(result.workspaces)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setWorkspacesError(
-            err instanceof Error ? err.message : 'Failed to load workspaces',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setWorkspacesLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [resolvedWorkspaceId, handleUnauthorized])
+  }, [managedCatalogMeta?.defaultPort, publishedPort])
 
   useEffect(() => {
-    if (step !== 2 || !selectedType || selectedType === 'docker-compose') {
-      return
-    }
-
-    let cancelled = false
-
-    const load = async () => {
-      setCatalogLoading(true)
-      setCatalogError(null)
-      try {
-        const result = await fetchProjectCatalog()
-        if (!cancelled) {
-          setCatalog(result.catalog)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setCatalogError(
-            err instanceof Error ? err.message : 'Failed to load catalog',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setCatalogLoading(false)
-        }
-      }
-    }
-
-    void load()
-
     return () => {
-      cancelled = true
+      setRootPassword(null)
     }
-  }, [step, selectedType, handleUnauthorized])
+  }, [])
 
   const filteredCatalog = filterCatalogByType(catalog, selectedType)
   const catalogEntriesForStep =
@@ -716,34 +1322,35 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     setSelectedType(type)
     setSelectedCode(null)
     setApiError(null)
-    setStep(type === 'docker-compose' ? 3 : 2)
+    setCreatedProjectId(null)
+    setRootPassword(null)
+    const next = resolveInitialStep(type)
+    setStep(next.step)
+    setManagedStep(next.managedStep)
   }
 
   const handleBack = () => {
     setApiError(null)
-    if (step === 4) {
-      setStep(3)
-      return
-    }
-    if (step === 3 && selectedType === 'docker-compose') {
-      setStep(1)
-      setSelectedType(null)
-      return
-    }
-    if (step === 3) {
-      setStep(2)
-      return
-    }
-    if (step === 2) {
-      setStep(1)
-      setSelectedType(null)
-      setSelectedCode(null)
-    }
+    applyBackTransition(
+      resolveBackTransition(isManagedPath, managedStep, step, selectedType),
+      setManagedStep,
+      setSelectedType,
+      setSelectedCode,
+      setStep,
+    )
   }
 
   const handleCatalogSelect = (code: string) => {
     setSelectedCode(code)
-    setStep(3)
+    if (selectedType !== 'managed') {
+      setStep(3)
+      return
+    }
+    const meta = managedCatalogEntryForCode(code)
+    if (meta?.defaultPort != null) {
+      setPublishedPort(String(meta.defaultPort))
+    }
+    setManagedStep('details')
   }
 
   const handleWorkspaceSelect = (id: string) => {
@@ -790,10 +1397,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     if (!selectedType) {
       return
     }
-    if (
-      (selectedType === 'template' || selectedType === 'managed') &&
-      !selectedCode
-    ) {
+    if (selectedType === 'template' && !selectedCode) {
       setApiError('Select a catalog entry before continuing.')
       return
     }
@@ -816,17 +1420,102 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
     setSubmitting(true)
     setApiError(null)
+    const result = await withGuardedAction(
+      createProjectRequest,
+      handleUnauthorized,
+      'Failed to create project',
+    )
+    setSubmitting(false)
+    if (!result.ok && result.error) {
+      setApiError(result.error)
+    }
+  }
+
+  const handleManagedDetailsContinue = () => {
+    if (!selectedCode) {
+      setApiError('Select an engine before continuing.')
+      return
+    }
+    const errors = validateProjectFields({
+      displayName,
+      resolvedWorkspaceId,
+      selectedWorkspaceId: pickedWorkspaceId,
+    })
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      return
+    }
+    setApiError(null)
+    setManagedStep('placement')
+  }
+
+  const submitManagedService = async (
+    workspaceIdForCreate: string,
+    engineCode: string,
+    serverId: string,
+  ): Promise<void> => {
+    let projectId = createdProjectId
+    if (!projectId) {
+      const created = await createProject({
+        workspaceId: workspaceIdForCreate,
+        type: 'managed',
+        code: engineCode,
+        displayName: displayName.trim(),
+        serverId,
+      })
+      projectId = created.id
+      setCreatedProjectId(projectId)
+    }
+
+    const envs = await fetchVisibleEnvironments(projectId)
+    const production =
+      envs.environments.find(
+        (env) => env.displayName?.trim() === 'Production',
+      ) ?? envs.environments[0]
+    if (!production) {
+      setApiError('Project was created but no environment was found.')
+      return
+    }
+
+    const managed = await createEnvironmentManaged(
+      production.id,
+      expose
+        ? { exposure: { enabled: true, publishedPort: Number(publishedPort) } }
+        : undefined,
+    )
+    if (managed.rootPassword) {
+      setRootPassword(managed.rootPassword)
+    }
+    setManagedStep('secret')
+  }
+
+  const handleManagedSubmit = async () => {
+    if (managedSubmitGuard.current) {
+      return
+    }
+    const workspaceIdForCreate = resolvedWorkspaceId ?? pickedWorkspaceId
+    if (!workspaceIdForCreate || !selectedCode || !selectedServerId) {
+      setApiError('Select a workspace, engine, and server before creating.')
+      return
+    }
+    if (expose && !isValidPublishedPort(Number(publishedPort))) {
+      setApiError('Enter a valid published port (1–65535, not reserved).')
+      return
+    }
+
+    managedSubmitGuard.current = true
+    setSubmitting(true)
+    setApiError(null)
     try {
-      await createProjectRequest()
+      await submitManagedService(workspaceIdForCreate, selectedCode, selectedServerId)
     } catch (err) {
       if (isForbiddenError(err)) {
         await handleUnauthorized()
         return
       }
-      setApiError(
-        err instanceof Error ? err.message : 'Failed to create project',
-      )
+      setApiError(managedErrorMessage(err, 'Failed to create managed service'))
     } finally {
+      managedSubmitGuard.current = false
       setSubmitting(false)
     }
   }
@@ -834,82 +1523,105 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const handleComposeCreate = async () => {
     setSubmitting(true)
     setApiError(null)
-    try {
-      await createProjectRequest()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setApiError(
-        err instanceof Error ? err.message : 'Failed to create project',
-      )
-    } finally {
-      setSubmitting(false)
+    const result = await withGuardedAction(
+      createProjectRequest,
+      handleUnauthorized,
+      'Failed to create project',
+    )
+    setSubmitting(false)
+    if (!result.ok && result.error) {
+      setApiError(result.error)
     }
   }
 
   const detailsContinueLabel =
     selectedType === 'docker-compose' ? 'Continue to compose' : 'Create project'
 
+  const showBack =
+    (isManagedPath && managedStep !== 'secret') ||
+    (!isManagedPath && step > 1)
+
+  const view = resolveWizardView(isManagedPath, managedStep, step)
+
+  const handleOpenStranded = () => {
+    if (createdProjectId) {
+      router.replace(`/${orgId}/projects/${createdProjectId}`)
+    }
+  }
+
+  const handleManagedSecretDone = () => {
+    setRootPassword(null)
+    if (createdProjectId) {
+      router.replace(`/${orgId}/projects/${createdProjectId}`)
+    }
+  }
+
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>New project</Text>
 
       <SectionPanel title="Create project" hint="Step-by-step wizard">
-        <WizardProgress step={step} selectedType={selectedType} />
+        {isManagedPath && managedStep ? (
+          <WizardStepIndicator
+            labels={['Type', 'Engine', 'Details', 'Server']}
+            activeIndex={managedStepIndex(managedStep)}
+          />
+        ) : (
+          <WizardProgress step={step} selectedType={selectedType} />
+        )}
 
-        {step > 1 ? (
+        {showBack ? (
           <Pressable style={styles.backButton} onPress={handleBack}>
             <Text style={styles.backButtonText}>← Back</Text>
           </Pressable>
         ) : null}
 
-        {step === 1 ? <TypeStep onSelect={handleTypeSelect} /> : null}
-
-        {step === 2 ? (
-          <CatalogStep
-            loading={catalogLoading}
-            error={catalogError}
-            entries={catalogEntriesForStep}
-            selectedCode={selectedCode}
-            onSelect={handleCatalogSelect}
-            managedEngineCards={selectedType === 'managed'}
-          />
-        ) : null}
-
-        {step === 3 ? (
-          <DetailsStep
-            selectedType={selectedType}
-            selectedCode={selectedCode}
-            resolvedWorkspaceId={resolvedWorkspaceId}
-            workspacesLoading={workspacesLoading}
-            workspacesError={workspacesError}
-            workspaces={workspaces}
-            selectedWorkspaceId={selectedWorkspaceId}
-            onWorkspaceSelect={handleWorkspaceSelect}
-            displayName={displayName}
-            description={description}
-            fieldErrors={fieldErrors}
-            apiError={apiError}
-            submitting={submitting}
-            onDisplayNameChange={handleDisplayNameChange}
-            onDescriptionChange={setDescription}
-            onContinue={() => void handleDetailsContinue()}
-            continueLabel={detailsContinueLabel}
-          />
-        ) : null}
-
-        {step === 4 ? (
-          <ComposeSetupStep
-            composeDraft={composeDraft}
-            onComposeChange={setComposeDraft}
-            saving={false}
-            apiError={apiError}
-            submitting={submitting}
-            onCreate={() => void handleComposeCreate()}
-          />
-        ) : null}
+        {renderWizardStep(view, {
+          onTypeSelect: handleTypeSelect,
+          catalogLoading,
+          catalogError,
+          catalogEntriesForStep,
+          selectedCode,
+          onCatalogSelect: handleCatalogSelect,
+          selectedType,
+          resolvedWorkspaceId,
+          workspacesLoading,
+          workspacesError,
+          workspaces,
+          selectedWorkspaceId,
+          onWorkspaceSelect: handleWorkspaceSelect,
+          displayName,
+          description,
+          fieldErrors,
+          apiError,
+          submitting,
+          onDisplayNameChange: handleDisplayNameChange,
+          onDescriptionChange: setDescription,
+          onDetailsContinue: () => void handleDetailsContinue(),
+          detailsContinueLabel,
+          onManagedDetailsContinue: handleManagedDetailsContinue,
+          servers,
+          serversLoading,
+          serversError,
+          selectedServerId,
+          onSelectServer: setSelectedServerId,
+          expose,
+          onToggleExpose: () => setExpose((current) => !current),
+          publishedPort,
+          onPublishedPortChange: setPublishedPort,
+          defaultPort: managedCatalogMeta?.defaultPort ?? 5432,
+          createdProjectId,
+          onOpenStranded: handleOpenStranded,
+          onManagedSubmit: () => {
+            void handleManagedSubmit()
+          },
+          rootPassword,
+          rootUsername: managedCatalogMeta?.rootUsername,
+          onManagedSecretDone: handleManagedSecretDone,
+          composeDraft,
+          onComposeChange: setComposeDraft,
+          onComposeCreate: () => void handleComposeCreate(),
+        })}
       </SectionPanel>
     </View>
   )
@@ -1153,5 +1865,47 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  secondaryButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  secondaryButtonText: {
+    color: colors.textBody,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  exposeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  exposeCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exposeCheckboxChecked: {
+    borderColor: colors.accent,
+    backgroundColor: colors.bgActive,
+  },
+  exposeCheckmark: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  exposeLabel: {
+    color: colors.textBody,
+    fontSize: 13,
   },
 })

@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
-import { ManagedConnectionPanel } from '@/components/org/managed-connection-panel'
+import { ContainerStatusBadge } from '@/components/org/managed/container-status-badge'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -40,11 +40,9 @@ import {
   type HostingRecord,
   type IpRecord,
   type OrgServerRecord,
-  type ProjectRecord,
   type ServiceRecord,
   type TlsRecord,
 } from '@/lib/instance-api'
-import { managedCatalogEntryForCode } from '@/lib/managed-services'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
@@ -342,25 +340,6 @@ async function fetchContainersByService(
   return Object.fromEntries(entries)
 }
 
-type ContainerStatusVariant = 'running' | 'pending' | 'stopped' | 'unknown'
-
-function containerStatusVariant(status?: string): ContainerStatusVariant {
-  switch (status) {
-    case 'running':
-      return 'running'
-    case 'restarting':
-    case 'created':
-    case 'paused':
-      return 'pending'
-    case 'exited':
-    case 'dead':
-    case 'removing':
-      return 'stopped'
-    default:
-      return 'unknown'
-  }
-}
-
 function containerDisplayName(container: ContainerRecord): string {
   return container.containerName || container.composeServiceName || container.id
 }
@@ -374,20 +353,6 @@ function containerHostLabel(
     return serverLabel(host)
   }
   return container.serverId
-}
-
-function ContainerStatusBadge({
-  status,
-}: Readonly<{ status?: string }>) {
-  const variant = containerStatusVariant(status)
-  const label = status?.trim() || 'unknown'
-  return (
-    <View style={[styles.statusBadge, statusBadgeVariantStyles[variant].badge]}>
-      <Text style={[styles.statusBadgeText, statusBadgeVariantStyles[variant].text]}>
-        {label}
-      </Text>
-    </View>
-  )
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -1147,8 +1112,6 @@ function EnvironmentLoadedPanels({
   environment,
   projectId,
   orgId,
-  projectType,
-  projectEngineCode,
   mergedCompose,
   serviceNames,
   allServers,
@@ -1179,8 +1142,6 @@ function EnvironmentLoadedPanels({
   environment: EnvironmentRecord
   projectId: string
   orgId: string
-  projectType: NonNullable<ProjectRecord['metadata']>['type'] | null
-  projectEngineCode: string | null
   mergedCompose: ComposeDocument
   serviceNames: string[]
   allServers: OrgServerRecord[]
@@ -1259,18 +1220,6 @@ function EnvironmentLoadedPanels({
           textAlignVertical="top"
         />
       </SectionPanel>
-
-      {projectType === 'managed' &&
-      projectEngineCode &&
-      managedCatalogEntryForCode(projectEngineCode) ? (
-        <ManagedConnectionPanel
-          environmentId={environment.id}
-          engineCode={projectEngineCode}
-          canManage={canManage}
-          placementServerId={placementServerId}
-          pinnedServer={pinnedServer}
-        />
-      ) : null}
 
       <SectionPanel
         title="Deploy"
@@ -1428,10 +1377,6 @@ export function EnvironmentDetailBody({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [projectCompose, setProjectCompose] = useState<unknown>(null)
-  const [projectType, setProjectType] = useState<
-    NonNullable<ProjectRecord['metadata']>['type'] | null
-  >(null)
-  const [projectEngineCode, setProjectEngineCode] = useState<string | null>(null)
   const [savingCompose, setSavingCompose] = useState(false)
   const [savingPlacement, setSavingPlacement] = useState(false)
   const [allServers, setAllServers] = useState<OrgServerRecord[]>([])
@@ -1478,8 +1423,6 @@ export function EnvironmentDetailBody({
         }
         setEnvironment(result.environment)
         setProjectCompose(projectResult.project.options?.compose)
-        setProjectType(projectResult.project.metadata?.type ?? null)
-        setProjectEngineCode(projectResult.project.metadata?.code ?? null)
         setAllServers(serversResult.servers)
         setServices(servicesResult.services)
         setTlsLibrary(tlsResult.tls)
@@ -1707,8 +1650,6 @@ export function EnvironmentDetailBody({
           environment={environment}
           projectId={projectId}
           orgId={orgId}
-          projectType={projectType}
-          projectEngineCode={projectEngineCode}
           mergedCompose={mergedCompose}
           serviceNames={serviceNames}
           allServers={allServers}
@@ -1927,19 +1868,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
   fieldLabel: {
     color: colors.textMuted,
     fontSize: 12,
@@ -2033,25 +1961,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 })
-
-const statusBadgeVariantStyles: Record<
-  ContainerStatusVariant,
-  { badge: { borderColor: string; backgroundColor: string }; text: { color: string } }
-> = {
-  running: {
-    badge: { borderColor: colors.accent, backgroundColor: colors.bgActive },
-    text: { color: colors.accent },
-  },
-  pending: {
-    badge: { borderColor: colors.pending, backgroundColor: colors.bgSecondary },
-    text: { color: colors.pending },
-  },
-  stopped: {
-    badge: { borderColor: colors.error, backgroundColor: colors.bgSecondary },
-    text: { color: colors.error },
-  },
-  unknown: {
-    badge: { borderColor: colors.borderChip, backgroundColor: colors.bgSecondary },
-    text: { color: colors.textMuted },
-  },
-}

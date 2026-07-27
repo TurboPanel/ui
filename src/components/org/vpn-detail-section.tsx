@@ -45,18 +45,10 @@ import {
   resolvePrimaryGatewayByDatacenter,
 } from '@/lib/vpn-mesh'
 
-/** WireGuard Curve25519 public keys are 32 bytes → 44-char base64 with `=`. */
-const WIREGUARD_PUBLIC_KEY_RE = /^[A-Za-z0-9+/]{43}=$/
-
 type CreatePeerBody = {
   serverId: string
-  publicKey: string
   role?: PeerRole
   tunnelAddress?: string
-  listenPort?: number
-  endpoint?: string
-  endpointIpId?: string
-  presharedKey?: string
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -140,46 +132,19 @@ function truncateKey(publicKey: string): string {
   return `${publicKey.slice(0, 8)}…${publicKey.slice(-6)}`
 }
 
-function parseOptionalListenPort(raw: string): number | undefined {
-  const trimmed = raw.trim()
-  if (trimmed.length === 0) return undefined
-  const parsed = Number.parseInt(trimmed, 10)
-  if (!Number.isInteger(parsed)) {
-    throw new TypeError('Listen port must be an integer.')
-  }
-  return parsed
-}
-
 function buildCreatePeerBody(input: {
   serverId: string
-  publicKey: string
   role: PeerRole
   tunnelAddress: string
-  listenPort: string
-  endpoint: string
-  endpointIpId: string | null
-  presharedKey: string
 }): CreatePeerBody {
-  const publicKey = input.publicKey.trim()
-  if (!WIREGUARD_PUBLIC_KEY_RE.test(publicKey)) {
-    throw new Error('Public key must be a 44-character WireGuard base64 key.')
-  }
   if (!input.serverId) {
     throw new Error('Select a server for this peer.')
   }
-  const listenPort = parseOptionalListenPort(input.listenPort)
   return {
     serverId: input.serverId,
-    publicKey,
     role: input.role,
     ...(input.tunnelAddress.trim()
       ? { tunnelAddress: input.tunnelAddress.trim() }
-      : {}),
-    ...(listenPort !== undefined ? { listenPort } : {}),
-    ...(input.endpoint.trim() ? { endpoint: input.endpoint.trim() } : {}),
-    ...(input.endpointIpId ? { endpointIpId: input.endpointIpId } : {}),
-    ...(input.presharedKey.trim()
-      ? { presharedKey: input.presharedKey.trim() }
       : {}),
   }
 }
@@ -267,6 +232,9 @@ function PeerCard({
 }>) {
   const [overrideDraft, setOverrideDraft] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const publicKeyLabel = peer.publicKey
+    ? truncateKey(peer.publicKey)
+    : 'Pending (after Apply)'
 
   return (
     <View style={orgPanelStyles.detailCard}>
@@ -285,7 +253,7 @@ function PeerCard({
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Public key: </Text>
         <Text style={styles.mono} selectable>
-          {truncateKey(peer.publicKey)}
+          {publicKeyLabel}
         </Text>
       </Text>
       <Text style={orgPanelStyles.detailLine}>
@@ -558,49 +526,33 @@ function PeersPanel({
 
 function AddPeerPanel({
   availableServers,
-  publicIps,
   peerServerId,
   peerRole,
-  peerPublicKey,
   peerTunnelAddress,
-  peerListenPort,
-  peerEndpoint,
-  peerEndpointIpId,
-  peerPresharedKey,
   pending,
   onServerId,
   onRole,
-  onPublicKey,
   onTunnelAddress,
-  onListenPort,
-  onEndpoint,
-  onEndpointIpId,
-  onPresharedKey,
   onSubmit,
 }: Readonly<{
   availableServers: OrgServerRecord[]
-  publicIps: IpRecord[]
   peerServerId: string
   peerRole: PeerRole
-  peerPublicKey: string
   peerTunnelAddress: string
-  peerListenPort: string
-  peerEndpoint: string
-  peerEndpointIpId: string | null
-  peerPresharedKey: string
   pending: boolean
   onServerId: (id: string) => void
   onRole: (role: PeerRole) => void
-  onPublicKey: (value: string) => void
   onTunnelAddress: (value: string) => void
-  onListenPort: (value: string) => void
-  onEndpoint: (value: string) => void
-  onEndpointIpId: (id: string | null) => void
-  onPresharedKey: (value: string) => void
   onSubmit: () => void
 }>) {
   return (
     <SectionPanel title="Add peer" hint="Manage-gated">
+      <Text style={orgPanelStyles.muted}>
+        Keys, listen port, and endpoint are configured automatically. Choose
+        the server, role, and optionally pin an overlay address in the mesh
+        CIDR.
+      </Text>
+
       <Text style={styles.fieldLabel}>Server</Text>
       {availableServers.length === 0 ? (
         <Text style={orgPanelStyles.muted}>
@@ -657,17 +609,6 @@ function AddPeerPanel({
         </Pressable>
       </View>
 
-      <Text style={styles.fieldLabel}>WireGuard public key</Text>
-      <TextInput
-        value={peerPublicKey}
-        onChangeText={onPublicKey}
-        placeholder="44-character base64 key"
-        placeholderTextColor={colors.textDim}
-        style={[styles.input, styles.mono]}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
       <Text style={styles.fieldLabel}>Tunnel address (optional)</Text>
       <Text style={orgPanelStyles.muted}>
         Leave blank to auto-assign from the mesh CIDR.
@@ -678,56 +619,6 @@ function AddPeerPanel({
         placeholder="Auto-assign from mesh CIDR"
         placeholderTextColor={colors.textDim}
         style={styles.input}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
-      <Text style={styles.fieldLabel}>Listen port (optional)</Text>
-      <TextInput
-        value={peerListenPort}
-        onChangeText={onListenPort}
-        placeholder="51820"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
-        keyboardType="number-pad"
-      />
-
-      <Text style={styles.fieldLabel}>Endpoint (optional)</Text>
-      <TextInput
-        value={peerEndpoint}
-        onChangeText={onEndpoint}
-        placeholder="host:port — or derive from endpoint IP + port"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
-      <Text style={styles.fieldLabel}>Endpoint IP (optional)</Text>
-      <View style={styles.chipRow}>
-        <PickerChip
-          label="None"
-          active={peerEndpointIpId === null}
-          onPress={() => onEndpointIpId(null)}
-        />
-        {publicIps.map((ip) => (
-          <PickerChip
-            key={ip.id}
-            label={ip.displayName?.trim() || ip.address}
-            active={peerEndpointIpId === ip.id}
-            onPress={() => onEndpointIpId(ip.id)}
-          />
-        ))}
-      </View>
-
-      <Text style={styles.fieldLabel}>Preshared key (optional, write-only)</Text>
-      <TextInput
-        value={peerPresharedKey}
-        onChangeText={onPresharedKey}
-        placeholder="Never shown again after save"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
-        secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
       />
@@ -774,7 +665,8 @@ function ApplyWireguardPanel({
     <SectionPanel title="Apply WireGuard" hint="Enqueues per-peer commands">
       <Text style={orgPanelStyles.muted}>
         Runs server.wireguard.apply on each peer host. Private keys stay on
-        the daemon; preshared keys are never returned to the UI.
+        the daemon; a follow-up apply completes the mesh once keys are
+        reported.
       </Text>
       <Pressable
         style={[
@@ -862,12 +754,7 @@ export function VpnDetailSection({
 
   const [peerServerId, setPeerServerId] = useState('')
   const [peerRole, setPeerRole] = useState<PeerRole>('member')
-  const [peerPublicKey, setPeerPublicKey] = useState('')
   const [peerTunnelAddress, setPeerTunnelAddress] = useState('')
-  const [peerListenPort, setPeerListenPort] = useState('')
-  const [peerEndpoint, setPeerEndpoint] = useState('')
-  const [peerEndpointIpId, setPeerEndpointIpId] = useState<string | null>(null)
-  const [peerPresharedKey, setPeerPresharedKey] = useState('')
 
   const [applyResults, setApplyResults] = useState<{
     interfaceName: string
@@ -940,25 +827,15 @@ export function VpnDetailSection({
         vpnId,
         buildCreatePeerBody({
           serverId: peerServerId,
-          publicKey: peerPublicKey,
           role: peerRole,
           tunnelAddress: peerTunnelAddress,
-          listenPort: peerListenPort,
-          endpoint: peerEndpoint,
-          endpointIpId: peerEndpointIpId,
-          presharedKey: peerPresharedKey,
         }),
       ),
     onSuccess: async () => {
       setError(null)
       setPeerServerId('')
       setPeerRole('member')
-      setPeerPublicKey('')
       setPeerTunnelAddress('')
-      setPeerListenPort('')
-      setPeerEndpoint('')
-      setPeerEndpointIpId(null)
-      setPeerPresharedKey('')
       await invalidateVpn()
     },
     onError: (err) => onMutationError(err, 'Failed to add peer'),
@@ -1162,24 +1039,13 @@ export function VpnDetailSection({
       {canManage ? (
         <AddPeerPanel
           availableServers={availableServers}
-          publicIps={publicIps}
           peerServerId={peerServerId}
           peerRole={peerRole}
-          peerPublicKey={peerPublicKey}
           peerTunnelAddress={peerTunnelAddress}
-          peerListenPort={peerListenPort}
-          peerEndpoint={peerEndpoint}
-          peerEndpointIpId={peerEndpointIpId}
-          peerPresharedKey={peerPresharedKey}
           pending={createPeerMutation.isPending}
           onServerId={setPeerServerId}
           onRole={setPeerRole}
-          onPublicKey={setPeerPublicKey}
           onTunnelAddress={setPeerTunnelAddress}
-          onListenPort={setPeerListenPort}
-          onEndpoint={setPeerEndpoint}
-          onEndpointIpId={setPeerEndpointIpId}
-          onPresharedKey={setPeerPresharedKey}
           onSubmit={() => createPeerMutation.mutate()}
         />
       ) : null}

@@ -7,6 +7,13 @@ export const ORG_AREAS = [
     subRoutes: [],
   },
   {
+    id: 'managed',
+    label: 'Managed',
+    pathSegment: 'managed',
+    hint: 'Managed database and engine services across the organization',
+    subRoutes: [],
+  },
+  {
     id: 'servers',
     label: 'Servers',
     pathSegment: 'servers',

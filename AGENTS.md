@@ -153,7 +153,7 @@ These are non-negotiable for the console (detail lives in Master):
 |-------|--------|--------|
 | **1** | Design system pages, compose create wizard + base panel, shell polish, TurboPanel High Availability terminology, variables presets | **Shipped** |
 | **2** | Compose flow rail + wizard step indicator, project variables panel, managed provision API wired, environment-scoped managed connection UI, Expo SDK 56.0.16 | **Shipped** |
-| **3** | Org VPC (WireGuard) UI, read replicas, move services between servers, managed DB user provisioning, daemon `managed.provision` command | **Partial** — gateway/member mesh console shipped (CIDR overlay, role, primary gateway, site membership); remaining items planned |
+| **3** | Org VPC (WireGuard) UI, read replicas, move services between servers, managed DB user provisioning, daemon `managed.provision` command | **Partial** — gateway/member mesh console shipped (CIDR overlay, role, primary gateway, site membership); **managed DB user provisioning shipped for Postgres** (create wizard + managed project panels); remaining items planned |
 
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, health-check deploy ack modal, storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
 
@@ -217,7 +217,8 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
 | `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list; optional `?workspaceId` from the header switcher (omit = **All workspaces** when multiple exist; sole workspace is selected automatically) |
 | `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
-| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + base compose editor + Workspace "Move to workspace" picker (gated by `organization:own` display hint; server enforces 403), then the **integrated** environments area (`project-environments-section.tsx`) — per-environment server placement lives there |
+| `/<orgId>/projects/[projectId]` | `project-detail-section.tsx` | Project details + Workspace "Move to workspace" picker. Compose projects keep the base compose editor + `project-environments-section.tsx`. Managed projects (`metadata.type === 'managed'`) render `managed-project-section.tsx` at the same route instead of the compose editor + environments stack |
+| `/<orgId>/managed` | `managed/managed-overview-section.tsx` | Org-wide managed services table (`GET /organizations/:id/managed`); engine / status / server filters; row opens the managed project detail |
 | `/<orgId>/projects/[projectId]/[environmentId]` | `environment-detail-section.tsx` | Standalone deep-link fallback for a single environment (same body as the embedded tab); the primary flow is the project page, not this route |
 | `/<orgId>/access` | `access-overview-section.tsx` | Permission grant management (`GET/POST/DELETE /api/client/v1/access`) |
 | `/<orgId>/workspaces` | `workspaces-overview-section.tsx` | Workspace CRUD (reached via switcher **Manage workspaces**, not the sidebar) |
@@ -241,7 +242,7 @@ Environments are **not** a separate page/flow — they live inside `project-deta
 - **Server** is a required dropdown on the environment: pick one whole connected server via `updateEnvironment({ serverId })` — not compose, and not at deploy time. Deploy stays disabled until a connected server is selected. Different environments may select different servers. Compose must not carry `x-turbopanel.placement` (instance validation rejects it; UI `stripComposePlacement` is an input-sanitization path only).
 - `EnvironmentDetailSection` remains as a thin wrapper (heading + `EnvironmentDetailBody`) for the standalone `/[environmentId]` deep-link route only.
 - **Container status** is shown inline in the active environment's Containers panel (`ContainerStatusBadge`, Postgres-backed `fetchContainers(serviceId)` per service — never DO reads), so no separate environment page is needed to see it.
-- **Managed connection:** for managed **engine** projects (`metadata.type === 'managed'` and `metadata.code` in `MANAGED_SERVICE_CATALOG`), `EnvironmentDetailBody` renders `ManagedConnectionPanel` (engine label falls back to project `code` before provision; provision gated on `environment.serverId`, same pattern as Deploy). Only managed engine catalog codes are offered on create and this panel.
+- **Managed projects:** when `metadata.type === 'managed'`, `project-detail-section.tsx` renders `managed-project-section.tsx` (environment tabs + Connection / Credentials / Users & databases / Backups / Lifecycle / Settings / Status & logs panels) instead of compose + `EnvironmentDetailBody`. Create flow is the managed branch of `project-create-section.tsx` (engine → details → server → show-once root password). Additional environments use an inline Set up panel (`createEnvironmentManaged`) with the same reveal. **Backups** (`managed/managed-backups-panel.tsx`, rendered after Users & databases): **Back up now** (primary, disabled when the engine has no `spec.backup`); rows show timestamp, size, database, short checksum; **Delete** is the two-press pattern; **Restore** is destructive/irreversible and gates behind a **typed confirmation** — the operator must type the managed/project display name exactly before **Confirm restore** is pressable (mirrors the Lifecycle delete pattern). Backups are loaded in `reloadAll()` via `fetchManagedBackups()` only when the engine supports backup (Postgres today); create/delete/restore call `createManagedBackup()` / `deleteManagedBackup()` / `restoreManagedBackup()` and register their `commandId` with the same shared command-poll timer as every other managed mutation. Settings' advanced section also exposes **backup retention (keep-N)** (`ManagedSettings.backups.retentionKeep`, clamped server-side to the engine's `maxRetentionKeep`).
 
 ### Workspaces
 
@@ -266,7 +267,7 @@ Authorization helpers:
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 - `fetchVisibleWorkspaces()` → `GET /api/client/v1/workspaces`
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
-- `createProject({ type: 'docker-compose' | 'template' | 'managed', … })` — Docker Compose is the default manual compose path (blank removed)
+- `createProject({ type: 'docker-compose' | 'template' | 'managed', serverId?, … })` — Docker Compose is the default manual compose path (blank removed); managed create may pass `serverId` to pin the scaffolded Production environment
 - `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`)
 - `deployEnvironment(environmentId, body?)` → `POST /api/client/v1/environments/:id/deploy`; the UI always requires `EnvironmentRecord.serverId` first and calls deploy without a body so the instance resolves the target from that column; poll with `fetchCommand(serverId, commandId)` (Postgres only)
 - `stopEnvironment(environmentId)` → `POST /api/client/v1/environments/:id/stop` — compose down (with volumes) on `environment.server_id`; returns `{ commandId, serverId }` for polling; used by the project-delete wizard before cascade delete
@@ -283,8 +284,23 @@ Authorization helpers:
 - `createEnvironment(body)` → `POST /api/client/v1/environments`
 - `updateEnvironment(id, body)` → `PATCH /api/client/v1/environments/:id`
 - `deleteEnvironment(id)` → `DELETE /api/client/v1/environments/:id`
-- `fetchEnvironmentManaged(environmentId)` → `GET /api/client/v1/environments/:id/managed` — `{ managed: ManagedEnvironmentRecord | null }`
-- `provisionEnvironmentManaged(environmentId, body?)` → `POST /api/client/v1/environments/:id/managed/provision` — requires placement pin; returns `{ ok, alreadyProvisioned?, managed }`
+- `fetchEnvironmentManaged(environmentId)` → `GET /api/client/v1/environments/:id/managed` — `{ managed, connection, settings, server, rootUsername }` (`managed` may be `null` before create)
+- `createEnvironmentManaged(environmentId, body?)` → `POST …/managed` — `{ ok, managed, commandId?, serverId?, rootPassword?, alreadyProvisioned? }`; plaintext `rootPassword` is **show-once**
+- `updateEnvironmentManaged(environmentId, { settings })` → `PATCH …/managed`
+- `applyEnvironmentManaged(environmentId)` → `POST …/managed/apply` — `{ ok, commandId, status: 'queued', serverId }`
+- `runManagedLifecycle(environmentId, action)` → `POST …/managed/lifecycle` (`start` / `stop` / `restart`)
+- `deleteEnvironmentManaged(environmentId)` → `DELETE …/managed` — `{ ok, deleted, commandId?, serverId? }`
+- `rotateManagedRootPassword(environmentId)` → `POST …/managed/root-password` — show-once `rootPassword`
+- `fetchManagedUsers` / `createManagedUser` / `deleteManagedUser` → `…/managed/users` (create returns show-once `password`)
+- `fetchManagedDatabases` / `createManagedDatabase` / `deleteManagedDatabase` → `…/managed/databases` (name URL-encoded on delete)
+- `fetchManagedStatus(environmentId)` → `{ status, host, port, containers }` (Postgres-backed)
+- `fetchManagedLogs(environmentId, tail?)` → `{ logs }` (on-demand daemon round-trip; never timer-polled)
+- `fetchOrganizationManaged(orgId)` → `GET /organizations/:id/managed` — `{ managed: ManagedListRecord[] }`
+- `fetchManagedBackups(environmentId)` → `GET …/managed/backups` — `{ backups: ManagedBackupRecord[] }`, metadata only (no download endpoint, no dump bytes ever cross this API)
+- `createManagedBackup(environmentId, body?)` → `POST …/managed/backups` — `{ ok, backupId, commandId, serverId }`
+- `deleteManagedBackup(environmentId, backupId)` → `DELETE …/managed/backups/:backupId` — `ManagedCommandResponse`; the consumer removes the metadata row on success
+- `restoreManagedBackup(environmentId, backupId)` → `POST …/managed/backups/:backupId/restore` — `ManagedCommandResponse`; mutates the running engine, so it flips `managed.status` to `applying` like `apply`/`lifecycle`
+- Types/helpers in `src/lib/managed-services.ts` (`ManagedStatus`, `ManagedSettings`, `ManagedBackupRecord`, `managedErrorMessage`, `isValidPublishedPort`, `shortBackupChecksum`, …)
 - `fetchVariables(parentFilter)` → `GET /api/client/v1/variables?...` — `VariableParentFilter` includes `organizationId` / `workspaceId` / `projectId` / `environmentId` / `serviceId` / `hostingId` / `serverId`
 - `fetchVariable(id)` → `GET /api/client/v1/variables/:id`
 - `createVariable(body)` → `POST /api/client/v1/variables` (exactly one parent scope key)
@@ -312,6 +328,7 @@ Authorization helpers:
 - Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ContainerRecord` (`serviceId`, `serverId`, top-level `containerId` / `containerName` / `status` / `composeServiceName` — status/id from Postgres reconcile, never DO reads; residual `metadata` only), `TlsRecord` (`source`, `metadata`, `certificatePem` — no private key), `DatacenterRecord`, `IpRecord` (`vpnId`, `scope` includes `vpn`, derived `version`), `NetworkRecord` (`kind` without `vpn`, `cidr`, …), `VpnRecord` (`cidr`), `PeerRecord` (`role`, `endpointIpId`, `tunnelIpId`, no `presharedKey`), `HostingRecord` (`tlsId?`, `ipId?`), `OrgServerRecord` / `ServerDetailRecord` (`datacenterId`, `datacenterDisplayName`)
 - **Secret write-only rule:** `VariableRecord.value` is always `null` when `isSecret` is true — the UI must never display or pre-fill secret values; use masked placeholders and write-only update forms. Generated secrets may be shown once at create time, then never again.
 - **Principal password write-only rule:** principals are not a public org-console surface. Hosting/database-user flows create them behind the scenes; passwords are sealed as `tpsecret` at rest and must never be displayed or pre-filled after the optional show-once generate step.
+- **Managed password show-once rule:** `createEnvironmentManaged`, `rotateManagedRootPassword`, and `createManagedUser` may return plaintext once. Render via `SecretReveal` only; clear from state when dismissed / on unmount — never persist or re-display.
 - `fetchServerUpdate(serverId)` → `GET /api/client/v1/servers/:id/update` — returns `ServerUpdateStatus` with `current`/`target` commit identity and `updateAvailable`.
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
 - `fetchServer(serverId)` → `GET /api/client/v1/servers/:id` — unwraps `{ ok, server }` → `ServerDetailRecord` (Postgres-backed detail read; never `fetchServerCell`).

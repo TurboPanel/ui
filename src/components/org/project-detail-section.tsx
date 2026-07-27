@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -314,6 +315,10 @@ function workspaceLabel(ws: WorkspaceRecord): string {
 function isComposeProject(project: ProjectRecord): boolean {
   const type = project.metadata?.type
   return type === 'docker-compose' || type == null
+}
+
+function isManagedProject(project: ProjectRecord): boolean {
+  return project.metadata?.type === 'managed'
 }
 
 function projectTitleField({
@@ -688,41 +693,66 @@ export function ProjectDetailSection({
             }}
           />
 
-          <ProjectPrincipalsSection
-            projectId={project.id}
-            canManage={canManage}
-          />
-
-          {isComposeProject(project) ? (
+          {isManagedProject(project) ? (
             <>
-              <SectionPanel
-                title="Compose"
-                hint="Shared stack — each environment can override"
-                accent
-              >
-                <ComposeBasePanel
-                  document={project.options?.compose}
-                  onSave={saveCompose}
-                  saving={savingCompose}
-                />
-              </SectionPanel>
-
-              <ProjectVariablesSection orgId={orgId} projectId={project.id} />
+              <ManagedProjectSection
+                orgId={orgId}
+                projectId={projectId}
+                engineCode={project.metadata?.code ?? null}
+                projectDisplayName={
+                  project.displayName?.trim() || 'Unnamed project'
+                }
+              />
+              <WorkspaceMovePanel
+                canOwn={canOwn}
+                workspaces={sortedWorkspaces}
+                currentWorkspaceId={project.workspaceId}
+                currentWorkspaceLabel={currentWorkspaceLabel}
+                savingWorkspace={savingWorkspace}
+                onMove={(id) => {
+                  void moveToWorkspace(id)
+                }}
+              />
             </>
-          ) : null}
+          ) : (
+            <>
+              <ProjectPrincipalsSection
+                projectId={project.id}
+                canManage={canManage}
+              />
 
-          <WorkspaceMovePanel
-            canOwn={canOwn}
-            workspaces={sortedWorkspaces}
-            currentWorkspaceId={project.workspaceId}
-            currentWorkspaceLabel={currentWorkspaceLabel}
-            savingWorkspace={savingWorkspace}
-            onMove={(id) => {
-              void moveToWorkspace(id)
-            }}
-          />
+              {isComposeProject(project) ? (
+                <>
+                  <SectionPanel
+                    title="Compose"
+                    hint="Shared stack — each environment can override"
+                    accent
+                  >
+                    <ComposeBasePanel
+                      document={project.options?.compose}
+                      onSave={saveCompose}
+                      saving={savingCompose}
+                    />
+                  </SectionPanel>
 
-          <ProjectEnvironmentsSection orgId={orgId} projectId={projectId} />
+                  <ProjectVariablesSection orgId={orgId} projectId={project.id} />
+                </>
+              ) : null}
+
+              <WorkspaceMovePanel
+                canOwn={canOwn}
+                workspaces={sortedWorkspaces}
+                currentWorkspaceId={project.workspaceId}
+                currentWorkspaceLabel={currentWorkspaceLabel}
+                savingWorkspace={savingWorkspace}
+                onMove={(id) => {
+                  void moveToWorkspace(id)
+                }}
+              />
+
+              <ProjectEnvironmentsSection orgId={orgId} projectId={projectId} />
+            </>
+          )}
         </>
       ) : null}
     </View>
