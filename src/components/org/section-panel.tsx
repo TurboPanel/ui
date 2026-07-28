@@ -8,20 +8,22 @@ export function SectionPanel({
   accent,
   children,
 }: Readonly<{
-  title: string
+  title?: string
   hint?: string
   accent?: boolean
   children: ReactNode
 }>) {
   return (
     <View style={styles.area}>
-      <View style={[styles.areaHeader, accent && styles.areaHeaderAccent]}>
-        {accent ? <View style={styles.accentStripe} /> : null}
-        <View style={styles.areaHeaderCopy}>
-          <Text style={styles.areaTitle}>{title}</Text>
-          {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
+      {title ? (
+        <View style={[styles.areaHeader, accent && styles.areaHeaderAccent]}>
+          {accent ? <View style={styles.accentStripe} /> : null}
+          <View style={styles.areaHeaderCopy}>
+            <Text style={styles.areaTitle}>{title}</Text>
+            {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
+          </View>
         </View>
-      </View>
+      ) : null}
       <View style={styles.areaBody}>{children}</View>
     </View>
   )

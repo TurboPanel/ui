@@ -14,7 +14,7 @@ Per-service operational settings live in `service.options` (not compose YAML). D
 
 UI: `service-settings-panel.tsx` on environment detail.
 
-Hosting proxy settings live in `hosting.options.proxy` (`forceHttps`, `gzip`, `brotli`, `stripPrefix`) and map to Traefik middleware labels + hosting Caddy HTTP redirect behavior. Shared hostnames on the hosting-edge Caddy merge into one site block with per-`pathPrefix` `handle` routes (traditional-web loopback upstreams or Traefik for containers).
+Hosting proxy settings live in `hosting.options.proxy` (`forceHttps`, `gzip`, `brotli`, `stripPrefix`) and map to Traefik middleware labels + hosting Caddy HTTP redirect behavior. Shared hostnames on the hosting Caddy merge into one site block with per-`pathPrefix` `handle` routes (traditional-web loopback upstreams or Traefik for containers).
 
 HTTP hostings may set `hosting.options.web.env` (static `KEY=VALUE`) and optional `web.php` settings (`version`, `memoryLimit`, `maxExecutionTime`). At deploy, hosting-scoped variables with `forRuntime` merge into the payload; static env wins on key collision. Traditional-web sites materialize merged env to `<site>/.turbopanel/hosting.env` and PHP settings to `php.json`. On Apache, deploy installs mod_php (`libapache2-mod-php<version>` when set), applies `memory_limit` / `max_execution_time` as vhost `php_admin_value`, and injects web.env as Apache `SetEnv`. nginx may still write `hosting.env` on disk but does not inject into the process; OpenLiteSpeed is static-only (PHP and web-env hints ignored).
 

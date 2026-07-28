@@ -718,11 +718,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       (state) => state.triggering || state.data?.status === 'updating',
     )
 
-  const hostLabel = servers.length === 1 ? 'host' : 'hosts'
-  const fleetHint = loading
-    ? 'Loading hosts…'
-    : `${servers.length} ${hostLabel} · Postgres-backed status`
-
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Servers overview</Text>
@@ -730,7 +725,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         Select hosts to update, or open a server for its control panel.
       </Text>
 
-      <SectionPanel title="Fleet" hint={fleetHint} accent>
+      <SectionPanel>
         <ServersOverviewToolbar
           canOwn={canOwn}
           canManage={canManage}

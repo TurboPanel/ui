@@ -11,7 +11,7 @@
 
 - One job: **fleet table**, not a dashboard of widgets  
 - Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
-- Toolbar inside accent `SectionPanel` ("Fleet"): **+ Server** (own-gated) + batch Update for selected updatable hosts  
+- Toolbar inside `SectionPanel` (no title/hint bar): **+ Server** (own-gated) + batch Update for selected updatable hosts  
 - **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
 - Page title uses shared `orgPanelStyles.pageTitle` / `pageCopy`; route context lives in `OrgHeader` eyebrow  
 - No hero, no stat strip, no decorative bento above the table
@@ -19,8 +19,7 @@
 ## Toolbar
 
 - **+ Server** (own-gated) + batch **Update (N)** for selected updatable hosts  
-- Selection hint: `{N} selected · {M} updatable` in monospace when any rows checked  
-- Fleet hint shows live host count
+- Selection hint: `{N} selected · {M} updatable` in monospace when any rows checked
 
 ## Density
 
@@ -47,7 +46,7 @@
 
 ## Components
 
-- Reuse `orgPanelStyles` toolbar buttons, `SectionPanel` accent stripe, `AddServerWizard`  
+- Reuse `orgPanelStyles` toolbar buttons, `SectionPanel`, `AddServerWizard`  
 - Commands, delete, per-host update detail, time/network, and metrics live on the **server detail** page
 
 ## Charts
