@@ -22,11 +22,30 @@ export function leadingWhitespace(line: string): string {
 
 /** Unquoted mapping key on a YAML line, or null. */
 export function parseYamlMappingKey(line: string): string | null {
-  const match = /^[\t ]*([^:#\s][^:#]*?)\s*:/.exec(stripInlineComment(line))
-  if (!match?.[1]) {
+  const body = stripInlineComment(line)
+  let i = 0
+  while (i < body.length && (body[i] === ' ' || body[i] === '\t')) {
+    i += 1
+  }
+  const keyStart = i
+  // Key may not start with whitespace, `:`, or `#`.
+  const first = body[i]
+  if (first === undefined || first === ':' || first === '#') {
     return null
   }
-  return match[1].trim()
+  i += 1
+  while (i < body.length) {
+    const ch = body[i]
+    if (ch === undefined || ch === ':' || ch === '#') {
+      break
+    }
+    i += 1
+  }
+  if (body[i] !== ':') {
+    return null
+  }
+  const key = body.slice(keyStart, i).trim()
+  return key.length > 0 ? key : null
 }
 
 function isBlankOrCommentLine(line: string): boolean {
@@ -178,7 +197,19 @@ export function canFixComposeYamlIndentation(text: string): boolean {
 
 /** Remove trailing spaces/tabs on every line (keeps line structure). */
 export function trimTrailingWhitespacePerLine(text: string): string {
-  return text.split('\n').map((line) => line.replace(/[ \t]+$/u, '')).join('\n')
+  return text.split('\n').map(trimTrailingSpacesAndTabs).join('\n')
+}
+
+function trimTrailingSpacesAndTabs(line: string): string {
+  let end = line.length
+  while (end > 0) {
+    const ch = line[end - 1]
+    if (ch !== ' ' && ch !== '\t') {
+      break
+    }
+    end -= 1
+  }
+  return end === line.length ? line : line.slice(0, end)
 }
 
 /**

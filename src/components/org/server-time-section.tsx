@@ -24,6 +24,8 @@ import { orgRouteHref } from '@/lib/org-navigation'
 import { useQuery } from '@tanstack/react-query'
 import { colors, spacing } from '@/lib/theme'
 
+type TimeSyncMaybe = ServerDetailRecord['timeSync']
+
 function parseHostList(raw: string): string[] {
   return raw
     .split(/[\s,]+/)
@@ -41,6 +43,307 @@ function ntpSyncLabel(synced: boolean | undefined): string {
   if (synced === true) return 'Synced'
   if (synced === false) return 'Not synced'
   return 'Unknown'
+}
+
+function timezoneDisabledReason(
+  canManage: boolean,
+  connected: boolean,
+  enforceServerTimezone: boolean,
+): string | null {
+  if (!canManage) return 'Organization manage permission required.'
+  if (!connected) return 'Daemon must be online to change timezone.'
+  if (enforceServerTimezone) {
+    return 'Organization enforces its default timezone for all servers.'
+  }
+  return null
+}
+
+function ntpDisabledReason(canManage: boolean, connected: boolean): string | null {
+  if (!canManage) return 'Organization manage permission required.'
+  if (!connected) return 'Daemon must be online to change NTP settings.'
+  return null
+}
+
+function buildNtpPayload(
+  ntpEnabled: boolean,
+  ntpServersText: string,
+  fallbackText: string,
+  timeSync: TimeSyncMaybe,
+): NtpSetInput | null {
+  const payload: NtpSetInput = {}
+  if (ntpEnabled !== (timeSync?.ntpEnabled === true)) {
+    payload.enabled = ntpEnabled
+  }
+  const servers = parseHostList(ntpServersText)
+  const fallback = parseHostList(fallbackText)
+  const prevServers = timeSync?.ntpServers ?? []
+  const prevFallback = timeSync?.fallbackNtpServers ?? []
+  if (servers.join(',') !== prevServers.join(',')) {
+    payload.servers = servers
+  }
+  if (fallback.join(',') !== prevFallback.join(',')) {
+    payload.fallbackServers = fallback
+  }
+  if (
+    payload.enabled === undefined &&
+    payload.servers === undefined &&
+    payload.fallbackServers === undefined
+  ) {
+    return null
+  }
+  return payload
+}
+
+function HostListLine({
+  label,
+  hosts,
+}: Readonly<{ label: string; hosts: string[] | undefined }>) {
+  if (!hosts || hosts.length === 0) return null
+  return (
+    <Text style={orgPanelStyles.detailLine}>
+      <Text style={orgPanelStyles.detailLabel}>{label}: </Text>
+      <Text style={styles.mono}>{hosts.join(', ')}</Text>
+    </Text>
+  )
+}
+
+function TimeSyncStatusPanel({
+  timeSync,
+}: Readonly<{ timeSync: TimeSyncMaybe }>) {
+  if (!timeSync) {
+    return (
+      <SectionPanel title="Time sync status" hint="Facts from the last daemon heartbeat">
+        <Text style={orgPanelStyles.muted}>
+          No time facts reported yet — waiting for the daemon.
+        </Text>
+      </SectionPanel>
+    )
+  }
+
+  return (
+    <SectionPanel title="Time sync status" hint="Facts from the last daemon heartbeat">
+      <View style={styles.statusRow}>
+        <View style={styles.statusPair}>
+          <View
+            style={[
+              styles.dot,
+              timeSync.ntpEnabled ? styles.dotOn : styles.dotOff,
+            ]}
+          />
+          <Text style={styles.statusText}>
+            NTP client {timeSync.ntpEnabled ? 'Enabled' : 'Disabled'}
+          </Text>
+        </View>
+        <View style={styles.statusPair}>
+          <View
+            style={[
+              styles.dot,
+              timeSync.ntpSynced ? styles.dotOn : styles.dotMuted,
+            ]}
+          />
+          <Text style={styles.statusText}>
+            {ntpSyncLabel(timeSync.ntpSynced)}
+          </Text>
+        </View>
+      </View>
+      <HostListLine label="Servers" hosts={timeSync.ntpServers} />
+      <HostListLine label="Fallback" hosts={timeSync.fallbackNtpServers} />
+      {timeSync.capturedAt ? (
+        <Text style={orgPanelStyles.muted}>
+          Captured{' '}
+          {formatLocalDateTime(timeSync.capturedAt, {
+            timeZoneName: 'short',
+          })}
+        </Text>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
+function TimezoneSettingsPanel({
+  orgId,
+  server,
+  pickedTimezone,
+  timezoneOptions,
+  formsDisabled,
+  disabledReason,
+  submitting,
+  commandInFlight,
+  localError,
+  pollError,
+  onPickTimezone,
+  onApply,
+}: Readonly<{
+  orgId: string
+  server: ServerDetailRecord
+  pickedTimezone: string | null
+  timezoneOptions: string[]
+  formsDisabled: boolean
+  disabledReason: string | null
+  submitting: boolean
+  commandInFlight: boolean
+  localError: string | null
+  pollError: string | null
+  onPickTimezone: (value: string | null) => void
+  onApply: () => void
+}>) {
+  const router = useRouter()
+  const applyDisabled = formsDisabled || !pickedTimezone || Boolean(disabledReason)
+
+  return (
+    <SectionPanel title="Timezone" hint="Effective timezone on this host">
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
+        <Text style={styles.mono}>{server.timezone ?? 'Not set'}</Text>
+      </Text>
+      <Text style={orgPanelStyles.muted}>
+        Source: {timezoneSourceLabel(server.timezoneSource)}
+      </Text>
+
+      {disabledReason ? (
+        <Text style={orgPanelStyles.muted}>{disabledReason}</Text>
+      ) : null}
+      {server.enforceServerTimezone ? (
+        <Pressable
+          onPress={() =>
+            router.push(orgRouteHref(orgId, 'servers', 'settings') as `/${string}/servers/settings`)
+          }
+          style={webPointer}
+        >
+          <Text style={styles.linkText}>Open fleet timezone settings</Text>
+        </Pressable>
+      ) : null}
+
+      {localError ? <Text style={orgPanelStyles.error}>{localError}</Text> : null}
+      {pollError ? <Text style={orgPanelStyles.error}>{pollError}</Text> : null}
+
+      <ServerTimezonePicker
+        value={pickedTimezone}
+        options={timezoneOptions}
+        disabled={formsDisabled || Boolean(disabledReason)}
+        placeholder="Select timezone…"
+        onChange={onPickTimezone}
+      />
+
+      <Pressable
+        disabled={applyDisabled}
+        onPress={onApply}
+        style={({ pressed }) => [
+          orgPanelStyles.toolbarBtnPrimary,
+          (formsDisabled || !pickedTimezone) && styles.btnDisabled,
+          pressed && styles.btnPressed,
+          webPointer,
+        ]}
+      >
+        {submitting || commandInFlight ? (
+          <ActivityIndicator size="small" color={colors.buttonText} />
+        ) : null}
+        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Apply timezone</Text>
+      </Pressable>
+      {commandInFlight ? (
+        <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
+function NtpSettingsPanel({
+  ntpEnabled,
+  ntpServersText,
+  fallbackText,
+  formsDisabled,
+  disabledReason,
+  submitting,
+  commandInFlight,
+  localError,
+  pollError,
+  onToggleEnabled,
+  onServersChange,
+  onFallbackChange,
+  onApply,
+}: Readonly<{
+  ntpEnabled: boolean
+  ntpServersText: string
+  fallbackText: string
+  formsDisabled: boolean
+  disabledReason: string | null
+  submitting: boolean
+  commandInFlight: boolean
+  localError: string | null
+  pollError: string | null
+  onToggleEnabled: () => void
+  onServersChange: (value: string) => void
+  onFallbackChange: (value: string) => void
+  onApply: () => void
+}>) {
+  return (
+    <SectionPanel title="NTP configuration" hint="Pushed to the daemon via command">
+      {disabledReason ? (
+        <Text style={orgPanelStyles.muted}>{disabledReason}</Text>
+      ) : null}
+      {localError ? <Text style={orgPanelStyles.error}>{localError}</Text> : null}
+      {pollError ? <Text style={orgPanelStyles.error}>{pollError}</Text> : null}
+
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>NTP client enabled</Text>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{
+            checked: ntpEnabled,
+            disabled: formsDisabled,
+          }}
+          disabled={formsDisabled}
+          onPress={onToggleEnabled}
+          style={[
+            styles.toggle,
+            ntpEnabled ? styles.toggleOn : styles.toggleOff,
+            formsDisabled && styles.btnDisabled,
+          ]}
+        >
+          <Text style={styles.toggleText}>{ntpEnabled ? 'On' : 'Off'}</Text>
+        </Pressable>
+      </View>
+
+      <Text style={orgPanelStyles.detailLabel}>NTP servers</Text>
+      <TextInput
+        value={ntpServersText}
+        onChangeText={onServersChange}
+        editable={!formsDisabled}
+        placeholder="pool.ntp.org, time.google.com"
+        placeholderTextColor={colors.textMuted}
+        style={styles.input}
+      />
+
+      <Text style={orgPanelStyles.detailLabel}>Fallback servers</Text>
+      <TextInput
+        value={fallbackText}
+        onChangeText={onFallbackChange}
+        editable={!formsDisabled}
+        placeholder="Optional fallback hosts"
+        placeholderTextColor={colors.textMuted}
+        style={styles.input}
+      />
+
+      <Pressable
+        disabled={formsDisabled}
+        onPress={onApply}
+        style={({ pressed }) => [
+          orgPanelStyles.toolbarBtnSecondary,
+          formsDisabled && styles.btnDisabled,
+          pressed && styles.btnPressed,
+          webPointer,
+        ]}
+      >
+        {submitting || commandInFlight ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : null}
+        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Apply NTP</Text>
+      </Pressable>
+      {commandInFlight ? (
+        <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
+      ) : null}
+    </SectionPanel>
+  )
 }
 
 export function ServerTimeSection({
@@ -62,7 +365,6 @@ export function ServerTimeSection({
   ntpPollError: string | null
   onEnqueueCommand: (response: CommandEnqueueResponse, kind: 'timezone' | 'ntp') => void
 }>) {
-  const router = useRouter()
   const timeSync = server.timeSync
   const timezonesQuery = useQuery({
     queryKey: ['timezones'],
@@ -86,32 +388,32 @@ export function ServerTimeSection({
   const [ntpError, setNtpError] = useState<string | null>(null)
   const [ntpSubmitting, setNtpSubmitting] = useState(false)
 
-  const timezoneDisabledReason = useMemo(() => {
-    if (!canManage) return 'Organization manage permission required.'
-    if (!server.connected) return 'Daemon must be online to change timezone.'
-    if (server.enforceServerTimezone) {
-      return 'Organization enforces its default timezone for all servers.'
-    }
-    return null
-  }, [canManage, server.connected, server.enforceServerTimezone])
+  const tzDisabledReason = useMemo(
+    () =>
+      timezoneDisabledReason(
+        canManage,
+        server.connected,
+        Boolean(server.enforceServerTimezone),
+      ),
+    [canManage, server.connected, server.enforceServerTimezone],
+  )
 
   const timezoneFormsDisabled =
     timezoneCommandInFlight ||
     timezoneSubmitting ||
     ntpSubmitting ||
-    Boolean(timezoneDisabledReason)
+    Boolean(tzDisabledReason)
 
-  const ntpDisabledReason = useMemo(() => {
-    if (!canManage) return 'Organization manage permission required.'
-    if (!server.connected) return 'Daemon must be online to change NTP settings.'
-    return null
-  }, [canManage, server.connected])
+  const ntpReason = useMemo(
+    () => ntpDisabledReason(canManage, server.connected),
+    [canManage, server.connected],
+  )
 
   const ntpFormsDisabled =
     ntpCommandInFlight ||
     ntpSubmitting ||
     timezoneSubmitting ||
-    Boolean(ntpDisabledReason)
+    Boolean(ntpReason)
 
   const applyTimezone = async () => {
     if (!pickedTimezone || timezoneFormsDisabled) return
@@ -129,25 +431,13 @@ export function ServerTimeSection({
 
   const applyNtp = async () => {
     if (ntpFormsDisabled) return
-    const payload: NtpSetInput = {}
-    if (ntpEnabled !== (timeSync?.ntpEnabled === true)) {
-      payload.enabled = ntpEnabled
-    }
-    const servers = parseHostList(ntpServersText)
-    const fallback = parseHostList(fallbackText)
-    const prevServers = timeSync?.ntpServers ?? []
-    const prevFallback = timeSync?.fallbackNtpServers ?? []
-    if (servers.join(',') !== prevServers.join(',')) {
-      payload.servers = servers
-    }
-    if (fallback.join(',') !== prevFallback.join(',')) {
-      payload.fallbackServers = fallback
-    }
-    if (
-      payload.enabled === undefined &&
-      payload.servers === undefined &&
-      payload.fallbackServers === undefined
-    ) {
+    const payload = buildNtpPayload(
+      ntpEnabled,
+      ntpServersText,
+      fallbackText,
+      timeSync,
+    )
+    if (!payload) {
       setNtpError('Change at least one NTP setting before applying.')
       return
     }
@@ -165,190 +455,36 @@ export function ServerTimeSection({
 
   return (
     <View style={styles.root}>
-      <SectionPanel title="Time sync status" hint="Facts from the last daemon heartbeat">
-        {!timeSync ? (
-          <Text style={orgPanelStyles.muted}>
-            No time facts reported yet — waiting for the daemon.
-          </Text>
-        ) : (
-          <>
-            <View style={styles.statusRow}>
-              <View style={styles.statusPair}>
-                <View
-                  style={[
-                    styles.dot,
-                    timeSync.ntpEnabled ? styles.dotOn : styles.dotOff,
-                  ]}
-                />
-                <Text style={styles.statusText}>
-                  NTP client {timeSync.ntpEnabled ? 'Enabled' : 'Disabled'}
-                </Text>
-              </View>
-              <View style={styles.statusPair}>
-                <View
-                  style={[
-                    styles.dot,
-                    timeSync.ntpSynced ? styles.dotOn : styles.dotMuted,
-                  ]}
-                />
-                <Text style={styles.statusText}>
-                  {ntpSyncLabel(timeSync.ntpSynced)}
-                </Text>
-              </View>
-            </View>
-            {timeSync.ntpServers && timeSync.ntpServers.length > 0 ? (
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Servers: </Text>
-                <Text style={styles.mono}>{timeSync.ntpServers.join(', ')}</Text>
-              </Text>
-            ) : null}
-            {timeSync.fallbackNtpServers &&
-            timeSync.fallbackNtpServers.length > 0 ? (
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Fallback: </Text>
-                <Text style={styles.mono}>
-                  {timeSync.fallbackNtpServers.join(', ')}
-                </Text>
-              </Text>
-            ) : null}
-            {timeSync.capturedAt ? (
-              <Text style={orgPanelStyles.muted}>
-                Captured{' '}
-                {formatLocalDateTime(timeSync.capturedAt, {
-                  timeZoneName: 'short',
-                })}
-              </Text>
-            ) : null}
-          </>
-        )}
-      </SectionPanel>
-
-      <SectionPanel title="Timezone" hint="Effective timezone on this host">
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
-          <Text style={styles.mono}>{server.timezone ?? 'Not set'}</Text>
-        </Text>
-        <Text style={orgPanelStyles.muted}>
-          Source: {timezoneSourceLabel(server.timezoneSource)}
-        </Text>
-
-        {timezoneDisabledReason ? (
-          <Text style={orgPanelStyles.muted}>{timezoneDisabledReason}</Text>
-        ) : null}
-        {server.enforceServerTimezone ? (
-          <Pressable
-            onPress={() =>
-              router.push(orgRouteHref(orgId, 'servers', 'settings') as `/${string}/servers/settings`)
-            }
-            style={webPointer}
-          >
-            <Text style={styles.linkText}>Open fleet timezone settings</Text>
-          </Pressable>
-        ) : null}
-
-        {timezoneError ? (
-          <Text style={orgPanelStyles.error}>{timezoneError}</Text>
-        ) : null}
-        {timezonePollError ? (
-          <Text style={orgPanelStyles.error}>{timezonePollError}</Text>
-        ) : null}
-
-        <ServerTimezonePicker
-          value={pickedTimezone}
-          options={timezonesQuery.data?.timezones ?? []}
-          disabled={timezoneFormsDisabled || Boolean(timezoneDisabledReason)}
-          placeholder="Select timezone…"
-          onChange={setPickedTimezone}
-        />
-
-        <Pressable
-          disabled={
-            timezoneFormsDisabled || !pickedTimezone || Boolean(timezoneDisabledReason)
-          }
-          onPress={() => void applyTimezone()}
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
-            (timezoneFormsDisabled || !pickedTimezone) && styles.btnDisabled,
-            pressed && styles.btnPressed,
-            webPointer,
-          ]}
-        >
-          {timezoneSubmitting || timezoneCommandInFlight ? (
-            <ActivityIndicator size="small" color={colors.buttonText} />
-          ) : null}
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Apply timezone</Text>
-        </Pressable>
-        {timezoneCommandInFlight ? (
-          <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
-        ) : null}
-      </SectionPanel>
-
-      <SectionPanel title="NTP configuration" hint="Pushed to the daemon via command">
-        {ntpDisabledReason ? (
-          <Text style={orgPanelStyles.muted}>{ntpDisabledReason}</Text>
-        ) : null}
-        {ntpError ? <Text style={orgPanelStyles.error}>{ntpError}</Text> : null}
-        {ntpPollError ? <Text style={orgPanelStyles.error}>{ntpPollError}</Text> : null}
-
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>NTP client enabled</Text>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{
-              checked: ntpEnabled,
-              disabled: ntpFormsDisabled,
-            }}
-            disabled={ntpFormsDisabled}
-            onPress={() => setNtpEnabled((on) => !on)}
-            style={[
-              styles.toggle,
-              ntpEnabled ? styles.toggleOn : styles.toggleOff,
-              ntpFormsDisabled && styles.btnDisabled,
-            ]}
-          >
-            <Text style={styles.toggleText}>{ntpEnabled ? 'On' : 'Off'}</Text>
-          </Pressable>
-        </View>
-
-        <Text style={orgPanelStyles.detailLabel}>NTP servers</Text>
-        <TextInput
-          value={ntpServersText}
-          onChangeText={setNtpServersText}
-          editable={!ntpFormsDisabled}
-          placeholder="pool.ntp.org, time.google.com"
-          placeholderTextColor={colors.textMuted}
-          style={styles.input}
-        />
-
-        <Text style={orgPanelStyles.detailLabel}>Fallback servers</Text>
-        <TextInput
-          value={fallbackText}
-          onChangeText={setFallbackText}
-          editable={!ntpFormsDisabled}
-          placeholder="Optional fallback hosts"
-          placeholderTextColor={colors.textMuted}
-          style={styles.input}
-        />
-
-        <Pressable
-          disabled={ntpFormsDisabled}
-          onPress={() => void applyNtp()}
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnSecondary,
-            ntpFormsDisabled && styles.btnDisabled,
-            pressed && styles.btnPressed,
-            webPointer,
-          ]}
-        >
-          {ntpSubmitting || ntpCommandInFlight ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : null}
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Apply NTP</Text>
-        </Pressable>
-        {ntpCommandInFlight ? (
-          <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
-        ) : null}
-      </SectionPanel>
+      <TimeSyncStatusPanel timeSync={timeSync} />
+      <TimezoneSettingsPanel
+        orgId={orgId}
+        server={server}
+        pickedTimezone={pickedTimezone}
+        timezoneOptions={timezonesQuery.data?.timezones ?? []}
+        formsDisabled={timezoneFormsDisabled}
+        disabledReason={tzDisabledReason}
+        submitting={timezoneSubmitting}
+        commandInFlight={timezoneCommandInFlight}
+        localError={timezoneError}
+        pollError={timezonePollError}
+        onPickTimezone={setPickedTimezone}
+        onApply={() => void applyTimezone()}
+      />
+      <NtpSettingsPanel
+        ntpEnabled={ntpEnabled}
+        ntpServersText={ntpServersText}
+        fallbackText={fallbackText}
+        formsDisabled={ntpFormsDisabled}
+        disabledReason={ntpReason}
+        submitting={ntpSubmitting}
+        commandInFlight={ntpCommandInFlight}
+        localError={ntpError}
+        pollError={ntpPollError}
+        onToggleEnabled={() => setNtpEnabled((on) => !on)}
+        onServersChange={setNtpServersText}
+        onFallbackChange={setFallbackText}
+        onApply={() => void applyNtp()}
+      />
     </View>
   )
 }
@@ -392,9 +528,6 @@ const styles = StyleSheet.create({
   mono: {
     fontFamily: 'monospace',
     fontSize: 13,
-  },
-  settingsLink: {
-    marginTop: spacing.xs,
   },
   linkText: {
     color: colors.accent,
