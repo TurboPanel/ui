@@ -735,8 +735,14 @@ export type ProjectRecord = {
     /** Managed engine catalog code (`postgres`, …). */
     code?: string;
   } | null;
-  /** `options.compose` is a versioned ComposeDocument. */
-  options: { compose?: ComposeDocument } | null;
+  /**
+   * `options.compose` is a versioned ComposeDocument.
+   * `options.containerNaming` is `uuid` (default) or `custom`.
+   */
+  options: {
+    compose?: ComposeDocument
+    containerNaming?: 'uuid' | 'custom'
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1097,7 +1103,10 @@ export async function updateProject(
   body: {
     displayName?: string;
     description?: string;
-    options?: { compose?: ComposeDocument };
+    options?: {
+      compose?: ComposeDocument
+      containerNaming?: 'uuid' | 'custom'
+    };
     workspaceId?: string;
   },
 ): Promise<{ ok: true }> {
@@ -2175,6 +2184,47 @@ export async function deployEnvironment(
   }
 
   return await response.json() as CommandEnqueueResponse
+}
+
+export type DeployPreviewWarning = {
+  code:
+    | 'empty_compose'
+    | 'resource_limit_exceeded'
+    | 'health_check_missing'
+    | 'docker_external_network_unregistered'
+    | 'traditional_web_principal_ambiguous'
+  message: string
+  details?: Record<string, unknown>
+}
+
+export type DeployPreviewResponse = {
+  ok: true
+  composeYaml: string
+  projectName: string
+  containers: Array<{
+    serviceId: string
+    composeServiceName: string
+    containerName: string
+    ordinal: number
+  }>
+  volumes: Array<{
+    storageId: string
+    composeKey: string
+    volumeName: string
+  }>
+  warnings: DeployPreviewWarning[]
+}
+
+/**
+ * Exact compose document deploy would send (same prepare path), with secret
+ * values redacted. May allocate containers / register volumes idempotently.
+ */
+export async function fetchDeployPreview(
+  environmentId: string,
+): Promise<DeployPreviewResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/deploy-preview`,
+  )
 }
 
 export type StorageKind = 'docker_volume' | 'bind_mount' | 'file' | 'directory'

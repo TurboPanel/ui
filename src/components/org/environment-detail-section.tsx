@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
+import { DeployPreviewPanel } from '@/components/org/deploy-preview-panel'
 import { ContainerStatusBadge } from '@/components/org/managed/container-status-badge'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
@@ -1200,6 +1201,12 @@ function EnvironmentLoadedPanels({
           title="Environment compose overlay"
         />
       </SectionPanel>
+
+      <DeployPreviewPanel
+        environmentId={environment.id}
+        canManage={canManage}
+        placementServerId={placementServerId}
+      />
 
       <EnvironmentPlacementPanel
         placementServerId={placementServerId}

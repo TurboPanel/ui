@@ -30,8 +30,15 @@
 - Compose: Editor | Visual tabs; placement only on environment overlays  
 - Delete project: stop-running-services wizard then type-name confirm  
 
+## Settings
+
+- **Container naming** segment (`uuid` / `custom`) on compose project detail — writes `options.containerNaming`; manage-gated as a display hint  
+- Environment **Deploy preview** is collapsible read-only YAML (fetch on expand / refresh)
+
 ## Anti-patterns (page-specific)
 
 - ❌ Project-level server placement (environment-owned only)  
 - ❌ Showing secret variable values after create  
 - ❌ Card grids of empty "feature" tiles on the overview  
+- ❌ Auto-polling deploy preview  
+

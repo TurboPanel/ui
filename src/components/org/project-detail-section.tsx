@@ -5,7 +5,7 @@ import { ManagedProjectSection } from '@/components/org/managed/managed-project-
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
   createProjectPrincipal,
@@ -442,6 +442,74 @@ function ProjectPageHeader({
   )
 }
 
+type ContainerNamingMode = 'uuid' | 'custom'
+
+function ContainerNamingPanel({
+  canManage,
+  value,
+  saving,
+  onChange,
+}: Readonly<{
+  canManage: boolean
+  value: ContainerNamingMode
+  saving: boolean
+  onChange: (mode: ContainerNamingMode) => void
+}>) {
+  return (
+    <SectionPanel
+      title="Container naming"
+      hint="How Docker container_name values are generated at deploy"
+    >
+      {canManage ? (
+        <View style={orgPanelStyles.segmentGroup}>
+          {(
+            [
+              { mode: 'uuid' as const, label: 'UUID' },
+              { mode: 'custom' as const, label: 'Custom' },
+            ] as const
+          ).map((option) => {
+            const active = value === option.mode
+            return (
+              <Pressable
+                key={option.mode}
+                style={[
+                  orgPanelStyles.segmentChip,
+                  active && orgPanelStyles.segmentChipActive,
+                  webPointer,
+                  saving && styles.namingDisabled,
+                ]}
+                disabled={saving}
+                onPress={() => {
+                  onChange(option.mode)
+                }}
+              >
+                <Text
+                  style={[
+                    orgPanelStyles.segmentChipText,
+                    active && orgPanelStyles.segmentChipTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : (
+        <Text style={orgPanelStyles.detailLine}>
+          {value === 'custom' ? 'Custom' : 'UUID'}
+        </Text>
+      )}
+      <Text style={orgPanelStyles.muted}>
+        {value === 'custom'
+          ? 'Uses each service’s explicit container name when set; otherwise Compose default names.'
+          : 'Default — each container is named from its allocated row UUID.'}
+      </Text>
+      {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
+    </SectionPanel>
+  )
+}
+
 function WorkspaceMovePanel({
   canOwn,
   workspaces,
@@ -530,6 +598,7 @@ export function ProjectDetailSection({
   const [error, setError] = useState<string | null>(null)
   const [savingCompose, setSavingCompose] = useState(false)
   const [savingWorkspace, setSavingWorkspace] = useState(false)
+  const [savingContainerNaming, setSavingContainerNaming] = useState(false)
   const [editDisplayName, setEditDisplayName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [savingMeta, setSavingMeta] = useState(false)
@@ -595,10 +664,21 @@ export function ProjectDetailSection({
     setSavingCompose(true)
     setError(null)
     try {
-      await updateProject(projectId, { options: { compose } })
+      const containerNaming = project?.options?.containerNaming
+      const options = containerNaming
+        ? { compose, containerNaming }
+        : { compose }
+      await updateProject(projectId, { options })
       setProject((current) =>
         current
-          ? { ...current, options: { compose } }
+          ? {
+              ...current,
+              options: {
+                ...current.options,
+                compose,
+                ...(containerNaming ? { containerNaming } : {}),
+              },
+            }
           : current,
       )
     } catch (err) {
@@ -609,6 +689,43 @@ export function ProjectDetailSection({
       setError(err instanceof Error ? err.message : 'Failed to save compose')
     } finally {
       setSavingCompose(false)
+    }
+  }
+
+  const saveContainerNaming = async (containerNaming: ContainerNamingMode) => {
+    const currentMode = project?.options?.containerNaming ?? 'uuid'
+    if (currentMode === containerNaming) return
+
+    setSavingContainerNaming(true)
+    setError(null)
+    try {
+      const compose = project?.options?.compose
+      const options = compose
+        ? { compose, containerNaming }
+        : { containerNaming }
+      await updateProject(projectId, { options })
+      setProject((current) =>
+        current
+          ? {
+              ...current,
+              options: {
+                ...current.options,
+                ...(compose ? { compose } : {}),
+                containerNaming,
+              },
+            }
+          : current,
+      )
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        await handleUnauthorized()
+        return
+      }
+      setError(
+        err instanceof Error ? err.message : 'Failed to save container naming',
+      )
+    } finally {
+      setSavingContainerNaming(false)
     }
   }
 
@@ -723,6 +840,15 @@ export function ProjectDetailSection({
 
               {isComposeProject(project) ? (
                 <>
+                  <ContainerNamingPanel
+                    canManage={canManage}
+                    value={project.options?.containerNaming ?? 'uuid'}
+                    saving={savingContainerNaming}
+                    onChange={(mode) => {
+                      void saveContainerNaming(mode)
+                    }}
+                  />
+
                   <SectionPanel
                     title="Compose"
                     hint="Shared stack — each environment can override"
@@ -832,6 +958,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
+  namingDisabled: { opacity: 0.55 },
   serverList: { gap: spacing.xs },
   serverOption: {
     borderWidth: 1,

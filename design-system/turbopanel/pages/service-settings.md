@@ -29,3 +29,7 @@ Storage registry: `storage` table + `/api/client/v1/storage`; daemon materialize
 Project principals: `principal.project_id` + `/api/client/v1/projects/:id/principals`; list/create return `serviceIds[]` from `assignment`; `PATCH …/principals/:id` replaces bindings. UID/GID from org `options.nextPrincipalUid` starting at 10001. Deploy includes assigned principals in `principalMaterial[]` (`ensureSystemPrincipals` on the daemon).
 
 Resource limits: `organization.options.resourceLimits` and `server.options.resourceLimits`; validated at deploy in `deploy-prepare.ts`.
+
+**Deploy preview:** environment detail shows a collapsible read-only preview of the exact prepared compose YAML (container/volume names) via `GET …/deploy-preview`. Fetch on expand and explicit refresh only — never auto-poll. Prepare gates appear as warnings so the panel still renders.
+
+**Container naming:** project settings expose `options.containerNaming` (`uuid` default vs `custom`) via segment chips; gated by manage as a display hint.
