@@ -5,10 +5,6 @@ import { IpListRow } from '@/components/org/ips-overview-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
-  formatServerGeoCountryCode,
-  formatServerGeoLocation,
-} from '@/lib/server-geo'
-import {
   fetchDatacenters,
   fetchIps,
   fetchNetworks,
@@ -22,14 +18,6 @@ import { useForbiddenRecovery } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 // Docker/veth/bridge interfaces are filtered daemon-side before addresses reach the API.
-
-function dialLine(server: ServerDetailRecord): string {
-  const raw = server.remoteAddress?.trim()
-  if (!raw || raw === '__direct__') {
-    return 'Co-located (Unix socket)'
-  }
-  return raw
-}
 
 function AddressGroup({
   label,
@@ -148,10 +136,6 @@ export function ServerNetworkSection({
       addresses.publicIpv6.length > 0 ||
       addresses.privateIpv4.length > 0 ||
       addresses.privateIpv6.length > 0)
-
-  const geoLocation = formatServerGeoLocation(server.geo)
-  const geoCountry = formatServerGeoCountryCode(server.geo)
-  const geoLine = [geoLocation, geoCountry].filter(Boolean).join(', ')
 
   const datacenterIpsQuery = useQuery({
     queryKey: ['server', server.id, 'ips', { scope: 'datacenter' }],
@@ -282,19 +266,6 @@ export function ServerNetworkSection({
             <AddressGroup label="Private IPv6" addresses={addresses!.privateIpv6} />
           </>
         )}
-      </SectionPanel>
-
-      <SectionPanel title="Control-plane connection" hint="How this host dials the instance">
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Dial: </Text>
-          <Text style={styles.mono}>{dialLine(server)}</Text>
-        </Text>
-        {geoLine ? (
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Geo: </Text>
-            {geoLine}
-          </Text>
-        ) : null}
       </SectionPanel>
     </View>
   )

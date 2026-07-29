@@ -351,6 +351,7 @@ Authorization helpers:
 #### Server control panel (`/<orgId>/servers/[serverId]`)
 
 - `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`).
+- Overview **Connection** shows observed egress (`remoteAddress` as Connected from) plus **24h host-metrics reporting** (`Last sample` / `Reporting (24h)` via `fetchServerMetricsSeries`). Do **not** surface `connectedAt` / `lastInboundAt` as session uptime — Workers steady-state cell pings do not refresh Postgres `lastInboundAt`, and sockets self-recycle about every 2h so `connectedAt` is only the current WS session start.
 - Single command poll timer (`COMMAND_POLL_MS`) for ping, hostname, reboot, timezone, and NTP on this page; terminal hostname/reboot/timezone/NTP success invalidates `['server', serverId]`.
 - Legacy deep link `/<orgId>/servers/[serverId]/metrics` unchanged; Metrics tab embeds `ServerMetricsSection` with `embedded`.
 

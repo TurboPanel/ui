@@ -24,10 +24,10 @@
 
 | Tab | Content |
 |-----|---------|
-| Overview | Identity, OS, connection, geo, effective timezone summary |
+| Overview | Identity, OS, connection (egress + 24h metrics reporting), geo, timezone |
 | Control | Ping, hostname, reboot, trunk update, delete (two-step) |
 | Time | NTP status, timezone picker, NTP apply form |
-| Network | Public/private IPv4/IPv6 groups, control-plane dial line |
+| Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
 
 ## Motion

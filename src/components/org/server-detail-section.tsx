@@ -31,7 +31,11 @@ import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
-import { formatLocalDateTime } from '@/lib/format-datetime'
+import { formatLocalDateTime, formatRelativeLocalDateTime } from '@/lib/format-datetime'
+import {
+  formatCoveragePercent,
+  presentSamplesFromGaps,
+} from '@/lib/format-metrics'
 import {
   defaultOrgDashboardHref,
   SERVER_DETAIL_TAB_IDS,
@@ -42,15 +46,18 @@ import {
   deleteServer,
   fetchCommand,
   fetchServer,
+  fetchServerMetricsSeries,
   fetchServerUpdate,
   formatServerDeleteBlockedError,
   isForbiddenError,
+  MetricsBackendUnavailableError,
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
   setServerHostname,
   triggerServerUpdate,
   type CommandEnqueueResponse,
+  type MetricsSeriesResponse,
   type OrgServerRecord,
   type ServerDetailRecord,
   type ServerOsLogoKey,
@@ -68,6 +75,62 @@ import { chrome, colors, spacing } from '@/lib/theme'
 
 const SERVERS_REFRESH_MS = 30_000
 const UPDATE_PROGRESS_POLL_MS = 5_000
+/** Overview reporting window — matches Metrics 24h cadence (300 s refresh). */
+const REPORTING_WINDOW_MS = 24 * 60 * 60 * 1000
+const REPORTING_REFRESH_MS = 300_000
+
+function latestMetricsSampleAt(data: MetricsSeriesResponse): string | null {
+  for (let i = data.points.length - 1; i >= 0; i -= 1) {
+    const point = data.points[i]
+    if (point && point.sampleCount > 0) return point.at
+  }
+  return null
+}
+
+function reportingCoverageLabel(data: MetricsSeriesResponse): string | null {
+  const expectedSamples = data.sampleCount + data.gapCount
+  if (expectedSamples <= 0) return null
+  const presentSamples = presentSamplesFromGaps(expectedSamples, data.gapCount)
+  return formatCoveragePercent(presentSamples, expectedSamples)
+}
+
+function formatReportingLine(data: MetricsSeriesResponse): string | null {
+  const coverageLabel = reportingCoverageLabel(data)
+  if (!coverageLabel) return null
+  if (data.gapCount <= 0) return coverageLabel
+  const gapWord = data.gapCount === 1 ? 'gap' : 'gaps'
+  return `${coverageLabel} · ${data.gapCount} ${gapWord}`
+}
+
+function ReportingStatusNote({
+  loading,
+  errored,
+  reporting,
+}: Readonly<{
+  loading: boolean
+  errored: boolean
+  reporting: MetricsSeriesResponse | null | undefined
+}>) {
+  if (loading) {
+    return <Text style={orgPanelStyles.muted}>Loading reporting…</Text>
+  }
+  if (errored) {
+    return <Text style={orgPanelStyles.muted}>Reporting unavailable.</Text>
+  }
+  if (!reporting) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        Metrics backend not configured for this control plane.
+      </Text>
+    )
+  }
+  if (!reporting.available) {
+    return (
+      <Text style={orgPanelStyles.muted}>Waiting for first metrics samples.</Text>
+    )
+  }
+  return null
+}
 
 type DetailActiveCommand = ActiveCommand
 
@@ -973,10 +1036,79 @@ export function ServerDetailSection({
   )
 }
 
+function ServerConnectionOverview({
+  server,
+}: Readonly<{ server: ServerDetailRecord }>) {
+  // remoteAddress is the egress IP the control plane observed on the daemon WS
+  // (CF-Connecting-IP / X-Real-IP) — not the URL/hostname the daemon dials.
+  const seenFrom = server.remoteAddress?.trim()
+  const seenFromDisplay =
+    !seenFrom || seenFrom === '__direct__'
+      ? 'Co-located (Unix socket)'
+      : seenFrom
+
+  // Presence timestamps (connectedAt / lastInboundAt) are not useful here:
+  // Workers steady-state cell pings never project lastInboundAt, and sockets
+  // self-recycle every ~2h so connectedAt is only the current session start.
+  // Host-metrics coverage is the durable continuity signal (~60s samples).
+  const reportingQuery = useQuery({
+    queryKey: ['server', server.id, 'reporting', '24h'],
+    queryFn: async (): Promise<MetricsSeriesResponse | null> => {
+      const toMs = Date.now()
+      try {
+        return await fetchServerMetricsSeries(server.id, {
+          fromIso: new Date(toMs - REPORTING_WINDOW_MS).toISOString(),
+          toIso: new Date(toMs).toISOString(),
+          metrics: ['uptimeSeconds'],
+        })
+      } catch (error) {
+        if (error instanceof MetricsBackendUnavailableError) return null
+        throw error
+      }
+    },
+    refetchInterval: REPORTING_REFRESH_MS,
+  })
+  useForbiddenRecovery(reportingQuery.error)
+
+  const reporting = reportingQuery.data
+  const showSamples = Boolean(reporting?.available)
+  const latestSampleAt = reporting ? latestMetricsSampleAt(reporting) : null
+  const reportingLine = reporting ? formatReportingLine(reporting) : null
+
+  return (
+    <SectionPanel
+      title="Connection"
+      hint="Observed egress and host-metrics reporting (not WS session age)"
+    >
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Connected from: </Text>
+        <Text style={styles.mono}>{seenFromDisplay}</Text>
+      </Text>
+      <ReportingStatusNote
+        loading={reportingQuery.isLoading}
+        errored={reportingQuery.isError}
+        reporting={reporting}
+      />
+      {showSamples ? (
+        <>
+          <Text style={orgPanelStyles.detailLine}>
+            <Text style={orgPanelStyles.detailLabel}>Last sample: </Text>
+            {formatRelativeLocalDateTime(latestSampleAt, {
+              neverLabel: 'No samples in the last 24h',
+              absolute: { includeSeconds: false },
+            })}
+          </Text>
+          <Text style={orgPanelStyles.detailLine}>
+            <Text style={orgPanelStyles.detailLabel}>Reporting (24h): </Text>
+            {reportingLine ?? '—'}
+          </Text>
+        </>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
 function ServerOverviewTab({ server }: Readonly<{ server: ServerDetailRecord }>) {
-  const dial = server.remoteAddress?.trim()
-  const dialDisplay =
-    !dial || dial === '__direct__' ? 'Co-located (Unix socket)' : dial
   const geoLine = formatServerGeoLocation(server.geo)
   const country = formatServerGeoCountryCode(server.geo)
   const asn = formatServerGeoAsn(server.geo)
@@ -1016,20 +1148,7 @@ function ServerOverviewTab({ server }: Readonly<{ server: ServerDetailRecord }>)
         ) : null}
       </SectionPanel>
 
-      <SectionPanel title="Connection">
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Connected since: </Text>
-          {formatLocalDateTime(server.connectedAt)}
-        </Text>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Last inbound: </Text>
-          {formatLocalDateTime(server.lastInboundAt)}
-        </Text>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Dial: </Text>
-          <Text style={styles.mono}>{dialDisplay}</Text>
-        </Text>
-      </SectionPanel>
+      <ServerConnectionOverview server={server} />
 
       <SectionPanel title="Geo">
         {geoLine || country || asn ? (
