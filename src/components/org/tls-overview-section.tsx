@@ -18,7 +18,7 @@ import {
   type TlsSource,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 function tlsTitle(row: TlsRecord): string {
   return row.displayName?.trim() || row.metadata.dnsNames[0] || row.id
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   sourceChipActive: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgSecondary,
   },
   sourceChipText: {
@@ -308,14 +308,14 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   primaryButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     borderRadius: 6,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     alignSelf: 'flex-start',
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontWeight: '600',
   },
   secondaryButton: {

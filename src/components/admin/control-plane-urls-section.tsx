@@ -16,7 +16,7 @@ import {
   savePublicUrls,
 } from '@/lib/instance-api'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
@@ -415,12 +415,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

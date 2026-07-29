@@ -59,7 +59,7 @@ import {
   stripComposePlacement,
   type HostingServiceContext,
 } from '@/lib/compose'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import { useCan } from '@/lib/query-client'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
@@ -1769,19 +1769,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
     padding: spacing.sm,
   },
-  serverOptionSelected: { borderColor: colors.accent, backgroundColor: colors.bgActive },
+  serverOptionSelected: { borderColor: chrome.accent, backgroundColor: chrome.bgActive },
   serverOptionDisabled: { opacity: 0.6 },
   serverOptionText: { color: colors.text, fontSize: 13, fontFamily: 'monospace' },
   serverOptionTextDisabled: { color: colors.textMuted },
   deployButton: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     borderRadius: 8,
     marginTop: spacing.sm,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  deployButtonText: { color: colors.buttonText, fontSize: 14, fontWeight: '700' },
+  deployButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
   hostingList: { gap: spacing.sm },
   hostingTitleRow: {
     flexDirection: 'row',
@@ -1850,8 +1850,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   tlsChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   tlsChipText: {
     color: colors.textChip,
@@ -1861,7 +1861,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
@@ -1898,7 +1898,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   proxyCheckboxChecked: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   proxyCheckboxMark: {
@@ -1945,12 +1945,12 @@ const styles = StyleSheet.create({
   },
   modalPrimaryButton: {
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   modalPrimaryText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

@@ -13,7 +13,7 @@ import {
   type OrgDefaultTimezoneSettings,
 } from '@/lib/instance-api'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -197,8 +197,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleOn: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   toggleOff: {
     borderColor: colors.borderChip,

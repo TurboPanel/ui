@@ -41,7 +41,7 @@ import {
 } from '@/lib/instance-api'
 import { HA_METRICS_LOCAL_NOTE } from '@/lib/platform-copy'
 import { useForbiddenRecovery } from '@/lib/query-client'
-import { colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing } from '@/lib/theme'
 
 const RANGE_OPTIONS: ReadonlyArray<{
   id: MetricsRangeId
@@ -1122,7 +1122,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: spacing.sm,
     borderLeftWidth: 3,
-    borderLeftColor: colors.accent,
+    borderLeftColor: chrome.accent,
   },
   coverageHeader: {
     flexDirection: 'row',
@@ -1164,7 +1164,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderRadius: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   coverageBarGap: {
     position: 'absolute',
@@ -1240,7 +1240,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   chartGroupCountActive: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgPanel,
   },
   chartGroupCountText: {
@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   chartGroupCountTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   chartGrid: {
     gap: spacing.lg,
@@ -1291,6 +1291,6 @@ const styles = StyleSheet.create({
     color: colors.pending,
   },
   coverageStatAccent: {
-    color: colors.accent,
+    color: chrome.accent,
   },
 })

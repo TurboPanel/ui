@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '@/lib/theme'
+import { chrome, colors } from '@/lib/theme'
 
 export function SectionPanel({
   title,
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   },
   accentStripe: {
     width: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   areaHeaderCopy: {
     flex: 1,

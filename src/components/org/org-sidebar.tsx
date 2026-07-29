@@ -4,7 +4,7 @@ import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
 import { webPointer } from '@/components/org/org-panel-styles'
-import { colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import { projectsHrefForScope } from '@/lib/workspace-scope'
 
@@ -27,16 +27,7 @@ export function OrgSidebar({
   return (
     <View style={styles.sidebar}>
       <View style={styles.brand}>
-        <View style={styles.brandStripe} accessibilityElementsHidden>
-          <View style={styles.brandStripeGreen} />
-          <View style={styles.brandStripeBlue} />
-        </View>
-        <View style={styles.brandCopy}>
-          <View style={styles.brandTitleRow}>
-            <View style={styles.brandDot} />
-            <Text style={styles.brandTitle}>TurboPanel</Text>
-          </View>
-        </View>
+        <Text style={styles.brandTitle}>TurboPanel</Text>
       </View>
 
       <View style={styles.nav}>
@@ -165,44 +156,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   brand: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
     marginBottom: spacing.xl,
-    paddingHorizontal: spacing.xs,
-  },
-  brandStripe: {
-    width: 3,
-    borderRadius: 2,
-    marginRight: spacing.sm,
-    overflow: 'hidden',
-  },
-  brandStripeGreen: {
-    flex: 1,
-    backgroundColor: colors.green,
-  },
-  brandStripeBlue: {
-    flex: 1,
-    backgroundColor: colors.blue,
-  },
-  brandCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  brandTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  brandDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.green,
+    paddingHorizontal: spacing.sm,
   },
   brandTitle: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     letterSpacing: -0.2,
   },
   nav: {
@@ -233,7 +193,7 @@ const styles = StyleSheet.create({
     bottom: 6,
     width: 2,
     borderRadius: 1,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   areaLabel: {
     color: colors.textMuted,
@@ -267,7 +227,7 @@ const styles = StyleSheet.create({
   },
   subItemActive: {
     borderColor: colors.borderMuted,
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
   },
   subLabel: {
     color: colors.textDim,
@@ -275,7 +235,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subLabelActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   adminNav: {
     marginTop: 'auto',

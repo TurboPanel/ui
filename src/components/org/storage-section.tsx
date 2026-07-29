@@ -15,7 +15,7 @@ import {
   type StorageRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const STORAGE_KINDS: StorageKind[] = [
   'docker_volume',
@@ -542,14 +542,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
     marginBottom: spacing.sm,
   },
   primaryButtonText: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -590,8 +590,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   kindChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   kindChipText: {
     color: colors.text,
@@ -609,8 +609,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   serverOptionSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   serverOptionText: {
     color: colors.text,
@@ -619,12 +619,12 @@ const styles = StyleSheet.create({
   submitButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   submitButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

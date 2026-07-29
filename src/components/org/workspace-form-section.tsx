@@ -1,7 +1,7 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { createWorkspace, fetchWorkspace, updateWorkspace } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import {
   validateWorkspaceDescription,
   validateWorkspaceName,
@@ -260,12 +260,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

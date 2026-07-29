@@ -37,7 +37,7 @@ import {
   sortManagedCatalogEntries,
   type ManagedEngineAvailability,
 } from '@/lib/managed-services'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
@@ -1655,10 +1655,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderChip,
   },
   progressDotDone: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   progressDotActive: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     transform: [{ scale: 1.15 }],
   },
   progressLabel: {
@@ -1748,8 +1748,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   catalogCardSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   catalogCardDisabled: {
     opacity: 0.72,
@@ -1769,7 +1769,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   catalogStatusPillLive: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   catalogStatusPillMuted: {
@@ -1811,8 +1811,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   workspaceCardSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   workspaceCardLabel: {
     color: colors.text,
@@ -1853,13 +1853,13 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginTop: spacing.sm,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1896,7 +1896,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exposeCheckboxChecked: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   exposeCheckmark: {

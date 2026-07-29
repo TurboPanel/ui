@@ -64,7 +64,7 @@ import {
   formatServerGeoCountryCode,
   formatServerGeoLocation,
 } from '@/lib/server-geo'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const SERVERS_REFRESH_MS = 30_000
 const UPDATE_PROGRESS_POLL_MS = 5_000
@@ -1317,11 +1317,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   chipAccent: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 12,
     fontWeight: '600',
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -1346,7 +1346,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   badgeUpdating: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   badgeError: {
@@ -1358,7 +1358,7 @@ const styles = StyleSheet.create({
   badgeMuted: {
     borderColor: colors.borderChip,
   },
-  badgeTextAccent: { color: colors.accent },
+  badgeTextAccent: { color: chrome.accent },
   badgeTextError: { color: colors.error },
   badgeTextPending: { color: colors.pending },
   badgeTextMuted: { color: colors.textDim },
@@ -1370,11 +1370,11 @@ const styles = StyleSheet.create({
   },
   updateBtn: {
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
   },
   updateBtnText: {
     color: colors.accent,

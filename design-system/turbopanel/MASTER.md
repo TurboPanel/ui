@@ -40,14 +40,14 @@ Canonical tokens live in `src/lib/theme.ts`. Design system maps onto those — d
 | Text primary | `#ffffff` | `colors.text` |
 | Text body | `#cccccc` | `colors.textBody` |
 | Text muted | `#888888` | `colors.textMuted` |
-| Green (self-hosted / run) | `#3dd68c` | `colors.green` / `colors.accent` — Deno auth + online CTA |
-| Blue (HA) | `#3366cc` | `colors.blue` — Workers auth + secondary brand |
+| Green (self-hosted / run / online) | `#3dd68c` | `colors.green` / `colors.accent` — online status always; Deno chrome |
+| Blue (HA) | `#3366cc` | `colors.blue` — Workers / HA interactive chrome |
 | Pending / warn | `#e0b341` | `colors.pending` |
 | Error | `#ff6b6b` | `colors.error` |
 | Info / command | `#9ad2ff` | `colors.command` |
 | Overlay | `rgba(0,0,0,0.6)` | `colors.overlay` |
 
-**Color notes:** Dual brand — light green + `#3366cc` blue (aligned with website `--tp-green` / `--tp-blue`). Signed-in ops chrome stays **green-primary** (online / CTA). Auth screens follow control-plane runtime: **Workers (HA) → blue**, **Deno (self-hosted) → green**. Status must never rely on color alone (pair with label/dot shape).
+**Color notes:** Dual brand — light green + `#3366cc` blue (aligned with website `--tp-green` / `--tp-blue`). Interactive chrome (sidebar active states, primary CTAs, toolbar chips) follows control-plane runtime via `chrome.*` tokens (`applyConsoleChromeRuntime`): **Workers (HA) → blue**, **Deno (self-hosted) → green**. **Online / live status stays green** always (`colors.green` / `colors.accent`). Auth screens use the same runtime mapping. Status must never rely on color alone (pair with label/dot shape).
 
 ### Typography
 

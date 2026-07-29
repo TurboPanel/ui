@@ -12,7 +12,7 @@ import {
   type EnvironmentRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const DISPLAY_NAME_PATTERN = /^[A-Za-z0-9 ._-]+$/
 const DEFAULT_ENVIRONMENT_NAME = 'Production'
@@ -551,8 +551,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   tabActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   tabText: {
     color: colors.textMuted,
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   toolbar: {
     flexDirection: 'row',
@@ -602,12 +602,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

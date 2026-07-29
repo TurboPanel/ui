@@ -24,7 +24,7 @@ import {
   type ManagedStatus,
 } from '@/lib/managed-services'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 /** Restrained fleet refresh — one org list call, never per-row status polling. */
 const MANAGED_REFRESH_MS = 30_000
@@ -611,8 +611,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textMuted,
@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   buttonPressed: {
     opacity: 0.88,
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   statusReady: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   statusStopped: {

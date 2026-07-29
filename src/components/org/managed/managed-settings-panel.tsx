@@ -15,7 +15,7 @@ import {
   type ManagedBindScope,
   type ManagedSettings,
 } from '@/lib/managed-services'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const ENGINE_CONFIG_MAX = 16 * 1024
 const RESTART_POLICIES = ['no', 'always', 'on-failure', 'unless-stopped'] as const
@@ -640,7 +640,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxChecked: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   checkmark: {
@@ -661,8 +661,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   segmentActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   segmentText: {
     color: colors.textMuted,
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   grid: {
     gap: spacing.sm,

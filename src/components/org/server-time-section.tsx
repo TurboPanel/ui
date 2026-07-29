@@ -22,7 +22,7 @@ import {
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { orgRouteHref } from '@/lib/org-navigation'
 import { useQuery } from '@tanstack/react-query'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 type TimeSyncMaybe = ServerDetailRecord['timeSync']
 
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   linkText: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -556,8 +556,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleOn: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   toggleOff: {
     borderColor: colors.borderChip,

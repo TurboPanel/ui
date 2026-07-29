@@ -7,7 +7,7 @@ import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { fetchOrganizations, type OrganizationRecord } from '@/lib/instance-api'
 import { setActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref } from '@/lib/org-navigation'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 export default function WelcomeScreen() {
   const { session, signOut } = useAuth()
@@ -168,19 +168,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   orgButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 12,
     alignItems: 'center',
   },
   orgButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
   adminButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   adminButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },

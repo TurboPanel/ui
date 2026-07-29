@@ -12,7 +12,7 @@ import {
 } from '@/lib/instance-api'
 import { useForbiddenRecovery } from '@/lib/query-client'
 import { HA_SIGNUP_SETTINGS_NOTE } from '@/lib/platform-copy'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleOn: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   toggleOff: {
     backgroundColor: colors.border,

@@ -39,7 +39,7 @@ import {
   type VpnRecord,
 } from '@/lib/instance-api'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import {
   overlayAddressForPeer,
   resolvePrimaryGatewayByDatacenter,
@@ -1081,13 +1081,13 @@ const styles = StyleSheet.create({
   primaryBadge: {
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   primaryBadgeText: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.4,
@@ -1145,7 +1145,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInset,
   },
   chipActive: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgSecondary,
   },
   chipText: {
@@ -1154,7 +1154,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   applyResults: {
     marginTop: spacing.sm,

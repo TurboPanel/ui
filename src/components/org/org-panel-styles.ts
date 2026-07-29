@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 /** Web-only cursor for interactive rows and chips. */
 export const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {}
@@ -43,7 +43,7 @@ export const orgPanelStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   detailTitle: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -94,10 +94,10 @@ export const orgPanelStyles = StyleSheet.create({
     gap: spacing.xs,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
   },
   toolbarBtnSecondary: {
     flexDirection: 'row',
@@ -111,7 +111,7 @@ export const orgPanelStyles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
   },
   toolbarBtnTextPrimary: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -170,9 +170,9 @@ export const orgPanelStyles = StyleSheet.create({
     alignItems: 'center',
   },
   segmentChipActive: {
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
   },
   segmentChipText: {
     color: colors.textDim,
@@ -181,7 +181,7 @@ export const orgPanelStyles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   segmentChipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
     fontWeight: '700',
   },
 })

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native'
 import { colors } from '@/lib/theme'
 
 export type ControlPlaneRuntime = 'deno' | 'workers'
@@ -50,6 +51,23 @@ export function authSpinnerColor(
   if (runtime === 'workers') return colors.blue
   if (runtime === 'deno') return colors.green
   return colors.textMuted
+}
+
+/**
+ * Push runtime chrome into CSS variables (web) so StyleSheet-baked
+ * `chrome.*` tokens follow Workers blue / Deno green without remounts.
+ */
+export function applyConsoleChromeRuntime(
+  runtime: ControlPlaneRuntime | undefined,
+): void {
+  if (Platform.OS !== 'web') return
+  if (typeof document === 'undefined') return
+
+  const theme = authAccentForRuntime(runtime)
+  const root = document.documentElement
+  root.style.setProperty('--tp-chrome-accent', theme.accent)
+  root.style.setProperty('--tp-chrome-bg-active', theme.bgActive)
+  root.style.setProperty('--tp-chrome-on-accent', theme.onAccent)
 }
 
 /**

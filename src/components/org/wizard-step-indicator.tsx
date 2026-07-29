@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 export function WizardStepIndicator({
   labels,
@@ -50,14 +50,14 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   chipDone: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
 })

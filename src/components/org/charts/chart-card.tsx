@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 export function ChartCard({
   title,
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   },
   accentStripe: {
     width: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   headerCopy: {
     flex: 1,

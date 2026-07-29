@@ -24,7 +24,7 @@ import {
   defaultDevInstallHttpBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const POLL_FAILURE_THRESHOLD = 3
 
@@ -638,11 +638,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   primaryButtonFill: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: chrome.accent,
+    borderColor: chrome.accent,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -692,12 +692,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepDotActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   stepDotDone: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.accent,
   },
   stepDotText: {
     color: colors.textDim,
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   stepDotTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   stepDotTextDone: {
     color: colors.buttonText,
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   stepConnectorDone: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   successRow: {
     flexDirection: 'row',
@@ -737,7 +737,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   revealed: {
     gap: spacing.sm,

@@ -35,7 +35,7 @@ import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
 import { countryCodeToFlagEmoji } from '@/lib/server-geo'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 /** Group VPN-scope overlay addresses by server — O(1) page-level fan-in. */
 function overlayByServerId(
@@ -849,7 +849,7 @@ const styles = StyleSheet.create({
           paddingTop: spacing.xs,
         } as const)
       : {}),
-    borderBottomColor: colors.accent,
+    borderBottomColor: chrome.accent,
   },
   toolbarRow: {
     flexDirection: 'row',
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
   },
   tableRowSelected: {
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
   },
   tableHeaderRow: {
     backgroundColor: colors.bgSecondary,
@@ -1054,11 +1054,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxChecked: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   checkboxMark: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 12,
     fontWeight: '700',
   },

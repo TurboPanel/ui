@@ -29,7 +29,7 @@ import {
   type VpnRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const SCOPES: IpScope[] = ['public', 'datacenter', 'loopback', 'vpn']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   editCard: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
   },
   editActions: {
     flexDirection: 'row',
@@ -958,8 +958,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textMuted,
@@ -967,7 +967,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   fieldLabel: {
     color: colors.textMuted,

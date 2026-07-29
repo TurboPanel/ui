@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { useCan } from '@/lib/query-client'
-import { colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import {
   ALL_WORKSPACES_SCOPE,
@@ -249,8 +249,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   menuItemActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   menuItemLabel: {
     color: colors.textBody,
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   menuItemLabelActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   menuItemHint: {
     color: colors.textDim,
@@ -289,14 +289,14 @@ const styles = StyleSheet.create({
   menuActionPrimary: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     marginTop: 2,
   },
   menuActionPrimaryLabel: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 13,
     fontWeight: '700',
   },

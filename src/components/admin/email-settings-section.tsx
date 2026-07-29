@@ -18,7 +18,7 @@ import {
   type EmailSettingsResponse,
 } from '@/lib/instance-api'
 import { useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const FULL_KEYS = [
   'TURBOPANEL_SYSTEM_EMAIL__PROVIDER',
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   badgeDb: {
     backgroundColor: colors.bgActive,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
   },
   badgeTextEnv: {
     color: colors.pending,
@@ -515,8 +515,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textChip,
@@ -535,12 +535,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

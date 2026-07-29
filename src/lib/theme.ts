@@ -1,9 +1,12 @@
+import { Platform } from 'react-native'
+
 /**
  * TurboPanel console brand tokens.
  *
  * Dual brand: green (self-hosted / “run”) + blue `#3366cc` (HA).
- * Auth screens pick the accent from control-plane runtime (Workers → blue,
- * Deno → green). Signed-in ops chrome stays green-primary for online/CTA.
+ * Interactive chrome (nav, CTAs, toolbar) follows control-plane runtime via
+ * {@link chrome} CSS variables on web (Workers → blue, Deno → green).
+ * Online / live status stays {@link colors.green} always.
  * Keep in step with website `--tp-green` / `--tp-blue` in `globals.css`.
  */
 export const colors = {
@@ -15,9 +18,9 @@ export const colors = {
   bgSecondary: '#1a1a1a',
   bgInset: '#050505',
   bgSidebar: '#0a0a0a',
-  /** Green-tinted selected / active surface */
+  /** Green-tinted selected / active surface (status / Deno chrome fallback) */
   bgActive: '#10241a',
-  /** Blue-tinted selected surface (HA auth) */
+  /** Blue-tinted selected surface (HA chrome) */
   bgActiveBlue: '#0a1628',
   border: '#222',
   borderSubtle: '#1e1e1e',
@@ -32,11 +35,14 @@ export const colors = {
   textFaint: '#555',
   textLabel: '#777',
   textChip: '#bbb',
-  /** Self-hosted / run green — primary console accent + Deno auth */
+  /** Self-hosted / run / online green */
   green: '#3dd68c',
-  /** TurboPanel High Availability blue — Workers auth + secondary brand */
+  /** TurboPanel High Availability blue */
   blue: '#3366cc',
-  /** Alias of {@link colors.green} for existing call sites */
+  /**
+   * Online / success green. Prefer {@link chrome} for nav, CTAs, and toolbar
+   * so Workers HA can resolve blue via CSS variables.
+   */
   accent: '#3dd68c',
   error: '#ff6b6b',
   errorText: '#ff8a8a',
@@ -50,6 +56,28 @@ export const colors = {
   /** On blue fills */
   buttonTextOnBlue: '#fff',
   overlay: 'rgba(0, 0, 0, 0.6)',
+} as const
+
+/**
+ * Runtime interactive chrome (sidebar, primary buttons, toolbar chips).
+ * On web these are CSS variables updated by {@link applyConsoleChromeRuntime}
+ * when `/status` resolves — StyleSheet can bake the `var(...)` string and still
+ * follow Workers blue vs Deno green. Native falls back to green until a
+ * later per-tree accent pass.
+ */
+export const chrome = {
+  accent:
+    Platform.OS === 'web'
+      ? 'var(--tp-chrome-accent, #3dd68c)'
+      : colors.green,
+  bgActive:
+    Platform.OS === 'web'
+      ? 'var(--tp-chrome-bg-active, #10241a)'
+      : colors.bgActive,
+  onAccent:
+    Platform.OS === 'web'
+      ? 'var(--tp-chrome-on-accent, #000000)'
+      : colors.buttonText,
 } as const
 
 export const layout = {

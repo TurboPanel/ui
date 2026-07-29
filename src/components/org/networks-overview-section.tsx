@@ -23,7 +23,7 @@ import {
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const NETWORK_KINDS: NetworkKind[] = ['datacenter', 'server', 'docker']
 
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   selectedCard: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -726,8 +726,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textMuted,
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   filterRow: {
     gap: spacing.md,

@@ -16,7 +16,7 @@ import {
   managedErrorMessage,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
 const DATABASE_PATTERN = /^[a-zA-Z_]\w{0,62}$/
@@ -444,8 +444,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   chipSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textMuted,
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   createUser: {
     gap: spacing.sm,

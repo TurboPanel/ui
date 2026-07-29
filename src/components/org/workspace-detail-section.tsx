@@ -11,7 +11,7 @@ import {
   type ProjectRecord,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 function renderWorkspaceBody({
   loading,
@@ -191,11 +191,11 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  primaryButtonText: { color: colors.buttonText, fontSize: 14, fontWeight: '700' },
+  primaryButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
   secondaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,

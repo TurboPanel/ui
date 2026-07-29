@@ -32,7 +32,7 @@ import {
   TURBOPANEL_SERVICE_EXTENSION_KEY,
   type TraditionalWebEngine,
 } from '@/lib/compose/service-kind'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const webSelectStyle: CSSProperties = {
   width: '100%',
@@ -601,11 +601,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   optionChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   optionChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  optionChipTextActive: { color: colors.accent },
+  optionChipTextActive: { color: chrome.accent },
   addRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

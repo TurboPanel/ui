@@ -10,7 +10,7 @@ import {
   type ServiceOptions,
   type ServiceRecord,
 } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const webInputStyle = {
   borderWidth: 1,
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxChecked: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   checkboxMark: {
@@ -476,8 +476,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   policyChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   policyChipText: {
     color: colors.text,
@@ -489,12 +489,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: spacing.sm,
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   saveButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

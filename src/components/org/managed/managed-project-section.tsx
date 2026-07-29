@@ -67,7 +67,7 @@ import {
 } from '@/lib/managed-services'
 import { withGuardedAction } from '@/lib/guarded-action'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const DEFAULT_ENVIRONMENT_NAME = 'Production'
 const STATUS_POLL_MS = 5_000
@@ -1146,8 +1146,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   tabActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   tabText: {
     color: colors.textMuted,
@@ -1155,7 +1155,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   toolbar: {
     flexDirection: 'row',
@@ -1204,8 +1204,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   serverCardSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   serverCardDisabled: {
     opacity: 0.55,
@@ -1235,7 +1235,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxChecked: {
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
   },
   checkmark: {

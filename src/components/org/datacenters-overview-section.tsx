@@ -25,7 +25,7 @@ import {
 } from '@/lib/instance-api'
 import { datacenterDetailHref } from '@/lib/org-navigation'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -503,8 +503,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textMuted,
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   input: {
     borderWidth: 1,

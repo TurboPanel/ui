@@ -32,7 +32,7 @@ import {
   fixComposeYamlIndentation,
 } from '@/lib/compose/yaml-indent'
 import { splitYamlLineHighlight } from '@/lib/compose/yaml-highlight'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 type TextSelection = { start: number; end: number }
 
@@ -735,9 +735,9 @@ const styles = StyleSheet.create({
   serviceCount: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { borderWidth: 1, borderColor: colors.borderChip, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
-  tabActive: { borderColor: colors.accent, backgroundColor: colors.bgActive },
+  tabActive: { borderColor: chrome.accent, backgroundColor: chrome.bgActive },
   tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  tabTextActive: { color: colors.accent },
+  tabTextActive: { color: chrome.accent },
   yamlEditor: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -857,8 +857,8 @@ const styles = StyleSheet.create({
   lintMessageError: { color: colors.errorText },
   lintMessageWarning: { color: colors.pending },
   serviceList: { gap: spacing.sm },
-  saveButton: { alignSelf: 'flex-start', borderRadius: 8, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 10 },
-  saveButtonText: { color: colors.buttonText, fontSize: 14, fontWeight: '700' },
+  saveButton: { alignSelf: 'flex-start', borderRadius: 8, backgroundColor: chrome.accent, paddingHorizontal: 14, paddingVertical: 10 },
+  saveButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
   secondaryButton: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, borderColor: colors.borderChip, paddingHorizontal: 10, paddingVertical: 7 },
   secondaryButtonText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },

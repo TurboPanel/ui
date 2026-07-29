@@ -1,7 +1,7 @@
 import { createElement, type CSSProperties } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const webSelectStyle: CSSProperties = {
   width: '100%',
@@ -125,8 +125,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nativeOptionSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   nativeOptionPressed: {
     opacity: 0.88,

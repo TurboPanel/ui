@@ -32,7 +32,7 @@ import {
   useForbiddenRecovery,
   visibilityQueryKeys,
 } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 type SubjectKind = CreateAccessBody['subjectKind']
 
@@ -659,8 +659,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textChip,
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   pickerList: {
     maxHeight: 200,
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderSubtle,
   },
   pickerRowSelected: {
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
   },
   pickerTitle: {
     color: colors.text,
@@ -701,12 +701,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

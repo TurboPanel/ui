@@ -19,7 +19,7 @@ import {
   type WorkspaceRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import {
   ALL_WORKSPACES_SCOPE,
   newProjectHrefForScope,
@@ -323,13 +323,13 @@ const styles = StyleSheet.create({
   badgeAccent: {
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   badgeAccentText: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -352,14 +352,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
     marginBottom: spacing.sm,
   },
   primaryButtonText: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 12,
     fontWeight: '600',
   },

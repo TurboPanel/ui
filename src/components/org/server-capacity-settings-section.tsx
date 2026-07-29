@@ -11,7 +11,7 @@ import {
   type OrgServerCapacity,
 } from '@/lib/instance-api'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleOn: {
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   toggleOff: {
     backgroundColor: colors.border,

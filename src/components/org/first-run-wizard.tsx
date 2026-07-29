@@ -1,5 +1,5 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
 const webInputStyle = {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   cardStripe: {
     width: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
   },
   cardBody: {
     flex: 1,
@@ -171,12 +171,12 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   primaryButtonText: {
-    color: colors.buttonText,
+    color: chrome.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },

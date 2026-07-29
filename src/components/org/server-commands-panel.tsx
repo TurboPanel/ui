@@ -14,7 +14,7 @@ import {
   type OrgServerRecord,
   type PingLatencyBreakdown,
 } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 export const COMMAND_POLL_MS = 2_000
 
@@ -411,10 +411,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: colors.bgActive,
+    backgroundColor: chrome.bgActive,
   },
   actionButtonDanger: {
     borderColor: colors.error,

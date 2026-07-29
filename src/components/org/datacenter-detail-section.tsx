@@ -31,7 +31,7 @@ import {
   type VpnRecord,
 } from '@/lib/instance-api'
 import { useCan, useForbiddenRecovery } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import {
   overlayAddressForPeer,
   resolvePrimaryGatewayByDatacenter,
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   primaryBadge: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -787,8 +787,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   chipText: {
     color: colors.textMuted,
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextActive: {
-    color: colors.accent,
+    color: chrome.accent,
   },
   switchRow: {
     flexDirection: 'row',
@@ -824,8 +824,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleOn: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   toggleOff: {
     borderColor: colors.borderChip,

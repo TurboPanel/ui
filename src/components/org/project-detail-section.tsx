@@ -26,7 +26,7 @@ import {
   type WorkspaceRecord,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 const webInputStyle = {
   borderWidth: 1,
@@ -933,13 +933,13 @@ const styles = StyleSheet.create({
   badgeAccent: {
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: chrome.accent,
     backgroundColor: colors.bgActive,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   badgeAccentText: {
-    color: colors.accent,
+    color: chrome.accent,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -968,8 +968,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   serverOptionSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   workspaceOptionText: {
     color: colors.text,
@@ -1010,15 +1010,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   serviceChipOn: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
   },
   serviceChipText: {
     color: colors.textMuted,
     fontSize: 12,
   },
   serviceChipTextOn: {
-    color: colors.accent,
+    color: chrome.accent,
     fontWeight: '600',
   },
   principalForm: {
@@ -1027,7 +1027,7 @@ const styles = StyleSheet.create({
   principalAdd: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: chrome.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
