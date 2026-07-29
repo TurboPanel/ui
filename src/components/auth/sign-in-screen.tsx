@@ -83,7 +83,11 @@ export function SignInScreenContent() {
     ) : null
 
   return (
-    <AuthScreenShell title="Sign In" footer={signupFooter}>
+    <AuthScreenShell
+      title="Sign In"
+      footer={signupFooter}
+      accentColor={accent.accent}
+    >
       <View style={authFormStyles.field}>
         <AuthFloatingField
           label="Email"
@@ -97,7 +101,7 @@ export function SignInScreenContent() {
         />
       </View>
 
-      <View style={authFormStyles.field}>
+      <View style={[authFormStyles.field, authFormStyles.fieldSpaced]}>
         <AuthFloatingField
           label="Password"
           value={password}

@@ -9,7 +9,7 @@
 
 ## Layout
 
-- Centered single column; panel title is the page name only (e.g. **Sign In**) — no “Ops console” product line  
+- Centered single column; **page title sits above the form panel** (e.g. **Sign In**) — not inside the box; no “Ops console” product line  
 - Constrain the form column to **`maxWidth: 400`** (`AUTH_FORM_MAX_WIDTH`) — never full-bleed fields on desktop  
 - Shared shell: `src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`  
 - One primary CTA (accent fill); secondary text link for alternate path below the panel  
@@ -22,9 +22,12 @@
 - **Runtime accent** from `GET /api/client/v1/status` → `runtime` (`src/lib/auth-accent.ts`):  
   - `workers` (TurboPanel High Availability) → blue `#3366cc`  
   - `deno` (self-hosted) → green `#3dd68c`  
-- Form lives in a single bordered panel (`bgPanel` + hairline `borderSubtle`, radius 12) — interaction container only, not a decorative card stack  
+- Form panel: `bgPanel` + hairline `borderSubtle`, radius 12, soft lift, **2px runtime-accent top edge** — interaction container only, not a decorative card stack  
+- Page title ~28px / 600 weight above the panel; optional description under the title  
+
 - Generous vertical rhythm vs dense dashboard pages (density dial conceptually ~4 here)  
 - Tokens only from `src/lib/theme.ts` — no raw hex in auth screens  
+- **Backdrop** (`AuthScreenBackground`): cheap static layer + 4 Reanimated streaks — web uses one CSS compositor layer (wash/dots/vignette, no SVG); native uses tiled SVG pattern + two gradients; streak tracks are shared values (no lap re-renders); honor reduced motion  
 - **Floating labels** (`AuthFloatingField`): label sits inside the field as the resting “placeholder”, then shrinks to the top on focus or when the field has a value; focused border + raised label use the runtime accent  
 - Password visibility toggle is an **eye / eye-slash** icon button (`auth-eye-icons.tsx`) with an accessible name — not “Show” / “Hide” text
 
@@ -32,7 +35,8 @@
 
 - Subtle field focus / button press only  
 - Floating label raise/settle ~160ms  
-- No hero video, no ambient blob backgrounds
+- Backdrop: **2 horizontal + 2 vertical** hairline streaks (accent-tinted, bright tip); each lap picks a random grid line; honor `useReducedMotion` (no streaks)  
+- No hero video, no ambient blob backgrounds, no pulsing glow / neon scan lines
 
 ## Anti-patterns
 

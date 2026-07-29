@@ -40,12 +40,27 @@ export const authFloatingWebInputStyle = {
 } as const
 
 export const authFormStyles = StyleSheet.create({
+  shell: {
+    flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+    backgroundColor: colors.bg,
+  },
   scroll: {
     flex: 1,
     alignSelf: 'stretch',
     width: '100%',
     maxWidth: '100%',
     backgroundColor: colors.bg,
+  },
+  /** Scroller over {@link AuthScreenBackground} — keep fill transparent. */
+  scrollTransparent: {
+    flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     flexGrow: 1,
@@ -56,39 +71,65 @@ export const authFormStyles = StyleSheet.create({
     width: '100%',
     maxWidth: '100%',
     paddingHorizontal: spacing.xl,
-    paddingVertical: 48,
+    paddingVertical: 56,
   },
   column: {
     width: '100%',
     maxWidth: AUTH_FORM_MAX_WIDTH,
     alignSelf: 'center',
-    gap: spacing.xl,
+    gap: spacing.lg,
+  },
+  /** Page title lives above the form panel. */
+  pageHeader: {
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  pageTitle: {
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: '600',
+    letterSpacing: -0.6,
+    lineHeight: 34,
+  },
+  pageCopy: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
   },
   panel: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
+    overflow: 'hidden',
+    // Soft lift so the panel reads against the grid without heavy chrome.
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0 12px 40px rgba(0, 0, 0, 0.45)',
+        } as object)
+      : {
+          shadowColor: '#000',
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 6,
+        }),
+  },
+  panelAccent: {
+    height: 2,
+    width: '100%',
+  },
+  panelBody: {
     paddingHorizontal: spacing.xl,
-    paddingVertical: 28,
+    paddingTop: 24,
+    paddingBottom: 28,
     gap: spacing.lg,
   },
-  panelHeader: {
-    gap: spacing.sm,
-  },
-  panelTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '600',
-    letterSpacing: -0.3,
-  },
-  panelCopy: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
   field: {
-    gap: spacing.sm,
+    gap: 0,
+  },
+  fieldSpaced: {
+    marginTop: spacing.xs,
   },
   label: {
     color: colors.textLabel,
@@ -111,8 +152,8 @@ export const authFormStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderMuted,
     backgroundColor: colors.bgInput,
-    borderRadius: 8,
-    minHeight: 52,
+    borderRadius: 10,
+    minHeight: 54,
     overflow: 'hidden',
   },
   floatingLabel: {
@@ -164,9 +205,9 @@ export const authFormStyles = StyleSheet.create({
     lineHeight: 18,
   },
   primaryButton: {
-    marginTop: spacing.xs,
-    minHeight: 44,
-    borderRadius: 8,
+    marginTop: spacing.sm,
+    minHeight: 46,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
@@ -175,15 +216,17 @@ export const authFormStyles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonPressed: {
-    opacity: 0.9,
+    opacity: 0.92,
   },
   primaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.1,
   },
   footer: {
     alignItems: 'center',
     gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   footerLink: {
     color: colors.textBody,
@@ -198,6 +241,7 @@ export const authFormStyles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     letterSpacing: 0.2,
+    marginTop: spacing.xs,
   },
 })
 

@@ -6,10 +6,12 @@ import {
   Text,
   View,
 } from 'react-native'
+import { AuthScreenBackground } from '@/components/auth/auth-screen-background'
 import {
   authFormStyles,
   authScrollWebStyle,
 } from '@/components/auth/auth-form-styles'
+import { colors } from '@/lib/theme'
 
 const COPYRIGHT_YEAR = new Date().getFullYear()
 
@@ -17,43 +19,56 @@ export function AuthScreenShell({
   title,
   description,
   footer,
+  accentColor = colors.accent,
   children,
 }: Readonly<{
   title: string
   description?: string
   footer?: ReactNode
+  /** Runtime accent for the gradient wash (Workers blue / Deno green). */
+  accentColor?: string
   children: ReactNode
 }>) {
   return (
-    <KeyboardAvoidingView
-      style={[authFormStyles.scroll, authScrollWebStyle]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        style={[authFormStyles.scroll, authScrollWebStyle]}
-        contentContainerStyle={authFormStyles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
+    <View style={authFormStyles.shell}>
+      <AuthScreenBackground accentColor={accentColor} />
+      <KeyboardAvoidingView
+        style={[authFormStyles.scrollTransparent, authScrollWebStyle]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={authFormStyles.column}>
-          <View style={authFormStyles.panel}>
-            <View style={authFormStyles.panelHeader} accessibilityRole="header">
-              <Text style={authFormStyles.panelTitle}>{title}</Text>
+        <ScrollView
+          style={[authFormStyles.scrollTransparent, authScrollWebStyle]}
+          contentContainerStyle={authFormStyles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+        >
+          <View style={authFormStyles.column}>
+            <View style={authFormStyles.pageHeader} accessibilityRole="header">
+              <Text style={authFormStyles.pageTitle}>{title}</Text>
               {description ? (
-                <Text style={authFormStyles.panelCopy}>{description}</Text>
+                <Text style={authFormStyles.pageCopy}>{description}</Text>
               ) : null}
             </View>
-            {children}
+
+            <View style={authFormStyles.panel}>
+              <View
+                style={[
+                  authFormStyles.panelAccent,
+                  { backgroundColor: accentColor },
+                ]}
+              />
+              <View style={authFormStyles.panelBody}>{children}</View>
+            </View>
+
+            {footer ? <View style={authFormStyles.footer}>{footer}</View> : null}
+
+            <Text style={authFormStyles.copyright}>
+              © {COPYRIGHT_YEAR} TurboPanel
+            </Text>
           </View>
-
-          {footer ? <View style={authFormStyles.footer}>{footer}</View> : null}
-
-          <Text style={authFormStyles.copyright}>
-            © {COPYRIGHT_YEAR} TurboPanel
-          </Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   )
 }
