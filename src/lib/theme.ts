@@ -1,3 +1,11 @@
+/**
+ * TurboPanel console brand tokens.
+ *
+ * Dual brand: green (self-hosted / “run”) + blue `#3366cc` (HA).
+ * Auth screens pick the accent from control-plane runtime (Workers → blue,
+ * Deno → green). Signed-in ops chrome stays green-primary for online/CTA.
+ * Keep in step with website `--tp-green` / `--tp-blue` in `globals.css`.
+ */
 export const colors = {
   bg: '#000',
   bgPanel: '#0a0a0a',
@@ -7,7 +15,10 @@ export const colors = {
   bgSecondary: '#1a1a1a',
   bgInset: '#050505',
   bgSidebar: '#0a0a0a',
+  /** Green-tinted selected / active surface */
   bgActive: '#10241a',
+  /** Blue-tinted selected surface (HA auth) */
+  bgActiveBlue: '#0a1628',
   border: '#222',
   borderSubtle: '#1e1e1e',
   borderMuted: '#2a2a2a',
@@ -21,6 +32,11 @@ export const colors = {
   textFaint: '#555',
   textLabel: '#777',
   textChip: '#bbb',
+  /** Self-hosted / run green — primary console accent + Deno auth */
+  green: '#3dd68c',
+  /** TurboPanel High Availability blue — Workers auth + secondary brand */
+  blue: '#3366cc',
+  /** Alias of {@link colors.green} for existing call sites */
   accent: '#3dd68c',
   error: '#ff6b6b',
   errorText: '#ff8a8a',
@@ -29,7 +45,10 @@ export const colors = {
   command: '#9ad2ff',
   stdout: '#cfd3d6',
   log: '#9aa0a6',
+  /** On green fills */
   buttonText: '#000',
+  /** On blue fills */
+  buttonTextOnBlue: '#fff',
   overlay: 'rgba(0, 0, 0, 0.6)',
 } as const
 

@@ -58,6 +58,11 @@ export type OrganizationRecord = {
 };
 
 export type InstallStatus = {
+  /**
+   * Control-plane runtime from `GET /api/client/v1/status`.
+   * Workers (HA) → blue auth chrome; Deno (self-hosted) → green.
+   */
+  runtime?: 'deno' | 'workers';
   /** Deno self-hosted only — absent on Workers (use sign-up for bootstrap). */
   needsInstall?: boolean;
   /** Deno self-hosted only — absent on Workers. */
@@ -140,6 +145,9 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
     InstallStatus & { ok: true; needsInstall?: boolean }
   >(`${CLIENT_API}/status`);
   return {
+    ...(body.runtime === 'deno' || body.runtime === 'workers'
+      ? { runtime: body.runtime }
+      : {}),
     ...(body.needsInstall === undefined
       ? {}
       : { needsInstall: body.needsInstall }),

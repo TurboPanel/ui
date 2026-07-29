@@ -20,5 +20,8 @@ export function ScreenSafeArea({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
   },
 })

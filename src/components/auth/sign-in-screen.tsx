@@ -1,21 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Platform, TextInput } from 'react-native'
-import { YStack, XStack, Input, Button, Text } from 'tamagui'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { Link, useRouter, type Href } from 'expo-router'
+import { AuthFloatingField } from '@/components/auth/auth-floating-field'
+import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
+import {
+  authAccentStyles,
+  authFormStyles,
+  webPointer,
+} from '@/components/auth/auth-form-styles'
+import {
+  authAccentForRuntime,
+  resolveControlPlaneRuntime,
+} from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { useAuthStatus } from '@/lib/query-client'
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: '#3d3d3d',
-  backgroundColor: '#1a1a1a',
-  color: '#e0e0e0',
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
 
 export function SignInScreenContent() {
   const router = useRouter()
@@ -27,6 +25,13 @@ export function SignInScreenContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const accent = useMemo(
+    () =>
+      authAccentForRuntime(resolveControlPlaneRuntime(instanceInfo)),
+    [instanceInfo],
+  )
+  const tint = useMemo(() => authAccentStyles(accent), [accent])
 
   const onEmailChange = useCallback((text: string) => {
     setEmail(text)
@@ -46,7 +51,7 @@ export function SignInScreenContent() {
       const href = await resolveDashboardHref()
       router.replace(href as Href)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed')
+      setError(err instanceof Error ? err.message : 'Sign In failed')
     } finally {
       setLoading(false)
     }
@@ -59,106 +64,87 @@ export function SignInScreenContent() {
 
   if (instanceInfoLoading || isInstallMode) return null
 
+  const signupFooter =
+    instanceInfo?.isSignupEnabled === true ? (
+      <Link href="/sign-up" asChild>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Sign up for an account"
+          style={webPointer}
+        >
+          <Text style={authFormStyles.footerLink}>
+            Don&apos;t have an account?{' '}
+            <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
+              Sign up
+            </Text>
+          </Text>
+        </Pressable>
+      </Link>
+    ) : null
+
   return (
-    <YStack flex={1} backgroundColor="$background" padding="$6" justifyContent="center" gap="$4">
-      <Text fontSize="$6" fontWeight="bold" color="$color">
-        Sign In
-      </Text>
-      <YStack gap="$2">
-        <Text color="$color" fontSize="$4">
-          Email
-        </Text>
-        {Platform.OS === 'web' ? (
-          <TextInput
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={onEmailChange}
-            autoComplete="email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-            style={webInputStyle}
-          />
-        ) : (
-          <Input
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={onEmailChange}
-            autoComplete="email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false as unknown as undefined}
-            borderColor="$borderColor"
-            backgroundColor="$background"
-            editable={!loading}
-          />
-        )}
-      </YStack>
-      <YStack gap="$2">
-        <Text color="$color" fontSize="$4">
-          Password
-        </Text>
-        <XStack position="relative" alignItems="center">
-          {Platform.OS === 'web' ? (
-            <TextInput
-              placeholder="Password"
-              value={password}
-              onChangeText={onPasswordChange}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-              style={{ ...webInputStyle, flex: 1 }}
-            />
-          ) : (
-            <Input
-              flex={1}
-              placeholder="Password"
-              value={password}
-              onChangeText={onPasswordChange}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false as unknown as undefined}
-              borderColor="$borderColor"
-              backgroundColor="$background"
-              editable={!loading}
-            />
-          )}
-          <Button
-            size="$2"
-            chromeless
-            position="absolute"
-            right="$2"
-            onPress={() => setShowPassword((v) => !v)}
-          >
-            {showPassword ? 'Hide' : 'Show'}
-          </Button>
-        </XStack>
-      </YStack>
+    <AuthScreenShell title="Sign In" footer={signupFooter}>
+      <View style={authFormStyles.field}>
+        <AuthFloatingField
+          label="Email"
+          value={email}
+          onChangeText={onEmailChange}
+          accentColor={accent.accent}
+          autoComplete="email"
+          keyboardType="email-address"
+          editable={!loading}
+          returnKeyType="next"
+        />
+      </View>
+
+      <View style={authFormStyles.field}>
+        <AuthFloatingField
+          label="Password"
+          value={password}
+          onChangeText={onPasswordChange}
+          accentColor={accent.accent}
+          autoComplete="password"
+          secureTextEntry={!showPassword}
+          showPasswordToggle
+          passwordVisible={showPassword}
+          onTogglePasswordVisible={() => setShowPassword((v) => !v)}
+          editable={!loading}
+          returnKeyType="go"
+          onSubmitEditing={() => {
+            onSubmit().catch(() => {
+              // Errors are surfaced via setError inside onSubmit.
+            })
+          }}
+        />
+      </View>
+
       {error ? (
-        <Text color="$red10" fontSize="$3">
+        <Text style={authFormStyles.error} accessibilityRole="alert">
           {error}
         </Text>
       ) : null}
-      <Button
-        onPress={onSubmit}
-        theme="accent"
-        size="$4"
+
+      <Pressable
+        onPress={() => {
+          onSubmit().catch(() => {
+            // Errors are surfaced via setError inside onSubmit.
+          })
+        }}
         disabled={loading}
-        opacity={loading ? 0.7 : 1}
+        accessibilityRole="button"
+        accessibilityLabel={loading ? 'Signing In' : 'Sign In'}
+        style={({ pressed }) => [
+          authFormStyles.primaryButton,
+          tint.primaryButton,
+          loading && authFormStyles.primaryButtonDisabled,
+          pressed && !loading && authFormStyles.primaryButtonPressed,
+          webPointer,
+        ]}
       >
-        {loading ? 'Signing in...' : 'Sign In'}
-      </Button>
-      <YStack gap="$2">
-        {instanceInfo?.isSignupEnabled === true ? (
-          <Link href="/sign-up">
-            <Text color="$blue10" fontSize="$3" textDecorationLine="underline">
-              Don&apos;t have an account? Sign up
-            </Text>
-          </Link>
-        ) : null}
-      </YStack>
-    </YStack>
+        <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
+          {loading ? 'Signing In…' : 'Sign In'}
+        </Text>
+      </Pressable>
+    </AuthScreenShell>
   )
 }

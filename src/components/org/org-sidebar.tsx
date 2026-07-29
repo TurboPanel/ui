@@ -27,13 +27,15 @@ export function OrgSidebar({
   return (
     <View style={styles.sidebar}>
       <View style={styles.brand}>
-        <View style={styles.brandStripe} />
+        <View style={styles.brandStripe} accessibilityElementsHidden>
+          <View style={styles.brandStripeGreen} />
+          <View style={styles.brandStripeBlue} />
+        </View>
         <View style={styles.brandCopy}>
           <View style={styles.brandTitleRow}>
             <View style={styles.brandDot} />
             <Text style={styles.brandTitle}>TurboPanel</Text>
           </View>
-          <Text style={styles.brandHint}>Ops console</Text>
         </View>
       </View>
 
@@ -171,8 +173,16 @@ const styles = StyleSheet.create({
   brandStripe: {
     width: 3,
     borderRadius: 2,
-    backgroundColor: colors.accent,
     marginRight: spacing.sm,
+    overflow: 'hidden',
+  },
+  brandStripeGreen: {
+    flex: 1,
+    backgroundColor: colors.green,
+  },
+  brandStripeBlue: {
+    flex: 1,
+    backgroundColor: colors.blue,
   },
   brandCopy: {
     flex: 1,
@@ -187,18 +197,13 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
   },
   brandTitle: {
     color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: -0.2,
-  },
-  brandHint: {
-    color: colors.textDim,
-    fontSize: 11,
-    marginLeft: 14,
   },
   nav: {
     flex: 1,

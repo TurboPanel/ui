@@ -40,13 +40,14 @@ Canonical tokens live in `src/lib/theme.ts`. Design system maps onto those — d
 | Text primary | `#ffffff` | `colors.text` |
 | Text body | `#cccccc` | `colors.textBody` |
 | Text muted | `#888888` | `colors.textMuted` |
-| Accent / CTA / online | `#3dd68c` | `colors.accent` — "run green" |
+| Green (self-hosted / run) | `#3dd68c` | `colors.green` / `colors.accent` — Deno auth + online CTA |
+| Blue (HA) | `#3366cc` | `colors.blue` — Workers auth + secondary brand |
 | Pending / warn | `#e0b341` | `colors.pending` |
 | Error | `#ff6b6b` | `colors.error` |
 | Info / command | `#9ad2ff` | `colors.command` |
 | Overlay | `rgba(0,0,0,0.6)` | `colors.overlay` |
 
-**Color notes:** Code dark + run green. Status must never rely on color alone (pair with label/dot shape). Accent hover softens to ~90% opacity; do not shift hue toward blue/purple.
+**Color notes:** Dual brand — light green + `#3366cc` blue (aligned with website `--tp-green` / `--tp-blue`). Signed-in ops chrome stays **green-primary** (online / CTA). Auth screens follow control-plane runtime: **Workers (HA) → blue**, **Deno (self-hosted) → green**. Status must never rely on color alone (pair with label/dot shape).
 
 ### Typography
 

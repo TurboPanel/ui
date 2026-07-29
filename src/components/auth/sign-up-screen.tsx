@@ -335,7 +335,7 @@ function SignupActions({
         </Text>
         <Link href="/sign-in">
           <Text color="$blue10" fontSize="$3" textDecorationLine="underline">
-            Sign in
+            Sign In
           </Text>
         </Link>
       </XStack>
