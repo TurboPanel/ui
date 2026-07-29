@@ -9,6 +9,10 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  resolveControlPlaneRuntime,
+  type ControlPlaneRuntime,
+} from '@/lib/auth-accent'
+import {
   fetchInstallStatus,
   fetchOrganizations,
   fetchSession,
@@ -29,6 +33,8 @@ type AuthContextValue = {
   /** Deno self-hosted only — false on Workers (bootstrap via sign-up). */
   needsInstall: boolean
   isSignupEnabled: boolean
+  /** From `GET /status` — set as soon as status returns during bootstrap. */
+  controlPlaneRuntime: ControlPlaneRuntime | undefined
   isLoading: boolean
   bootstrapError: string | null
   signIn: (username: string, password: string) => Promise<SessionInfo>
@@ -50,11 +56,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [session, setSession] = useState<SessionInfo | null>(null)
   const [needsInstall, setNeedsInstall] = useState(false)
   const [isSignupEnabled, setIsSignupEnabled] = useState(false)
+  const [controlPlaneRuntime, setControlPlaneRuntime] = useState<
+    ControlPlaneRuntime | undefined
+  >()
   const [isLoading, setIsLoading] = useState(true)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
 
-  const syncAuthStatusCache = useCallback(
+  const applyInstallStatus = useCallback(
     (status: InstallStatus) => {
+      setNeedsInstall(status.needsInstall ?? false)
+      setIsSignupEnabled(status.isSignupEnabled ?? false)
+      setControlPlaneRuntime(resolveControlPlaneRuntime(status))
       queryClient.setQueryData(authQueryKeys.authStatus, status)
     },
     [queryClient],
@@ -69,11 +81,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const refreshInstallStatus = useCallback(async () => {
     const status = await fetchInstallStatus()
-    setNeedsInstall(status.needsInstall ?? false)
-    setIsSignupEnabled(status.isSignupEnabled ?? false)
-    syncAuthStatusCache(status)
+    applyInstallStatus(status)
     return status.needsInstall ?? false
-  }, [syncAuthStatusCache])
+  }, [applyInstallStatus])
 
   const refreshSession = useCallback(async () => {
     const data = await fetchSession()
@@ -104,26 +114,35 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [needsInstall, session])
 
   useEffect(() => {
-    let bootstrapErr: string | null = null
+    let cancelled = false
 
-    void Promise.all([fetchInstallStatusCached(), fetchSession()])
-      .then(([installStatus, sessionData]) => {
-        setNeedsInstall(installStatus.needsInstall ?? false)
-        setIsSignupEnabled(installStatus.isSignupEnabled ?? false)
-        syncAuthStatusCache(installStatus)
+    void (async () => {
+      try {
+        // Resolve runtime first so the bootstrap spinner can brand correctly
+        // while the session request is still in flight.
+        const installStatus = await fetchInstallStatusCached()
+        if (cancelled) return
+        applyInstallStatus(installStatus)
+
+        const sessionData = await fetchSession()
+        if (cancelled) return
         setSession(sessionData)
         setBootstrapError(null)
-      })
-      .catch((err: unknown) => {
-        bootstrapErr =
-          err instanceof Error ? err.message : 'Failed to load session'
+      } catch (err: unknown) {
+        if (cancelled) return
         setSession(null)
-        setBootstrapError(bootstrapErr)
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
-  }, [fetchInstallStatusCached, syncAuthStatusCache])
+        setBootstrapError(
+          err instanceof Error ? err.message : 'Failed to load session',
+        )
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [applyInstallStatus, fetchInstallStatusCached])
 
   const signIn = useCallback(async (username: string, password: string) => {
     const loaded = await signInApi(username, password)
@@ -162,6 +181,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       session,
       needsInstall,
       isSignupEnabled,
+      controlPlaneRuntime,
       isLoading,
       bootstrapError,
       signIn,
@@ -177,6 +197,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       session,
       needsInstall,
       isSignupEnabled,
+      controlPlaneRuntime,
       isLoading,
       bootstrapError,
       signIn,

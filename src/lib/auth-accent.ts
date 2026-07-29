@@ -17,8 +17,8 @@ export type AuthAccentTheme = {
  * Auth chrome accent by control-plane runtime:
  * - Workers (TurboPanel High Availability) → blue `#3366cc`
  * - Deno (self-hosted) → green
- * - Unknown / still loading → green (console primary) so co-located Deno
- *   bootstrap never flashes HA blue before `/status` lands
+ * - Unknown → green form chrome (console primary); bootstrap spinners should
+ *   use {@link authSpinnerColor} instead so HA never flashes green
  */
 export function authAccentForRuntime(
   runtime: ControlPlaneRuntime | undefined,
@@ -38,6 +38,18 @@ export function authAccentForRuntime(
     bgActive: colors.bgActive,
     label: 'Self-hosted',
   }
+}
+
+/**
+ * Spinner color once runtime is known; muted until `/status` resolves so
+ * neither HA nor self-hosted flashes the wrong brand.
+ */
+export function authSpinnerColor(
+  runtime: ControlPlaneRuntime | undefined,
+): string {
+  if (runtime === 'workers') return colors.blue
+  if (runtime === 'deno') return colors.green
+  return colors.textMuted
 }
 
 /**

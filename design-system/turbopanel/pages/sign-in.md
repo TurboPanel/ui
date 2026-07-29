@@ -30,7 +30,7 @@
 - **Backdrop** (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid on all platforms (RN Web drops CSS `backgroundImage` on `View`); wash uses **opaque** accent→black mixes + extra stops (Safari bands/dithers alpha gradients); 4 Reanimated streaks via shared values; honor reduced motion  
 - **Floating labels** (`AuthFloatingField`): label sits inside the field as the resting “placeholder”, then shrinks to the top on focus or when the field has a value; focused border + raised label use the runtime accent  
 - Password visibility toggle is an **eye / eye-slash** icon button (`auth-eye-icons.tsx`) with an accessible name — not “Show” / “Hide” text  
-- Loading spinners use runtime accent (bootstrap) or `onAccent` on the filled Sign In CTA
+- Bootstrap/recovery spinners: muted until `runtime` is known, then blue/green (`authSpinnerColor`); Sign In CTA spinner uses `onAccent`
 
 ## Motion
 
@@ -45,6 +45,7 @@
 - ❌ Full-width inputs on desktop (≥768)  
 - ❌ “Ops console” / dual-line product chrome above the form  
 - ❌ Hardcoding blue on Deno auth (or green on Workers auth)  
+- ❌ Defaulting the HA bootstrap spinner to green before `/status` returns  
 - ❌ Emoji in validation messages as primary icons  
 - ❌ Placeholder-only fields with no visible label when empty *and* when filled (floating label must remain visible when raised)  
 - ❌ Text “Show” / “Hide” for password visibility on sign-in  

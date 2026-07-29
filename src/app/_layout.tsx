@@ -12,10 +12,7 @@ import type { AppStateStatus } from 'react-native'
 import { focusManager } from '@tanstack/react-query'
 import { AppProviders } from '@/components/app-providers'
 import { SafeAreaRoot } from '@/components/safe-area-root'
-import {
-  authAccentForRuntime,
-  resolveControlPlaneRuntime,
-} from '@/lib/auth-accent'
+import { authSpinnerColor } from '@/lib/auth-accent'
 import {
   dashboardHref,
   hasUserSession,
@@ -23,7 +20,6 @@ import {
   useAuth,
 } from '@/lib/auth-context'
 import type { SessionInfo } from '@/lib/instance-api'
-import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
 
 const STACK_SCREEN_OPTIONS = { headerShown: false } as const
@@ -62,18 +58,17 @@ export default function RootLayout() {
 }
 
 function AuthGuard() {
-  const { session, needsInstall, isLoading } = useAuth()
-  const { data: instanceInfo } = useAuthStatus()
+  const { session, needsInstall, isLoading, controlPlaneRuntime } = useAuth()
   const segments = useSegments()
   const topSegment = (segments as readonly string[])[0]
-  const spinnerColor = authAccentForRuntime(
-    resolveControlPlaneRuntime(instanceInfo),
-  ).accent
 
   if (isLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color={spinnerColor} />
+        <ActivityIndicator
+          size="large"
+          color={authSpinnerColor(controlPlaneRuntime)}
+        />
       </View>
     )
   }

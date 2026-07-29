@@ -2,10 +2,7 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import {
-  authAccentForRuntime,
-  resolveControlPlaneRuntime,
-} from '@/lib/auth-accent'
+import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import {
   parseRecoveryReason,
@@ -13,7 +10,6 @@ import {
   recoveryDetail,
   recoveryTitle,
 } from '@/lib/instance-recovery'
-import { useAuthStatus } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 const POLL_MS = 1_000
@@ -22,11 +18,13 @@ export default function RecoveringScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ reason?: string }>()
   const reason = parseRecoveryReason(params.reason)
-  const { clearSession, refreshInstallStatus, refreshSession } = useAuth()
-  const { data: instanceInfo } = useAuthStatus()
-  const spinnerColor = authAccentForRuntime(
-    resolveControlPlaneRuntime(instanceInfo),
-  ).accent
+  const {
+    clearSession,
+    refreshInstallStatus,
+    refreshSession,
+    controlPlaneRuntime,
+  } = useAuth()
+  const spinnerColor = authSpinnerColor(controlPlaneRuntime)
   const [statusText, setStatusText] = useState('Waiting for instance…')
   const redirected = useRef(false)
 
