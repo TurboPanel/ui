@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
@@ -27,7 +28,7 @@ export function OrgSidebar({
   return (
     <View style={styles.sidebar}>
       <View style={styles.brand}>
-        <Text style={styles.brandTitle}>TurboPanel</Text>
+        <TurboPanelLogo size={36} />
       </View>
 
       <View style={styles.nav}>
@@ -158,12 +159,6 @@ const styles = StyleSheet.create({
   brand: {
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.sm,
-  },
-  brandTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
   },
   nav: {
     flex: 1,

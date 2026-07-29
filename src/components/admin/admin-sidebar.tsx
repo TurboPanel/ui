@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { ADMIN_AREAS, adminAreaHref } from '@/lib/admin-navigation'
-import { colors, layout } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 export function AdminSidebar({
   onNavigate,
@@ -12,7 +13,7 @@ export function AdminSidebar({
   return (
     <View style={styles.sidebar}>
       <View style={styles.brand}>
-        <Text style={styles.brandTitle}>TurboPanel</Text>
+        <TurboPanelLogo size={36} />
         <Text style={styles.brandHint}>Instance administration</Text>
       </View>
 
@@ -57,17 +58,12 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   brand: {
-    paddingHorizontal: 8,
-  },
-  brandTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
   },
   brandHint: {
     color: colors.textDim,
     fontSize: 11,
-    marginTop: 4,
   },
   nav: {
     gap: 8,

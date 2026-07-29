@@ -36,6 +36,8 @@ export default function RootLayout() {
     InterBold: require('@tamagui/font-inter/otf/Inter-Bold.otf'),
     InterMediumItalic: require('@tamagui/font-inter/otf/Inter-MediumItalic.otf'),
     InterBoldItalic: require('@tamagui/font-inter/otf/Inter-BoldItalic.otf'),
+    // Brand logotype (matches website Plus Jakarta Sans / `--font-display`)
+    PlusJakartaSansItalic: require('../../assets/fonts/PlusJakartaSans-Italic.ttf'),
   })
 
   useEffect(() => {

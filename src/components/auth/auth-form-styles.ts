@@ -84,12 +84,25 @@ export const authFormStyles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xs,
   },
+  /** Logo mark + title on one row (mark left, title right-aligned). */
+  pageTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  brandMark: {
+    flexShrink: 0,
+  },
   pageTitle: {
     color: colors.text,
-    fontSize: 28,
-    fontWeight: '600',
-    letterSpacing: -0.6,
-    lineHeight: 34,
+    fontSize: 22,
+    fontWeight: '500',
+    letterSpacing: -0.3,
+    lineHeight: 28,
+    flex: 1,
+    textAlign: 'right',
+    paddingRight: spacing.xs,
   },
   pageCopy: {
     color: colors.textMuted,

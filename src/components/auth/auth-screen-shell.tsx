@@ -11,6 +11,7 @@ import {
   authFormStyles,
   authScrollWebStyle,
 } from '@/components/auth/auth-form-styles'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { colors } from '@/lib/theme'
 
 const COPYRIGHT_YEAR = new Date().getFullYear()
@@ -45,7 +46,10 @@ export function AuthScreenShell({
         >
           <View style={authFormStyles.column}>
             <View style={authFormStyles.pageHeader} accessibilityRole="header">
-              <Text style={authFormStyles.pageTitle}>{title}</Text>
+              <View style={authFormStyles.pageTitleRow}>
+                <TurboPanelLogo size={44} style={authFormStyles.brandMark} />
+                <Text style={authFormStyles.pageTitle}>{title}</Text>
+              </View>
               {description ? (
                 <Text style={authFormStyles.pageCopy}>{description}</Text>
               ) : null}

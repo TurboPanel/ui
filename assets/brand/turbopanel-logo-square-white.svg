@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 680" role="img" aria-labelledby="title desc">
+  <title id="title">TurboPanel logo (square, white)</title>
+  <desc id="desc">A forward-leaning T with two acceleration bars at its tail, white on a square canvas.</desc>
+  <g transform="translate(35 120)">
+    <path fill="#FFFFFF" d="M55 40h55L70 140H15z"/>
+    <path fill="#FFFFFF" d="M125 40h75l-40 100H85z"/>
+    <path fill="#FFFFFF" d="M215 40h420l-40 100H420L310 400H200l110-260H175z"/>
+  </g>
+</svg>

@@ -84,6 +84,13 @@ Layout constants: `sidebarWidth` 220, `contentMaxWidth` 1400, `desktopBreakpoint
 
 ---
 
+## Logo / brand mark
+
+- Geometry lives in **`assets/brand/`** (`turbopanel-logo*`) and the inline SVG component **`src/components/brand/turbopanel-logo.tsx`**
+- Color mark uses `colors.green` + `colors.blue`; `white` / `mono` variants for special surfaces
+- Org sidebar, admin sidebar, auth shell, and `AppShell` use `TurboPanelLogo` / `TurboPanelLogoMark` — T mark + Plus Jakarta Sans extrabold italic “urboPanel” under the blue crossbar (`assets/fonts/PlusJakartaSans-Italic.ttf`)
+- Public downloads + usage copy: marketing site **`/about/logo`**
+
 ## Component Specs
 
 ### Buttons

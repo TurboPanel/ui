@@ -9,9 +9,9 @@
 
 ## Layout
 
-- Centered single column; **page title sits above the form panel** (e.g. **Sign In**) — not inside the box; no “Ops console” product line  
+- Centered single column; **TurboPanel logo mark** and **page title** on one row above the form panel (mark left, title right-aligned — e.g. **T** ····· **Sign In**) — not inside the box; no “Ops console” product line  
 - Constrain the form column to **`maxWidth: 400`** (`AUTH_FORM_MAX_WIDTH`) — never full-bleed fields on desktop  
-- Shared shell: `src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`  
+- Shared shell: `src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`; mark via `TurboPanelLogoMark`  
 - One primary CTA (accent fill); secondary text link for alternate path below the panel  
 - Footer copyright: `© {year} TurboPanel` (muted) under the panel / alt-path link  
 - Install is a two-step host→superadmin flow — progressive disclosure, not one long form
@@ -23,7 +23,7 @@
   - `workers` (TurboPanel High Availability) → blue `#3366cc`  
   - `deno` (self-hosted) → green `#3dd68c`  
 - Form panel: `bgPanel` + hairline `borderSubtle`, radius 12, soft lift, **2px runtime-accent top edge** — interaction container only, not a decorative card stack  
-- Page title ~28px / 600 weight above the panel; optional description under the title  
+- Page title ~22px / 500 weight above the panel; optional description under the title  
 
 - Generous vertical rhythm vs dense dashboard pages (density dial conceptually ~4 here)  
 - Tokens only from `src/lib/theme.ts` — no raw hex in auth screens  

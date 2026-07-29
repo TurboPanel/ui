@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { useAuth } from '@/lib/auth-context'
 import { colors, spacing } from '@/lib/theme'
 
@@ -16,7 +17,7 @@ export function AppShell({ title, children }: AppShellProps) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.headerMain}>
-          <Text style={styles.brand}>TurboPanel</Text>
+          <TurboPanelLogo size={32} />
           <Text style={styles.title}>{title}</Text>
         </View>
         <View style={styles.headerActions}>
@@ -57,13 +58,6 @@ const styles = StyleSheet.create({
   headerMain: {
     gap: spacing.xs,
     flexShrink: 1,
-  },
-  brand: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
   },
   title: {
     color: colors.text,
