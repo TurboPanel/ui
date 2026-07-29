@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Link, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
@@ -145,9 +145,18 @@ export function SignInScreenContent() {
           webPointer,
         ]}
       >
-        <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
-          {loading ? 'Signing In…' : 'Sign In'}
-        </Text>
+        {loading ? (
+          <View style={authFormStyles.primaryButtonContent}>
+            <ActivityIndicator size="small" color={accent.onAccent} />
+            <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
+              Signing In…
+            </Text>
+          </View>
+        ) : (
+          <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
+            Sign In
+          </Text>
+        )}
       </Pressable>
     </AuthScreenShell>
   )

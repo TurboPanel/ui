@@ -17,24 +17,26 @@ export type AuthAccentTheme = {
  * Auth chrome accent by control-plane runtime:
  * - Workers (TurboPanel High Availability) → blue `#3366cc`
  * - Deno (self-hosted) → green
+ * - Unknown / still loading → green (console primary) so co-located Deno
+ *   bootstrap never flashes HA blue before `/status` lands
  */
 export function authAccentForRuntime(
   runtime: ControlPlaneRuntime | undefined,
 ): AuthAccentTheme {
-  if (runtime === 'deno') {
+  if (runtime === 'workers') {
     return {
-      accent: colors.green,
-      onAccent: colors.buttonText,
-      bgActive: colors.bgActive,
-      label: 'Self-hosted',
+      accent: colors.blue,
+      onAccent: colors.buttonTextOnBlue,
+      bgActive: colors.bgActiveBlue,
+      label: 'High Availability',
     }
   }
 
   return {
-    accent: colors.blue,
-    onAccent: colors.buttonTextOnBlue,
-    bgActive: colors.bgActiveBlue,
-    label: 'High Availability',
+    accent: colors.green,
+    onAccent: colors.buttonText,
+    bgActive: colors.bgActive,
+    label: 'Self-hosted',
   }
 }
 

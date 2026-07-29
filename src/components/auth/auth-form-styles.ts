@@ -218,6 +218,12 @@ export const authFormStyles = StyleSheet.create({
   primaryButtonPressed: {
     opacity: 0.92,
   },
+  primaryButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
   primaryButtonText: {
     fontSize: 15,
     fontWeight: '600',

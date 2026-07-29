@@ -27,9 +27,10 @@
 
 - Generous vertical rhythm vs dense dashboard pages (density dial conceptually ~4 here)  
 - Tokens only from `src/lib/theme.ts` — no raw hex in auth screens  
-- **Backdrop** (`AuthScreenBackground`): cheap static layer + 4 Reanimated streaks — web uses one CSS compositor layer (wash/dots/vignette, no SVG); native uses tiled SVG pattern + two gradients; streak tracks are shared values (no lap re-renders); honor reduced motion  
+- **Backdrop** (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid on all platforms (RN Web drops CSS `backgroundImage` on `View`); wash uses **opaque** accent→black mixes + extra stops (Safari bands/dithers alpha gradients); 4 Reanimated streaks via shared values; honor reduced motion  
 - **Floating labels** (`AuthFloatingField`): label sits inside the field as the resting “placeholder”, then shrinks to the top on focus or when the field has a value; focused border + raised label use the runtime accent  
-- Password visibility toggle is an **eye / eye-slash** icon button (`auth-eye-icons.tsx`) with an accessible name — not “Show” / “Hide” text
+- Password visibility toggle is an **eye / eye-slash** icon button (`auth-eye-icons.tsx`) with an accessible name — not “Show” / “Hide” text  
+- Loading spinners use runtime accent (bootstrap) or `onAccent` on the filled Sign In CTA
 
 ## Motion
 

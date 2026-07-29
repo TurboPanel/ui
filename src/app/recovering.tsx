@@ -2,6 +2,10 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import {
+  authAccentForRuntime,
+  resolveControlPlaneRuntime,
+} from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import {
   parseRecoveryReason,
@@ -9,6 +13,7 @@ import {
   recoveryDetail,
   recoveryTitle,
 } from '@/lib/instance-recovery'
+import { useAuthStatus } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 const POLL_MS = 1_000
@@ -18,6 +23,10 @@ export default function RecoveringScreen() {
   const params = useLocalSearchParams<{ reason?: string }>()
   const reason = parseRecoveryReason(params.reason)
   const { clearSession, refreshInstallStatus, refreshSession } = useAuth()
+  const { data: instanceInfo } = useAuthStatus()
+  const spinnerColor = authAccentForRuntime(
+    resolveControlPlaneRuntime(instanceInfo),
+  ).accent
   const [statusText, setStatusText] = useState('Waiting for instance…')
   const redirected = useRef(false)
 
@@ -79,7 +88,7 @@ export default function RecoveringScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color={spinnerColor} />
         <Text style={styles.title}>{recoveryTitle(reason)}</Text>
         <Text style={styles.detail}>{recoveryDetail(reason)}</Text>
         <Text style={styles.status}>{statusText}</Text>

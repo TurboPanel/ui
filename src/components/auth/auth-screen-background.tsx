@@ -53,36 +53,36 @@ const STREAKS: readonly StreakConfig[] = [
     id: 'h-ltr',
     lengthFactor: 0.55,
     maxLength: 360,
-    durationMs: 4200,
+    durationMs: 7200,
     delayMs: 0,
-    peakAlpha: 0.1,
+    peakAlpha: 0.065,
     direction: 'ltr',
   },
   {
     id: 'h-rtl',
     lengthFactor: 0.5,
     maxLength: 340,
-    durationMs: 3900,
-    delayMs: 900,
-    peakAlpha: 0.055,
+    durationMs: 8600,
+    delayMs: 1600,
+    peakAlpha: 0.038,
     direction: 'rtl',
   },
   {
     id: 'v-ttb',
     lengthFactor: 0.45,
     maxLength: 320,
-    durationMs: 4600,
-    delayMs: 400,
-    peakAlpha: 0.08,
+    durationMs: 7800,
+    delayMs: 900,
+    peakAlpha: 0.052,
     direction: 'ttb',
   },
   {
     id: 'v-btt',
     lengthFactor: 0.48,
     maxLength: 300,
-    durationMs: 5000,
-    delayMs: 1500,
-    peakAlpha: 0.04,
+    durationMs: 9400,
+    delayMs: 2400,
+    peakAlpha: 0.028,
     direction: 'btt',
   },
 ]
@@ -129,10 +129,10 @@ const AuthGridStreak = memo(function AuthGridStreak({
   const travel = span + streakLength
 
   const palette = useMemo(() => {
-    const hot = hexWithAlpha(colors.text, Math.min(0.35, peakAlpha + 0.12))
-    const bright = hexWithAlpha(colors.text, peakAlpha * 0.65)
-    const mid = hexWithAlpha(accentColor, peakAlpha * 0.4)
-    const soft = hexWithAlpha(accentColor, peakAlpha * 0.1)
+    const hot = hexWithAlpha(colors.text, Math.min(0.18, peakAlpha + 0.06))
+    const bright = hexWithAlpha(colors.text, peakAlpha * 0.55)
+    const mid = hexWithAlpha(accentColor, peakAlpha * 0.35)
+    const soft = hexWithAlpha(accentColor, peakAlpha * 0.08)
     const colorsAlong = (
       tipForward
         ? ['transparent', soft, mid, bright, hot]
@@ -144,8 +144,8 @@ const AuthGridStreak = memo(function AuthGridStreak({
     return {
       colorsAlong,
       locations,
-      tip: hexWithAlpha(colors.text, Math.min(0.4, peakAlpha + 0.18)),
-      tipGlow: hexWithAlpha(accentColor, Math.min(0.16, peakAlpha * 1.1)),
+      tip: hexWithAlpha(colors.text, Math.min(0.22, peakAlpha + 0.08)),
+      tipGlow: hexWithAlpha(accentColor, Math.min(0.08, peakAlpha * 0.9)),
     }
   }, [accentColor, peakAlpha, tipForward])
 
@@ -250,8 +250,8 @@ const AuthGridStreak = memo(function AuthGridStreak({
             backgroundColor: palette.tip,
             shadowColor: accentColor,
             ...(Platform.OS === 'web'
-              ? ({ boxShadow: `0 0 3px 1px ${palette.tipGlow}` } as object)
-              : { shadowOpacity: 0.35, shadowRadius: 3 }),
+              ? ({ boxShadow: `0 0 2px 0 ${palette.tipGlow}` } as object)
+              : { shadowOpacity: 0.2, shadowRadius: 2 }),
           },
         ]}
       />
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   streak: {
     position: 'absolute',
-    opacity: 0.85,
+    opacity: 0.62,
   },
   streakFill: {
     position: 'absolute',
