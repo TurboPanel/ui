@@ -2,13 +2,14 @@ import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { OrgShell } from '@/components/org/org-shell'
+import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { fetchOrganizations } from '@/lib/instance-api'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { colors } from '@/lib/theme'
 
 export default function OrganizationLayout() {
-  const { session, needsInstall, isLoading } = useAuth()
+  const { session, needsInstall, isLoading, controlPlaneRuntime } = useAuth()
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
   const [orgAllowed, setOrgAllowed] = useState<boolean | null>(null)
 
@@ -46,7 +47,10 @@ export default function OrganizationLayout() {
   if (isLoading || (session && orgId && orgAllowed === null)) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator
+          size="large"
+          color={authSpinnerColor(controlPlaneRuntime)}
+        />
       </View>
     )
   }

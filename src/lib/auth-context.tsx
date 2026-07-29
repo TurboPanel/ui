@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import {
   applyConsoleChromeRuntime,
+  readStoredControlPlaneRuntime,
   resolveControlPlaneRuntime,
   type ControlPlaneRuntime,
 } from '@/lib/auth-accent'
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [isSignupEnabled, setIsSignupEnabled] = useState(false)
   const [controlPlaneRuntime, setControlPlaneRuntime] = useState<
     ControlPlaneRuntime | undefined
-  >()
+  >(() => readStoredControlPlaneRuntime())
   const [isLoading, setIsLoading] = useState(true)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
 
@@ -68,8 +69,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const runtime = resolveControlPlaneRuntime(status)
       setNeedsInstall(status.needsInstall ?? false)
       setIsSignupEnabled(status.isSignupEnabled ?? false)
-      setControlPlaneRuntime(runtime)
-      applyConsoleChromeRuntime(runtime)
+      if (runtime !== undefined) {
+        setControlPlaneRuntime(runtime)
+        applyConsoleChromeRuntime(runtime)
+      }
       queryClient.setQueryData(authQueryKeys.authStatus, status)
     },
     [queryClient],
