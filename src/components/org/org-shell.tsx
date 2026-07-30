@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrgHeader } from '@/components/org/org-header'
 import { OrgSidebar } from '@/components/org/org-sidebar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
+import { glass } from '@/lib/glass'
 import { colors, layout, spacing } from '@/lib/theme'
 
 export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
@@ -114,7 +115,9 @@ const styles = StyleSheet.create({
     width: layout.sidebarWidth,
     zIndex: 11,
     borderRightWidth: 1,
-    borderRightColor: colors.borderSubtle,
-    boxShadow: '4px 0 24px rgba(0, 0, 0, 0.5)',
+    borderRightColor: glass.border,
+    // Glass sidebar fills the drawer; soft lift over the dimmed backdrop.
+    boxShadow: glass.shadow,
+    overflow: 'hidden',
   },
 })

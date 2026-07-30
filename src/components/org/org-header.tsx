@@ -1,5 +1,6 @@
 import { usePathname } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { GlassSurface } from '@/components/glass/glass-surface'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import { orgAreaFromPathname } from '@/lib/org-navigation'
@@ -29,7 +30,7 @@ export function OrgHeader({
   const userLabel = session?.email ?? session?.username
 
   return (
-    <View style={styles.header}>
+    <GlassSurface style={styles.header} intensity="strong">
       <View style={styles.headerMain}>
         {onMenuPress ? (
           <Pressable
@@ -91,21 +92,22 @@ export function OrgHeader({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </GlassSurface>
   )
 }
 
 const styles = StyleSheet.create({
   header: {
-    borderBottomColor: colors.borderSubtle,
+    borderRadius: 0,
+    borderWidth: 0,
     borderBottomWidth: 1,
-    backgroundColor: colors.bgAreaHeader,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     gap: spacing.md,
+    zIndex: 5,
   },
   headerMain: {
     flexDirection: 'row',

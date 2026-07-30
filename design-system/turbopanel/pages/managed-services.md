@@ -94,7 +94,7 @@ Uses the **`managed`** table + **`principal(managed_id)`**:
 
 - One managed row per **environment** (`environment_id`, unique partial index)
 - Engine identity from project catalog code (`postgres`, …)
-- Root + DB user creds sealed as `tpsecret` on principal rows
+- Root + DB user creds sealed as `enc` on principal rows
 - Runtime status: `provisioning` \| `applying` \| `ready` \| `stopped` \| `failed`
 
 ## Visual

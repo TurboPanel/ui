@@ -12,6 +12,7 @@ import {
   authScrollWebStyle,
 } from '@/components/auth/auth-form-styles'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
+import { GlassSurface } from '@/components/glass/glass-surface'
 import { colors } from '@/lib/theme'
 
 const COPYRIGHT_YEAR = new Date().getFullYear()
@@ -55,7 +56,7 @@ export function AuthScreenShell({
               ) : null}
             </View>
 
-            <View style={authFormStyles.panel}>
+            <GlassSurface style={authFormStyles.panel} intensity="regular">
               <View
                 style={[
                   authFormStyles.panelAccent,
@@ -63,7 +64,7 @@ export function AuthScreenShell({
                 ]}
               />
               <View style={authFormStyles.panelBody}>{children}</View>
-            </View>
+            </GlassSurface>
 
             {footer ? <View style={authFormStyles.footer}>{footer}</View> : null}
 

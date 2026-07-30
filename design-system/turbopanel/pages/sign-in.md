@@ -22,7 +22,8 @@
 - **Runtime accent** from `GET /api/client/v1/status` → `runtime` (`src/lib/auth-accent.ts`):  
   - `workers` (TurboPanel High Availability) → blue `#3366cc`  
   - `deno` (self-hosted) → green `#3dd68c`  
-- Form panel: `bgPanel` + hairline `borderSubtle`, radius 12, soft lift, **2px runtime-accent top edge** — interaction container only, not a decorative card stack  
+- Form panel: **liquid glass** via `GlassSurface` (`glass.fill` + blur/saturate on web; native `GlassView` on iOS 26+), radius 12, soft lift, **2px runtime-accent top edge** — interaction container only, not a decorative card stack  
+- Floating fields: soft glass fill on web (`glass.fillSoft` + light blur) so they sit inside the frosted panel  
 - Page title ~22px / 500 weight above the panel; optional description under the title  
 
 - Generous vertical rhythm vs dense dashboard pages (density dial conceptually ~4 here)  

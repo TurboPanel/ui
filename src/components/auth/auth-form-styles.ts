@@ -109,17 +109,12 @@ export const authFormStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
+  /** Glass fill / border / blur come from {@link GlassSurface}. */
   panel: {
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
     overflow: 'hidden',
-    // Soft lift so the panel reads against the grid without heavy chrome.
     ...(Platform.OS === 'web'
-      ? ({
-          boxShadow: '0 12px 40px rgba(0, 0, 0, 0.45)',
-        } as object)
+      ? ({} as object)
       : {
           shadowColor: '#000',
           shadowOpacity: 0.35,
@@ -164,10 +159,17 @@ export const authFormStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderMuted,
-    backgroundColor: colors.bgInput,
+    backgroundColor:
+      Platform.OS === 'web' ? 'rgba(17, 17, 17, 0.55)' : colors.bgInput,
     borderRadius: 10,
     minHeight: 54,
     overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(10px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(10px) saturate(140%)',
+        } as object)
+      : {}),
   },
   floatingLabel: {
     position: 'absolute',

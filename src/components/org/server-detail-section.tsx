@@ -1047,10 +1047,11 @@ function ServerConnectionOverview({
       ? 'Co-located (Unix socket)'
       : seenFrom
 
-  // Presence timestamps (connectedAt / lastInboundAt) are not useful here:
-  // Workers steady-state cell pings never project lastInboundAt, and sockets
-  // self-recycle every ~2h so connectedAt is only the current session start.
-  // Host-metrics coverage is the durable continuity signal (~60s samples).
+  // statusChangedAt is the last online/offline flip (`status_changed_at`).
+  // Host-metrics coverage remains the durable continuity signal (~60s samples).
+  const statusSinceLabel = server.connected ? 'Online since' : 'Offline since'
+  const statusSince = server.statusChangedAt
+
   const reportingQuery = useQuery({
     queryKey: ['server', server.id, 'reporting', '24h'],
     queryFn: async (): Promise<MetricsSeriesResponse | null> => {
@@ -1083,6 +1084,10 @@ function ServerConnectionOverview({
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Connected from: </Text>
         <Text style={styles.mono}>{seenFromDisplay}</Text>
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>{statusSinceLabel}: </Text>
+        {statusSince ? formatLocalDateTime(statusSince) : '—'}
       </Text>
       <ReportingStatusNote
         loading={reportingQuery.isLoading}

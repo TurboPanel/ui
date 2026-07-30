@@ -19,7 +19,6 @@ import { VariablesSection } from '@/components/org/variables-section'
 import { useAuth } from '@/lib/auth-context'
 import {
   createHosting,
-  createService,
   DeployHealthCheckMissingError,
   deployEnvironment,
   fetchContainers,
@@ -1307,7 +1306,6 @@ function EnvironmentLoadedPanels({
               return (
                 <ServiceSettingsPanel
                   key={composeServiceName}
-                  environmentId={environment.id}
                   composeServiceName={composeServiceName}
                   service={service}
                   canManage={canManage}
@@ -1504,6 +1502,15 @@ export function EnvironmentDetailBody({
           ? { ...current, options: { compose } }
           : current,
       )
+      const servicesResult = await fetchVisibleServices(environmentId)
+      setServices(servicesResult.services)
+      const [hostingState, containersState] = await Promise.all([
+        fetchHostingsByService(servicesResult.services),
+        fetchContainersByService(servicesResult.services),
+      ])
+      setHostingsByService(hostingState.byService)
+      setHostingEditors(hostingState.editors)
+      setContainersByService(containersState)
     } catch (err) {
       await reportSectionError(
         err,
@@ -1603,33 +1610,30 @@ export function EnvironmentDetailBody({
       const service = services.find(
         (item) => item.composeServiceName === composeServiceName,
       )
-      const resolvedService = service ?? {
-        id: (await createService(environmentId, {
-          displayName: composeServiceName,
-          composeServiceName,
-        })).id,
+      if (!service) {
+        setError('Save the compose document first.')
+        return
       }
-      const serviceKey = service?.id ?? composeServiceName
-      const editor = hostingEditors[serviceKey] ?? readHostingEditor([])
+      const editor = hostingEditors[service.id] ?? readHostingEditor([])
       await upsertHosting(
-        resolvedService.id,
+        service.id,
         composeServiceName,
         editor,
         hostingsByService,
       )
       const [servicesResult, hostingsResult] = await Promise.all([
         fetchVisibleServices(environmentId),
-        fetchVisibleHostings(resolvedService.id),
+        fetchVisibleHostings(service.id),
       ])
       setServices(servicesResult.services)
       const nextEditor = readHostingEditor(hostingsResult.hostings)
       setHostingsByService((current) => ({
         ...current,
-        [resolvedService.id]: hostingsResult.hostings,
+        [service.id]: hostingsResult.hostings,
       }))
       setHostingEditors((current) => ({
         ...current,
-        [resolvedService.id]: nextEditor,
+        [service.id]: nextEditor,
       }))
       setContainersByService(await fetchContainersByService(servicesResult.services))
     } catch (err) {

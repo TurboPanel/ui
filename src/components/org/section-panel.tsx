@@ -1,5 +1,7 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { GlassSurface } from '@/components/glass/glass-surface'
+import { glass } from '@/lib/glass'
 import { chrome, colors } from '@/lib/theme'
 
 export function SectionPanel({
@@ -14,7 +16,7 @@ export function SectionPanel({
   children: ReactNode
 }>) {
   return (
-    <View style={styles.area}>
+    <GlassSurface style={styles.area} intensity="soft">
       {title ? (
         <View style={[styles.areaHeader, accent && styles.areaHeaderAccent]}>
           {accent ? <View style={styles.accentStripe} /> : null}
@@ -25,16 +27,13 @@ export function SectionPanel({
         </View>
       ) : null}
       <View style={styles.areaBody}>{children}</View>
-    </View>
+    </GlassSurface>
   )
 }
 
 const styles = StyleSheet.create({
   area: {
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgArea,
     overflow: 'hidden',
   },
   areaHeader: {
@@ -42,7 +41,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     borderBottomWidth: 1,
     borderBottomColor: colors.borderArea,
-    backgroundColor: colors.bgAreaHeader,
+    backgroundColor: glass.fillSoft,
   },
   areaHeaderAccent: {
     backgroundColor: colors.bgActive,

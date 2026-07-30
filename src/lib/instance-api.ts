@@ -242,6 +242,8 @@ export type OrgServerRecord = {
   remoteAddress: string | null;
   lastInboundAt: string | null;
   connectedAt: string | null;
+  /** Last online/offline transition (`server.status_changed_at`). */
+  statusChangedAt: string | null;
   geo: ServerGeo | null;
   /** Host OS from server.metadata.os (daemon hello); null until reported. */
   os: ServerOsMetadata | null;
@@ -860,7 +862,8 @@ export type ServiceRecord = {
   displayName: string | null;
   description: string | null;
   environmentId: string;
-  composeServiceName?: string | null;
+  /** Derived from the compose document — read-only; never send this on create/update. */
+  composeServiceName: string;
   metadata?: Record<string, unknown> | null;
   options?: ServiceOptions | Record<string, unknown> | null;
   createdAt: string;
@@ -1229,12 +1232,16 @@ export async function fetchVisibleServices(
   return await apiFetch(`${CLIENT_API}/services${suffix}`);
 }
 
+/**
+ * Not supported by the instance — services are created only by compose
+ * reconcile. Kept only as a typed reference for the 400
+ * `service_create_not_supported` contract; do not call from new UI code.
+ */
 export async function createService(
   environmentId: string,
   body: {
     displayName?: string
     description?: string
-    composeServiceName?: string
     metadata?: Record<string, unknown>
     options?: ServiceOptions | Record<string, unknown>
   },
@@ -1248,7 +1255,6 @@ export async function createService(
 export async function updateService(
   id: string,
   body: {
-    composeServiceName?: string | null
     options?: ServiceOptions
     metadata?: Record<string, unknown> | null
   },
@@ -1799,7 +1805,7 @@ export type ServerCpuMetadata = {
 export type ServerMetadata = {
   os?: ServerOsMetadata
   cpu?: ServerCpuMetadata
-  machineId?: string
+  machineKey?: string
   hostname?: string
 }
 
@@ -1808,7 +1814,7 @@ export type DaemonCellSnapshot = {
   version: number
   updatedAt: string
   hostname?: string
-  machineId?: string
+  machineKey?: string
   remoteAddress?: string
   keyId?: string
   connected: boolean
@@ -1829,9 +1835,7 @@ export type ServerStatusRecord = {
   serverId: string
   connected: boolean
   daemonStatus: 'online' | 'offline' | 'unknown' | null
-  lastSeenAt: string | null
   connectedAt: string | null
-  disconnectedAt: string | null
   statusChangedAt: string | null
   hostname: string | null
   remoteAddress: string | null

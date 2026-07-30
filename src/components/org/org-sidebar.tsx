@@ -1,10 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
+import { GlassSurface } from '@/components/glass/glass-surface'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
 import { webPointer } from '@/components/org/org-panel-styles'
+import { glass } from '@/lib/glass'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import { projectsHrefForScope } from '@/lib/workspace-scope'
@@ -26,7 +28,7 @@ export function OrgSidebar({
     pathname === adminHref || pathname.startsWith('/admin/')
 
   return (
-    <View style={styles.sidebar}>
+    <GlassSurface style={styles.sidebar} intensity="strong">
       <View style={styles.brand}>
         <TurboPanelLogo size={36} />
       </View>
@@ -141,7 +143,7 @@ export function OrgSidebar({
           </Pressable>
         </View>
       ) : null}
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -150,9 +152,9 @@ const styles = StyleSheet.create({
     width: layout.sidebarWidth,
     flexShrink: 0,
     alignSelf: 'stretch',
-    backgroundColor: colors.bgSidebar,
+    borderRadius: 0,
+    borderWidth: 0,
     borderRightWidth: 1,
-    borderRightColor: colors.borderSubtle,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
   },
@@ -178,8 +180,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   areaItemActive: {
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgSecondary,
+    borderColor: glass.border,
+    backgroundColor: glass.fillSoft,
   },
   areaActiveBar: {
     position: 'absolute',

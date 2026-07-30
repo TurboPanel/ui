@@ -258,13 +258,10 @@ function computeRangeBounds(rangeId: MetricsRangeId): {
 
 function isServerStale(server: OrgServerRecord | null): boolean {
   if (!server) return true
-  // Presence is authoritative from Postgres `server.daemon.status.connected`
-  // (maintained by connect/disconnect + the offline sweep), the same signal the
-  // servers overview uses. `lastInboundAt` (Postgres `lastSeenAt`) is NOT a
-  // sub-few-minutes freshness signal: steady-state daemons only send wire cell
-  // pings, which refresh cell meta but not the Postgres projection, so it
-  // freezes at the last connect/heartbeat and would false-trip an offline
-  // banner on a healthy long-lived connection.
+  // Presence is authoritative from Postgres `server.connected` (maintained by
+  // connect/disconnect + the offline sweep), the same signal the servers
+  // overview uses. Live cell inbound markers are admin-snapshot-only and are
+  // not a sub-few-minutes freshness signal on this path.
   return !server.connected
 }
 

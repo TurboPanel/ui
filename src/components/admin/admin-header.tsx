@@ -1,5 +1,6 @@
 import { usePathname } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { GlassSurface } from '@/components/glass/glass-surface'
 import { useAuth } from '@/lib/auth-context'
 import { adminAreaFromPathname } from '@/lib/admin-navigation'
 import { colors, spacing } from '@/lib/theme'
@@ -14,7 +15,7 @@ export function AdminHeader({
   const title = match ? match.area.label : 'Admin'
 
   return (
-    <View style={styles.header}>
+    <GlassSurface style={styles.header} intensity="strong">
       <View style={styles.headerMain}>
         {onMenuPress ? (
           <Pressable style={styles.menuButton} onPress={onMenuPress}>
@@ -48,13 +49,14 @@ export function AdminHeader({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </GlassSurface>
   )
 }
 
 const styles = StyleSheet.create({
   header: {
-    borderBottomColor: colors.border,
+    borderRadius: 0,
+    borderWidth: 0,
     borderBottomWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -62,6 +64,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     gap: spacing.md,
+    zIndex: 5,
   },
   headerMain: {
     flexDirection: 'row',

@@ -3,7 +3,6 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import {
-  createService,
   isForbiddenError,
   updateService,
   type HealthCheckPolicy,
@@ -118,13 +117,11 @@ function buildResourcesOptions(
 }
 
 export function ServiceSettingsPanel({
-  environmentId,
   composeServiceName,
   service,
   canManage,
   onServiceChange,
 }: Readonly<{
-  environmentId: string
   composeServiceName: string
   service: ServiceRecord | undefined
   canManage: boolean
@@ -201,33 +198,14 @@ export function ServiceSettingsPanel({
   }
 
   const save = async () => {
-    if (!canManage) return
+    if (!canManage || !service) return
     setSaving(true)
     setError(null)
     setSavedHint(null)
     try {
       const options = buildOptions()
-      let resolved = service
-      if (!resolved) {
-        const created = await createService(environmentId, {
-          displayName: composeServiceName,
-          composeServiceName,
-        })
-        resolved = {
-          id: created.id,
-          displayName: composeServiceName,
-          description: null,
-          environmentId,
-          composeServiceName,
-          metadata: null,
-          options: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-      }
-      await updateService(resolved.id, { options })
-      const updated: ServiceRecord = { ...resolved, options }
-      onServiceChange(updated)
+      await updateService(service.id, { options })
+      onServiceChange({ ...service, options })
       setSavedHint('Saved')
     } catch (err) {
       if (isForbiddenError(err)) {
@@ -382,17 +360,22 @@ export function ServiceSettingsPanel({
       </View>
 
       {canManage ? (
-        <Pressable
-          style={[styles.saveButton, saving && styles.buttonDisabled]}
-          disabled={saving}
-          onPress={() => {
-            void save()
-          }}
-        >
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Saving…' : 'Save service settings'}
-          </Text>
-        </Pressable>
+        <>
+          {!service ? (
+            <Text style={orgPanelStyles.muted}>Save the compose document first.</Text>
+          ) : null}
+          <Pressable
+            style={[styles.saveButton, (saving || !service) && styles.buttonDisabled]}
+            disabled={saving || !service}
+            onPress={() => {
+              void save()
+            }}
+          >
+            <Text style={styles.saveButtonText}>
+              {saving ? 'Saving…' : 'Save service settings'}
+            </Text>
+          </Pressable>
+        </>
       ) : null}
     </View>
   )
