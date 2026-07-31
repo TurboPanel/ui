@@ -90,14 +90,23 @@ function PreviewContainerList({
   return (
     <View style={styles.metaBlock}>
       <Text style={orgPanelStyles.detailTitle}>Containers</Text>
-      {containers.map((row) => (
-        <Text key={`${row.serviceId}:${row.ordinal}`} style={orgPanelStyles.detailLine}>
-          {row.composeServiceName}
-          {' → '}
-          {row.containerName}
-          {row.ordinal > 1 ? ` (#${row.ordinal})` : ''}
-        </Text>
-      ))}
+      {containers.map((row) => {
+        const isIngress = row.role === 'ingress'
+        const ordinalSuffix =
+          !isIngress && row.ordinal > 1 ? ` (#${row.ordinal})` : ''
+        return (
+          <Text
+            key={`${row.serviceId}:${row.role}:${row.ordinal}`}
+            style={orgPanelStyles.detailLine}
+          >
+            {row.composeServiceName}
+            {' → '}
+            {row.containerName}
+            {ordinalSuffix}
+            {isIngress ? ' · ingress' : ''}
+          </Text>
+        )
+      })}
     </View>
   )
 }

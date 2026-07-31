@@ -7,7 +7,10 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { ContainerStatusBadge } from '@/components/org/managed/container-status-badge'
+import {
+  ContainerRoleBadge,
+  ContainerStatusBadge,
+} from '@/components/org/managed/container-status-badge'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import type { ContainerRecord } from '@/lib/instance-api'
@@ -54,11 +57,19 @@ function statusPillStyle(status: ManagedStatus): {
 }
 
 function containerDisplayName(container: ContainerRecord): string {
-  // Ingress sidecar — label from compose key (`…-ingress`), not the UUID name.
-  if (container.composeServiceName.endsWith('-ingress')) {
-    return container.composeServiceName
+  if (container.role === 'ingress') {
+    return container.containerName || container.id
   }
   return container.containerName || container.composeServiceName || container.id
+}
+
+/** Engine (app) first, then ingress. */
+function partitionContainersForDisplay(
+  containers: ContainerRecord[],
+): ContainerRecord[] {
+  const appRows = containers.filter((row) => row.role !== 'ingress')
+  const ingressRows = containers.filter((row) => row.role === 'ingress')
+  return [...appRows, ...ingressRows]
 }
 
 export function ManagedStatusPanel({
@@ -114,11 +125,18 @@ export function ManagedStatusPanel({
       </View>
 
       <View style={styles.containerList}>
-        {containers.map((container) => (
-          <View key={container.id} style={styles.containerRow}>
+        {partitionContainersForDisplay(containers).map((container) => (
+          <View
+            key={container.id}
+            style={[
+              styles.containerRow,
+              container.role === 'ingress' && styles.containerRowIngress,
+            ]}
+          >
             <Text style={styles.containerName}>
               {containerDisplayName(container)}
             </Text>
+            <ContainerRoleBadge role={container.role} />
             <ContainerStatusBadge status={container.status} />
           </View>
         ))}
@@ -209,6 +227,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     flexWrap: 'wrap',
+  },
+  containerRowIngress: {
+    marginLeft: spacing.md,
+    paddingLeft: spacing.sm,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderArea,
   },
   containerName: {
     color: colors.textBody,

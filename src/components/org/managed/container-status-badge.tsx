@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import type { ContainerRole } from '@/lib/instance-api'
 import { colors } from '@/lib/theme'
 
 type ContainerStatusVariant = 'running' | 'pending' | 'stopped' | 'unknown'
@@ -51,6 +52,30 @@ export function ContainerStatusBadge({
     <View style={[styles.statusBadge, statusBadgeVariantStyles[variant].badge]}>
       <Text style={[styles.statusBadgeText, statusBadgeVariantStyles[variant].text]}>
         {label}
+      </Text>
+    </View>
+  )
+}
+
+/** Classifier pill — renders nothing for app rows so callers can drop it in unconditionally. */
+export function ContainerRoleBadge({
+  role,
+}: Readonly<{ role: ContainerRole }>) {
+  if (role === 'app') return null
+  return (
+    <View
+      style={[
+        styles.statusBadge,
+        statusBadgeVariantStyles.unknown.badge,
+      ]}
+    >
+      <Text
+        style={[
+          styles.statusBadgeText,
+          statusBadgeVariantStyles.unknown.text,
+        ]}
+      >
+        Ingress
       </Text>
     </View>
   )

@@ -912,6 +912,9 @@ export type TlsRecord = {
   updatedAt: string
 }
 
+/** Allocator-owned container classifier. */
+export type ContainerRole = 'app' | 'ingress'
+
 export type ContainerRecord = {
   id: string;
   serviceId: string;
@@ -919,6 +922,11 @@ export type ContainerRecord = {
   containerId: string;
   containerName: string;
   status: string;
+  /**
+   * Allocator-owned. Ingress rows are the per-service Traefik container,
+   * always ordinal 1, named `<serviceId>-ingress`.
+   */
+  role: ContainerRole;
   composeServiceName: string;
   metadata?: Record<string, unknown> | null;
   options?: Record<string, unknown> | null;
@@ -2218,6 +2226,7 @@ export type DeployPreviewResponse = {
     composeServiceName: string
     containerName: string
     ordinal: number
+    role: ContainerRole
   }>
   volumes: Array<{
     storageId: string

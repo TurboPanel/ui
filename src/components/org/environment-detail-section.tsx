@@ -10,7 +10,10 @@ import {
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { DeployPreviewPanel } from '@/components/org/deploy-preview-panel'
-import { ContainerStatusBadge } from '@/components/org/managed/container-status-badge'
+import {
+  ContainerRoleBadge,
+  ContainerStatusBadge,
+} from '@/components/org/managed/container-status-badge'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -342,6 +345,15 @@ async function fetchContainersByService(
 
 function containerDisplayName(container: ContainerRecord): string {
   return container.containerName || container.composeServiceName || container.id
+}
+
+/** App rows first (existing ordinal order), then the single ingress row. */
+function partitionContainersForDisplay(
+  containers: ContainerRecord[],
+): ContainerRecord[] {
+  const appRows = containers.filter((row) => row.role !== 'ingress')
+  const ingressRows = containers.filter((row) => row.role === 'ingress')
+  return [...appRows, ...ingressRows]
 }
 
 function containerHostLabel(
@@ -1331,7 +1343,9 @@ function EnvironmentLoadedPanels({
         ) : (
           <View style={styles.containerList}>
             {services.map((service) => {
-              const containers = containersByService[service.id] ?? []
+              const containers = partitionContainersForDisplay(
+                containersByService[service.id] ?? [],
+              )
               if (containers.length === 0) {
                 return null
               }
@@ -1342,11 +1356,18 @@ function EnvironmentLoadedPanels({
                       String(service.composeServiceName ?? service.id)}
                   </Text>
                   {containers.map((container) => (
-                    <View key={container.id} style={styles.containerRow}>
+                    <View
+                      key={container.id}
+                      style={[
+                        styles.containerRow,
+                        container.role === 'ingress' && styles.containerRowIngress,
+                      ]}
+                    >
                       <View style={styles.containerHeader}>
                         <Text style={orgPanelStyles.detailLine}>
                           {containerDisplayName(container)}
                         </Text>
+                        <ContainerRoleBadge role={container.role} />
                         <ContainerStatusBadge status={container.status} />
                       </View>
                       <Text style={orgPanelStyles.detailLine}>
@@ -1873,6 +1894,12 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   containerList: { gap: spacing.sm },
   containerRow: { gap: spacing.xs, marginTop: spacing.sm },
+  containerRowIngress: {
+    marginLeft: spacing.md,
+    paddingLeft: spacing.sm,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderArea,
+  },
   containerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
