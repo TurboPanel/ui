@@ -503,7 +503,7 @@ function ContainerNamingPanel({
       <Text style={orgPanelStyles.muted}>
         {value === 'custom'
           ? 'Uses each service’s explicit container name when set; otherwise Compose default names.'
-          : 'Default — each container is named from its allocated row UUID.'}
+          : 'Default — each container is named from its service UUID (with -<n> when scaled).'}
       </Text>
       {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
     </SectionPanel>

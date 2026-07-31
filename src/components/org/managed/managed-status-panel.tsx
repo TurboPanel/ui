@@ -54,6 +54,10 @@ function statusPillStyle(status: ManagedStatus): {
 }
 
 function containerDisplayName(container: ContainerRecord): string {
+  // Ingress sidecar — label from compose key (`…-ingress`), not the UUID name.
+  if (container.composeServiceName.endsWith('-ingress')) {
+    return container.composeServiceName
+  }
   return container.containerName || container.composeServiceName || container.id
 }
 
