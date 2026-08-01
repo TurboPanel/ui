@@ -76,20 +76,61 @@ function trimTrailingSlash(url: string): string {
   return url.replace(/\/$/, '')
 }
 
-function encodeLicenseArg(licenseId: string, licenseToken: string): string {
-  const combined = `${licenseId}:${licenseToken}`
-  return btoa(combined)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '')
-}
-
 function hasNonOriginUrlParts(url: URL): boolean {
   return (
     (url.pathname !== '/' && url.pathname !== '') ||
     Boolean(url.search) ||
     Boolean(url.hash)
   )
+}
+
+function isBareTurbopanelShOrigin(trimmed: string): boolean {
+  if (trimmed === 'turbopanel.sh') return true
+  try {
+    const url = new URL(trimmed)
+    return (
+      url.hostname === 'turbopanel.sh' &&
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      !hasNonOriginUrlParts(url) &&
+      (url.port === '' || url.port === '443' || url.port === '80')
+    )
+  } catch {
+    return false
+  }
+}
+
+/** Bare host[:port] or scheme+host for curl; never includes an install script path. */
+function formatInstallScriptCurlUrl(origin: string): string {
+  const trimmed = trimTrailingSlash(origin.trim())
+  if (isBareTurbopanelShOrigin(trimmed)) {
+    return 'turbopanel.sh'
+  }
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol === 'https:') {
+      if (!url.port || url.port === '443') {
+        return url.hostname
+      }
+      return `https://${url.host}`
+    }
+    if (url.protocol === 'http:') {
+      if (!url.port || url.port === '80') {
+        return url.hostname
+      }
+      return url.host
+    }
+  } catch {
+    // fall through
+  }
+  return trimmed
+}
+
+function encodeLicenseArg(licenseId: string, licenseToken: string): string {
+  const combined = `${licenseId}:${licenseToken}`
+  return btoa(combined)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '')
 }
 
 /**
@@ -141,7 +182,7 @@ function buildInstallPipeline(opts: {
 }
 
 /**
- * Rebuild a dev install command (run.sh + downloads on the same public host).
+ * Rebuild a dev install command (installer script + downloads on the same public host).
  * `baseUrl` must already be a validated origin from {@link parseInstallBaseUrl}.
  */
 export function buildInstallCommandWithBaseUrl(opts: {
@@ -153,16 +194,17 @@ export function buildInstallCommandWithBaseUrl(opts: {
 }): string {
   const base = trimTrailingSlash(opts.baseUrl.trim())
   const licenseArg = encodeLicenseArg(opts.licenseId, opts.licenseToken)
+  const curlUrl = formatInstallScriptCurlUrl(base)
   if (base.startsWith('http://')) {
     return buildInstallPipeline({
-      curlUrl: `${base}/run.sh`,
+      curlUrl,
       licenseArg,
       host: base,
     })
   }
   const insecureTls = opts.insecureTls ?? true
   return buildInstallPipeline({
-    curlUrl: `${base}/run.sh`,
+    curlUrl,
     licenseArg,
     host: base,
     insecureTls,

@@ -7,7 +7,7 @@ import {
 const revealed = {
   licenseId: 'license-id',
   licenseToken: 'token',
-  installCommand: 'curl -fsSL turbopanel.sh/run.sh | TURBOPANEL_LICENSE=abc sh',
+  installCommand: 'curl -fsSL turbopanel.sh | TURBOPANEL_LICENSE=abc sh',
 }
 
 describe('parseInstallBaseUrl', () => {
@@ -84,7 +84,7 @@ describe('resolveDisplayedInstallCommand', () => {
       .replaceAll('=', '')
 
     expect(command).toContain(
-      'curl -fsSLk https://panel.example.com:8443/run.sh',
+      'curl -fsSLk https://panel.example.com:8443',
     )
     expect(command).toContain(
       'TURBOPANEL_HOST=https://panel.example.com:8443',
@@ -99,7 +99,7 @@ describe('resolveDisplayedInstallCommand', () => {
       revealed,
       'http://dev.example.com:8880',
     )
-    expect(command).toContain('curl -fsSL http://dev.example.com:8880/run.sh')
+    expect(command).toContain('curl -fsSL dev.example.com:8880')
     expect(command).not.toContain('curl -fsSLk')
     expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
     expect(command).not.toContain("'")

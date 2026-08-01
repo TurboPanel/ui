@@ -360,7 +360,7 @@ Authorization helpers:
 
 - **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) opens `AddServerWizard` inline on the servers page.
 - `resolveServerAddEligibility(capacity?)` in `src/lib/server-add-eligibility.ts` gates **+ Server** from org seat capacity (`maxServers`); unlimited when omitted/null. `POST /licenses` still enforces **409** `server_capacity_exceeded` server-side.
-- Wizard shows the install command only (key embedded, one-shot); avoid "create license" / license-management copy. Production shape: `curl -fsSL turbopanel.sh/run.sh | TURBOPANEL_LICENSE=… sh` (dev rebuild via `resolveDisplayedInstallCommand` / `buildInstallCommandWithBaseUrl` validates the edited origin, emits values unquoted, and adds `TURBOPANEL_HOST` / `TURBOPANEL_INSECURE_TLS=1` for self-signed HTTPS).
+- Wizard shows the install command only (key embedded, one-shot); avoid "create license" / license-management copy. Production shape: `curl -fsSL turbopanel.sh | TURBOPANEL_LICENSE=… sh` (dev rebuild via `resolveDisplayedInstallCommand` / `buildInstallCommandWithBaseUrl` validates the edited origin, emits values unquoted, and adds `TURBOPANEL_HOST` / `TURBOPANEL_INSECURE_TLS=1` for self-signed HTTPS).
 
 #### Server metrics (`/<orgId>/servers/[serverId]/metrics`)
 

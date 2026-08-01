@@ -59,6 +59,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web --clear",
     "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "os-logos": "node scripts/render-os-logos.mjs",
     "export": "expo export --platform web",
