@@ -204,7 +204,7 @@ function collectSiteCidrs(networks: readonly NetworkRecord[]): string[] {
 }
 
 function collectPeersFromQueries(
-  peerQueries: ReadonlyArray<{ data?: { peers: PeerRecord[] } }>,
+  peerQueries: readonly { data?: { peers: PeerRecord[] } }[],
 ): PeerRecord[] {
   const allPeers: PeerRecord[] = []
   for (const peerQuery of peerQueries) {

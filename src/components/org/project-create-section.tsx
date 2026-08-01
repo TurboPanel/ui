@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Platform,
   Pressable,
@@ -1275,7 +1275,6 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [publishedPort, setPublishedPort] = useState('')
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
   const [rootPassword, setRootPassword] = useState<string | null>(null)
-  const managedSubmitGuard = useRef(false)
   const isManagedPath = selectedType === 'managed' && managedStep !== null
   const managedCatalogMeta = selectedCode
     ? managedCatalogEntryForCode(selectedCode)
@@ -1490,7 +1489,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const handleManagedSubmit = async () => {
-    if (managedSubmitGuard.current) {
+    if (submitting) {
       return
     }
     const workspaceIdForCreate = resolvedWorkspaceId ?? pickedWorkspaceId
@@ -1503,7 +1502,6 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       return
     }
 
-    managedSubmitGuard.current = true
     setSubmitting(true)
     setApiError(null)
     try {
@@ -1515,7 +1513,6 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       }
       setApiError(managedErrorMessage(err, 'Failed to create managed service'))
     } finally {
-      managedSubmitGuard.current = false
       setSubmitting(false)
     }
   }

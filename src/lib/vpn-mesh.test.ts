@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { IpRecord, PeerRecord } from './instance-api.ts'
+import type { IpRecord, PeerRecord } from './instance-api'
 import {
   overlayAddressForPeer,
   peerRoleLabel,
   resolvePrimaryGatewayByDatacenter,
   type MeshServerRef,
-} from './vpn-mesh.ts'
+} from './vpn-mesh'
 
 function peer(
   partial: Pick<PeerRecord, 'id' | 'serverId' | 'role' | 'createdAt'> &

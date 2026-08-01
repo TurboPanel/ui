@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, spacing } from '@/lib/theme'
 
 export function WizardStepIndicator({
   labels,

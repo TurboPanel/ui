@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View, type TextStyle } from 'react-native'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
@@ -344,7 +344,7 @@ function projectTitleField({
     <TextInput
       style={[
         styles.titleInput,
-        Platform.OS === 'web' ? styles.titleInputWeb : null,
+        Platform.OS === 'web' ? projectTitleInputWebStyle : null,
       ]}
       value={editDisplayName}
       onChangeText={onChangeDisplayName}
@@ -377,7 +377,7 @@ function projectDescriptionField({
       <TextInput
         style={[
           styles.descriptionInput,
-          Platform.OS === 'web' ? styles.descriptionInputWeb : null,
+          Platform.OS === 'web' ? projectDescriptionInputWebStyle : null,
         ]}
         value={editDescription}
         onChangeText={onChangeDescription}
@@ -885,6 +885,19 @@ export function ProjectDetailSection({
   )
 }
 
+const projectTitleInputWebStyle = {
+  outlineStyle: 'none',
+  borderWidth: 0,
+  backgroundColor: 'transparent',
+} as unknown as TextStyle
+
+const projectDescriptionInputWebStyle = {
+  outlineStyle: 'none',
+  borderWidth: 0,
+  backgroundColor: 'transparent',
+  resize: 'none',
+} as unknown as TextStyle
+
 const styles = StyleSheet.create({
   root: {
     width: '100%',
@@ -910,11 +923,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     minHeight: 36,
   },
-  titleInputWeb: {
-    outlineStyle: 'none',
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  } as const,
   descriptionInput: {
     color: colors.textMuted,
     fontSize: 15,
@@ -924,12 +932,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     textAlignVertical: 'top',
   },
-  descriptionInputWeb: {
-    outlineStyle: 'none',
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    resize: 'none',
-  } as const,
   badgeAccent: {
     borderRadius: 4,
     borderWidth: 1,

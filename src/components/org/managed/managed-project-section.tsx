@@ -95,7 +95,9 @@ function useManagedCommands(
 ) {
   const [commands, setCommands] = useState<Record<string, TrackedCommand>>({})
   const onSuccessRef = useRef(onTerminalSuccess)
-  onSuccessRef.current = onTerminalSuccess
+  useEffect(() => {
+    onSuccessRef.current = onTerminalSuccess
+  }, [onTerminalSuccess])
 
   const registerCommand = (commandId: string, label: string) => {
     setCommands((current) => ({

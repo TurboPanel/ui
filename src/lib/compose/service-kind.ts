@@ -103,11 +103,11 @@ export function patchServiceTurbopanelExtension(
   }
 }
 
-export const TRADITIONAL_WEB_ENGINE_OPTIONS: ReadonlyArray<{
+export const TRADITIONAL_WEB_ENGINE_OPTIONS: readonly {
   value: TraditionalWebEngine
   label: string
   deployable: boolean
-}> = [
+}[] = [
   { value: 'nginx', label: 'nginx (static / reverse proxy)', deployable: true },
   { value: 'apache', label: 'Apache (mod_php)', deployable: true },
   {

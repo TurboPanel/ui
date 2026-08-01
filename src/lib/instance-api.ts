@@ -2221,18 +2221,18 @@ export type DeployPreviewResponse = {
   ok: true
   composeYaml: string
   projectName: string
-  containers: Array<{
+  containers: {
     serviceId: string
     composeServiceName: string
     containerName: string
     ordinal: number
     role: ContainerRole
-  }>
-  volumes: Array<{
+  }[]
+  volumes: {
     storageId: string
     composeKey: string
     volumeName: string
-  }>
+  }[]
   warnings: DeployPreviewWarning[]
 }
 

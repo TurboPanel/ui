@@ -6,5 +6,11 @@ module.exports = defineConfig([
   expoConfig,
   {
     ignores: ["dist/*"],
-  }
+  },
+  {
+    rules: {
+      // Legitimate in this codebase: mount-time fetch, prop→form sync, reset on scope change.
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
 ]);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatFetchFailureDetail,
   isForbiddenError,
-} from './fetch-error-detail.ts'
+} from './fetch-error-detail'
 
 const METRICS_PATH =
   '/api/client/v1/servers/00000000-0000-4000-8000-000000000001/metrics/series'

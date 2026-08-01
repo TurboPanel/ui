@@ -37,7 +37,7 @@ function isAuthorizationError(err: unknown): boolean {
 
 type WizardStep = 'create' | 'install' | 'waiting'
 
-const WIZARD_STEPS: ReadonlyArray<{ id: WizardStep; label: string }> = [
+const WIZARD_STEPS: readonly { id: WizardStep; label: string }[] = [
   { id: 'create', label: 'Name' },
   { id: 'install', label: 'Install' },
   { id: 'waiting', label: 'Connect' },

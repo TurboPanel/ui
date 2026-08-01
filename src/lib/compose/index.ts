@@ -1,3 +1,13 @@
+import {
+  isBlankComposeData,
+  isComposeEditorView,
+  normalizeCompose,
+  type ComposeComment,
+  type ComposeDocument,
+  type ComposeEditorView,
+  type ComposePresentation,
+} from './types'
+
 export type {
   ComposeComment,
   ComposeDocument,
@@ -75,16 +85,6 @@ export {
   serviceHasVisualField,
   visualFieldById,
 } from './visual-fields'
-
-import {
-  isBlankComposeData,
-  isComposeEditorView,
-  normalizeCompose,
-  type ComposeComment,
-  type ComposeDocument,
-  type ComposeEditorView,
-  type ComposePresentation,
-} from './types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

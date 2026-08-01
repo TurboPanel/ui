@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextStyle,
 } from 'react-native'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -196,7 +197,9 @@ function YamlHighlightedField({
   onTabKey?: (shiftKey: boolean, selection: TextSelection) => void
 }>) {
   const onTabKeyRef = useRef(onTabKey)
-  onTabKeyRef.current = onTabKey
+  useEffect(() => {
+    onTabKeyRef.current = onTabKey
+  }, [onTabKey])
   const height = yamlEditorHeight(value, minLines)
   const lineCount = value.split('\n').length
   const lineLevels = useMemo(
@@ -213,8 +216,8 @@ function YamlHighlightedField({
     let node: HTMLTextAreaElement | HTMLInputElement | null = null
     let raf = 0
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') {
+    const handleKeyDown = (event: Event) => {
+      if (!(event instanceof KeyboardEvent) || event.key !== 'Tab') {
         return
       }
       event.preventDefault()
@@ -267,7 +270,7 @@ function YamlHighlightedField({
         style={[
           styles.yamlInputOverlay,
           { minHeight: height },
-          Platform.OS === 'web' ? ({ caretColor: colors.text } as { caretColor: string }) : null,
+          Platform.OS === 'web' ? ({ caretColor: colors.text } as TextStyle) : null,
         ]}
         textAlignVertical="top"
       />

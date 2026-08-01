@@ -204,7 +204,6 @@ function EmailField({ email, onEmailChange }: Readonly<EmailFieldProps>) {
           autoCorrect={false as unknown as undefined}
           borderColor="$borderColor"
           backgroundColor="$background"
-          editable
         />
       )}
     </YStack>

@@ -45,10 +45,10 @@ function actionButtonLabel(
   return idleLabel
 }
 
-const LATENCY_ROWS: Array<{
+const LATENCY_ROWS: {
   key: keyof PingLatencyBreakdown
   label: string
-}> = [
+}[] = [
   { key: 'apiToConsumerMs', label: 'API → consumer' },
   { key: 'consumerToCellMs', label: 'Outbox wait' },
   { key: 'cellToDaemonMs', label: 'Cell → daemon' },

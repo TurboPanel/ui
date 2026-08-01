@@ -750,7 +750,7 @@ function HostingPanelRow({
           <Text style={styles.fieldLabel}>Ports</Text>
           <Text style={styles.tlsHint}>
             Comma-separated published[:target] pairs. Target defaults to
-            published when omitted (e.g. "5432, 8443:8080").
+            published when omitted (e.g. &quot;5432, 8443:8080&quot;).
           </Text>
           <TextInput
             value={editor.ports}
@@ -768,7 +768,7 @@ function HostingPanelRow({
           <Text style={styles.tlsLabel}>TLS certificate</Text>
           <Text style={styles.tlsHint}>
             Default is a basic self-signed cert. Pick a library certificate to use
-            an upload, org self-signed, or Let's Encrypt cert — nothing is requested
+            an upload, org self-signed, or Let&apos;s Encrypt cert — nothing is requested
             automatically.
           </Text>
           <View style={styles.tlsOptions}>

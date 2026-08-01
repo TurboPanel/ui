@@ -78,7 +78,7 @@ function OptionSelect({
   onChange,
 }: Readonly<{
   value: string
-  options: ReadonlyArray<{ value: string; label: string }>
+  options: readonly { value: string; label: string }[]
   disabled: boolean
   onChange: (value: string) => void
 }>) {

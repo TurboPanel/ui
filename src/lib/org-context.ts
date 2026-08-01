@@ -41,7 +41,7 @@ export function setActiveOrganizationId(orgId: string | null): void {
 }
 
 export function resolvePreferredOrganizationId(
-  organizations: Array<{ id: string }>,
+  organizations: { id: string }[],
 ): string | null {
   if (organizations.length === 0) {
     return null

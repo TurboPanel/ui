@@ -82,7 +82,6 @@ export function formatRelativeLocalDateTime(
   options: FormatRelativeLocalDateTimeOptions = {},
 ): string {
   const {
-    fallback = 'Unknown',
     neverLabel = 'Never',
     absolute,
   } = options

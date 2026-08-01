@@ -190,22 +190,6 @@ function isColocatedServer(
   )
 }
 
-function isTerminalUpdateState(status: ServerUpdateStatus): boolean {
-  if (status.updateBlocked) return true
-  if (status.status === 'error') return true
-  if (status.status === 'updating') return false
-  if (status.targetStatus === 'unknown') return true
-  if (!status.updateAvailable) return true
-  if (
-    status.current?.commit &&
-    status.target?.commit &&
-    status.current.commit === status.target.commit
-  ) {
-    return true
-  }
-  return status.status === 'idle'
-}
-
 function resolveUpdateBadgeVariant(input: {
   status: ServerUpdateStatus['status'] | undefined
   targetStatus: ServerUpdateStatus['targetStatus'] | undefined
@@ -614,7 +598,7 @@ function createPingHandler(input: CommandHandlerDeps): () => void {
     input.patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
     pingDaemon(input.serverId)
       .then((result) => {
-        const entry: DetailPollCommand = { commandId: result.commandId, kind: 'ping' }
+        const entry: ActiveCommand = { commandId: result.commandId, kind: 'ping' }
         input.registerPollCommand(entry)
         input.patchCommand({ activeCommand: entry })
       })
@@ -637,7 +621,7 @@ function createSetHostnameHandler(input: CommandHandlerDeps): (hostname: string)
     input.patchCommand({ hostnameError: null, hostnameRunning: true, commandRecord: null })
     setServerHostname(input.serverId, host)
       .then((result) => {
-        const entry: DetailPollCommand = { commandId: result.commandId, kind: 'hostname' }
+        const entry: ActiveCommand = { commandId: result.commandId, kind: 'hostname' }
         input.registerPollCommand(entry)
         input.patchCommand({ activeCommand: entry })
       })
@@ -656,7 +640,7 @@ function createRebootHandler(input: CommandHandlerDeps): () => void {
     input.patchCommand({ rebootError: null, rebootRunning: true, commandRecord: null })
     rebootServer(input.serverId)
       .then((result) => {
-        const entry: DetailPollCommand = { commandId: result.commandId, kind: 'reboot' }
+        const entry: ActiveCommand = { commandId: result.commandId, kind: 'reboot' }
         input.registerPollCommand(entry)
         input.patchCommand({ activeCommand: entry })
       })

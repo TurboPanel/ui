@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveServerAddEligibility } from './server-add-eligibility.ts'
+import { resolveServerAddEligibility } from './server-add-eligibility'
 
 describe('resolveServerAddEligibility', () => {
   it('allows add when capacity is omitted or unlimited', () => {

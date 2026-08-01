@@ -97,7 +97,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     return data
   }, [])
 
-  const resolveDashboardHref = useCallback(async () => {
+  const resolveDashboardHref = useCallback(async (): Promise<
+    '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
+  > => {
     if (needsInstall) {
       return '/install'
     }
@@ -110,7 +112,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const preferred = resolvePreferredOrganizationId(organizations)
       if (preferred) {
         setActiveOrganizationId(preferred)
-        return `/${preferred}/servers`
+        return `/${preferred}/servers` as `/${string}/servers`
       }
     } catch {
       // Fall back to welcome when org discovery fails.

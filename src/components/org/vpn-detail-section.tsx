@@ -413,7 +413,7 @@ function MeshPanel({
   return (
     <SectionPanel title="Mesh" hint="Shared overlay CIDR">
       <Text style={orgPanelStyles.muted}>
-        Every peer's WireGuard interface takes an address from this prefix.
+        Every peer&apos;s WireGuard interface takes an address from this prefix.
         Widening adds capacity; shrinking is rejected when any peer tunnel
         address would fall outside the new prefix.
       </Text>

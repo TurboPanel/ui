@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     zIndex: 10,
   },

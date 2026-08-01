@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Animated,
   Platform,
@@ -22,14 +22,14 @@ type AuthFloatingFieldProps = Readonly<{
   onChangeText: (text: string) => void
   accentColor: string
   editable?: boolean
-  autoComplete?: TextInputProps['autoComplete']
-  keyboardType?: TextInputProps['keyboardType']
+  autoComplete?: NonNullable<TextInputProps['autoComplete']>
+  keyboardType?: NonNullable<TextInputProps['keyboardType']>
   secureTextEntry?: boolean
   showPasswordToggle?: boolean
   passwordVisible?: boolean
   onTogglePasswordVisible?: () => void
-  returnKeyType?: TextInputProps['returnKeyType']
-  onSubmitEditing?: TextInputProps['onSubmitEditing']
+  returnKeyType?: NonNullable<TextInputProps['returnKeyType']>
+  onSubmitEditing?: NonNullable<TextInputProps['onSubmitEditing']>
 }>
 
 export function AuthFloatingField({
@@ -49,7 +49,9 @@ export function AuthFloatingField({
 }: AuthFloatingFieldProps) {
   const [focused, setFocused] = useState(false)
   const raised = focused || value.length > 0
-  const raiseAnim = useRef(new Animated.Value(raised ? 1 : 0)).current
+  const [raiseAnim] = useState(
+    () => new Animated.Value(raised ? 1 : 0),
+  )
 
   useEffect(() => {
     Animated.timing(raiseAnim, {

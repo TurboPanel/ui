@@ -43,10 +43,10 @@ import { HA_METRICS_LOCAL_NOTE } from '@/lib/platform-copy'
 import { useForbiddenRecovery } from '@/lib/query-client'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 
-const RANGE_OPTIONS: ReadonlyArray<{
+const RANGE_OPTIONS: readonly {
   id: MetricsRangeId
   label: string
-}> = [
+}[] = [
   { id: '1h', label: '1h' },
   { id: '6h', label: '6h' },
   { id: '24h', label: '24h' },
