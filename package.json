@@ -2,7 +2,7 @@
   "name": "@turbopanel/ui",
   "main": "expo-router/entry",
   "version": "0.1.0",
-  "license": "AGPL-3.0-or-later",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@expo/ui": "~56.0.22",
     "@tamagui/babel-plugin": "^2.0.0-rc.26",

@@ -2,6 +2,14 @@
 
 Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
 
+## Project metadata / public naming
+
+| Public name | GitHub | Internal term |
+| --- | --- | --- |
+| TurboPanel UI | [turbopanel/ui](https://github.com/turbopanel/ui) | `ui` |
+
+Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) (TurboPanel Control Plane). **License:** AGPL-3.0-only. **Maturity:** **Public beta**. README is product-facing; AGENTS.md is maintainer-facing. This repo is not deployed standalone — Caddy serves the control plane export.
+
 ## Documentation discipline
 
 **Keep this file current.** When you learn something durable about the UI — instance API shapes, developer/diagnostic panels, fetch patterns, Expo constraints — add or update a note here alongside code changes.

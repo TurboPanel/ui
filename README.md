@@ -1,29 +1,63 @@
 # TurboPanel UI
 
-Signed-in product console for TurboPanel — Expo / Tamagui (web-first; native later).
+**Web-first signed-in product console** for TurboPanel — fleet management, deploy workflows, managed services, networking, and admin surfaces.
 
-GitHub: [turbopanel/ui](https://github.com/turbopanel/ui). Local checkout: `~/ui` (or `${TURBOPANEL_UI_REPO}`).
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](./LICENSE)
+[![Docs](https://img.shields.io/badge/docs-turbopanel.io-3366cc)](https://turbopanel.io/docs)
+[![Status: Public beta](https://img.shields.io/badge/status-public%20beta-3dd68c)](https://turbopanel.io/roadmap)
 
-## Development
+GitHub: [turbopanel/ui](https://github.com/turbopanel/ui). Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel).
 
-Do **not** bootstrap this repo on its own. The co-located stack is owned by **[turbopanel/dev](https://github.com/turbopanel/dev)**.
+![TurboPanel console — servers overview](https://turbopanel.io/screenshots/servers-overview.png)
+
+## What this repo is
+
+This repository is **one component** of TurboPanel. It is **not deployed standalone**.
+
+- **Production:** the daemon `ui-build` Ansible role runs `expo export --platform web` and publishes static assets to `/opt/turbopanel/share/ui`. Caddy on the control plane serves them.
+- **Development:** `turbopanel-ui.service` runs the Expo web dev server (`:8081`), proxied by Caddy at `https://localhost:8443`.
+
+The UI talks to the control plane API (`/api/client/v1/*`) — never directly to daemons.
+
+Built with **Expo** (web-first today) and **Tamagui**. Native mobile is on the [roadmap](https://turbopanel.io/roadmap) — not scheduled here.
+
+## Design system
+
+Console visual rules live in:
+
+- [`design-system/turbopanel/MASTER.md`](./design-system/turbopanel/MASTER.md) — global tokens and patterns
+- [`design-system/turbopanel/pages/`](./design-system/turbopanel/pages/) — per-surface overrides
+- [`src/lib/theme.ts`](./src/lib/theme.ts) — runtime Tamagui tokens
+
+Read [AGENTS.md](./AGENTS.md) before visual work — the **ui-ux-pro-max** skill is mandatory for layout and chrome changes.
+
+## Documentation
+
+- Product docs: [turbopanel.io/docs](https://turbopanel.io/docs?utm_source=github-ui-readme)
+- API contracts mirrored in [`src/lib/instance-api.ts`](./src/lib/instance-api.ts)
+
+## Contributing
+
+Use the [TurboPanel Development Environment](https://github.com/turbopanel/dev) to run the full co-located stack:
 
 ```sh
 curl -fsSL dev.turbopanel.sh | sh
 ```
 
-That installs/updates `~/dev`, launches the developer console, and (after **Converge**) brings up the full environment — including this UI as `turbopanel-ui.service` (Expo web on port **8081**, proxied via Caddy at `https://localhost:8443`).
+Then edit this repo under `~/ui`. See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
 
-Typical layout after converge:
+Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trunk/CONTRIBUTING.md)
 
-| Path | Repo |
+## Community & support
+
+| Need | Where |
 | --- | --- |
-| `~/dev` | [turbopanel/dev](https://github.com/turbopanel/dev) — console + Ansible overlay |
-| `~/daemon` | daemon |
-| `~/instance` | control plane |
-| `~/ui` | this repo |
-| `~/website` | marketing + docs |
+| Usage questions | [Discussions → Help & Q&A](https://github.com/turbopanel/turbopanel/discussions/categories/help-q-a) |
+| UI bugs | [turbopanel/ui issues](https://github.com/turbopanel/ui/issues) |
+| Security | [turbopanel.io/security](https://turbopanel.io/security) |
 
-Edit sources in place under `$HOME`. Re-converge from the console when the stack needs refresh. Details: [dev README](https://github.com/turbopanel/dev#readme) and [Local development](https://turbopanel.io/docs/getting-started/development).
+## License
 
-Agent conventions and design-system workflow: [AGENTS.md](./AGENTS.md).
+TurboPanel UI is licensed under the [GNU Affero General Public License v3.0 only (AGPL-3.0-only)](./LICENSE).
+
+Copyright (C) 2025 TurboPanel contributors
