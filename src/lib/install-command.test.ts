@@ -7,7 +7,7 @@ import {
 const revealed = {
   licenseId: 'license-id',
   licenseToken: 'token',
-  installCommand: 'curl -fsSL trbp.nl/run.sh | TURBOPANEL_LICENSE=abc sh',
+  installCommand: 'curl -fsSL turbopanel.sh/run.sh | TURBOPANEL_LICENSE=abc sh',
 }
 
 describe('parseInstallBaseUrl', () => {
