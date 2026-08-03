@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   ActivityIndicator,
   Pressable,
@@ -30,8 +29,6 @@ import {
   type MetricsRangeId,
 } from '@/lib/format-metrics'
 import {
-  fetchOrgServers,
-  fetchServerMetricsSeries,
   MetricsBackendUnavailableError,
   type MetricsBackendKind,
   type HostMetricKey,
@@ -40,7 +37,7 @@ import {
   type MetricsSeriesResponse,
 } from '@/lib/instance-api'
 import { HA_METRICS_LOCAL_NOTE } from '@/lib/platform-copy'
-import { useForbiddenRecovery } from '@/lib/query-client'
+import { useOrgServers, useServerMetricsSeries } from '@/lib/queries/servers'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 
 const RANGE_OPTIONS: readonly {
@@ -905,31 +902,22 @@ export function ServerMetricsSection({
   const [rangeId, setRangeId] = useState<MetricsRangeId>('1h')
   const timing = rangeQueryTiming(rangeId)
   const twoColumn = width >= layout.desktopBreakpoint
+  const bounds = useMemo(() => computeRangeBounds(rangeId), [rangeId])
 
-  const serversQuery = useQuery({
-    queryKey: ['org-servers', orgId],
-    queryFn: fetchOrgServers,
-    staleTime: 60_000,
-  })
+  const serversQuery = useOrgServers(orgId)
 
-  const metricsQuery = useQuery({
-    queryKey: ['metrics-series', serverId, rangeId],
-    queryFn: () => {
-      const bounds = computeRangeBounds(rangeId)
-      return fetchServerMetricsSeries(
-        serverId,
-        {
-          fromIso: bounds.fromIso,
-          toIso: bounds.toIso,
-        },
-        orgId,
-      )
+  const metricsQuery = useServerMetricsSeries(
+    orgId,
+    serverId,
+    {
+      fromIso: bounds.fromIso,
+      toIso: bounds.toIso,
     },
-    refetchInterval: timing.refetchInterval,
-    staleTime: timing.staleTime,
-  })
-
-  useForbiddenRecovery(metricsQuery.error ?? serversQuery.error)
+    {
+      refetchInterval: timing.refetchInterval,
+      staleTime: timing.staleTime,
+    },
+  )
 
   const server =
     serversQuery.data?.servers.find((row) => row.id === serverId) ?? null

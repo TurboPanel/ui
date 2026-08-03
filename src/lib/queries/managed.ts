@@ -1,0 +1,425 @@
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+} from '@tanstack/react-query'
+import {
+  applyEnvironmentManaged,
+  createEnvironmentManaged,
+  createManagedBackup,
+  createManagedDatabase,
+  createManagedUser,
+  deleteEnvironmentManaged,
+  deleteManagedBackup,
+  deleteManagedDatabase,
+  deleteManagedUser,
+  fetchEnvironmentManaged,
+  fetchManagedBackups,
+  fetchManagedDatabases,
+  fetchManagedLogs,
+  fetchManagedStatus,
+  fetchManagedUsers,
+  fetchOrganizationManaged,
+  isForbiddenError,
+  restoreManagedBackup,
+  rotateManagedRootPassword,
+  runManagedLifecycle,
+  updateEnvironmentManaged,
+} from '@/lib/instance-api'
+import {
+  useApiMutation,
+  queryKeys,
+  type ApiMutationResult,
+} from '@/lib/query-client'
+
+const MANAGED_STATUS_POLL_MS = 5000
+
+function isManagedStatusInFlight(
+  status: string | null | undefined,
+): boolean {
+  return status === 'provisioning' || status === 'applying'
+}
+
+function invalidateManagedEnvironment(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  environmentId: string,
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).managed.environment(environmentId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).managed.status(environmentId),
+    }),
+  ])
+}
+
+export function useOrganizationManaged(
+  orgId: string,
+  options?: Readonly<{
+    enabled?: boolean
+    refetchInterval?: number | false
+    staleTime?: number
+  }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.orgList,
+    queryFn: () => fetchOrganizationManaged(orgId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+  })
+}
+
+export function useEnvironmentManaged(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.environment(environmentId),
+    queryFn: () => fetchEnvironmentManaged(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+export function useManagedStatus(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.status(environmentId),
+    queryFn: () => fetchManagedStatus(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (!isManagedStatusInFlight(status)) return false
+      return MANAGED_STATUS_POLL_MS
+    },
+  })
+}
+
+export function useManagedUsers(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.users(environmentId),
+    queryFn: () => fetchManagedUsers(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+export function useManagedDatabases(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.databases(environmentId),
+    queryFn: () => fetchManagedDatabases(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+export function useManagedBackups(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.backups(environmentId),
+    queryFn: () => fetchManagedBackups(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+/** Disabled by default — callers opt in and refetch explicitly. */
+export function useManagedLogs(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean; tail?: number }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.logs(environmentId),
+    queryFn: () => fetchManagedLogs(environmentId, options?.tail),
+    enabled:
+      (options?.enabled ?? false) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+type ShowOnceSecretMutation<TData, TVariables> = Omit<
+  UseMutationResult<TData, Error, TVariables>,
+  'data' | 'mutateAsync'
+> & {
+  /** Always cleared after success — secrets live only in the caller's local state. */
+  data: undefined
+  actionError: string | null
+  run: (variables: TVariables) => Promise<ApiMutationResult<TData>>
+  mutateAsync: (variables: TVariables) => Promise<TData>
+}
+
+/**
+ * Show-once secret mutations must not leave plaintext in React Query mutation
+ * state. Returns the full API payload to the caller, then immediately resets.
+ */
+function useShowOnceSecretMutation<TData, TVariables = void>(
+  mutation: UseMutationResult<TData, Error, TVariables>,
+  fallbackError: string,
+): ShowOnceSecretMutation<TData, TVariables> {
+  let actionError: string | null = null
+  if (mutation.error && !isForbiddenError(mutation.error)) {
+    actionError =
+      mutation.error instanceof Error
+        ? mutation.error.message
+        : fallbackError
+  }
+
+  const run = async (
+    variables: TVariables,
+  ): Promise<ApiMutationResult<TData>> => {
+    try {
+      const value = await mutation.mutateAsync(variables)
+      mutation.reset()
+      return { ok: true, value }
+    } catch (err) {
+      if (isForbiddenError(err)) {
+        return { ok: false, error: null }
+      }
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : fallbackError,
+      }
+    }
+  }
+
+  const mutateAsync = async (variables: TVariables): Promise<TData> => {
+    const value = await mutation.mutateAsync(variables)
+    // Clear mutation cache after success so plaintext secrets never linger in
+    // React Query Devtools / mutation.state. Errors stay for actionError.
+    mutation.reset()
+    return value
+  }
+
+  return {
+    ...mutation,
+    data: undefined,
+    actionError,
+    run,
+    mutateAsync,
+  }
+}
+
+export function useCreateEnvironmentManaged(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (body?: Parameters<typeof createEnvironmentManaged>[1]) =>
+      createEnvironmentManaged(environmentId, body),
+    onSuccess: () =>
+      Promise.all([
+        invalidateManagedEnvironment(queryClient, orgId, environmentId),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.orgList,
+        }),
+      ]),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to create managed service')
+}
+
+export function useUpdateEnvironmentManaged(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: Parameters<typeof updateEnvironmentManaged>[1]) =>
+      updateEnvironmentManaged(environmentId, body),
+    onSuccess: () =>
+      invalidateManagedEnvironment(queryClient, orgId, environmentId),
+  })
+}
+
+export function useApplyEnvironmentManaged(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => applyEnvironmentManaged(environmentId),
+    onSuccess: () =>
+      Promise.all([
+        invalidateManagedEnvironment(queryClient, orgId, environmentId),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
+export function useRunManagedLifecycle(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (action: Parameters<typeof runManagedLifecycle>[1]) =>
+      runManagedLifecycle(environmentId, action),
+    onSuccess: () =>
+      Promise.all([
+        invalidateManagedEnvironment(queryClient, orgId, environmentId),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
+export function useDeleteEnvironmentManaged(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => deleteEnvironmentManaged(environmentId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).managed.all,
+      }),
+  })
+}
+
+export function useRotateManagedRootPassword(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: () => rotateManagedRootPassword(environmentId),
+    onSuccess: () =>
+      Promise.all([
+        invalidateManagedEnvironment(queryClient, orgId, environmentId),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to rotate root password')
+}
+
+export function useCreateManagedUser(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (body: Parameters<typeof createManagedUser>[1]) =>
+      createManagedUser(environmentId, body),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.users(environmentId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to create managed user')
+}
+
+export function useDeleteManagedUser(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (principalId: string) =>
+      deleteManagedUser(environmentId, principalId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.users(environmentId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
+export function useCreateManagedDatabase(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: Parameters<typeof createManagedDatabase>[1]) =>
+      createManagedDatabase(environmentId, body),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.databases(environmentId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
+export function useDeleteManagedDatabase(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (name: string) => deleteManagedDatabase(environmentId, name),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.databases(environmentId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
+export function useCreateManagedBackup(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body?: Parameters<typeof createManagedBackup>[1]) =>
+      createManagedBackup(environmentId, body),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.backups(environmentId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
+export function useDeleteManagedBackup(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (backupId: string) =>
+      deleteManagedBackup(environmentId, backupId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).managed.backups(environmentId),
+      }),
+  })
+}
+
+export function useRestoreManagedBackup(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (backupId: string) =>
+      restoreManagedBackup(environmentId, backupId),
+    onSuccess: () =>
+      Promise.all([
+        invalidateManagedEnvironment(queryClient, orgId, environmentId),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}

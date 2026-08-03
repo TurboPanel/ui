@@ -28,22 +28,28 @@ export function projectTypeLabel(project: ProjectRecord): string {
   return 'Setup'
 }
 
+/**
+ * Compose project routes. Overview is Project / environment compose (chips),
+ * not a separate section tab. Environments tab removed — env work lives under
+ * the selected environment chip plus Networking / Storage.
+ */
 export const COMPOSE_PROJECT_TAB_IDS = [
   'overview',
-  'environments',
   'networking',
   'storage',
-  'settings',
 ] as const
 
 export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
 
+/** Section chips after Project / environment (Overview is the compose surface). */
+export const COMPOSE_SECTION_TAB_IDS = ['networking', 'storage'] as const
+
+export type ComposeSectionTabId = (typeof COMPOSE_SECTION_TAB_IDS)[number]
+
 export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
   overview: 'Overview',
-  environments: 'Environments',
   networking: 'Networking',
   storage: 'Storage',
-  settings: 'Settings',
 }
 
 export const MANAGED_PROJECT_TAB_IDS = [
@@ -51,7 +57,6 @@ export const MANAGED_PROJECT_TAB_IDS = [
   'environments',
   'data',
   'backups',
-  'settings',
 ] as const
 
 export type ManagedProjectTabId = (typeof MANAGED_PROJECT_TAB_IDS)[number]
@@ -61,7 +66,6 @@ export const MANAGED_PROJECT_TAB_LABELS: Record<ManagedProjectTabId, string> = {
   environments: 'Environments',
   data: 'Data',
   backups: 'Backups',
-  settings: 'Settings',
 }
 
 export type ProjectTabId = ComposeProjectTabId | ManagedProjectTabId
@@ -140,6 +144,8 @@ export function projectSettingsSubHref(
 /**
  * Environment id from `/projects/:projectId/environments/:environmentId`.
  * Returns null for the Environments tab index (`…/environments`) and all other tabs.
+ * Compose no longer exposes an Environments section tab (bare `/environments` redirects
+ * to Overview); managed still uses the index route.
  */
 export function parseProjectEnvironmentId(
   pathname: string,

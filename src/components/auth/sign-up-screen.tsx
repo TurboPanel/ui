@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ScrollView, Platform, TextInput, Linking } from 'react-native'
 import { YStack, XStack, Input, Button, Text } from 'tamagui'
 import { Link, useRouter } from 'expo-router'
-import { useAuth } from '@/lib/auth-context'
+import { useSignUp } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 
 type PasswordValidation = {
@@ -398,7 +398,7 @@ function SignupForm({
 
 export function SignUpScreenContent() {
   const router = useRouter()
-  const { signUp } = useAuth()
+  const signUpMutation = useSignUp()
   const {
     data: instanceInfo,
     isLoading: instanceInfoLoading,
@@ -409,8 +409,8 @@ export function SignUpScreenContent() {
   const [passwordTouched, setPasswordTouched] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const loading = signUpMutation.isPending
   const [pwnedWarning, setPwnedWarning] = useState('')
   const [pwnedChecking, setPwnedChecking] = useState(false)
   const [pwnedCheckedPassword, setPwnedCheckedPassword] = useState<string | null>(null)
@@ -481,16 +481,21 @@ export function SignUpScreenContent() {
       }
     }
     setError('')
-    setLoading(true)
     try {
-      await signUp(email, password)
+      await signUpMutation.mutateAsync({ email, password })
       setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed')
-    } finally {
-      setLoading(false)
     }
-  }, [email, password, validation.isValid, pwnedChecking, pwnedCheckedPassword, isPwned, signUp])
+  }, [
+    email,
+    password,
+    validation.isValid,
+    pwnedChecking,
+    pwnedCheckedPassword,
+    isPwned,
+    signUpMutation,
+  ])
 
   useEffect(() => {
     if (instanceInfoLoading) return

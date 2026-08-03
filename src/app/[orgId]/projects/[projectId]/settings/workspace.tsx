@@ -1,5 +1,11 @@
-import { SettingsWorkspacePanel } from '@/components/org/project/compose-tabs'
+import { useProjectContext } from '@/components/org/project/project-context'
+import { projectTabHref } from '@/lib/project-navigation'
+import { Redirect, type Href } from 'expo-router'
 
-export default function SettingsWorkspaceScreen() {
-  return <SettingsWorkspacePanel />
+/** Settings sub-pages removed — redirect deep links to Overview. */
+export default function SettingsSubScreenRedirect() {
+  const { orgId, projectId } = useProjectContext()
+  return (
+    <Redirect href={projectTabHref(orgId, projectId, 'overview') as Href} />
+  )
 }

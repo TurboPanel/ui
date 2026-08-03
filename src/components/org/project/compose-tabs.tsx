@@ -1,29 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Link, useRouter, type Href } from 'expo-router'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
+import { ProjectSectionTabs } from '@/components/org/project/project-section-tabs'
+import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
 import { EffectiveComposePanel } from '@/components/org/project/effective-compose-panel'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import {
-  persistEnvironmentCompose,
-  persistProjectCompose,
+  usePersistEnvironmentCompose,
+  usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { StorageSection } from '@/components/org/storage-section'
 import {
-  fetchContainers,
-  fetchVisibleServices,
-  isForbiddenError,
-  updateProject,
   type ComposeDocument,
   type ContainerRecord,
+  type EnvironmentRecord,
+  type ProjectRecord,
   type ServiceRecord,
 } from '@/lib/instance-api'
+import { useUpdateProject } from '@/lib/queries/projects'
+import { useContainersByServices, useServices } from '@/lib/queries'
 import {
   isActiveContainerStatus,
   serviceStatusTone,
@@ -33,147 +37,238 @@ import {
   projectServiceHref,
   projectSettingsSubHref,
 } from '@/lib/project-navigation'
-import { useAuth } from '@/lib/auth-context'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { buildProjectOptionsPatch, mergeProjectOptionsLocal } from '@/lib/project-options'
+import {
+  buildProjectOptionsPatch,
+  resolveEffectiveServerId,
+} from '@/lib/project-options'
+
+function ServicesStatusList({
+  orgId,
+  projectId,
+  services,
+  containersByService,
+}: Readonly<{
+  orgId: string
+  projectId: string
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+}>) {
+  if (services.length === 0) {
+    return <Text style={orgPanelStyles.muted}>No services yet.</Text>
+  }
+  return (
+    <View style={styles.list}>
+      {services.map((service) => {
+        const label =
+          service.displayName?.trim() ||
+          service.composeServiceName ||
+          'Service'
+        const tone = serviceStatusTone(containersByService[service.id] ?? [])
+        return (
+          <Link
+            key={service.id}
+            href={projectServiceHref(orgId, projectId, service.id) as Href}
+            asChild
+          >
+            <Pressable
+              style={StyleSheet.flatten([
+                styles.row,
+                styles.statusRow,
+                webPointer,
+              ])}
+              accessibilityRole="link"
+              accessibilityLabel={`${label}, ${tone.label}`}
+            >
+              <View
+                style={[styles.statusDot, { backgroundColor: tone.color }]}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              />
+              <View style={styles.statusTextCol}>
+                <Text style={styles.rowTitle}>{label}</Text>
+                <Text style={styles.rowMeta}>{tone.label}</Text>
+              </View>
+            </Pressable>
+          </Link>
+        )
+      })}
+    </View>
+  )
+}
+
+function ServicesPanelBody({
+  baseSelected,
+  project,
+  projectId,
+  orgId,
+  selectedEnvironment,
+  services,
+  containersByService,
+  loading,
+  saving,
+  isStarted,
+  onSaveProjectCompose,
+  onSaveEnvironmentCompose,
+  toolbarLeading,
+  toolbarTrailing,
+}: Readonly<{
+  baseSelected: boolean
+  project: ProjectRecord
+  projectId: string
+  orgId: string
+  selectedEnvironment: EnvironmentRecord | null
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+  loading: boolean
+  saving: boolean
+  isStarted: boolean
+  onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
+  onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
+  toolbarLeading?: ReactNode
+  toolbarTrailing?: ReactNode
+}>): ReactNode {
+  if (baseSelected) {
+    return (
+      <ComposeBasePanel
+        document={project.options?.compose}
+        onSave={onSaveProjectCompose}
+        saving={saving}
+        defaultEditorView="editor"
+        hideHeader
+        toolbarLeading={toolbarLeading}
+        toolbarTrailing={toolbarTrailing}
+      />
+    )
+  }
+
+  if (!selectedEnvironment) {
+    return (
+      <ComposeEditorChrome leading={toolbarLeading} trailing={toolbarTrailing}>
+        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+      </ComposeEditorChrome>
+    )
+  }
+
+  if (loading) {
+    return (
+      <ComposeEditorChrome leading={toolbarLeading} trailing={toolbarTrailing}>
+        <Text style={orgPanelStyles.muted}>Loading…</Text>
+      </ComposeEditorChrome>
+    )
+  }
+
+  if (isStarted) {
+    return (
+      <ComposeEditorChrome leading={toolbarLeading} trailing={toolbarTrailing}>
+        <ServicesStatusList
+          orgId={orgId}
+          projectId={projectId}
+          services={services}
+          containersByService={containersByService}
+        />
+      </ComposeEditorChrome>
+    )
+  }
+
+  return (
+    <ComposeBasePanel
+      document={selectedEnvironment.options?.compose}
+      onSave={onSaveEnvironmentCompose}
+      saving={saving}
+      defaultEditorView="editor"
+      hideHeader
+      toolbarLeading={toolbarLeading}
+      toolbarTrailing={toolbarTrailing}
+    />
+  )
+}
 
 export function ComposeServicesTab() {
   const {
     orgId,
     projectId,
     project,
-    setProject,
     selectedEnvironment,
     selectedEnvironmentId,
     baseSelected,
-    refreshEnvironments,
+    invalidateEnvironments,
     setError,
     canManage,
   } = useProjectContext()
-  const { handleUnauthorized } = useAuth()
-  const [services, setServices] = useState<ServiceRecord[]>([])
-  const [containersByService, setContainersByService] = useState<
-    Record<string, ContainerRecord[]>
-  >({})
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [overlayDraft, setOverlayDraft] = useState<ComposeDocument | null>(null)
-  const [servicesReloadToken, setServicesReloadToken] = useState(0)
+  const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
+  const persistEnvironmentCompose = usePersistEnvironmentCompose(
+    orgId,
+    selectedEnvironmentId ?? '',
+  )
+  const servicesEnabled = Boolean(selectedEnvironmentId) && !baseSelected
+  const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
+    enabled: servicesEnabled,
+  })
+  const services = servicesQuery.data?.services ?? []
+  const serviceIds = useMemo(
+    () => services.map((service) => service.id),
+    [services],
+  )
+  const containersQuery = useContainersByServices(orgId, serviceIds, {
+    enabled: servicesEnabled && serviceIds.length > 0,
+  })
+  const containersByService = containersQuery.containersByService
+  const loading =
+    servicesEnabled &&
+    (servicesQuery.isLoading ||
+      (serviceIds.length > 0 && containersQuery.isLoading))
+  const composeSaving =
+    persistProjectCompose.isPending || persistEnvironmentCompose.isPending
 
-  useEffect(() => {
-    setOverlayDraft(null)
-  }, [selectedEnvironmentId, baseSelected])
+  const handleSaveProjectCompose = useCallback(
+    async (compose: ComposeDocument) => {
+      setError(null)
+      const result = await persistProjectCompose.run(compose)
+      if (!result.ok && persistProjectCompose.actionError) {
+        setError(persistProjectCompose.actionError)
+      }
+    },
+    [persistProjectCompose, setError],
+  )
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      if (!selectedEnvironmentId || baseSelected) {
-        setServices([])
-        setContainersByService({})
-        setLoading(false)
+  const handleSaveEnvironmentCompose = useCallback(
+    async (compose: ComposeDocument) => {
+      if (!selectedEnvironmentId) return
+      setError(null)
+      const result = await persistEnvironmentCompose.run(compose)
+      if (!result.ok && persistEnvironmentCompose.actionError) {
+        setError(persistEnvironmentCompose.actionError)
         return
       }
-      setLoading(true)
-      try {
-        const result = await fetchVisibleServices(selectedEnvironmentId)
-        if (cancelled) return
-        setServices(result.services)
-        const entries = await Promise.all(
-          result.services.map(async (service) => {
-            const { containers } = await fetchContainers({ serviceId: service.id })
-            return [service.id, containers] as const
-          }),
-        )
-        if (!cancelled) {
-          setContainersByService(Object.fromEntries(entries))
-        }
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to load services')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+      await invalidateEnvironments()
+      await Promise.all([
+        servicesQuery.refetch(),
+        containersQuery.refetchAll(),
+      ])
+    },
+    [
+      selectedEnvironmentId,
+      persistEnvironmentCompose,
+      setError,
+      invalidateEnvironments,
+      servicesQuery,
+      containersQuery,
+    ],
+  )
+
+  useEffect(() => {
+    if (servicesQuery.error instanceof Error) {
+      setError(servicesQuery.error.message)
     }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [
-    selectedEnvironmentId,
-    baseSelected,
-    servicesReloadToken,
-    handleUnauthorized,
-    setError,
-  ])
+  }, [servicesQuery.error, setError])
 
   if (!project) return null
 
-  if (baseSelected) {
-    return (
-      <View style={styles.root}>
-        {!canManage ? (
-          <Text style={orgPanelStyles.muted}>View only</Text>
-        ) : null}
-        <SectionPanel
-          title="Services"
-          hint="Shared setup every environment starts from"
-          accent
-        >
-          <ComposeBasePanel
-            document={project.options?.compose}
-            onSave={(compose) =>
-              persistProjectCompose({
-                projectId,
-                project,
-                compose,
-                setProject,
-                setError,
-                setSaving,
-                handleUnauthorized,
-              })
-            }
-            saving={saving}
-            defaultEditorView="editor"
-          />
-          <Text style={orgPanelStyles.muted}>
-            Pick an environment to start it, or edit its overlay.
-          </Text>
-        </SectionPanel>
-      </View>
-    )
-  }
-
-  if (!selectedEnvironment) {
-    return <Text style={orgPanelStyles.muted}>Select an environment.</Text>
-  }
-
   const allContainers = Object.values(containersByService).flat()
-  const isStarted = allContainers.some((container) =>
-    isActiveContainerStatus(container.status),
-  )
-  const environmentName =
-    selectedEnvironment.displayName?.trim() || 'this environment'
-
-  const saveEnvironmentCompose = (compose: ComposeDocument) =>
-    persistEnvironmentCompose({
-      environmentId: selectedEnvironment.id,
-      compose,
-      setError,
-      setSaving,
-      handleUnauthorized,
-      onSaved: async () => {
-        await refreshEnvironments()
-        setServicesReloadToken((token) => token + 1)
-      },
-    })
-
-  if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
-  }
+  const isStarted =
+    !baseSelected &&
+    allContainers.some((container) => isActiveContainerStatus(container.status))
 
   return (
     <View style={styles.root}>
@@ -181,100 +276,38 @@ export function ComposeServicesTab() {
         <Text style={orgPanelStyles.muted}>View only</Text>
       ) : null}
 
-      {!isStarted ? (
-        <SectionPanel
-          title="Services"
-          hint={`Settings for ${environmentName} only — on top of the shared setup`}
-          accent
-        >
-          <ComposeBasePanel
-            document={selectedEnvironment.options?.compose}
-            onSave={saveEnvironmentCompose}
-            saving={saving}
-            defaultEditorView="editor"
-            onDraftChange={setOverlayDraft}
-          />
-        </SectionPanel>
-      ) : (
-        <SectionPanel
-          title="Services"
-          hint={`Running status in ${environmentName}`}
-          accent
-        >
-          {services.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>No services yet.</Text>
-          ) : (
-            <View style={styles.list}>
-              {services.map((service) => {
-                const label =
-                  service.displayName?.trim() ||
-                  service.composeServiceName ||
-                  'Service'
-                const tone = serviceStatusTone(containersByService[service.id] ?? [])
-                return (
-                  <Link
-                    key={service.id}
-                    href={
-                      projectServiceHref(
-                        orgId,
-                        projectId,
-                        service.id,
-                      ) as Href
-                    }
-                    asChild
-                  >
-                    <Pressable
-                      style={StyleSheet.flatten([
-                        styles.row,
-                        styles.statusRow,
-                        webPointer,
-                      ])}
-                      accessibilityRole="link"
-                      accessibilityLabel={`${label}, ${tone.label}`}
-                    >
-                      <View
-                        style={[styles.statusDot, { backgroundColor: tone.color }]}
-                        accessibilityElementsHidden
-                        importantForAccessibility="no"
-                      />
-                      <View style={styles.statusTextCol}>
-                        <Text style={styles.rowTitle}>{label}</Text>
-                        <Text style={styles.rowMeta}>{tone.label}</Text>
-                      </View>
-                    </Pressable>
-                  </Link>
-                )
-              })}
-            </View>
+      <View style={styles.overviewCompose}>
+        <ServicesPanelBody
+          baseSelected={baseSelected}
+          project={project}
+          projectId={projectId}
+          orgId={orgId}
+          selectedEnvironment={selectedEnvironment}
+          services={services}
+          containersByService={containersByService}
+          loading={loading}
+          saving={composeSaving}
+          isStarted={isStarted}
+          onSaveProjectCompose={handleSaveProjectCompose}
+          onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
+          toolbarLeading={<ProjectSectionTabs />}
+          toolbarTrailing={<ProjectServerHeaderControl />}
+        />
+        <OverviewEnvironmentsPanel />
+      </View>
+
+      {!baseSelected && selectedEnvironment ? (
+        <EffectiveComposePanel
+          orgId={orgId}
+          environmentId={selectedEnvironment.id}
+          canManage={canManage}
+          placementServerId={resolveEffectiveServerId(
+            selectedEnvironment.serverId,
+            project.options?.defaultServerId,
           )}
-        </SectionPanel>
-      )}
-
-      <EffectiveComposePanel
-        environmentId={selectedEnvironment.id}
-        environmentName={environmentName}
-        projectCompose={project.options?.compose}
-        savedOverlay={selectedEnvironment.options?.compose}
-        overlayDraft={overlayDraft}
-        canManage={canManage}
-        placementServerId={selectedEnvironment.serverId}
-      />
+        />
+      ) : null}
     </View>
-  )
-}
-
-export function ComposeEnvironmentsTab() {
-  const { orgId, projectId, selectedEnvironmentId } = useProjectContext()
-  if (!selectedEnvironmentId) {
-    return <Text style={orgPanelStyles.muted}>No environment selected.</Text>
-  }
-  return (
-    <EnvironmentDetailBody
-      orgId={orgId}
-      projectId={projectId}
-      environmentId={selectedEnvironmentId}
-      embedded
-    />
   )
 }
 
@@ -298,8 +331,8 @@ export function ComposeNetworkingTab() {
         embedded
       />
       <Text style={styles.hint}>
-        Tip: use Settings → Base Compose for the shared stack, then pin a
-        server here before Deploy.
+        Tip: edit the shared stack on Overview (Project), then pin a server here
+        before Deploy.
       </Text>
       {/* Keep hosting deep-link helper reachable for a11y/docs. */}
       <Text style={styles.srOnly}>
@@ -398,11 +431,17 @@ export function ComposeSettingsHub() {
 }
 
 export function SettingsComposePanel() {
-  const { projectId, project, setProject, setError, canManage } =
-    useProjectContext()
-  const { handleUnauthorized } = useAuth()
-  const [saving, setSaving] = useState(false)
+  const { orgId, projectId, project, setError, canManage } = useProjectContext()
+  const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
   if (!project) return null
+
+  const handleSave = async (compose: ComposeDocument) => {
+    setError(null)
+    const result = await persistProjectCompose.run(compose)
+    if (!result.ok && persistProjectCompose.actionError) {
+      setError(persistProjectCompose.actionError)
+    }
+  }
 
   return (
     <SectionPanel
@@ -415,18 +454,8 @@ export function SettingsComposePanel() {
       ) : null}
       <ComposeBasePanel
         document={project.options?.compose}
-        onSave={(compose) =>
-          persistProjectCompose({
-            projectId,
-            project,
-            compose,
-            setProject,
-            setError,
-            setSaving,
-            handleUnauthorized,
-          })
-        }
-        saving={saving}
+        onSave={handleSave}
+        saving={persistProjectCompose.isPending}
       />
     </SectionPanel>
   )
@@ -448,9 +477,13 @@ export function SettingsOverridesPanel() {
 }
 
 export function SettingsPrincipalsPanel() {
-  const { projectId, canManage } = useProjectContext()
+  const { orgId, projectId, canManage } = useProjectContext()
   return (
-    <ProjectPrincipalsSection projectId={projectId} canManage={canManage} />
+    <ProjectPrincipalsSection
+      orgId={orgId}
+      projectId={projectId}
+      canManage={canManage}
+    />
   )
 }
 
@@ -460,36 +493,22 @@ export function SettingsVariablesPanel() {
 }
 
 export function SettingsNamingPanel() {
-  const { projectId, project, setProject, setError, canManage } =
-    useProjectContext()
-  const { handleUnauthorized } = useAuth()
-  const [saving, setSaving] = useState(false)
+  const { orgId, projectId, project, setError, canManage } = useProjectContext()
+  const updateProjectMutation = useUpdateProject(orgId, projectId)
   if (!project) return null
   const value = project.options?.containerNaming ?? 'uuid'
 
   const save = async (containerNaming: 'uuid' | 'custom') => {
     if (value === containerNaming) return
-    setSaving(true)
     setError(null)
-    try {
-      const options = buildProjectOptionsPatch(project, { containerNaming })
-      await updateProject(projectId, { options })
-      setProject({
-        ...project,
-        options: mergeProjectOptionsLocal(project.options, options),
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to save container naming',
-      )
-    } finally {
-      setSaving(false)
+    const options = buildProjectOptionsPatch(project, { containerNaming })
+    const result = await updateProjectMutation.run({ options })
+    if (!result.ok && updateProjectMutation.actionError) {
+      setError(updateProjectMutation.actionError)
     }
   }
+
+  const saving = updateProjectMutation.isPending
 
   return (
     <SectionPanel
@@ -546,14 +565,14 @@ export function SettingsNamingPanel() {
 
 export function SettingsWorkspacePanel() {
   const {
+    orgId,
+    projectId,
     project,
     workspaces,
     canOwn,
-    setProject,
     setError,
   } = useProjectContext()
-  const { handleUnauthorized } = useAuth()
-  const [saving, setSaving] = useState(false)
+  const updateProjectMutation = useUpdateProject(orgId, projectId)
   if (!project) return null
 
   const sorted = [...workspaces].sort((a, b) =>
@@ -562,21 +581,14 @@ export function SettingsWorkspacePanel() {
 
   const move = async (workspaceId: string) => {
     if (workspaceId === project.workspaceId) return
-    setSaving(true)
     setError(null)
-    try {
-      await updateProject(project.id, { workspaceId })
-      setProject({ ...project, workspaceId })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to move project')
-    } finally {
-      setSaving(false)
+    const result = await updateProjectMutation.run({ workspaceId })
+    if (!result.ok && updateProjectMutation.actionError) {
+      setError(updateProjectMutation.actionError)
     }
   }
+
+  const saving = updateProjectMutation.isPending
 
   return (
     <SectionPanel title="Workspace" hint="Move this project to another workspace">
@@ -625,11 +637,11 @@ export function SettingsWorkspacePanel() {
 
 export function SettingsDangerPanel() {
   const { orgId, project } = useProjectContext()
-  const { handleUnauthorized } = useAuth()
   const router = useRouter()
   if (!project) return null
   return (
     <ProjectDeletePanel
+      orgId={orgId}
       project={project}
       onCancel={() => {
         router.push(`/${orgId}/projects/${project.id}/settings` as Href)
@@ -637,13 +649,13 @@ export function SettingsDangerPanel() {
       onDeleted={() => {
         router.replace(`/${orgId}/projects` as Href)
       }}
-      onUnauthorized={handleUnauthorized}
     />
   )
 }
 
 const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
+  overviewCompose: { width: '100%', gap: spacing.md },
   list: { gap: spacing.xs },
   row: {
     borderWidth: 1,

@@ -1,6 +1,11 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
-import { createWorkspace, fetchWorkspace, updateWorkspace } from '@/lib/instance-api'
+import { displayNameConflictMessage } from '@/lib/display-name'
+import {
+  useCreateWorkspace,
+  useUpdateWorkspace,
+  useWorkspace,
+} from '@/lib/queries'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   validateWorkspaceDescription,
@@ -34,49 +39,25 @@ export function WorkspaceFormSection({
 }>) {
   const router = useRouter()
   const workspaceScope = useOptionalWorkspaceScope()
+  const workspaceQuery = useWorkspace(orgId, workspaceId ?? '', {
+    enabled: mode === 'edit' && Boolean(workspaceId),
+  })
+  const createWorkspace = useCreateWorkspace(orgId)
+  const updateWorkspace = useUpdateWorkspace(orgId, workspaceId ?? '')
+
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{
     displayName?: string
     description?: string
   }>({})
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [loadingWorkspace, setLoadingWorkspace] = useState(mode === 'edit')
 
   useEffect(() => {
-    if (mode !== 'edit' || !workspaceId) {
-      return
+    if (mode === 'edit' && workspaceQuery.data?.workspace) {
+      setDisplayName(workspaceQuery.data.workspace.displayName ?? '')
+      setDescription(workspaceQuery.data.workspace.description ?? '')
     }
-
-    let cancelled = false
-
-    const load = async () => {
-      setLoadingWorkspace(true)
-      setApiError(null)
-      try {
-        const result = await fetchWorkspace(workspaceId)
-        if (!cancelled) {
-          setDisplayName(result.workspace.displayName ?? '')
-          setDescription(result.workspace.description ?? '')
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setApiError(err instanceof Error ? err.message : 'Failed to load workspace')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingWorkspace(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [mode, workspaceId])
+  }, [mode, workspaceQuery.data?.workspace])
 
   const validate = (): { displayName?: string; description?: string } => {
     const errors: { displayName?: string; description?: string } = {}
@@ -98,28 +79,36 @@ export function WorkspaceFormSection({
       return
     }
 
-    setSubmitting(true)
-    setApiError(null)
-    try {
-      const trimmedDescription = description.trim()
-      if (mode === 'create') {
-        await createWorkspace({
-          displayName: displayName.trim(),
-          ...(trimmedDescription ? { description: trimmedDescription } : {}),
-        })
-      } else {
-        await updateWorkspace(workspaceId!, {
-          displayName: displayName.trim(),
-          description: trimmedDescription,
-        })
+    const trimmedDescription = description.trim()
+    if (mode === 'create') {
+      const result = await createWorkspace.run({
+        displayName: displayName.trim(),
+        ...(trimmedDescription ? { description: trimmedDescription } : {}),
+      })
+      if (!result.ok) {
+        if (result.error) {
+          setFieldErrors({
+            displayName: displayNameConflictMessage(result.error) ?? result.error,
+          })
+        }
+        return
       }
-      await workspaceScope?.refreshWorkspaces()
-      router.replace(`/${orgId}/workspaces`)
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : 'Failed to save workspace')
-    } finally {
-      setSubmitting(false)
+    } else {
+      const result = await updateWorkspace.run({
+        displayName: displayName.trim(),
+        description: trimmedDescription,
+      })
+      if (!result.ok) {
+        if (result.error) {
+          setFieldErrors({
+            displayName: displayNameConflictMessage(result.error) ?? result.error,
+          })
+        }
+        return
+      }
     }
+    await workspaceScope?.refreshWorkspaces()
+    router.replace(`/${orgId}/workspaces`)
   }
 
   const inputStyle = (hasError: boolean) => [
@@ -131,6 +120,13 @@ export function WorkspaceFormSection({
       : styles.input,
     hasError && Platform.OS !== 'web' && styles.inputError,
   ]
+
+  const submitting = createWorkspace.isPending || updateWorkspace.isPending
+  const loadingWorkspace = mode === 'edit' && workspaceQuery.isLoading
+  const apiError =
+    workspaceQuery.error instanceof Error
+      ? workspaceQuery.error.message
+      : createWorkspace.actionError ?? updateWorkspace.actionError
 
   let submitLabel = 'Save changes'
   if (submitting) {

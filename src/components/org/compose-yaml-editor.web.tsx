@@ -62,56 +62,58 @@ const composeHighlightStyle = HighlightStyle.define([
   { tag: tags.meta, color: colors.textFaint },
 ])
 
-const composeEditorTheme = EditorView.theme(
-  {
-    '&': {
-      backgroundColor: colors.bgInput,
-      color: colors.text,
-      fontSize: `${YAML_FONT_SIZE}px`,
-      border: `1px solid ${colors.border}`,
-      borderRadius: '8px',
+function composeEditorTheme(embedded: boolean) {
+  return EditorView.theme(
+    {
+      '&': {
+        backgroundColor: colors.bgInput,
+        color: colors.text,
+        fontSize: `${YAML_FONT_SIZE}px`,
+        border: embedded ? 'none' : `1px solid ${colors.border}`,
+        borderRadius: embedded ? '0' : '8px',
+      },
+      '.cm-scroller': {
+        fontFamily: 'monospace',
+        lineHeight: `${YAML_LINE_HEIGHT}px`,
+      },
+      '.cm-content': {
+        padding: `${spacing.sm}px 0`,
+        caretColor: colors.text,
+      },
+      '.cm-gutters': {
+        backgroundColor: colors.bgInput,
+        color: colors.textDim,
+        border: 'none',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        color: colors.textMuted,
+      },
+      '.cm-activeLine': {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+        // `chrome.bgActive` already resolves per control-plane runtime (blue on
+        // Workers/HA, green on Deno) via a CSS variable — same token the rest
+        // of the console uses for "active/selected".
+        backgroundColor: `${chrome.bgActive} !important`,
+      },
+      '.cm-foldPlaceholder': {
+        backgroundColor: colors.bgSecondary,
+        border: `1px solid ${colors.borderChip}`,
+        color: colors.textMuted,
+      },
+      '.cm-tooltip-lint': {
+        backgroundColor: colors.bgSecondary,
+        border: `1px solid ${colors.border}`,
+      },
+      '.cm-diagnostic': {
+        fontSize: '12px',
+      },
     },
-    '.cm-scroller': {
-      fontFamily: 'monospace',
-      lineHeight: `${YAML_LINE_HEIGHT}px`,
-    },
-    '.cm-content': {
-      padding: `${spacing.sm}px 0`,
-      caretColor: colors.text,
-    },
-    '.cm-gutters': {
-      backgroundColor: colors.bgInput,
-      color: colors.textDim,
-      border: 'none',
-    },
-    '.cm-activeLineGutter': {
-      backgroundColor: 'rgba(255, 255, 255, 0.04)',
-      color: colors.textMuted,
-    },
-    '.cm-activeLine': {
-      backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-      // `chrome.bgActive` already resolves per control-plane runtime (blue on
-      // Workers/HA, green on Deno) via a CSS variable — same token the rest
-      // of the console uses for "active/selected".
-      backgroundColor: `${chrome.bgActive} !important`,
-    },
-    '.cm-foldPlaceholder': {
-      backgroundColor: colors.bgSecondary,
-      border: `1px solid ${colors.borderChip}`,
-      color: colors.textMuted,
-    },
-    '.cm-tooltip-lint': {
-      backgroundColor: colors.bgSecondary,
-      border: `1px solid ${colors.border}`,
-    },
-    '.cm-diagnostic': {
-      fontSize: '12px',
-    },
-  },
-  { dark: true },
-)
+    { dark: true },
+  )
+}
 
 /**
  * Web compose YAML editor: real CodeMirror 6 (line numbers, indentation
@@ -122,7 +124,14 @@ const composeEditorTheme = EditorView.theme(
  */
 export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYamlEditorProps>(
   function ComposeYamlEditor(
-    { value, editable = true, minLines = DEFAULT_COMPOSE_YAML_MIN_LINES, lintIssues, onChangeText },
+    {
+      value,
+      editable = true,
+      minLines = DEFAULT_COMPOSE_YAML_MIN_LINES,
+      lintIssues,
+      onChangeText,
+      embedded = false,
+    },
     ref,
   ) {
     const viewRef = useRef<EditorViewType | undefined>(undefined)
@@ -165,9 +174,9 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
         // `Prec.highest` so this wins over the basic-setup default keymap's
         // own Enter binding (`insertNewlineAndIndent`).
         Prec.highest(keymap.of([{ key: 'Enter', run: insertYamlNewline }])),
-        composeEditorTheme,
+        composeEditorTheme(embedded),
       ],
-      [],
+      [embedded],
     )
 
     useEffect(() => {

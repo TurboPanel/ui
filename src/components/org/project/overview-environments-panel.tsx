@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,40 +10,31 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
 import {
-  COMMAND_POLL_MS,
-  isTerminalCommandStatus,
-} from '@/components/org/server-commands-panel'
-import { useAuth } from '@/lib/auth-context'
-import {
   environmentStatusTone,
   hasHostDeployedContainers,
-  isActiveContainerStatus,
 } from '@/lib/container-status'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import {
-  createEnvironment,
-  deleteEnvironment,
-  deployEnvironment,
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
-  fetchCommand,
-  fetchContainers,
-  fetchOrgServers,
-  isForbiddenError,
-  runEnvironmentLifecycle,
-  stopEnvironment,
-  updateEnvironment,
-  updateProject,
   type CommandStatus,
   type ContainerRecord,
   type EnvironmentRecord,
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
-  buildProjectOptionsPatch,
-  mergeProjectOptionsLocal,
-  resolveEffectiveServerId,
-} from '@/lib/project-options'
+  isTerminalCommandStatus,
+  useCommandsBatch,
+  useContainersByEnvironments,
+  useCreateEnvironment,
+  useDeployEnvironment,
+  useOrgServers,
+  useRunEnvironmentLifecycle,
+  useStopEnvironment,
+  useUpdateEnvironment,
+  type TrackedCommandEntry,
+} from '@/lib/queries'
+import { resolveEffectiveServerId } from '@/lib/project-options'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 type ContainersByEnv = Record<string, ContainerRecord[]>
@@ -61,158 +51,6 @@ function environmentLabel(env: EnvironmentRecord): string {
   return env.displayName?.trim() || 'Environment'
 }
 
-function joinedEnvironmentIds(environments: EnvironmentRecord[]): string {
-  return environments
-    .map((env) => env.id)
-    .sort((a, b) => a.localeCompare(b))
-    .join(',')
-}
-
-function useEnvironmentContainers(
-  environments: EnvironmentRecord[],
-  handleUnauthorized: () => void | Promise<void>,
-) {
-  const [containersByEnv, setContainersByEnv] = useState<ContainersByEnv>({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const envKey = joinedEnvironmentIds(environments)
-  const envIdsRef = useRef(environments.map((env) => env.id))
-  useEffect(() => {
-    envIdsRef.current = environments.map((env) => env.id)
-  }, [envKey, environments])
-
-  const refreshOne = useCallback(async (environmentId: string) => {
-    const result = await fetchContainers({ environmentId })
-    setContainersByEnv((current) => ({
-      ...current,
-      [environmentId]: result.containers,
-    }))
-  }, [])
-
-  const refreshAll = useCallback(async () => {
-    const ids = envIdsRef.current
-    if (ids.length === 0) {
-      setContainersByEnv({})
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const entries = await Promise.all(
-        ids.map(async (id) => {
-          const result = await fetchContainers({ environmentId: id })
-          return [id, result.containers] as const
-        }),
-      )
-      const next: ContainersByEnv = {}
-      for (const [id, containers] of entries) {
-        next[id] = containers
-      }
-      setContainersByEnv(next)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to load environment status',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [handleUnauthorized])
-
-  useEffect(() => {
-    void refreshAll()
-  }, [envKey, refreshAll])
-
-  return { containersByEnv, loading, error, setError, refreshAll, refreshOne }
-}
-
-function useEnvironmentCommands(
-  onTerminalSuccess: (environmentId: string) => void,
-) {
-  const [commands, setCommands] = useState<Record<string, TrackedCommand>>({})
-  const onSuccessRef = useRef(onTerminalSuccess)
-  useEffect(() => {
-    onSuccessRef.current = onTerminalSuccess
-  }, [onTerminalSuccess])
-
-  const registerCommand = (
-    commandId: string,
-    input: Readonly<{
-      environmentId: string
-      serverId: string
-      label: string
-    }>,
-  ) => {
-    setCommands((current) => ({
-      ...current,
-      [commandId]: {
-        environmentId: input.environmentId,
-        serverId: input.serverId,
-        label: input.label,
-        status: 'queued',
-        error: null,
-      },
-    }))
-  }
-
-  const inFlight = Object.values(commands).some(
-    (row) => !isTerminalCommandStatus(row.status),
-  )
-
-  useEffect(() => {
-    const active = Object.entries(commands).filter(
-      ([, row]) => !isTerminalCommandStatus(row.status),
-    )
-    if (active.length === 0) {
-      return
-    }
-
-    let cancelled = false
-    const tick = async () => {
-      for (const [commandId, row] of active) {
-        try {
-          const record = await fetchCommand(row.serverId, commandId)
-          if (cancelled) return
-          setCommands((current) => {
-            const prev = current[commandId]
-            if (!prev) return current
-            return {
-              ...current,
-              [commandId]: {
-                ...prev,
-                status: record.status,
-                error: record.error ?? null,
-              },
-            }
-          })
-          if (!isTerminalCommandStatus(record.status)) {
-            continue
-          }
-          if (record.status === 'succeeded') {
-            onSuccessRef.current(row.environmentId)
-          }
-        } catch {
-          // Keep polling; next tick may succeed.
-        }
-      }
-    }
-
-    void tick()
-    const timer = setInterval(() => {
-      void tick()
-    }, COMMAND_POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [commands])
-
-  return { registerCommand, inFlight, commands }
-}
-
 function latestCommandForEnv(
   commands: Record<string, TrackedCommand>,
   environmentId: string,
@@ -221,85 +59,6 @@ function latestCommandForEnv(
     (row) => row.environmentId === environmentId,
   )
   return rows.at(-1) ?? null
-}
-
-function EnvironmentToggle({
-  environments,
-  containersByEnv,
-  selectedEnvironmentId,
-  baseSelected,
-  onSelectBase,
-  onSelectEnvironment,
-}: Readonly<{
-  environments: EnvironmentRecord[]
-  containersByEnv: ContainersByEnv
-  selectedEnvironmentId: string | null
-  baseSelected: boolean
-  onSelectBase: () => void
-  onSelectEnvironment: (id: string) => void
-}>) {
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.toggleScroll}
-      accessibilityRole="tablist"
-      accessibilityLabel="Environments"
-    >
-      <View style={orgPanelStyles.segmentGroup}>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: baseSelected }}
-          accessibilityLabel="Base"
-          style={[
-            orgPanelStyles.segmentChip,
-            baseSelected && orgPanelStyles.segmentChipActive,
-            webPointer,
-          ]}
-          onPress={onSelectBase}
-        >
-          <Text
-            style={[
-              orgPanelStyles.segmentChipText,
-              baseSelected && orgPanelStyles.segmentChipTextActive,
-            ]}
-            numberOfLines={1}
-          >
-            Base
-          </Text>
-        </Pressable>
-        {environments.map((env) => {
-          const active = !baseSelected && env.id === selectedEnvironmentId
-          const name = environmentLabel(env)
-          const tone = environmentStatusTone(containersByEnv[env.id] ?? [])
-          return (
-            <Pressable
-              key={env.id}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${name}, ${tone.label}`}
-              style={[
-                orgPanelStyles.segmentChip,
-                active && orgPanelStyles.segmentChipActive,
-                webPointer,
-              ]}
-              onPress={() => onSelectEnvironment(env.id)}
-            >
-              <Text
-                style={[
-                  orgPanelStyles.segmentChipText,
-                  active && orgPanelStyles.segmentChipTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                {name}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
-    </ScrollView>
-  )
 }
 
 function quietButtonTextStyle(
@@ -467,41 +226,25 @@ function LifecycleToolbar({
 
 function ManageExtras({
   busy,
-  canRemove,
-  removeBlocked,
-  removeArmed,
-  removeBusy,
   showCreate,
   createName,
   createError,
   creating,
-  onToggleRemove,
-  onConfirmRemove,
   onShowCreate,
   onCreateChange,
   onCreateSubmit,
   onCreateCancel,
 }: Readonly<{
   busy: boolean
-  canRemove: boolean
-  removeBlocked: boolean
-  removeArmed: boolean
-  removeBusy: boolean
   showCreate: boolean
   createName: string
   createError: string | null
   creating: boolean
-  onToggleRemove: () => void
-  onConfirmRemove: () => void
   onShowCreate: () => void
   onCreateChange: (value: string) => void
   onCreateSubmit: () => void
   onCreateCancel: () => void
 }>) {
-  let removeLabel = 'Remove'
-  if (removeBusy) removeLabel = 'Removing…'
-  else if (removeArmed) removeLabel = 'Confirm remove'
-
   if (showCreate) {
     return (
       <EnvironmentCreateInline
@@ -523,23 +266,6 @@ function ManageExtras({
         disabled={busy}
         onPress={onShowCreate}
       />
-      {canRemove ? (
-        <>
-          <QuietButton
-            label={removeLabel}
-            accessibilityLabel={removeLabel}
-            tone="danger"
-            disabled={(busy || removeBlocked) && !removeArmed}
-            onPress={removeArmed ? onConfirmRemove : onToggleRemove}
-          />
-          {removeArmed ? (
-            <QuietButton label="Cancel" onPress={onToggleRemove} />
-          ) : null}
-        </>
-      ) : null}
-      {removeBlocked ? (
-        <Text style={styles.hintInline}>Stop first</Text>
-      ) : null}
     </View>
   )
 }
@@ -558,11 +284,7 @@ function StatusAside({
   toneLabel: string
 }>) {
   if (baseSelected) {
-    return (
-      <Text style={styles.statusText} numberOfLines={1}>
-        Shared setup
-      </Text>
-    )
+    return null
   }
   if (!selectedEnvironment) {
     return <Text style={styles.statusText}>No environments yet</Text>
@@ -642,46 +364,28 @@ function BarTrailingActions({
 function OverviewPlacementPins({
   canManage,
   baseSelected,
-  project,
   selectedEnvironment,
   hasServer,
-  projectDefaultServerId,
   servers,
   savingPlacement,
-  onSaveBaseServer,
   onSaveEnvironmentServer,
 }: Readonly<{
   canManage: boolean
   baseSelected: boolean
-  project: NonNullable<ReturnType<typeof useProjectContext>['project']> | null
   selectedEnvironment: EnvironmentRecord | null
   hasServer: boolean
-  projectDefaultServerId: string | null
   servers: OrgServerRecord[]
   savingPlacement: boolean
-  onSaveBaseServer: (serverId: string | null) => void
   onSaveEnvironmentServer: (serverId: string) => void
 }>) {
   if (!canManage) return null
-  if (baseSelected && project) {
-    return (
-      <ServerPinSelect
-        label="Default server"
-        hint="Optional. Environments without their own server inherit this."
-        placementServerId={projectDefaultServerId}
-        servers={servers}
-        saving={savingPlacement}
-        allowClear
-        onSelect={onSaveBaseServer}
-        onClear={() => onSaveBaseServer(null)}
-      />
-    )
-  }
+  // Project default server lives in the Compose header; only show an
+  // env-level pin when the selected environment has no effective server yet.
   if (!baseSelected && selectedEnvironment && !hasServer) {
     return (
       <ServerPinSelect
         label="Server"
-        hint="Pin a server for this environment, or set a default on Base."
+        hint="Pin a server for this environment, or set Project server in the header."
         placementServerId={null}
         servers={servers}
         saving={savingPlacement}
@@ -693,82 +397,116 @@ function OverviewPlacementPins({
 }
 
 /**
- * Compact Overview strip: Base / environment segmented toggle plus refined
- * Start / Stop / Refresh / Destroy for the selected environment.
+ * Overview lifecycle strip (Start / Stop / Refresh / Destroy) and env management.
+ * Project / environment / section chips live in the compose editor toolbar via
+ * {@link ProjectSectionTabs}.
  */
 export function OverviewEnvironmentsPanel() {
   const {
+    orgId,
     projectId,
     project,
-    setProject,
     environments,
     selectedEnvironmentId,
     selectedEnvironment,
     baseSelected,
     setSelectedEnvironmentId,
-    selectBaseCompose,
-    refreshEnvironments,
+    invalidateEnvironments,
     canManage,
   } = useProjectContext()
-  const { handleUnauthorized } = useAuth()
 
-  const {
-    containersByEnv,
-    loading,
-    error,
-    setError,
-    refreshAll,
-    refreshOne,
-  } = useEnvironmentContainers(environments, handleUnauthorized)
-
-  const onTerminalSuccess = useCallback(
-    (environmentId: string) => {
-      void refreshOne(environmentId).catch(() => {
-        // Surfaced on next manual refresh.
-      })
-    },
-    [refreshOne],
+  const environmentIds = useMemo(
+    () => environments.map((env) => env.id),
+    [environments],
   )
-  const { registerCommand, inFlight, commands } =
-    useEnvironmentCommands(onTerminalSuccess)
 
+  const [trackedEntries, setTrackedEntries] = useState<
+    readonly TrackedCommandEntry[]
+  >([])
+  const [commandMeta, setCommandMeta] = useState<
+    Record<string, TrackedCommand>
+  >({})
   const [actionError, setActionError] = useState<string | null>(null)
+  const [containerError, setContainerError] = useState<string | null>(null)
   const [destroyArmed, setDestroyArmed] = useState(false)
-  const [destroyBusy, setDestroyBusy] = useState(false)
-  const [removeArmed, setRemoveArmed] = useState(false)
-  const [removeBusy, setRemoveBusy] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [savingPlacement, setSavingPlacement] = useState(false)
+
+  const containersQuery = useContainersByEnvironments(orgId, environmentIds)
+  const containersByEnv = containersQuery.containersByEnv
+  const loading = containersQuery.isLoading
+  const serversQuery = useOrgServers(orgId, { enabled: canManage })
+
+  const createEnvironmentMutation = useCreateEnvironment(orgId)
+  const updateEnvironmentMutation = useUpdateEnvironment(
+    orgId,
+    selectedEnvironment?.id ?? '',
+  )
+  const deployEnvironmentMutation = useDeployEnvironment(
+    orgId,
+    selectedEnvironment?.id ?? '',
+  )
+  const lifecycleMutation = useRunEnvironmentLifecycle(
+    orgId,
+    selectedEnvironment?.id ?? '',
+  )
+  const stopEnvironmentMutation = useStopEnvironment(
+    orgId,
+    selectedEnvironment?.id ?? '',
+  )
+  const commandsQuery = useCommandsBatch(orgId, trackedEntries)
+
+  useEffect(() => {
+    if (!commandsQuery.data) return
+    for (const [index, record] of commandsQuery.data.entries()) {
+      const entry = trackedEntries[index]
+      if (!entry) continue
+      const meta = commandMeta[entry.commandId]
+      if (!meta || isTerminalCommandStatus(meta.status)) continue
+
+      const nextStatus = record.status
+      setCommandMeta((current) => ({
+        ...current,
+        [entry.commandId]: {
+          ...meta,
+          status: nextStatus,
+          error: record.error ?? null,
+        },
+      }))
+
+      if (!isTerminalCommandStatus(nextStatus)) continue
+
+      if (nextStatus === 'succeeded') {
+        void containersQuery.refetchOne(meta.environmentId)
+        if (meta.label === 'Destroy' || meta.label === 'Start') {
+          void invalidateEnvironments()
+        }
+      }
+
+      setTrackedEntries((current) =>
+        current.filter((row) => row.commandId !== entry.commandId),
+      )
+    }
+  }, [
+    commandsQuery.data,
+    trackedEntries,
+    commandMeta,
+    containersQuery,
+    invalidateEnvironments,
+  ])
+
+  const commands = commandMeta
+  const inFlight = Object.values(commands).some(
+    (row) => !isTerminalCommandStatus(row.status),
+  )
 
   useEffect(() => {
     setDestroyArmed(false)
-    setRemoveArmed(false)
     setActionError(null)
   }, [selectedEnvironmentId, baseSelected])
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const result = await fetchOrgServers()
-        if (!cancelled) setServers(result.servers)
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-        }
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [handleUnauthorized])
-
+  const servers = serversQuery.data?.servers ?? []
   const projectDefaultServerId = project?.options?.defaultServerId ?? null
   const effectiveServerId = useMemo(
     () =>
@@ -783,49 +521,36 @@ export function OverviewEnvironmentsPanel() {
     !selectedEnvironment?.serverId &&
     Boolean(projectDefaultServerId)
 
-  const saveBaseServer = async (serverId: string | null) => {
-    if (!project) return
-    setSavingPlacement(true)
-    setActionError(null)
-    try {
-      const options = buildProjectOptionsPatch(project, {
-        defaultServerId: serverId,
-      })
-      await updateProject(projectId, { options })
-      setProject({
-        ...project,
-        options: mergeProjectOptionsLocal(project.options, options),
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setActionError(
-        err instanceof Error ? err.message : 'Failed to save default server',
-      )
-    } finally {
-      setSavingPlacement(false)
-    }
+  const registerCommand = (
+    commandId: string,
+    input: Readonly<{
+      environmentId: string
+      serverId: string
+      label: string
+    }>,
+  ) => {
+    setCommandMeta((current) => ({
+      ...current,
+      [commandId]: {
+        environmentId: input.environmentId,
+        serverId: input.serverId,
+        label: input.label,
+        status: 'queued',
+        error: null,
+      },
+    }))
+    setTrackedEntries((current) => [
+      ...current,
+      { serverId: input.serverId, commandId },
+    ])
   }
 
   const saveEnvironmentServer = async (serverId: string) => {
     if (!selectedEnvironment) return
-    setSavingPlacement(true)
     setActionError(null)
-    try {
-      await updateEnvironment(selectedEnvironment.id, { serverId })
-      await refreshEnvironments()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setActionError(
-        err instanceof Error ? err.message : 'Failed to save server',
-      )
-    } finally {
-      setSavingPlacement(false)
+    const result = await updateEnvironmentMutation.run({ serverId })
+    if (!result.ok && updateEnvironmentMutation.actionError) {
+      setActionError(updateEnvironmentMutation.actionError)
     }
   }
 
@@ -852,20 +577,24 @@ export function OverviewEnvironmentsPanel() {
     const containers = containersByEnv[selectedEnvironment.id] ?? []
     const useLifecycle = hasHostDeployedContainers(containers)
     try {
-      const response = useLifecycle
-        ? await runEnvironmentLifecycle(selectedEnvironment.id, 'start')
-        : await deployEnvironment(selectedEnvironment.id)
+      const result = useLifecycle
+        ? await lifecycleMutation.run('start')
+        : await deployEnvironmentMutation.run(undefined)
+      if (!result.ok) {
+        setActionError(
+          lifecycleMutation.actionError ??
+            deployEnvironmentMutation.actionError ??
+            'Failed to start',
+        )
+        return
+      }
       trackEnqueue(
         selectedEnvironment.id,
         effectiveServerId ?? selectedEnvironment.serverId,
-        response,
+        result.value,
         'Start',
       )
     } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
       if (err instanceof DeployHealthCheckMissingError) {
         setActionError(
           err.required
@@ -887,104 +616,66 @@ export function OverviewEnvironmentsPanel() {
   const handleStop = async () => {
     if (!selectedEnvironment) return
     setActionError(null)
-    try {
-      const response = await runEnvironmentLifecycle(
-        selectedEnvironment.id,
-        'stop',
-      )
-      trackEnqueue(
-        selectedEnvironment.id,
-        effectiveServerId ?? selectedEnvironment.serverId,
-        response,
-        'Stop',
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await lifecycleMutation.run('stop')
+    if (!result.ok) {
+      if (lifecycleMutation.actionError) {
+        setActionError(lifecycleMutation.actionError)
       }
-      setActionError(err instanceof Error ? err.message : 'Failed to stop')
+      return
     }
+    trackEnqueue(
+      selectedEnvironment.id,
+      effectiveServerId ?? selectedEnvironment.serverId,
+      result.value,
+      'Stop',
+    )
   }
 
   const handleDestroy = async () => {
     if (!selectedEnvironment) return
-    setDestroyBusy(true)
     setActionError(null)
-    try {
-      const response = await stopEnvironment(selectedEnvironment.id)
-      trackEnqueue(
-        selectedEnvironment.id,
-        effectiveServerId ??
-          selectedEnvironment.serverId ??
-          response.serverId,
-        response,
-        'Destroy',
-      )
-      setDestroyArmed(false)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await stopEnvironmentMutation.run()
+    if (!result.ok) {
+      if (stopEnvironmentMutation.actionError) {
+        setActionError(stopEnvironmentMutation.actionError)
       }
-      setActionError(err instanceof Error ? err.message : 'Failed to destroy')
-    } finally {
-      setDestroyBusy(false)
+      return
     }
+    trackEnqueue(
+      selectedEnvironment.id,
+      effectiveServerId ??
+        selectedEnvironment.serverId ??
+        result.value.serverId,
+      result.value,
+      'Destroy',
+    )
+    setDestroyArmed(false)
   }
 
   const handleCreate = async () => {
+    if (createEnvironmentMutation.isPending) return
     const trimmed = createName.trim()
     const validation = validateEnvironmentName(trimmed)
     if (validation) {
       setCreateError(validation)
       return
     }
-    setCreating(true)
     setCreateError(null)
     setActionError(null)
-    try {
-      const result = await createEnvironment({
-        projectId,
-        displayName: trimmed,
-      })
-      await refreshEnvironments()
-      setSelectedEnvironmentId(result.id)
-      setShowCreate(false)
-      setCreateName('')
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await createEnvironmentMutation.run({
+      projectId,
+      displayName: trimmed,
+    })
+    if (!result.ok) {
+      if (createEnvironmentMutation.actionError) {
+        setCreateError(createEnvironmentMutation.actionError)
       }
-      setCreateError(
-        err instanceof Error ? err.message : 'Failed to create environment',
-      )
-    } finally {
-      setCreating(false)
+      return
     }
-  }
-
-  const handleRemove = async () => {
-    if (!selectedEnvironment) return
-    if (environments.length <= 1) return
-    setRemoveBusy(true)
-    setActionError(null)
-    try {
-      await deleteEnvironment(selectedEnvironment.id)
-      setRemoveArmed(false)
-      await refreshEnvironments()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setActionError(
-        err instanceof Error ? err.message : 'Failed to remove environment',
-      )
-    } finally {
-      setRemoveBusy(false)
-    }
+    await invalidateEnvironments()
+    setSelectedEnvironmentId(result.value.id)
+    setShowCreate(false)
+    setCreateName('')
   }
 
   const selectedCommand =
@@ -1004,71 +695,65 @@ export function OverviewEnvironmentsPanel() {
   const tone = environmentStatusTone(containers)
   const hasServer = Boolean(effectiveServerId)
   const hasContainers = hasHostDeployedContainers(containers)
-  const removeBlocked = containers.some((row) =>
-    isActiveContainerStatus(row.status),
-  )
-  const busy =
-    inFlight || destroyBusy || removeBusy || creating || savingPlacement
+  const creating = createEnvironmentMutation.isPending
+  const destroyBusy = stopEnvironmentMutation.isPending
+  const savingPlacement = updateEnvironmentMutation.isPending
+  const busy = inFlight || destroyBusy || creating || savingPlacement
 
   let statusLabel: string = tone.label
   if (inheritsBaseServer) {
-    statusLabel = `${tone.label} · via Base`
+    statusLabel = `${tone.label} · via project server`
   }
+
+  const showLifecycleBar =
+    !baseSelected && Boolean(selectedEnvironment)
 
   return (
     <View style={styles.root}>
-      <View style={styles.bar}>
-        <EnvironmentToggle
-          environments={environments}
-          containersByEnv={containersByEnv}
-          selectedEnvironmentId={selectedEnvironmentId}
-          baseSelected={baseSelected}
-          onSelectBase={selectBaseCompose}
-          onSelectEnvironment={setSelectedEnvironmentId}
-        />
+      {showLifecycleBar ? (
+        <View style={styles.bar}>
+          <StatusAside
+            baseSelected={baseSelected}
+            selectedEnvironment={selectedEnvironment}
+            loading={loading}
+            toneColor={tone.color}
+            toneLabel={statusLabel}
+          />
 
-        <StatusAside
-          baseSelected={baseSelected}
-          selectedEnvironment={selectedEnvironment}
-          loading={loading}
-          toneColor={tone.color}
-          toneLabel={statusLabel}
-        />
+          <View style={styles.barSpacer} />
 
-        <View style={styles.barSpacer} />
-
-        <BarTrailingActions
-          showLifecycle={!baseSelected && Boolean(selectedEnvironment) && canManage}
-          showRefreshOnly={
-            !baseSelected && Boolean(selectedEnvironment) && !canManage
-          }
-          hasServer={hasServer}
-          hasContainers={hasContainers}
-          inFlight={inFlight}
-          busy={busy}
-          destroyArmed={destroyArmed}
-          destroyBusy={destroyBusy}
-          onStart={() => void handleStart()}
-          onStop={() => void handleStop()}
-          onToggleDestroy={() => setDestroyArmed((current) => !current)}
-          onConfirmDestroy={() => void handleDestroy()}
-          onRefresh={() => {
-            setError(null)
-            void refreshAll()
-          }}
-        />
-      </View>
+          <BarTrailingActions
+            showLifecycle={canManage}
+            showRefreshOnly={!canManage}
+            hasServer={hasServer}
+            hasContainers={hasContainers}
+            inFlight={inFlight}
+            busy={busy}
+            destroyArmed={destroyArmed}
+            destroyBusy={destroyBusy}
+            onStart={() => void handleStart()}
+            onStop={() => void handleStop()}
+            onToggleDestroy={() => setDestroyArmed((current) => !current)}
+            onConfirmDestroy={() => void handleDestroy()}
+            onRefresh={() => {
+              setContainerError(null)
+              void containersQuery.refetchAll().catch((err) => {
+                setContainerError(
+                  err instanceof Error ? err.message : 'Failed to refresh',
+                )
+              })
+            }}
+          />
+        </View>
+      ) : null}
 
       <OverviewPlacementPins
         canManage={canManage}
         baseSelected={baseSelected}
-        project={project}
         selectedEnvironment={selectedEnvironment}
         hasServer={hasServer}
-        projectDefaultServerId={projectDefaultServerId}
         servers={servers}
         savingPlacement={savingPlacement}
-        onSaveBaseServer={(serverId) => void saveBaseServer(serverId)}
         onSaveEnvironmentServer={(serverId) =>
           void saveEnvironmentServer(serverId)
         }
@@ -1077,16 +762,10 @@ export function OverviewEnvironmentsPanel() {
       {canManage && !baseSelected ? (
         <ManageExtras
           busy={busy}
-          canRemove={environments.length > 1}
-          removeBlocked={removeBlocked}
-          removeArmed={removeArmed}
-          removeBusy={removeBusy}
           showCreate={showCreate}
           createName={createName}
           createError={createError}
           creating={creating}
-          onToggleRemove={() => setRemoveArmed((current) => !current)}
-          onConfirmRemove={() => void handleRemove()}
           onShowCreate={() => setShowCreate(true)}
           onCreateChange={(value) => {
             setCreateName(value)
@@ -1107,7 +786,9 @@ export function OverviewEnvironmentsPanel() {
         </Text>
       ) : null}
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {containerError ? (
+        <Text style={orgPanelStyles.error}>{containerError}</Text>
+      ) : null}
       {actionError ? <Text style={orgPanelStyles.error}>{actionError}</Text> : null}
       {commandError ? (
         <Text style={orgPanelStyles.error}>{commandError}</Text>
@@ -1126,9 +807,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.xs,
-  },
-  toggleScroll: {
-    flexGrow: 0,
   },
   statusCluster: {
     flexDirection: 'row',

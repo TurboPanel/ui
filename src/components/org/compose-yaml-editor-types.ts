@@ -12,6 +12,11 @@ export type ComposeYamlEditorProps = Readonly<{
   lintIssues?: readonly ComposeLintIssue[]
   onChangeText: (value: string) => void
   /**
+   * Drop the editor's own border/radius when nested inside a shared chrome
+   * shell (e.g. Editor/Visual tab strip above the surface).
+   */
+  embedded?: boolean
+  /**
    * Native only: fires on caret/selection change so the parent can trim
    * trailing whitespace and re-indent the line the caret just left
    * (`formatComposeYamlOnLineChange`). The web CodeMirror editor does not call

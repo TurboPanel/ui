@@ -18,6 +18,7 @@ import {
   managedStatusLabel,
   type ManagedStatus,
 } from '@/lib/managed-services'
+import { useManagedLogs } from '@/lib/queries/managed'
 import { colors, spacing } from '@/lib/theme'
 
 const TAIL_OPTIONS = [200, 500, 1000] as const
@@ -73,34 +74,40 @@ function partitionContainersForDisplay(
 }
 
 export function ManagedStatusPanel({
+  orgId,
+  environmentId,
   status,
   host,
   port,
   containers,
-  onFetchLogs,
 }: Readonly<{
+  orgId: string
+  environmentId: string
   status: ManagedStatus
   host: string | null
   port: number | null
   containers: ContainerRecord[]
-  onFetchLogs: (tail: number) => Promise<string>
 }>) {
   const [tail, setTail] = useState<(typeof TAIL_OPTIONS)[number]>(200)
   const [logs, setLogs] = useState('')
-  const [loadingLogs, setLoadingLogs] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const logsQuery = useManagedLogs(orgId, environmentId, {
+    enabled: false,
+    tail,
+  })
+  const loadingLogs = logsQuery.isFetching
   const pill = statusPillStyle(status)
 
   const refreshLogs = async () => {
-    setLoadingLogs(true)
     setError(null)
     try {
-      const next = await onFetchLogs(tail)
-      setLogs(next)
+      const result = await logsQuery.refetch()
+      if (result.error) {
+        throw result.error
+      }
+      setLogs(result.data?.logs ?? '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load logs')
-    } finally {
-      setLoadingLogs(false)
     }
   }
 

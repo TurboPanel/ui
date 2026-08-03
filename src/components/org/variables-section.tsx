@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   Platform,
   Pressable,
@@ -9,17 +9,13 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import type { VariableParentFilter, VariableRecord } from '@/lib/instance-api'
 import {
-  createVariable,
-  deleteVariable,
-  fetchVariables,
-  isForbiddenError,
-  updateVariable,
-  type CreateVariableBody,
-  type VariableParentFilter,
-  type VariableRecord,
-} from '@/lib/instance-api'
+  useCreateVariable,
+  useDeleteVariable,
+  useUpdateVariable,
+  useVariables,
+} from '@/lib/queries/variables'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -40,6 +36,19 @@ function displayVariableValue(variable: VariableRecord): string {
     return '••••••••'
   }
   return variable.value ?? ''
+}
+
+function resolveVariablesLoadError(
+  isError: boolean,
+  error: unknown,
+): string | null {
+  if (!isError) {
+    return null
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'Failed to load variables'
 }
 
 const VARIABLE_PRESETS = [
@@ -518,7 +527,7 @@ function VariablesListContent({
   loading,
   variables,
   canOwn,
-  deleting,
+  deletingId,
   editingId,
   updatingSecretId,
   editKey,
@@ -548,7 +557,7 @@ function VariablesListContent({
   loading: boolean
   variables: VariableRecord[]
   canOwn: boolean
-  deleting: Set<string>
+  deletingId: string | null
   editingId: string | null
   updatingSecretId: string | null
   editKey: string
@@ -600,7 +609,7 @@ function VariablesListContent({
           canOwn={canOwn}
           isEditing={editingId === variable.id}
           isUpdatingSecret={updatingSecretId === variable.id}
-          isDeleting={deleting.has(variable.id)}
+          isDeleting={deletingId === variable.id}
           editKey={editKey}
           editValue={editValue}
           editDescription={editDescription}
@@ -776,12 +785,15 @@ export function VariablesSection({
   /** Common-key preset chips above the add form. */
   showPresets?: boolean
 }>) {
-  const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
-  const [variables, setVariables] = useState<VariableRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const variablesQuery = useVariables(orgId, parentField)
+  const createMutation = useCreateVariable(orgId, parentField)
+  const updateMutation = useUpdateVariable(orgId, parentField)
+  const deleteMutation = useDeleteVariable(orgId, parentField)
+
+  const variables = variablesQuery.data?.variables ?? []
+  const loading = variablesQuery.isLoading
   const [error, setError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
   const [showAddForm, setShowAddForm] = useState(false)
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
@@ -791,7 +803,6 @@ export function VariablesSection({
   const [newForBuild, setNewForBuild] = useState(false)
   const [newForRuntime, setNewForRuntime] = useState(true)
   const [addFieldError, setAddFieldError] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editKey, setEditKey] = useState('')
   const [editValue, setEditValue] = useState('')
@@ -799,98 +810,39 @@ export function VariablesSection({
   const [editIsLiteral, setEditIsLiteral] = useState(false)
   const [editForBuild, setEditForBuild] = useState(false)
   const [editForRuntime, setEditForRuntime] = useState(true)
-  const [editSaving, setEditSaving] = useState(false)
   const [updatingSecretId, setUpdatingSecretId] = useState<string | null>(null)
   const [secretNewValue, setSecretNewValue] = useState('')
-  const [secretSaving, setSecretSaving] = useState(false)
 
-  const loadVariables = async () => {
-    setLoading(true)
+  const queryError = resolveVariablesLoadError(
+    variablesQuery.isError,
+    variablesQuery.error,
+  )
+  const displayError =
+    error ??
+    createMutation.actionError ??
+    updateMutation.actionError ??
+    deleteMutation.actionError ??
+    queryError
+
+  const handleDeleteVariable = (id: string) => {
     setError(null)
-    try {
-      const result = await fetchVariables(parentField)
-      setVariables(result.variables)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to load variables',
-      )
-    } finally {
-      setLoading(false)
-    }
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        if (editingId === id) {
+          setEditingId(null)
+        }
+        if (updatingSecretId === id) {
+          setUpdatingSecretId(null)
+          setSecretNewValue('')
+        }
+      },
+      onError: () => {
+        setError(deleteMutation.actionError ?? 'Failed to delete variable')
+      },
+    })
   }
 
-  const parentQueryKey = JSON.stringify(parentField)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const result = await fetchVariables(parentField)
-        if (!cancelled) {
-          setVariables(result.variables)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setError(
-            err instanceof Error ? err.message : 'Failed to load variables',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [parentQueryKey, handleUnauthorized])
-
-  const handleDeleteVariable = async (id: string) => {
-    setDeleting((current) => new Set(current).add(id))
-    setError(null)
-    try {
-      await deleteVariable(id)
-      if (editingId === id) {
-        setEditingId(null)
-      }
-      if (updatingSecretId === id) {
-        setUpdatingSecretId(null)
-        setSecretNewValue('')
-      }
-      await loadVariables()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to delete variable',
-      )
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-    }
-  }
-
-  const handleAddVariable = async () => {
+  const handleAddVariable = () => {
     const trimmedKey = newKey.trim()
     if (!trimmedKey) {
       setAddFieldError('Key is required.')
@@ -902,12 +854,10 @@ export function VariablesSection({
       return
     }
 
-    setAdding(true)
     setAddFieldError(null)
     setError(null)
-    try {
-      await createVariable({
-        ...parentField,
+    createMutation.mutate(
+      {
         key: trimmedKey,
         value: trimmedValue,
         isSecret: newIsSecret,
@@ -917,27 +867,23 @@ export function VariablesSection({
         ...(newDescription.trim()
           ? { description: newDescription.trim() }
           : {}),
-      } satisfies CreateVariableBody)
-      setNewKey('')
-      setNewValue('')
-      setNewDescription('')
-      setNewIsSecret(false)
-      setNewIsLiteral(false)
-      setNewForBuild(false)
-      setNewForRuntime(true)
-      setShowAddForm(false)
-      await loadVariables()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to create variable',
-      )
-    } finally {
-      setAdding(false)
-    }
+      },
+      {
+        onSuccess: () => {
+          setNewKey('')
+          setNewValue('')
+          setNewDescription('')
+          setNewIsSecret(false)
+          setNewIsLiteral(false)
+          setNewForBuild(false)
+          setNewForRuntime(true)
+          setShowAddForm(false)
+        },
+        onError: () => {
+          setError(createMutation.actionError ?? 'Failed to create variable')
+        },
+      },
+    )
   }
 
   const startEdit = (variable: VariableRecord) => {
@@ -961,7 +907,7 @@ export function VariablesSection({
     setEditingId(null)
   }
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
     if (!editingId) {
       return
     }
@@ -971,33 +917,31 @@ export function VariablesSection({
       return
     }
 
-    setEditSaving(true)
     setError(null)
-    try {
-      await updateVariable(editingId, {
-        key: trimmedKey,
-        value: editValue.trim(),
-        description: editDescription.trim() || null,
-        isLiteral: editIsLiteral,
-        forBuild: editForBuild,
-        forRuntime: editForRuntime,
-      })
-      setEditingId(null)
-      await loadVariables()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to update variable',
-      )
-    } finally {
-      setEditSaving(false)
-    }
+    updateMutation.mutate(
+      {
+        variableId: editingId,
+        body: {
+          key: trimmedKey,
+          value: editValue.trim(),
+          description: editDescription.trim() || null,
+          isLiteral: editIsLiteral,
+          forBuild: editForBuild,
+          forRuntime: editForRuntime,
+        },
+      },
+      {
+        onSuccess: () => {
+          setEditingId(null)
+        },
+        onError: () => {
+          setError(updateMutation.actionError ?? 'Failed to update variable')
+        },
+      },
+    )
   }
 
-  const handleSaveSecretValue = async () => {
+  const handleSaveSecretValue = () => {
     if (!updatingSecretId) {
       return
     }
@@ -1006,25 +950,33 @@ export function VariablesSection({
       return
     }
 
-    setSecretSaving(true)
     setError(null)
-    try {
-      await updateVariable(updatingSecretId, { value: secretNewValue })
-      setUpdatingSecretId(null)
-      setSecretNewValue('')
-      await loadVariables()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to update secret value',
-      )
-    } finally {
-      setSecretSaving(false)
-    }
+    updateMutation.mutate(
+      {
+        variableId: updatingSecretId,
+        body: { value: secretNewValue },
+      },
+      {
+        onSuccess: () => {
+          setUpdatingSecretId(null)
+          setSecretNewValue('')
+        },
+        onError: () => {
+          setError(updateMutation.actionError ?? 'Failed to update secret value')
+        },
+      },
+    )
   }
+
+  const editSaving = updateMutation.isPending && editingId !== null
+  const secretSaving =
+    updateMutation.isPending && updatingSecretId !== null
+  const deletingId =
+    deleteMutation.isPending &&
+    typeof deleteMutation.variables === 'string'
+      ? deleteMutation.variables
+      : null
+  const adding = createMutation.isPending
 
   const body = (
     <>
@@ -1051,7 +1003,7 @@ export function VariablesSection({
         </Pressable>
       ) : null}
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       {showAddForm && canOwn ? (
         <AddVariableForm
@@ -1074,7 +1026,7 @@ export function VariablesSection({
           onToggleLiteral={() => setNewIsLiteral((current) => !current)}
           onToggleForBuild={() => setNewForBuild((current) => !current)}
           onToggleForRuntime={() => setNewForRuntime((current) => !current)}
-          onSubmit={() => void handleAddVariable()}
+          onSubmit={handleAddVariable}
         />
       ) : null}
 
@@ -1082,7 +1034,7 @@ export function VariablesSection({
         loading={loading}
         variables={variables}
         canOwn={canOwn}
-        deleting={deleting}
+        deletingId={deletingId}
         editingId={editingId}
         updatingSecretId={updatingSecretId}
         editKey={editKey}
@@ -1100,17 +1052,17 @@ export function VariablesSection({
         onToggleEditLiteral={() => setEditIsLiteral((current) => !current)}
         onToggleEditForBuild={() => setEditForBuild((current) => !current)}
         onToggleEditForRuntime={() => setEditForRuntime((current) => !current)}
-        onSaveEdit={() => void handleSaveEdit()}
+        onSaveEdit={handleSaveEdit}
         onCancelEdit={() => setEditingId(null)}
         onSecretValueChange={setSecretNewValue}
-        onSaveSecret={() => void handleSaveSecretValue()}
+        onSaveSecret={handleSaveSecretValue}
         onCancelSecret={() => {
           setUpdatingSecretId(null)
           setSecretNewValue('')
         }}
         onEdit={startEdit}
         onSecretUpdate={startSecretUpdate}
-        onDelete={(id) => void handleDeleteVariable(id)}
+        onDelete={handleDeleteVariable}
       />
     </>
   )

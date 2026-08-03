@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -9,13 +9,9 @@ import {
 import { FirstRunWizard } from '@/components/org/first-run-wizard'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import {
-  createWorkspace,
-  deleteWorkspace,
-  fetchVisibleWorkspaces,
-  WORKSPACE_HAS_CHILDREN_ERROR,
-  type WorkspaceRecord,
-} from '@/lib/instance-api'
+import { displayNameConflictMessage, isDisplayNameTaken } from '@/lib/display-name'
+import { WORKSPACE_HAS_CHILDREN_ERROR } from '@/lib/instance-api'
+import { useCreateWorkspace, useDeleteWorkspace, useWorkspaces } from '@/lib/queries'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 import { validateWorkspaceName } from '@/lib/workspace-validation'
@@ -31,59 +27,21 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   const router = useRouter()
   const workspaceScope = useOptionalWorkspaceScope()
   const canOwn = useCan('organization', orgId, 'organization:own')
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const workspacesQuery = useWorkspaces(orgId)
+  const createWorkspace = useCreateWorkspace(orgId)
+  const deleteWorkspaceMutation = useDeleteWorkspace(orgId)
+
+  const workspaces = workspacesQuery.data?.workspaces ?? []
+  const loading = workspacesQuery.isLoading
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
   const [createName, setCreateName] = useState('')
-  const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const loadWorkspaces = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await fetchVisibleWorkspaces()
-      setWorkspaces(result.workspaces)
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to load workspaces',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const result = await fetchVisibleWorkspaces()
-        if (!cancelled) {
-          setWorkspaces(result.workspaces)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Failed to load workspaces',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [orgId])
+  const queryError =
+    workspacesQuery.error instanceof Error
+      ? workspacesQuery.error.message
+      : null
 
   const handleCreateWorkspace = async () => {
     const nameError = validateWorkspaceName(createName)
@@ -91,45 +49,50 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
       setCreateError(nameError)
       return
     }
-
-    setCreating(true)
-    setCreateError(null)
-    try {
-      await createWorkspace({ displayName: createName.trim() })
-      setCreateName('')
-      await loadWorkspaces()
-      await workspaceScope?.refreshWorkspaces()
-    } catch (err) {
-      setCreateError(
-        err instanceof Error ? err.message : 'Failed to create workspace',
+    if (
+      isDisplayNameTaken(
+        createName,
+        workspaces.map((workspace) => workspace.displayName),
       )
-    } finally {
-      setCreating(false)
+    ) {
+      setCreateError(
+        'A workspace with this name already exists in the organization.',
+      )
+      return
     }
+
+    setCreateError(null)
+    const result = await createWorkspace.run({ displayName: createName.trim() })
+    if (!result.ok) {
+      if (result.error) {
+        setCreateError(displayNameConflictMessage(result.error) ?? result.error)
+      }
+      return
+    }
+    setCreateName('')
+    await workspaceScope?.refreshWorkspaces()
   }
 
   const handleDelete = async (id: string) => {
     setDeleting((current) => new Set(current).add(id))
     setError(null)
-    try {
-      await deleteWorkspace(id)
-      await loadWorkspaces()
-      await workspaceScope?.refreshWorkspaces()
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to delete workspace'
-      if (message.includes(WORKSPACE_HAS_CHILDREN_ERROR)) {
-        setError('This workspace has projects and cannot be deleted.')
-      } else {
-        setError(message)
+    const result = await deleteWorkspaceMutation.run(id)
+    if (!result.ok) {
+      if (result.error) {
+        if (result.error.includes(WORKSPACE_HAS_CHILDREN_ERROR)) {
+          setError('This workspace has projects and cannot be deleted.')
+        } else {
+          setError(result.error)
+        }
       }
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
+    } else {
+      await workspaceScope?.refreshWorkspaces()
     }
+    setDeleting((current) => {
+      const next = new Set(current)
+      next.delete(id)
+      return next
+    })
   }
 
   let workspaceListContent
@@ -212,13 +175,15 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
           nameLabel="Workspace name"
           primaryActionLabel="Create workspace"
           onPrimaryAction={() => void handleCreateWorkspace()}
-          submitting={creating}
+          submitting={createWorkspace.isPending}
           error={createError}
         />
       ) : null}
 
       <SectionPanel title="Workspaces" hint="Organization workspaces">
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {error ?? queryError ? (
+          <Text style={orgPanelStyles.error}>{error ?? queryError}</Text>
+        ) : null}
 
         {workspaceListContent}
       </SectionPanel>

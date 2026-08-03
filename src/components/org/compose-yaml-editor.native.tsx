@@ -128,6 +128,7 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
       lintIssues,
       onChangeText,
       onSelectionChange,
+      embedded = false,
     },
     ref,
   ) {
@@ -156,7 +157,13 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
     )
 
     return (
-      <View style={[styles.yamlEditor, { minHeight: height }]}>
+      <View
+        style={[
+          styles.yamlEditor,
+          embedded && styles.yamlEditorEmbedded,
+          { minHeight: height },
+        ]}
+      >
         <YamlLintGutter lineCount={lineCount} lineLevels={lineLevels} />
         <YamlHighlightLayer value={value} lineLevels={lineLevels} />
         <TextInput
@@ -189,6 +196,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     overflow: 'hidden',
     position: 'relative',
+  },
+  yamlEditorEmbedded: {
+    borderWidth: 0,
+    borderRadius: 0,
   },
   yamlHighlight: {
     position: 'absolute',

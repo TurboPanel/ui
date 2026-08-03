@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import {
@@ -11,26 +11,28 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
   fetchIps,
-  fetchOrgServerCapacity,
-  fetchOrgServers,
-  fetchServersUpdateStatus,
   fetchVpns,
   isForbiddenError,
-  triggerServerUpdate,
   type IpRecord,
   type OrgServerRecord,
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { serverDetailHref } from '@/lib/org-navigation'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import {
+  useBatchTriggerServerUpdates,
+  useOrgServerCapacity,
+  useOrgServers,
+  useServersUpdateStatus,
+  SERVERS_REFRESH_MS,
+} from '@/lib/queries/servers'
+import { useCan, queryKeys } from '@/lib/query-client'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
@@ -56,16 +58,6 @@ function overlayByServerId(
   }
   return result
 }
-
-type UpdateState = {
-  loading: boolean
-  triggering: boolean
-  data: ServerUpdateStatus | null
-  error: string | null
-}
-
-const SERVERS_REFRESH_MS = 30_000
-const UPDATE_PROGRESS_POLL_MS = 5_000
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -102,33 +94,18 @@ function isColocatedServer(
 
 function isServerUpdatable(
   server: OrgServerRecord,
-  updateStates: Map<string, UpdateState>,
+  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
+  triggeringServerIds: ReadonlySet<string>,
 ): boolean {
-  const state = updateStates.get(server.id)
+  const data = updateByServerId.get(server.id)
   return (
     server.connected &&
-    !isColocatedServer(server, state?.data) &&
-    state?.data?.targetStatus === 'ok' &&
-    state.data.updateAvailable === true &&
-    !state.triggering &&
-    state.data.status !== 'updating'
+    !isColocatedServer(server, data) &&
+    data?.targetStatus === 'ok' &&
+    data.updateAvailable === true &&
+    !triggeringServerIds.has(server.id) &&
+    data.status !== 'updating'
   )
-}
-
-function isTerminalUpdateState(status: ServerUpdateStatus): boolean {
-  if (status.updateBlocked) return true
-  if (status.status === 'error') return true
-  if (status.status === 'updating') return false
-  if (status.targetStatus === 'unknown') return true
-  if (!status.updateAvailable) return true
-  if (
-    status.current?.commit &&
-    status.target?.commit &&
-    status.current.commit === status.target.commit
-  ) {
-    return true
-  }
-  return status.status === 'idle'
 }
 
 function selectedUpdateButtonLabel(
@@ -414,281 +391,96 @@ function OrgServerTableRow({
 }
 
 export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
+  const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
 
   const vpnIpsQuery = useQuery({
-    queryKey: ['org', orgId, 'ips', { scope: 'vpn' }],
+    queryKey: queryKeys.org(orgId).topology.ips({ scope: 'vpn' }),
     queryFn: () => fetchIps({ scope: 'vpn' }),
   })
   const vpnsQuery = useQuery({
-    queryKey: ['org', orgId, 'vpns'],
+    queryKey: queryKeys.org(orgId).topology.vpns,
     queryFn: fetchVpns,
   })
-  useForbiddenRecovery(vpnIpsQuery.error)
-  useForbiddenRecovery(vpnsQuery.error)
 
   const meshOverlayByServer = overlayByServerId(
     vpnIpsQuery.data?.ips ?? [],
     new Set((vpnsQuery.data?.vpns ?? []).map((vpn) => vpn.id)),
   )
 
+  const serversQuery = useOrgServers(orgId, {
+    refetchInterval: SERVERS_REFRESH_MS,
+  })
+  const updatesQuery = useServersUpdateStatus(orgId, { pollWhileUpdating: true })
+  const capacityQuery = useOrgServerCapacity(orgId, { enabled: canOwn })
+  const batchUpdateMutation = useBatchTriggerServerUpdates(orgId)
+
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
-  const [addServerEligibility, setAddServerEligibility] = useState(() =>
-    resolveServerAddEligibility(),
-  )
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [updateStates, setUpdateStates] = useState<Map<string, UpdateState>>(
-    new Map(),
-  )
-  const [batchUpdating, setBatchUpdating] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const mergeUpdateEntry = (
-    prev: Map<string, UpdateState>,
-    serverId: string,
-    data: ServerUpdateStatus,
-    options?: { preserveTriggering?: boolean },
-  ): Map<string, UpdateState> => {
-    const current = prev.get(serverId)
-    const preserveTriggering =
-      options?.preserveTriggering &&
-      (current?.triggering ?? false) &&
-      !isTerminalUpdateState(data)
-    return new Map(prev).set(serverId, {
-      loading: false,
-      triggering: preserveTriggering || data.status === 'updating',
-      data,
-      error: null,
-    })
-  }
-
-  const loadAllUpdateData = async (
-    serverIds: string[],
-    options?: { silent?: boolean },
-  ): Promise<void> => {
-    if (serverIds.length === 0) return
-
-    if (!options?.silent) {
-      setUpdateStates((prev) => {
-        let next = prev
-        for (const serverId of serverIds) {
-          const current = prev.get(serverId)
-          next = new Map(next).set(serverId, {
-            loading: true,
-            triggering: current?.triggering ?? false,
-            data: current?.data ?? null,
-            error: null,
-          })
-        }
-        return next
-      })
-    }
-
-    try {
-      const batch = await fetchServersUpdateStatus()
-      setUpdateStates((prev) => {
-        let next = prev
-        for (const entry of batch.servers) {
-          if (!serverIds.includes(entry.serverId)) continue
-          next = mergeUpdateEntry(next, entry.serverId, entry, {
-            preserveTriggering: options?.silent,
-          })
-        }
-        return next
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      if (!options?.silent) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to load update status'
-        setUpdateStates((prev) => {
-          let next = prev
-          for (const serverId of serverIds) {
-            const current = prev.get(serverId)
-            next = new Map(next).set(serverId, {
-              loading: false,
-              triggering: current?.triggering ?? false,
-              data: current?.data ?? null,
-              error: message,
-            })
-          }
-          return next
-        })
-      }
-    }
-  }
-
-  const handleTriggerSelectedUpdates = async (): Promise<void> => {
-    const targets = servers.filter(
-      (server) =>
-        selectedIds.has(server.id) && isServerUpdatable(server, updateStates),
-    )
-    if (targets.length === 0) return
-
-    setBatchUpdating(true)
-    setUpdateStates((prev) => {
-      let next = prev
-      for (const server of targets) {
-        const current = prev.get(server.id)
-        next = new Map(next).set(server.id, {
-          loading: current?.loading ?? false,
-          triggering: true,
-          data: current?.data ?? null,
-          error: null,
-        })
-      }
-      return next
-    })
-
-    try {
-      const results = await Promise.allSettled(
-        targets.map((server) => triggerServerUpdate(server.id)),
+  const servers = serversQuery.data?.servers ?? []
+  const loading = serversQuery.isLoading
+  const error = serversQuery.isError
+    ? serversRefreshErrorMessage(
+        serversQuery.error,
+        isForbiddenError(serversQuery.error),
       )
+    : null
 
-      let sawForbidden = false
-      setUpdateStates((prev) => {
-        let next = prev
-        for (let index = 0; index < targets.length; index++) {
-          const server = targets[index]
-          const result = results[index]
-          const current = prev.get(server.id)
-          if (result.status === 'fulfilled') {
-            next = new Map(next).set(server.id, {
-              loading: current?.loading ?? false,
-              triggering: true,
-              data: current?.data ?? null,
-              error: null,
-            })
-            continue
-          }
-          const reason = result.reason
-          if (isForbiddenError(reason)) {
-            sawForbidden = true
-          }
-          const message =
-            reason instanceof Error ? reason.message : 'Failed to trigger update'
-          next = new Map(next).set(server.id, {
-            loading: false,
-            triggering: false,
-            data: current?.data ?? null,
-            error: message,
-          })
-        }
-        return next
-      })
+  const addServerEligibility = useMemo(
+    () =>
+      resolveServerAddEligibility(
+        capacityQuery.isError ? undefined : capacityQuery.data,
+      ),
+    [capacityQuery.data, capacityQuery.isError],
+  )
 
-      if (sawForbidden) {
-        await handleUnauthorized()
-      }
-
-      const anySucceeded = results.some((result) => result.status === 'fulfilled')
-      if (anySucceeded) {
-        void loadAllUpdateData(
-          targets.map((server) => server.id),
-          { silent: true },
-        )
-      }
-    } finally {
-      setBatchUpdating(false)
+  const updateByServerId = useMemo(() => {
+    const map = new Map<string, ServerUpdateStatus>()
+    for (const entry of updatesQuery.data?.servers ?? []) {
+      map.set(entry.serverId, entry)
     }
-  }
+    return map
+  }, [updatesQuery.data])
 
-  const refreshServers = async (options?: {
-    silent?: boolean
-    isCancelled?: () => boolean
-  }): Promise<void> => {
-    const cancelled = (): boolean => options?.isCancelled?.() === true
-    if (!options?.silent) {
-      setLoading(true)
-      setError(null)
-    }
-    try {
-      const result = await fetchOrgServers()
-      if (cancelled()) return
-      setServers(result.servers)
-      setSelectedIds((prev) => pruneSelectedServerIds(prev, result.servers))
-    } catch (err) {
-      if (cancelled()) return
-      const forbidden = isForbiddenError(err)
-      if (forbidden) await handleUnauthorized()
-      if (forbidden || !options?.silent) {
-        setError(serversRefreshErrorMessage(err, forbidden))
-      }
-    } finally {
-      if (!options?.silent && !cancelled()) {
-        setLoading(false)
+  const triggeringServerIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (batchUpdateMutation.isPending && batchUpdateMutation.variables) {
+      for (const serverId of batchUpdateMutation.variables) {
+        ids.add(serverId)
       }
     }
-  }
+    for (const entry of updatesQuery.data?.servers ?? []) {
+      if (entry.status === 'updating') {
+        ids.add(entry.serverId)
+      }
+    }
+    return ids
+  }, [
+    batchUpdateMutation.isPending,
+    batchUpdateMutation.variables,
+    updatesQuery.data,
+  ])
 
   useEffect(() => {
-    let cancelled = false
-    void refreshServers({ isCancelled: () => cancelled })
-    const timer = setInterval(
-      () => void refreshServers({ silent: true, isCancelled: () => cancelled }),
-      SERVERS_REFRESH_MS,
-    )
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, handleUnauthorized])
-
-  useEffect(() => {
-    if (!canOwn) return
-    let cancelled = false
-    void fetchOrgServerCapacity(orgId)
-      .then((capacity) => {
-        if (cancelled) return
-        setAddServerEligibility(resolveServerAddEligibility(capacity))
-      })
-      .catch(async (err) => {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        // Fail open for the display hint — POST /licenses still enforces.
-        setAddServerEligibility(resolveServerAddEligibility())
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [canOwn, orgId, handleUnauthorized, servers.length])
-
-  useEffect(() => {
-    const pendingIds = servers
-      .map((server) => server.id)
-      .filter((serverId) => !updateStates.has(serverId))
-    if (pendingIds.length === 0) return
-    void loadAllUpdateData(pendingIds, { silent: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedIds((prev) => pruneSelectedServerIds(prev, servers))
   }, [servers])
 
-  useEffect(() => {
-    const inProgressIds = [...updateStates.entries()]
-      .filter(([, state]) => state.triggering || state.data?.status === 'updating')
-      .map(([serverId]) => serverId)
-    if (inProgressIds.length === 0) return
-
-    const timer = setInterval(() => {
-      void loadAllUpdateData(inProgressIds, { silent: true })
-    }, UPDATE_PROGRESS_POLL_MS)
-
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateStates])
+  const handleTriggerSelectedUpdates = (): void => {
+    const targets = servers.filter(
+      (server) =>
+        selectedIds.has(server.id) &&
+        isServerUpdatable(server, updateByServerId, triggeringServerIds),
+    )
+    if (targets.length === 0) return
+    batchUpdateMutation.mutate(targets.map((server) => server.id))
+  }
 
   const selectedUpdatableCount = servers.filter(
     (server) =>
-      selectedIds.has(server.id) && isServerUpdatable(server, updateStates),
+      selectedIds.has(server.id) &&
+      isServerUpdatable(server, updateByServerId, triggeringServerIds),
   ).length
 
   const allSelected =
@@ -712,11 +504,15 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     })
   }
 
+  const batchUpdating = batchUpdateMutation.isPending
   const anyUpdateInProgress =
-    batchUpdating ||
-    [...updateStates.values()].some(
-      (state) => state.triggering || state.data?.status === 'updating',
-    )
+    batchUpdating || triggeringServerIds.size > 0
+
+  const refreshServersList = (): void => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).servers.list,
+    })
+  }
 
   return (
     <View style={styles.root}>
@@ -736,11 +532,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           batchUpdating={batchUpdating}
           selectedCount={selectedIds.size}
           selectedUpdatableCount={selectedUpdatableCount}
-          onTriggerSelectedUpdates={() => {
-            handleTriggerSelectedUpdates().catch(() => {
-              // Errors surface via update state.
-            })
-          }}
+          onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
         />
         {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
           <Text style={orgPanelStyles.muted}>{addServerEligibility.reason}</Text>
@@ -808,11 +600,10 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
       {canOwn && showAddServerWizard ? (
         <AddServerWizard
+          orgId={orgId}
           onComplete={() => {
             setShowAddServerWizard(false)
-            refreshServers().catch(() => {
-              // Errors surface via section error state.
-            })
+            refreshServersList()
           }}
           onDismiss={() => setShowAddServerWizard(false)}
         />

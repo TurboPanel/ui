@@ -8,41 +8,24 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
-  applyPublicUrls,
-  fetchPublicUrls,
-  isForbiddenError,
-  savePublicUrls,
-} from '@/lib/instance-api'
+  useApplyPublicUrls,
+  usePublicUrls,
+  useSavePublicUrls,
+} from '@/lib/queries/admin'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
-}
-
-async function recoverIfForbidden(
-  err: unknown,
-  handleUnauthorized: () => Promise<void>,
-): Promise<boolean> {
-  if (!isForbiddenError(err)) {
-    return false
-  }
-  await handleUnauthorized()
-  return true
-}
-
 type ApplyStatus = 'idle' | 'done' | 'failed'
 
 export function ControlPlaneUrlsSection() {
-  const { handleUnauthorized } = useAuth()
+  const publicUrlsQuery = usePublicUrls()
+  const saveMutation = useSavePublicUrls()
+  const applyMutation = useApplyPublicUrls()
+
   const [draft, setDraft] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [applying, setApplying] = useState(false)
   const [applyStatus, setApplyStatus] = useState<ApplyStatus>('idle')
   const [applyError, setApplyError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,43 +33,20 @@ export function ControlPlaneUrlsSection() {
   const [applyNotAvailable, setApplyNotAvailable] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const result = await fetchPublicUrls()
-        if (cancelled) {
-          return
-        }
-        setDraft(result.urls)
-      } catch (err) {
-        if (cancelled) {
-          return
-        }
-        const forbidden = await recoverIfForbidden(err, handleUnauthorized)
-        setError(
-          errorMessage(
-            err,
-            forbidden
-              ? 'Access to public URLs was denied'
-              : 'Failed to load public URLs',
-          ),
-        )
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    if (publicUrlsQuery.data) {
+      setDraft(publicUrlsQuery.data.urls)
     }
+  }, [publicUrlsQuery.data])
 
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [handleUnauthorized])
+  let queryError: string | null = null
+  if (publicUrlsQuery.isError) {
+    queryError =
+      publicUrlsQuery.error instanceof Error
+        ? publicUrlsQuery.error.message
+        : 'Failed to load public URLs'
+  }
+  const displayError =
+    error ?? saveMutation.actionError ?? applyMutation.actionError ?? queryError
 
   const clearApplyFeedback = () => {
     setApplyStatus('idle')
@@ -109,56 +69,45 @@ export function ControlPlaneUrlsSection() {
     clearApplyFeedback()
   }
 
-  const onSave = async () => {
-    setSaving(true)
+  const onSave = () => {
     setError(null)
-    try {
-      const result = await savePublicUrls(draft)
-      setDraft(result.urls)
-    } catch (err) {
-      const forbidden = await recoverIfForbidden(err, handleUnauthorized)
-      setError(
-        errorMessage(
-          err,
-          forbidden
-            ? 'Access to public URLs was denied'
-            : 'Failed to save public URLs',
-        ),
-      )
-    } finally {
-      setSaving(false)
-    }
+    saveMutation.mutate(draft, {
+      onSuccess: (result) => {
+        setDraft(result.urls)
+      },
+      onError: () => {
+        setError(saveMutation.actionError ?? 'Failed to save public URLs')
+      },
+    })
   }
 
-  const handleApplyError = async (err: unknown) => {
-    const message = errorMessage(err, 'Failed to apply public URLs')
+  const handleApplyError = (message: string) => {
     if (message.includes(WORKERS_APPLY_MESSAGE)) {
       setApplyNotAvailable(true)
       clearApplyFeedback()
       return
     }
-    await recoverIfForbidden(err, handleUnauthorized)
     setApplyStatus('failed')
     setApplyError(message)
   }
 
-  const onSaveAndApply = async () => {
-    setApplying(true)
+  const onSaveAndApply = () => {
     setError(null)
     clearApplyFeedback()
-    try {
-      const result = await applyPublicUrls(draft)
-      if (result.ok && result.applied) {
-        setApplyStatus('done')
-        return
-      }
-      setApplyStatus('failed')
-      setApplyError(result.error ?? 'Apply failed')
-    } catch (err) {
-      await handleApplyError(err)
-    } finally {
-      setApplying(false)
-    }
+    applyMutation.mutate(draft, {
+      onSuccess: (result) => {
+        if (result.ok && result.applied) {
+          setApplyStatus('done')
+          return
+        }
+        setApplyStatus('failed')
+        setApplyError(result.error ?? 'Apply failed')
+      },
+      onError: () => {
+        const message = applyMutation.actionError ?? 'Failed to apply public URLs'
+        handleApplyError(message)
+      },
+    })
   }
 
   return (
@@ -173,23 +122,23 @@ export function ControlPlaneUrlsSection() {
         title="Public URLs"
         hint="Addresses this control plane is reachable at (used for TLS cert SANs)"
       >
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-        {loading ? (
+        {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+        {publicUrlsQuery.isLoading ? (
           <Text style={orgPanelStyles.muted}>Loading...</Text>
         ) : (
           <PublicUrlsEditor
             draft={draft}
             newUrl={newUrl}
-            saving={saving}
-            applying={applying}
+            saving={saveMutation.isPending}
+            applying={applyMutation.isPending}
             applyStatus={applyStatus}
             applyError={applyError}
             applyNotAvailable={applyNotAvailable}
             onNewUrlChange={setNewUrl}
             onAddUrl={onAddUrl}
             onRemoveUrl={onRemoveUrl}
-            onSave={() => void onSave()}
-            onSaveAndApply={() => void onSaveAndApply()}
+            onSave={onSave}
+            onSaveAndApply={onSaveAndApply}
           />
         )}
       </SectionPanel>

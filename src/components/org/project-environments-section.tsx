@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
-  createEnvironment,
-  deleteEnvironment,
-  fetchVisibleEnvironments,
-  isForbiddenError,
-  updateEnvironment,
-  type EnvironmentRecord,
-} from '@/lib/instance-api'
+  useCreateEnvironment,
+  useDeleteEnvironment,
+  useEnvironments,
+  useUpdateEnvironment,
+} from '@/lib/queries'
+import type { EnvironmentRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
@@ -247,105 +245,76 @@ export function ProjectEnvironmentsSection({
 }: Readonly<{
   orgId: string
   projectId: string
-  /** When false, only environment chrome (tabs/rename) — no compose detail body. */
   embedDetail?: boolean
 }>) {
-  const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const {
     defaultEnvironmentName,
     isLoading: defaultNameLoading,
   } = useOrgDefaultEnvironmentName(orgId)
-  const [environments, setEnvironments] = useState<EnvironmentRecord[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
+  const environmentsQuery = useEnvironments(orgId, projectId)
+  const createEnvironment = useCreateEnvironment(orgId)
+  const environments = environmentsQuery.data?.environments ?? []
+  const loading = environmentsQuery.isLoading || defaultNameLoading
+
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
-  const [renameSaving, setRenameSaving] = useState(false)
-
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
-
   const [deleteArmed, setDeleteArmed] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
-  // Only ever auto-provision the default environment once per project (survives
-  // React StrictMode's double effect invocation in development).
   const provisionAttemptedFor = useRef<string | null>(null)
-
-  const reload = async (): Promise<EnvironmentRecord[]> => {
-    const result = await fetchVisibleEnvironments(projectId)
-    return result.environments
-  }
-
-  useEffect(() => {
-    // Wait for the org default name query to settle so a custom org default is
-    // never raced by the platform fallback while still loading.
-    if (defaultNameLoading) {
-      return
-    }
-
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        let envs = await reload()
-        if (
-          envs.length === 0 &&
-          canOwn &&
-          provisionAttemptedFor.current !== projectId
-        ) {
-          provisionAttemptedFor.current = projectId
-          await createEnvironment({
-            projectId,
-            displayName: defaultEnvironmentName,
-          })
-          envs = await reload()
-        }
-        if (cancelled) {
-          return
-        }
-        setEnvironments(envs)
-        setSelectedId((previous) => resolveSelectedId(previous, envs))
-      } catch (err) {
-        if (cancelled) {
-          return
-        }
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(
-          err instanceof Error ? err.message : 'Failed to load environments',
-        )
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [
-    projectId,
-    canOwn,
-    handleUnauthorized,
-    defaultEnvironmentName,
-    defaultNameLoading,
-  ])
 
   const activeEnvironment =
     environments.find((env) => env.id === selectedId) ?? null
+
+  const updateEnvironment = useUpdateEnvironment(
+    orgId,
+    activeEnvironment?.id ?? '',
+  )
+  const deleteEnvironment = useDeleteEnvironment(orgId)
+
+  useEffect(() => {
+    setSelectedId((previous) => resolveSelectedId(previous, environments))
+  }, [environments])
+
+  useEffect(() => {
+    if (defaultNameLoading || environmentsQuery.isLoading) return
+    if (
+      environments.length === 0 &&
+      canOwn &&
+      provisionAttemptedFor.current !== projectId
+    ) {
+      provisionAttemptedFor.current = projectId
+      createEnvironment
+        .run({
+          projectId,
+          displayName: defaultEnvironmentName,
+        })
+        .then((result) => {
+          if (!result.ok && createEnvironment.actionError) {
+            setError(createEnvironment.actionError)
+          }
+        })
+    }
+  }, [
+    environments.length,
+    canOwn,
+    projectId,
+    defaultEnvironmentName,
+    defaultNameLoading,
+    environmentsQuery.isLoading,
+    createEnvironment,
+  ])
+
+  const queryError =
+    environmentsQuery.error instanceof Error
+      ? environmentsQuery.error.message
+      : null
 
   const selectEnvironment = (id: string) => {
     setSelectedId(id)
@@ -355,9 +324,7 @@ export function ProjectEnvironmentsSection({
   }
 
   const startRename = () => {
-    if (!activeEnvironment) {
-      return
-    }
+    if (!activeEnvironment) return
     setRenameValue(activeEnvironment.displayName?.trim() ?? '')
     setRenaming(true)
     setShowCreate(false)
@@ -365,36 +332,22 @@ export function ProjectEnvironmentsSection({
   }
 
   const saveRename = async () => {
-    if (!activeEnvironment) {
-      return
-    }
+    if (!activeEnvironment) return
     const trimmed = renameValue.trim()
     const validation = validateEnvironmentName(trimmed)
     if (validation) {
       setError(validation)
       return
     }
-    setRenameSaving(true)
     setError(null)
-    try {
-      await updateEnvironment(activeEnvironment.id, { displayName: trimmed })
-      setEnvironments((current) =>
-        current.map((env) =>
-          env.id === activeEnvironment.id
-            ? { ...env, displayName: trimmed }
-            : env,
-        ),
-      )
-      setRenaming(false)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await updateEnvironment.run({ displayName: trimmed })
+    if (!result.ok) {
+      if (updateEnvironment.actionError) {
+        setError(updateEnvironment.actionError)
       }
-      setError(err instanceof Error ? err.message : 'Failed to rename environment')
-    } finally {
-      setRenameSaving(false)
+      return
     }
+    setRenaming(false)
   }
 
   const submitCreate = async () => {
@@ -404,50 +357,34 @@ export function ProjectEnvironmentsSection({
       setCreateError(validation)
       return
     }
-    setCreating(true)
     setCreateError(null)
     setError(null)
-    try {
-      const result = await createEnvironment({ projectId, displayName: trimmed })
-      const envs = await reload()
-      setEnvironments(envs)
-      setSelectedId(result.id)
-      setCreateName('')
-      setShowCreate(false)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await createEnvironment.run({
+      projectId,
+      displayName: trimmed,
+    })
+    if (!result.ok) {
+      if (createEnvironment.actionError) {
+        setCreateError(createEnvironment.actionError)
       }
-      setCreateError(
-        err instanceof Error ? err.message : 'Failed to create environment',
-      )
-    } finally {
-      setCreating(false)
+      return
     }
+    setSelectedId(result.value.id)
+    setCreateName('')
+    setShowCreate(false)
   }
 
   const deleteActive = async () => {
-    if (!activeEnvironment) {
+    if (!activeEnvironment) return
+    setError(null)
+    const result = await deleteEnvironment.run(activeEnvironment.id)
+    if (!result.ok) {
+      if (deleteEnvironment.actionError) {
+        setError(deleteEnvironment.actionError)
+      }
       return
     }
-    setDeleting(true)
-    setError(null)
-    try {
-      await deleteEnvironment(activeEnvironment.id)
-      const envs = await reload()
-      setEnvironments(envs)
-      setSelectedId(envs[0]?.id ?? null)
-      setDeleteArmed(false)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to delete environment')
-    } finally {
-      setDeleting(false)
-    }
+    setDeleteArmed(false)
   }
 
   let content
@@ -471,7 +408,7 @@ export function ProjectEnvironmentsSection({
         {renaming ? (
           <EnvironmentRenameForm
             value={renameValue}
-            saving={renameSaving}
+            saving={updateEnvironment.isPending}
             onChange={setRenameValue}
             onSave={() => void saveRename()}
             onCancel={() => setRenaming(false)}
@@ -487,7 +424,7 @@ export function ProjectEnvironmentsSection({
               setDeleteArmed(false)
             }}
             deleteArmed={deleteArmed}
-            deleting={deleting}
+            deleting={deleteEnvironment.isPending}
             onConfirmDelete={() => void deleteActive()}
             onToggleArm={() => setDeleteArmed((current) => !current)}
           />
@@ -496,7 +433,7 @@ export function ProjectEnvironmentsSection({
           <EnvironmentCreateForm
             value={createName}
             fieldError={createError}
-            creating={creating}
+            creating={createEnvironment.isPending}
             onChange={(value) => {
               setCreateName(value)
               setCreateError(null)
@@ -525,7 +462,9 @@ export function ProjectEnvironmentsSection({
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Environments</Text>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ?? queryError ? (
+        <Text style={orgPanelStyles.error}>{error ?? queryError}</Text>
+      ) : null}
       {content}
     </View>
   )

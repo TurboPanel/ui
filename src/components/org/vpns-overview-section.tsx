@@ -8,40 +8,20 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import { VPN_CIDR_IN_USE_ERROR, type VpnRecord } from '@/lib/instance-api'
 import {
-  createVpn,
-  deleteVpn,
-  fetchPeers,
-  fetchVpns,
-  isForbiddenError,
-  updateVpn,
-  VPN_CIDR_IN_USE_ERROR,
-  type VpnRecord,
-} from '@/lib/instance-api'
+  peersQueryOptions,
+  useCreateVpn,
+  useDeleteVpn,
+  useRenameVpn,
+  useVpns,
+} from '@/lib/queries/topology'
+import { useCan } from '@/lib/query-client'
 import { vpnDetailHref } from '@/lib/org-navigation'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
-}
-
-function friendlyCreateError(err: unknown): string {
-  const message = errorMessage(err, 'Failed to create VPN')
-  if (message.includes(VPN_CIDR_IN_USE_ERROR)) {
-    return 'Another mesh already uses that CIDR.'
-  }
-  return message
-}
 
 function vpnTitle(vpn: VpnRecord): string {
   return vpn.displayName?.trim() || 'Unnamed VPN'
@@ -168,8 +148,6 @@ export function VpnsOverviewSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
   const router = useRouter()
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState('')
@@ -177,18 +155,16 @@ export function VpnsOverviewSection({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
 
-  const vpnsQuery = useQuery({
-    queryKey: ['org', orgId, 'vpns'],
-    queryFn: fetchVpns,
-  })
-  useForbiddenRecovery(vpnsQuery.error)
+  const vpnsQuery = useVpns(orgId)
+  const createMutation = useCreateVpn(orgId)
+  const renameMutation = useRenameVpn(orgId)
+  const deleteMutation = useDeleteVpn(orgId)
 
   const vpns = vpnsQuery.data?.vpns ?? []
 
   const peerQueries = useQueries({
     queries: vpns.map((vpn) => ({
-      queryKey: ['org', orgId, 'vpns', vpn.id, 'peers'],
-      queryFn: () => fetchPeers(vpn.id),
+      ...peersQueryOptions(orgId, vpn.id),
       enabled: vpns.length > 0,
     })),
   })
@@ -210,63 +186,15 @@ export function VpnsOverviewSection({
     return map
   }, [peerQueries, vpns])
 
-  const peerQueryError = peerQueries.find((q) => q.error)?.error ?? null
-  useForbiddenRecovery(peerQueryError)
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      createVpn({
-        displayName: displayName.trim() || undefined,
-        cidr: meshCidr.trim(),
-      }),
-    onSuccess: async () => {
-      setError(null)
-      setDisplayName('')
-      setMeshCidr('')
-      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(friendlyCreateError(err))
-    },
-  })
-
-  const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      updateVpn(id, { displayName: name || null }),
-    onSuccess: async () => {
-      setError(null)
-      setRenamingId(null)
-      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to rename VPN'))
-      setRenamingId(null)
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteVpn(id),
-    onSuccess: async () => {
-      setError(null)
-      setConfirmDeleteId(null)
-      await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] })
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to delete VPN'))
-    },
-  })
+  let queryError: string | null = null
+  if (vpnsQuery.isError) {
+    queryError =
+      vpnsQuery.error instanceof Error
+        ? vpnsQuery.error.message
+        : 'Failed to load VPNs'
+  }
+  const displayError =
+    error ?? createMutation.actionError ?? renameMutation.actionError ?? deleteMutation.actionError ?? queryError
 
   const loading = vpnsQuery.isLoading
   const createDisabled =
@@ -280,12 +208,7 @@ export function VpnsOverviewSection({
         host needs to be a peer — more peers per site improve redundancy.
       </Text>
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      {vpnsQuery.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
-          {errorMessage(vpnsQuery.error, 'Failed to load VPNs')}
-        </Text>
-      ) : null}
+      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       {canManage ? (
         <SectionPanel title="Create VPN" hint="Manage-gated">
@@ -319,7 +242,30 @@ export function VpnsOverviewSection({
               webPointer,
             ]}
             disabled={createDisabled}
-            onPress={() => createMutation.mutate()}
+            onPress={() => {
+              setError(null)
+              createMutation.mutate(
+                {
+                  displayName: displayName.trim() || undefined,
+                  cidr: meshCidr.trim(),
+                },
+                {
+                  onSuccess: () => {
+                    setDisplayName('')
+                    setMeshCidr('')
+                  },
+                  onError: () => {
+                    const message =
+                      createMutation.actionError ?? 'Failed to create VPN'
+                    setError(
+                      message.includes(VPN_CIDR_IN_USE_ERROR)
+                        ? 'Another mesh already uses that CIDR.'
+                        : message,
+                    )
+                  },
+                },
+              )
+            }}
           >
             {createMutation.isPending ? (
               <ActivityIndicator size="small" color={colors.textMuted} />
@@ -354,10 +300,26 @@ export function VpnsOverviewSection({
               onOpen={() => router.push(vpnDetailHref(orgId, vpn.id))}
               onRename={(name) => {
                 setRenamingId(vpn.id)
-                renameMutation.mutate({ id: vpn.id, name })
+                renameMutation.mutate(
+                  { vpnId: vpn.id, name },
+                  {
+                    onSuccess: () => setRenamingId(null),
+                    onError: () => {
+                      setError(renameMutation.actionError ?? 'Failed to rename VPN')
+                      setRenamingId(null)
+                    },
+                  },
+                )
               }}
               onRequestDelete={() => setConfirmDeleteId(vpn.id)}
-              onConfirmDelete={() => deleteMutation.mutate(vpn.id)}
+              onConfirmDelete={() => {
+                deleteMutation.mutate(vpn.id, {
+                  onSuccess: () => setConfirmDeleteId(null),
+                  onError: () => {
+                    setError(deleteMutation.actionError ?? 'Failed to delete VPN')
+                  },
+                })
+              }}
               onCancelDelete={() => setConfirmDeleteId(null)}
             />
           ))}

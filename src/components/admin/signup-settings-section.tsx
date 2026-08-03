@@ -1,16 +1,12 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import type { SignupSettingsResponse } from '@/lib/instance-api'
 import {
-  fetchSignupSettings,
-  isForbiddenError,
-  saveSignupSettings,
-  type SignupSettingsResponse,
-} from '@/lib/instance-api'
-import { useForbiddenRecovery } from '@/lib/query-client'
+  useSaveSignupSettings,
+  useSignupSettings,
+} from '@/lib/queries/admin'
 import { HA_SIGNUP_SETTINGS_NOTE } from '@/lib/platform-copy'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -19,34 +15,21 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 export function SignupSettingsSection() {
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
 
-  const query = useQuery({
-    queryKey: ['admin', 'settings', 'signup'],
-    queryFn: fetchSignupSettings,
-  })
-  useForbiddenRecovery(query.error)
-
-  const mutation = useMutation({
-    mutationFn: (enabled: boolean) => saveSignupSettings(enabled),
-    onSuccess: (data) => {
-      setError(null)
-      queryClient.setQueryData(['admin', 'settings', 'signup'], data)
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      setError(errorMessage(err, 'Failed to update sign-up setting'))
-    },
-  })
+  const query = useSignupSettings()
+  const mutation = useSaveSignupSettings()
 
   const settings = query.data
   const enabled = settings?.enabled === true
   const envForced = settings?.isEnvForced === true
   const pending = mutation.isPending || query.isLoading
+
+  const queryError =
+    query.isError && !error
+      ? errorMessage(query.error, 'Failed to load sign-up setting')
+      : null
+  const displayError = error ?? mutation.actionError ?? queryError
 
   return (
     <View style={styles.root}>
@@ -60,12 +43,7 @@ export function SignupSettingsSection() {
         title="Public sign-up"
         hint="When enabled, guests see Create account and can open /sign-up"
       >
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-        {query.isError && !error ? (
-          <Text style={orgPanelStyles.error}>
-            {errorMessage(query.error, 'Failed to load sign-up setting')}
-          </Text>
-        ) : null}
+        {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
         {envForced ? (
           <Text style={orgPanelStyles.muted}>
@@ -83,7 +61,14 @@ export function SignupSettingsSection() {
             disabled={pending || envForced || !settings}
             onPress={() => {
               if (!settings) return
-              mutation.mutate(!enabled)
+              setError(null)
+              mutation.mutate(!enabled, {
+                onError: () => {
+                  setError(
+                    mutation.actionError ?? 'Failed to update sign-up setting',
+                  )
+                },
+              })
             }}
             style={[
               styles.toggle,

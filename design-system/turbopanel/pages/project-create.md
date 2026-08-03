@@ -9,11 +9,19 @@
 
 ## Flow
 
-1. **Details** (`/projects/new`) — workspace + name → `POST /projects` with `type: 'empty'`
+1. **Details** (`/projects/new`) — name, optional description, workspace (existing or create) → `POST /projects` with `type: 'empty'`
 2. **Type** (`/projects/:id/setup`) — Docker Compose / Template / Managed
 3. **Catalog** — template or managed engine only; Compose configures immediately
 
 Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
+
+## Details step fields
+
+- **Name** (required) — unique within the organization (trim + case-insensitive; enforced by API)
+- **Description** (optional)
+- **Workspace** — segment: Existing | Create new
+  - Existing: picker of visible workspaces (preselected from `?workspaceId=` / active scope / sole workspace)
+  - Create new: Same as project | Custom name; creates the workspace first, then the project
 
 ## UX rules
 
@@ -21,6 +29,7 @@ Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
 - Interrupted setup is resumable (open project → setup until type is set)
 - Projects remain undeployed during setup
 - Touch targets ≥ 44pt; one column on phone
+- Surface `project_name_in_use` / `workspace_name_in_use` as plain-language field/API errors
 
 ## Anti-patterns
 

@@ -2,6 +2,7 @@ import {
   createElement,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type Dispatch,
@@ -9,7 +10,7 @@ import {
 } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
-import { persistEnvironmentCompose } from '@/components/org/compose-persistence'
+import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import { DeployPreviewPanel } from '@/components/org/deploy-preview-panel'
 import {
   ContainerRoleBadge,
@@ -20,23 +21,8 @@ import { StorageSection } from '@/components/org/storage-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { VariablesSection } from '@/components/org/variables-section'
-import { useAuth } from '@/lib/auth-context'
 import {
-  createHosting,
   DeployHealthCheckMissingError,
-  deployEnvironment,
-  fetchContainers,
-  fetchEnvironment,
-  fetchIps,
-  fetchOrgServers,
-  fetchProject,
-  fetchTlsLibrary,
-  fetchVisibleHostings,
-  fetchVisibleServices,
-  fetchCommand,
-  isForbiddenError,
-  updateEnvironment,
-  updateHosting,
   type CommandRecord,
   type ComposeDocument,
   type ContainerRecord,
@@ -47,6 +33,28 @@ import {
   type ServiceRecord,
   type TlsRecord,
 } from '@/lib/instance-api'
+import {
+  isTerminalCommandStatus,
+  useCommandsBatch,
+  type TrackedCommandEntry,
+} from '@/lib/queries/commands'
+import {
+  useContainersByServices,
+} from '@/lib/queries/containers'
+import {
+  useDeployEnvironment,
+  useEnvironment,
+  useUpdateEnvironment,
+} from '@/lib/queries/environments'
+import { useProject } from '@/lib/queries/projects'
+import { useOrgServers } from '@/lib/queries/servers'
+import {
+  useHostingsByServices,
+  useServices,
+  useUpsertHosting,
+} from '@/lib/queries/services'
+import { useTlsLibrary } from '@/lib/queries/tls'
+import { useIps } from '@/lib/queries/topology'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
@@ -60,10 +68,13 @@ import {
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
   stripComposePlacement,
+  withEffectivePlacement,
   type HostingServiceContext,
 } from '@/lib/compose'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { useCan } from '@/lib/query-client'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
 type HostingProtocol = 'http' | 'tcp' | 'udp'
@@ -275,13 +286,6 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
   return options
 }
 
-const TERMINAL_COMMAND_STATUSES = new Set<CommandRecord['status']>([
-  'succeeded',
-  'failed',
-  'timed_out',
-  'cancelled',
-])
-
 function composeServiceNames(document: ComposeDocument): string[] {
   const services = document.data.services
   if (typeof services !== 'object' || services === null || Array.isArray(services)) {
@@ -309,39 +313,6 @@ function serverLabel(server: OrgServerRecord): string {
 function serverOptionLabel(server: OrgServerRecord): string {
   const base = serverLabel(server)
   return server.connected ? base : `${base} (offline)`
-}
-
-async function fetchHostingsByService(services: ServiceRecord[]): Promise<{
-  byService: Record<string, HostingRecord[]>
-  editors: Record<string, HostingEditorState>
-}> {
-  const entries = await Promise.all(
-    services.map(async (service) => {
-      const hostings = await fetchVisibleHostings(service.id)
-      return [service.id, hostings.hostings] as const
-    }),
-  )
-  return {
-    byService: Object.fromEntries(entries),
-    editors: Object.fromEntries(
-      entries.map(([serviceId, hostings]) => [
-        serviceId,
-        readHostingEditor(hostings),
-      ]),
-    ),
-  }
-}
-
-async function fetchContainersByService(
-  services: ServiceRecord[],
-): Promise<Record<string, ContainerRecord[]>> {
-  const entries = await Promise.all(
-    services.map(async (service) => {
-      const result = await fetchContainers({ serviceId: service.id })
-      return [service.id, result.containers] as const
-    }),
-  )
-  return Object.fromEntries(entries)
 }
 
 function containerDisplayName(container: ContainerRecord): string {
@@ -392,57 +363,6 @@ function upsertServiceById(
   return copy
 }
 
-async function waitForTerminalCommand(
-  serverId: string,
-  commandId: string,
-): Promise<CommandRecord> {
-  let command = await fetchCommand(serverId, commandId)
-  while (!TERMINAL_COMMAND_STATUSES.has(command.status)) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 2000))
-    command = await fetchCommand(serverId, commandId)
-  }
-  return command
-}
-
-/** Consumer marks deploy succeeded before container reconcile finishes — retry briefly. */
-const POST_DEPLOY_CONTAINER_REFRESH_ATTEMPTS = 5
-const POST_DEPLOY_CONTAINER_REFRESH_DELAY_MS = 400
-
-function hasAnyContainers(
-  services: ServiceRecord[],
-  containersByService: Record<string, ContainerRecord[]>,
-): boolean {
-  return services.some((service) => (containersByService[service.id] ?? []).length > 0)
-}
-
-async function refreshServicesAndContainersAfterDeploy(
-  environmentId: string,
-): Promise<{
-  services: ServiceRecord[]
-  containersByService: Record<string, ContainerRecord[]>
-}> {
-  let services: ServiceRecord[] = []
-  let containersByService: Record<string, ContainerRecord[]> = {}
-
-  for (let attempt = 0; attempt < POST_DEPLOY_CONTAINER_REFRESH_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      await new Promise<void>((resolve) =>
-        setTimeout(resolve, POST_DEPLOY_CONTAINER_REFRESH_DELAY_MS),
-      )
-    }
-    const servicesResult = await fetchVisibleServices(environmentId)
-    services = servicesResult.services
-    containersByService = await fetchContainersByService(services)
-    // Always take a second pass when rows appear on attempt 0 — they may still
-    // be pre-reconcile. Stop once a deferred attempt sees containers.
-    if (attempt > 0 && hasAnyContainers(services, containersByService)) {
-      break
-    }
-  }
-
-  return { services, containersByService }
-}
-
 function deployStatusMessage(command: CommandRecord): string {
   if (command.status === 'succeeded') {
     return 'Deployment completed.'
@@ -456,45 +376,6 @@ function deployErrorMessage(err: unknown): string {
     return "Deploy target does not match the project's pinned server placement."
   }
   return message
-}
-
-async function reportSectionError(
-  err: unknown,
-  handleUnauthorized: () => Promise<void>,
-  setMessage: (message: string) => void,
-  fallback: string,
-): Promise<void> {
-  if (isForbiddenError(err)) {
-    await handleUnauthorized()
-    return
-  }
-  setMessage(errorMessage(err, fallback))
-}
-
-async function upsertHosting(
-  serviceId: string,
-  composeServiceName: string,
-  editor: HostingEditorState,
-  hostingsByService: Record<string, HostingRecord[]>,
-): Promise<void> {
-  const existing = hostingsByService[serviceId]?.[0]
-  const options = buildHostingOptions(editor)
-  if (existing) {
-    await updateHosting(existing.id, {
-      metadata: { composeServiceName },
-      options,
-      tlsId: editor.tlsId,
-      ipId: editor.ipId,
-    })
-    return
-  }
-  await createHosting(serviceId, {
-    displayName: composeServiceName,
-    metadata: { composeServiceName },
-    options,
-    tlsId: editor.tlsId,
-    ipId: editor.ipId,
-  })
 }
 
 function tlsLabel(row: TlsRecord): string {
@@ -1058,14 +939,14 @@ function EnvironmentPlacementPanel({
       title="Server"
       hint={
         inheritsProjectDefault
-          ? 'Inherited from project Base — pick a server to override for this environment'
+          ? 'Inherited from Project — pick a server to override for this environment'
           : 'Required — this environment deploys to one server'
       }
     >
       {picker}
       {!placementServerId ? (
         <Text style={orgPanelStyles.error}>
-          Select a server before deploying (or set a default on Base).
+          Select a server before deploying (or set a default on Project).
         </Text>
       ) : null}
       {selectedOffline ? (
@@ -1147,7 +1028,7 @@ function EnvironmentLoadedPanels({
   onSavePlacement,
   inheritsProjectDefault = false,
   services,
-  setServices,
+  onServiceChange,
   hostingEditors,
   setHostingEditors,
   hostingsByService,
@@ -1178,7 +1059,7 @@ function EnvironmentLoadedPanels({
   onSavePlacement: (serverId: string) => void
   inheritsProjectDefault?: boolean
   services: ServiceRecord[]
-  setServices: Dispatch<SetStateAction<ServiceRecord[]>>
+  onServiceChange: (nextService: ServiceRecord) => void
   hostingEditors: Record<string, HostingEditorState>
   setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
   hostingsByService: Record<string, HostingRecord[]>
@@ -1223,6 +1104,7 @@ function EnvironmentLoadedPanels({
       </SectionPanel>
 
       <DeployPreviewPanel
+        orgId={orgId}
         environmentId={environment.id}
         canManage={canManage}
         placementServerId={placementServerId}
@@ -1328,12 +1210,11 @@ function EnvironmentLoadedPanels({
               return (
                 <ServiceSettingsPanel
                   key={composeServiceName}
+                  orgId={orgId}
                   composeServiceName={composeServiceName}
                   service={service}
                   canManage={canManage}
-                  onServiceChange={(nextService) =>
-                    setServices((current) => upsertServiceById(current, nextService))
-                  }
+                  onServiceChange={onServiceChange}
                 />
               )
             })}
@@ -1407,124 +1288,191 @@ export function EnvironmentDetailBody({
   environmentId: string
   embedded?: boolean
 }>) {
-  const { handleUnauthorized } = useAuth()
+  const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [environment, setEnvironment] = useState<EnvironmentRecord | null>(null)
-  const [loading, setLoading] = useState(true)
+  const persistEnvironmentCompose = usePersistEnvironmentCompose(
+    orgId,
+    environmentId,
+  )
+
+  const environmentQuery = useEnvironment(orgId, environmentId)
+  const projectQuery = useProject(orgId, projectId)
+  const serversQuery = useOrgServers(orgId)
+  const servicesQuery = useServices(orgId, environmentId)
+  const tlsQuery = useTlsLibrary(orgId)
+  const ipsQuery = useIps(orgId, { scope: 'public' })
+
+  const services = servicesQuery.data?.services
+  const serviceIds = useMemo(
+    () => (services ?? []).map((service) => service.id),
+    [services],
+  )
+
+  const hostingsQuery = useHostingsByServices(orgId, serviceIds, {
+    enabled: serviceIds.length > 0,
+  })
+  const containersQuery = useContainersByServices(orgId, serviceIds, {
+    enabled: serviceIds.length > 0,
+  })
+
+  const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
+  const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
+  const upsertHostingMutation = useUpsertHosting(orgId)
+
   const [error, setError] = useState<string | null>(null)
-  const [projectCompose, setProjectCompose] = useState<unknown>(null)
-  const [projectDefaultServerId, setProjectDefaultServerId] = useState<
-    string | null
-  >(null)
-  const [savingCompose, setSavingCompose] = useState(false)
-  const [savingPlacement, setSavingPlacement] = useState(false)
-  const [allServers, setAllServers] = useState<OrgServerRecord[]>([])
-  const [deploying, setDeploying] = useState(false)
-  const [deployStatus, setDeployStatus] = useState<string | null>(null)
-  const [services, setServices] = useState<ServiceRecord[]>([])
-  const [hostingsByService, setHostingsByService] = useState<Record<string, HostingRecord[]>>({})
-  const [hostingEditors, setHostingEditors] = useState<Record<string, HostingEditorState>>({})
-  const [tlsLibrary, setTlsLibrary] = useState<TlsRecord[]>([])
-  const [publicIps, setPublicIps] = useState<IpRecord[]>([])
+  const [hostingEditors, setHostingEditors] = useState<
+    Record<string, HostingEditorState>
+  >({})
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [healthCheckPrompt, setHealthCheckPrompt] = useState<{
     services: string[]
     required: boolean
   } | null>(null)
-  const [containersByService, setContainersByService] = useState<
-    Record<string, ContainerRecord[]>
-  >({})
+  const [deployStatus, setDeployStatus] = useState<string | null>(null)
+  const [trackedEntries, setTrackedEntries] = useState<
+    readonly TrackedCommandEntry[]
+  >([])
+  const [activeDeployCommandId, setActiveDeployCommandId] = useState<
+    string | null
+  >(null)
+  const postDeployRefreshRef = useRef(0)
+
+  const commandsQuery = useCommandsBatch(orgId, trackedEntries)
+
+  const environment = environmentQuery.data?.environment ?? null
+  const projectCompose = projectQuery.data?.project.options?.compose ?? null
+  const projectDefaultServerId =
+    projectQuery.data?.project.options?.defaultServerId ?? null
+  const allServers = serversQuery.data?.servers ?? []
+  const tlsLibrary = tlsQuery.data?.tls ?? []
+  const publicIps = ipsQuery.data?.ips ?? []
+  const hostingsByService = hostingsQuery.hostingsByService
+  const containersByService = containersQuery.containersByService
+  const resolvedServices = services ?? []
+
+  const loading =
+    (environmentQuery.isLoading && !environment) ||
+    projectQuery.isLoading ||
+    serversQuery.isLoading ||
+    servicesQuery.isLoading ||
+    tlsQuery.isLoading ||
+    ipsQuery.isLoading ||
+    (serviceIds.length > 0 &&
+      (hostingsQuery.isLoading || containersQuery.isLoading))
+
+  const queryError =
+    environmentQuery.error ??
+    projectQuery.error ??
+    serversQuery.error ??
+    servicesQuery.error ??
+    tlsQuery.error ??
+    ipsQuery.error
 
   useEffect(() => {
-    let cancelled = false
+    if (queryError) {
+      setError(
+        queryError instanceof Error
+          ? queryError.message
+          : 'Failed to load environment',
+      )
+    }
+  }, [queryError])
 
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [
-          result,
-          projectResult,
-          serversResult,
-          servicesResult,
-          tlsResult,
-          ipsResult,
-        ] = await Promise.all([
-          fetchEnvironment(environmentId),
-          fetchProject(projectId),
-          fetchOrgServers(),
-          fetchVisibleServices(environmentId),
-          fetchTlsLibrary(),
-          fetchIps({ scope: 'public' }),
-        ])
-        if (cancelled) {
-          return
-        }
-        setEnvironment(result.environment)
-        setProjectCompose(projectResult.project.options?.compose)
-        setProjectDefaultServerId(
-          projectResult.project.options?.defaultServerId ?? null,
-        )
-        setAllServers(serversResult.servers)
-        setServices(servicesResult.services)
-        setTlsLibrary(tlsResult.tls)
-        setPublicIps(ipsResult.ips)
-        const [hostingState, containersState] = await Promise.all([
-          fetchHostingsByService(servicesResult.services),
-          fetchContainersByService(servicesResult.services),
-        ])
-        if (cancelled) {
-          return
-        }
-        setHostingsByService(hostingState.byService)
-        setHostingEditors(hostingState.editors)
-        setContainersByService(containersState)
-      } catch (err) {
-        if (cancelled) {
-          return
-        }
-        await reportSectionError(
-          err,
-          handleUnauthorized,
-          setError,
-          'Failed to load environment',
-        )
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+  // Seed editors once per service id. Return the same state object when
+  // nothing is missing so a new hostingsByService identity cannot loop.
+  useEffect(() => {
+    if (loading) return
+    setHostingEditors((current) => {
+      let changed = false
+      const next = { ...current }
+      for (const serviceId of serviceIds) {
+        if (serviceId in next) continue
+        next[serviceId] = readHostingEditor(hostingsByService[serviceId] ?? [])
+        changed = true
       }
-    }
-
-    load().catch(() => {
-      // Errors are handled inside load via setError / unauthorized recovery.
+      return changed ? next : current
     })
+  }, [loading, serviceIds, hostingsByService])
 
-    return () => {
-      cancelled = true
+  useEffect(() => {
+    if (!commandsQuery.data || trackedEntries.length === 0) return
+    for (const [index, record] of commandsQuery.data.entries()) {
+      const entry = trackedEntries[index]
+      if (entry?.commandId !== activeDeployCommandId) continue
+      if (!isTerminalCommandStatus(record.status)) continue
+
+      setDeployStatus(deployStatusMessage(record))
+      setActiveDeployCommandId(null)
+      setTrackedEntries((current) =>
+        current.filter((row) => row.commandId !== entry.commandId),
+      )
+
+      if (record.status !== 'succeeded') continue
+
+      const refreshAttempt = ++postDeployRefreshRef.current
+      void (async () => {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          if (postDeployRefreshRef.current !== refreshAttempt) return
+          if (attempt > 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 400))
+          }
+          const [servicesResult] = await Promise.all([
+            servicesQuery.refetch(),
+            containersQuery.refetchAll(),
+            hostingsQuery.refetchAll(),
+          ])
+          const refreshedServices =
+            servicesResult.data?.services ?? servicesQuery.data?.services ?? []
+          const hasContainers = refreshedServices.some((service) => {
+            const rows = queryClient.getQueryData<{ containers: ContainerRecord[] }>(
+              queryKeys.org(orgId).containers.list({ serviceId: service.id }),
+            )?.containers
+            return (rows?.length ?? 0) > 0
+          })
+          if (attempt > 0 && hasContainers) break
+        }
+      })()
     }
-  }, [environmentId, handleUnauthorized, projectId])
+  }, [
+    activeDeployCommandId,
+    commandsQuery.data,
+    containersQuery,
+    hostingsQuery,
+    servicesQuery,
+    trackedEntries,
+    orgId,
+    queryClient,
+  ])
 
-  const mergedCompose = useMemo(
-    () =>
-      mergeComposeOverlay(
-        stripComposePlacement(normalizeCompose(projectCompose)),
-        environment?.options?.compose,
-      ),
-    [environment?.options?.compose, projectCompose],
-  )
-  const serviceNames = useMemo(() => composeServiceNames(mergedCompose), [mergedCompose])
   const envServerId = environment?.serverId ?? null
-  const placementServerId =
-    envServerId ?? projectDefaultServerId
+  const placementServerId = envServerId ?? projectDefaultServerId
   const inheritsProjectDefault =
     !envServerId && Boolean(projectDefaultServerId)
+  const mergedCompose = useMemo(
+    () =>
+      withEffectivePlacement(
+        mergeComposeOverlay(
+          stripComposePlacement(normalizeCompose(projectCompose)),
+          environment?.options?.compose,
+        ),
+        placementServerId,
+      ),
+    [environment?.options?.compose, projectCompose, placementServerId],
+  )
+  const serviceNames = useMemo(
+    () => composeServiceNames(mergedCompose),
+    [mergedCompose],
+  )
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
     [allServers, placementServerId],
   )
   const deployBlocked =
-    deployBlockedReason(placementServerId, pinnedServer, serviceNames.length) !== null
+    deployBlockedReason(
+      placementServerId,
+      pinnedServer,
+      serviceNames.length,
+    ) !== null
   const sortedServers = useMemo(
     () =>
       [...allServers].sort((a, b) =>
@@ -1533,51 +1481,48 @@ export function EnvironmentDetailBody({
     [allServers],
   )
 
+  const savingCompose = persistEnvironmentCompose.isPending
+  const savingPlacement = updateEnvironmentMutation.isPending
+  const deploying =
+    deployEnvironmentMutation.isPending ||
+    activeDeployCommandId !== null ||
+    trackedEntries.length > 0
+
+  const resetHostingEditorsFromQueries = async () => {
+    await Promise.all([hostingsQuery.refetchAll(), servicesQuery.refetch()])
+    const editors: Record<string, HostingEditorState> = {}
+    for (const service of servicesQuery.data?.services ?? resolvedServices) {
+      editors[service.id] = readHostingEditor(
+        hostingsQuery.hostingsByService[service.id] ?? [],
+      )
+    }
+    setHostingEditors(editors)
+  }
+
   const saveCompose = async (compose: ComposeDocument) => {
-    await persistEnvironmentCompose({
-      environmentId,
-      compose,
-      setError,
-      setSaving: setSavingCompose,
-      handleUnauthorized,
-      onSaved: async () => {
-        setEnvironment((current) =>
-          current
-            ? { ...current, options: { compose } }
-            : current,
-        )
-        const servicesResult = await fetchVisibleServices(environmentId)
-        setServices(servicesResult.services)
-        const [hostingState, containersState] = await Promise.all([
-          fetchHostingsByService(servicesResult.services),
-          fetchContainersByService(servicesResult.services),
-        ])
-        setHostingsByService(hostingState.byService)
-        setHostingEditors(hostingState.editors)
-        setContainersByService(containersState)
-      },
-    })
+    setError(null)
+    const result = await persistEnvironmentCompose.run(compose)
+    if (!result.ok) {
+      if (persistEnvironmentCompose.actionError) {
+        setError(persistEnvironmentCompose.actionError)
+      }
+      return
+    }
+    await Promise.all([
+      servicesQuery.refetch(),
+      containersQuery.refetchAll(),
+      hostingsQuery.refetchAll(),
+    ])
+    await resetHostingEditorsFromQueries()
   }
 
   const savePlacement = async (serverIdToPin: string) => {
-    setSavingPlacement(true)
     setError(null)
-    try {
-      await updateEnvironment(environmentId, { serverId: serverIdToPin })
-      setEnvironment((current) =>
-        current
-          ? { ...current, serverId: serverIdToPin }
-          : current,
-      )
-    } catch (err) {
-      await reportSectionError(
-        err,
-        handleUnauthorized,
-        setError,
-        'Failed to save placement',
-      )
-    } finally {
-      setSavingPlacement(false)
+    const result = await updateEnvironmentMutation.run({
+      serverId: serverIdToPin,
+    })
+    if (!result.ok && updateEnvironmentMutation.actionError) {
+      setError(updateEnvironmentMutation.actionError)
     }
   }
 
@@ -1589,29 +1534,28 @@ export function EnvironmentDetailBody({
     )
     if (blockedReason || !placementServerId) {
       setDeployStatus(
-        blockedReason ?? 'Select a server for this environment before deploying.',
+        blockedReason ??
+          'Select a server for this environment before deploying.',
       )
       return
     }
-    setDeploying(true)
     setDeployStatus('Queueing deployment…')
+    setError(null)
     try {
-      const result = await deployEnvironment(environmentId, {
+      const result = await deployEnvironmentMutation.mutateAsync({
         ...(acknowledgeHealthCheckWarnings
           ? { acknowledgeHealthCheckWarnings: true }
           : {}),
       })
       setHealthCheckPrompt(null)
-      const command = await waitForTerminalCommand(
-        placementServerId,
-        result.commandId,
-      )
-      setDeployStatus(deployStatusMessage(command))
-      if (command.status === 'succeeded') {
-        const refreshed = await refreshServicesAndContainersAfterDeploy(environmentId)
-        setServices(refreshed.services)
-        setContainersByService(refreshed.containersByService)
-      }
+      setActiveDeployCommandId(result.commandId)
+      setTrackedEntries([
+        {
+          serverId: placementServerId,
+          commandId: result.commandId,
+        },
+      ])
+      setDeployStatus('Deploying…')
     } catch (err) {
       if (err instanceof DeployHealthCheckMissingError) {
         setHealthCheckPrompt({
@@ -1625,13 +1569,7 @@ export function EnvironmentDetailBody({
         )
         return
       }
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
       setDeployStatus(deployErrorMessage(err))
-    } finally {
-      setDeploying(false)
     }
   }
 
@@ -1643,7 +1581,7 @@ export function EnvironmentDetailBody({
     setSavingHosting(composeServiceName)
     setError(null)
     try {
-      const service = services.find(
+      const service = resolvedServices.find(
         (item) => item.composeServiceName === composeServiceName,
       )
       if (!service) {
@@ -1651,37 +1589,52 @@ export function EnvironmentDetailBody({
         return
       }
       const editor = hostingEditors[service.id] ?? readHostingEditor([])
-      await upsertHosting(
-        service.id,
-        composeServiceName,
-        editor,
-        hostingsByService,
-      )
-      const [servicesResult, hostingsResult] = await Promise.all([
-        fetchVisibleServices(environmentId),
-        fetchVisibleHostings(service.id),
+      const existing = hostingsByService[service.id]?.[0]
+      const options = buildHostingOptions(editor)
+      const body = {
+        displayName: composeServiceName,
+        metadata: { composeServiceName },
+        options,
+        tlsId: editor.tlsId,
+        ipId: editor.ipId,
+      }
+      const result = await upsertHostingMutation.run({
+        serviceId: service.id,
+        ...(existing ? { hostingId: existing.id } : {}),
+        body,
+      })
+      if (!result.ok) {
+        if (upsertHostingMutation.actionError) {
+          setError(upsertHostingMutation.actionError)
+        }
+        return
+      }
+      await Promise.all([
+        servicesQuery.refetch(),
+        hostingsQuery.refetchAll(),
+        containersQuery.refetchAll(),
       ])
-      setServices(servicesResult.services)
-      const nextEditor = readHostingEditor(hostingsResult.hostings)
-      setHostingsByService((current) => ({
-        ...current,
-        [service.id]: hostingsResult.hostings,
-      }))
+      const refreshedHostings =
+        hostingsQuery.hostingsByService[service.id] ?? []
       setHostingEditors((current) => ({
         ...current,
-        [service.id]: nextEditor,
+        [service.id]: readHostingEditor(refreshedHostings),
       }))
-      setContainersByService(await fetchContainersByService(servicesResult.services))
-    } catch (err) {
-      await reportSectionError(
-        err,
-        handleUnauthorized,
-        setError,
-        'Failed to save hosting',
-      )
     } finally {
       setSavingHosting(null)
     }
+  }
+
+  const updateServiceInCache = (nextService: ServiceRecord) => {
+    queryClient.setQueryData(
+      queryKeys.org(orgId).services.list(environmentId),
+      (current: { services: ServiceRecord[] } | undefined) => {
+        if (!current) return current
+        return {
+          services: upsertServiceById(current.services, nextService),
+        }
+      },
+    )
   }
 
   if (loading && !environment) {
@@ -1718,8 +1671,8 @@ export function EnvironmentDetailBody({
             void savePlacement(nextServerId)
           }}
           inheritsProjectDefault={inheritsProjectDefault}
-          services={services}
-          setServices={setServices}
+          services={resolvedServices}
+          onServiceChange={updateServiceInCache}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}
           hostingsByService={hostingsByService}

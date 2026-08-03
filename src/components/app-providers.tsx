@@ -1,19 +1,14 @@
 import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { TamaguiProvider } from 'tamagui'
 import { AuthProvider } from '@/lib/auth-context'
+import { createAppQueryClient } from '@/lib/query-client'
 import tamaguiConfig from '@/lib/tamagui.config'
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-})
+/** Module-level instance — preserves Fast Refresh lifetime. */
+const queryClient = createAppQueryClient()
 
 type AppProvidersProps = Readonly<{
   children: ReactNode

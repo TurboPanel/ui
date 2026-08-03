@@ -1,45 +1,34 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { NetworkListItem } from '@/components/org/networks-overview-section'
 import { IpListRow } from '@/components/org/ips-overview-section'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
-import { useAuth } from '@/lib/auth-context'
-import {
-  fetchDatacenter,
-  fetchIps,
-  fetchNetworks,
-  fetchOrgServers,
-  fetchPeers,
-  fetchTimezones,
-  fetchVpns,
-  isForbiddenError,
-  updateDatacenter,
-  updateServer,
-  type DatacenterRecord,
-  type IpRecord,
-  type NetworkRecord,
-  type OrgServerRecord,
-  type PeerRecord,
-  type VpnRecord,
+import type {
+  DatacenterRecord,
+  IpRecord,
+  NetworkRecord,
+  OrgServerRecord,
+  PeerRecord,
+  VpnRecord,
 } from '@/lib/instance-api'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import {
+  peersQueryOptions,
+  useDatacenter,
+  useIps,
+  useNetworks,
+  useUpdateDatacenter,
+  useVpns,
+} from '@/lib/queries/topology'
+import { useOrgServers, usePatchServer, useTimezones } from '@/lib/queries/servers'
+import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   overlayAddressForPeer,
   resolvePrimaryGatewayByDatacenter,
 } from '@/lib/vpn-mesh'
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
-}
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -483,8 +472,6 @@ export function DatacenterDetailSection({
   orgId: string
   datacenterId: string
 }>) {
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [assignServerId, setAssignServerId] = useState('')
@@ -493,129 +480,33 @@ export function DatacenterDetailSection({
   )
   const [draftEnforce, setDraftEnforce] = useState<boolean | null>(null)
 
-  const datacenterQuery = useQuery({
-    queryKey: ['org', orgId, 'datacenter', datacenterId],
-    queryFn: () => fetchDatacenter(datacenterId),
+  const datacenterQuery = useDatacenter(orgId, datacenterId, {
     enabled: Boolean(datacenterId),
   })
-  const serversQuery = useQuery({
-    queryKey: ['org', orgId, 'servers'],
-    queryFn: fetchOrgServers,
-  })
-  const networksQuery = useQuery({
-    queryKey: ['org', orgId, 'networks', { datacenterId }],
-    queryFn: () => fetchNetworks({ datacenterId }),
-    enabled: Boolean(datacenterId),
-  })
-  const ipsQuery = useQuery({
-    queryKey: ['org', orgId, 'ips', { datacenterId }],
-    queryFn: () => fetchIps({ datacenterId }),
-    enabled: Boolean(datacenterId),
-  })
-  const timezonesQuery = useQuery({
-    queryKey: ['timezones'],
-    queryFn: fetchTimezones,
-    staleTime: Number.POSITIVE_INFINITY,
-  })
-  const vpnsQuery = useQuery({
-    queryKey: ['org', orgId, 'vpns'],
-    queryFn: fetchVpns,
-  })
-  const vpnIpsQuery = useQuery({
-    queryKey: ['org', orgId, 'ips', { scope: 'vpn' }],
-    queryFn: () => fetchIps({ scope: 'vpn' }),
-  })
+  const serversQuery = useOrgServers(orgId)
+  const networksQuery = useNetworks(
+    orgId,
+    { datacenterId },
+    { enabled: Boolean(datacenterId) },
+  )
+  const ipsQuery = useIps(
+    orgId,
+    { datacenterId },
+    { enabled: Boolean(datacenterId) },
+  )
+  const timezonesQuery = useTimezones()
+  const vpnsQuery = useVpns(orgId)
+  const vpnIpsQuery = useIps(orgId, { scope: 'vpn' })
   const vpns = vpnsQuery.data?.vpns ?? []
   const peerQueries = useQueries({
     queries: vpns.map((vpn) => ({
-      queryKey: ['org', orgId, 'vpn', vpn.id, 'peers'],
-      queryFn: () => fetchPeers(vpn.id),
+      ...peersQueryOptions(orgId, vpn.id),
       enabled: vpnsQuery.isSuccess,
     })),
   })
 
-  const peerQueryError =
-    peerQueries.find((query) => query.error)?.error ?? null
-
-  useForbiddenRecovery(datacenterQuery.error)
-  useForbiddenRecovery(serversQuery.error)
-  useForbiddenRecovery(networksQuery.error)
-  useForbiddenRecovery(ipsQuery.error)
-  useForbiddenRecovery(vpnsQuery.error)
-  useForbiddenRecovery(vpnIpsQuery.error)
-  useForbiddenRecovery(peerQueryError)
-
-  const invalidateAll = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'datacenter', datacenterId],
-      }),
-      queryClient.invalidateQueries({ queryKey: ['org', orgId, 'servers'] }),
-      queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'datacenter-name-suggestions'],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'networks', { datacenterId }],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'ips', { datacenterId }],
-      }),
-      queryClient.invalidateQueries({ queryKey: ['org', orgId, 'datacenters'] }),
-    ])
-  }
-
-  const assignMutation = useMutation({
-    mutationFn: (serverId: string) =>
-      updateServer(serverId, { datacenterId }),
-    onSuccess: async () => {
-      setError(null)
-      setAssignServerId('')
-      await invalidateAll()
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to assign server'))
-    },
-  })
-
-  const unassignMutation = useMutation({
-    mutationFn: (serverId: string) =>
-      updateServer(serverId, { datacenterId: null }),
-    onSuccess: async () => {
-      setError(null)
-      await invalidateAll()
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to unassign server'))
-    },
-  })
-
-  const timezoneMutation = useMutation({
-    mutationFn: (options: {
-      defaultServerTimezone: string | null
-      enforceServerTimezone: boolean
-    }) => updateDatacenter(datacenterId, { options }),
-    onSuccess: async () => {
-      setError(null)
-      setDraftTimezone(undefined)
-      setDraftEnforce(null)
-      await invalidateAll()
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(errorMessage(err, 'Failed to save datacenter timezone'))
-    },
-  })
+  const patchServerMutation = usePatchServer(orgId)
+  const timezoneMutation = useUpdateDatacenter(orgId, datacenterId)
 
   const datacenter = datacenterQuery.data?.datacenter
   const servers = serversQuery.data?.servers ?? []
@@ -664,10 +555,21 @@ export function DatacenterDetailSection({
   const enforce =
     draftEnforce ?? (datacenter?.options?.enforceServerTimezone ?? false)
   const pending =
-    timezoneMutation.isPending ||
-    assignMutation.isPending ||
-    unassignMutation.isPending
+    timezoneMutation.isPending || patchServerMutation.isPending
   const readOnly = !canManage
+
+  let queryError: string | null = null
+  if (datacenterQuery.isError) {
+    queryError =
+      datacenterQuery.error instanceof Error
+        ? datacenterQuery.error.message
+        : 'Failed to load datacenter'
+  }
+  const displayError =
+    error ??
+    patchServerMutation.actionError ??
+    timezoneMutation.actionError ??
+    queryError
 
   const title =
     datacenter?.displayName?.trim() ||
@@ -681,12 +583,7 @@ export function DatacenterDetailSection({
           'Member servers, networks, IP pool, and timezone defaults for this location.'}
       </Text>
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      {datacenterQuery.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
-          {errorMessage(datacenterQuery.error, 'Failed to load datacenter')}
-        </Text>
-      ) : null}
+      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       <MemberServersPanel
         memberServers={memberServers}
@@ -695,8 +592,33 @@ export function DatacenterDetailSection({
         pending={pending}
         assignServerId={assignServerId}
         onSelectAssign={setAssignServerId}
-        onAssign={() => assignMutation.mutate(assignServerId)}
-        onUnassign={(serverId) => unassignMutation.mutate(serverId)}
+        onAssign={() => {
+          setError(null)
+          patchServerMutation.mutate(
+            { serverId: assignServerId, body: { datacenterId } },
+            {
+              onSuccess: () => setAssignServerId(''),
+              onError: () => {
+                setError(
+                  patchServerMutation.actionError ?? 'Failed to assign server',
+                )
+              },
+            },
+          )
+        }}
+        onUnassign={(serverId) => {
+          setError(null)
+          patchServerMutation.mutate(
+            { serverId, body: { datacenterId: null } },
+            {
+              onError: () => {
+                setError(
+                  patchServerMutation.actionError ?? 'Failed to unassign server',
+                )
+              },
+            },
+          )
+        }}
       />
 
       <DatacenterNetworksPanel
@@ -725,12 +647,29 @@ export function DatacenterDetailSection({
         pending={pending}
         onTimezoneChange={setDraftTimezone}
         onEnforceToggle={() => setDraftEnforce(!enforce)}
-        onSave={() =>
-          timezoneMutation.mutate({
-            defaultServerTimezone: effectiveTimezone,
-            enforceServerTimezone: enforce,
-          })
-        }
+        onSave={() => {
+          setError(null)
+          timezoneMutation.mutate(
+            {
+              options: {
+                defaultServerTimezone: effectiveTimezone,
+                enforceServerTimezone: enforce,
+              },
+            },
+            {
+              onSuccess: () => {
+                setDraftTimezone(undefined)
+                setDraftEnforce(null)
+              },
+              onError: () => {
+                setError(
+                  timezoneMutation.actionError ??
+                    'Failed to save datacenter timezone',
+                )
+              },
+            },
+          )
+        }}
       />
     </View>
   )

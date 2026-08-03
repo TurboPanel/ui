@@ -1,16 +1,9 @@
 import { useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
-import { useAuth } from '@/lib/auth-context'
-import {
-  fetchVisibleProjects,
-  fetchWorkspace,
-  isForbiddenError,
-  type ProjectRecord,
-  type WorkspaceRecord,
-} from '@/lib/instance-api'
+import { useProjects, useWorkspace } from '@/lib/queries'
+import type { ProjectRecord, WorkspaceRecord } from '@/lib/instance-api'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function renderWorkspaceBody({
@@ -88,47 +81,18 @@ export function WorkspaceDetailSection({
   workspaceId: string
 }>) {
   const router = useRouter()
-  const { handleUnauthorized } = useAuth()
-  const [workspace, setWorkspace] = useState<WorkspaceRecord | null>(null)
-  const [projects, setProjects] = useState<ProjectRecord[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const workspaceQuery = useWorkspace(orgId, workspaceId)
+  const projectsQuery = useProjects(orgId, workspaceId)
 
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [workspaceResult, projectsResult] = await Promise.all([
-          fetchWorkspace(workspaceId),
-          fetchVisibleProjects(workspaceId),
-        ])
-        if (!cancelled) {
-          setWorkspace(workspaceResult.workspace)
-          setProjects(projectsResult.projects)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setError(err instanceof Error ? err.message : 'Failed to load workspace')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [handleUnauthorized, workspaceId])
+  const workspace = workspaceQuery.data?.workspace ?? null
+  const projects = projectsQuery.data?.projects ?? []
+  const loading = workspaceQuery.isLoading || projectsQuery.isLoading
+  let error: string | null = null
+  if (workspaceQuery.error instanceof Error) {
+    error = workspaceQuery.error.message
+  } else if (projectsQuery.error instanceof Error) {
+    error = projectsQuery.error.message
+  }
 
   return (
     <View style={styles.root}>

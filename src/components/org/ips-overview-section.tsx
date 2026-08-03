@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -9,25 +9,25 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
-import {
-  createIp,
-  deleteIp,
-  fetchDatacenters,
-  fetchIps,
-  fetchNetworks,
-  fetchOrgServers,
-  fetchVpns,
-  isForbiddenError,
-  updateIp,
-  type DatacenterRecord,
-  type IpAllocation,
-  type IpRecord,
-  type IpScope,
-  type NetworkRecord,
-  type OrgServerRecord,
-  type VpnRecord,
+import type {
+  DatacenterRecord,
+  IpAllocation,
+  IpRecord,
+  IpScope,
+  NetworkRecord,
+  OrgServerRecord,
+  VpnRecord,
 } from '@/lib/instance-api'
+import {
+  useCreateIp,
+  useDatacenters,
+  useDeleteIp,
+  useIps,
+  useNetworks,
+  useUpdateIp,
+  useVpns,
+} from '@/lib/queries/topology'
+import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -83,6 +83,51 @@ function buildIpListFilters(
   return filters
 }
 
+function resolveIpsQueryError(
+  isError: boolean,
+  error: unknown,
+): string | null {
+  if (!isError) return null
+  if (error instanceof Error) return error.message
+  return 'Failed to load IP addresses'
+}
+
+function isIpsOverviewLoading(queries: Readonly<{
+  ipsLoading: boolean
+  ipsPlaceholder: boolean
+  serversLoading: boolean
+  networksLoading: boolean
+  datacentersLoading: boolean
+  vpnsLoading: boolean
+}>): boolean {
+  if (queries.ipsLoading && !queries.ipsPlaceholder) return true
+  return (
+    queries.serversLoading ||
+    queries.networksLoading ||
+    queries.datacentersLoading ||
+    queries.vpnsLoading
+  )
+}
+
+function indexById<T extends { id: string }>(
+  rows: readonly T[],
+): Map<string, T> {
+  const map = new Map<string, T>()
+  for (const row of rows) map.set(row.id, row)
+  return map
+}
+
+type CreateIpInput = {
+  address: string
+  allocation: IpAllocation
+  scope: IpScope
+  displayName?: string
+  vpnId?: string
+  datacenterId?: string
+  networkId?: string
+  serverId?: string
+}
+
 function buildCreateIpBody(input: Readonly<{
   address: string
   allocation: IpAllocation
@@ -92,8 +137,8 @@ function buildCreateIpBody(input: Readonly<{
   createDatacenterId: string
   createNetworkId: string
   createServerId: string
-}>) {
-  const body: Parameters<typeof createIp>[0] = {
+}>): CreateIpInput {
+  const body: CreateIpInput = {
     address: input.address,
     allocation: input.allocation,
     scope: input.scope,
@@ -435,22 +480,13 @@ function IpEditPanel({
 export function IpsOverviewSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [ips, setIps] = useState<IpRecord[]>([])
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [networks, setNetworks] = useState<NetworkRecord[]>([])
-  const [datacenters, setDatacenters] = useState<DatacenterRecord[]>([])
-  const [vpns, setVpns] = useState<VpnRecord[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scopeFilter, setScopeFilter] = useState<IpScope | 'all'>('all')
   const [allocationFilter, setAllocationFilter] = useState<IpAllocation | 'all'>(
     'all',
   )
   const [datacenterFilter, setDatacenterFilter] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
   const [address, setAddress] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [allocation, setAllocation] = useState<IpAllocation>('dedicated')
@@ -467,80 +503,56 @@ export function IpsOverviewSection({
   const [editDatacenterId, setEditDatacenterId] = useState('')
   const [editNetworkId, setEditNetworkId] = useState('')
   const [editServerId, setEditServerId] = useState('')
-  const [savingEdit, setSavingEdit] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const filters = buildIpListFilters(
-        scopeFilter,
-        allocationFilter,
-        datacenterFilter,
-      )
-      const [
-        ipsResult,
-        serversResult,
-        networksResult,
-        datacentersResult,
-        vpnsResult,
-      ] = await Promise.all([
-        fetchIps(filters),
-        fetchOrgServers(),
-        fetchNetworks(),
-        fetchDatacenters(),
-        fetchVpns(),
-      ])
-      setIps(ipsResult.ips)
-      setServers(serversResult.servers)
-      setNetworks(networksResult.networks)
-      setDatacenters(datacentersResult.datacenters)
-      setVpns(vpnsResult.vpns)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load IP addresses')
-    } finally {
-      setLoading(false)
-    }
-  }, [
-    allocationFilter,
-    datacenterFilter,
-    handleUnauthorized,
-    scopeFilter,
-  ])
+  const ipFilters = useMemo(
+    () =>
+      buildIpListFilters(scopeFilter, allocationFilter, datacenterFilter),
+    [allocationFilter, datacenterFilter, scopeFilter],
+  )
 
-  useEffect(() => {
-    load().catch(() => {
-      // Errors are surfaced via error state inside load.
-    })
-  }, [load, orgId])
+  const ipsQuery = useIps(orgId, ipFilters)
+  const serversQuery = useOrgServers(orgId)
+  const networksQuery = useNetworks(orgId)
+  const datacentersQuery = useDatacenters(orgId)
+  const vpnsQuery = useVpns(orgId)
+  const createMutation = useCreateIp(orgId)
+  const updateMutation = useUpdateIp(orgId)
+  const deleteMutation = useDeleteIp(orgId)
 
-  const serverById = useMemo(() => {
-    const map = new Map<string, OrgServerRecord>()
-    for (const server of servers) map.set(server.id, server)
-    return map
-  }, [servers])
+  const ips = ipsQuery.data?.ips ?? []
+  const servers = serversQuery.data?.servers ?? []
+  const networks = networksQuery.data?.networks ?? []
+  const datacenters = datacentersQuery.data?.datacenters ?? []
+  const vpns = vpnsQuery.data?.vpns ?? []
 
-  const networkById = useMemo(() => {
-    const map = new Map<string, NetworkRecord>()
-    for (const network of networks) map.set(network.id, network)
-    return map
-  }, [networks])
+  const loading = isIpsOverviewLoading({
+    ipsLoading: ipsQuery.isLoading,
+    ipsPlaceholder: ipsQuery.isPlaceholderData,
+    serversLoading: serversQuery.isLoading,
+    networksLoading: networksQuery.isLoading,
+    datacentersLoading: datacentersQuery.isLoading,
+    vpnsLoading: vpnsQuery.isLoading,
+  })
 
-  const datacenterById = useMemo(() => {
-    const map = new Map<string, DatacenterRecord>()
-    for (const row of datacenters) map.set(row.id, row)
-    return map
-  }, [datacenters])
+  const queryError = resolveIpsQueryError(ipsQuery.isError, ipsQuery.error)
+  const displayError =
+    error ??
+    createMutation.actionError ??
+    updateMutation.actionError ??
+    deleteMutation.actionError ??
+    queryError
 
-  const vpnById = useMemo(() => {
-    const map = new Map<string, VpnRecord>()
-    for (const vpn of vpns) map.set(vpn.id, vpn)
-    return map
-  }, [vpns])
+  const deletingId = deleteMutation.isPending
+    ? deleteMutation.variables
+    : undefined
+  const creating = createMutation.isPending
+  const createDisabled = creating || (scope === 'vpn' && !createVpnId)
+  const savingEdit = updateMutation.isPending
+
+  const serverById = useMemo(() => indexById(servers), [servers])
+  const networkById = useMemo(() => indexById(networks), [networks])
+  const datacenterById = useMemo(() => indexById(datacenters), [datacenters])
+  const vpnById = useMemo(() => indexById(vpns), [vpns])
 
   const handleCreateScopeChange = (next: IpScope) => {
     setScope(next)
@@ -562,7 +574,7 @@ export function IpsOverviewSection({
     setCreateVpnId('')
   }
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!canManage) return
     const trimmed = address.trim()
     if (!IP_LITERAL_OR_CIDR.test(trimmed)) {
@@ -573,59 +585,40 @@ export function IpsOverviewSection({
       setError('Select a VPN for vpn-scoped addresses.')
       return
     }
-    setCreating(true)
     setError(null)
-    try {
-      await createIp(
-        buildCreateIpBody({
-          address: trimmed,
-          allocation,
-          scope,
-          displayName,
-          createVpnId,
-          createDatacenterId,
-          createNetworkId,
-          createServerId,
-        }),
-      )
-      resetCreateForm()
-      await load()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to create IP')
-    } finally {
-      setCreating(false)
-    }
+    createMutation.mutate(
+      buildCreateIpBody({
+        address: trimmed,
+        allocation,
+        scope,
+        displayName,
+        createVpnId,
+        createDatacenterId,
+        createNetworkId,
+        createServerId,
+      }),
+      {
+        onSuccess: () => resetCreateForm(),
+        onError: () => {
+          setError(createMutation.actionError ?? 'Failed to create IP')
+        },
+      },
+    )
   }
 
-  const handleDelete = async (ipId: string) => {
+  const handleDelete = (ipId: string) => {
     if (!canManage) return
     const target = ips.find((row) => row.id === ipId)
     if (target?.scope === 'vpn') return
-    setDeleting((current) => new Set(current).add(ipId))
     setError(null)
-    try {
-      await deleteIp(ipId)
-      if (editingId === ipId) {
-        setEditingId(null)
-      }
-      await load()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to delete IP')
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(ipId)
-        return next
-      })
-    }
+    deleteMutation.mutate(ipId, {
+      onSuccess: () => {
+        if (editingId === ipId) setEditingId(null)
+      },
+      onError: () => {
+        setError(deleteMutation.actionError ?? 'Failed to delete IP')
+      },
+    })
   }
 
   const beginEdit = (ip: IpRecord) => {
@@ -645,28 +638,26 @@ export function IpsOverviewSection({
     setEditingId(null)
   }
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
     if (!canManage || !editingId) return
-    setSavingEdit(true)
     setError(null)
-    try {
-      await updateIp(editingId, {
-        displayName: editDisplayName.trim() || null,
-        datacenterId: editDatacenterId || null,
-        networkId: editNetworkId || null,
-        serverId: editServerId || null,
-      })
-      setEditingId(null)
-      await load()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to update IP')
-    } finally {
-      setSavingEdit(false)
-    }
+    updateMutation.mutate(
+      {
+        ipId: editingId,
+        body: {
+          displayName: editDisplayName.trim() || null,
+          datacenterId: editDatacenterId || null,
+          networkId: editNetworkId || null,
+          serverId: editServerId || null,
+        },
+      },
+      {
+        onSuccess: () => setEditingId(null),
+        onError: () => {
+          setError(updateMutation.actionError ?? 'Failed to update IP')
+        },
+      },
+    )
   }
 
   return (
@@ -677,7 +668,7 @@ export function IpsOverviewSection({
         organization.
       </Text>
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       <SectionPanel title="Filters" hint="Optional narrowing">
         <Text style={styles.fieldLabel}>Scope</Text>
@@ -790,16 +781,11 @@ export function IpsOverviewSection({
           <Pressable
             style={[
               orgPanelStyles.toolbarBtnPrimary,
-              (creating || (scope === 'vpn' && !createVpnId)) &&
-                styles.buttonDisabled,
+              createDisabled && styles.buttonDisabled,
               webPointer,
             ]}
-            disabled={creating || (scope === 'vpn' && !createVpnId)}
-            onPress={() => {
-              handleCreate().catch(() => {
-                // Errors are surfaced via error state.
-              })
-            }}
+            disabled={createDisabled}
+            onPress={handleCreate}
           >
             {creating ? (
               <ActivityIndicator size="small" color={colors.textMuted} />
@@ -848,11 +834,7 @@ export function IpsOverviewSection({
                   onNetworkIdChange={setEditNetworkId}
                   onServerIdChange={setEditServerId}
                   onCancel={cancelEdit}
-                  onSave={() => {
-                    handleSaveEdit().catch(() => {
-                      // Errors are surfaced via error state.
-                    })
-                  }}
+                  onSave={handleSaveEdit}
                 />
               )
             }
@@ -869,15 +851,11 @@ export function IpsOverviewSection({
                 }
                 datacenterLabel={datacenter?.displayName?.trim() || null}
                 vpnLabel={vpn ? vpnTitle(vpn) : null}
-                isDeleting={deleting.has(ip.id)}
+                isDeleting={deletingId === ip.id}
                 showDelete={canManage && !isMeshManaged}
                 showEdit={canManage && !isMeshManaged}
                 onEdit={() => beginEdit(ip)}
-                onDelete={(id) => {
-                  handleDelete(id).catch(() => {
-                    // Errors are surfaced via error state.
-                  })
-                }}
+                onDelete={handleDelete}
               />
             )
           })}

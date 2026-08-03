@@ -1,5 +1,7 @@
 import {
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -7,7 +9,7 @@ import {
 } from 'react'
 import { Link, useRouter, useLocalSearchParams } from 'expo-router'
 import { Image } from 'expo-image'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ActivityIndicator,
   Pressable,
@@ -19,7 +21,6 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import {
-  COMMAND_POLL_MS,
   defaultServerCommandState,
   isTerminalCommandStatus,
   ServerCommandsPanel,
@@ -30,7 +31,6 @@ import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import { formatLocalDateTime, formatRelativeLocalDateTime } from '@/lib/format-datetime'
 import {
   formatCoveragePercent,
@@ -43,27 +43,29 @@ import {
   type ServerDetailTabId,
 } from '@/lib/org-navigation'
 import {
-  deleteServer,
-  fetchCommand,
-  fetchServer,
-  fetchServerMetricsSeries,
-  fetchServerUpdate,
   formatServerDeleteBlockedError,
   isForbiddenError,
-  MetricsBackendUnavailableError,
-  pingDaemon,
-  rebootServer,
-  resetServerUpdateStatus,
-  setServerHostname,
-  triggerServerUpdate,
   type CommandEnqueueResponse,
+  type CommandRecord,
   type MetricsSeriesResponse,
   type OrgServerRecord,
   type ServerDetailRecord,
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { useCommandsBatch } from '@/lib/queries/commands'
+import {
+  useDeleteServer,
+  usePingDaemon,
+  useRebootServer,
+  useResetServerUpdateStatus,
+  useServerDetail,
+  useServerReporting,
+  useServerUpdateStatus,
+  useSetServerHostname,
+  useTriggerServerUpdate,
+} from '@/lib/queries/servers'
+import { useCan, queryKeys } from '@/lib/query-client'
 import { osLogoSource } from '@/lib/os-logos'
 import {
   countryCodeToFlagEmoji,
@@ -72,12 +74,6 @@ import {
   formatServerGeoLocation,
 } from '@/lib/server-geo'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-const SERVERS_REFRESH_MS = 30_000
-const UPDATE_PROGRESS_POLL_MS = 5_000
-/** Overview reporting window — matches Metrics 24h cadence (300 s refresh). */
-const REPORTING_WINDOW_MS = 24 * 60 * 60 * 1000
-const REPORTING_REFRESH_MS = 300_000
 
 function latestMetricsSampleAt(data: MetricsSeriesResponse): string | null {
   for (let i = data.points.length - 1; i >= 0; i -= 1) {
@@ -231,7 +227,7 @@ function updateBadgeLabel(
 function applyDetailCommandPollResult(
   current: ServerCommandState,
   activeCommand: DetailActiveCommand,
-  record: Awaited<ReturnType<typeof fetchCommand>>,
+  record: CommandRecord,
   onSucceeded: () => void,
 ): ServerCommandState | null {
   if (current.activeCommand?.commandId !== activeCommand.commandId) {
@@ -276,73 +272,90 @@ function applyDetailCommandPollResult(
   return updated
 }
 
-function renderDetailTabBody(
-  tab: ServerDetailTabId,
-  input: Readonly<{
-    orgId: string
-    serverId: string
-    server: ServerDetailRecord
-    canManage: boolean
-    commandState: ServerCommandState
-    timezoneCommandInFlight: boolean
-    timezonePollError: string | null
-    ntpCommandInFlight: boolean
-    ntpPollError: string | null
-    updateState: UpdateState
-    updateVm: ReturnType<typeof deriveServerUpdateViewModel>
-    onPing: () => void
-    onSetHostname: (hostname: string) => void
-    onReboot: () => void
-    onTriggerUpdate: () => void
-    onResetUpdate: () => void
-    onEnqueueCommand: (response: CommandEnqueueResponse, kind: 'timezone' | 'ntp') => void
-    deletePanel: ReactNode
-  }>,
-): ReactNode {
+function DetailTabBody({
+  tab,
+  orgId,
+  serverId,
+  server,
+  canManage,
+  commandState,
+  timezoneCommandInFlight,
+  timezonePollError,
+  ntpCommandInFlight,
+  ntpPollError,
+  updateState,
+  updateVm,
+  onPing,
+  onSetHostname,
+  onReboot,
+  onTriggerUpdate,
+  onResetUpdate,
+  onEnqueueCommand,
+  deletePanel,
+}: Readonly<{
+  tab: ServerDetailTabId
+  orgId: string
+  serverId: string
+  server: ServerDetailRecord
+  canManage: boolean
+  commandState: ServerCommandState
+  timezoneCommandInFlight: boolean
+  timezonePollError: string | null
+  ntpCommandInFlight: boolean
+  ntpPollError: string | null
+  updateState: UpdateState
+  updateVm: ReturnType<typeof deriveServerUpdateViewModel>
+  onPing: () => void
+  onSetHostname: (hostname: string) => void
+  onReboot: () => void
+  onTriggerUpdate: () => void
+  onResetUpdate: () => void
+  onEnqueueCommand: (
+    response: CommandEnqueueResponse,
+    kind: 'timezone' | 'ntp',
+  ) => void
+  deletePanel: ReactNode
+}>): ReactNode {
   switch (tab) {
     case 'overview':
-      return <ServerOverviewTab server={input.server} />
+      return <ServerOverviewTab orgId={orgId} server={server} />
     case 'control':
       return (
         <ServerControlTab
-          server={input.server}
-          canManage={input.canManage}
-          commandState={input.commandState}
-          updateState={input.updateState}
-          viewModel={input.updateVm}
-          onPing={input.onPing}
-          onSetHostname={input.onSetHostname}
-          onReboot={input.onReboot}
-          onTriggerUpdate={input.onTriggerUpdate}
-          onResetUpdate={input.onResetUpdate}
-          deletePanel={input.deletePanel}
+          server={server}
+          canManage={canManage}
+          commandState={commandState}
+          updateState={updateState}
+          viewModel={updateVm}
+          onPing={onPing}
+          onSetHostname={onSetHostname}
+          onReboot={onReboot}
+          onTriggerUpdate={onTriggerUpdate}
+          onResetUpdate={onResetUpdate}
+          deletePanel={deletePanel}
         />
       )
     case 'time':
       return (
         <ServerTimeSection
-          orgId={input.orgId}
-          server={input.server}
-          canManage={input.canManage}
-          timezoneCommandInFlight={input.timezoneCommandInFlight}
-          timezonePollError={input.timezonePollError}
-          ntpCommandInFlight={input.ntpCommandInFlight}
-          ntpPollError={input.ntpPollError}
-          onEnqueueCommand={input.onEnqueueCommand}
+          orgId={orgId}
+          server={server}
+          canManage={canManage}
+          timezoneCommandInFlight={timezoneCommandInFlight}
+          timezonePollError={timezonePollError}
+          ntpCommandInFlight={ntpCommandInFlight}
+          ntpPollError={ntpPollError}
+          onEnqueueCommand={onEnqueueCommand}
         />
       )
     case 'network':
-      return <ServerNetworkSection orgId={input.orgId} server={input.server} />
+      return <ServerNetworkSection orgId={orgId} server={server} />
     case 'metrics':
       return (
-        <ServerMetricsSection
-          orgId={input.orgId}
-          serverId={input.serverId}
-          embedded
-        />
+        <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
       )
     default:
-      return <ServerOverviewTab server={input.server} />
+      return <ServerOverviewTab orgId={orgId} server={server} />
   }
 }
 
@@ -403,7 +416,7 @@ function removePollCommandById(
 
 function applyTerminalPollSuccess(
   entry: DetailPollCommand,
-  record: Awaited<ReturnType<typeof fetchCommand>>,
+  record: CommandRecord,
   handlers: Readonly<{
     onRefreshServer: () => void
     setCommandState: Dispatch<SetStateAction<ServerCommandState>>
@@ -482,34 +495,6 @@ type PollHandlers = Readonly<{
   patchCommand: (patch: Partial<ServerCommandState>) => void
 }>
 
-type PollCancelledRef = { current: boolean }
-
-async function pollSingleCommand(
-  entry: DetailPollCommand,
-  input: Readonly<{
-    serverId: string
-    cancelledRef: PollCancelledRef
-    handleUnauthorized: () => Promise<void>
-    pollHandlers: PollHandlers
-    onSettled: (commandId: string) => void
-  }>,
-): Promise<void> {
-  try {
-    const record = await fetchCommand(input.serverId, entry.commandId)
-    if (input.cancelledRef.current) return
-    if (!isTerminalCommandStatus(record.status)) return
-    applyTerminalPollSuccess(entry, record, input.pollHandlers)
-    input.onSettled(entry.commandId)
-  } catch (err) {
-    if (input.cancelledRef.current) return
-    if (isForbiddenError(err)) {
-      await input.handleUnauthorized()
-    }
-    applyPollFailure(entry, err, input.pollHandlers)
-    input.onSettled(entry.commandId)
-  }
-}
-
 function renderServerDeletePanel(input: Readonly<{
   canManage: boolean
   colocated: boolean
@@ -553,253 +538,80 @@ function ServerDetailError({ message }: Readonly<{ message: string }>): ReactNod
   return <Text style={orgPanelStyles.error}>{message}</Text>
 }
 
-function createLoadUpdate(input: Readonly<{
-  serverId: string
-  handleUnauthorized: () => Promise<void>
-  setUpdateState: Dispatch<SetStateAction<UpdateState>>
-}>): (options?: { silent?: boolean }) => Promise<void> {
-  return async (options) => {
-    if (!options?.silent) {
-      input.setUpdateState((prev) => ({ ...prev, loading: true, error: null }))
-    }
-    try {
-      const data = await fetchServerUpdate(input.serverId)
-      input.setUpdateState({
-        loading: false,
-        triggering: data.status === 'updating',
-        resetting: false,
-        data,
-        error: null,
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await input.handleUnauthorized()
-      }
-      if (!options?.silent) {
-        input.setUpdateState((prev) => ({
-          ...prev,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load update status',
-        }))
-      }
-    }
-  }
-}
-
-type CommandHandlerDeps = Readonly<{
-  serverId: string
-  patchCommand: (patch: Partial<ServerCommandState>) => void
-  registerPollCommand: (entry: DetailPollCommand) => void
-  handleUnauthorized: () => Promise<void>
-}>
-
-function createPingHandler(input: CommandHandlerDeps): () => void {
-  return () => {
-    input.patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
-    pingDaemon(input.serverId)
-      .then((result) => {
-        const entry: ActiveCommand = { commandId: result.commandId, kind: 'ping' }
-        input.registerPollCommand(entry)
-        input.patchCommand({ activeCommand: entry })
-      })
-      .catch(async (err) => {
-        if (isForbiddenError(err)) await input.handleUnauthorized()
-        input.patchCommand({
-          pingError: err instanceof Error ? err.message : 'Ping failed',
-          pingRunning: false,
-        })
-      })
-  }
-}
-
-function createSetHostnameHandler(input: CommandHandlerDeps): (hostname: string) => void {
-  return (host) => {
-    if (!host) {
-      input.patchCommand({ hostnameError: 'Hostname is required' })
-      return
-    }
-    input.patchCommand({ hostnameError: null, hostnameRunning: true, commandRecord: null })
-    setServerHostname(input.serverId, host)
-      .then((result) => {
-        const entry: ActiveCommand = { commandId: result.commandId, kind: 'hostname' }
-        input.registerPollCommand(entry)
-        input.patchCommand({ activeCommand: entry })
-      })
-      .catch(async (err) => {
-        if (isForbiddenError(err)) await input.handleUnauthorized()
-        input.patchCommand({
-          hostnameError: err instanceof Error ? err.message : 'Hostname change failed',
-          hostnameRunning: false,
-        })
-      })
-  }
-}
-
-function createRebootHandler(input: CommandHandlerDeps): () => void {
-  return () => {
-    input.patchCommand({ rebootError: null, rebootRunning: true, commandRecord: null })
-    rebootServer(input.serverId)
-      .then((result) => {
-        const entry: ActiveCommand = { commandId: result.commandId, kind: 'reboot' }
-        input.registerPollCommand(entry)
-        input.patchCommand({ activeCommand: entry })
-      })
-      .catch(async (err) => {
-        if (isForbiddenError(err)) await input.handleUnauthorized()
-        input.patchCommand({
-          rebootError: err instanceof Error ? err.message : 'Reboot failed',
-          rebootRunning: false,
-        })
-      })
-  }
-}
-
-function createTriggerUpdateHandler(input: Readonly<{
-  serverId: string
-  setUpdateState: Dispatch<SetStateAction<UpdateState>>
-  loadUpdate: (options?: { silent?: boolean }) => Promise<void>
-  handleUnauthorized: () => Promise<void>
-}>): () => void {
-  return () => {
-    input.setUpdateState((prev) => ({ ...prev, triggering: true, error: null }))
-    triggerServerUpdate(input.serverId)
-      .then(() =>
-        input.loadUpdate({ silent: true }).catch(() => {
-          /* silent refresh after trigger */
-        }),
-      )
-      .catch(async (err) => {
-        if (isForbiddenError(err)) await input.handleUnauthorized()
-        input.setUpdateState((prev) => ({
-          ...prev,
-          triggering: false,
-          error: err instanceof Error ? err.message : 'Update failed',
-        }))
-      })
-  }
-}
-
-function createResetUpdateHandler(input: Readonly<{
-  serverId: string
-  setUpdateState: Dispatch<SetStateAction<UpdateState>>
-  handleUnauthorized: () => Promise<void>
-}>): () => void {
-  return () => {
-    input.setUpdateState((prev) => ({ ...prev, resetting: true, error: null }))
-    resetServerUpdateStatus(input.serverId)
-      .then((data) =>
-        input.setUpdateState({
-          loading: false,
-          triggering: data.status === 'updating',
-          resetting: false,
-          data,
-          error: null,
-        }),
-      )
-      .catch(async (err) => {
-        if (isForbiddenError(err)) await input.handleUnauthorized()
-        input.setUpdateState((prev) => ({
-          ...prev,
-          resetting: false,
-          error: err instanceof Error ? err.message : 'Reset failed',
-        }))
-      })
-  }
-}
-
-function createDeleteHandler(input: Readonly<{
-  serverId: string
-  orgId: string
-  router: ReturnType<typeof useRouter>
-  handleUnauthorized: () => Promise<void>
-  setDeleting: Dispatch<SetStateAction<boolean>>
-  setDeleteError: Dispatch<SetStateAction<string | null>>
-}>): () => Promise<void> {
-  return async () => {
-    input.setDeleting(true)
-    input.setDeleteError(null)
-    try {
-      await deleteServer(input.serverId, input.orgId)
-      input.router.replace(defaultOrgDashboardHref(input.orgId))
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await input.handleUnauthorized()
-        return
-      }
-      input.setDeleteError(formatServerDeleteBlockedError(err))
-    } finally {
-      input.setDeleting(false)
-    }
-  }
-}
-
 export function ServerDetailSection({
   orgId,
   serverId,
 }: Readonly<{ orgId: string; serverId: string }>) {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string | string[] }>()
   const activeTab = parseTabParam(tabParam)
 
-  const serverQuery = useQuery({
-    queryKey: ['server', serverId],
-    queryFn: () => fetchServer(serverId),
-    refetchInterval: SERVERS_REFRESH_MS,
-    enabled: serverId.length > 0,
-  })
-  useForbiddenRecovery(serverQuery.error)
+  const serverQuery = useServerDetail(orgId, serverId)
+  const updateStatusQuery = useServerUpdateStatus(orgId, serverId)
+  const triggerUpdateMutation = useTriggerServerUpdate(orgId, serverId)
+  const resetUpdateMutation = useResetServerUpdateStatus(orgId, serverId)
+  const pingMutation = usePingDaemon(orgId, serverId)
+  const hostnameMutation = useSetServerHostname(orgId, serverId)
+  const rebootMutation = useRebootServer(orgId, serverId)
+  const deleteMutation = useDeleteServer(orgId)
 
-  const [updateState, setUpdateState] = useState<UpdateState>({
-    loading: true,
-    triggering: false,
-    resetting: false,
-    data: null,
-    error: null,
-  })
   const [commandState, setCommandState] = useState<ServerCommandState>(
     defaultServerCommandState(),
   )
   const [pollCommands, setPollCommands] = useState<DetailPollCommand[]>([])
   const [timezonePollError, setTimezonePollError] = useState<string | null>(null)
   const [ntpPollError, setNtpPollError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const server = serverQuery.data
 
-  const loadUpdate = createLoadUpdate({ serverId, handleUnauthorized, setUpdateState })
-
-  useEffect(() => {
-    if (!serverId) return
-    loadUpdate().catch(() => {
-      /* loadUpdate reports failures via updateState */
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverId])
-
-  useEffect(() => {
-    if (updateState.data?.status !== 'updating' && !updateState.triggering) {
-      return
+  const updateState = useMemo((): UpdateState => {
+    const data = updateStatusQuery.data ?? null
+    let error: string | null = null
+    if (triggerUpdateMutation.actionError) {
+      error = triggerUpdateMutation.actionError
+    } else if (resetUpdateMutation.actionError) {
+      error = resetUpdateMutation.actionError
+    } else if (updateStatusQuery.error instanceof Error) {
+      error = updateStatusQuery.error.message
     }
-    const timer = setInterval(() => {
-      loadUpdate({ silent: true }).catch(() => {
-        /* silent progress poll */
-      })
-    }, UPDATE_PROGRESS_POLL_MS)
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateState.data?.status, updateState.triggering, serverId])
+    return {
+      loading: updateStatusQuery.isLoading,
+      triggering:
+        triggerUpdateMutation.isPending || data?.status === 'updating',
+      resetting: resetUpdateMutation.isPending,
+      data,
+      error,
+    }
+  }, [
+    updateStatusQuery.data,
+    updateStatusQuery.isLoading,
+    updateStatusQuery.error,
+    triggerUpdateMutation.isPending,
+    triggerUpdateMutation.actionError,
+    resetUpdateMutation.isPending,
+    resetUpdateMutation.actionError,
+  ])
+
+  const commandBatchEntries = useMemo(
+    () =>
+      pollCommands.map((entry) => ({
+        serverId,
+        commandId: entry.commandId,
+      })),
+    [pollCommands, serverId],
+  )
+
+  const commandsQuery = useCommandsBatch(orgId, commandBatchEntries)
+  const processedCommandIdsRef = useRef<Set<string>>(new Set())
 
   const invalidateServer = () => {
-    queryClient
-      .invalidateQueries({ queryKey: ['server', serverId] })
-      .catch(() => {
-        /* refresh is best-effort */
-      })
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
   }
 
   const patchCommand = (patch: Partial<ServerCommandState>) => {
@@ -807,6 +619,7 @@ export function ServerDetailSection({
   }
 
   const registerPollCommand = (entry: DetailPollCommand) => {
+    processedCommandIdsRef.current.delete(entry.commandId)
     setPollCommands((prev) =>
       prev.some((item) => item.commandId === entry.commandId)
         ? prev
@@ -818,9 +631,9 @@ export function ServerDetailSection({
   const ntpCommandInFlight = pollCommands.some((item) => item.kind === 'ntp')
 
   useEffect(() => {
-    if (pollCommands.length === 0) return
+    const records = commandsQuery.data
+    if (!records || records.length === 0) return
 
-    const cancelledRef: PollCancelledRef = { current: false }
     const pollHandlers: PollHandlers = {
       onRefreshServer: invalidateServer,
       setCommandState,
@@ -828,36 +641,36 @@ export function ServerDetailSection({
       setNtpPollError,
       patchCommand,
     }
-    const onSettled = (commandId: string) => {
-      setPollCommands((prev) => removePollCommandById(prev, commandId))
+
+    for (let index = 0; index < pollCommands.length; index += 1) {
+      const entry = pollCommands[index]
+      const record = records[index]
+      if (!entry || !record) continue
+      if (!isTerminalCommandStatus(record.status)) continue
+      if (processedCommandIdsRef.current.has(entry.commandId)) continue
+
+      processedCommandIdsRef.current.add(entry.commandId)
+      applyTerminalPollSuccess(entry, record, pollHandlers)
+      setPollCommands((prev) => removePollCommandById(prev, entry.commandId))
+    }
+  }, [commandsQuery.data, pollCommands, serverId])
+
+  useEffect(() => {
+    if (!commandsQuery.error || pollCommands.length === 0) return
+
+    const pollHandlers: PollHandlers = {
+      onRefreshServer: invalidateServer,
+      setCommandState,
+      setTimezonePollError,
+      setNtpPollError,
+      patchCommand,
     }
 
-    const pollAll = () =>
-      Promise.all(
-        pollCommands.map((entry) =>
-          pollSingleCommand(entry, {
-            serverId,
-            cancelledRef,
-            handleUnauthorized,
-            pollHandlers,
-            onSettled,
-          }),
-        ),
-      )
-
-    pollAll().catch(() => {
-      /* per-entry errors handled inside pollSingleCommand */
-    })
-    const timer = setInterval(() => {
-      pollAll().catch(() => {
-        /* per-entry errors handled inside pollSingleCommand */
-      })
-    }, COMMAND_POLL_MS)
-    return () => {
-      cancelledRef.current = true
-      clearInterval(timer)
+    for (const entry of pollCommands) {
+      applyPollFailure(entry, commandsQuery.error, pollHandlers)
     }
-  }, [pollCommands, serverId, handleUnauthorized, queryClient])
+    setPollCommands([])
+  }, [commandsQuery.error, pollCommands])
 
   const setTab = (tabId: ServerDetailTabId) => {
     router.setParams({ tab: tabId })
@@ -882,43 +695,95 @@ export function ServerDetailSection({
   const hostname = server.hostname?.trim()
   const daemonCommit = shortCommit(updateState.data?.current?.commit)
 
-  const handleDelete = createDeleteHandler({
-    serverId,
-    orgId,
-    router,
-    handleUnauthorized,
-    setDeleting,
-    setDeleteError,
-  })
+  const onPing = () => {
+    patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
+    pingMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        const entry: ActiveCommand = { commandId: result.commandId, kind: 'ping' }
+        registerPollCommand(entry)
+        patchCommand({ activeCommand: entry })
+      },
+      onError: (err) => {
+        if (isForbiddenError(err)) return
+        patchCommand({
+          pingError: err instanceof Error ? err.message : 'Ping failed',
+          pingRunning: false,
+        })
+      },
+    })
+  }
 
-  const onPing = createPingHandler({ serverId, patchCommand, registerPollCommand, handleUnauthorized })
-  const onSetHostname = createSetHostnameHandler({
-    serverId,
-    patchCommand,
-    registerPollCommand,
-    handleUnauthorized,
-  })
-  const onReboot = createRebootHandler({ serverId, patchCommand, registerPollCommand, handleUnauthorized })
-  const onTriggerUpdate = createTriggerUpdateHandler({
-    serverId,
-    setUpdateState,
-    loadUpdate,
-    handleUnauthorized,
-  })
-  const onResetUpdate = createResetUpdateHandler({ serverId, setUpdateState, handleUnauthorized })
+  const onSetHostname = (host: string) => {
+    if (!host) {
+      patchCommand({ hostnameError: 'Hostname is required' })
+      return
+    }
+    patchCommand({ hostnameError: null, hostnameRunning: true, commandRecord: null })
+    hostnameMutation.mutate(host, {
+      onSuccess: (result) => {
+        const entry: ActiveCommand = {
+          commandId: result.commandId,
+          kind: 'hostname',
+        }
+        registerPollCommand(entry)
+        patchCommand({ activeCommand: entry })
+      },
+      onError: (err) => {
+        if (isForbiddenError(err)) return
+        patchCommand({
+          hostnameError:
+            err instanceof Error ? err.message : 'Hostname change failed',
+          hostnameRunning: false,
+        })
+      },
+    })
+  }
+
+  const onReboot = () => {
+    patchCommand({ rebootError: null, rebootRunning: true, commandRecord: null })
+    rebootMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        const entry: ActiveCommand = { commandId: result.commandId, kind: 'reboot' }
+        registerPollCommand(entry)
+        patchCommand({ activeCommand: entry })
+      },
+      onError: (err) => {
+        if (isForbiddenError(err)) return
+        patchCommand({
+          rebootError: err instanceof Error ? err.message : 'Reboot failed',
+          rebootRunning: false,
+        })
+      },
+    })
+  }
+
+  const onTriggerUpdate = () => {
+    triggerUpdateMutation.mutate()
+  }
+
+  const onResetUpdate = () => {
+    resetUpdateMutation.mutate()
+  }
 
   const deletePanel = renderServerDeletePanel({
     canManage,
     colocated: updateVm.colocated,
-    deleting,
+    deleting: deleteMutation.isPending,
     deleteError,
     confirmingDelete,
     onRequestConfirm: () => setConfirmingDelete(true),
     onCancel: () => setConfirmingDelete(false),
     onConfirm: () => {
       setConfirmingDelete(false)
-      handleDelete().catch(() => {
-        /* handleDelete reports failures via deleteError */
+      setDeleteError(null)
+      deleteMutation.mutate(serverId, {
+        onSuccess: () => {
+          router.replace(defaultOrgDashboardHref(orgId))
+        },
+        onError: (err) => {
+          if (isForbiddenError(err)) return
+          setDeleteError(formatServerDeleteBlockedError(err))
+        },
       })
     },
   })
@@ -989,40 +854,42 @@ export function ServerDetailSection({
         </View>
       </ScrollView>
 
-      {renderDetailTabBody(activeTab, {
-        orgId,
-        serverId,
-        server,
-        canManage,
-        commandState,
-        timezoneCommandInFlight,
-        timezonePollError,
-        ntpCommandInFlight,
-        ntpPollError: ntpPollError,
-        updateState,
-        updateVm,
-        onPing,
-        onSetHostname,
-        onReboot,
-        onTriggerUpdate,
-        onResetUpdate,
-        onEnqueueCommand: (response, kind) => {
+      <DetailTabBody
+        tab={activeTab}
+        orgId={orgId}
+        serverId={serverId}
+        server={server}
+        canManage={canManage}
+        commandState={commandState}
+        timezoneCommandInFlight={timezoneCommandInFlight}
+        timezonePollError={timezonePollError}
+        ntpCommandInFlight={ntpCommandInFlight}
+        ntpPollError={ntpPollError}
+        updateState={updateState}
+        updateVm={updateVm}
+        onPing={onPing}
+        onSetHostname={onSetHostname}
+        onReboot={onReboot}
+        onTriggerUpdate={onTriggerUpdate}
+        onResetUpdate={onResetUpdate}
+        onEnqueueCommand={(response, kind) => {
           if (kind === 'timezone') {
             setTimezonePollError(null)
           } else {
             setNtpPollError(null)
           }
           registerPollCommand({ commandId: response.commandId, kind })
-        },
-        deletePanel,
-      })}
+        }}
+        deletePanel={deletePanel}
+      />
     </View>
   )
 }
 
 function ServerConnectionOverview({
+  orgId,
   server,
-}: Readonly<{ server: ServerDetailRecord }>) {
+}: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
   // remoteAddress is the egress IP the control plane observed on the daemon WS
   // (CF-Connecting-IP / X-Real-IP) — not the URL/hostname the daemon dials.
   const seenFrom = server.remoteAddress?.trim()
@@ -1036,24 +903,7 @@ function ServerConnectionOverview({
   const statusSinceLabel = server.connected ? 'Online since' : 'Offline since'
   const statusSince = server.statusChangedAt
 
-  const reportingQuery = useQuery({
-    queryKey: ['server', server.id, 'reporting', '24h'],
-    queryFn: async (): Promise<MetricsSeriesResponse | null> => {
-      const toMs = Date.now()
-      try {
-        return await fetchServerMetricsSeries(server.id, {
-          fromIso: new Date(toMs - REPORTING_WINDOW_MS).toISOString(),
-          toIso: new Date(toMs).toISOString(),
-          metrics: ['uptimeSeconds'],
-        })
-      } catch (error) {
-        if (error instanceof MetricsBackendUnavailableError) return null
-        throw error
-      }
-    },
-    refetchInterval: REPORTING_REFRESH_MS,
-  })
-  useForbiddenRecovery(reportingQuery.error)
+  const reportingQuery = useServerReporting(orgId, server.id)
 
   const reporting = reportingQuery.data
   const showSamples = Boolean(reporting?.available)
@@ -1097,7 +947,10 @@ function ServerConnectionOverview({
   )
 }
 
-function ServerOverviewTab({ server }: Readonly<{ server: ServerDetailRecord }>) {
+function ServerOverviewTab({
+  orgId,
+  server,
+}: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
   const geoLine = formatServerGeoLocation(server.geo)
   const country = formatServerGeoCountryCode(server.geo)
   const asn = formatServerGeoAsn(server.geo)
@@ -1137,7 +990,7 @@ function ServerOverviewTab({ server }: Readonly<{ server: ServerDetailRecord }>)
         ) : null}
       </SectionPanel>
 
-      <ServerConnectionOverview server={server} />
+      <ServerConnectionOverview orgId={orgId} server={server} />
 
       <SectionPanel title="Geo">
         {geoLine || country || asn ? (

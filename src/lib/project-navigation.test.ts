@@ -55,6 +55,9 @@ describe('path-based environment selection', () => {
     expect(projectEnvironmentHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1',
     )
+    expect(projectTabHref('org', 'proj', 'networking')).toBe(
+      '/org/projects/proj/networking',
+    )
     expect(projectTabHref('org', 'proj', 'environments')).toBe(
       '/org/projects/proj/environments',
     )

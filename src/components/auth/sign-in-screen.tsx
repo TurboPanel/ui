@@ -13,18 +13,20 @@ import {
   resolveControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
+import { useSignIn } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 
 export function SignInScreenContent() {
   const router = useRouter()
-  const { signIn, resolveDashboardHref } = useAuth()
+  const { resolveDashboardHref } = useAuth()
+  const signInMutation = useSignIn()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const loading = signInMutation.isPending
 
   const accent = useMemo(
     () =>
@@ -45,17 +47,14 @@ export function SignInScreenContent() {
 
   const onSubmit = useCallback(async () => {
     setError('')
-    setLoading(true)
     try {
-      await signIn(email, password)
+      await signInMutation.mutateAsync({ username: email, password })
       const href = await resolveDashboardHref()
       router.replace(href as Href)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign In failed')
-    } finally {
-      setLoading(false)
     }
-  }, [email, password, resolveDashboardHref, router, signIn])
+  }, [email, password, resolveDashboardHref, router, signInMutation])
 
   useEffect(() => {
     if (instanceInfoLoading) return

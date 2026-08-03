@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -10,11 +10,7 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
-  createLicense,
-  fetchOrgServers,
-  fetchPublicUrls,
   isForbiddenError,
   type CreatedLicense,
   type OrgServerRecord,
@@ -24,9 +20,12 @@ import {
   defaultDevInstallHttpBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
+import { usePublicUrlsOptional } from '@/lib/queries/admin'
+import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const POLL_FAILURE_THRESHOLD = 3
+const WAITING_POLL_MS = 3000
 
 function isAuthorizationError(err: unknown): boolean {
   return (
@@ -91,6 +90,7 @@ function WizardStepIndicator({ step }: Readonly<{ step: WizardStep }>) {
 }
 
 type AddServerWizardProps = Readonly<{
+  orgId: string
   onComplete: () => void
   onDismiss?: () => void
 }>
@@ -378,15 +378,19 @@ function WaitingStep({
   )
 }
 
-export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps) {
-  const { handleUnauthorized } = useAuth()
-  const [managedUrls, setManagedUrls] = useState<string[]>([])
+export function AddServerWizard({
+  orgId,
+  onComplete,
+  onDismiss,
+}: AddServerWizardProps) {
+  const publicUrlsQuery = usePublicUrlsOptional({ enabled: __DEV__ })
+  const managedUrls = publicUrlsQuery.data?.urls ?? []
+  const createLicenseMutation = useCreateLicense(orgId)
   const [step, setStep] = useState<WizardStep>('create')
   const [displayName, setDisplayName] = useState('')
   const [installBaseUrl, setInstallBaseUrl] = useState(() =>
     __DEV__ ? defaultDevInstallBaseUrl() : '',
   )
-  const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [revealed, setRevealed] = useState<CreatedLicense | null>(null)
   const [installCommandCopied, setInstallCommandCopied] = useState(false)
@@ -394,12 +398,27 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [pollError, setPollError] = useState<string | null>(null)
   const [pollAttempt, setPollAttempt] = useState(0)
+  const consecutivePollFailuresRef = useRef(0)
+  const creating = createLicenseMutation.isPending
+
+  const waitingForConnection = step === 'waiting' && revealed != null
+  const serversQuery = useOrgServers(orgId, {
+    enabled: waitingForConnection,
+    refetchInterval: waitingForConnection ? WAITING_POLL_MS : false,
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (!__DEV__ || managedUrls.length === 0) return
+    setInstallBaseUrl((current) =>
+      current.trim() ? current : defaultDevInstallBaseUrl(managedUrls),
+    )
+  }, [managedUrls])
 
   const resetWizard = () => {
     setStep('create')
     setDisplayName('')
     setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl(managedUrls) : '')
-    setCreating(false)
     setCreateError(null)
     setRevealed(null)
     setInstallCommandCopied(false)
@@ -407,27 +426,23 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
     setElapsedSeconds(0)
     setPollError(null)
     setPollAttempt(0)
+    consecutivePollFailuresRef.current = 0
   }
 
   const onStartAddServer = async () => {
-    setCreating(true)
     setCreateError(null)
-    try {
-      const created = await createLicense(
-        displayName.trim() || undefined,
-        __DEV__ ? installBaseUrl : undefined,
-      )
-      setRevealed(created)
-      setInstallCommandCopied(false)
-      setDisplayName('')
-      setStep('install')
-    } catch (err) {
-      setCreateError(
-        err instanceof Error ? err.message : 'Failed to start server setup',
-      )
-    } finally {
-      setCreating(false)
+    const result = await createLicenseMutation.run({
+      displayName: displayName.trim() || undefined,
+      installBaseUrl: __DEV__ ? installBaseUrl : undefined,
+    })
+    if (!result.ok) {
+      if (result.error) setCreateError(result.error)
+      return
     }
+    setRevealed(result.value)
+    setInstallCommandCopied(false)
+    setDisplayName('')
+    setStep('install')
   }
 
   const displayedInstallCommand = revealed
@@ -462,95 +477,80 @@ export function AddServerWizard({ onComplete, onDismiss }: AddServerWizardProps)
   }
 
   useEffect(() => {
-    if (!__DEV__) {
-      return
-    }
-
-    let cancelled = false
-
-    fetchPublicUrls()
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        setManagedUrls(result.urls)
-        if (result.urls.length > 0) {
-          setInstallBaseUrl(defaultDevInstallBaseUrl(result.urls))
-        }
-      })
-      .catch(() => {
-        // Non-admin users may get 403 — fall back to location.origin.
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (step !== 'waiting' || !revealed) {
+    if (!waitingForConnection || !revealed) {
       return
     }
 
     setElapsedSeconds(0)
     setConnectedServer(null)
     setPollError(null)
+    consecutivePollFailuresRef.current = 0
+  }, [waitingForConnection, revealed?.licenseId, pollAttempt])
 
-    let pollTimer: ReturnType<typeof setInterval> | null = null
-    let elapsedTimer: ReturnType<typeof setInterval> | null = null
-    let consecutiveFailures = 0
-
-    const stopPolling = () => {
-      if (pollTimer) clearInterval(pollTimer)
-      if (elapsedTimer) clearInterval(elapsedTimer)
-      pollTimer = null
-      elapsedTimer = null
+  useEffect(() => {
+    if (!waitingForConnection || !revealed || !serversQuery.data) {
+      return
     }
 
-    const checkServers = async () => {
-      try {
-        const { servers } = await fetchOrgServers()
-        consecutiveFailures = 0
-        const match = servers.find(
-          (s) => s.licenseId === revealed.licenseId && s.connected,
-        )
-        if (match) {
-          setConnectedServer(match)
-          stopPolling()
-        }
-      } catch (err) {
-        if (isAuthorizationError(err)) {
-          await handleUnauthorized()
-          setPollError(
-            err instanceof Error ? err.message : 'Session expired or access denied',
-          )
-          stopPolling()
-          return
-        }
+    const match = serversQuery.data.servers.find(
+      (server) => server.licenseId === revealed.licenseId && server.connected,
+    )
+    if (match) {
+      setConnectedServer(match)
+    }
+  }, [waitingForConnection, revealed, serversQuery.data])
 
-        consecutiveFailures += 1
-        if (consecutiveFailures >= POLL_FAILURE_THRESHOLD) {
-          setPollError(
-            err instanceof Error ? err.message : 'Failed to check server status',
-          )
-          stopPolling()
-        }
+  useEffect(() => {
+    if (!waitingForConnection || connectedServer) {
+      return
+    }
+
+    const err = serversQuery.error
+    if (!err) {
+      if (serversQuery.isSuccess) {
+        consecutivePollFailuresRef.current = 0
       }
+      return
     }
 
-    void checkServers()
-    pollTimer = setInterval(() => void checkServers(), 3000)
-    elapsedTimer = setInterval(() => {
+    if (isAuthorizationError(err)) {
+      setPollError(
+        err instanceof Error ? err.message : 'Session expired or access denied',
+      )
+      return
+    }
+
+    consecutivePollFailuresRef.current += 1
+    if (consecutivePollFailuresRef.current >= POLL_FAILURE_THRESHOLD) {
+      setPollError(
+        err instanceof Error ? err.message : 'Failed to check server status',
+      )
+    }
+  }, [
+    waitingForConnection,
+    connectedServer,
+    serversQuery.error,
+    serversQuery.isSuccess,
+    serversQuery.dataUpdatedAt,
+  ])
+
+  useEffect(() => {
+    if (!waitingForConnection || connectedServer || pollError) {
+      return
+    }
+
+    const elapsedTimer = setInterval(() => {
       setElapsedSeconds((current) => current + 1)
     }, 1000)
 
     return () => {
-      stopPolling()
+      clearInterval(elapsedTimer)
     }
-  }, [step, revealed, pollAttempt, handleUnauthorized])
+  }, [waitingForConnection, connectedServer, pollError])
 
   const onRetryPolling = () => {
     setPollError(null)
+    consecutivePollFailuresRef.current = 0
     setPollAttempt((current) => current + 1)
   }
 

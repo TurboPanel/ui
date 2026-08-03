@@ -1,84 +1,87 @@
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  isForbiddenError,
   updateEnvironment,
   updateProject,
   type ComposeDocument,
   type ProjectRecord,
 } from '@/lib/instance-api'
-import { buildProjectOptionsPatch, mergeProjectOptionsLocal } from '@/lib/project-options'
+import {
+  buildProjectOptionsPatch,
+  mergeProjectOptionsLocal,
+} from '@/lib/project-options'
+import { useApiMutation, queryKeys } from '@/lib/query-client'
 
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+export function usePersistProjectCompose(orgId: string, projectId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: async (compose: ComposeDocument) => {
+      const cached = queryClient.getQueryData<{ project: ProjectRecord }>(
+        queryKeys.org(orgId).projects.detail(projectId),
+      )
+      const project = cached?.project
+      if (!project) {
+        throw new Error('Project not loaded')
+      }
+      const options = buildProjectOptionsPatch(project, { compose })
+      await updateProject(projectId, { options })
+      return {
+        project: {
+          ...project,
+          options: mergeProjectOptionsLocal(project.options, options),
+        },
+      }
+    },
+    onSuccess: async (data) => {
+      queryClient.setQueryData(
+        queryKeys.org(orgId).projects.detail(projectId),
+        { project: data.project },
+      )
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.all,
+      })
+    },
+    fallbackError: 'Failed to save compose',
+  })
 }
 
-export type PersistProjectComposeArgs = Readonly<{
-  projectId: string
-  project: ProjectRecord
-  compose: ComposeDocument
-  setProject: (project: ProjectRecord | null) => void
-  setError: (error: string | null) => void
-  setSaving: (saving: boolean) => void
-  handleUnauthorized: () => void | Promise<void>
-}>
-
-export async function persistProjectCompose({
-  projectId,
-  project,
-  compose,
-  setProject,
-  setError,
-  setSaving,
-  handleUnauthorized,
-}: PersistProjectComposeArgs): Promise<void> {
-  setSaving(true)
-  setError(null)
-  try {
-    const options = buildProjectOptionsPatch(project, { compose })
-    await updateProject(projectId, { options })
-    setProject({
-      ...project,
-      options: mergeProjectOptionsLocal(project.options, options),
-    })
-  } catch (err) {
-    if (isForbiddenError(err)) {
-      await handleUnauthorized()
-      return
-    }
-    setError(err instanceof Error ? err.message : 'Failed to save compose')
-  } finally {
-    setSaving(false)
-  }
-}
-
-export type PersistEnvironmentComposeArgs = Readonly<{
-  environmentId: string
-  compose: ComposeDocument
-  onSaved?: () => void | Promise<void>
-  setError: (error: string | null) => void
-  setSaving: (saving: boolean) => void
-  handleUnauthorized: () => void | Promise<void>
-}>
-
-export async function persistEnvironmentCompose({
-  environmentId,
-  compose,
-  onSaved,
-  setError,
-  setSaving,
-  handleUnauthorized,
-}: PersistEnvironmentComposeArgs): Promise<void> {
-  setSaving(true)
-  setError(null)
-  try {
-    await updateEnvironment(environmentId, { options: { compose } })
-    await onSaved?.()
-  } catch (err) {
-    if (isForbiddenError(err)) {
-      await handleUnauthorized()
-      return
-    }
-    setError(errorMessage(err, 'Failed to save compose overlay'))
-  } finally {
-    setSaving(false)
-  }
+export function usePersistEnvironmentCompose(
+  orgId: string,
+  environmentId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: async (compose: ComposeDocument) => {
+      await updateEnvironment(environmentId, { options: { compose } })
+      return compose
+    },
+    onSuccess: async (compose) => {
+      queryClient.setQueryData(
+        queryKeys.org(orgId).environments.detail(environmentId),
+        (current: { environment: { options?: { compose?: ComposeDocument } } } | undefined) =>
+          current
+            ? {
+                environment: {
+                  ...current.environment,
+                  options: { ...current.environment.options, compose },
+                },
+              }
+            : current,
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).environments.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).services.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).containers.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).environments.deployPreview(environmentId),
+        }),
+      ])
+    },
+    fallbackError: 'Failed to save compose overlay',
+  })
 }

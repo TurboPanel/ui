@@ -8,6 +8,7 @@ import {
   setComposeEditorView,
   stripComposeManagedExtension,
   stripComposePlacement,
+  withEffectivePlacement,
   yamlToComposeDocument,
 } from './index'
 
@@ -144,6 +145,26 @@ x-turbopanel:
     const stripped = stripComposePlacement(source)
     expect(composeDocumentToYaml(stripped)).not.toContain('x-turbopanel')
     expect(composeDocumentToRuntimeYaml(stripped)).not.toContain(projectPin)
+  })
+
+  it('withEffectivePlacement injects server_id for display YAML', () => {
+    const projectPin = '11111111-1111-4111-8111-111111111111'
+    const source = yamlToComposeDocument(`services:
+  nginx:
+    image: nginx:alpine
+    x-turbopanel:
+      serviceKind: container
+`)
+    const withPin = withEffectivePlacement(source, projectPin)
+    const yaml = composeDocumentToRuntimeYaml(withPin)
+    expect(yaml).toContain('x-turbopanel:')
+    expect(yaml).toContain('server_id:')
+    expect(yaml).toContain(projectPin)
+    expect(yaml).toContain('serviceKind: container')
+
+    const withoutPin = withEffectivePlacement(source, null)
+    expect(composeDocumentToRuntimeYaml(withoutPin)).not.toContain('server_id:')
+    expect(composeDocumentToRuntimeYaml(withoutPin)).toContain('serviceKind: container')
   })
 
   it('stores editor view in presentation only, not x-turbopanel', () => {

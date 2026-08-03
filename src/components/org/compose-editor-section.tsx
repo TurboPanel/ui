@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -141,6 +148,79 @@ function ComposeLintPanel({
 
 const LINT_DEBOUNCE_MS = 150
 
+/** Editor / Visual segmented control (shared button-group chrome). */
+export function ComposeEditorViewTabs({
+  value,
+  onChange,
+}: Readonly<{
+  value: ComposeEditorView
+  onChange: (view: ComposeEditorView) => void
+}>) {
+  return (
+    <View style={orgPanelStyles.segmentGroup} accessibilityRole="tablist">
+      {([
+        ['editor', 'Editor'],
+        ['visual', 'Visual'],
+      ] as const).map(([entry, label]) => {
+        const active = value === entry
+        return (
+          <Pressable
+            key={entry}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={[
+              orgPanelStyles.segmentChip,
+              active && orgPanelStyles.segmentChipActive,
+            ]}
+            onPress={() => {
+              onChange(entry)
+            }}
+          >
+            <Text
+              style={[
+                orgPanelStyles.segmentChipText,
+                active && orgPanelStyles.segmentChipTextActive,
+              ]}
+            >
+              {label}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+/**
+ * Shared editor chrome: leading tools, trailing tools, optional Editor/Visual
+ * tabs. Used by the compose editor and the started-status shell.
+ */
+export function ComposeEditorChrome({
+  leading,
+  trailing,
+  tabs,
+  children,
+}: Readonly<{
+  leading?: ReactNode
+  trailing?: ReactNode
+  tabs?: ReactNode
+  children: ReactNode
+}>) {
+  return (
+    <View style={styles.editorShell}>
+      <View style={styles.editorTabBar}>
+        {leading ? <View style={styles.toolbarLeading}>{leading}</View> : null}
+        <View style={styles.toolbarSpacer} />
+        {trailing ? (
+          <View style={styles.toolbarTrailing}>{trailing}</View>
+        ) : null}
+        {tabs}
+      </View>
+      <View style={styles.editorBody}>{children}</View>
+    </View>
+  )
+}
+
 export function ComposeEditorSection({
   document,
   onSave,
@@ -148,6 +228,9 @@ export function ComposeEditorSection({
   title = 'Docker Compose',
   defaultView = 'editor',
   onDraftChange,
+  hideHeader = false,
+  toolbarLeading,
+  toolbarTrailing,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -157,6 +240,15 @@ export function ComposeEditorSection({
   defaultView?: ComposeEditorView
   /** Debounced draft updates; `null` while editor YAML is unparseable. */
   onDraftChange?: (document: ComposeDocument | null) => void
+  /**
+   * Hide title / service count. Editor/Visual remain as a right-aligned tab
+   * strip attached to the top of the editor surface.
+   */
+  hideHeader?: boolean
+  /** Left of Editor/Visual (e.g. Project / environment chips). */
+  toolbarLeading?: ReactNode
+  /** Right-aligned before Editor/Visual (e.g. project server pin). */
+  toolbarTrailing?: ReactNode
 }>) {
   const source = normalizeCompose(document)
   const [tab, setTab] = useState<EditorTab>(
@@ -264,6 +356,32 @@ export function ComposeEditorSection({
     setError(null)
     setShowSaveLint(false)
   }
+
+  const requestView = useCallback(
+    (entry: EditorTab) => {
+      if (entry === tab) return
+      if (tab === 'editor' && entry !== 'editor') {
+        try {
+          const parsed = stripComposeManagedExtension(
+            yamlToComposeDocument(yaml),
+          )
+          setDraft(parsed)
+          setYaml(composeDocumentToYaml(parsed))
+          setError(null)
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : 'Compose YAML is invalid',
+          )
+          return
+        }
+      }
+      if (entry === 'editor' && tab === 'visual') {
+        setYaml(composeDocumentToYaml(draft))
+      }
+      setTab(entry)
+    },
+    [tab, yaml, draft],
+  )
 
   const documentForSave = (
     edited: ComposeDocument,
@@ -411,6 +529,7 @@ export function ComposeEditorSection({
   const currentYaml = tab === 'editor' ? yaml : composeDocumentToYaml(draft)
   const isDirty = currentYaml !== baselineYaml
   const serviceCount = useMemo(() => {
+    if (hideHeader) return 0
     if (tab === 'visual') {
       return countComposeServices(draft)
     }
@@ -419,85 +538,69 @@ export function ComposeEditorSection({
     } catch {
       return countComposeServices(draft)
     }
-  }, [tab, yaml, draft])
+  }, [hideHeader, tab, yaml, draft])
+
+  const editorBody =
+    tab === 'editor' ? (
+      <ComposeYamlEditor
+        ref={editorRef}
+        value={yaml}
+        editable={!saving}
+        lintIssues={displayLintIssues}
+        onChangeText={handleYamlChange}
+        onSelectionChange={handleYamlSelectionChange}
+        embedded
+      />
+    ) : (
+      <View style={[styles.serviceList, styles.visualBody]}>
+        {Object.entries(servicesFrom(draft)).map(([name, service]) => (
+          <ComposeVisualServiceCard
+            key={name}
+            service={service}
+            nameDraft={serviceNameDrafts[name] ?? name}
+            saving={saving}
+            onNameDraftChange={(value) =>
+              setServiceNameDrafts((current) => ({ ...current, [name]: value }))
+            }
+            onRename={(nextName) => renameService(name, nextName)}
+            onRemoveService={() => removeService(name)}
+            onPatchService={(patch) => updateService(name, patch)}
+            onClearField={(key) => clearServiceField(name, key)}
+            onAddField={(field) => addServiceField(name, field)}
+          />
+        ))}
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={addService}
+          disabled={saving}
+        >
+          <Text style={styles.secondaryButtonText}>Add service</Text>
+        </Pressable>
+      </View>
+    )
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.serviceCount}>{serviceCountLabel(serviceCount)}</Text>
+      {hideHeader ? null : (
+        <View style={styles.header}>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.serviceCount}>
+              {serviceCountLabel(serviceCount)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.tabs}>
-          {([
-            ['editor', 'Editor'],
-            ['visual', 'Visual'],
-          ] as const).map(([entry, label]) => (
-            <Pressable
-              key={entry}
-              style={[styles.tab, tab === entry && styles.tabActive]}
-              onPress={() => {
-                if (tab === 'editor' && entry !== 'editor') {
-                  try {
-                    const parsed = stripComposeManagedExtension(
-                      yamlToComposeDocument(yaml),
-                    )
-                    setDraft(parsed)
-                    setYaml(composeDocumentToYaml(parsed))
-                    setError(null)
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Compose YAML is invalid')
-                    return
-                  }
-                }
-                if (entry === 'editor' && tab === 'visual') {
-                  setYaml(composeDocumentToYaml(draft))
-                }
-                setTab(entry)
-              }}
-            >
-              <Text style={[styles.tabText, tab === entry && styles.tabTextActive]}>
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      )}
 
-      {tab === 'editor' ? (
-        <ComposeYamlEditor
-          ref={editorRef}
-          value={yaml}
-          editable={!saving}
-          lintIssues={displayLintIssues}
-          onChangeText={handleYamlChange}
-          onSelectionChange={handleYamlSelectionChange}
-        />
-      ) : null}
-
-      {tab === 'visual' ? (
-        <View style={styles.serviceList}>
-          {Object.entries(servicesFrom(draft)).map(([name, service]) => (
-            <ComposeVisualServiceCard
-              key={name}
-              service={service}
-              nameDraft={serviceNameDrafts[name] ?? name}
-              saving={saving}
-              onNameDraftChange={(value) =>
-                setServiceNameDrafts((current) => ({ ...current, [name]: value }))
-              }
-              onRename={(nextName) => renameService(name, nextName)}
-              onRemoveService={() => removeService(name)}
-              onPatchService={(patch) => updateService(name, patch)}
-              onClearField={(key) => clearServiceField(name, key)}
-              onAddField={(field) => addServiceField(name, field)}
-            />
-          ))}
-          <Pressable style={styles.secondaryButton} onPress={addService} disabled={saving}>
-            <Text style={styles.secondaryButtonText}>Add service</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <ComposeEditorChrome
+        leading={toolbarLeading}
+        trailing={toolbarTrailing}
+        tabs={
+          <ComposeEditorViewTabs value={tab} onChange={requestView} />
+        }
+      >
+        {editorBody}
+      </ComposeEditorChrome>
 
       <ComposeLintPanel
         issues={displayLintIssues}
@@ -531,11 +634,32 @@ const styles = StyleSheet.create({
   headerTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing.sm },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' },
   serviceCount: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  tabs: { flexDirection: 'row', gap: 4 },
-  tab: { borderWidth: 1, borderColor: colors.borderChip, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
-  tabActive: { borderColor: chrome.accent, backgroundColor: chrome.bgActive },
-  tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  tabTextActive: { color: chrome.accent },
+  editorShell: {
+    gap: spacing.xs,
+  },
+  editorTabBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 36,
+  },
+  toolbarLeading: {
+    flexShrink: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  toolbarSpacer: {
+    flexGrow: 1,
+    minWidth: spacing.sm,
+  },
+  toolbarTrailing: {
+    flexShrink: 0,
+    justifyContent: 'center',
+  },
+  editorBody: {
+    minHeight: 120,
+  },
   lintPanel: {
     gap: 6,
     borderWidth: 1,
@@ -571,6 +695,9 @@ const styles = StyleSheet.create({
   lintMessageError: { color: colors.errorText },
   lintMessageWarning: { color: colors.pending },
   serviceList: { gap: spacing.sm },
+  visualBody: {
+    padding: spacing.sm,
+  },
   saveButton: { alignSelf: 'flex-start', borderRadius: 8, backgroundColor: chrome.accent, paddingHorizontal: 14, paddingVertical: 10 },
   saveButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
   secondaryButton: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, borderColor: colors.borderChip, paddingHorizontal: 10, paddingVertical: 7 },

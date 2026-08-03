@@ -6,25 +6,26 @@ import { ProjectVariablesSection } from '@/components/org/project-variables-sect
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import { usePersistProjectCompose } from '@/components/org/compose-persistence'
 import {
-  createProjectPrincipal,
-  deleteProjectPrincipal,
-  fetchProject,
-  fetchProjectPrincipals,
-  fetchVisibleEnvironments,
-  fetchVisibleServices,
-  fetchVisibleWorkspaces,
-  isForbiddenError,
-  updateProject,
-  updateProjectPrincipalAssignments,
   type ComposeDocument,
   type EnvironmentRecord,
-  type ProjectPrincipalRecord,
   type ProjectRecord,
   type ServiceRecord,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
+import {
+  useCreateProjectPrincipal,
+  useDeleteProjectPrincipal,
+  useProject,
+  useProjectPrincipals,
+  useUpdateProject,
+  useUpdateProjectPrincipalAssignments,
+} from '@/lib/queries/projects'
+import { useEnvironments } from '@/lib/queries/environments'
+import { useServicesByEnvironments } from '@/lib/queries/services'
+import { useWorkspaces } from '@/lib/queries/workspaces'
+import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -56,61 +57,69 @@ function formatServiceOptionLabel(
 }
 
 export function ProjectPrincipalsSection({
+  orgId,
   projectId,
   canManage,
 }: Readonly<{
+  orgId: string
   projectId: string
   canManage: boolean
 }>) {
-  const { handleUnauthorized } = useAuth()
-  const [principals, setPrincipals] = useState<ProjectPrincipalRecord[]>([])
-  const [serviceOptions, setServiceOptions] = useState<ProjectServiceOption[]>([])
-  const [loading, setLoading] = useState(true)
+  const principalsQuery = useProjectPrincipals(orgId, projectId)
+  const environmentsQuery = useEnvironments(orgId, projectId)
+  const environments = environmentsQuery.data?.environments ?? []
+  const environmentIds = useMemo(
+    () => environments.map((env) => env.id),
+    [environments],
+  )
+  const servicesByEnvQuery = useServicesByEnvironments(orgId, environmentIds)
+  const createPrincipal = useCreateProjectPrincipal(orgId, projectId)
+  const deletePrincipal = useDeleteProjectPrincipal(orgId, projectId)
+  const updateAssignments = useUpdateProjectPrincipalAssignments(orgId, projectId)
+
+  const principals = principalsQuery.data?.principals ?? []
+  const serviceOptions = useMemo(() => {
+    const flat: ProjectServiceOption[] = []
+    for (const env of environments) {
+      const services = servicesByEnvQuery.servicesByEnv[env.id] ?? []
+      for (const service of services) {
+        flat.push({
+          id: service.id,
+          label: formatServiceOptionLabel(env, service),
+        })
+      }
+    }
+    flat.sort((a, b) => a.label.localeCompare(b.label))
+    return flat
+  }, [environments, servicesByEnvQuery.servicesByEnv])
+
   const [error, setError] = useState<string | null>(null)
   const [username, setUsername] = useState('')
-  const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
-  const [savingAssignments, setSavingAssignments] = useState<Set<string>>(() => new Set())
+  const [savingAssignments, setSavingAssignments] = useState<Set<string>>(
+    () => new Set(),
+  )
 
-  const load = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [principalResult, envResult] = await Promise.all([
-        fetchProjectPrincipals(projectId),
-        fetchVisibleEnvironments(projectId),
-      ])
-      setPrincipals(principalResult.principals)
+  const loading =
+    principalsQuery.isLoading ||
+    environmentsQuery.isLoading ||
+    servicesByEnvQuery.isLoading
 
-      const envs = envResult.environments
-      const serviceLists = await Promise.all(
-        envs.map(async (env) => {
-          const { services } = await fetchVisibleServices(env.id)
-          return services.map((service) => ({
-            id: service.id,
-            label: formatServiceOptionLabel(env, service),
-          }))
-        }),
-      )
-      const flat = serviceLists.flat()
-      flat.sort((a, b) => a.label.localeCompare(b.label))
-      setServiceOptions(flat)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load principals')
-    } finally {
-      setLoading(false)
-    }
+  let queryError: string | null = null
+  if (principalsQuery.error instanceof Error) {
+    queryError = principalsQuery.error.message
+  } else if (environmentsQuery.error instanceof Error) {
+    queryError = environmentsQuery.error.message
   }
 
   useEffect(() => {
-    void load()
-  }, [projectId, handleUnauthorized])
+    setError(queryError)
+  }, [queryError])
 
-  const toggleServiceAssignment = async (principalId: string, serviceId: string) => {
+  const toggleServiceAssignment = async (
+    principalId: string,
+    serviceId: string,
+  ) => {
     const row = principals.find((p) => p.id === principalId)
     if (!row) return
     const next = row.serviceIds.includes(serviceId)
@@ -119,26 +128,15 @@ export function ProjectPrincipalsSection({
 
     setSavingAssignments((current) => new Set(current).add(principalId))
     setError(null)
-    try {
-      const result = await updateProjectPrincipalAssignments(projectId, principalId, next)
-      setPrincipals((current) =>
-        current.map((p) =>
-          p.id === principalId ? { ...p, serviceIds: result.serviceIds } : p
-        ),
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to update assignments')
-    } finally {
-      setSavingAssignments((current) => {
-        const copy = new Set(current)
-        copy.delete(principalId)
-        return copy
-      })
+    const result = await updateAssignments.run({ principalId, serviceIds: next })
+    if (!result.ok && updateAssignments.actionError) {
+      setError(updateAssignments.actionError)
     }
+    setSavingAssignments((current) => {
+      const copy = new Set(current)
+      copy.delete(principalId)
+      return copy
+    })
   }
 
   const handleAdd = async () => {
@@ -147,43 +145,32 @@ export function ProjectPrincipalsSection({
       setError('Username is required.')
       return
     }
-    setAdding(true)
     setError(null)
-    try {
-      await createProjectPrincipal(projectId, { username: trimmed })
-      setUsername('')
-      await load()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await createPrincipal.run({ username: trimmed })
+    if (!result.ok) {
+      if (createPrincipal.actionError) {
+        setError(createPrincipal.actionError)
       }
-      setError(err instanceof Error ? err.message : 'Failed to create principal')
-    } finally {
-      setAdding(false)
+      return
     }
+    setUsername('')
   }
 
   const handleDelete = async (id: string) => {
     setDeleting((current) => new Set(current).add(id))
     setError(null)
-    try {
-      await deleteProjectPrincipal(projectId, id)
-      await load()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to delete principal')
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
+    const result = await deletePrincipal.run(id)
+    if (!result.ok && deletePrincipal.actionError) {
+      setError(deletePrincipal.actionError)
     }
+    setDeleting((current) => {
+      const next = new Set(current)
+      next.delete(id)
+      return next
+    })
   }
+
+  const adding = createPrincipal.isPending
 
   return (
     <SectionPanel
@@ -589,60 +576,36 @@ export function ProjectDetailSection({
   orgId: string
   projectId: string
 }>) {
-  const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [project, setProject] = useState<ProjectRecord | null>(null)
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const projectQuery = useProject(orgId, projectId)
+  const workspacesQuery = useWorkspaces(orgId)
+  const updateProjectMutation = useUpdateProject(orgId, projectId)
+  const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
+
+  const project = projectQuery.data?.project ?? null
+  const workspaces = workspacesQuery.data?.workspaces ?? []
+  const loading = projectQuery.isLoading || workspacesQuery.isLoading
+
   const [error, setError] = useState<string | null>(null)
-  const [savingCompose, setSavingCompose] = useState(false)
-  const [savingWorkspace, setSavingWorkspace] = useState(false)
-  const [savingContainerNaming, setSavingContainerNaming] = useState(false)
   const [editDisplayName, setEditDisplayName] = useState('')
   const [editDescription, setEditDescription] = useState('')
-  const [savingMeta, setSavingMeta] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
+    if (!project) return
+    setEditDisplayName(project.displayName?.trim() ?? '')
+    setEditDescription(project.description?.trim() ?? '')
+  }, [project])
 
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [projectResult, workspacesResult] = await Promise.all([
-          fetchProject(projectId),
-          fetchVisibleWorkspaces(),
-        ])
-        if (!cancelled) {
-          setProject(projectResult.project)
-          setWorkspaces(workspacesResult.workspaces)
-          setEditDisplayName(projectResult.project.displayName?.trim() ?? '')
-          setEditDescription(projectResult.project.description?.trim() ?? '')
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setError(
-            err instanceof Error ? err.message : 'Failed to load project',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+  useEffect(() => {
+    let queryError: string | null = null
+    if (projectQuery.error instanceof Error) {
+      queryError = projectQuery.error.message
+    } else if (workspacesQuery.error instanceof Error) {
+      queryError = workspacesQuery.error.message
     }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [projectId, handleUnauthorized])
+    setError(queryError)
+  }, [projectQuery.error, workspacesQuery.error])
 
   const sortedWorkspaces = useMemo(
     () =>
@@ -661,101 +624,35 @@ export function ProjectDetailSection({
   }, [project, workspaces])
 
   const saveCompose = async (compose: ComposeDocument) => {
-    setSavingCompose(true)
     setError(null)
-    try {
-      const containerNaming = project?.options?.containerNaming
-      const options = containerNaming
-        ? { compose, containerNaming }
-        : { compose }
-      await updateProject(projectId, { options })
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              options: {
-                ...current.options,
-                compose,
-                ...(containerNaming ? { containerNaming } : {}),
-              },
-            }
-          : current,
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to save compose')
-    } finally {
-      setSavingCompose(false)
+    const result = await persistProjectCompose.run(compose)
+    if (!result.ok && persistProjectCompose.actionError) {
+      setError(persistProjectCompose.actionError)
     }
   }
 
   const saveContainerNaming = async (containerNaming: ContainerNamingMode) => {
     const currentMode = project?.options?.containerNaming ?? 'uuid'
-    if (currentMode === containerNaming) return
+    if (currentMode === containerNaming || !project) return
 
-    setSavingContainerNaming(true)
     setError(null)
-    try {
-      const compose = project?.options?.compose
-      const options = compose
-        ? { compose, containerNaming }
-        : { containerNaming }
-      await updateProject(projectId, { options })
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              options: {
-                ...current.options,
-                ...(compose ? { compose } : {}),
-                containerNaming,
-              },
-            }
-          : current,
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to save container naming',
-      )
-    } finally {
-      setSavingContainerNaming(false)
+    const options = buildProjectOptionsPatch(project, { containerNaming })
+    const result = await updateProjectMutation.run({ options })
+    if (!result.ok && updateProjectMutation.actionError) {
+      setError(updateProjectMutation.actionError)
     }
   }
 
   const saveProjectMeta = async () => {
     const displayName = editDisplayName.trim()
     const description = editDescription.trim()
-    setSavingMeta(true)
     setError(null)
-    try {
-      await updateProject(projectId, {
-        displayName: displayName || undefined,
-        description: description || undefined,
-      })
-      setProject((current) =>
-        current
-          ? {
-              ...current,
-              displayName: displayName || null,
-              description: description || null,
-            }
-          : current,
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to save project')
-    } finally {
-      setSavingMeta(false)
+    const result = await updateProjectMutation.run({
+      displayName: displayName || undefined,
+      description: description || undefined,
+    })
+    if (!result.ok && updateProjectMutation.actionError) {
+      setError(updateProjectMutation.actionError)
     }
   }
 
@@ -763,25 +660,17 @@ export function ProjectDetailSection({
     if (workspaceId === project?.workspaceId) {
       return
     }
-    setSavingWorkspace(true)
     setError(null)
-    try {
-      await updateProject(projectId, { workspaceId })
-      setProject((current) =>
-        current ? { ...current, workspaceId } : current,
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to move project',
-      )
-    } finally {
-      setSavingWorkspace(false)
+    const result = await updateProjectMutation.run({ workspaceId })
+    if (!result.ok && updateProjectMutation.actionError) {
+      setError(updateProjectMutation.actionError)
     }
   }
+
+  const savingCompose = persistProjectCompose.isPending
+  const savingWorkspace = updateProjectMutation.isPending
+  const savingContainerNaming = updateProjectMutation.isPending
+  const savingMeta = updateProjectMutation.isPending
 
   if (loading && !project) {
     return (
@@ -834,6 +723,7 @@ export function ProjectDetailSection({
           ) : (
             <>
               <ProjectPrincipalsSection
+                orgId={orgId}
                 projectId={project.id}
                 canManage={canManage}
               />

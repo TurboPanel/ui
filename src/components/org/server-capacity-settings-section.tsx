@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
-  fetchOrgServerCapacity,
-  isForbiddenError,
   saveOrgServerCapacity,
   type OrgServerCapacity,
 } from '@/lib/instance-api'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { useOrgServerCapacity } from '@/lib/queries/servers'
+import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -28,7 +26,6 @@ function formatCapacitySummary(capacity: OrgServerCapacity): string {
 export function ServerCapacitySettingsSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
   const queryClient = useQueryClient()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const canManage = useCan('organization', orgId, 'organization:manage')
@@ -36,26 +33,19 @@ export function ServerCapacitySettingsSection({
   const [draftText, setDraftText] = useState<string | null>(null)
   const [unlimited, setUnlimited] = useState<boolean | null>(null)
 
-  const query = useQuery({
-    queryKey: ['org', orgId, 'server-capacity'],
-    queryFn: () => fetchOrgServerCapacity(orgId),
-    enabled: canManage,
-  })
-  useForbiddenRecovery(query.error)
+  const capacityKey = queryKeys.org(orgId).settings.serverCapacity
+  const query = useOrgServerCapacity(orgId, { enabled: canManage })
 
-  const mutation = useMutation({
+  const mutation = useApiMutation({
     mutationFn: (maxServers: number | null) =>
       saveOrgServerCapacity(orgId, maxServers),
     onSuccess: (data) => {
       setError(null)
       setDraftText(null)
       setUnlimited(null)
-      queryClient.setQueryData(['org', orgId, 'server-capacity'], data)
+      queryClient.setQueryData(capacityKey, data)
     },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
+    onError: (err) => {
       setError(errorMessage(err, 'Failed to save server capacity'))
     },
   })

@@ -8,41 +8,20 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import type { DatacenterNameSuggestion, DatacenterRecord } from '@/lib/instance-api'
 import {
-  createDatacenter,
-  deleteDatacenter,
-  fetchDatacenters,
-  fetchDatacenterNameSuggestions,
-  fetchOrgServers,
-  isForbiddenError,
-  updateDatacenter,
-  type DatacenterNameSuggestion,
-  type DatacenterRecord,
-} from '@/lib/instance-api'
+  useCreateDatacenter,
+  useDatacenters,
+  useDatacenterNameSuggestions,
+  useDeleteDatacenter,
+  useUpdateDatacenter,
+} from '@/lib/queries/topology'
+import { useOrgServers } from '@/lib/queries/servers'
 import { datacenterDetailHref } from '@/lib/org-navigation'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
-}
-
-async function reportMutationError(
-  err: unknown,
-  fallback: string,
-  handleUnauthorized: () => Promise<void>,
-  setError: (message: string) => void,
-) {
-  if (isForbiddenError(err)) {
-    await handleUnauthorized()
-    return
-  }
-  setError(errorMessage(err, fallback))
-}
 
 function DatacenterCard({
   datacenter,
@@ -233,38 +212,33 @@ function countServersByDatacenter(
   return counts
 }
 
-export function DatacentersOverviewSection({
+function queryErrorMessage(
+  query: Readonly<{ isError: boolean; error: unknown }>,
+  fallback: string,
+): string | null {
+  if (!query.isError) return null
+  if (query.error instanceof Error) return query.error.message
+  return fallback
+}
+
+function CreateDatacenterPanel({
   orgId,
-}: Readonly<{ orgId: string }>) {
-  const router = useRouter()
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
-  const canManage = useCan('organization', orgId, 'organization:manage')
-  const [error, setError] = useState<string | null>(null)
+  onError,
+}: Readonly<{
+  orgId: string
+  onError: (message: string | null) => void
+}>) {
   const [displayName, setDisplayName] = useState('')
   const [hasEditedDisplayName, setHasEditedDisplayName] = useState(false)
   const [description, setDescription] = useState('')
   const [selectedSuggestion, setSelectedSuggestion] =
     useState<DatacenterNameSuggestion | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [renamingId, setRenamingId] = useState<string | null>(null)
 
-  const datacentersQuery = useQuery({
-    queryKey: ['org', orgId, 'datacenters'],
-    queryFn: fetchDatacenters,
+  const nameSuggestionsQuery = useDatacenterNameSuggestions(orgId, {
+    enabled: true,
+    limit: 8,
   })
-  const serversQuery = useQuery({
-    queryKey: ['org', orgId, 'servers'],
-    queryFn: fetchOrgServers,
-  })
-  const nameSuggestionsQuery = useQuery({
-    queryKey: ['org', orgId, 'datacenter-name-suggestions'],
-    queryFn: () => fetchDatacenterNameSuggestions({ limit: 8 }),
-    enabled: canManage,
-  })
-  useForbiddenRecovery(datacentersQuery.error)
-  useForbiddenRecovery(serversQuery.error)
-  useForbiddenRecovery(nameSuggestionsQuery.error)
+  const createMutation = useCreateDatacenter(orgId)
 
   const nameSuggestions = nameSuggestionsQuery.data?.suggestions ?? []
   const topSuggestion = nameSuggestions[0]
@@ -275,85 +249,123 @@ export function DatacentersOverviewSection({
     ? displayName
     : (topSuggestion?.displayName ?? displayName)
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      createDatacenter({
-        displayName: resolvedDisplayName.trim() || undefined,
-        description: description.trim() || undefined,
-        sourceServerId: activeSuggestion?.serverIds[0],
-        assignServerIds: activeSuggestion?.serverIds,
-      }),
-    onSuccess: async () => {
-      setError(null)
-      setDisplayName('')
-      setHasEditedDisplayName(false)
-      setDescription('')
-      setSelectedSuggestion(null)
-      await queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'datacenters'],
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'servers'],
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'datacenter-name-suggestions'],
-      })
-    },
-    onError: async (err) => {
-      await reportMutationError(
-        err,
-        'Failed to create datacenter',
-        handleUnauthorized,
-        setError,
-      )
-    },
-  })
+  return (
+    <SectionPanel title="Create datacenter" hint="Manage-gated">
+      <DatacenterSuggestionChips
+        suggestions={nameSuggestions}
+        activeSuggestion={activeSuggestion}
+        onSelect={(suggestion) => {
+          setHasEditedDisplayName(true)
+          setDisplayName(suggestion.displayName)
+          setSelectedSuggestion(suggestion)
+        }}
+      />
+      <Text style={styles.fieldLabel}>Display name</Text>
+      <TextInput
+        value={resolvedDisplayName}
+        onChangeText={(value) => {
+          setHasEditedDisplayName(true)
+          setDisplayName(value)
+          setSelectedSuggestion(null)
+        }}
+        placeholder="e.g. AMS-1"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.fieldLabel}>Description</Text>
+      <TextInput
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Optional notes"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Pressable
+        style={[
+          orgPanelStyles.toolbarBtnPrimary,
+          createMutation.isPending && styles.buttonDisabled,
+          webPointer,
+        ]}
+        disabled={createMutation.isPending}
+        onPress={() => {
+          onError(null)
+          createMutation.mutate(
+            {
+              displayName: resolvedDisplayName.trim() || undefined,
+              description: description.trim() || undefined,
+              sourceServerId: activeSuggestion?.serverIds[0],
+              assignServerIds: activeSuggestion?.serverIds,
+            },
+            {
+              onSuccess: () => {
+                setDisplayName('')
+                setHasEditedDisplayName(false)
+                setDescription('')
+                setSelectedSuggestion(null)
+              },
+              onError: () => {
+                onError(
+                  createMutation.actionError ?? 'Failed to create datacenter',
+                )
+              },
+            },
+          )
+        }}
+      >
+        {createMutation.isPending ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : (
+          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+            Create datacenter
+          </Text>
+        )}
+      </Pressable>
+    </SectionPanel>
+  )
+}
 
-  const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      updateDatacenter(id, { displayName: name || null }),
-    onSuccess: async () => {
-      setError(null)
-      setRenamingId(null)
-      await queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'datacenters'],
-      })
-    },
-    onError: async (err) => {
-      await reportMutationError(
-        err,
-        'Failed to rename datacenter',
-        handleUnauthorized,
-        setError,
-      )
-      setRenamingId(null)
-    },
-  })
+function DatacenterListEmptyState({
+  loading,
+  isEmpty,
+}: Readonly<{ loading: boolean; isEmpty: boolean }>) {
+  if (loading && isEmpty) {
+    return <Text style={orgPanelStyles.muted}>Loading datacenters…</Text>
+  }
+  if (!loading && isEmpty) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        No datacenters yet. Create one to group servers and IP pools.
+      </Text>
+    )
+  }
+  return null
+}
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteDatacenter(id),
-    onSuccess: async () => {
-      setError(null)
-      setConfirmDeleteId(null)
-      await queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'datacenters'],
-      })
-    },
-    onError: async (err) => {
-      await reportMutationError(
-        err,
-        'Failed to delete datacenter',
-        handleUnauthorized,
-        setError,
-      )
-    },
-  })
+export function DatacentersOverviewSection({
+  orgId,
+}: Readonly<{ orgId: string }>) {
+  const router = useRouter()
+  const canManage = useCan('organization', orgId, 'organization:manage')
+  const [error, setError] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null)
+
+  const datacentersQuery = useDatacenters(orgId)
+  const serversQuery = useOrgServers(orgId)
+  const deleteMutation = useDeleteDatacenter(orgId)
+  const renameMutation = useUpdateDatacenter(orgId, renameTargetId ?? '')
 
   const datacenters = datacentersQuery.data?.datacenters ?? []
   const servers = serversQuery.data?.servers ?? []
   const countsByDatacenter = countServersByDatacenter(servers)
 
   const loading = datacentersQuery.isLoading || serversQuery.isLoading
+  const displayError =
+    error ??
+    renameMutation.actionError ??
+    deleteMutation.actionError ??
+    queryErrorMessage(datacentersQuery, 'Failed to load datacenters')
 
   return (
     <View style={styles.root}>
@@ -363,76 +375,20 @@ export function DatacentersOverviewSection({
         defaults can override the org fleet default for member hosts.
       </Text>
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      {datacentersQuery.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
-          {errorMessage(datacentersQuery.error, 'Failed to load datacenters')}
-        </Text>
-      ) : null}
+      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       {canManage ? (
-        <SectionPanel title="Create datacenter" hint="Manage-gated">
-          <DatacenterSuggestionChips
-            suggestions={nameSuggestions}
-            activeSuggestion={activeSuggestion}
-            onSelect={(suggestion) => {
-              setHasEditedDisplayName(true)
-              setDisplayName(suggestion.displayName)
-              setSelectedSuggestion(suggestion)
-            }}
-          />
-          <Text style={styles.fieldLabel}>Display name</Text>
-          <TextInput
-            value={resolvedDisplayName}
-            onChangeText={(value) => {
-              setHasEditedDisplayName(true)
-              setDisplayName(value)
-              setSelectedSuggestion(null)
-            }}
-            placeholder="e.g. AMS-1"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.fieldLabel}>Description</Text>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Optional notes"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              createMutation.isPending && styles.buttonDisabled,
-              webPointer,
-            ]}
-            disabled={createMutation.isPending}
-            onPress={() => createMutation.mutate()}
-          >
-            {createMutation.isPending ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            ) : (
-              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-                Create datacenter
-              </Text>
-            )}
-          </Pressable>
-        </SectionPanel>
+        <CreateDatacenterPanel orgId={orgId} onError={setError} />
       ) : null}
 
       <SectionPanel
         title="Datacenters"
         hint={loading ? 'Loading…' : `${datacenters.length} location(s)`}
       >
-        {loading && datacenters.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading datacenters…</Text>
-        ) : null}
-        {!loading && datacenters.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
-            No datacenters yet. Create one to group servers and IP pools.
-          </Text>
-        ) : null}
+        <DatacenterListEmptyState
+          loading={loading}
+          isEmpty={datacenters.length === 0}
+        />
         <View style={styles.list}>
           {datacenters.map((datacenter) => (
             <DatacenterCard
@@ -447,10 +403,31 @@ export function DatacentersOverviewSection({
               }
               onRename={(name) => {
                 setRenamingId(datacenter.id)
-                renameMutation.mutate({ id: datacenter.id, name })
+                setRenameTargetId(datacenter.id)
+                renameMutation.mutate(
+                  { displayName: name || null },
+                  {
+                    onSuccess: () => setRenamingId(null),
+                    onError: () => {
+                      setError(
+                        renameMutation.actionError ?? 'Failed to rename datacenter',
+                      )
+                      setRenamingId(null)
+                    },
+                  },
+                )
               }}
               onRequestDelete={() => setConfirmDeleteId(datacenter.id)}
-              onConfirmDelete={() => deleteMutation.mutate(datacenter.id)}
+              onConfirmDelete={() => {
+                deleteMutation.mutate(datacenter.id, {
+                  onSuccess: () => setConfirmDeleteId(null),
+                  onError: () => {
+                    setError(
+                      deleteMutation.actionError ?? 'Failed to delete datacenter',
+                    )
+                  },
+                })
+              }}
               onCancelDelete={() => setConfirmDeleteId(null)}
             />
           ))}

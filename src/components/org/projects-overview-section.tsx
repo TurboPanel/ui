@@ -1,5 +1,5 @@
 import { useRouter, type Href } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -10,14 +10,8 @@ import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
-import { useAuth } from '@/lib/auth-context'
-import {
-  fetchVisibleProjects,
-  fetchVisibleWorkspaces,
-  isForbiddenError,
-  type ProjectRecord,
-  type WorkspaceRecord,
-} from '@/lib/instance-api'
+import { useProjects, useWorkspaces } from '@/lib/queries'
+import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
@@ -57,6 +51,96 @@ function projectTypeBadge(type: ProjectRecord['metadata']) {
   )
 }
 
+function queryErrorMessage(
+  projectsError: unknown,
+  workspacesError: unknown,
+): string | null {
+  if (projectsError instanceof Error) {
+    return projectsError.message
+  }
+  if (workspacesError instanceof Error) {
+    return workspacesError.message
+  }
+  return null
+}
+
+function ProjectOverviewCard({
+  orgId,
+  project,
+  canOwn,
+  showWorkspaceLabels,
+  workspaceName,
+  isDeleting,
+  deletingProject,
+  onOpen,
+  onDelete,
+  onCancelDelete,
+  onDeleted,
+}: Readonly<{
+  orgId: string
+  project: ProjectRecord
+  canOwn: boolean
+  showWorkspaceLabels: boolean
+  workspaceName: string
+  isDeleting: boolean
+  deletingProject: ProjectRecord | null
+  onOpen: () => void
+  onDelete: () => void
+  onCancelDelete: () => void
+  onDeleted: () => void
+}>) {
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.titleRow}>
+          <Text style={orgPanelStyles.detailTitle}>
+            {project.displayName?.trim() || 'Unnamed project'}
+          </Text>
+          {projectTypeBadge(project.metadata)}
+        </View>
+        <View style={styles.cardActions}>
+          <Pressable style={styles.secondaryButton} onPress={onOpen}>
+            <Text style={styles.secondaryButtonText}>Open</Text>
+          </Pressable>
+          {canOwn ? (
+            <Pressable
+              style={[
+                styles.secondaryButton,
+                isDeleting && styles.buttonDisabled,
+              ]}
+              disabled={isDeleting}
+              onPress={onDelete}
+            >
+              <Text style={styles.secondaryButtonText}>Delete</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+      {project.description ? (
+        <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
+      ) : null}
+      {showWorkspaceLabels ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Workspace: </Text>
+          {workspaceName}
+        </Text>
+      ) : null}
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+        {new Date(project.createdAt).toLocaleString()}
+      </Text>
+      {isDeleting && deletingProject ? (
+        <ProjectDeletePanel
+          orgId={orgId}
+          project={deletingProject}
+          onCancel={onCancelDelete}
+          onDeleted={onDeleted}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 export function ProjectsOverviewSection({
   orgId,
   workspaceId,
@@ -65,13 +149,8 @@ export function ProjectsOverviewSection({
   workspaceId?: string
 }>) {
   const router = useRouter()
-  const { handleUnauthorized } = useAuth()
   const workspaceScope = useOptionalWorkspaceScope()
   const canOwn = useCan('organization', orgId, 'organization:own')
-  const [projects, setProjects] = useState<ProjectRecord[]>([])
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
 
   const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
@@ -81,6 +160,21 @@ export function ProjectsOverviewSection({
 
   const scopeWorkspaces = workspaceScope?.workspaces
   const scopeLabel = workspaceScope?.scope.label
+
+  const projectsQuery = useProjects(orgId, scopedWorkspaceId)
+  const needsWorkspaceNames =
+    showWorkspaceLabels && (!scopeWorkspaces || scopeWorkspaces.length === 0)
+  const workspacesQuery = useWorkspaces(orgId, {
+    enabled: needsWorkspaceNames,
+  })
+
+  const projects = projectsQuery.data?.projects ?? []
+  const workspaces = needsWorkspaceNames
+    ? (workspacesQuery.data?.workspaces ?? [])
+    : []
+  const loading =
+    projectsQuery.isLoading || (needsWorkspaceNames && workspacesQuery.isLoading)
+  const error = queryErrorMessage(projectsQuery.error, workspacesQuery.error)
 
   const workspaceNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -95,74 +189,6 @@ export function ProjectsOverviewSection({
   const scopedWorkspaceName = scopedWorkspaceId
     ? (workspaceNameById.get(scopedWorkspaceId) ?? scopeLabel ?? 'this workspace')
     : null
-
-  const loadProjects = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await fetchVisibleProjects(scopedWorkspaceId)
-      setProjects(result.projects)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load projects')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const needsWorkspaceNames =
-          showWorkspaceLabels && (!scopeWorkspaces || scopeWorkspaces.length === 0)
-        const [projectsResult, workspacesResult] = await Promise.all([
-          fetchVisibleProjects(scopedWorkspaceId),
-          needsWorkspaceNames
-            ? fetchVisibleWorkspaces()
-            : Promise.resolve({ workspaces: [] as WorkspaceRecord[] }),
-        ])
-        if (!cancelled) {
-          setProjects(projectsResult.projects)
-          if (needsWorkspaceNames) {
-            setWorkspaces(workspacesResult.workspaces)
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setError(
-            err instanceof Error ? err.message : 'Failed to load projects',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [
-    orgId,
-    scopedWorkspaceId,
-    showWorkspaceLabels,
-    scopeWorkspaces,
-    handleUnauthorized,
-  ])
 
   const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
   const deletingProject = deletingProjectId
@@ -187,67 +213,24 @@ export function ProjectsOverviewSection({
     projectListContent = (
       <View style={styles.list}>
         {projects.map((project) => (
-          <View key={project.id} style={orgPanelStyles.detailCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleRow}>
-                <Text style={orgPanelStyles.detailTitle}>
-                  {project.displayName?.trim() || 'Unnamed project'}
-                </Text>
-                {projectTypeBadge(project.metadata)}
-              </View>
-              <View style={styles.cardActions}>
-                <Pressable
-                  style={styles.secondaryButton}
-                  onPress={() =>
-                    router.push(`/${orgId}/projects/${project.id}` as Href)
-                  }
-                >
-                  <Text style={styles.secondaryButtonText}>Open</Text>
-                </Pressable>
-                {canOwn ? (
-                  <Pressable
-                    style={[
-                      styles.secondaryButton,
-                      deletingProjectId === project.id && styles.buttonDisabled,
-                    ]}
-                    disabled={deletingProjectId === project.id}
-                    onPress={() => {
-                      setError(null)
-                      setDeletingProjectId(project.id)
-                    }}
-                  >
-                    <Text style={styles.secondaryButtonText}>Delete</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-            {project.description ? (
-              <Text style={orgPanelStyles.detailLine}>
-                {project.description}
-              </Text>
-            ) : null}
-            {showWorkspaceLabels ? (
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Workspace: </Text>
-                {workspaceNameById.get(project.workspaceId) ?? 'Unknown'}
-              </Text>
-            ) : null}
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-              {new Date(project.createdAt).toLocaleString()}
-            </Text>
-            {deletingProjectId === project.id && deletingProject ? (
-              <ProjectDeletePanel
-                project={deletingProject}
-                onCancel={() => setDeletingProjectId(null)}
-                onDeleted={() => {
-                  setDeletingProjectId(null)
-                  void loadProjects()
-                }}
-                onUnauthorized={handleUnauthorized}
-              />
-            ) : null}
-          </View>
+          <ProjectOverviewCard
+            key={project.id}
+            orgId={orgId}
+            project={project}
+            canOwn={canOwn}
+            showWorkspaceLabels={showWorkspaceLabels}
+            workspaceName={
+              workspaceNameById.get(project.workspaceId) ?? 'Unknown'
+            }
+            isDeleting={deletingProjectId === project.id}
+            deletingProject={deletingProject}
+            onOpen={() =>
+              router.push(`/${orgId}/projects/${project.id}` as Href)
+            }
+            onDelete={() => setDeletingProjectId(project.id)}
+            onCancelDelete={() => setDeletingProjectId(null)}
+            onDeleted={() => setDeletingProjectId(null)}
+          />
         ))}
       </View>
     )

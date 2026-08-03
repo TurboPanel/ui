@@ -4,13 +4,7 @@ import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { useEffect, useState } from 'react'
-import {
-  fetchVisibleServices,
-  isForbiddenError,
-  type ServiceRecord,
-} from '@/lib/instance-api'
-import { useAuth } from '@/lib/auth-context'
+import { useServices } from '@/lib/queries/services'
 import { spacing } from '@/lib/theme'
 
 function firstParam(value: string | string[] | undefined): string {
@@ -23,42 +17,15 @@ export default function ProjectServiceDetailScreen() {
     serviceId: string | string[]
   }>()
   const serviceId = firstParam(rawServiceId)
-  const { selectedEnvironmentId, setError, canManage } = useProjectContext()
-  const { handleUnauthorized } = useAuth()
-  const [service, setService] = useState<ServiceRecord | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { orgId, selectedEnvironmentId, canManage } = useProjectContext()
+  const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
+    enabled: Boolean(selectedEnvironmentId && serviceId),
+  })
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      if (!selectedEnvironmentId || !serviceId) {
-        setService(null)
-        setLoading(false)
-        return
-      }
-      setLoading(true)
-      try {
-        const { services } = await fetchVisibleServices(selectedEnvironmentId)
-        if (cancelled) return
-        setService(services.find((row) => row.id === serviceId) ?? null)
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to load service')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [selectedEnvironmentId, serviceId, handleUnauthorized, setError])
+  const service =
+    servicesQuery.data?.services.find((row) => row.id === serviceId) ?? null
 
-  if (loading) {
+  if (servicesQuery.isLoading) {
     return <Text style={orgPanelStyles.muted}>Loading service…</Text>
   }
   if (!service) {
@@ -75,10 +42,10 @@ export default function ProjectServiceDetailScreen() {
         accent
       >
         <ServiceSettingsPanel
+          orgId={orgId}
           composeServiceName={composeName}
           service={service}
           canManage={canManage}
-          onServiceChange={setService}
         />
       </SectionPanel>
     </View>

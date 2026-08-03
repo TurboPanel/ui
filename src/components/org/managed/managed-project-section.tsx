@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
+import {
   Platform,
   Pressable,
   StyleSheet,
@@ -18,59 +22,53 @@ import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import {
-  COMMAND_POLL_MS,
-  isTerminalCommandStatus,
-} from '@/components/org/server-commands-panel'
-import { useAuth } from '@/lib/auth-context'
-import {
-  applyEnvironmentManaged,
-  createEnvironment,
-  createEnvironmentManaged,
-  createManagedBackup,
-  createManagedDatabase,
-  createManagedUser,
-  deleteEnvironment,
-  deleteEnvironmentManaged,
-  deleteManagedBackup,
-  deleteManagedDatabase,
-  deleteManagedUser,
-  fetchCommand,
-  fetchEnvironment,
-  fetchEnvironmentManaged,
-  fetchManagedBackups,
-  fetchManagedDatabases,
-  fetchManagedLogs,
-  fetchManagedStatus,
-  fetchManagedUsers,
-  fetchOrgServers,
-  fetchVisibleEnvironments,
-  isForbiddenError,
-  restoreManagedBackup,
-  rotateManagedRootPassword,
-  runManagedLifecycle,
-  updateEnvironment,
-  updateEnvironmentManaged,
-  type CommandStatus,
-  type ContainerRecord,
   type EnvironmentRecord,
-  type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
   isValidPublishedPort,
   managedCatalogEntryForCode,
   managedErrorMessage,
-  type ManagedBackupRecord,
   type ManagedDetailResponse,
   type ManagedSettings,
-  type ManagedStatus,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
-import { withGuardedAction } from '@/lib/guarded-action'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
+import {
+  isTerminalCommandStatus,
+  useCommandsBatch,
+  type TrackedCommandEntry,
+} from '@/lib/queries/commands'
+import {
+  useCreateEnvironment,
+  useDeleteEnvironment,
+  useEnvironment,
+  useEnvironments,
+  useUpdateEnvironment,
+} from '@/lib/queries/environments'
+import {
+  useApplyEnvironmentManaged,
+  useCreateEnvironmentManaged,
+  useCreateManagedBackup,
+  useCreateManagedDatabase,
+  useCreateManagedUser,
+  useDeleteEnvironmentManaged,
+  useDeleteManagedBackup,
+  useDeleteManagedDatabase,
+  useDeleteManagedUser,
+  useEnvironmentManaged,
+  useManagedBackups,
+  useManagedDatabases,
+  useManagedStatus,
+  useManagedUsers,
+  useRestoreManagedBackup,
+  useRotateManagedRootPassword,
+  useRunManagedLifecycle,
+  useUpdateEnvironmentManaged,
+} from '@/lib/queries/managed'
+import { useOrgServers } from '@/lib/queries/servers'
+import { queryKeys } from '@/lib/query-keys'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-const STATUS_POLL_MS = 5_000
 
 const webInputStyle = {
   borderWidth: 1,
@@ -84,77 +82,63 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
-type TrackedCommand = {
-  label: string
-  status: CommandStatus
+/** Fire-and-forget without the `void` operator (typescript:S3735). */
+function ignorePromise(promise: Promise<unknown>): void {
+  promise.catch(() => {
+    // Best-effort; callers surface errors via query/mutation state.
+  })
 }
 
-function useManagedCommands(
-  serverId: string | null,
-  onTerminalSuccess: () => void,
-) {
-  const [commands, setCommands] = useState<Record<string, TrackedCommand>>({})
-  const onSuccessRef = useRef(onTerminalSuccess)
-  useEffect(() => {
-    onSuccessRef.current = onTerminalSuccess
-  }, [onTerminalSuccess])
+type ManagedBodyFocus =
+  | 'all'
+  | 'overview'
+  | 'data'
+  | 'backups'
+  | 'settings'
+  | 'environments'
 
-  const registerCommand = (commandId: string, label: string) => {
-    setCommands((current) => ({
-      ...current,
-      [commandId]: { label, status: 'queued' },
-    }))
+function managedFocusVisibility(focus: ManagedBodyFocus): {
+  showOverview: boolean
+  showData: boolean
+  showBackups: boolean
+  showSettings: boolean
+  showLifecycle: boolean
+} {
+  return {
+    showOverview: focus === 'all' || focus === 'overview',
+    showData: focus === 'all' || focus === 'data',
+    showBackups: focus === 'all' || focus === 'backups',
+    showSettings: focus === 'all' || focus === 'settings',
+    showLifecycle:
+      focus === 'all' || focus === 'environments' || focus === 'settings',
   }
+}
 
-  const inFlight = Object.values(commands).some(
-    (row) => !isTerminalCommandStatus(row.status),
+function invalidateEnvironmentManagedQueries(
+  queryClient: QueryClient,
+  orgId: string,
+  environmentId: string,
+): void {
+  const managed = queryKeys.org(orgId).managed
+  ignorePromise(
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: managed.environment(environmentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: managed.status(environmentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: managed.users(environmentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: managed.databases(environmentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: managed.backups(environmentId),
+      }),
+    ]),
   )
-
-  useEffect(() => {
-    if (!serverId) {
-      return
-    }
-    const ids = Object.entries(commands)
-      .filter(([, row]) => !isTerminalCommandStatus(row.status))
-      .map(([id]) => id)
-    if (ids.length === 0) {
-      return
-    }
-
-    let cancelled = false
-    const tick = async () => {
-      for (const commandId of ids) {
-        try {
-          const record = await fetchCommand(serverId, commandId)
-          if (cancelled) return
-          setCommands((current) => {
-            const prev = current[commandId]
-            if (!prev) return current
-            return {
-              ...current,
-              [commandId]: { ...prev, status: record.status },
-            }
-          })
-          if (isTerminalCommandStatus(record.status) && record.status === 'succeeded') {
-            onSuccessRef.current()
-          }
-        } catch {
-          // Keep polling; next tick may succeed.
-        }
-      }
-    }
-
-    void tick()
-    const timer = setInterval(() => {
-      void tick()
-    }, COMMAND_POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [commands, serverId])
-
-  return { registerCommand, inFlight, commands }
 }
 
 function environmentLabel(env: EnvironmentRecord): string {
@@ -194,55 +178,39 @@ function EnvironmentTabs({
 }
 
 function ManagedSetupPanel({
+  orgId,
   environmentId,
   engineCode,
   canManage,
   onCreated,
 }: Readonly<{
+  orgId: string
   environmentId: string
   engineCode: string | null
   canManage: boolean
   onCreated: (rootPassword?: string) => void
 }>) {
-  const { handleUnauthorized } = useAuth()
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
   const [serverId, setServerId] = useState<string | null>(null)
   const [expose, setExpose] = useState(false)
   const [publishedPort, setPublishedPort] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const submitGuard = useRef(false)
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
 
+  const serversQuery = useOrgServers(orgId)
+  const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
+  const createManagedMutation = useCreateEnvironmentManaged(orgId, environmentId)
+
+  const servers = serversQuery.data?.servers ?? []
+  const loading = serversQuery.isLoading
+  const submitting =
+    updateEnvironmentMutation.isPending || createManagedMutation.isPending
+
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      setLoading(true)
-      try {
-        const result = await fetchOrgServers()
-        if (!cancelled) {
-          setServers(result.servers)
-          const connected = result.servers.find((row) => row.connected)
-          setServerId(connected?.id ?? null)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (isForbiddenError(err)) {
-            await handleUnauthorized()
-            return
-          }
-          setError(err instanceof Error ? err.message : 'Failed to load servers')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [handleUnauthorized])
+    if (serverId || servers.length === 0) return
+    const connected = servers.find((row) => row.connected)
+    setServerId(connected?.id ?? null)
+  }, [serverId, servers])
 
   useEffect(() => {
     if (catalog?.defaultPort != null) {
@@ -260,12 +228,16 @@ function ManagedSetupPanel({
       }
     }
     submitGuard.current = true
-    setSubmitting(true)
     setError(null)
     try {
-      await updateEnvironment(environmentId, { serverId })
-      const result = await createEnvironmentManaged(
-        environmentId,
+      const pinResult = await updateEnvironmentMutation.run({ serverId })
+      if (!pinResult.ok) {
+        if (updateEnvironmentMutation.actionError) {
+          setError(updateEnvironmentMutation.actionError)
+        }
+        return
+      }
+      const result = await createManagedMutation.run(
         expose
           ? {
               exposure: {
@@ -275,16 +247,15 @@ function ManagedSetupPanel({
             }
           : undefined,
       )
-      onCreated(result.rootPassword)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
+      if (!result.ok) {
+        if (createManagedMutation.actionError) {
+          setError(createManagedMutation.actionError)
+        }
         return
       }
-      setError(managedErrorMessage(err, 'Failed to create managed service'))
+      onCreated(result.value.rootPassword)
     } finally {
       submitGuard.current = false
-      setSubmitting(false)
     }
   }
 
@@ -349,7 +320,7 @@ function ManagedSetupPanel({
           ]}
           disabled={submitting || !serverId}
           onPress={() => {
-            void create()
+            ignorePromise(create())
           }}
         >
           <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
@@ -383,133 +354,45 @@ export function ManagedEnvironmentBody({
   engineCode: string | null
   projectDisplayName: string
   /** When set, only render panels for that project shell tab. */
-  focus?: 'all' | 'overview' | 'data' | 'backups' | 'settings' | 'environments'
+  focus?: ManagedBodyFocus
 }>) {
-  const { handleUnauthorized } = useAuth()
+  const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [detail, setDetail] = useState<ManagedDetailResponse | null>(null)
-  const [status, setStatus] = useState<{
-    status: ManagedStatus
-    host: string | null
-    port: number | null
-    containers: ContainerRecord[]
-  } | null>(null)
-  const [users, setUsers] = useState<ManagedUserRecord[]>([])
-  const [databases, setDatabases] = useState<string[]>([])
-  const [backups, setBackups] = useState<ManagedBackupRecord[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [revealPassword, setRevealPassword] = useState<string | null>(null)
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
-  // Only Postgres ships `spec.backup` today (see `instance/src/lib/managed/postgres.ts`);
-  // other catalog engines are `coming-soon` and unreachable from this body anyway.
-  const supportsBackup = engineCode === 'postgres'
 
-  const clearToSetup = () => {
-    setDetail(null)
-    setStatus(null)
-    setUsers([])
-    setDatabases([])
-    setBackups([])
-  }
-
-  const reloadAll = async () => {
-    // Unpinned environments cannot resolve /managed (409 server_placement_required).
-    // Treat that as setup state instead of an error so Add environment works.
-    const { environment } = await fetchEnvironment(environmentId)
-    if (!environment.serverId) {
-      clearToSetup()
-      return
+  // Show-once passwords stay in local state only; clear on dismiss and unmount.
+  useEffect(() => {
+    return () => {
+      setRevealPassword(null)
     }
-    const managedDetail = await fetchEnvironmentManaged(environmentId)
-    setDetail(managedDetail)
-    if (!managedDetail.managed) {
-      setStatus(null)
-      setUsers([])
-      setDatabases([])
-      setBackups([])
-      return
-    }
-    const [managedStatus, usersResult, databasesResult, backupsResult] =
-      await Promise.all([
-        fetchManagedStatus(environmentId),
-        fetchManagedUsers(environmentId),
-        fetchManagedDatabases(environmentId),
-        supportsBackup
-          ? fetchManagedBackups(environmentId)
-          : Promise.resolve({ backups: [] as ManagedBackupRecord[] }),
-      ])
-    setStatus(managedStatus)
-    setUsers(usersResult.users)
-    setDatabases(databasesResult.databases)
-    setBackups(backupsResult.backups)
-  }
+  }, [])
 
-  const serverId =
-    detail?.managed?.serverId ?? detail?.server?.id ?? null
-
-  const { registerCommand, inFlight } = useManagedCommands(serverId, () => {
-    void reloadAll().catch(() => {
-      // surfaced via next manual refresh / status poll
-    })
+  const environmentQuery = useEnvironment(orgId, environmentId)
+  const hasServerPin = Boolean(environmentQuery.data?.environment.serverId)
+  const managedQuery = useEnvironmentManaged(orgId, environmentId, {
+    enabled: hasServerPin,
   })
+  const detail = managedQuery.data ?? null
+
+  const queryError =
+    environmentQuery.error ?? (hasServerPin ? managedQuery.error : null)
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      setLoading(true)
+    if (!queryError) return
+    if (isServerPlacementRequiredError(queryError)) {
       setError(null)
-      try {
-        await reloadAll()
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        if (isServerPlacementRequiredError(err)) {
-          clearToSetup()
-          return
-        }
-        setError(managedErrorMessage(err, 'Failed to load managed service'))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [environmentId, handleUnauthorized])
-
-  const managedStatus = status?.status ?? detail?.managed?.status ?? null
-
-  useEffect(() => {
-    if (
-      managedStatus !== 'provisioning' &&
-      managedStatus !== 'applying'
-    ) {
       return
     }
-    let cancelled = false
-    const tick = async () => {
-      try {
-        const next = await fetchManagedStatus(environmentId)
-        if (!cancelled) setStatus(next)
-      } catch {
-        // keep previous status
-      }
-    }
-    const timer = setInterval(() => {
-      void tick()
-    }, STATUS_POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [environmentId, managedStatus])
+    setError(managedErrorMessage(queryError, 'Failed to load managed service'))
+  }, [queryError])
 
-  if (loading && !detail) {
+  const loading =
+    environmentQuery.isLoading ||
+    (hasServerPin && managedQuery.isLoading && !detail)
+
+  if (loading && !detail && !revealPassword) {
     return <Text style={orgPanelStyles.muted}>Loading managed service…</Text>
   }
 
@@ -530,9 +413,10 @@ export function ManagedEnvironmentBody({
     )
   }
 
-  if (!detail?.managed) {
+  if (!hasServerPin || !detail?.managed) {
     return (
       <ManagedSetupPanel
+        orgId={orgId}
         environmentId={environmentId}
         engineCode={engineCode}
         canManage={canManage}
@@ -540,20 +424,129 @@ export function ManagedEnvironmentBody({
           if (rootPassword) {
             setRevealPassword(rootPassword)
           }
-          void reloadAll()
+          invalidateEnvironmentManagedQueries(
+            queryClient,
+            orgId,
+            environmentId,
+          )
+          ignorePromise(environmentQuery.refetch())
+          ignorePromise(managedQuery.refetch())
         }}
       />
     )
   }
 
+  return (
+    <ManagedEnvironmentReadyPanels
+      orgId={orgId}
+      environmentId={environmentId}
+      focus={focus}
+      projectDisplayName={projectDisplayName}
+      supportsBackup={engineCode === 'postgres'}
+      canManage={canManage}
+      detail={detail}
+    />
+  )
+}
+
+function ManagedEnvironmentReadyPanels({
+  orgId,
+  environmentId,
+  focus,
+  projectDisplayName,
+  supportsBackup,
+  canManage,
+  detail,
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  focus: ManagedBodyFocus
+  projectDisplayName: string
+  supportsBackup: boolean
+  canManage: boolean
+  detail: ManagedDetailResponse & {
+    managed: NonNullable<ManagedDetailResponse['managed']>
+  }
+}>) {
+  const queryClient = useQueryClient()
+  const [trackedEntries, setTrackedEntries] = useState<
+    readonly TrackedCommandEntry[]
+  >([])
+  const {
+    showOverview,
+    showData,
+    showBackups,
+    showSettings,
+    showLifecycle,
+  } = managedFocusVisibility(focus)
+
   const managed = detail.managed
   const settings = detail.settings
-  const showOverview = focus === 'all' || focus === 'overview'
-  const showData = focus === 'all' || focus === 'data'
-  const showBackups = focus === 'all' || focus === 'backups'
-  const showSettings = focus === 'all' || focus === 'settings'
-  const showLifecycle =
-    focus === 'all' || focus === 'environments' || focus === 'settings'
+  const statusQuery = useManagedStatus(orgId, environmentId)
+  const usersQuery = useManagedUsers(orgId, environmentId)
+  const databasesQuery = useManagedDatabases(orgId, environmentId)
+  const backupsQuery = useManagedBackups(orgId, environmentId, {
+    enabled: supportsBackup,
+  })
+
+  const rotatePasswordMutation = useRotateManagedRootPassword(orgId, environmentId)
+  const createDatabaseMutation = useCreateManagedDatabase(orgId, environmentId)
+  const deleteDatabaseMutation = useDeleteManagedDatabase(orgId, environmentId)
+  const createUserMutation = useCreateManagedUser(orgId, environmentId)
+  const deleteUserMutation = useDeleteManagedUser(orgId, environmentId)
+  const createBackupMutation = useCreateManagedBackup(orgId, environmentId)
+  const deleteBackupMutation = useDeleteManagedBackup(orgId, environmentId)
+  const restoreBackupMutation = useRestoreManagedBackup(orgId, environmentId)
+  const lifecycleMutation = useRunManagedLifecycle(orgId, environmentId)
+  const applyManagedMutation = useApplyEnvironmentManaged(orgId, environmentId)
+  const deleteManagedMutation = useDeleteEnvironmentManaged(orgId, environmentId)
+  const updateManagedMutation = useUpdateEnvironmentManaged(orgId, environmentId)
+  const managedQuery = useEnvironmentManaged(orgId, environmentId)
+
+  const status = statusQuery.data ?? null
+  const users = usersQuery.data?.users ?? []
+  const databases = databasesQuery.data?.databases ?? []
+  const backups = backupsQuery.data?.backups ?? []
+  const serverId = managed.serverId ?? detail.server?.id ?? null
+  const commandsQuery = useCommandsBatch(orgId, trackedEntries)
+
+  const invalidateManagedData = () => {
+    invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
+  }
+
+  const registerCommand = (
+    commandId: string,
+    _label: string,
+    commandServerId?: string,
+  ) => {
+    const resolvedServerId = commandServerId ?? serverId
+    if (!resolvedServerId) return
+    setTrackedEntries((current) => [
+      ...current,
+      { serverId: resolvedServerId, commandId },
+    ])
+  }
+
+  useEffect(() => {
+    if (!commandsQuery.data) return
+    for (const [index, record] of commandsQuery.data.entries()) {
+      const entry = trackedEntries[index]
+      if (!entry || !isTerminalCommandStatus(record.status)) continue
+      if (record.status === 'succeeded') {
+        invalidateManagedData()
+      }
+      setTrackedEntries((current) =>
+        current.filter((row) => row.commandId !== entry.commandId),
+      )
+    }
+  }, [commandsQuery.data, trackedEntries, environmentId, orgId, queryClient])
+
+  const inFlight =
+    trackedEntries.length > 0 &&
+    (commandsQuery.data?.some(
+      (record) => !isTerminalCommandStatus(record.status),
+    ) ??
+      true)
 
   return (
     <View style={styles.panels}>
@@ -565,60 +558,21 @@ export function ManagedEnvironmentBody({
         />
       ) : null}
       {showData ? (
-        <>
-          <ManagedCredentialsPanel
-            rootUsername={detail.rootUsername}
-            canManage={canManage}
-            busy={inFlight}
-            onRotate={async () => {
-              try {
-                const result = await rotateManagedRootPassword(environmentId)
-                registerCommand(result.commandId, 'Rotate root password')
-                return { rootPassword: result.rootPassword }
-              } catch (err) {
-                if (isForbiddenError(err)) {
-                  await handleUnauthorized()
-                  return null
-                }
-                throw new Error(
-                  managedErrorMessage(err, 'Failed to rotate password'),
-                )
-              }
-            }}
-          />
-          <ManagedUsersPanel
-            databases={databases}
-            users={users}
-            canManage={canManage}
-            busy={inFlight}
-            onCreateDatabase={async (name) => {
-              const result = await createManagedDatabase(environmentId, { name })
-              registerCommand(result.commandId, 'Create database')
-            }}
-            onDeleteDatabase={async (name) => {
-              const result = await deleteManagedDatabase(environmentId, name)
-              registerCommand(result.commandId, 'Delete database')
-            }}
-            onCreateUser={async (input) => {
-              try {
-                const result = await createManagedUser(environmentId, input)
-                registerCommand(result.commandId, 'Create user')
-                return { password: result.password }
-              } catch (err) {
-                if (isForbiddenError(err)) {
-                  await handleUnauthorized()
-                  return null
-                }
-                throw err
-              }
-            }}
-            onDeleteUser={async (principalId) => {
-              const result = await deleteManagedUser(environmentId, principalId)
-              registerCommand(result.commandId, 'Delete user')
-            }}
-            onReload={reloadAll}
-          />
-        </>
+        <ManagedDataPanels
+          rootUsername={detail.rootUsername}
+          databases={databases}
+          users={users}
+          canManage={canManage}
+          inFlight={inFlight}
+          rotatePasswordMutation={rotatePasswordMutation}
+          createDatabaseMutation={createDatabaseMutation}
+          deleteDatabaseMutation={deleteDatabaseMutation}
+          createUserMutation={createUserMutation}
+          deleteUserMutation={deleteUserMutation}
+          usersQuery={usersQuery}
+          databasesQuery={databasesQuery}
+          registerCommand={registerCommand}
+        />
       ) : null}
       {showBackups ? (
         <ManagedBackupsPanel
@@ -628,16 +582,26 @@ export function ManagedEnvironmentBody({
           canManage={canManage}
           busy={inFlight}
           onBackupNow={async () => {
-            const result = await createManagedBackup(environmentId)
+            const result = await createBackupMutation.mutateAsync(undefined)
             registerCommand(result.commandId, 'Back up now')
           }}
           onDelete={async (backupId) => {
-            const result = await deleteManagedBackup(environmentId, backupId)
-            registerCommand(result.commandId, 'Delete backup')
+            const result = await deleteBackupMutation.run(backupId)
+            if (!result.ok) {
+              throw new Error(
+                deleteBackupMutation.actionError ?? 'Failed to delete backup',
+              )
+            }
+            registerCommand(result.value.commandId, 'Delete backup')
           }}
           onRestore={async (backupId) => {
-            const result = await restoreManagedBackup(environmentId, backupId)
-            registerCommand(result.commandId, 'Restore backup')
+            const result = await restoreBackupMutation.run(backupId)
+            if (!result.ok) {
+              throw new Error(
+                restoreBackupMutation.actionError ?? 'Failed to restore backup',
+              )
+            }
+            registerCommand(result.value.commandId, 'Restore backup')
           }}
         />
       ) : null}
@@ -648,45 +612,27 @@ export function ManagedEnvironmentBody({
           canManage={canManage}
           busy={inFlight}
           onLifecycle={async (action) => {
-            try {
-              const result = await runManagedLifecycle(environmentId, action)
-              registerCommand(result.commandId, action)
-            } catch (err) {
-              if (isForbiddenError(err)) {
-                await handleUnauthorized()
-                return
-              }
-              throw new Error(managedErrorMessage(err, 'Lifecycle action failed'))
+            const result = await lifecycleMutation.run(action)
+            if (!result.ok) {
+              throw new Error(
+                lifecycleMutation.actionError ?? 'Lifecycle action failed',
+              )
             }
+            registerCommand(result.value.commandId, action)
           }}
           onApply={async () => {
-            try {
-              const result = await applyEnvironmentManaged(environmentId)
-              registerCommand(result.commandId, 'Apply')
-            } catch (err) {
-              if (isForbiddenError(err)) {
-                await handleUnauthorized()
-                return
-              }
-              throw new Error(managedErrorMessage(err, 'Apply failed'))
-            }
+            const result = await applyManagedMutation.mutateAsync()
+            registerCommand(result.commandId, 'Apply')
           }}
           onDelete={async () => {
-            try {
-              const result = await deleteEnvironmentManaged(environmentId)
-              if (result.deleted) {
-                await reloadAll()
-                return
-              }
-              if (result.commandId && result.serverId) {
-                registerCommand(result.commandId, 'Delete')
-              }
-            } catch (err) {
-              if (isForbiddenError(err)) {
-                await handleUnauthorized()
-                return
-              }
-              throw new Error(managedErrorMessage(err, 'Delete failed'))
+            const result = await deleteManagedMutation.mutateAsync()
+            if (result.deleted) {
+              invalidateManagedData()
+              ignorePromise(managedQuery.refetch())
+              return
+            }
+            if (result.commandId && result.serverId) {
+              registerCommand(result.commandId, 'Delete', result.serverId)
             }
           }}
         />
@@ -697,34 +643,129 @@ export function ManagedEnvironmentBody({
           canManage={canManage}
           busy={inFlight}
           onApply={async (next: ManagedSettings) => {
-            try {
-              await updateEnvironmentManaged(environmentId, { settings: next })
-              const result = await applyEnvironmentManaged(environmentId)
-              registerCommand(result.commandId, 'Apply settings')
-              await reloadAll()
-            } catch (err) {
-              if (isForbiddenError(err)) {
-                await handleUnauthorized()
-                return
-              }
-              throw err
+            const updateResult = await updateManagedMutation.run({
+              settings: next,
+            })
+            if (!updateResult.ok) {
+              throw new Error(
+                updateManagedMutation.actionError ?? 'Failed to save settings',
+              )
             }
+            const applyResult = await applyManagedMutation.mutateAsync()
+            registerCommand(applyResult.commandId, 'Apply settings')
+            invalidateManagedData()
           }}
         />
       ) : null}
       {showOverview || showSettings ? (
         <ManagedStatusPanel
+          orgId={orgId}
+          environmentId={environmentId}
           status={status?.status ?? managed.status}
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}
           containers={status?.containers ?? []}
-          onFetchLogs={async (tail) => {
-            const result = await fetchManagedLogs(environmentId, tail)
-            return result.logs
-          }}
         />
       ) : null}
     </View>
+  )
+}
+
+function ManagedDataPanels({
+  rootUsername,
+  databases,
+  users,
+  canManage,
+  inFlight,
+  rotatePasswordMutation,
+  createDatabaseMutation,
+  deleteDatabaseMutation,
+  createUserMutation,
+  deleteUserMutation,
+  usersQuery,
+  databasesQuery,
+  registerCommand,
+}: Readonly<{
+  rootUsername: string | null
+  databases: string[]
+  users: ManagedUserRecord[]
+  canManage: boolean
+  inFlight: boolean
+  rotatePasswordMutation: ReturnType<typeof useRotateManagedRootPassword>
+  createDatabaseMutation: ReturnType<typeof useCreateManagedDatabase>
+  deleteDatabaseMutation: ReturnType<typeof useDeleteManagedDatabase>
+  createUserMutation: ReturnType<typeof useCreateManagedUser>
+  deleteUserMutation: ReturnType<typeof useDeleteManagedUser>
+  usersQuery: ReturnType<typeof useManagedUsers>
+  databasesQuery: ReturnType<typeof useManagedDatabases>
+  registerCommand: (
+    commandId: string,
+    label: string,
+    commandServerId?: string,
+  ) => void
+}>) {
+  return (
+    <>
+      <ManagedCredentialsPanel
+        rootUsername={rootUsername}
+        canManage={canManage}
+        busy={inFlight}
+        onRotate={async () => {
+          const result = await rotatePasswordMutation.mutateAsync()
+          registerCommand(result.commandId, 'Rotate root password')
+          return { rootPassword: result.rootPassword }
+        }}
+      />
+      <ManagedUsersPanel
+        databases={databases}
+        users={users}
+        canManage={canManage}
+        busy={inFlight}
+        onCreateDatabase={async (name) => {
+          const result = await createDatabaseMutation.run({ name })
+          if (!result.ok) {
+            throw new Error(
+              createDatabaseMutation.actionError ??
+                'Failed to create database',
+            )
+          }
+          registerCommand(result.value.commandId, 'Create database')
+        }}
+        onDeleteDatabase={async (name) => {
+          const result = await deleteDatabaseMutation.run(name)
+          if (!result.ok) {
+            throw new Error(
+              deleteDatabaseMutation.actionError ??
+                'Failed to delete database',
+            )
+          }
+          registerCommand(result.value.commandId, 'Delete database')
+        }}
+        onCreateUser={async (input) => {
+          const result = await createUserMutation.run(input)
+          if (!result.ok) {
+            if (createUserMutation.actionError) {
+              throw new Error(createUserMutation.actionError)
+            }
+            return null
+          }
+          registerCommand(result.value.commandId, 'Create user')
+          return { password: result.value.password }
+        }}
+        onDeleteUser={async (principalId) => {
+          const result = await deleteUserMutation.run(principalId)
+          if (!result.ok) {
+            throw new Error(
+              deleteUserMutation.actionError ?? 'Failed to delete user',
+            )
+          }
+          registerCommand(result.value.commandId, 'Delete user')
+        }}
+        onReload={async () => {
+          await Promise.all([usersQuery.refetch(), databasesQuery.refetch()])
+        }}
+      />
+    </>
   )
 }
 
@@ -736,23 +777,6 @@ function resolveSelectedEnvironmentId(
     return previous
   }
   return envs[0]?.id ?? null
-}
-
-async function loadOrProvisionEnvironments(
-  projectId: string,
-  canOwn: boolean,
-  provisionAttemptedFor: { current: string | null },
-  displayName: string,
-): Promise<EnvironmentRecord[]> {
-  const envs = (await fetchVisibleEnvironments(projectId)).environments
-  const shouldProvision =
-    envs.length === 0 && canOwn && provisionAttemptedFor.current !== projectId
-  if (!shouldProvision) {
-    return envs
-  }
-  provisionAttemptedFor.current = projectId
-  await createEnvironment({ projectId, displayName })
-  return (await fetchVisibleEnvironments(projectId)).environments
 }
 
 function deleteButtonLabel(deleteArmed: boolean, deleting: boolean): string {
@@ -886,9 +910,7 @@ function ActiveEnvironmentPanel({
   activeEnvironment,
   selectedId,
   canOwn,
-  handleUnauthorized,
   onSelect,
-  onEnvironmentsChanged,
   onError,
 }: Readonly<{
   orgId: string
@@ -899,19 +921,21 @@ function ActiveEnvironmentPanel({
   activeEnvironment: EnvironmentRecord
   selectedId: string | null
   canOwn: boolean
-  handleUnauthorized: () => Promise<void>
   onSelect: (id: string | null) => void
-  onEnvironmentsChanged: (environments: EnvironmentRecord[]) => void
   onError: (error: string | null) => void
 }>) {
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
-  const [renameSaving, setRenameSaving] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
-  const [creating, setCreating] = useState(false)
   const [deleteArmed, setDeleteArmed] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+
+  const updateEnvironmentMutation = useUpdateEnvironment(
+    orgId,
+    activeEnvironment.id,
+  )
+  const createEnvironmentMutation = useCreateEnvironment(orgId)
+  const deleteEnvironmentMutation = useDeleteEnvironment(orgId)
 
   const saveRename = async () => {
     const trimmed = renameValue.trim()
@@ -919,25 +943,14 @@ function ActiveEnvironmentPanel({
       onError('Name is required.')
       return
     }
-    setRenameSaving(true)
     onError(null)
-    const result = await withGuardedAction(
-      () => updateEnvironment(activeEnvironment.id, { displayName: trimmed }),
-      handleUnauthorized,
-      'Failed to rename',
-    )
-    setRenameSaving(false)
+    const result = await updateEnvironmentMutation.run({ displayName: trimmed })
     if (!result.ok) {
-      if (result.error) onError(result.error)
+      if (updateEnvironmentMutation.actionError) {
+        onError(updateEnvironmentMutation.actionError)
+      }
       return
     }
-    onEnvironmentsChanged(
-      environments.map((env) =>
-        env.id === activeEnvironment.id
-          ? { ...env, displayName: trimmed }
-          : env,
-      ),
-    )
     setRenaming(false)
   }
 
@@ -947,42 +960,37 @@ function ActiveEnvironmentPanel({
       onError('Name is required.')
       return
     }
-    setCreating(true)
     onError(null)
-    const result = await withGuardedAction(
-      () => createEnvironment({ projectId, displayName: trimmed }),
-      handleUnauthorized,
-      'Failed to create environment',
-    )
-    setCreating(false)
+    const result = await createEnvironmentMutation.run({
+      projectId,
+      displayName: trimmed,
+    })
     if (!result.ok) {
-      if (result.error) onError(result.error)
+      if (createEnvironmentMutation.actionError) {
+        onError(createEnvironmentMutation.actionError)
+      }
       return
     }
-    onEnvironmentsChanged((await fetchVisibleEnvironments(projectId)).environments)
     onSelect(result.value.id)
     setCreateName('')
     setShowCreate(false)
   }
 
   const deleteActive = async () => {
-    setDeleting(true)
     onError(null)
-    const result = await withGuardedAction(
-      () => deleteEnvironment(activeEnvironment.id),
-      handleUnauthorized,
-      'Failed to delete environment',
-    )
-    setDeleting(false)
+    const result = await deleteEnvironmentMutation.run(activeEnvironment.id)
     if (!result.ok) {
-      if (result.error) onError(result.error)
+      if (deleteEnvironmentMutation.actionError) {
+        onError(deleteEnvironmentMutation.actionError)
+      }
       return
     }
-    const envs = (await fetchVisibleEnvironments(projectId)).environments
-    onEnvironmentsChanged(envs)
-    onSelect(envs[0]?.id ?? null)
     setDeleteArmed(false)
   }
+
+  const renameSaving = updateEnvironmentMutation.isPending
+  const creating = createEnvironmentMutation.isPending
+  const deleting = deleteEnvironmentMutation.isPending
 
   return (
     <>
@@ -1017,7 +1025,7 @@ function ActiveEnvironmentPanel({
           }}
           onDeletePress={() => {
             if (deleteArmed) {
-              void deleteActive()
+              ignorePromise(deleteActive())
               return
             }
             setDeleteArmed(true)
@@ -1031,7 +1039,7 @@ function ActiveEnvironmentPanel({
           onChange={setRenameValue}
           saving={renameSaving}
           onSave={() => {
-            void saveRename()
+            ignorePromise(saveRename())
           }}
         />
       ) : null}
@@ -1042,7 +1050,7 @@ function ActiveEnvironmentPanel({
           onChange={setCreateName}
           creating={creating}
           onCreate={() => {
-            void submitCreate()
+            ignorePromise(submitCreate())
           }}
         />
       ) : null}
@@ -1069,66 +1077,74 @@ export function ManagedProjectSection({
   engineCode: string | null
   projectDisplayName: string
 }>) {
-  const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const {
     defaultEnvironmentName,
     isLoading: defaultNameLoading,
   } = useOrgDefaultEnvironmentName(orgId)
-  const [environments, setEnvironments] = useState<EnvironmentRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const provisionAttemptedFor = useRef<string | null>(null)
 
-  useEffect(() => {
-    // Wait for the org default name query to settle so a custom org default is
-    // never raced by the platform fallback while still loading.
-    if (defaultNameLoading) {
-      return
-    }
+  const environmentsQuery = useEnvironments(orgId, projectId, {
+    enabled: !defaultNameLoading,
+  })
+  const createEnvironmentMutation = useCreateEnvironment(orgId)
 
-    let cancelled = false
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      const result = await withGuardedAction(
-        () =>
-          loadOrProvisionEnvironments(
-            projectId,
-            canOwn,
-            provisionAttemptedFor,
-            defaultEnvironmentName,
-          ),
-        handleUnauthorized,
-        'Failed to load environments',
+  const environments = environmentsQuery.data?.environments ?? []
+
+  useEffect(() => {
+    if (defaultNameLoading || environmentsQuery.isLoading) return
+    if (
+      environments.length === 0 &&
+      canOwn &&
+      provisionAttemptedFor.current !== projectId &&
+      !createEnvironmentMutation.isPending
+    ) {
+      provisionAttemptedFor.current = projectId
+      ignorePromise(
+        createEnvironmentMutation
+          .run({ projectId, displayName: defaultEnvironmentName })
+          .then((result) => {
+            if (!result.ok && createEnvironmentMutation.actionError) {
+              setError(createEnvironmentMutation.actionError)
+            }
+          }),
       )
-      if (cancelled) return
-      if (!result.ok) {
-        if (result.error) setError(result.error)
-        setLoading(false)
-        return
-      }
-      setEnvironments(result.value)
-      setSelectedId((previous) =>
-        resolveSelectedEnvironmentId(previous, result.value),
-      )
-      setLoading(false)
-    }
-    void load()
-    return () => {
-      cancelled = true
     }
   }, [
-    projectId,
     canOwn,
-    handleUnauthorized,
+    createEnvironmentMutation,
     defaultEnvironmentName,
     defaultNameLoading,
+    environments.length,
+    environmentsQuery.isLoading,
+    projectId,
   ])
+
+  useEffect(() => {
+    setSelectedId((previous) =>
+      resolveSelectedEnvironmentId(previous, environments),
+    )
+  }, [environments])
+
+  useEffect(() => {
+    if (environmentsQuery.error) {
+      setError(
+        environmentsQuery.error instanceof Error
+          ? environmentsQuery.error.message
+          : 'Failed to load environments',
+      )
+    }
+  }, [environmentsQuery.error])
 
   const activeEnvironment =
     environments.find((env) => env.id === selectedId) ?? null
+
+  const loading =
+    defaultNameLoading ||
+    ((environmentsQuery.isLoading || createEnvironmentMutation.isPending) &&
+      environments.length === 0)
 
   if (loading && environments.length === 0) {
     return <Text style={orgPanelStyles.muted}>Loading environments…</Text>
@@ -1151,9 +1167,7 @@ export function ManagedProjectSection({
           activeEnvironment={activeEnvironment}
           selectedId={selectedId}
           canOwn={canOwn}
-          handleUnauthorized={handleUnauthorized}
           onSelect={setSelectedId}
-          onEnvironmentsChanged={setEnvironments}
           onError={setError}
         />
       )}

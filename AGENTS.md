@@ -40,16 +40,41 @@ Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) 
 | Stack / fonts / Tamagui | [Stack](#stack) |
 | Auth, install, sign-up | [End-user auth & first-run install](#end-user-auth--first-run-install-self-hosted) |
 | Org routes & shell | [Organization console](#organization-console-organizationid) |
-| API helpers & contracts | [Instance API](#instance-api) (under Organization console) + `src/lib/instance-api.ts` |
+| API helpers & contracts | [Instance API](#instance-api) + `src/lib/instance-api.ts` |
+| Server state / queries | [Server state (React Query)](#server-state-react-query) + `src/lib/query-keys.ts` + `src/lib/queries/` |
 | Admin surface | [Admin area](#admin-area-admin) |
-| Commands / polling | [Command Pipeline UI](#command-pipeline-ui) |
+| Commands / polling | [Command Pipeline UI](#command-pipeline-ui) + `src/lib/queries/commands.ts` |
 | Deploy modes | [Build output & deployment](#build-output--deployment-dev-vs-prod) |
 
 ## Stack
 
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
-- **React Query** `^5.90.14` — module-level `QueryClient` in `src/app/_layout.tsx`; `useAuthStatus()` hook in `src/lib/query-client.ts`.
+- **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
 - **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.
+
+## Server state (React Query)
+
+All instance/server state goes through React Query. Do **not** add new `useEffect` + `useState` fetch caches or hand-rolled `setInterval` poll loops.
+
+| Piece | Location |
+| --- | --- |
+| Query-key factory | `src/lib/query-keys.ts` (`queryKeys`) — hierarchical, org-scoped prefixes (`['org', orgId, …]`) so partial invalidation works |
+| QueryClient factory | `createAppQueryClient()` in `src/lib/query-client.ts`; module-level instance in `src/components/app-providers.tsx` |
+| Domain hooks | `src/lib/queries/*.ts` — one module per domain (servers, projects, environments, managed, …) |
+| Mutations | `useApiMutation` in `src/lib/query-client.ts` — `{ ok, error }` shape; mutations use `retry: false` |
+| 403 seam | `setForbiddenHandler` registered by `AuthProvider`; QueryCache/MutationCache `onError` routes `isForbiddenError` there. Prefer this over per-component `useForbiddenRecovery` |
+| Transport / types | `src/lib/instance-api.ts` — components import **hooks** from `src/lib/queries/*`, not `fetch*` helpers |
+
+**Conventions**
+
+- Screens use `useQuery` / `useQueries` / mutation hooks; invalidate the narrowest correct key prefix in `onSuccess` — never thread a caller `refresh()` callback for server data.
+- Sign-out calls `queryClient.clear()` so a second account never sees the previous cache.
+- Show-once secrets (managed root/user passwords, generated variable secrets) stay in component state from the mutation result — **never** `setQueryData` them.
+- Polling uses query `refetchInterval` (function form when conditional): servers list 30 s; update-status while `status === 'updating'`; commands via `useCommandsBatch` (`COMMAND_POLL_MS` in `src/lib/queries/commands.ts`); managed status only while `provisioning` / `applying`; metrics cadence 1 h/6 h → 60 s, 24 h → 300 s, longer → `false`.
+- Containers on Project Overview: `refetchInterval: false` — refresh only on explicit **Refresh** or after a tracked command reaches terminal status.
+- O(1) fleet reads: one `useOrgServers` / one batch update-status query — never per-server queries or `fetchServerCell` with an interval on overview.
+- `useCan` remains a display hint; server 403s remain authoritative via the global forbidden seam.
+- Manage-gated reads that must not sign the user out (e.g. org default environment) catch `isForbiddenError` inside `queryFn` and return a fallback so the global handler is not invoked.
 
 ## Design system (ui-ux-pro-max)
 
@@ -226,9 +251,9 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/servers/vpns/[vpnId]` | `vpn-detail-section.tsx` | Peers CRUD + apply mesh (`server.wireguard.apply`) |
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
 | `/<orgId>/projects` | `projects-overview-section.tsx` | Projects list; optional `?workspaceId` from the header switcher (omit = **All workspaces** when multiple exist; sole workspace is selected automatically) |
-| `/<orgId>/projects/new` | `project-create-section.tsx` | Type picker: Docker Compose / Template / Managed |
+| `/<orgId>/projects/new` | `project-create-section.tsx` | Details: name, description, existing/new workspace → empty project; type chosen on setup |
 | `/<orgId>/projects/settings` | `default-environment-settings-section.tsx` | Org default environment name (`GET`/`PUT /organizations/:id/default-environment`) |
-| `/<orgId>/projects/[projectId]` | tabbed project shell (`project/_layout` + tabs) | Overview defaults to **Base** at `/overview` (no `?env=`). Selecting an environment uses `/environments/:environmentId` (same Overview UI; that env highlighted, not Base). Environments tab index is bare `/environments`. Shell environment selector is hidden on Overview and Environments. Unconfigured projects redirect to `/setup`. Service detail remains at `/services/:id`. |
+| `/<orgId>/projects/[projectId]` | tabbed project shell (`project/_layout` + tabs) | Overview defaults to **Project** compose at `/overview` (no `?env=`). Selecting an environment uses `/environments/:environmentId` (same Overview UI; that env highlighted, not Project). Compose has one unified tab group (Project · envs · Networking · Storage); bare `/environments` redirects to Overview. Shell environment selector is for managed non-Overview tabs. Unconfigured projects redirect to `/setup`. Service detail remains at `/services/:id`. |
 | `/<orgId>/projects/[projectId]/setup` | `project-setup-section.tsx` | Resumable type / catalog selection after empty create |
 | `/<orgId>/projects/[projectId]/environments/[environmentId]` | `ProjectOverviewTab` | Overview with that environment selected (path-based; no query) |
 | `/<orgId>/managed` | `managed/managed-overview-section.tsx` | Org-wide managed services table (`GET /organizations/:id/managed`); engine / status / server filters; row opens the managed project detail |
@@ -244,14 +269,14 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 
 ### Environments (project Environments tab)
 
-Environments live in the project shell **Environments** tab (`project-environments-section.tsx`), with overrides / deploy / hosting for compose projects via `EnvironmentDetailBody`. The shell environment selector keeps the active environment across other tabs in memory — except **Overview** and **Environments**, where the selector is hidden (Overview owns its own chip strip; path `/environments/:id` selects that env on Overview).
+Managed environments use the shell **Environments** tab (`project-environments-section.tsx`). Compose projects have no Environments section tab — env work lives under the selected environment chip plus Networking / Storage (`EnvironmentDetailBody` on Networking). The shell environment selector keeps the active environment across managed non-Overview tabs; compose Overview owns the unified chip strip (path `/environments/:id` selects that env).
 
-**Overview environments strip** (`overview-environments-panel.tsx`, rendered above Services on the compose Overview tab):
+**Overview Compose panel** (`compose-tabs.tsx` → `ComposeServicesTab` + `overview-environments-panel.tsx`):
 
-- Compact segmented toggle (`orgPanelStyles.segmentGroup`): leading **Base** plus one segment per environment (name only). Not a SectionPanel — a single toolbar row. Optional **Default server** pin on Base (`project.options.defaultServerId`) is inherited by environments without their own `serverId` (effective placement = `env.serverId ?? project.defaultServerId`). Status is loaded with one `fetchContainers({ environmentId })` per environment on mount / when the environment-id list changes, and again on explicit **Refresh** or after a tracked command reaches a terminal status — **no auto-poll / `refetchInterval`**.
-- **Base vs environment selection:** Overview Base is `/overview` (no query). Selecting an environment chip navigates to `/environments/:environmentId` — that environment is highlighted (not Base) and Overview edits its overlay / lifecycle. Overview tab links and post-setup navigation open `/overview`. While Base is selected, context keeps a concrete `selectedEnvironmentId` for Networking / Storage / settings. Base mode shows “Shared setup”, an inline default-server picker, and hides lifecycle actions.
+- Editor chrome toolbar (one row): unified **Project · environments · Networking · Storage** (`ProjectSectionTabs` — one segment group; Networking / Storage only when an environment is selected, not on Project compose); shell hides that group on compose Overview so it lives in the toolbar, and shows the same group on Networking / Storage. **Set Default Project Server (Optional)** (`ProjectServerHeaderControl` → `project.options.defaultServerId`) then **Editor / Visual** on the right. Lifecycle Start / Stop / Refresh / Destroy and env add live below via `OverviewEnvironmentsPanel` when an environment is selected. Env-only server pin appears when the selected env has no effective server. Status is loaded with one `fetchContainers({ environmentId })` per environment on mount / when the environment-id list changes, and again on explicit **Refresh** or after a tracked command reaches a terminal status — **no auto-poll / `refetchInterval`**.
+- **Project vs environment selection:** Overview Project compose is `/overview` (no query). Selecting an environment chip navigates to `/environments/:environmentId` — that environment is highlighted (not Project) and Overview edits its overlay / lifecycle. Post-setup navigation opens `/overview`. While Project is selected, Networking / Storage chips are hidden; context may still keep a concrete `selectedEnvironmentId`. Project mode hides lifecycle actions.
 - **Start / Stop / Refresh / Destroy** — refined quiet toolbar buttons (not large primary chips). Start uses `deployEnvironment` until host-deployed containers exist (`hasHostDeployedContainers` — ignores allocator `pending` pins with no Docker id); then `runEnvironmentLifecycle(id, 'start')`. Stop keeps files/data. Destroy is two-press confirm (`stopEnvironment`) and removes containers **and their data volumes**. Deploy ack conflicts surface plain-language copy pointing at the Environments tab.
-- **Add / Remove** — quiet secondary controls under the bar (`createEnvironment` / `deleteEnvironment`; remove hidden when only one remains; blocked while containers are active). Name validation via `validateEnvironmentName`.
+- **Delete** — header red trash can (`organization:own`): with more than one environment, two-press confirm deletes the selected environment; with a single environment it opens `ProjectDeletePanel`. Name validation via `validateEnvironmentName` for Add.
 - Lifecycle / deploy / destroy commands share a **single** `COMMAND_POLL_MS` timer (`useEnvironmentCommands`), never one timer per environment.
 
 - `ProjectEnvironmentsSection` loads `fetchVisibleEnvironments(projectId)` and renders one active environment at a time.
@@ -262,7 +287,7 @@ Environments live in the project shell **Environments** tab (`project-environmen
 - **Server** is a required dropdown on the environment: pick one whole connected server via `updateEnvironment({ serverId })` — not compose, and not at deploy time. Deploy stays disabled until a connected server is selected. Different environments may select different servers. Compose must not carry `x-turbopanel.placement` (instance validation rejects it; UI `stripComposePlacement` is an input-sanitization path only).
 - `EnvironmentDetailSection` remains as a thin wrapper (heading + `EnvironmentDetailBody`) for embedded Environments-tab use.
 - **Container status** is shown inline in the active environment's Containers panel (`ContainerStatusBadge`, Postgres-backed `fetchContainers({ serviceId })` per service — never DO reads), so no separate environment page is needed to see it.
-- **Managed projects:** tabbed shell (`/data`, `/backups`, `/settings`, `/environments`) via `ManagedEnvironmentBody` focus panels — never Compose UI. Create via empty project → setup → managed catalog; provisioning uses `createEnvironmentManaged` with show-once root password. **Backups** (`managed/managed-backups-panel.tsx`): **Back up now**; **Restore** behind typed confirmation (managed/project display name); **Delete** two-press. Metadata-only — no download endpoint.
+- **Managed projects:** tabbed shell (`/data`, `/backups`, `/environments`) via `ManagedEnvironmentBody` focus panels — never Compose UI. Create via empty project → setup → managed catalog; provisioning uses `createEnvironmentManaged` with show-once root password. **Backups** (`managed/managed-backups-panel.tsx`): **Back up now**; **Restore** behind typed confirmation (managed/project display name); **Delete** two-press. Metadata-only — no download endpoint. Project Settings tab removed; delete uses the shell trash control.
 
 ### Workspaces
 
@@ -287,13 +312,13 @@ Authorization helpers:
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
 - `fetchVisibleWorkspaces()` → `GET /api/client/v1/workspaces`
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
-- `createProject({ type: 'docker-compose' | 'template' | 'managed', serverId?, … })` — Docker Compose is the default manual compose path (blank removed); managed create may pass `serverId` to pin the scaffolded Production environment
+- `createProject({ type: 'empty' | 'docker-compose' | 'template' | 'managed', serverId?, … })` — UI create uses `type: 'empty'` then configure on setup; Docker Compose remains the omit-type API default. Project/workspace names are unique per org (trim + case-insensitive; **409** `project_name_in_use` / `workspace_name_in_use`). Managed create may pass `serverId` to pin the scaffolded Production environment
 - `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`); `updateProject` also accepts `options.containerNaming` (`uuid` \| `custom`)
 - `deployEnvironment(environmentId, body?)` → `POST /api/client/v1/environments/:id/deploy`; the UI always requires `EnvironmentRecord.serverId` first and calls deploy without a body so the instance resolves the target from that column; poll with `fetchCommand(serverId, commandId)` (Postgres only)
 - `fetchDeployPreview(environmentId)` → `GET /api/client/v1/environments/:id/deploy-preview` — `DeployPreviewResponse` (`composeYaml`, `projectName`, `containers[]`, `volumes[]`, `warnings[]`); secret values redacted; same prepare path as deploy
 - `stopEnvironment(environmentId)` → `POST /api/client/v1/environments/:id/stop` — compose down (with volumes) on `environment.server_id`; returns `{ commandId, serverId }` for polling; used by the project-delete wizard before cascade delete
 - `runEnvironmentLifecycle(environmentId, action)` → `POST /api/client/v1/environments/:id/lifecycle` (`start` / `stop` / `restart`); non-destructive `environment.lifecycle` command; returns `CommandEnqueueResponse`
-- Compose UI: Overview edits **base or this environment's settings** depending on the path (`/overview` → `project.options.compose` via `persistProjectCompose`; `/environments/:id` → `environment.options.compose` via `persistEnvironmentCompose`), both through the shared `compose-persistence.ts` helpers, and the environment editor still collapses to service status dots once containers exist. `ComposeEditorSection` accepts optional `onDraftChange` (debounced, `null` while YAML is unparseable). The Overview effective preview is a **client-side** `mergeComposeOverlay` of base + live draft rendered through the shared `ReadOnlyYamlBlock`, complemented by the server-verified `DeployPreviewPanel`; the deploy payload and daemon launch path are unchanged (instance still merges in `deploy-prepare.ts`). `compose-editor-section.tsx` (Editor | Visual) on project and environment detail. Placement is **not** stored in compose (instance validation rejects `x-turbopanel.placement`; UI strips it before save). The active tab is persisted in `presentation.editorView` (`editor` \| `visual`) on that compose document when saved — project base and each environment overlay keep their own preference (`readComposeEditorView` / `setComposeEditorView`); the YAML textarea hides placement via `stripComposeManagedExtension`. **Visual** (`compose-visual-service.tsx`) shows name, a **Service kind** picker (`container` vs `traditional-web` via per-service `x-turbopanel`), and for containers **Image** + **Tag** always (joined into Compose `image:` via `parseComposeImageRef` / `formatComposeImageRef` in `src/lib/compose/image-ref.ts`); traditional-web shows **engine** (`nginx` / Apache / OpenLiteSpeed — all deployable; OpenLiteSpeed is static-only, no PHP/env hints) + relative **document root** instead of an image. Hosting PHP settings (`version` / memory / max execution time) apply on Apache traditional-web deploys via mod_php. **Registry** is an Add chip for alternate registries (`ghcr.io`, `quay.io`, `localhost:5000`, … — Docker Hub when omitted); digests round-trip when already present. Optional Compose fields come from `VISUAL_SERVICE_FIELDS` in `src/lib/compose/visual-fields.ts` — flip `offerAdd` to expose an "Add …" button (currently **Restart** only; Compose Spec policies `no` / `always` / `on-failure[:max-retries]` / `unless-stopped`, default `always`). Ports stay editable when already present in YAML but are not offered as an Add button yet. **Editor** edits YAML with managed fields hidden and preserves `#` comments on save; a **Compose linter** (`lintComposeYaml` in `src/lib/compose/lint.ts`) runs live on both tabs (`ComposeLintPanel`) and flags invalid YAML, unknown top-level/service keys (with edit-distance "did you mean" hints — e.g. `imaage` → `image`), and services missing `image`/`build`, with 1-based line numbers sorted ascending (errors before warnings on the same line); badges/messages are red for errors and yellow for warnings. It gates save — client disables save when blocking issues exist, and the instance rejects `options.compose` with **400** `compose_invalid` + `issues` (same linter; empty-draft “no services” warnings are allowed). **Enter** auto-indents (2 spaces, deeper after `key:`), right-trims trailing spaces/tabs on every line, and re-indents a just-finished service-only key (`restart`, `image`, …) when it was left too shallow under `services:` (e.g. `restart: always` at column 0 → nested under the current service); top-level keys that are also service keys (`networks`, `volumes`, …) are left alone. **Tab** / **Shift+Tab** indent/outdent by two spaces via `src/lib/compose/yaml-indent.ts` (client-side; save still re-stringifies with the `yaml` package). The field itself is platform-split behind `compose-yaml-editor.tsx` (shared `ComposeYamlEditorProps`/`ComposeYamlEditorHandle` types in `compose-yaml-editor-types.ts`): **web** (`compose-yaml-editor.web.tsx`) is a real **CodeMirror 6** editor (`@uiw/react-codemirror`) with line numbers, indentation-guide lines (`@replit/codemirror-indentation-markers`), YAML syntax highlighting, and lint diagnostics in the gutter (`src/lib/compose/lint-diagnostics.ts` adapts `ComposeLintIssue[]` to CM `Diagnostic[]`; the `ComposeLintPanel` list stays below as the detailed view) — CM owns Tab/selection/smart-indent on web, with a custom Enter keymap reusing `indentAfterNewline` for parity; **native** (`compose-yaml-editor.native.tsx`) keeps the original transparent-`TextInput`-over-highlight-overlay approach (`src/lib/compose/yaml-highlight.ts` for muted comments + red/yellow lint-line tinting and the fixed-width `●`/`▲` gutter marker).
+- Compose UI: Overview edits **base or this environment's settings** depending on the path (`/overview` → `project.options.compose` via `persistProjectCompose`; `/environments/:id` → `environment.options.compose` via `persistEnvironmentCompose`), both through the shared `compose-persistence.ts` helpers, and the environment editor still collapses to service status dots once containers exist. `ComposeEditorSection` accepts optional `onDraftChange` (debounced, `null` while YAML is unparseable). On Overview with an environment selected, **What will run** (`EffectiveComposePanel` → always-expanded `DeployPreviewPanel`) shows the server-prepared deploy YAML only (no project-name chrome / refresh / container map) — not a client-side merge; requires a saved change and an effective server pin. Docker Compose project name is the TurboPanel project UUID; container names are service UUIDs (`containerNaming: uuid`). The deploy payload and daemon launch path are unchanged (instance still merges in `deploy-prepare.ts`). `compose-editor-section.tsx` (Editor | Visual) on project and environment detail. Placement is **not** stored in compose (instance validation rejects `x-turbopanel.placement`; UI strips it before save). The active tab is persisted in `presentation.editorView` (`editor` \| `visual`) on that compose document when saved — project base and each environment overlay keep their own preference (`readComposeEditorView` / `setComposeEditorView`); the YAML textarea hides placement via `stripComposeManagedExtension`. **Visual** (`compose-visual-service.tsx`) shows name, a **Service kind** picker (`container` vs `traditional-web` via per-service `x-turbopanel`), and for containers **Image** + **Tag** always (joined into Compose `image:` via `parseComposeImageRef` / `formatComposeImageRef` in `src/lib/compose/image-ref.ts`); traditional-web shows **engine** (`nginx` / Apache / OpenLiteSpeed — all deployable; OpenLiteSpeed is static-only, no PHP/env hints) + relative **document root** instead of an image. Hosting PHP settings (`version` / memory / max execution time) apply on Apache traditional-web deploys via mod_php. **Registry** is an Add chip for alternate registries (`ghcr.io`, `quay.io`, `localhost:5000`, … — Docker Hub when omitted); digests round-trip when already present. Optional Compose fields come from `VISUAL_SERVICE_FIELDS` in `src/lib/compose/visual-fields.ts` — flip `offerAdd` to expose an "Add …" button (currently **Restart** only; Compose Spec policies `no` / `always` / `on-failure[:max-retries]` / `unless-stopped`, default `always`). Ports stay editable when already present in YAML but are not offered as an Add button yet. **Editor** edits YAML with managed fields hidden and preserves `#` comments on save; a **Compose linter** (`lintComposeYaml` in `src/lib/compose/lint.ts`) runs live on both tabs (`ComposeLintPanel`) and flags invalid YAML, unknown top-level/service keys (with edit-distance "did you mean" hints — e.g. `imaage` → `image`), and services missing `image`/`build`, with 1-based line numbers sorted ascending (errors before warnings on the same line); badges/messages are red for errors and yellow for warnings. It gates save — client disables save when blocking issues exist, and the instance rejects `options.compose` with **400** `compose_invalid` + `issues` (same linter; empty-draft “no services” warnings are allowed). **Enter** auto-indents (2 spaces, deeper after `key:`), right-trims trailing spaces/tabs on every line, and re-indents a just-finished service-only key (`restart`, `image`, …) when it was left too shallow under `services:` (e.g. `restart: always` at column 0 → nested under the current service); top-level keys that are also service keys (`networks`, `volumes`, …) are left alone. **Tab** / **Shift+Tab** indent/outdent by two spaces via `src/lib/compose/yaml-indent.ts` (client-side; save still re-stringifies with the `yaml` package). The field itself is platform-split behind `compose-yaml-editor.tsx` (shared `ComposeYamlEditorProps`/`ComposeYamlEditorHandle` types in `compose-yaml-editor-types.ts`): **web** (`compose-yaml-editor.web.tsx`) is a real **CodeMirror 6** editor (`@uiw/react-codemirror`) with line numbers, indentation-guide lines (`@replit/codemirror-indentation-markers`), YAML syntax highlighting, and lint diagnostics in the gutter (`src/lib/compose/lint-diagnostics.ts` adapts `ComposeLintIssue[]` to CM `Diagnostic[]`; the `ComposeLintPanel` list stays below as the detailed view) — CM owns Tab/selection/smart-indent on web, with a custom Enter keymap reusing `indentAfterNewline` for parity; **native** (`compose-yaml-editor.native.tsx`) keeps the original transparent-`TextInput`-over-highlight-overlay approach (`src/lib/compose/yaml-highlight.ts` for muted comments + red/yellow lint-line tinting and the fixed-width `●`/`▲` gutter marker).
 - `EnvironmentRecord.serverId` / `updateEnvironment(id, { serverId })` — placement pin SoT; compose never carries placement. `stripComposePlacement` is an input-sanitization path only (strips any `x-turbopanel.placement` a client might still submit); there are no read/write placement helpers — UI placement UX uses `serverId` only
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `fetchProjectCatalog()` → `GET /api/client/v1/project-catalog` — returns `{ catalog: CatalogSummary[] }`
@@ -439,7 +464,7 @@ When apply returns 422 with `"cert apply is not applicable on this runtime"` (Wo
 
 ## Command Pipeline UI
 
-Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab; orchestration and polling live in `src/components/org/server-detail-section.tsx`. Commands follow a create-then-poll pattern: the UI calls the create endpoint, receives a `commandId`, then polls `fetchCommand` until the status is terminal (`succeeded`, `failed`, or `timed_out`). A single shared timer on the detail page coalesces polling for all in-flight commands on that host — no per-server intervals on the fleet overview.
+Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. No hand-rolled `setInterval` per page or per server.
 
 ### API helpers — `src/lib/instance-api.ts`
 
@@ -465,31 +490,10 @@ PingLatencyBreakdown {
 
 Segment durations are computed server-side from the flat `CommandRecord` lifecycle fields (`queuedAt`, `dispatchStartedAt`, `sentAt`, `ackedAt`, `finishedAt`) before being exposed on `CommandRecord.latency`.
 
-### Ping Daemon button
+### Ping / hostname / reboot
 
-- Visible per server card; requires no special permission (read access is sufficient).
-- On click: calls `pingDaemon(serverId)`, registers the `commandId` with the shared command poll coordinator in `servers-overview-section.tsx` (`COMMAND_POLL_MS = 2_000`).
-- Stops polling when status is `succeeded`, `failed`, or `timed_out`.
-- On `succeeded`: renders the latency breakdown table inline below the button.
-- On `failed`/`timed_out`: renders the error message inline.
-- Reuses `orgPanelStyles`, `colors`, `spacing`, and existing badge/button styles.
-
-### Change Hostname
-
-- Gated by `useCan('organization', orgId, 'organization:manage')` as a **display hint only** — the server enforces the real 403. On 403 response, call `handleUnauthorized()`.
-- Disabled when the server's `connected` field is `false` (daemon offline — from Postgres status, no extra call).
-- On submit: validates non-empty client-side, calls `setServerHostname(serverId, hostname)`, registers with the shared command poll coordinator until terminal.
-- On `succeeded`: refreshes the server list (re-fetches `GET /api/client/v1/servers`) so the new hostname appears.
-- On `failed`: shows the error inline.
-
-### Reboot Server
-
-- `rebootServer(serverId)` → `POST /api/client/v1/servers/:id/commands/reboot` — returns `CommandEnqueueResponse`.
-- Gated by `canManage` (display hint only; server enforces 403).
-- Disabled when `!server.connected` or any command is in flight.
-- Two-step confirm: first press shows "Confirm reboot?" + Confirm/Cancel; only Confirm calls `onReboot`.
-- Polled via the shared `COMMAND_POLL_MS` coordinator — no new timer.
-- On `succeeded`: triggers a silent server list refresh (`refreshServers({ silent: true })`).
-- On `failed`/`timed_out`: surfaces `rebootError` inline.
-
-Poll only while a command is in flight. Do not add per-server background polling loops. N servers must not produce N repeated calls. This is the same O(1) rule as the existing status read model.
+- Surface on the server detail **Control** tab via `ServerCommandsPanel`.
+- Mutations: `usePingDaemon` / `useSetServerHostname` / `useRebootServer` from `src/lib/queries/servers.ts`.
+- In-flight command ids feed `useCommandsBatch`; terminal success invalidates the server detail key.
+- Hostname/reboot gated by `useCan(…, 'organization:manage')` as a display hint; disabled when `!server.connected`.
+- Reboot uses two-step confirm. Do not add per-server background polling loops — O(1) shared batch query only.

@@ -14,7 +14,7 @@ import {
   type VpnRecord,
 } from '@/lib/instance-api'
 import { vpnDetailHref } from '@/lib/org-navigation'
-import { useForbiddenRecovery } from '@/lib/query-client'
+import { queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 // Docker/veth/bridge interfaces are filtered daemon-side before addresses reach the API.
@@ -138,25 +138,26 @@ export function ServerNetworkSection({
       addresses.privateIpv6.length > 0)
 
   const datacenterIpsQuery = useQuery({
-    queryKey: ['server', server.id, 'ips', { scope: 'datacenter' }],
+    queryKey: queryKeys.org(orgId).servers.ips(server.id, {
+      scope: 'datacenter',
+    }),
     queryFn: () => fetchIps({ serverId: server.id, scope: 'datacenter' }),
   })
-  useForbiddenRecovery(datacenterIpsQuery.error)
 
   const vpnIpsQuery = useQuery({
-    queryKey: ['server', server.id, 'ips', { scope: 'vpn' }],
+    queryKey: queryKeys.org(orgId).servers.ips(server.id, { scope: 'vpn' }),
     queryFn: () => fetchIps({ serverId: server.id, scope: 'vpn' }),
   })
-  useForbiddenRecovery(vpnIpsQuery.error)
 
   const vpnsQuery = useQuery({
-    queryKey: ['org', orgId, 'vpns'],
+    queryKey: queryKeys.org(orgId).topology.vpns,
     queryFn: fetchVpns,
   })
-  useForbiddenRecovery(vpnsQuery.error)
 
   const serverManagedIpsQuery = useQuery({
-    queryKey: ['server', server.id, 'ips', 'managed'],
+    queryKey: queryKeys.org(orgId).servers.ips(server.id, {
+      scope: 'managed-panel',
+    }),
     queryFn: async () => {
       const [ipsResult, networksResult, datacentersResult] = await Promise.all([
         fetchIps({ serverId: server.id }),
@@ -170,7 +171,6 @@ export function ServerNetworkSection({
       }
     },
   })
-  useForbiddenRecovery(serverManagedIpsQuery.error)
 
   const privateAddress =
     datacenterIpsQuery.data?.ips[0]?.address ?? null

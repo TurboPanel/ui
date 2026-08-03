@@ -227,6 +227,45 @@ export function stripComposePlacement(document: ComposeDocument): ComposeDocumen
   return stripTurbopanelField(document, 'placement')
 }
 
+/**
+ * Display-only: attach effective placement as top-level
+ * `x-turbopanel.placement.server_id` for “what will actually run” YAML.
+ * Does not persist — stored compose never carries placement (see
+ * {@link stripComposePlacement}). When `serverId` is null/blank, placement is
+ * omitted (other `x-turbopanel` fields preserved).
+ */
+export function withEffectivePlacement(
+  document: ComposeDocument,
+  serverId: string | null | undefined,
+): ComposeDocument {
+  const normalized = stripComposePlacement(document)
+  const trimmed = typeof serverId === 'string' ? serverId.trim() : ''
+  if (!trimmed) return normalized
+
+  const existing = normalized.data[TURBOPANEL_EXTENSION_KEY]
+  const rest = isRecord(existing) ? { ...existing } : {}
+  const data = {
+    ...normalized.data,
+    [TURBOPANEL_EXTENSION_KEY]: {
+      ...rest,
+      placement: { server_id: trimmed },
+    },
+  }
+  const keyOrder = [...normalized.presentation.keyOrder]
+  if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
+    keyOrder.push(TURBOPANEL_EXTENSION_KEY)
+  }
+
+  return {
+    version: 1,
+    data,
+    presentation: buildPresentation(normalized.presentation, {
+      keyOrder,
+      comments: { ...normalized.presentation.comments },
+    }),
+  }
+}
+
 export function readComposeEditorView(
   document: ComposeDocument,
 ): ComposeEditorView | null {

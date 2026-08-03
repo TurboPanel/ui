@@ -2,18 +2,14 @@ import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import type { OrgServerRecord, StorageKind, StorageRecord } from '@/lib/instance-api'
 import {
-  createStorage,
-  deleteStorage,
-  fetchOrgServers,
-  fetchStorage,
-  isForbiddenError,
-  updateStorage,
-  type OrgServerRecord,
-  type StorageKind,
-  type StorageRecord,
-} from '@/lib/instance-api'
+  useCreateStorage,
+  useDeleteStorage,
+  useStorage,
+  useUpdateStorage,
+} from '@/lib/queries/storage'
+import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -44,18 +40,139 @@ function inputStyle() {
   return Platform.OS === 'web' ? webInputStyle : styles.input
 }
 
-async function handleStorageApiError(
-  err: unknown,
-  handleUnauthorized: () => Promise<void>,
-  setError: (message: string) => void,
-  fallbackMessage: string,
-): Promise<boolean> {
-  if (isForbiddenError(err)) {
-    await handleUnauthorized()
-    return true
+function useStorageSection({
+  orgId,
+  environmentId,
+  defaultServerId,
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  defaultServerId?: string | null
+}>) {
+  const filter = { environmentId }
+  const storageQuery = useStorage(orgId, filter)
+  const serversQuery = useOrgServers(orgId)
+  const createMutation = useCreateStorage(orgId, filter)
+  const updateMutation = useUpdateStorage(orgId, filter)
+  const deleteMutation = useDeleteStorage(orgId, filter)
+
+  const [error, setError] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<StorageKind>('docker_volume')
+  const [serverId, setServerId] = useState(defaultServerId ?? '')
+  const [sourcePath, setSourcePath] = useState('')
+  const [destinationPath, setDestinationPath] = useState('')
+
+  useEffect(() => {
+    if (defaultServerId) {
+      setServerId(defaultServerId)
+    }
+  }, [defaultServerId])
+
+  const rows = storageQuery.data?.storage ?? []
+  const servers = serversQuery.data?.servers ?? []
+  const loading = storageQuery.isLoading || serversQuery.isLoading
+
+  let queryError: string | null = null
+  if (storageQuery.isError) {
+    queryError =
+      storageQuery.error instanceof Error
+        ? storageQuery.error.message
+        : 'Failed to load storage'
   }
-  setError(err instanceof Error ? err.message : fallbackMessage)
-  return false
+  const displayError =
+    error ??
+    createMutation.actionError ??
+    updateMutation.actionError ??
+    deleteMutation.actionError ??
+    queryError
+
+  const handleAdd = () => {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setError('Name is required.')
+      return
+    }
+    if (!serverId) {
+      setError('Select a server.')
+      return
+    }
+    setError(null)
+    createMutation.mutate(
+      {
+        environmentId,
+        serverId,
+        kind,
+        name: trimmedName,
+        ...(sourcePath.trim() ? { sourcePath: sourcePath.trim() } : {}),
+        ...(destinationPath.trim()
+          ? { destinationPath: destinationPath.trim() }
+          : {}),
+      },
+      {
+        onSuccess: () => {
+          setName('')
+          setSourcePath('')
+          setDestinationPath('')
+          setShowAdd(false)
+        },
+        onError: () => {
+          setError(createMutation.actionError ?? 'Failed to create storage')
+        },
+      },
+    )
+  }
+
+  const handleDestinationPathSave = async (id: string, nextDestinationPath: string) => {
+    setError(null)
+    const result = await updateMutation.run({
+      storageId: id,
+      body: { destinationPath: nextDestinationPath },
+    })
+    if (!result.ok && result.error) {
+      setError(result.error)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    setError(null)
+    deleteMutation.mutate(id, {
+      onError: () => {
+        setError(deleteMutation.actionError ?? 'Failed to delete storage')
+      },
+    })
+  }
+
+  const deletingId =
+    deleteMutation.isPending &&
+    typeof deleteMutation.variables === 'string'
+      ? deleteMutation.variables
+      : null
+
+  return {
+    rows,
+    servers,
+    loading,
+    error: displayError,
+    deletingId,
+    showAdd,
+    setShowAdd,
+    name,
+    setName,
+    kind,
+    setKind,
+    serverId,
+    setServerId,
+    sourcePath,
+    setSourcePath,
+    destinationPath,
+    setDestinationPath,
+    adding: createMutation.isPending,
+    handleAdd,
+    handleDelete,
+    handleDestinationPathSave,
+  }
 }
 
 function StorageListStatus({
@@ -181,145 +298,6 @@ function StorageAddForm({
       </Pressable>
     </View>
   )
-}
-
-function useStorageSection({
-  environmentId,
-  defaultServerId,
-  handleUnauthorized,
-}: Readonly<{
-  environmentId: string
-  defaultServerId?: string | null
-  handleUnauthorized: () => Promise<void>
-}>) {
-  const [rows, setRows] = useState<StorageRecord[]>([])
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
-  const [showAdd, setShowAdd] = useState(false)
-  const [name, setName] = useState('')
-  const [kind, setKind] = useState<StorageKind>('docker_volume')
-  const [serverId, setServerId] = useState(defaultServerId ?? '')
-  const [sourcePath, setSourcePath] = useState('')
-  const [destinationPath, setDestinationPath] = useState('')
-  const [adding, setAdding] = useState(false)
-
-  const load = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [storageResult, serversResult] = await Promise.all([
-        fetchStorage({ environmentId }),
-        fetchOrgServers(),
-      ])
-      setRows(storageResult.storage)
-      setServers(serversResult.servers)
-      if (!serverId && defaultServerId) {
-        setServerId(defaultServerId)
-      }
-    } catch (err) {
-      if (await handleStorageApiError(err, handleUnauthorized, setError, 'Failed to load storage')) {
-        return
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void load()
-  }, [environmentId, handleUnauthorized])
-
-  useEffect(() => {
-    if (defaultServerId) {
-      setServerId(defaultServerId)
-    }
-  }, [defaultServerId])
-
-  const handleAdd = async () => {
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      setError('Name is required.')
-      return
-    }
-    if (!serverId) {
-      setError('Select a server.')
-      return
-    }
-    setAdding(true)
-    setError(null)
-    try {
-      await createStorage({
-        environmentId,
-        serverId,
-        kind,
-        name: trimmedName,
-        ...(sourcePath.trim() ? { sourcePath: sourcePath.trim() } : {}),
-        ...(destinationPath.trim() ? { destinationPath: destinationPath.trim() } : {}),
-      })
-      setName('')
-      setSourcePath('')
-      setDestinationPath('')
-      setShowAdd(false)
-      await load()
-    } catch (err) {
-      await handleStorageApiError(err, handleUnauthorized, setError, 'Failed to create storage')
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  const handleDestinationPathSave = async (id: string, destinationPath: string) => {
-    setError(null)
-    try {
-      await updateStorage(id, { destinationPath })
-      await load()
-    } catch (err) {
-      await handleStorageApiError(err, handleUnauthorized, setError, 'Failed to update storage')
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    setDeleting((current) => new Set(current).add(id))
-    setError(null)
-    try {
-      await deleteStorage(id)
-      await load()
-    } catch (err) {
-      await handleStorageApiError(err, handleUnauthorized, setError, 'Failed to delete storage')
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(id)
-        return next
-      })
-    }
-  }
-
-  return {
-    rows,
-    servers,
-    loading,
-    error,
-    deleting,
-    showAdd,
-    setShowAdd,
-    name,
-    setName,
-    kind,
-    setKind,
-    serverId,
-    setServerId,
-    sourcePath,
-    setSourcePath,
-    destinationPath,
-    setDestinationPath,
-    adding,
-    handleAdd,
-    handleDelete,
-    handleDestinationPathSave,
-  }
 }
 
 function StorageRow({
@@ -464,9 +442,8 @@ export function StorageSection({
   environmentId: string
   defaultServerId?: string | null
 }>) {
-  const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const storage = useStorageSection({ environmentId, defaultServerId, handleUnauthorized })
+  const storage = useStorageSection({ orgId, environmentId, defaultServerId })
 
   return (
     <SectionPanel title="Storage" hint="Volumes and bind mounts for this environment">
@@ -497,9 +474,7 @@ export function StorageSection({
           onServerIdChange={storage.setServerId}
           onSourcePathChange={storage.setSourcePath}
           onDestinationPathChange={storage.setDestinationPath}
-          onSubmit={() => {
-            void storage.handleAdd()
-          }}
+          onSubmit={storage.handleAdd}
         />
       ) : null}
 
@@ -510,10 +485,8 @@ export function StorageSection({
             key={row.id}
             row={row}
             canManage={canManage}
-            deleting={storage.deleting.has(row.id)}
-            onDelete={(id) => {
-              void storage.handleDelete(id)
-            }}
+            deleting={storage.deletingId === row.id}
+            onDelete={storage.handleDelete}
             onDestinationPathSave={storage.handleDestinationPathSave}
           />
         ))}

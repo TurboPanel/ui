@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -9,19 +9,19 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
-import {
-  createNetwork,
-  deleteNetwork,
-  fetchDatacenters,
-  fetchNetworks,
-  fetchOrgServers,
-  isForbiddenError,
-  type DatacenterRecord,
-  type NetworkKind,
-  type NetworkRecord,
-  type OrgServerRecord,
+import type {
+  DatacenterRecord,
+  NetworkKind,
+  NetworkRecord,
+  OrgServerRecord,
 } from '@/lib/instance-api'
+import {
+  useCreateNetwork,
+  useDatacenters,
+  useDeleteNetwork,
+  useNetworks,
+} from '@/lib/queries/topology'
+import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -235,7 +235,15 @@ function createScopeReady(form: CreateNetworkFormState): boolean {
 }
 
 function buildCreateNetworkBody(form: CreateNetworkFormState) {
-  const body: Parameters<typeof createNetwork>[0] = {
+  const body: {
+    organizationId: string
+    kind: NetworkKind
+    displayName?: string
+    cidr?: string
+    serverId?: string
+    datacenterId?: string
+    options?: { dockerNetworkName: string }
+  } = {
     organizationId: form.organizationId,
     kind: form.kind,
     displayName: form.displayName.trim() || undefined,
@@ -454,58 +462,47 @@ export function NetworksOverviewSection({
   /** Optional pre-filter when linked from a server detail page. */
   serverId?: string
 }>) {
-  const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [servers, setServers] = useState<OrgServerRecord[]>([])
-  const [datacenters, setDatacenters] = useState<DatacenterRecord[]>([])
-  const [networks, setNetworks] = useState<NetworkRecord[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<NetworkKind | 'all'>('all')
   const [datacenterFilter, setDatacenterFilter] = useState<string>('')
   const [serverFilter, setServerFilter] = useState<string>(serverId?.trim() ?? '')
-  const [creating, setCreating] = useState(false)
-  const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const filters = buildNetworkListFilters(
-        kindFilter,
-        datacenterFilter,
-        serverFilter,
-      )
-      const [networksResult, serversResult, datacentersResult] =
-        await Promise.all([
-          fetchNetworks(filters),
-          fetchOrgServers(),
-          fetchDatacenters(),
-        ])
-      setNetworks(networksResult.networks)
-      setServers(serversResult.servers)
-      setDatacenters(datacentersResult.datacenters)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load networks')
-    } finally {
-      setLoading(false)
+  const networkFilters = useMemo(
+    () => buildNetworkListFilters(kindFilter, datacenterFilter, serverFilter),
+    [datacenterFilter, kindFilter, serverFilter],
+  )
+
+  const networksQuery = useNetworks(orgId, networkFilters)
+  const serversQuery = useOrgServers(orgId)
+  const datacentersQuery = useDatacenters(orgId)
+  const createMutation = useCreateNetwork(orgId)
+  const deleteMutation = useDeleteNetwork(orgId)
+
+  const networks = networksQuery.data?.networks ?? []
+  const servers = serversQuery.data?.servers ?? []
+  const datacenters = datacentersQuery.data?.datacenters ?? []
+
+  const loading =
+    (networksQuery.isLoading && !networksQuery.isPlaceholderData) ||
+    serversQuery.isLoading ||
+    datacentersQuery.isLoading
+
+  let queryError: string | null = null
+  if (networksQuery.isError) {
+    if (networksQuery.error instanceof Error) {
+      queryError = networksQuery.error.message
+    } else {
+      queryError = 'Failed to load networks'
     }
-  }, [
-    datacenterFilter,
-    handleUnauthorized,
-    kindFilter,
-    serverFilter,
-  ])
+  }
+  const displayError =
+    error ?? createMutation.actionError ?? deleteMutation.actionError ?? queryError
 
-  useEffect(() => {
-    load().catch(() => {
-      // Errors are surfaced via error state inside load.
-    })
-  }, [load, orgId])
+  const deletingId = deleteMutation.isPending
+    ? deleteMutation.variables
+    : undefined
+  const creating = createMutation.isPending
 
   useEffect(() => {
     const pinned = serverId?.trim()
@@ -514,44 +511,26 @@ export function NetworksOverviewSection({
 
   const handleCreate = async (form: CreateNetworkFormState): Promise<boolean> => {
     if (!canManage) return false
-    setCreating(true)
     setError(null)
-    try {
-      await createNetwork(buildCreateNetworkBody(form))
-      await load()
-      return true
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return false
-      }
-      setError(err instanceof Error ? err.message : 'Failed to create network')
-      return false
-    } finally {
-      setCreating(false)
-    }
+    return new Promise((resolve) => {
+      createMutation.mutate(buildCreateNetworkBody(form), {
+        onSuccess: () => resolve(true),
+        onError: () => {
+          setError(createMutation.actionError ?? 'Failed to create network')
+          resolve(false)
+        },
+      })
+    })
   }
 
-  const handleDelete = async (networkId: string) => {
+  const handleDelete = (networkId: string) => {
     if (!canManage) return
-    setDeleting((current) => new Set(current).add(networkId))
     setError(null)
-    try {
-      await deleteNetwork(networkId)
-      await load()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to delete network')
-    } finally {
-      setDeleting((current) => {
-        const next = new Set(current)
-        next.delete(networkId)
-        return next
-      })
-    }
+    deleteMutation.mutate(networkId, {
+      onError: () => {
+        setError(deleteMutation.actionError ?? 'Failed to delete network')
+      },
+    })
   }
 
   const serverOptions = useMemo(
@@ -584,7 +563,7 @@ export function NetworksOverviewSection({
         meshes on the VPNs page.
       </Text>
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       <SectionPanel title="Filters" hint="Optional scope narrowing">
         <View style={styles.chipRow}>
@@ -652,13 +631,9 @@ export function NetworksOverviewSection({
             <NetworkListItem
               key={network.id}
               network={network}
-              isDeleting={deleting.has(network.id)}
+              isDeleting={deletingId === network.id}
               showDelete={canManage}
-              onDelete={(id) => {
-                handleDelete(id).catch(() => {
-                  // Errors are surfaced via error state.
-                })
-              }}
+              onDelete={handleDelete}
             />
           ))}
         </View>

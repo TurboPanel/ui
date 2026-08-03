@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -8,15 +8,12 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
+import type { TlsRecord, TlsSource } from '@/lib/instance-api'
 import {
-  createTlsCertificate,
-  deleteTlsCertificate,
-  fetchTlsLibrary,
-  isForbiddenError,
-  type TlsRecord,
-  type TlsSource,
-} from '@/lib/instance-api'
+  useCreateTlsCertificate,
+  useDeleteTlsCertificate,
+  useTlsLibrary,
+} from '@/lib/queries/tls'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -31,106 +28,92 @@ function formatSans(row: TlsRecord): string {
 export function TlsOverviewSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [rows, setRows] = useState<TlsRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const tlsQuery = useTlsLibrary(orgId)
+  const createMutation = useCreateTlsCertificate(orgId)
+  const deleteMutation = useDeleteTlsCertificate(orgId)
+
   const [error, setError] = useState<string | null>(null)
   const [source, setSource] = useState<TlsSource>('upload')
   const [displayName, setDisplayName] = useState('')
   const [certificatePem, setCertificatePem] = useState('')
   const [privateKeyPem, setPrivateKeyPem] = useState('')
   const [hostnames, setHostnames] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const reload = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await fetchTlsLibrary()
-      setRows(result.tls)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load TLS library')
-    } finally {
-      setLoading(false)
-    }
-  }, [handleUnauthorized])
+  const rows = tlsQuery.data?.tls ?? []
+  const loading = tlsQuery.isLoading
+
+  let queryError: string | null = null
+  if (tlsQuery.isError) {
+    queryError =
+      tlsQuery.error instanceof Error
+        ? tlsQuery.error.message
+        : 'Failed to load TLS library'
+  }
+  const displayError =
+    error ?? createMutation.actionError ?? deleteMutation.actionError ?? queryError
+
+  const deletingId =
+    deleteMutation.isPending &&
+    typeof deleteMutation.variables === 'string'
+      ? deleteMutation.variables
+      : null
 
   useEffect(() => {
-    reload().catch(() => {
-      // Errors are surfaced via error state inside reload.
-    })
-  }, [reload])
+    if (createMutation.isSuccess) {
+      setCertificatePem('')
+      setPrivateKeyPem('')
+      setHostnames('')
+      setDisplayName('')
+    }
+  }, [createMutation.isSuccess])
 
   const onCreate = () => {
     if (!canManage) return
-    setSaving(true)
     setError(null)
-    const run = async () => {
-      try {
-        if (source === 'upload') {
-          await createTlsCertificate({
-            source: 'upload',
-            displayName: displayName.trim() || undefined,
-            certificatePem,
-            privateKeyPem,
-          })
-        } else {
-          const names = hostnames
-            .split(',')
-            .map((n) => n.trim())
-            .filter((n) => n.length > 0)
-          await createTlsCertificate({
-            source,
-            displayName: displayName.trim() || undefined,
-            hostnames: names,
-          })
-        }
-        setCertificatePem('')
-        setPrivateKeyPem('')
-        setHostnames('')
-        setDisplayName('')
-        await reload()
-      } catch (err) {
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to create certificate')
-      } finally {
-        setSaving(false)
-      }
+
+    if (source === 'upload') {
+      createMutation.mutate(
+        {
+          source: 'upload',
+          displayName: displayName.trim() || undefined,
+          certificatePem,
+          privateKeyPem,
+        },
+        {
+          onError: () => {
+            setError(createMutation.actionError ?? 'Failed to create certificate')
+          },
+        },
+      )
+      return
     }
-    run().catch(() => {
-      // Errors are surfaced via error state inside run.
-    })
+
+    const names = hostnames
+      .split(',')
+      .map((n) => n.trim())
+      .filter((n) => n.length > 0)
+    createMutation.mutate(
+      {
+        source,
+        displayName: displayName.trim() || undefined,
+        hostnames: names,
+      },
+      {
+        onError: () => {
+          setError(createMutation.actionError ?? 'Failed to create certificate')
+        },
+      },
+    )
   }
 
   const onDelete = (id: string) => {
     if (!canManage) return
-    setDeletingId(id)
     setError(null)
-    const run = async () => {
-      try {
-        await deleteTlsCertificate(id)
-        await reload()
-      } catch (err) {
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to delete certificate')
-      } finally {
-        setDeletingId(null)
-      }
-    }
-    run().catch(() => {
-      // Errors are surfaced via error state inside run.
+    deleteMutation.mutate(id, {
+      onError: () => {
+        setError(deleteMutation.actionError ?? 'Failed to delete certificate')
+      },
     })
   }
 
@@ -157,9 +140,10 @@ export function TlsOverviewSection({
           <Pressable
             style={[
               styles.secondaryButton,
-              deletingId === row.id && styles.buttonDisabled,
+              (deletingId !== null || deleteMutation.isPending) &&
+                styles.buttonDisabled,
             ]}
-            disabled={deletingId !== null}
+            disabled={deleteMutation.isPending}
             onPress={() => onDelete(row.id)}
           >
             <Text style={styles.secondaryButtonText}>
@@ -244,18 +228,21 @@ export function TlsOverviewSection({
             </Text>
           ) : null}
           <Pressable
-            style={[styles.primaryButton, saving && styles.buttonDisabled]}
-            disabled={saving}
+            style={[
+              styles.primaryButton,
+              createMutation.isPending && styles.buttonDisabled,
+            ]}
+            disabled={createMutation.isPending}
             onPress={onCreate}
           >
             <Text style={styles.primaryButtonText}>
-              {saving ? 'Saving…' : 'Add certificate'}
+              {createMutation.isPending ? 'Saving…' : 'Add certificate'}
             </Text>
           </Pressable>
         </SectionPanel>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {displayError ? <Text style={styles.error}>{displayError}</Text> : null}
     </View>
   )
 }

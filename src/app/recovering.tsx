@@ -1,7 +1,8 @@
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useQuery } from '@tanstack/react-query'
 import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import {
@@ -10,6 +11,7 @@ import {
   recoveryDetail,
   recoveryTitle,
 } from '@/lib/instance-recovery'
+import { queryKeys } from '@/lib/query-keys'
 import { colors, spacing } from '@/lib/theme'
 
 const POLL_MS = 1_000
@@ -21,67 +23,61 @@ export default function RecoveringScreen() {
   const {
     clearSession,
     refreshInstallStatus,
-    refreshSession,
     controlPlaneRuntime,
   } = useAuth()
   const spinnerColor = authSpinnerColor(controlPlaneRuntime)
-  const [statusText, setStatusText] = useState('Waiting for instance…')
-  const redirected = useRef(false)
+  const [navigated, setNavigated] = useState(false)
 
   useEffect(() => {
     clearSession()
   }, [clearSession])
 
+  const recoveryQuery = useQuery({
+    queryKey: queryKeys.recovery,
+    queryFn: pollInstanceRecovery,
+    refetchInterval: navigated ? false : POLL_MS,
+    retry: false,
+  })
+
+  const result = recoveryQuery.data
+  const waiting = !result || result.kind === 'waiting'
+
   useEffect(() => {
+    if (navigated || waiting || !result) return
+
     let cancelled = false
+    setNavigated(true)
 
-    async function tick() {
-      if (cancelled || redirected.current) return
-
-      const result = await pollInstanceRecovery()
-      if (cancelled || redirected.current) return
-
-      if (result.kind === 'waiting') {
-        setStatusText('Waiting for instance…')
-        return
-      }
-
-      redirected.current = true
-      setStatusText('Instance is back online. Redirecting…')
-
-      const needsInstall = result.kind === 'needsInstall'
+    void (async () => {
       await refreshInstallStatus().catch(() => {
         // Best effort — poll already read install status.
       })
+      if (cancelled) return
 
-      if (needsInstall) {
+      if (result.kind === 'needsInstall') {
         router.replace('/install' as Href)
         return
       }
-
       if (result.kind === 'signedIn') {
         router.replace(`/${result.organizationId}/servers` as Href)
         return
       }
-
       if (result.kind === 'welcome') {
         router.replace('/welcome' as Href)
         return
       }
-
       router.replace('/sign-in' as Href)
-    }
-
-    void tick()
-    const timer = setInterval(() => {
-      void tick()
-    }, POLL_MS)
+    })()
 
     return () => {
       cancelled = true
-      clearInterval(timer)
     }
-  }, [refreshInstallStatus, refreshSession, router])
+  }, [navigated, waiting, result, refreshInstallStatus, router])
+
+  let statusText = 'Waiting for instance…'
+  if (!waiting) {
+    statusText = 'Instance is back online. Redirecting…'
+  }
 
   return (
     <SafeAreaView style={styles.safe}>

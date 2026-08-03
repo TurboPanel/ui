@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -10,26 +10,21 @@ import {
 } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
-  deleteProject,
-  fetchCommand,
-  fetchContainers,
-  fetchVisibleEnvironments,
-  fetchVisibleServices,
-  isForbiddenError,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
-  stopEnvironment,
   type ContainerRecord,
   type EnvironmentRecord,
   type ProjectRecord,
 } from '@/lib/instance-api'
+import {
+  isTerminalCommandStatus,
+  useCommandsBatch,
+  useContainersByEnvironments,
+  useDeleteProject,
+  useEnvironments,
+  useStopEnvironmentMutation,
+  type TrackedCommandEntry,
+} from '@/lib/queries'
 import { colors, spacing } from '@/lib/theme'
-
-const TERMINAL_STATUSES = new Set([
-  'succeeded',
-  'failed',
-  'timed_out',
-  'cancelled',
-])
 
 const STOPPED_CONTAINER_STATUSES = new Set(['exited', 'dead', 'removing'])
 
@@ -61,54 +56,6 @@ function resolveEnvServerId(
 ): string | null {
   if (environment.serverId) return environment.serverId
   return containers.find((row) => row.serverId)?.serverId ?? null
-}
-
-async function loadActiveEnvRows(projectId: string): Promise<EnvStopRow[]> {
-  const { environments } = await fetchVisibleEnvironments(projectId)
-  const rows: EnvStopRow[] = []
-
-  for (const environment of environments) {
-    const { services } = await fetchVisibleServices(environment.id)
-    const containerLists = await Promise.all(
-      services.map((service) => fetchContainers({ serviceId: service.id })),
-    )
-    const containers = containerLists.flatMap((result) => result.containers)
-    const active = containers.filter((container) =>
-      isActiveContainerStatus(container.status),
-    )
-    if (active.length === 0) continue
-    rows.push({
-      environment,
-      activeCount: active.length,
-      serverId: resolveEnvServerId(environment, active),
-      stopping: false,
-      status: null,
-      error: null,
-    })
-  }
-
-  return rows.sort((a, b) =>
-    environmentLabel(a.environment).localeCompare(environmentLabel(b.environment)),
-  )
-}
-
-async function waitForTerminalCommand(serverId: string, commandId: string) {
-  let command = await fetchCommand(serverId, commandId)
-  while (!TERMINAL_STATUSES.has(command.status)) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 2000))
-    command = await fetchCommand(serverId, commandId)
-  }
-  return command
-}
-
-function patchEnvRow(
-  rows: EnvStopRow[],
-  environmentId: string,
-  patch: Partial<EnvStopRow>,
-): EnvStopRow[] {
-  return rows.map((row) =>
-    row.environment.id === environmentId ? { ...row, ...patch } : row,
-  )
 }
 
 function StopStepSection({
@@ -198,70 +145,130 @@ function ConfirmStepSection({
 }
 
 export function ProjectDeletePanel({
+  orgId,
   project,
   onCancel,
   onDeleted,
-  onUnauthorized,
 }: Readonly<{
+  orgId: string
   project: ProjectRecord
   onCancel: () => void
   onDeleted: () => void
-  onUnauthorized: () => Promise<void>
 }>) {
   const confirmName = projectConfirmName(project)
-  const [loading, setLoading] = useState(true)
-  const [envRows, setEnvRows] = useState<EnvStopRow[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const environmentsQuery = useEnvironments(orgId, project.id)
+  const environments = environmentsQuery.data?.environments ?? []
+  const environmentIds = useMemo(
+    () => environments.map((env) => env.id),
+    [environments],
+  )
+  const containersQuery = useContainersByEnvironments(orgId, environmentIds, {
+    enabled: environmentIds.length > 0,
+  })
+  const deleteProjectMutation = useDeleteProject(orgId)
+  const stopEnvironmentMutation = useStopEnvironmentMutation(orgId)
+
+  const [stopRows, setStopRows] = useState<
+    Record<
+      string,
+      {
+        stopping: boolean
+        status: string | null
+        error: string | null
+        serverId: string | null
+      }
+    >
+  >({})
+  const [trackedCommands, setTrackedCommands] = useState<
+    readonly TrackedCommandEntry[]
+  >([])
+  const [commandEnvById, setCommandEnvById] = useState<Record<string, string>>(
+    {},
+  )
+
+  const commandsQuery = useCommandsBatch(orgId, trackedCommands)
+
   const [confirmText, setConfirmText] = useState('')
-  const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const refresh = async () => {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      setEnvRows(await loadActiveEnvRows(project.id))
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await onUnauthorized()
-        return
-      }
-      setLoadError(
-        err instanceof Error ? err.message : 'Failed to load environment status',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      setLoading(true)
-      setLoadError(null)
-      try {
-        const rows = await loadActiveEnvRows(project.id)
-        if (!cancelled) setEnvRows(rows)
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await onUnauthorized()
-          return
-        }
-        setLoadError(
-          err instanceof Error ? err.message : 'Failed to load environment status',
-        )
-      } finally {
-        if (!cancelled) setLoading(false)
+    if (!commandsQuery.data) return
+    for (const [index, command] of commandsQuery.data.entries()) {
+      const entry = trackedCommands[index]
+      if (!entry) continue
+      const environmentId = commandEnvById[entry.commandId]
+      if (!environmentId || !isTerminalCommandStatus(command.status)) continue
+
+      if (command.status === 'succeeded') {
+        void containersQuery.refetchAll()
+        setStopRows((current) => ({
+          ...current,
+          [environmentId]: {
+            stopping: false,
+            status: null,
+            error: null,
+            serverId: entry.serverId,
+          },
+        }))
+      } else {
+        setStopRows((current) => ({
+          ...current,
+          [environmentId]: {
+            stopping: false,
+            status: null,
+            error: command.error ?? `Stop ${command.status}`,
+            serverId: entry.serverId,
+          },
+        }))
       }
+      setTrackedCommands((current) =>
+        current.filter((row) => row.commandId !== entry.commandId),
+      )
+      setCommandEnvById((current) => {
+        const next = { ...current }
+        delete next[entry.commandId]
+        return next
+      })
     }
-    void load()
-    return () => {
-      cancelled = true
+  }, [commandsQuery.data, trackedCommands, commandEnvById, containersQuery])
+
+  const envRows = useMemo(() => {
+    const rows: EnvStopRow[] = []
+    for (const environment of environments) {
+      const containers = containersQuery.containersByEnv[environment.id] ?? []
+      const active = containers.filter((container) =>
+        isActiveContainerStatus(container.status),
+      )
+      if (active.length === 0) continue
+      const stopState = stopRows[environment.id]
+      rows.push({
+        environment,
+        activeCount: active.length,
+        serverId:
+          stopState?.serverId ?? resolveEnvServerId(environment, active),
+        stopping: stopState?.stopping ?? false,
+        status: stopState?.status ?? null,
+        error: stopState?.error ?? null,
+      })
     }
-  }, [project.id, onUnauthorized])
+    return rows.sort((a, b) =>
+      environmentLabel(a.environment).localeCompare(
+        environmentLabel(b.environment),
+      ),
+    )
+  }, [environments, containersQuery.containersByEnv, stopRows])
+
+  const loading =
+    environmentsQuery.isLoading ||
+    (environmentIds.length > 0 && containersQuery.isLoading)
+
+  const loadError =
+    environmentsQuery.error instanceof Error
+      ? environmentsQuery.error.message
+      : null
 
   const hasActiveServices = envRows.length > 0
+  const deleting = deleteProjectMutation.isPending
   const canDelete =
     !hasActiveServices &&
     confirmText.trim() === confirmName &&
@@ -269,72 +276,77 @@ export function ProjectDeletePanel({
     !loading
 
   const handleStop = async (environmentId: string) => {
-    setEnvRows((current) =>
-      patchEnvRow(current, environmentId, {
+    setStopRows((current) => ({
+      ...current,
+      [environmentId]: {
         stopping: true,
-        error: null,
         status: 'Queueing stop…',
-      }),
-    )
-    try {
-      const result = await stopEnvironment(environmentId)
-      if (!result.serverId) {
-        throw new Error('Stop queued but target server was not returned')
-      }
-      setEnvRows((current) =>
-        patchEnvRow(current, environmentId, {
-          status: 'Stopping services…',
-          serverId: result.serverId ?? null,
-        }),
-      )
-      const command = await waitForTerminalCommand(
-        result.serverId,
-        result.commandId,
-      )
-      if (command.status !== 'succeeded') {
-        throw new Error(command.error ?? `Stop ${command.status}`)
-      }
-      await refresh()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await onUnauthorized()
-        return
-      }
-      setEnvRows((current) =>
-        patchEnvRow(current, environmentId, {
+        error: null,
+        serverId: current[environmentId]?.serverId ?? null,
+      },
+    }))
+    const result = await stopEnvironmentMutation.run(environmentId)
+    if (!result.ok) {
+      setStopRows((current) => ({
+        ...current,
+        [environmentId]: {
           stopping: false,
           status: null,
-          error: err instanceof Error ? err.message : 'Failed to stop services',
-        }),
-      )
+          error: stopEnvironmentMutation.actionError ?? 'Failed to stop services',
+          serverId: current[environmentId]?.serverId ?? null,
+        },
+      }))
+      return
     }
+    const { commandId, serverId } = result.value
+    if (!serverId) {
+      setStopRows((current) => ({
+        ...current,
+        [environmentId]: {
+          stopping: false,
+          status: null,
+          error: 'Stop queued but target server was not returned',
+          serverId: null,
+        },
+      }))
+      return
+    }
+    setStopRows((current) => ({
+      ...current,
+      [environmentId]: {
+        stopping: true,
+        status: 'Stopping services…',
+        error: null,
+        serverId,
+      },
+    }))
+    setTrackedCommands((current) => [
+      ...current,
+      { serverId, commandId },
+    ])
+    setCommandEnvById((current) => ({
+      ...current,
+      [commandId]: environmentId,
+    }))
   }
 
   const handleDelete = async () => {
     if (!canDelete) return
-    setDeleting(true)
     setDeleteError(null)
-    try {
-      await deleteProject(project.id)
-      onDeleted()
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await onUnauthorized()
-        return
-      }
-      const message =
-        err instanceof Error ? err.message : 'Failed to delete project'
+    const result = await deleteProjectMutation.run(project.id)
+    if (!result.ok) {
+      const message = deleteProjectMutation.actionError ?? 'Failed to delete project'
       if (message.includes(PROJECT_HAS_RUNNING_SERVICES_ERROR)) {
         setDeleteError(
           'Services are still running. Stop every environment first.',
         )
-        await refresh()
+        void containersQuery.refetchAll()
       } else {
         setDeleteError(message)
       }
-    } finally {
-      setDeleting(false)
+      return
     }
+    onDeleted()
   }
 
   let body = null

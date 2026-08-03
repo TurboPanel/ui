@@ -10,24 +10,13 @@ import {
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
   type CommandRecord,
-  type CommandStatus,
-  type OrgServerRecord,
   type PingLatencyBreakdown,
+  type OrgServerRecord,
 } from '@/lib/instance-api'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { isTerminalCommandStatus } from '@/lib/queries/commands'
 
-export const COMMAND_POLL_MS = 2_000
-
-const TERMINAL_COMMAND_STATUSES: ReadonlySet<CommandStatus> = new Set([
-  'succeeded',
-  'failed',
-  'timed_out',
-  'cancelled',
-])
-
-export function isTerminalCommandStatus(status: CommandStatus): boolean {
-  return TERMINAL_COMMAND_STATUSES.has(status)
-}
+export { COMMAND_POLL_MS, isTerminalCommandStatus } from '@/lib/queries/commands'
 
 function formatLatencyMs(value: number | null | undefined): string {
   if (value === null || value === undefined) return 'n/a'

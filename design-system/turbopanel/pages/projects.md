@@ -10,13 +10,13 @@
 ## Layout
 
 - Overview: workspace switcher + project list (workspace label when viewing all); **setup** badge when type is unset
-- Detail: **Project shell** — header, environment selector, horizontal tabs (scroll on phone), tab body
-- Compose/Template tabs: Overview · Environments · Networking · Storage · Settings
-- Overview: opens on **Base** by default at `/overview` (no `?env=`). Compact **Base / environment** segmented toggle + optional inline **Default server** pin (inherited by unpinned environments) + refined Start / Stop / Refresh / Destroy when an environment is selected (`/environments/:environmentId` — that env highlighted, not Base). Services: Base Compose editor until an environment is started (any running/pending container); then collapsed rows with green / yellow / red dots (running / pending / stopped). Edit compose anytime under Settings.
-- Managed tabs: Overview · Environments · Data · Backups · Settings
-- Single environment: shell shows name (no chip strip); multi-env: chip selector on non-Overview tabs keeps selection in memory (Overview uses path `/environments/:id`)
+- Detail: **Project shell** — header with red trash delete (environment when multiple exist; otherwise project), environment selector (managed / non-Overview tabs), section tabs, tab body
+- Compose: one unified tab group — **Project · environments · Networking · Storage**. Networking / Storage only appear after an environment is selected (hidden on Project compose). No separate Overview or Environments section tabs — Project / env chips *are* the compose surface; env detail lives under the selected environment
+- Overview: opens on **Project** by default at `/overview` (no `?env=`). No outer panel chrome — editor toolbar, YAML surface, and Save sit flush on the page. One toolbar row: unified **Project / environment / section** segment group (left), then **Set Default Project Server (Optional)** and **Editor / Visual** (right). Section tabs leave the shell on Overview so they live in that row; Networking / Storage keep the same unified group in the shell. Lifecycle Start / Stop / Refresh / Destroy sits below when an environment is selected (`/environments/:environmentId`). After start, collapsed service rows with green / yellow / red dots.
+- Managed tabs: Overview · Environments · Data · Backups
+- Single environment: shell shows name (no chip strip) on managed non-Overview tabs; multi-env: chip selector on those tabs keeps selection in memory (compose Overview uses path `/environments/:id`)
 - Service detail deep links remain under `/services/:id`; `/services` redirects to Overview
-- Base Compose also remains under Settings for editing after start
+- Delete: header trash can — two-press confirm deletes the selected environment when more than one exists; with a single environment it opens the project-delete wizard. Old `/settings` routes redirect to Overview. Bare compose `/environments` redirects to Overview.
 
 ## Creation / setup
 
@@ -27,7 +27,6 @@
 ## Density
 
 - Tab targets ≥ 44pt; horizontal scroll ok on phone
-- Settings hub uses drill-down rows (not one giant form)
 - Service detail and hosting deep links under `/services/:id` and `/networking/:id`
 
 ## Anti-patterns (page-specific)
@@ -37,3 +36,5 @@
 - ❌ Showing secret variable values after create  
 - ❌ Managed projects exposing Compose UI  
 - ❌ Auto-polling deploy preview  
+- ❌ Separate Overview / Environments section tabs next to Project / env chips (one group only)  
+- ❌ Networking / Storage visible while Project (base) compose is selected  

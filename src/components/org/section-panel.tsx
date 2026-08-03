@@ -8,11 +8,14 @@ export function SectionPanel({
   title,
   hint,
   accent,
+  headerRight,
   children,
 }: Readonly<{
   title?: string
   hint?: string
   accent?: boolean
+  /** Optional trailing control in the title row (e.g. project server picker). */
+  headerRight?: ReactNode
   children: ReactNode
 }>) {
   return (
@@ -24,6 +27,9 @@ export function SectionPanel({
             <Text style={styles.areaTitle}>{title}</Text>
             {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
           </View>
+          {headerRight ? (
+            <View style={styles.areaHeaderRight}>{headerRight}</View>
+          ) : null}
         </View>
       ) : null}
       <View style={styles.areaBody}>{children}</View>
@@ -52,8 +58,18 @@ const styles = StyleSheet.create({
   },
   areaHeaderCopy: {
     flex: 1,
+    minWidth: 0,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  areaHeaderRight: {
+    flexShrink: 0,
+    paddingRight: 12,
+    paddingLeft: 4,
+    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
   areaTitle: {
     color: colors.textTitle,

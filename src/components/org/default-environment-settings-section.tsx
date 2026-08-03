@@ -1,20 +1,15 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import {
   fetchOrgDefaultEnvironment,
-  isForbiddenError,
   saveOrgDefaultEnvironment,
 } from '@/lib/instance-api'
-import {
-  orgDefaultEnvironmentQueryKey,
-  PLATFORM_DEFAULT_ENVIRONMENT_NAME,
-} from '@/lib/org-default-environment'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { PLATFORM_DEFAULT_ENVIRONMENT_NAME } from '@/lib/org-default-environment'
+import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -24,21 +19,19 @@ function errorMessage(err: unknown, fallback: string): string {
 export function DefaultEnvironmentSettingsSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [draftText, setDraftText] = useState<string | null>(null)
 
-  const queryKey = orgDefaultEnvironmentQueryKey(orgId)
+  const queryKey = queryKeys.org(orgId).settings.defaultEnvironment
   const query = useQuery({
     queryKey,
     queryFn: () => fetchOrgDefaultEnvironment(orgId),
     enabled: canManage,
   })
-  useForbiddenRecovery(query.error)
 
-  const mutation = useMutation({
+  const mutation = useApiMutation({
     mutationFn: (name: string | null) => saveOrgDefaultEnvironment(orgId, name),
     onSuccess: (data) => {
       setError(null)
@@ -47,10 +40,7 @@ export function DefaultEnvironmentSettingsSection({
         defaultEnvironmentName: data.defaultEnvironmentName,
       })
     },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
+    onError: (err) => {
       setError(errorMessage(err, 'Failed to save default environment name'))
     },
   })

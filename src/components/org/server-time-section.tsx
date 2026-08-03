@@ -13,15 +13,16 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
   type CommandEnqueueResponse,
-  fetchTimezones,
   type NtpSetInput,
   type ServerDetailRecord,
-  setServerNtp,
-  setServerTimezone,
 } from '@/lib/instance-api'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { orgRouteHref } from '@/lib/org-navigation'
-import { useQuery } from '@tanstack/react-query'
+import {
+  useSetServerNtp,
+  useSetServerTimezone,
+  useTimezones,
+} from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 type TimeSyncMaybe = ServerDetailRecord['timeSync']
@@ -366,11 +367,9 @@ export function ServerTimeSection({
   onEnqueueCommand: (response: CommandEnqueueResponse, kind: 'timezone' | 'ntp') => void
 }>) {
   const timeSync = server.timeSync
-  const timezonesQuery = useQuery({
-    queryKey: ['timezones'],
-    queryFn: fetchTimezones,
-    staleTime: Number.POSITIVE_INFINITY,
-  })
+  const timezonesQuery = useTimezones()
+  const timezoneMutation = useSetServerTimezone(orgId, server.id)
+  const ntpMutation = useSetServerNtp(orgId, server.id)
 
   const [pickedTimezone, setPickedTimezone] = useState<string | null>(
     server.timezone,
@@ -415,21 +414,26 @@ export function ServerTimeSection({
     timezoneSubmitting ||
     Boolean(ntpReason)
 
-  const applyTimezone = async () => {
+  const applyTimezone = () => {
     if (!pickedTimezone || timezoneFormsDisabled) return
     setTimezoneError(null)
     setTimezoneSubmitting(true)
-    try {
-      const result = await setServerTimezone(server.id, pickedTimezone)
-      onEnqueueCommand(result, 'timezone')
-    } catch (err) {
-      setTimezoneError(err instanceof Error ? err.message : 'Failed to apply timezone')
-    } finally {
-      setTimezoneSubmitting(false)
-    }
+    timezoneMutation.mutate(pickedTimezone, {
+      onSuccess: (result) => {
+        onEnqueueCommand(result, 'timezone')
+      },
+      onError: (err) => {
+        setTimezoneError(
+          err instanceof Error ? err.message : 'Failed to apply timezone',
+        )
+      },
+      onSettled: () => {
+        setTimezoneSubmitting(false)
+      },
+    })
   }
 
-  const applyNtp = async () => {
+  const applyNtp = () => {
     if (ntpFormsDisabled) return
     const payload = buildNtpPayload(
       ntpEnabled,
@@ -443,14 +447,19 @@ export function ServerTimeSection({
     }
     setNtpError(null)
     setNtpSubmitting(true)
-    try {
-      const result = await setServerNtp(server.id, payload)
-      onEnqueueCommand(result, 'ntp')
-    } catch (err) {
-      setNtpError(err instanceof Error ? err.message : 'Failed to apply NTP settings')
-    } finally {
-      setNtpSubmitting(false)
-    }
+    ntpMutation.mutate(payload, {
+      onSuccess: (result) => {
+        onEnqueueCommand(result, 'ntp')
+      },
+      onError: (err) => {
+        setNtpError(
+          err instanceof Error ? err.message : 'Failed to apply NTP settings',
+        )
+      },
+      onSettled: () => {
+        setNtpSubmitting(false)
+      },
+    })
   }
 
   return (
@@ -468,7 +477,7 @@ export function ServerTimeSection({
         localError={timezoneError}
         pollError={timezonePollError}
         onPickTimezone={setPickedTimezone}
-        onApply={() => void applyTimezone()}
+        onApply={() => applyTimezone()}
       />
       <NtpSettingsPanel
         ntpEnabled={ntpEnabled}
@@ -483,7 +492,7 @@ export function ServerTimeSection({
         onToggleEnabled={() => setNtpEnabled((on) => !on)}
         onServersChange={setNtpServersText}
         onFallbackChange={setFallbackText}
-        onApply={() => void applyNtp()}
+        onApply={() => applyNtp()}
       />
     </View>
   )

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
 import {
   ActivityIndicator,
   Platform,
@@ -12,10 +11,7 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import {
-  fetchOrganizationManaged,
-  type ManagedListRecord,
-} from '@/lib/instance-api'
+import { type ManagedListRecord } from '@/lib/instance-api'
 import {
   MANAGED_SERVICE_CATALOG,
   managedCatalogEntryForCode,
@@ -23,7 +19,8 @@ import {
   type ManagedServiceEngine,
   type ManagedStatus,
 } from '@/lib/managed-services'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { useOrganizationManaged } from '@/lib/queries/managed'
+import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 /** Restrained fleet refresh — one org list call, never per-row status polling. */
@@ -475,14 +472,10 @@ export function ManagedOverviewSection({
   const [statusFilter, setStatusFilter] = useState<ManagedStatus | 'all'>('all')
   const [serverFilter, setServerFilter] = useState('')
 
-  const managedQuery = useQuery({
-    queryKey: ['org', orgId, 'managed'],
-    queryFn: () => fetchOrganizationManaged(orgId),
-    enabled: orgId.length > 0,
+  const managedQuery = useOrganizationManaged(orgId, {
     refetchInterval: MANAGED_REFRESH_MS,
     staleTime: MANAGED_REFRESH_MS / 2,
   })
-  useForbiddenRecovery(managedQuery.error)
 
   const rows = managedQuery.data?.managed ?? []
   const filtered = useMemo(

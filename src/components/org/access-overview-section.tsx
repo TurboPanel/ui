@@ -1,4 +1,3 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Pressable,
@@ -10,27 +9,24 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
-import {
-  createAccessGrant,
-  fetchAccessGrants,
-  fetchPermissions,
-  fetchVisibleTeams,
-  isForbiddenError,
-  resolveResourceId,
-  revokeAccessGrant,
-  type AccessGrantRecord,
-  type AccessScopeKind,
-  type CreateAccessBody,
-  type PermissionKey,
-  type PermissionRecord,
+import type {
+  AccessGrantRecord,
+  AccessScopeKind,
+  CreateAccessBody,
+  PermissionKey,
+  PermissionRecord,
 } from '@/lib/instance-api'
 import {
-  authQueryKeys,
+  useAccessGrants,
+  useCreateAccessGrant,
+  usePermissions,
+  useResolveResourceId,
+  useRevokeAccessGrant,
+  useTeams,
+} from '@/lib/queries/access'
+import {
   getAccessManagementPermissionKey,
   useCan,
-  useForbiddenRecovery,
-  visibilityQueryKeys,
 } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -53,32 +49,6 @@ type ScopeItem = {
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
-}
-
-async function loadScopeItems(
-  kind: AccessScopeKind,
-  orgId: string,
-): Promise<ScopeItem[]> {
-  switch (kind) {
-    case 'organization':
-      return [{ id: orgId, label: 'Organization' }]
-    case 'team': {
-      const { teams } = await fetchVisibleTeams()
-      return teams.map((row) => ({
-        id: row.id,
-        label: row.displayName?.trim() || row.id,
-      }))
-    }
-  }
-}
-
-function scopeItemsQueryKey(kind: AccessScopeKind, orgId: string) {
-  switch (kind) {
-    case 'organization':
-      return ['scope-items', 'organization', orgId] as const
-    case 'team':
-      return visibilityQueryKeys.teams
-  }
 }
 
 function TeamScopePicker({
@@ -188,7 +158,7 @@ function AccessGrantsPanel({
   error,
   grants,
   canManage,
-  revoking,
+  revokingGrantId,
   onRevoke,
 }: Readonly<{
   actionError: string | null
@@ -197,7 +167,7 @@ function AccessGrantsPanel({
   error: unknown
   grants: AccessGrantRecord[]
   canManage: boolean
-  revoking: ReadonlySet<string>
+  revokingGrantId: string | null
   onRevoke: (grantId: string) => void
 }>) {
   let body: ReactNode
@@ -219,7 +189,7 @@ function AccessGrantsPanel({
             key={grant.id}
             grant={grant}
             canManage={canManage}
-            isRevoking={revoking.has(grant.id)}
+            isRevoking={revokingGrantId === grant.id}
             onRevoke={onRevoke}
           />
         ))}
@@ -339,46 +309,39 @@ function AddGrantForm({
 export function AccessOverviewSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
-
   const [scopeKind, setScopeKind] = useState<AccessScopeKind>('organization')
   const [selectedItemId, setSelectedItemId] = useState(orgId)
 
-  const scopeItemsQuery = useQuery({
-    queryKey: scopeItemsQueryKey(scopeKind, orgId),
-    queryFn: () => loadScopeItems(scopeKind, orgId),
-    enabled: orgId.length > 0,
-  })
-
-  useForbiddenRecovery(scopeItemsQuery.error)
+  const teamsQuery = useTeams({ enabled: scopeKind === 'team' })
+  const teams = teamsQuery.data?.teams ?? []
+  const scopeItems =
+    scopeKind === 'organization'
+      ? [{ id: orgId, label: 'Organization' }]
+      : teams.map((row) => ({
+          id: row.id,
+          label: row.displayName?.trim() || row.id,
+        }))
 
   useEffect(() => {
     if (scopeKind === 'organization') {
       setSelectedItemId(orgId)
       return
     }
-    const items = scopeItemsQuery.data ?? []
-    if (items.length === 0) {
+    if (scopeItems.length === 0) {
       setSelectedItemId('')
       return
     }
-    if (!items.some((item) => item.id === selectedItemId)) {
-      setSelectedItemId(items[0]!.id)
+    if (!scopeItems.some((item) => item.id === selectedItemId)) {
+      setSelectedItemId(scopeItems[0]!.id)
     }
-  }, [scopeKind, orgId, scopeItemsQuery.data, selectedItemId])
+  }, [scopeKind, orgId, scopeItems, selectedItemId])
 
   const managePermission = getAccessManagementPermissionKey(scopeKind)
   const canManage = useCan(scopeKind, selectedItemId, managePermission)
 
-  const resourceIdQuery = useQuery({
-    queryKey: ['resource-id', scopeKind, selectedItemId],
-    queryFn: () => resolveResourceId(scopeKind, selectedItemId),
+  const resourceIdQuery = useResolveResourceId(scopeKind, selectedItemId, {
     enabled: selectedItemId.length > 0,
   })
-
-  useForbiddenRecovery(resourceIdQuery.error)
-
   const resourceId = resourceIdQuery.data?.resourceId ?? ''
 
   const [subjectKind, setSubjectKind] = useState<SubjectKind>('user')
@@ -386,61 +349,39 @@ export function AccessOverviewSection({
   const [selectedPermissionKey, setSelectedPermissionKey] = useState<PermissionKey | null>(
     null,
   )
-  const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [revoking, setRevoking] = useState<Set<string>>(() => new Set())
   const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     setSelectedPermissionKey(null)
   }, [scopeKind])
 
-  const grantsQuery = useQuery({
-    queryKey: authQueryKeys.accessGrants(resourceId),
-    queryFn: () => fetchAccessGrants(resourceId),
+  const grantsQuery = useAccessGrants(resourceId, {
     enabled: resourceId.length > 0,
   })
-
-  useForbiddenRecovery(grantsQuery.error)
-
-  const permissionsQuery = useQuery({
-    queryKey: authQueryKeys.permissions,
-    queryFn: fetchPermissions,
-    enabled: canManage,
-  })
+  const permissionsQuery = usePermissions({ enabled: canManage })
+  const createGrantMutation = useCreateAccessGrant(resourceId)
+  const revokeGrantMutation = useRevokeAccessGrant(resourceId)
 
   const compatiblePermissions = (permissionsQuery.data?.permissions ?? []).filter(
     (permission) => PERMISSIONS_BY_SCOPE[scopeKind].includes(permission.key),
   )
 
-  const onRevokeGrant = async (grantId: string) => {
+  const onRevokeGrant = (grantId: string) => {
     if (!resourceId) {
       return
     }
-
-    setRevoking((current) => new Set(current).add(grantId))
     setActionError(null)
-    try {
-      await revokeAccessGrant(grantId)
-      await queryClient.invalidateQueries({
-        queryKey: authQueryKeys.accessGrants(resourceId),
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setActionError(errorMessage(err, 'Failed to revoke access grant'))
-    } finally {
-      setRevoking((current) => {
-        const next = new Set(current)
-        next.delete(grantId)
-        return next
-      })
-    }
+    revokeGrantMutation.mutate(grantId, {
+      onError: () => {
+        setActionError(
+          revokeGrantMutation.actionError ?? 'Failed to revoke access grant',
+        )
+      },
+    })
   }
 
-  const onCreateGrant = async () => {
+  const onCreateGrant = () => {
     if (!resourceId) {
       return
     }
@@ -456,36 +397,33 @@ export function AccessOverviewSection({
       return
     }
 
-    const body: CreateAccessBody = {
-      resourceId,
+    const body: Omit<CreateAccessBody, 'resourceId'> = {
       subjectKind,
       subjectId: trimmedSubjectId,
       effect: 'allow',
       permissionKey: selectedPermissionKey,
     }
 
-    setSubmitting(true)
     setSubmitError(null)
-    try {
-      await createAccessGrant(body)
-      setSubjectId('')
-      setSelectedPermissionKey(null)
-      await queryClient.invalidateQueries({
-        queryKey: authQueryKeys.accessGrants(resourceId),
-      })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setSubmitError(errorMessage(err, 'Failed to create access grant'))
-    } finally {
-      setSubmitting(false)
-    }
+    createGrantMutation.mutate(body, {
+      onSuccess: () => {
+        setSubjectId('')
+        setSelectedPermissionKey(null)
+      },
+      onError: () => {
+        setSubmitError(
+          createGrantMutation.actionError ?? 'Failed to create access grant',
+        )
+      },
+    })
   }
 
-  const scopeItems = scopeItemsQuery.data ?? []
   const grants = grantsQuery.data?.access ?? []
+  const revokingGrantId =
+    revokeGrantMutation.isPending &&
+    typeof revokeGrantMutation.variables === 'string'
+      ? revokeGrantMutation.variables
+      : null
 
   return (
     <View style={styles.root}>
@@ -521,9 +459,9 @@ export function AccessOverviewSection({
 
         {scopeKind === 'team' ? (
           <TeamScopePicker
-            isLoading={scopeItemsQuery.isLoading}
-            isError={scopeItemsQuery.isError}
-            error={scopeItemsQuery.error}
+            isLoading={teamsQuery.isLoading}
+            isError={teamsQuery.isError}
+            error={teamsQuery.error}
             items={scopeItems}
             selectedItemId={selectedItemId}
             onSelect={setSelectedItemId}
@@ -542,8 +480,8 @@ export function AccessOverviewSection({
         error={grantsQuery.error}
         grants={grants}
         canManage={canManage}
-        revoking={revoking}
-        onRevoke={(grantId) => void onRevokeGrant(grantId)}
+        revokingGrantId={revokingGrantId}
+        onRevoke={onRevokeGrant}
       />
 
       {canManage ? (
@@ -552,8 +490,8 @@ export function AccessOverviewSection({
             subjectKind={subjectKind}
             subjectId={subjectId}
             selectedPermissionKey={selectedPermissionKey}
-            submitting={submitting}
-            submitError={submitError}
+            submitting={createGrantMutation.isPending}
+            submitError={submitError ?? createGrantMutation.actionError}
             permissionsLoading={permissionsQuery.isLoading}
             compatiblePermissions={compatiblePermissions}
             onSubjectKindChange={setSubjectKind}
@@ -565,7 +503,7 @@ export function AccessOverviewSection({
               setSelectedPermissionKey(key)
               setSubmitError(null)
             }}
-            onSubmit={() => void onCreateGrant()}
+            onSubmit={onCreateGrant}
           />
         </SectionPanel>
       ) : (

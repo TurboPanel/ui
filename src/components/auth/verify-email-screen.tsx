@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { YStack, Button, Text } from 'tamagui'
 import { Link, useLocalSearchParams, useRouter } from 'expo-router'
-import { verifyEmail } from '@/lib/instance-api'
+import { useVerifyEmail } from '@/lib/queries/auth'
 
 function normalizeParam(param: string | string[] | undefined): string {
   if (param == null) return ''
@@ -16,6 +16,7 @@ export function VerifyEmailScreenContent() {
   const router = useRouter()
   const params = useLocalSearchParams<{ token?: string | string[] }>()
   const token = normalizeParam(params.token)
+  const verifyEmailMutation = useVerifyEmail()
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
@@ -31,22 +32,16 @@ export function VerifyEmailScreenContent() {
     if (verifyStartedRef.current) return
     verifyStartedRef.current = true
 
-    let cancelled = false
-
-    verifyEmail(token)
-      .then(() => {
-        if (!cancelled) setStatus('success')
-      })
-      .catch((err) => {
-        if (cancelled) return
+    verifyEmailMutation.mutate(token, {
+      onSuccess: () => {
+        setStatus('success')
+      },
+      onError: (err) => {
         setStatus('error')
         setErrorMessage(err instanceof Error ? err.message : 'Verification failed')
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [token])
+      },
+    })
+  }, [token, verifyEmailMutation.mutate])
 
   if (status === 'loading') {
     return (

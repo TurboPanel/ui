@@ -1,25 +1,40 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchOrgDefaultEnvironment } from '@/lib/instance-api'
+import {
+  fetchOrgDefaultEnvironment,
+  isForbiddenError,
+} from '@/lib/instance-api'
+import { queryKeys } from '@/lib/query-keys'
 
 /** Platform fallback when the org has no custom default (or the manage-gated read fails). */
 export const PLATFORM_DEFAULT_ENVIRONMENT_NAME = 'Production'
 
+/** @deprecated Prefer {@link queryKeys.org(orgId).settings.defaultEnvironment}. */
 export const orgDefaultEnvironmentQueryKey = (orgId: string) =>
-  ['org', orgId, 'default-environment'] as const
+  queryKeys.org(orgId).settings.defaultEnvironment
 
 /**
  * Resolved org default environment name for auto-provision paths.
  *
- * A manage-gated 403 must not sign the user out — callers fall back to
- * {@link PLATFORM_DEFAULT_ENVIRONMENT_NAME}. Do not wire `useForbiddenRecovery` here.
+ * A manage-gated 403 must not sign the user out — the queryFn catches forbidden
+ * errors and returns a null name so the global QueryClient onError handler is
+ * not invoked.
  */
 export function useOrgDefaultEnvironmentName(
   orgId: string,
   options?: Readonly<{ enabled?: boolean }>,
 ) {
   const query = useQuery({
-    queryKey: orgDefaultEnvironmentQueryKey(orgId),
-    queryFn: () => fetchOrgDefaultEnvironment(orgId),
+    queryKey: queryKeys.org(orgId).settings.defaultEnvironment,
+    queryFn: async () => {
+      try {
+        return await fetchOrgDefaultEnvironment(orgId)
+      } catch (err) {
+        if (isForbiddenError(err)) {
+          return { defaultEnvironmentName: null }
+        }
+        throw err
+      }
+    },
     retry: false,
     enabled: options?.enabled ?? Boolean(orgId),
   })

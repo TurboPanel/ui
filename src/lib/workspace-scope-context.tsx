@@ -2,25 +2,20 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useLocalSearchParams,
   usePathname,
   useRouter,
   type Href,
 } from 'expo-router'
-import {
-  fetchVisibleWorkspaces,
-  isForbiddenError,
-  type WorkspaceRecord,
-} from '@/lib/instance-api'
-import { useAuth } from '@/lib/auth-context'
-import { visibilityQueryKeys } from '@/lib/visibility-queries'
+import { useWorkspaces } from '@/lib/queries/workspaces'
+import { type WorkspaceRecord } from '@/lib/instance-api'
+import { queryKeys } from '@/lib/query-client'
 import {
   ALL_WORKSPACES_SCOPE,
   getStoredWorkspaceScopeId,
@@ -69,7 +64,6 @@ export function WorkspaceScopeProvider({
 }>) {
   const router = useRouter()
   const pathname = usePathname()
-  const { handleUnauthorized } = useAuth()
   const queryClient = useQueryClient()
   const params = useLocalSearchParams<{ workspaceId?: string | string[] }>()
   const urlWorkspaceId = parseWorkspaceIdParam(params.workspaceId)
@@ -79,26 +73,11 @@ export function WorkspaceScopeProvider({
     `${pathname}|${urlWorkspaceId ?? ''}`,
   )
 
-  const workspacesQuery = useQuery({
-    queryKey: visibilityQueryKeys.workspaces,
-    queryFn: async () => {
-      const result = await fetchVisibleWorkspaces()
-      return result.workspaces
-    },
-    staleTime: 60_000,
-  })
-
-  useEffect(() => {
-    if (workspacesQuery.error && isForbiddenError(workspacesQuery.error)) {
-      handleUnauthorized().catch(() => {
-        // Recovery is best-effort; the switcher already observed the 403.
-      })
-    }
-  }, [workspacesQuery.error, handleUnauthorized])
+  const workspacesQuery = useWorkspaces(orgId)
 
   const workspaces = useMemo(
-    () => workspacesQuery.data ?? [],
-    [workspacesQuery.data],
+    () => workspacesQuery.data?.workspaces ?? [],
+    [workspacesQuery.data?.workspaces],
   )
 
   // Sync from the projects URL while rendering (React “adjust state” pattern).
@@ -142,9 +121,9 @@ export function WorkspaceScopeProvider({
 
   const refreshWorkspaces = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: visibilityQueryKeys.workspaces,
+      queryKey: queryKeys.org(orgId).workspaces.list,
     })
-  }, [queryClient])
+  }, [queryClient, orgId])
 
   let error: string | null = null
   if (workspacesQuery.error instanceof Error) {

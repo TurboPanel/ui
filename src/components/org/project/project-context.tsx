@@ -7,13 +7,12 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter, type Href } from 'expo-router'
-import { useAuth } from '@/lib/auth-context'
+import { useEnvironments } from '@/lib/queries/environments'
+import { useProject } from '@/lib/queries/projects'
+import { useWorkspaces } from '@/lib/queries/workspaces'
 import {
-  fetchProject,
-  fetchVisibleEnvironments,
-  fetchVisibleWorkspaces,
-  isForbiddenError,
   type EnvironmentRecord,
   type ProjectRecord,
   type WorkspaceRecord,
@@ -26,7 +25,7 @@ import {
   resolveBaseComposeSelected,
   resolveSelectedEnvironmentId,
 } from '@/lib/project-navigation'
-import { useCan } from '@/lib/query-client'
+import { queryKeys, useCan } from '@/lib/query-client'
 
 type ProjectContextValue = {
   orgId: string
@@ -38,7 +37,7 @@ type ProjectContextValue = {
   selectedEnvironment: EnvironmentRecord | null
   /**
    * True on Overview Base (`/overview`). False when the path is
-   * `/environments/:id` (that environment is selected and highlighted).
+   * `/environments/:id` or Networking / Storage (env chip not Project).
    */
   baseSelected: boolean
   loading: boolean
@@ -48,9 +47,8 @@ type ProjectContextValue = {
   needsSetup: boolean
   setSelectedEnvironmentId: (id: string | null) => void
   selectBaseCompose: () => void
-  refreshProject: () => Promise<void>
-  refreshEnvironments: () => Promise<EnvironmentRecord[]>
-  setProject: (project: ProjectRecord | null) => void
+  invalidateProject: () => Promise<void>
+  invalidateEnvironments: () => Promise<void>
   setError: (error: string | null) => void
 }
 
@@ -69,63 +67,62 @@ export function ProjectProvider({
   const pathname = usePathname()
   const pathEnvironmentId = parseProjectEnvironmentId(pathname, projectId)
   const baseSelected = resolveBaseComposeSelected(pathname, projectId)
-  const { handleUnauthorized } = useAuth()
+  const queryClient = useQueryClient()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const canManage = useCan('organization', orgId, 'organization:manage')
 
-  const [project, setProject] = useState<ProjectRecord | null>(null)
-  const [environments, setEnvironments] = useState<EnvironmentRecord[]>([])
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
+  const projectQuery = useProject(orgId, projectId)
+  const environmentsQuery = useEnvironments(orgId, projectId)
+  const workspacesQuery = useWorkspaces(orgId)
+
+  const project = projectQuery.data?.project ?? null
+  const environments = environmentsQuery.data?.environments ?? []
+  const workspaces = workspacesQuery.data?.workspaces ?? []
+
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
     string | null
   >(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const refreshEnvironments = useCallback(async () => {
-    const result = await fetchVisibleEnvironments(projectId)
-    setEnvironments(result.environments)
-    return result.environments
-  }, [projectId])
+  const loading =
+    projectQuery.isLoading ||
+    environmentsQuery.isLoading ||
+    workspacesQuery.isLoading
 
-  const refreshProject = useCallback(async () => {
-    const [projectResult, workspacesResult, envs] = await Promise.all([
-      fetchProject(projectId),
-      fetchVisibleWorkspaces(),
-      fetchVisibleEnvironments(projectId),
+  const queryError = useMemo(() => {
+    const err =
+      projectQuery.error ?? environmentsQuery.error ?? workspacesQuery.error
+    if (!err) return null
+    return err instanceof Error ? err.message : 'Failed to load project'
+  }, [projectQuery.error, environmentsQuery.error, workspacesQuery.error])
+
+  useEffect(() => {
+    setError(queryError)
+  }, [queryError])
+
+  const invalidateProject = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.detail(projectId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).workspaces.list,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).environments.list(projectId),
+      }),
     ])
-    setProject(projectResult.project)
-    setWorkspaces(workspacesResult.workspaces)
-    setEnvironments(envs.environments)
-  }, [projectId])
+  }, [queryClient, orgId, projectId])
+
+  const invalidateEnvironments = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).environments.list(projectId),
+    })
+  }, [queryClient, orgId, projectId])
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        await refreshProject()
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to load project')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [refreshProject, handleUnauthorized])
-
-  useEffect(() => {
-    // Path `/environments/:id` wins; on Overview Base keep a concrete id for
-    // Networking / Storage / settings without flipping the Base highlight.
+    // Path `/environments/:id` wins; on Overview Base / Networking / Storage
+    // keep a concrete id without flipping the Base highlight.
     setSelectedEnvironmentId((previous) =>
       resolveSelectedEnvironmentId(
         baseSelected ? previous : pathEnvironmentId ?? previous,
@@ -142,7 +139,9 @@ export function ProjectProvider({
       }
       setSelectedEnvironmentId(id)
       // Overview Base and `/environments/:id` keep selection in the path.
-      // Other tabs (Networking / Storage / settings) only update local state.
+      // Managed Data / Backups (and compose Networking / Storage when using
+      // the shell selector) only update local state — compose env chips navigate
+      // via `projectEnvironmentHref` directly in ProjectSectionTabs.
       if (baseSelected || pathEnvironmentId != null) {
         router.push(projectEnvironmentHref(orgId, projectId, id) as Href)
       }
@@ -176,9 +175,8 @@ export function ProjectProvider({
       needsSetup,
       setSelectedEnvironmentId: setSelectedEnvironmentIdWithRoute,
       selectBaseCompose,
-      refreshProject,
-      refreshEnvironments,
-      setProject,
+      invalidateProject,
+      invalidateEnvironments,
       setError,
     }),
     [
@@ -197,8 +195,8 @@ export function ProjectProvider({
       needsSetup,
       setSelectedEnvironmentIdWithRoute,
       selectBaseCompose,
-      refreshProject,
-      refreshEnvironments,
+      invalidateProject,
+      invalidateEnvironments,
     ],
   )
 

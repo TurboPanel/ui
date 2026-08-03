@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -12,12 +12,7 @@ import { SectionPanel } from '@/components/org/section-panel'
 import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  configureProject,
-  fetchProjectCatalog,
-  isForbiddenError,
-  type CatalogSummary,
-} from '@/lib/instance-api'
+import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
 import {
   managedCatalogEntryForCode,
   sortManagedCatalogEntries,
@@ -25,7 +20,6 @@ import {
 } from '@/lib/managed-services'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectOverviewHref } from '@/lib/project-navigation'
-import { useAuth } from '@/lib/auth-context'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 type SetupType = 'docker-compose' | 'template' | 'managed'
@@ -55,7 +49,6 @@ const TYPE_OPTIONS: {
 
 export function ProjectSetupSection() {
   const router = useRouter()
-  const { handleUnauthorized } = useAuth()
   const {
     orgId,
     projectId,
@@ -63,7 +56,6 @@ export function ProjectSetupSection() {
     environments,
     canManage,
     needsSetup,
-    refreshProject,
     setError,
   } = useProjectContext()
   const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
@@ -77,10 +69,37 @@ export function ProjectSetupSection() {
 
   const [step, setStep] = useState<Step>('type')
   const [selectedType, setSelectedType] = useState<SetupType | null>(null)
-  const [catalog, setCatalog] = useState<CatalogSummary[]>([])
-  const [loadingCatalog, setLoadingCatalog] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [localError, setLocalError] = useState<string | null>(null)
+  const configureProject = useConfigureProject(orgId, projectId)
+
+  const catalogQuery = useProjectCatalog(orgId, {
+    enabled: step === 'catalog' && selectedType != null,
+  })
+
+  const catalog = useMemo(() => {
+    const raw = catalogQuery.data?.catalog ?? []
+    if (!selectedType) return []
+    const filtered = raw.filter((entry) => {
+      if (selectedType === 'template') return entry.kind === 'template'
+      if (selectedType === 'managed') {
+        return (
+          entry.kind === 'managed' &&
+          managedCatalogEntryForCode(entry.code) !== undefined
+        )
+      }
+      return false
+    })
+    if (selectedType === 'managed') {
+      return sortManagedCatalogEntries(filtered)
+    }
+    return filtered.toSorted((a, b) =>
+      a.displayName.localeCompare(b.displayName),
+    )
+  }, [catalogQuery.data?.catalog, selectedType])
+
+  const localError =
+    catalogQuery.error instanceof Error
+      ? catalogQuery.error.message
+      : configureProject.actionError
 
   useEffect(() => {
     if (!needsSetup && project) {
@@ -90,79 +109,25 @@ export function ProjectSetupSection() {
     }
   }, [needsSetup, project, orgId, projectId, router])
 
-  useEffect(() => {
-    if (step !== 'catalog' || !selectedType) return
-    let cancelled = false
-    const load = async () => {
-      setLoadingCatalog(true)
-      setLocalError(null)
-      try {
-        const result = await fetchProjectCatalog()
-        if (cancelled) return
-        const filtered = result.catalog.filter((entry) => {
-          if (selectedType === 'template') return entry.kind === 'template'
-          if (selectedType === 'managed') {
-            return (
-              entry.kind === 'managed' &&
-              managedCatalogEntryForCode(entry.code) !== undefined
-            )
-          }
-          return false
-        })
-        setCatalog(
-          selectedType === 'managed'
-            ? sortManagedCatalogEntries(filtered)
-            : filtered.toSorted((a, b) =>
-                a.displayName.localeCompare(b.displayName),
-              ),
-        )
-      } catch (err) {
-        if (cancelled) return
-        if (isForbiddenError(err)) {
-          await handleUnauthorized()
-          return
-        }
-        setLocalError(
-          err instanceof Error ? err.message : 'Failed to load catalog',
-        )
-      } finally {
-        if (!cancelled) setLoadingCatalog(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [step, selectedType, handleUnauthorized])
-
   const finish = async (type: SetupType, code?: string) => {
     if (!canManage) {
-      setLocalError('You need manage permission to finish setup.')
+      setError('You need manage permission to finish setup.')
       return
     }
-    setSubmitting(true)
-    setLocalError(null)
     setError(null)
-    try {
-      await configureProject(projectId, {
-        type,
-        ...(code ? { code } : {}),
-      })
-      await refreshProject()
-      router.replace(
-        projectOverviewHref(orgId, projectId) as Href,
-      )
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await configureProject.run({
+      type,
+      ...(code ? { code } : {}),
+    })
+    if (!result.ok) {
+      if (configureProject.actionError) {
+        setError(configureProject.actionError)
       }
-      setLocalError(
-        err instanceof Error ? err.message : 'Failed to configure project',
-      )
-    } finally {
-      setSubmitting(false)
+      return
     }
+    router.replace(
+      projectOverviewHref(orgId, projectId) as Href,
+    )
   }
 
   const onSelectType = (type: SetupType) => {
@@ -210,8 +175,12 @@ export function ProjectSetupSection() {
             {TYPE_OPTIONS.map((option) => (
               <Pressable
                 key={option.type}
-                style={[styles.typeCard, webPointer, submitting && styles.disabled]}
-                disabled={submitting || !canManage}
+                style={[
+                  styles.typeCard,
+                  webPointer,
+                  configureProject.isPending && styles.disabled,
+                ]}
+                disabled={configureProject.isPending || !canManage}
                 onPress={() => onSelectType(option.type)}
                 accessibilityRole="button"
                 accessibilityLabel={option.label}
@@ -231,13 +200,13 @@ export function ProjectSetupSection() {
                 setStep('type')
                 setSelectedType(null)
               }}
-              disabled={submitting}
+              disabled={configureProject.isPending}
               accessibilityRole="button"
               accessibilityLabel="Back to type"
             >
               <Text style={orgPanelStyles.toolbarBtnTextSecondary}>← Back</Text>
             </Pressable>
-            {loadingCatalog ? (
+            {catalogQuery.isLoading ? (
               <ActivityIndicator color={chrome.accent} />
             ) : (
               <View style={styles.typeGrid}>
@@ -247,7 +216,7 @@ export function ProjectSetupSection() {
                       ? availability(entry.code)
                       : 'available'
                   const disabled =
-                    submitting ||
+                    configureProject.isPending ||
                     !canManage ||
                     (selectedType === 'managed' && avail !== 'available')
                   return (
@@ -283,7 +252,7 @@ export function ProjectSetupSection() {
           </View>
         ) : null}
 
-        {submitting ? (
+        {configureProject.isPending ? (
           <Text style={orgPanelStyles.muted}>Configuring…</Text>
         ) : null}
       </SectionPanel>

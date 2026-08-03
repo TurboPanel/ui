@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -15,20 +14,25 @@ import {
   type ControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import {
-  fetchInstallStatus,
   fetchOrganizations,
-  fetchSession,
-  signIn as signInApi,
-  signOut as signOutApi,
-  signUp as signUpApi,
-  type InstallStatus,
   type SessionInfo,
 } from '@/lib/instance-api'
 import {
   resolvePreferredOrganizationId,
   setActiveOrganizationId,
 } from '@/lib/org-context'
-import { authQueryKeys, isVisibilityQuery } from '@/lib/visibility-queries'
+import {
+  isVisibilityQuery,
+  queryKeys,
+  setForbiddenHandler,
+} from '@/lib/query-client'
+import {
+  useInstallStatusQuery,
+  useSessionQuery,
+  useSignIn as useSignInMutation,
+  useSignOut as useSignOutMutation,
+  useSignUp as useSignUpMutation,
+} from '@/lib/queries/auth'
 
 type AuthContextValue = {
   session: SessionInfo | null
@@ -55,47 +59,86 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const queryClient = useQueryClient()
-  const [session, setSession] = useState<SessionInfo | null>(null)
-  const [needsInstall, setNeedsInstall] = useState(false)
-  const [isSignupEnabled, setIsSignupEnabled] = useState(false)
-  const [controlPlaneRuntime, setControlPlaneRuntime] = useState<
-    ControlPlaneRuntime | undefined
-  >(() => readStoredControlPlaneRuntime())
-  const [isLoading, setIsLoading] = useState(true)
-  const [bootstrapError, setBootstrapError] = useState<string | null>(null)
+  const statusQuery = useInstallStatusQuery()
+  const sessionQuery = useSessionQuery({
+    enabled: statusQuery.isSuccess || statusQuery.isError,
+  })
+  const signInMutation = useSignInMutation()
+  const signUpMutation = useSignUpMutation()
+  const signOutMutation = useSignOutMutation()
 
-  const applyInstallStatus = useCallback(
-    (status: InstallStatus) => {
-      const runtime = resolveControlPlaneRuntime(status)
-      setNeedsInstall(status.needsInstall ?? false)
-      setIsSignupEnabled(status.isSignupEnabled ?? false)
-      if (runtime !== undefined) {
-        setControlPlaneRuntime(runtime)
-        applyConsoleChromeRuntime(runtime)
-      }
-      queryClient.setQueryData(authQueryKeys.authStatus, status)
-    },
-    [queryClient],
-  )
+  const session = sessionQuery.data ?? null
+  const needsInstall = statusQuery.data?.needsInstall ?? false
+  const isSignupEnabled = statusQuery.data?.isSignupEnabled ?? false
 
-  const fetchInstallStatusCached = useCallback(async () => {
-    return await queryClient.fetchQuery({
-      queryKey: authQueryKeys.authStatus,
+  const controlPlaneRuntime = useMemo(() => {
+    if (statusQuery.data) {
+      return (
+        resolveControlPlaneRuntime(statusQuery.data) ??
+        readStoredControlPlaneRuntime()
+      )
+    }
+    return readStoredControlPlaneRuntime()
+  }, [statusQuery.data])
+
+  useEffect(() => {
+    if (!statusQuery.data) return
+    const runtime = resolveControlPlaneRuntime(statusQuery.data)
+    if (runtime !== undefined) {
+      applyConsoleChromeRuntime(runtime)
+    }
+  }, [statusQuery.data])
+
+  const isLoading =
+    statusQuery.isLoading ||
+    (statusQuery.isSuccess && sessionQuery.isLoading)
+
+  let bootstrapError: string | null = null
+  if (statusQuery.error instanceof Error) {
+    bootstrapError = statusQuery.error.message
+  } else if (sessionQuery.error instanceof Error) {
+    bootstrapError = sessionQuery.error.message
+  } else if (statusQuery.error || sessionQuery.error) {
+    bootstrapError = 'Failed to load session'
+  }
+
+  const refreshInstallStatus = useCallback(async () => {
+    const { fetchInstallStatus } = await import('@/lib/instance-api')
+    const status = await queryClient.fetchQuery({
+      queryKey: queryKeys.auth.status,
       queryFn: fetchInstallStatus,
+    })
+    return status.needsInstall ?? false
+  }, [queryClient])
+
+  const refreshSession = useCallback(async () => {
+    const { fetchSession } = await import('@/lib/instance-api')
+    return await queryClient.fetchQuery({
+      queryKey: queryKeys.auth.session,
+      queryFn: fetchSession,
     })
   }, [queryClient])
 
-  const refreshInstallStatus = useCallback(async () => {
-    const status = await fetchInstallStatus()
-    applyInstallStatus(status)
-    return status.needsInstall ?? false
-  }, [applyInstallStatus])
+  const clearSession = useCallback(() => {
+    queryClient.setQueryData<SessionInfo | null>(queryKeys.auth.session, null)
+    setActiveOrganizationId(null)
+  }, [queryClient])
 
-  const refreshSession = useCallback(async () => {
-    const data = await fetchSession()
-    setSession(data)
-    return data
-  }, [])
+  const handleUnauthorized = useCallback(async () => {
+    await queryClient.invalidateQueries({ predicate: isVisibilityQuery })
+    const data = await refreshSession()
+    if (!data) {
+      queryClient.setQueryData<SessionInfo | null>(queryKeys.auth.session, null)
+      setActiveOrganizationId(null)
+    }
+  }, [queryClient, refreshSession])
+
+  useEffect(() => {
+    setForbiddenHandler(handleUnauthorized)
+    return () => {
+      setForbiddenHandler(null)
+    }
+  }, [handleUnauthorized])
 
   const resolveDashboardHref = useCallback(async (): Promise<
     '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
@@ -108,7 +151,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
 
     try {
-      const { organizations } = await fetchOrganizations()
+      const { organizations } = await queryClient.fetchQuery({
+        queryKey: queryKeys.auth.organizations,
+        queryFn: fetchOrganizations,
+      })
       const preferred = resolvePreferredOrganizationId(organizations)
       if (preferred) {
         setActiveOrganizationId(preferred)
@@ -119,70 +165,25 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
 
     return '/welcome'
-  }, [needsInstall, session])
+  }, [needsInstall, queryClient, session])
 
-  useEffect(() => {
-    let cancelled = false
+  const signIn = useCallback(
+    async (username: string, password: string) => {
+      return await signInMutation.mutateAsync({ username, password })
+    },
+    [signInMutation],
+  )
 
-    void (async () => {
-      try {
-        // Resolve runtime first so the bootstrap spinner can brand correctly
-        // while the session request is still in flight.
-        const installStatus = await fetchInstallStatusCached()
-        if (cancelled) return
-        applyInstallStatus(installStatus)
-
-        const sessionData = await fetchSession()
-        if (cancelled) return
-        setSession(sessionData)
-        setBootstrapError(null)
-      } catch (err: unknown) {
-        if (cancelled) return
-        setSession(null)
-        setBootstrapError(
-          err instanceof Error ? err.message : 'Failed to load session',
-        )
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [applyInstallStatus, fetchInstallStatusCached])
-
-  const signIn = useCallback(async (username: string, password: string) => {
-    const loaded = await signInApi(username, password)
-    setSession(loaded)
-    setNeedsInstall(loaded.needsInstall ?? false)
-    setBootstrapError(null)
-    return loaded
-  }, [])
+  const signUp = useCallback(
+    async (email: string, password: string) => {
+      await signUpMutation.mutateAsync({ email, password })
+    },
+    [signUpMutation],
+  )
 
   const signOut = useCallback(async () => {
-    await signOutApi()
-    setSession(null)
-    setActiveOrganizationId(null)
-  }, [])
-
-  const signUp = useCallback(async (email: string, password: string) => {
-    await signUpApi(email, password)
-  }, [])
-
-  const clearSession = useCallback(() => {
-    setSession(null)
-    setActiveOrganizationId(null)
-  }, [])
-
-  const handleUnauthorized = useCallback(async () => {
-    await queryClient.invalidateQueries({ predicate: isVisibilityQuery })
-    const data = await refreshSession()
-    if (!data) {
-      setSession(null)
-      setActiveOrganizationId(null)
-    }
-  }, [queryClient, refreshSession])
+    await signOutMutation.mutateAsync()
+  }, [signOutMutation])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -235,7 +236,10 @@ export function isSuperadminSession(session: SessionInfo | null): boolean {
 }
 
 export function isAdminSession(session: SessionInfo | null): boolean {
-  return session !== null && (session.role === 'superadmin' || session.role === 'admin')
+  return (
+    session !== null &&
+    (session.role === 'superadmin' || session.role === 'admin')
+  )
 }
 
 export function hasUserSession(session: SessionInfo | null): boolean {

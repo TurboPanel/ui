@@ -3,13 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
-import {
-  fetchDeployPreview,
-  isForbiddenError,
-  type DeployPreviewResponse,
-} from '@/lib/instance-api'
-import { spacing } from '@/lib/theme'
+import { useDeployPreview } from '@/lib/queries'
+import type { DeployPreviewResponse } from '@/lib/instance-api'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
   if (warning.code === 'health_check_missing') {
@@ -45,89 +40,17 @@ function PreviewWarnings({
   )
 }
 
-function PreviewContainerList({
-  containers,
-}: Readonly<{ containers: DeployPreviewResponse['containers'] }>) {
-  if (containers.length === 0) return null
-  return (
-    <View style={styles.metaBlock}>
-      <Text style={orgPanelStyles.detailTitle}>Containers</Text>
-      {containers.map((row) => {
-        const isIngress = row.role === 'ingress'
-        const ordinalSuffix =
-          !isIngress && row.ordinal > 1 ? ` (#${row.ordinal})` : ''
-        return (
-          <Text
-            key={`${row.serviceId}:${row.role}:${row.ordinal}`}
-            style={orgPanelStyles.detailLine}
-          >
-            {row.composeServiceName}
-            {' → '}
-            {row.containerName}
-            {ordinalSuffix}
-            {isIngress ? ' · ingress' : ''}
-          </Text>
-        )
-      })}
-    </View>
-  )
-}
-
-function PreviewVolumeList({
-  volumes,
-}: Readonly<{ volumes: DeployPreviewResponse['volumes'] }>) {
-  if (volumes.length === 0) return null
-  return (
-    <View style={styles.metaBlock}>
-      <Text style={orgPanelStyles.detailTitle}>Volumes</Text>
-      {volumes.map((row) => (
-        <Text key={row.storageId} style={orgPanelStyles.detailLine}>
-          {row.composeKey}
-          {' → '}
-          {row.volumeName}
-        </Text>
-      ))}
-    </View>
-  )
-}
-
 function DeployPreviewBody({
   loading,
-  canManage,
   error,
   preview,
-  onRefresh,
 }: Readonly<{
   loading: boolean
-  canManage: boolean
   error: string | null
   preview: DeployPreviewResponse | null
-  onRefresh: () => void
 }>) {
   return (
     <View style={orgPanelStyles.expandedSection}>
-      <View style={styles.toolbar}>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            webPointer,
-            (loading || !canManage) && styles.disabled,
-          ]}
-          disabled={loading || !canManage}
-          onPress={onRefresh}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </Text>
-        </Pressable>
-        {preview?.projectName ? (
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Project: </Text>
-            {preview.projectName}
-          </Text>
-        ) : null}
-      </View>
-
       {loading && !preview ? (
         <Text style={orgPanelStyles.muted}>Loading deploy preview…</Text>
       ) : null}
@@ -136,8 +59,6 @@ function DeployPreviewBody({
       {preview ? (
         <>
           <PreviewWarnings warnings={preview.warnings} />
-          <PreviewContainerList containers={preview.containers} />
-          <PreviewVolumeList volumes={preview.volumes} />
           <ReadOnlyYamlBlock value={preview.composeYaml} />
         </>
       ) : null}
@@ -150,83 +71,67 @@ function DeployPreviewBody({
 }
 
 export function DeployPreviewPanel({
+  orgId,
   environmentId,
   canManage,
   placementServerId,
+  title = 'Deploy preview',
+  hint = 'Compose TurboPanel will deploy on the server',
+  alwaysExpanded = false,
 }: Readonly<{
+  orgId: string
   environmentId: string
   canManage: boolean
   placementServerId: string | null
+  title?: string
+  hint?: string
+  /** When true, fetch immediately and skip the Show/Hide control. */
+  alwaysExpanded?: boolean
 }>) {
-  const { handleUnauthorized } = useAuth()
-  const [expanded, setExpanded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<DeployPreviewResponse | null>(null)
+  const [expanded, setExpanded] = useState(alwaysExpanded)
+  const [localError, setLocalError] = useState<string | null>(null)
 
-  const loadPreview = async () => {
-    if (!canManage) {
-      setError('Organization manage permission is required to preview deploy.')
-      return
-    }
-    if (!placementServerId) {
-      setError('Select a server for this environment before previewing deploy.')
-      setPreview(null)
-      return
-    }
+  const open = alwaysExpanded || expanded
+  const canFetch = open && canManage && Boolean(placementServerId)
+  const previewQuery = useDeployPreview(orgId, environmentId, {
+    enabled: canFetch,
+  })
 
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await fetchDeployPreview(environmentId)
-      setPreview(result)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setPreview(null)
-      setError(err instanceof Error ? err.message : 'Failed to load deploy preview')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const preview = previewQuery.data ?? null
+  const loading = previewQuery.isFetching
+  const queryError =
+    previewQuery.error instanceof Error ? previewQuery.error.message : null
 
-  const toggleExpanded = () => {
-    setExpanded((current) => {
-      const next = !current
-      if (next) {
-        void loadPreview()
-      }
-      return next
-    })
+  let error = localError ?? queryError
+  if (open && canManage && !placementServerId) {
+    error = 'Select a server for this environment before previewing deploy.'
+  } else if (open && !canManage) {
+    error = 'Organization manage permission is required to preview deploy.'
   }
 
   return (
-    <SectionPanel
-      title="Deploy preview"
-      hint="Exact compose TurboPanel will deploy (container and volume names)"
-    >
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer, styles.toggle]}
-        onPress={toggleExpanded}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-          {expanded ? 'Hide preview' : 'Show preview'}
-        </Text>
-      </Pressable>
+    <SectionPanel title={title} hint={hint}>
+      {alwaysExpanded ? null : (
+        <Pressable
+          style={[orgPanelStyles.toolbarBtnSecondary, webPointer, styles.toggle]}
+          onPress={() => {
+            setExpanded((current) => !current)
+            setLocalError(null)
+          }}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+            {open ? 'Hide preview' : 'Show preview'}
+          </Text>
+        </Pressable>
+      )}
 
-      {expanded ? (
+      {open ? (
         <DeployPreviewBody
           loading={loading}
-          canManage={canManage}
           error={error}
           preview={preview}
-          onRefresh={() => {
-            void loadPreview()
-          }}
         />
       ) : null}
     </SectionPanel>
@@ -236,17 +141,5 @@ export function DeployPreviewPanel({
 const styles = StyleSheet.create({
   toggle: {
     alignSelf: 'flex-start',
-  },
-  toolbar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-  metaBlock: {
-    gap: spacing.xs,
   },
 })

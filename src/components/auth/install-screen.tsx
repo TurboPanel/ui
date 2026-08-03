@@ -8,10 +8,12 @@ import Animated, {
 } from 'react-native-reanimated'
 import { YStack, XStack, Input, Button, Text } from 'tamagui'
 import { useRouter, type Href } from 'expo-router'
-import { bootstrapInstall, completeInstall } from '@/lib/instance-api'
-import { useAuth } from '@/lib/auth-context'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref } from '@/lib/org-navigation'
+import {
+  useBootstrapInstall,
+  useCompleteInstall,
+} from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 
 const webInputStyle = {
@@ -82,7 +84,8 @@ function PasswordField({
 
 export function InstallScreenContent() {
   const router = useRouter()
-  const { refreshSession, refreshInstallStatus } = useAuth()
+  const bootstrapInstallMutation = useBootstrapInstall()
+  const completeInstallMutation = useCompleteInstall()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
   const [hostVerified, setHostVerified] = useState(false)
@@ -93,8 +96,9 @@ export function InstallScreenContent() {
   const [showHostPassword, setShowHostPassword] = useState(false)
   const [showSuperadminPassword, setShowSuperadminPassword] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const loading =
+    bootstrapInstallMutation.isPending || completeInstallMutation.isPending
 
   const hostSectionTranslateY = useSharedValue(0)
   const superadminSectionOpacity = useSharedValue(0)
@@ -135,16 +139,16 @@ export function InstallScreenContent() {
     }
 
     setError('')
-    setLoading(true)
     try {
-      await bootstrapInstall(username.trim(), password)
+      await bootstrapInstallMutation.mutateAsync({
+        username: username.trim(),
+        password,
+      })
       setHostVerified(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Host authentication failed')
-    } finally {
-      setLoading(false)
     }
-  }, [username, password])
+  }, [username, password, bootstrapInstallMutation])
 
   const handleCompleteSetup = useCallback(async () => {
     if (!username.trim() || !password) {
@@ -157,32 +161,26 @@ export function InstallScreenContent() {
     }
 
     setError('')
-    setLoading(true)
     try {
-      const result = await completeInstall({
+      const result = await completeInstallMutation.mutateAsync({
         username: username.trim(),
         password,
         superadminEmail,
         superadminPassword,
       })
       setSuccess(true)
-      await refreshInstallStatus()
-      await refreshSession()
       setActiveOrganizationId(result.organizationId)
       router.replace(defaultOrgDashboardHref(result.organizationId) as Href)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
       setSuccess(false)
-    } finally {
-      setLoading(false)
     }
   }, [
     username,
     password,
     superadminEmail,
     superadminPassword,
-    refreshInstallStatus,
-    refreshSession,
+    completeInstallMutation,
     router,
   ])
 

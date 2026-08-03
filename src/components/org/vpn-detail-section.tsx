@@ -7,10 +7,8 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
   GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR,
   GATEWAY_DATACENTER_REQUIRED_ERROR,
@@ -19,18 +17,6 @@ import {
   VPN_ADDRESS_POOL_EXHAUSTED_ERROR,
   VPN_CIDR_EXCLUDES_ADDRESSES_ERROR,
   VPN_CIDR_IN_USE_ERROR,
-  applyVpn,
-  createIp,
-  createPeer,
-  deleteIp,
-  deletePeer,
-  fetchIps,
-  fetchOrgServers,
-  fetchPeers,
-  fetchVpn,
-  isForbiddenError,
-  updatePeer,
-  updateVpn,
   type IpRecord,
   type OrgServerRecord,
   type PeerRecord,
@@ -38,7 +24,19 @@ import {
   type VpnApplyPeerResult,
   type VpnRecord,
 } from '@/lib/instance-api'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import {
+  OverridePeerTunnelIpCleanupError,
+  useApplyVpn,
+  useCreatePeer,
+  useDeletePeer,
+  useIps,
+  useOverridePeerTunnelIp,
+  usePeers,
+  useUpdateVpn,
+  useVpn,
+} from '@/lib/queries/topology'
+import { useOrgServers } from '@/lib/queries/servers'
+import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   overlayAddressForPeer,
@@ -57,17 +55,7 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 /** Override createIp succeeded but peer attach + deleteIp cleanup both failed. */
-class OverrideAddressCleanupError extends Error {
-  readonly cleanupFailed = true as const
-
-  constructor(originalMessage: string, options?: ErrorOptions) {
-    super(
-      `${originalMessage} The reserved overlay IP could not be released.`,
-      options,
-    )
-    this.name = 'OverrideAddressCleanupError'
-  }
-}
+class OverrideAddressCleanupError extends OverridePeerTunnelIpCleanupError {}
 
 function friendlyApiError(err: unknown, fallback: string): string {
   if (err instanceof OverrideAddressCleanupError) {
@@ -742,8 +730,6 @@ export function VpnDetailSection({
   orgId,
   vpnId,
 }: Readonly<{ orgId: string; vpnId: string }>) {
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [cidrDraft, setCidrDraft] = useState<string | undefined>(undefined)
@@ -762,173 +748,17 @@ export function VpnDetailSection({
   } | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
 
-  const vpnQuery = useQuery({
-    queryKey: ['org', orgId, 'vpns', vpnId],
-    queryFn: () => fetchVpn(vpnId),
-    enabled: vpnId.length > 0,
-  })
-  const peersQuery = useQuery({
-    queryKey: ['org', orgId, 'vpns', vpnId, 'peers'],
-    queryFn: () => fetchPeers(vpnId),
-    enabled: vpnId.length > 0,
-  })
-  const serversQuery = useQuery({
-    queryKey: ['org', orgId, 'servers'],
-    queryFn: fetchOrgServers,
-  })
-  const overlayIpsQuery = useQuery({
-    queryKey: ['org', orgId, 'ips', 'vpn', vpnId],
-    queryFn: () => fetchIps({ vpnId }),
-    enabled: vpnId.length > 0,
-  })
-  const publicIpsQuery = useQuery({
-    queryKey: ['org', orgId, 'ips', 'public'],
-    queryFn: () => fetchIps({ scope: 'public' }),
-  })
+  const vpnQuery = useVpn(orgId, vpnId, { enabled: vpnId.length > 0 })
+  const peersQuery = usePeers(orgId, vpnId, { enabled: vpnId.length > 0 })
+  const serversQuery = useOrgServers(orgId)
+  const overlayIpsQuery = useIps(orgId, { vpnId }, { enabled: vpnId.length > 0 })
+  const publicIpsQuery = useIps(orgId, { scope: 'public' })
 
-  useForbiddenRecovery(vpnQuery.error)
-  useForbiddenRecovery(peersQuery.error)
-  useForbiddenRecovery(serversQuery.error)
-
-  const invalidateVpn = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns', vpnId] }),
-      queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'vpns', vpnId, 'peers'],
-      }),
-      queryClient.invalidateQueries({ queryKey: ['org', orgId, 'vpns'] }),
-      queryClient.invalidateQueries({
-        queryKey: ['org', orgId, 'ips', 'vpn', vpnId],
-      }),
-    ])
-  }
-
-  const onMutationError = async (err: unknown, fallback: string) => {
-    if (isForbiddenError(err)) {
-      await handleUnauthorized()
-      return
-    }
-    setError(friendlyApiError(err, fallback))
-  }
-
-  const saveCidrMutation = useMutation({
-    mutationFn: (nextCidr: string) => updateVpn(vpnId, { cidr: nextCidr }),
-    onSuccess: async () => {
-      setError(null)
-      setCidrDraft(undefined)
-      await invalidateVpn()
-    },
-    onError: (err) => onMutationError(err, 'Failed to update mesh CIDR'),
-  })
-
-  const createPeerMutation = useMutation({
-    mutationFn: () =>
-      createPeer(
-        vpnId,
-        buildCreatePeerBody({
-          serverId: peerServerId,
-          role: peerRole,
-          tunnelAddress: peerTunnelAddress,
-        }),
-      ),
-    onSuccess: async () => {
-      setError(null)
-      setPeerServerId('')
-      setPeerRole('member')
-      setPeerTunnelAddress('')
-      await invalidateVpn()
-    },
-    onError: (err) => onMutationError(err, 'Failed to add peer'),
-  })
-
-  const overrideAddressMutation = useMutation({
-    mutationFn: async ({
-      peerId,
-      address,
-      serverId,
-    }: {
-      peerId: string
-      address: string
-      serverId: string
-    }) => {
-      const created = await createIp({
-        address,
-        scope: 'vpn',
-        vpnId,
-        allocation: 'dedicated',
-        serverId,
-      })
-      try {
-        await updatePeer(vpnId, peerId, { tunnelIpId: created.id })
-      } catch (updateErr) {
-        let released = true
-        try {
-          await deleteIp(created.id)
-        } catch {
-          released = false
-        }
-        if (!released) {
-          throw new OverrideAddressCleanupError(
-            friendlyApiError(updateErr, 'Failed to override overlay address'),
-            { cause: updateErr },
-          )
-        }
-        throw updateErr
-      }
-    },
-    onMutate: ({ peerId }) => {
-      setOverridePeerId(peerId)
-      setOverrideError(null)
-    },
-    onSuccess: async () => {
-      setError(null)
-      setOverrideError(null)
-      setOverridePeerId(undefined)
-      await invalidateVpn()
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      const message = friendlyApiError(err, 'Failed to override overlay address')
-      setOverrideError(message)
-      setError(message)
-      if (err instanceof OverrideAddressCleanupError) {
-        await invalidateVpn()
-      }
-    },
-  })
-
-  const deletePeerMutation = useMutation({
-    mutationFn: (peerId: string) => deletePeer(vpnId, peerId),
-    onSuccess: async () => {
-      setError(null)
-      await invalidateVpn()
-    },
-    onError: (err) => onMutationError(err, 'Failed to remove peer'),
-  })
-
-  const applyMutation = useMutation({
-    mutationFn: () => applyVpn(vpnId),
-    onSuccess: (data) => {
-      setError(null)
-      setApplyError(null)
-      setApplyResults({
-        interfaceName: data.interfaceName,
-        results: data.results,
-      })
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      const message = friendlyApiError(err, 'Failed to apply WireGuard')
-      setApplyError(message)
-      setError(message)
-    },
-  })
+  const saveCidrMutation = useUpdateVpn(orgId, vpnId)
+  const createPeerMutation = useCreatePeer(orgId, vpnId)
+  const overrideAddressMutation = useOverridePeerTunnelIp(orgId, vpnId)
+  const deletePeerMutation = useDeletePeer(orgId, vpnId)
+  const applyMutation = useApplyVpn(orgId, vpnId)
 
   const vpn = vpnQuery.data?.vpn
   const peers = peersQuery.data?.peers ?? []
@@ -1006,7 +836,23 @@ export function VpnDetailSection({
         dirty={cidrDraft !== undefined && cidrDraft.trim() !== vpn.cidr}
         pending={saveCidrMutation.isPending}
         onChange={setCidrDraft}
-        onSave={() => saveCidrMutation.mutate(meshCidr.trim())}
+        onSave={() => {
+          setError(null)
+          saveCidrMutation.mutate(
+            { cidr: meshCidr.trim() },
+            {
+              onSuccess: () => setCidrDraft(undefined),
+              onError: () => {
+                setError(
+                  friendlyApiError(
+                    saveCidrMutation.actionError,
+                    'Failed to update mesh CIDR',
+                  ),
+                )
+              },
+            },
+          )
+        }}
       />
 
       <PeersPanel
@@ -1024,15 +870,46 @@ export function VpnDetailSection({
         overridePeerId={overridePeerId}
         overridePending={overrideAddressMutation.isPending}
         overrideError={overrideError}
-        onDelete={(peerId) => deletePeerMutation.mutate(peerId)}
+        onDelete={(peerId) => {
+          setError(null)
+          deletePeerMutation.mutate(peerId, {
+            onError: () => {
+              setError(
+                friendlyApiError(
+                  deletePeerMutation.actionError,
+                  'Failed to remove peer',
+                ),
+              )
+            },
+          })
+        }}
         onOverrideAddress={(peerId, address) => {
           const peer = peers.find((row) => row.id === peerId)
           if (!peer) return
-          overrideAddressMutation.mutate({
-            peerId,
-            address,
-            serverId: peer.serverId,
-          })
+          setOverridePeerId(peerId)
+          setOverrideError(null)
+          setError(null)
+          overrideAddressMutation.mutate(
+            {
+              peerId,
+              address,
+              serverId: peer.serverId,
+            },
+            {
+              onSuccess: () => {
+                setOverridePeerId(undefined)
+                setOverrideError(null)
+              },
+              onError: (err) => {
+                const message = friendlyApiError(
+                  err,
+                  'Failed to override overlay address',
+                )
+                setOverrideError(message)
+                setError(message)
+              },
+            },
+          )
         }}
       />
 
@@ -1046,7 +923,31 @@ export function VpnDetailSection({
           onServerId={setPeerServerId}
           onRole={setPeerRole}
           onTunnelAddress={setPeerTunnelAddress}
-          onSubmit={() => createPeerMutation.mutate()}
+          onSubmit={() => {
+            setError(null)
+            createPeerMutation.mutate(
+              buildCreatePeerBody({
+                serverId: peerServerId,
+                role: peerRole,
+                tunnelAddress: peerTunnelAddress,
+              }),
+              {
+                onSuccess: () => {
+                  setPeerServerId('')
+                  setPeerRole('member')
+                  setPeerTunnelAddress('')
+                },
+                onError: () => {
+                  setError(
+                    friendlyApiError(
+                      createPeerMutation.actionError,
+                      'Failed to add peer',
+                    ),
+                  )
+                },
+              },
+            )
+          }}
         />
       ) : null}
 
@@ -1057,7 +958,26 @@ export function VpnDetailSection({
           applyResults={applyResults}
           applyError={applyError}
           serverById={serverById}
-          onApply={() => applyMutation.mutate()}
+          onApply={() => {
+            setError(null)
+            applyMutation.mutate(undefined, {
+              onSuccess: (data) => {
+                setApplyError(null)
+                setApplyResults({
+                  interfaceName: data.interfaceName,
+                  results: data.results,
+                })
+              },
+              onError: () => {
+                const message = friendlyApiError(
+                  applyMutation.actionError,
+                  'Failed to apply WireGuard',
+                )
+                setApplyError(message)
+                setError(message)
+              },
+            })
+          }}
         />
       ) : null}
     </View>

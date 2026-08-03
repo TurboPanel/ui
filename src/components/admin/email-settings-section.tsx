@@ -6,18 +6,13 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
-import {
-  fetchEmailSettings,
-  isForbiddenError,
-  saveEmailSettings,
-  type EmailSettingSource,
-  type EmailSettingsResponse,
+import type {
+  EmailSettingSource,
+  EmailSettingsResponse,
 } from '@/lib/instance-api'
-import { useForbiddenRecovery } from '@/lib/query-client'
+import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const FULL_KEYS = [
@@ -99,11 +94,9 @@ function envVarName(full: FullKey): string {
   return full
 }
 
-const emailSettingsQueryKey = ['admin', 'email-settings'] as const
-
 export function EmailSettingsSection() {
-  const { handleUnauthorized } = useAuth()
-  const queryClient = useQueryClient()
+  const emailQuery = useEmailSettings()
+  const saveMutation = useSaveEmailSettings()
 
   const [saveError, setSaveError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -135,13 +128,6 @@ export function EmailSettingsSection() {
     return init
   })
 
-  const emailQuery = useQuery({
-    queryKey: emailSettingsQueryKey,
-    queryFn: fetchEmailSettings,
-  })
-
-  useForbiddenRecovery(emailQuery.error)
-
   const applyServerResponse = (res: EmailSettingsResponse) => {
     const nextSources = {} as Record<FullKey, EmailSettingSource>
     const nextDraft = {} as Record<FullKey, string>
@@ -155,11 +141,8 @@ export function EmailSettingsSection() {
       nextTouched[k] = false
 
       if (entry.source === 'env') {
-        // Preserve resolved value for non-secrets so admins can see the effective setting.
-        // Secrets from env are never sent by the API; use a masked placeholder on render.
         nextDraft[k] = isSecretKey(k) ? '' : (entry.value ?? '')
       } else if (isSecretKey(k) && entry.value === '***') {
-        // Show masked; do not put literal '***' into the editable draft until user types.
         nextDraft[k] = ''
       } else {
         nextDraft[k] = entry.value ?? ''
@@ -177,27 +160,6 @@ export function EmailSettingsSection() {
       applyServerResponse(emailQuery.data)
     }
   }, [emailQuery.data])
-
-  const saveMutation = useMutation({
-    mutationFn: async (payload: Record<string, string | null>) => {
-      return await saveEmailSettings(payload)
-    },
-    onSuccess: (res) => {
-      queryClient.setQueryData(emailSettingsQueryKey, res)
-      applyServerResponse(res)
-      setSuccess('Settings saved.')
-      setSaveError(null)
-    },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        setSaveError(err instanceof Error ? err.message : 'Access denied')
-      } else {
-        setSaveError(err instanceof Error ? err.message : 'Failed to save email settings')
-      }
-      setSuccess(null)
-    },
-  })
 
   const onChange = (key: FullKey, text: string) => {
     setDraft((prev) => ({ ...prev, [key]: text }))
@@ -246,7 +208,17 @@ export function EmailSettingsSection() {
     setSuccess(null)
     setSaveError(null)
     const payload = buildSavePayload()
-    saveMutation.mutate(payload)
+    saveMutation.mutate(payload, {
+      onSuccess: (res) => {
+        applyServerResponse(res)
+        setSuccess('Settings saved.')
+        setSaveError(null)
+      },
+      onError: () => {
+        setSaveError(saveMutation.actionError ?? 'Failed to save email settings')
+        setSuccess(null)
+      },
+    })
   }
 
   const renderField = (key: FullKey) => {

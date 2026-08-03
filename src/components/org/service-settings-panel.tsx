@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { useAuth } from '@/lib/auth-context'
 import {
-  isForbiddenError,
-  updateService,
   type HealthCheckPolicy,
   type ServiceOptions,
   type ServiceRecord,
 } from '@/lib/instance-api'
+import { useUpdateService } from '@/lib/queries/services'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const webInputStyle = {
@@ -117,17 +115,19 @@ function buildResourcesOptions(
 }
 
 export function ServiceSettingsPanel({
+  orgId,
   composeServiceName,
   service,
   canManage,
   onServiceChange,
 }: Readonly<{
+  orgId: string
   composeServiceName: string
   service: ServiceRecord | undefined
   canManage: boolean
-  onServiceChange: (service: ServiceRecord) => void
+  onServiceChange?: (service: ServiceRecord) => void
 }>) {
-  const { handleUnauthorized } = useAuth()
+  const updateMutation = useUpdateService(orgId, service?.id ?? '')
   const parsed = parseServiceOptions(service?.options)
   const [disableCache, setDisableCache] = useState(parsed.build?.disableCache === true)
   const [containerName, setContainerName] = useState(parsed.container?.name ?? '')
@@ -202,20 +202,15 @@ export function ServiceSettingsPanel({
     setSaving(true)
     setError(null)
     setSavedHint(null)
-    try {
-      const options = buildOptions()
-      await updateService(service.id, { options })
-      onServiceChange({ ...service, options })
-      setSavedHint('Saved')
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
-      }
-      setError(err instanceof Error ? err.message : 'Failed to save service settings')
-    } finally {
-      setSaving(false)
+    const options = buildOptions()
+    const result = await updateMutation.run({ options })
+    setSaving(false)
+    if (!result.ok) {
+      if (result.error) setError(result.error)
+      return
     }
+    onServiceChange?.({ ...service, options })
+    setSavedHint('Saved')
   }
 
   return (

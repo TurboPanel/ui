@@ -1,11 +1,19 @@
 import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { isManagedProject } from '@/lib/project-navigation'
+import {
+  isManagedProject,
+  projectOverviewHref,
+} from '@/lib/project-navigation'
+import { Redirect, type Href } from 'expo-router'
 import { View } from 'react-native'
 import { spacing } from '@/lib/theme'
 
-/** Environments tab index (`/environments`) — list / detail section. */
+/**
+ * Environments tab index (`/environments`).
+ * Managed: list + focus panel. Compose: redirect to Overview (env work lives
+ * under Project / environment chips + Networking / Storage).
+ */
 export default function ProjectEnvironmentsScreen() {
   const { orgId, projectId, project } = useProjectContext()
 
@@ -22,5 +30,7 @@ export default function ProjectEnvironmentsScreen() {
     )
   }
 
-  return <ProjectEnvironmentsSection orgId={orgId} projectId={projectId} />
+  return (
+    <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  )
 }

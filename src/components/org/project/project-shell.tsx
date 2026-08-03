@@ -1,4 +1,4 @@
-import { Link, usePathname, type Href } from 'expo-router'
+import { Link, usePathname, useRouter, type Href } from 'expo-router'
 import {
   Platform,
   Pressable,
@@ -11,51 +11,21 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
-  COMPOSE_PROJECT_TAB_IDS,
-  COMPOSE_PROJECT_TAB_LABELS,
-  MANAGED_PROJECT_TAB_IDS,
-  MANAGED_PROJECT_TAB_LABELS,
+  ProjectSectionTabs,
+  activeProjectTabFromPathname,
+} from '@/components/org/project/project-section-tabs'
+import { TrashIcon } from '@/components/org/project/trash-icon'
+import {
   isManagedProject,
   parseProjectEnvironmentId,
-  projectTabHref,
-  projectTypeLabel,
-  type ProjectTabId,
+  projectOverviewHref,
 } from '@/lib/project-navigation'
+import { useDeleteEnvironment, useUpdateProject } from '@/lib/queries'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
-import { isForbiddenError, updateProject } from '@/lib/instance-api'
-import { useAuth } from '@/lib/auth-context'
 import { useEffect, useState, type ReactNode } from 'react'
-
-function activeTabFromPathname(
-  pathname: string,
-  projectId: string,
-): ProjectTabId | 'setup' | null {
-  const marker = `/projects/${projectId}/`
-  const idx = pathname.indexOf(marker)
-  if (idx < 0) {
-    if (pathname.endsWith(`/projects/${projectId}`)) return 'overview'
-    return null
-  }
-  const rest = pathname.slice(idx + marker.length)
-  const segment = rest.split('/')[0] ?? ''
-  if (segment === 'setup') return 'setup'
-  // Service detail lives under /services/:id but belongs to Overview.
-  if (segment === 'services') return 'overview'
-  // `/environments/:id` is Overview with that environment selected (Base is
-  // `/overview`). The Environments tab index is bare `/environments`.
-  if (segment === 'environments' && parseProjectEnvironmentId(pathname, projectId)) {
-    return 'overview'
-  }
-  if (
-    (COMPOSE_PROJECT_TAB_IDS as readonly string[]).includes(segment) ||
-    (MANAGED_PROJECT_TAB_IDS as readonly string[]).includes(segment)
-  ) {
-    return segment as ProjectTabId
-  }
-  return 'overview'
-}
 
 function EnvironmentSelector() {
   const {
@@ -116,64 +86,121 @@ function EnvironmentSelector() {
   )
 }
 
-function ProjectTabBar({
-  orgId,
-  projectId,
-  tabs,
-  labels,
-  activeTab,
+function ProjectTrashButton({
+  deletingProject,
+  onRequestDeleteProject,
 }: Readonly<{
-  orgId: string
-  projectId: string
-  tabs: readonly ProjectTabId[]
-  labels: Record<string, string>
-  activeTab: ProjectTabId | 'setup' | null
+  deletingProject: boolean
+  onRequestDeleteProject: () => void
 }>) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const {
+    orgId,
+    projectId,
+    environments,
+    selectedEnvironment,
+    canOwn,
+    setError,
+    invalidateEnvironments,
+  } = useProjectContext()
+  const deleteEnvironment = useDeleteEnvironment(orgId)
+  const [envArmed, setEnvArmed] = useState(false)
+
+  useEffect(() => {
+    setEnvArmed(false)
+  }, [selectedEnvironment?.id, environments.length])
+
+  if (!canOwn) return null
+
+  const multiEnv = environments.length > 1
+  const removing = deleteEnvironment.isPending
+
+  const handlePress = () => {
+    if (removing || deletingProject) return
+    if (!multiEnv) {
+      onRequestDeleteProject()
+      return
+    }
+    if (!selectedEnvironment) {
+      setError('Select an environment to delete.')
+      return
+    }
+    if (!envArmed) {
+      setEnvArmed(true)
+      return
+    }
+    void (async () => {
+      setError(null)
+      const deletedId = selectedEnvironment.id
+      const result = await deleteEnvironment.run(deletedId)
+      if (!result.ok) {
+        if (deleteEnvironment.actionError) {
+          setError(deleteEnvironment.actionError)
+        }
+        return
+      }
+      setEnvArmed(false)
+      await invalidateEnvironments()
+      if (parseProjectEnvironmentId(pathname, projectId) === deletedId) {
+        router.replace(projectOverviewHref(orgId, projectId) as Href)
+      }
+    })()
+  }
+
+  let accessibilityLabel = 'Delete this project'
+  if (multiEnv && envArmed) {
+    accessibilityLabel = 'Confirm delete this environment'
+  } else if (multiEnv) {
+    accessibilityLabel = 'Delete this environment'
+  }
+
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.tabBar}
-      accessibilityRole="tablist"
-      accessibilityLabel="Project sections"
-    >
-      {tabs.map((tabId) => {
-        const active = activeTab === tabId
-        const href = projectTabHref(orgId, projectId, tabId) as Href
-        const tabStyle = StyleSheet.flatten([
-          styles.tab,
-          active && styles.tabActive,
+    <View style={styles.trashRow}>
+      {envArmed ? (
+        <Pressable
+          style={[styles.trashCancel, webPointer]}
+          onPress={() => setEnvArmed(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel delete"
+        >
+          <Text style={styles.trashCancelText}>Cancel</Text>
+        </Pressable>
+      ) : null}
+      <Pressable
+        style={[
+          styles.trashButton,
+          (envArmed || deletingProject) && styles.trashButtonArmed,
+          (removing || deletingProject) && styles.trashButtonDisabled,
           webPointer,
-        ])
-        return (
-          <Link key={tabId} href={href} asChild>
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={labels[tabId] ?? tabId}
-              style={tabStyle}
-            >
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                {labels[tabId] ?? tabId}
-              </Text>
-            </Pressable>
-          </Link>
-        )
-      })}
-    </ScrollView>
+        ]}
+        onPress={handlePress}
+        disabled={removing || deletingProject}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+      >
+        <TrashIcon size={18} color={colors.error} />
+      </Pressable>
+    </View>
   )
 }
 
-function ProjectHeader() {
+function ProjectHeader({
+  deletingProject,
+  onRequestDeleteProject,
+}: Readonly<{
+  deletingProject: boolean
+  onRequestDeleteProject: () => void
+}>) {
   const {
+    orgId,
+    projectId,
     project,
     canOwn,
-    setProject,
     setError,
   } = useProjectContext()
-  const { handleUnauthorized } = useAuth()
+  const updateProject = useUpdateProject(orgId, projectId)
   const [editName, setEditName] = useState('')
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setEditName(project?.displayName?.trim() ?? '')
@@ -184,21 +211,18 @@ function ProjectHeader() {
   const saveName = async () => {
     const trimmed = editName.trim()
     if (trimmed === (project.displayName?.trim() ?? '')) return
-    setSaving(true)
     setError(null)
-    try {
-      await updateProject(project.id, { displayName: trimmed || undefined })
-      setProject({ ...project, displayName: trimmed || null })
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-        return
+    const result = await updateProject.run({
+      displayName: trimmed || undefined,
+    })
+    if (!result.ok) {
+      if (updateProject.actionError) {
+        setError(updateProject.actionError)
       }
-      setError(err instanceof Error ? err.message : 'Failed to save name')
-    } finally {
-      setSaving(false)
     }
   }
+
+  const saving = updateProject.isPending
 
   return (
     <View style={styles.header}>
@@ -226,32 +250,40 @@ function ProjectHeader() {
             {project.displayName?.trim() || 'Unnamed project'}
           </Text>
         )}
-        <View
-          style={
-            projectTypeLabel(project) === 'Setup'
-              ? styles.badgeMuted
-              : styles.badgeAccent
-          }
-        >
-          <Text
-            style={
-              projectTypeLabel(project) === 'Setup'
-                ? styles.badgeMutedText
-                : styles.badgeAccentText
-            }
-          >
-            {projectTypeLabel(project)}
-          </Text>
-        </View>
+        <ProjectTrashButton
+          deletingProject={deletingProject}
+          onRequestDeleteProject={onRequestDeleteProject}
+        />
       </View>
       {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
     </View>
   )
 }
 
+function ProjectShellChrome({
+  hideEnvSelector,
+  sectionTabsInOverview,
+  needsSetup,
+  activeTab,
+}: Readonly<{
+  hideEnvSelector: boolean
+  sectionTabsInOverview: boolean
+  needsSetup: boolean
+  activeTab: ReturnType<typeof activeProjectTabFromPathname>
+}>) {
+  if (needsSetup || activeTab === 'setup') return null
+  return (
+    <>
+      {hideEnvSelector ? null : <EnvironmentSelector />}
+      {sectionTabsInOverview ? null : <ProjectSectionTabs />}
+    </>
+  )
+}
+
 export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   const insets = useSafeAreaInsets()
   const pathname = usePathname()
+  const router = useRouter()
   const {
     orgId,
     projectId,
@@ -260,17 +292,23 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     error,
     needsSetup,
   } = useProjectContext()
+  const [deletingProject, setDeletingProject] = useState(false)
 
-  const activeTab = activeTabFromPathname(pathname, projectId)
+  const activeTab = activeProjectTabFromPathname(pathname, projectId)
   const managed = project ? isManagedProject(project) : false
-  const tabs = managed ? MANAGED_PROJECT_TAB_IDS : COMPOSE_PROJECT_TAB_IDS
-  const labels = managed
-    ? MANAGED_PROJECT_TAB_LABELS
-    : COMPOSE_PROJECT_TAB_LABELS
+  // Compose overview hosts the unified Project/env/section tabs in the editor toolbar.
+  const sectionTabsInOverview = !managed && activeTab === 'overview'
+  // Compose: env chips live in ProjectSectionTabs. Managed: hide selector on
+  // Overview / Environments (those surfaces own their own env chrome).
+  const hideEnvSelector = managed
+    ? activeTab === 'environments' || activeTab === 'overview'
+    : true
 
   const backStyle = StyleSheet.flatten([styles.backLink, webPointer])
-  const hideEnvSelector =
-    activeTab === 'environments' || activeTab === 'overview'
+  const rootPadding = {
+    paddingBottom: Math.max(insets.bottom, spacing.md),
+    paddingTop: Platform.OS === 'web' ? 0 : Math.max(insets.top - 8, 0),
+  }
 
   if (loading && !project) {
     return (
@@ -281,15 +319,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   }
 
   return (
-    <View
-      style={[
-        styles.root,
-        {
-          paddingBottom: Math.max(insets.bottom, spacing.md),
-          paddingTop: Platform.OS === 'web' ? 0 : Math.max(insets.top - 8, 0),
-        },
-      ]}
-    >
+    <View style={[styles.root, rootPadding]}>
       <Link href={`/${orgId}/projects` as Href} asChild>
         <Pressable
           style={backStyle}
@@ -300,24 +330,33 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
         </Pressable>
       </Link>
 
-      <ProjectHeader />
+      <ProjectHeader
+        deletingProject={deletingProject}
+        onRequestDeleteProject={() => setDeletingProject(true)}
+      />
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-      {needsSetup || activeTab === 'setup' ? null : (
+      {deletingProject && project ? (
+        <ProjectDeletePanel
+          orgId={orgId}
+          project={project}
+          onCancel={() => setDeletingProject(false)}
+          onDeleted={() => {
+            router.replace(`/${orgId}/projects` as Href)
+          }}
+        />
+      ) : (
         <>
-          {hideEnvSelector ? null : <EnvironmentSelector />}
-          <ProjectTabBar
-            orgId={orgId}
-            projectId={projectId}
-            tabs={tabs}
-            labels={labels}
+          <ProjectShellChrome
+            hideEnvSelector={hideEnvSelector}
+            sectionTabsInOverview={sectionTabsInOverview}
+            needsSetup={needsSetup}
             activeTab={activeTab}
           />
+          <View style={styles.body}>{children}</View>
         </>
       )}
-
-      <View style={styles.body}>{children}</View>
     </View>
   )
 }
@@ -374,37 +413,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.3,
   },
-  badgeAccent: {
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minHeight: 28,
+  trashRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  trashButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  badgeAccentText: {
-    color: chrome.accent,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  badgeMuted: {
-    borderRadius: 4,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minHeight: 28,
-    justifyContent: 'center',
   },
-  badgeMutedText: {
+  trashButtonArmed: {
+    borderColor: colors.error,
+    backgroundColor: colors.bgSecondary,
+  },
+  trashButtonDisabled: {
+    opacity: 0.5,
+  },
+  trashCancel: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  trashCancelText: {
     color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontSize: 13,
+    fontWeight: '600',
   },
   envSingle: {
     gap: 2,
@@ -446,35 +485,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   envChipTextActive: {
-    color: chrome.accent,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderArea,
-  },
-  tab: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  tabActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tabTextActive: {
     color: chrome.accent,
   },
   body: {

@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import type { ComposeDocument } from '@/lib/compose'
@@ -9,12 +10,18 @@ export function ComposeBasePanel({
   saving = false,
   defaultEditorView = 'visual',
   onDraftChange,
+  hideHeader = false,
+  toolbarLeading,
+  toolbarTrailing,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
   saving?: boolean
   defaultEditorView?: 'visual' | 'editor'
   onDraftChange?: (document: ComposeDocument | null) => void
+  hideHeader?: boolean
+  toolbarLeading?: ReactNode
+  toolbarTrailing?: ReactNode
 }>) {
   return (
     <View style={styles.root}>
@@ -25,6 +32,9 @@ export function ComposeBasePanel({
         title="Services"
         defaultView={defaultEditorView}
         onDraftChange={onDraftChange}
+        hideHeader={hideHeader}
+        toolbarLeading={toolbarLeading}
+        toolbarTrailing={toolbarTrailing}
       />
     </View>
   )

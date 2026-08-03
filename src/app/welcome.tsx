@@ -1,54 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, type Href } from 'expo-router'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
-import { fetchOrganizations, type OrganizationRecord } from '@/lib/instance-api'
 import { setActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref } from '@/lib/org-navigation'
+import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 export default function WelcomeScreen() {
   const { session, signOut } = useAuth()
   const router = useRouter()
   const showAdminLink = isAdminSession(session)
-  const [organizations, setOrganizations] = useState<OrganizationRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const orgsQuery = useOrganizationsQuery()
+  const organizations = orgsQuery.data?.organizations ?? []
+  const loading = orgsQuery.isLoading
+  let error = ''
+  if (orgsQuery.error instanceof Error) {
+    error = orgsQuery.error.message
+  } else if (orgsQuery.error) {
+    error = 'Failed to load organizations'
+  }
 
   useEffect(() => {
-    let cancelled = false
-
-    async function loadOrganizations() {
-      try {
-        const { organizations: orgs } = await fetchOrganizations()
-        if (cancelled) return
-        setOrganizations(orgs)
-        const preferred = resolvePreferredOrganizationId(orgs)
-        if (preferred) {
-          setActiveOrganizationId(preferred)
-          router.replace(defaultOrgDashboardHref(preferred) as Href)
-        }
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load organizations')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    if (!orgsQuery.data) return
+    const preferred = resolvePreferredOrganizationId(
+      orgsQuery.data.organizations,
+    )
+    if (preferred) {
+      setActiveOrganizationId(preferred)
+      router.replace(defaultOrgDashboardHref(preferred) as Href)
     }
-
-    loadOrganizations().catch(() => {
-      // Errors are handled inside loadOrganizations.
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [router])
+  }, [orgsQuery.data, router])
 
   let organizationContent
   if (loading) {

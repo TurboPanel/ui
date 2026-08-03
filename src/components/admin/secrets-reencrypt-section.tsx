@@ -3,39 +3,25 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
-import {
-  applyReencryptSecrets,
-  isForbiddenError,
-  type ReencryptSecretsResponse,
-} from '@/lib/instance-api'
+import type { ReencryptSecretsResponse } from '@/lib/instance-api'
+import { useApplyReencryptSecrets } from '@/lib/queries/admin'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
-}
-
 export function SecretsReencryptSection() {
-  const { session, handleUnauthorized } = useAuth()
+  const { session } = useAuth()
   const isSuperadmin = isSuperadminSession(session)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const reencryptMutation = useApplyReencryptSecrets()
   const [summary, setSummary] = useState<ReencryptSecretsResponse | null>(null)
 
-  const onReencrypt = async () => {
-    setPending(true)
-    setError(null)
+  const displayError = reencryptMutation.actionError
+
+  const onReencrypt = () => {
     setSummary(null)
-    try {
-      const result = await applyReencryptSecrets()
-      setSummary(result)
-    } catch (err) {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
-      setError(errorMessage(err, 'Failed to re-encrypt secrets'))
-    } finally {
-      setPending(false)
-    }
+    reencryptMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        setSummary(result)
+      },
+    })
   }
 
   return (
@@ -50,18 +36,21 @@ export function SecretsReencryptSection() {
         title="At-rest encryption"
         hint="Re-encrypt secret variables, TLS private keys, and principal passwords"
       >
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
         {isSuperadmin ? (
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
-              disabled={pending}
-              onPress={() => void onReencrypt()}
-              style={[styles.primaryButton, pending ? styles.buttonDisabled : null]}
+              disabled={reencryptMutation.isPending}
+              onPress={onReencrypt}
+              style={[
+                styles.primaryButton,
+                reencryptMutation.isPending ? styles.buttonDisabled : null,
+              ]}
             >
               <Text style={styles.primaryButtonText}>
-                {pending ? 'Re-encrypting…' : 'Re-encrypt secrets'}
+                {reencryptMutation.isPending ? 'Re-encrypting…' : 'Re-encrypt secrets'}
               </Text>
             </Pressable>
           </View>

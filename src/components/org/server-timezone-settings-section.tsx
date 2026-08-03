@@ -1,18 +1,16 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
-import { useAuth } from '@/lib/auth-context'
 import {
   fetchOrgDefaultTimezone,
-  fetchTimezones,
-  isForbiddenError,
   saveOrgDefaultTimezone,
   type OrgDefaultTimezoneSettings,
 } from '@/lib/instance-api'
-import { useCan, useForbiddenRecovery } from '@/lib/query-client'
+import { useTimezones } from '@/lib/queries/servers'
+import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -22,7 +20,6 @@ function errorMessage(err: unknown, fallback: string): string {
 export function ServerTimezoneSettingsSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
-  const { handleUnauthorized } = useAuth()
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
@@ -31,30 +28,23 @@ export function ServerTimezoneSettingsSection({
   )
   const [draftEnforce, setDraftEnforce] = useState<boolean | null>(null)
 
+  const settingsKey = queryKeys.org(orgId).settings.defaultTimezone
   const query = useQuery({
-    queryKey: ['org', orgId, 'default-timezone'],
+    queryKey: settingsKey,
     queryFn: () => fetchOrgDefaultTimezone(orgId),
   })
-  const timezonesQuery = useQuery({
-    queryKey: ['timezones'],
-    queryFn: fetchTimezones,
-    staleTime: Number.POSITIVE_INFINITY,
-  })
-  useForbiddenRecovery(query.error)
+  const timezonesQuery = useTimezones()
 
-  const mutation = useMutation({
+  const mutation = useApiMutation({
     mutationFn: (patch: Partial<OrgDefaultTimezoneSettings>) =>
       saveOrgDefaultTimezone(orgId, patch),
     onSuccess: (data) => {
       setError(null)
       setDraftTimezone(undefined)
       setDraftEnforce(null)
-      queryClient.setQueryData(['org', orgId, 'default-timezone'], data)
+      queryClient.setQueryData(settingsKey, data)
     },
-    onError: async (err) => {
-      if (isForbiddenError(err)) {
-        await handleUnauthorized()
-      }
+    onError: (err) => {
       setError(errorMessage(err, 'Failed to save fleet timezone settings'))
     },
   })
@@ -64,10 +54,7 @@ export function ServerTimezoneSettingsSection({
     draftTimezone !== undefined
       ? draftTimezone
       : (settings?.defaultServerTimezone ?? null)
-  const enforce =
-    draftEnforce !== null
-      ? draftEnforce
-      : (settings?.enforceServerTimezone ?? false)
+  const enforce = draftEnforce ?? settings?.enforceServerTimezone ?? false
   const pending = mutation.isPending || query.isLoading
   const readOnly = !canManage
 
