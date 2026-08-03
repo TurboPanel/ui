@@ -1039,6 +1039,7 @@ function EnvironmentLoadedPanels({
   containersByService,
   canManage,
   showEnvironmentPanel = true,
+  showComposeOverlay = true,
 }: Readonly<{
   environment: EnvironmentRecord
   projectId: string
@@ -1070,6 +1071,7 @@ function EnvironmentLoadedPanels({
   containersByService: Record<string, ContainerRecord[]>
   canManage: boolean
   showEnvironmentPanel?: boolean
+  showComposeOverlay?: boolean
 }>) {
   const hasContainers = services.some(
     (service) => (containersByService[service.id] ?? []).length > 0,
@@ -1094,14 +1096,16 @@ function EnvironmentLoadedPanels({
         </SectionPanel>
       ) : null}
 
-      <SectionPanel title="Compose overlay" hint="Overrides the project compose">
-        <ComposeEditorSection
-          document={environment.options?.compose}
-          onSave={onSaveCompose}
-          saving={savingCompose}
-          title="Environment compose overlay"
-        />
-      </SectionPanel>
+      {showComposeOverlay ? (
+        <SectionPanel title="Compose overlay" hint="Overrides the project compose">
+          <ComposeEditorSection
+            document={environment.options?.compose}
+            onSave={onSaveCompose}
+            saving={savingCompose}
+            title="Environment compose overlay"
+          />
+        </SectionPanel>
+      ) : null}
 
       <DeployPreviewPanel
         orgId={orgId}
@@ -1282,11 +1286,14 @@ export function EnvironmentDetailBody({
   projectId,
   environmentId,
   embedded = false,
+  showComposeOverlay = true,
 }: Readonly<{
   orgId: string
   projectId: string
   environmentId: string
   embedded?: boolean
+  /** Compose overlay editor — off on Networking (edit on Overview / Settings). */
+  showComposeOverlay?: boolean
 }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
@@ -1687,6 +1694,7 @@ export function EnvironmentDetailBody({
           containersByService={containersByService}
           canManage={canManage}
           showEnvironmentPanel={!embedded}
+          showComposeOverlay={showComposeOverlay}
         />
       ) : null}
 

@@ -329,6 +329,7 @@ export function ComposeNetworkingTab() {
         projectId={projectId}
         environmentId={selectedEnvironmentId}
         embedded
+        showComposeOverlay={false}
       />
       <Text style={styles.hint}>
         Tip: edit the shared stack on Overview (Project), then pin a server here
