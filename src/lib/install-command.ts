@@ -99,30 +99,13 @@ function isBareTurbopanelShOrigin(trimmed: string): boolean {
   }
 }
 
-/** Bare host[:port] or scheme+host for curl; never includes an install script path. */
+/** Curl target for the installer script: bare `turbopanel.sh` on the CDN, otherwise origin + `/run.sh`. */
 function formatInstallScriptCurlUrl(origin: string): string {
   const trimmed = trimTrailingSlash(origin.trim())
   if (isBareTurbopanelShOrigin(trimmed)) {
     return 'turbopanel.sh'
   }
-  try {
-    const url = new URL(trimmed)
-    if (url.protocol === 'https:') {
-      if (!url.port || url.port === '443') {
-        return url.hostname
-      }
-      return `https://${url.host}`
-    }
-    if (url.protocol === 'http:') {
-      if (!url.port || url.port === '80') {
-        return url.hostname
-      }
-      return url.host
-    }
-  } catch {
-    // fall through
-  }
-  return trimmed
+  return `${trimmed}/run.sh`
 }
 
 function encodeLicenseArg(licenseId: string, licenseToken: string): string {

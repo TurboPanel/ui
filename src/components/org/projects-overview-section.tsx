@@ -43,7 +43,18 @@ function projectTypeBadge(type: ProjectRecord['metadata']) {
       </View>
     )
   }
-  return null
+  if (projectType === 'docker-compose') {
+    return (
+      <View style={styles.badgeMuted}>
+        <Text style={styles.badgeMutedText}>compose</Text>
+      </View>
+    )
+  }
+  return (
+    <View style={styles.badgeMuted}>
+      <Text style={styles.badgeMutedText}>setup</Text>
+    </View>
+  )
 }
 
 export function ProjectsOverviewSection({
@@ -158,10 +169,8 @@ export function ProjectsOverviewSection({
     ? projects.find((project) => project.id === deletingProjectId) ?? null
     : null
 
-  let headingCopy = 'Projects across every workspace in this organization.'
   let panelHint = 'All workspaces'
   if (scopedWorkspaceName) {
-    headingCopy = `Projects in ${scopedWorkspaceName}.`
     panelHint = scopedWorkspaceName
   }
 
@@ -249,7 +258,6 @@ export function ProjectsOverviewSection({
       <View style={styles.pageHeader}>
         <View style={styles.pageIntro}>
           <Text style={orgPanelStyles.pageTitle}>Projects</Text>
-          <Text style={orgPanelStyles.pageCopy}>{headingCopy}</Text>
         </View>
         <WorkspaceSwitcher orgId={orgId} />
       </View>

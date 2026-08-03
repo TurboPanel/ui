@@ -140,7 +140,7 @@ export function ServiceSettingsPanel({
   const [preDeploy, setPreDeploy] = useState(parsed.preDeployCommand ?? '')
   const [postDeploy, setPostDeploy] = useState(parsed.postDeployCommand ?? '')
   const [healthPolicy, setHealthPolicy] = useState<HealthCheckPolicy>(
-    parsed.healthCheck?.policy ?? 'warn',
+    parsed.healthCheck?.policy ?? 'disabled',
   )
   const [cpus, setCpus] = useState(parsed.resources?.cpus?.toString() ?? '')
   const [memoryMb, setMemoryMb] = useState(
@@ -165,7 +165,7 @@ export function ServiceSettingsPanel({
     setMaxRestart(next.operations?.maxRestartAttempts?.toString() ?? '')
     setPreDeploy(next.preDeployCommand ?? '')
     setPostDeploy(next.postDeployCommand ?? '')
-    setHealthPolicy(next.healthCheck?.policy ?? 'warn')
+    setHealthPolicy(next.healthCheck?.policy ?? 'disabled')
     setCpus(next.resources?.cpus?.toString() ?? '')
     setMemoryMb(
       next.resources?.memoryBytes

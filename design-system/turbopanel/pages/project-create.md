@@ -1,30 +1,30 @@
 # Page Override: Project Create
 
-> Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/projects/new`.
+> Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/projects/new` and `/[projectId]/setup`.
 
-**Route:** new project wizard (Docker Compose / template / managed)  
-**Job:** Pick type → details → (compose projects) base compose with Production badge.
+**Routes:** new project (empty) → project setup (type/catalog)  
+**Job:** Create an empty project with Production once, then choose how it runs.
 
 ---
 
 ## Flow
 
-1. **Type** — three cards; Docker Compose shows Production badge
-2. **Catalog** — template/managed only
-3. **Details** — workspace, name; compose path continues instead of creating
-4. **Base compose** — `ComposeFlowRail` (base → Production → deploy), quick-start icon chips, Visual tab default
+1. **Details** (`/projects/new`) — workspace + name → `POST /projects` with `type: 'empty'`
+2. **Type** (`/projects/:id/setup`) — Docker Compose / Template / Managed
+3. **Catalog** — template or managed engine only; Compose configures immediately
 
-Progress: segmented `WizardStepIndicator` (Type → Details → Base compose).
+Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
 
 ## UX rules
 
-- Visual hierarchy via **ComposeFlowRail** + **ProductionBadge** — no subtitle essays
-- Quick starts use icon markers (NG, PG, JS, ∅)
-- Visual tab default for novices on create step
-- Point-and-click first; Editor for power users
+- Production is created with the empty project — never ask the operator to create it
+- Interrupted setup is resumable (open project → setup until type is set)
+- Projects remain undeployed during setup
+- Touch targets ≥ 44pt; one column on phone
 
 ## Anti-patterns
 
-- ❌ Server placement on base compose  
+- ❌ Choosing type before the project exists  
+- ❌ Requiring a second Production create  
 - ❌ Long explanatory paragraphs in the compose header  
-- ❌ Skipping compose step without guidance
+- ❌ Separate draft/runtime status field  

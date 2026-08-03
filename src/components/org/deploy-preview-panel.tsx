@@ -1,53 +1,15 @@
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
-import { splitYamlLineHighlight } from '@/lib/compose/yaml-highlight'
 import {
   fetchDeployPreview,
   isForbiddenError,
   type DeployPreviewResponse,
 } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
-
-const YAML_LINE_HEIGHT = 20
-
-function ReadOnlyYamlPreview({ value }: Readonly<{ value: string }>) {
-  const lines = value.length > 0 ? value.split('\n') : []
-  if (lines.length === 0) {
-    return <Text style={orgPanelStyles.muted}>No compose YAML to preview.</Text>
-  }
-
-  return (
-    <ScrollView
-      style={styles.yamlBlock}
-      nestedScrollEnabled
-      accessibilityRole="text"
-    >
-      <Text style={styles.yamlText}>
-        {lines.map((line, lineIndex) => {
-          const segments = splitYamlLineHighlight(line)
-          return (
-            <Text key={`L${lineIndex}:${line}`}>
-              {segments.map((segment) => (
-                <Text
-                  key={`${segment.kind}:${segment.text}`}
-                  style={
-                    segment.kind === 'comment' ? styles.yamlComment : styles.yamlCode
-                  }
-                >
-                  {segment.text}
-                </Text>
-              ))}
-              {lineIndex < lines.length - 1 ? '\n' : null}
-            </Text>
-          )
-        })}
-      </Text>
-    </ScrollView>
-  )
-}
+import { spacing } from '@/lib/theme'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
   if (warning.code === 'health_check_missing') {
@@ -176,7 +138,7 @@ function DeployPreviewBody({
           <PreviewWarnings warnings={preview.warnings} />
           <PreviewContainerList containers={preview.containers} />
           <PreviewVolumeList volumes={preview.volumes} />
-          <ReadOnlyYamlPreview value={preview.composeYaml} />
+          <ReadOnlyYamlBlock value={preview.composeYaml} />
         </>
       ) : null}
 
@@ -286,26 +248,5 @@ const styles = StyleSheet.create({
   },
   metaBlock: {
     gap: spacing.xs,
-  },
-  yamlBlock: {
-    ...orgPanelStyles.commandCodeBlock,
-    maxHeight: 420,
-  },
-  yamlText: {
-    fontFamily: 'monospace',
-    fontSize: 13,
-    lineHeight: YAML_LINE_HEIGHT,
-  },
-  yamlCode: {
-    color: colors.text,
-    fontFamily: 'monospace',
-    fontSize: 13,
-    lineHeight: YAML_LINE_HEIGHT,
-  },
-  yamlComment: {
-    color: colors.textMuted,
-    fontFamily: 'monospace',
-    fontSize: 13,
-    lineHeight: YAML_LINE_HEIGHT,
   },
 })

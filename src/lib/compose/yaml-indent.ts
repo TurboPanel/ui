@@ -54,6 +54,67 @@ function isBlankOrCommentLine(line: string): boolean {
 }
 
 /**
+ * A bare key that is neither a Compose top-level key (`services`, `networks`,
+ * …) nor a known service-body field (`image`, `restart`, …) — i.e. a
+ * user-defined name such as a service, network, or volume name.
+ */
+function isComposeUserDefinedNameKey(key: string): boolean {
+  return !isComposeTopLevelKey(key) && !isComposeServicePropertyKey(key)
+}
+
+/** Full-line YAML comment (`# …`), optionally indented. */
+export function isFullLineComment(line: string): boolean {
+  return line.trimStart().startsWith('#')
+}
+
+function isBlankLine(line: string): boolean {
+  return line.trim().length === 0
+}
+
+/**
+ * Resolve the expected indent for a line given the nearest preceding block
+ * opener above it. Extracted from {@link expectedIndentForLine} to keep its
+ * cognitive complexity in check.
+ */
+function resolveIndentAgainstOpener(
+  currentIndent: number,
+  currentKey: string,
+  previous: string,
+): number | null {
+  const previousIndent = leadingWhitespace(previous).length
+  const childIndent = previousIndent + YAML_INDENT.length
+  if (currentIndent >= childIndent) {
+    return null
+  }
+
+  const previousKey = parseYamlMappingKey(previous)
+  if (
+    currentIndent === 0 &&
+    isComposeTopLevelKey(currentKey) &&
+    previousIndent === 0 &&
+    previousKey &&
+    isComposeTopLevelKey(previousKey)
+  ) {
+    return null
+  }
+
+  // A user-defined name (e.g. a service under `services:`) does not turn a
+  // following unrecognized bare key into one of its fields — that key is
+  // far more likely a sibling name the user is still typing (a second
+  // service, network, …). Only re-indent it once it no longer matches the
+  // sibling depth; never deepen it under the previous name.
+  if (
+    previousKey &&
+    isComposeUserDefinedNameKey(previousKey) &&
+    isComposeUserDefinedNameKey(currentKey)
+  ) {
+    return currentIndent === previousIndent ? null : previousIndent
+  }
+
+  return childIndent
+}
+
+/**
  * Expected leading spaces for an under-indented line nested under a preceding
  * block opener. Returns null when the line is already indented enough or when
  * the expected depth cannot be inferred safely.
@@ -79,65 +140,177 @@ export function expectedIndentForLine(
 
   for (let index = lineIndex - 1; index >= 0; index -= 1) {
     const previous = lines[index] ?? ''
-    if (isBlankOrCommentLine(previous)) {
+    if (isBlankOrCommentLine(previous) || !lineOpensBlock(previous)) {
       continue
     }
-
-    if (!lineOpensBlock(previous)) {
-      continue
-    }
-
-    const previousIndent = leadingWhitespace(previous).length
-    const childIndent = previousIndent + YAML_INDENT.length
-    if (currentIndent >= childIndent) {
-      return null
-    }
-
-    const previousKey = parseYamlMappingKey(previous)
-    if (
-      currentIndent === 0 &&
-      isComposeTopLevelKey(currentKey) &&
-      previousIndent === 0 &&
-      previousKey &&
-      isComposeTopLevelKey(previousKey)
-    ) {
-      return null
-    }
-
-    return childIndent
+    return resolveIndentAgainstOpener(currentIndent, currentKey, previous)
   }
 
   return null
 }
 
-function lineStartOffset(text: string, lineIndex: number): number {
-  if (lineIndex <= 0) {
-    return 0
+/**
+ * Target indent for a full-line comment: match the following content line
+ * (using that line's expected indent when it is under-indented), else nest
+ * under the previous block opener / align with the previous sibling.
+ * Returns null when the comment is already correct.
+ */
+export function expectedIndentForCommentLine(
+  lines: readonly string[],
+  lineIndex: number,
+): number | null {
+  const line = lines[lineIndex]
+  if (line === undefined || !isFullLineComment(line)) {
+    return null
   }
-  let offset = 0
-  for (let index = 0; index < lineIndex; index += 1) {
-    offset = text.indexOf('\n', offset) + 1
+
+  const currentIndent = leadingWhitespace(line).length
+
+  for (let index = lineIndex + 1; index < lines.length; index += 1) {
+    const next = lines[index] ?? ''
+    if (isBlankLine(next) || isFullLineComment(next)) {
+      continue
+    }
+    const expectedForNext = expectedIndentForLine(lines, index)
+    const target = expectedForNext ?? leadingWhitespace(next).length
+    return currentIndent === target ? null : target
   }
-  return offset
+
+  for (let index = lineIndex - 1; index >= 0; index -= 1) {
+    const previous = lines[index] ?? ''
+    if (isBlankLine(previous) || isFullLineComment(previous)) {
+      continue
+    }
+    const target = lineOpensBlock(previous)
+      ? leadingWhitespace(previous).length + YAML_INDENT.length
+      : leadingWhitespace(previous).length
+    return currentIndent === target ? null : target
+  }
+
+  return currentIndent === 0 ? null : 0
 }
 
-function adjustSelectionForLineIndent(
+function mapSelectionThroughLineRewrites(
+  prev: string,
+  next: string,
   selection: { start: number; end: number },
-  lineStart: number,
-  indentDelta: number,
 ): { start: number; end: number } {
-  if (indentDelta <= 0) {
+  if (prev === next) {
     return selection
   }
+  const prevLines = prev.split('\n')
+  const nextLines = next.split('\n')
+  let prevPos = 0
+  let nextPos = 0
+  let start = selection.start
+  let end = selection.end
+
+  for (let i = 0; i < prevLines.length; i += 1) {
+    const prevLine = prevLines[i] ?? ''
+    const nextLine = nextLines[i] ?? prevLine
+    const delta = nextLine.length - prevLine.length
+    const lineEnd = prevPos + prevLine.length
+
+    if (selection.start > lineEnd) {
+      start += delta
+    } else if (selection.start >= prevPos) {
+      const local = selection.start - prevPos
+      start = nextPos + Math.min(Math.max(local + delta, 0), nextLine.length)
+      // Caret in leading whitespace: prefer staying on the content when indent grows.
+      if (local <= leadingWhitespace(prevLine).length) {
+        start = nextPos + Math.min(local + Math.max(delta, 0), nextLine.length)
+      }
+    }
+
+    if (selection.end > lineEnd) {
+      end += delta
+    } else if (selection.end >= prevPos) {
+      const local = selection.end - prevPos
+      end = nextPos + Math.min(Math.max(local + delta, 0), nextLine.length)
+      if (local <= leadingWhitespace(prevLine).length) {
+        end = nextPos + Math.min(local + Math.max(delta, 0), nextLine.length)
+      }
+    }
+
+    prevPos += prevLine.length + 1
+    nextPos += nextLine.length + 1
+  }
+
   return {
-    start: selection.start >= lineStart ? selection.start + indentDelta : selection.start,
-    end: selection.end >= lineStart ? selection.end + indentDelta : selection.end,
+    start: Math.max(0, Math.min(start, next.length)),
+    end: Math.max(0, Math.min(end, next.length)),
   }
 }
 
 /**
+ * Target indent for a content or full-line-comment line, or null when the
+ * line should be left alone.
+ */
+function expectedIndentForEditableLine(
+  lines: readonly string[],
+  lineIndex: number,
+  line: string,
+): number | null {
+  if (isFullLineComment(line)) {
+    return expectedIndentForCommentLine(lines, lineIndex)
+  }
+  return expectedIndentForLine(lines, lineIndex)
+}
+
+/**
+ * Whether {@link rewriteLineToExpectedIndent} should apply `expected` to
+ * `line`. Keys only deepen when under-indented; comments snap either way.
+ */
+function shouldRewriteLineIndent(
+  line: string,
+  expected: number,
+): boolean {
+  const current = leadingWhitespace(line).length
+  if (current === expected) {
+    return false
+  }
+  // Keys only deepen when under-indented; comments snap to the target depth.
+  if (!isFullLineComment(line) && current >= expected) {
+    return false
+  }
+  return true
+}
+
+/** Rewrite `lines[lineIndex]` to `expected` leading spaces. */
+function rewriteLineToExpectedIndent(
+  lines: string[],
+  lineIndex: number,
+  line: string,
+  expected: number,
+): void {
+  lines[lineIndex] = `${' '.repeat(expected)}${line.trimStart()}`
+}
+
+/**
+ * One pass over every line: deepen under-indented keys and snap comments.
+ * Returns true when at least one line changed.
+ */
+function rewriteUnderIndentedLinesPass(lines: string[]): boolean {
+  let passChanged = false
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]
+    if (line === undefined) {
+      continue
+    }
+    const expected = expectedIndentForEditableLine(lines, lineIndex, line)
+    if (expected === null || !shouldRewriteLineIndent(line, expected)) {
+      continue
+    }
+    rewriteLineToExpectedIndent(lines, lineIndex, line, expected)
+    passChanged = true
+  }
+  return passChanged
+}
+
+/**
  * Fix common compose under-indent mistakes (service names/properties left at
- * column 0 or one level too shallow). Returns null when nothing changed.
+ * column 0 or one level too shallow) and realign full-line comments with their
+ * surrounding block. Returns null when nothing changed.
  */
 export function fixComposeYamlIndentation(
   text: string,
@@ -145,47 +318,25 @@ export function fixComposeYamlIndentation(
 ): YamlEditResult | null {
   const lines = text.split('\n')
   let changed = false
-  let nextSelection = selection ?? { start: text.length, end: text.length }
 
   for (let pass = 0; pass < lines.length + 1; pass += 1) {
-    let passChanged = false
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-      const line = lines[lineIndex]
-      if (line === undefined) {
-        continue
-      }
-
-      const expected = expectedIndentForLine(lines, lineIndex)
-      if (expected === null) {
-        continue
-      }
-
-      const current = leadingWhitespace(line).length
-      if (current >= expected) {
-        continue
-      }
-
-      const indentDelta = expected - current
-      lines[lineIndex] = `${' '.repeat(expected)}${line.trimStart()}`
-      nextSelection = adjustSelectionForLineIndent(
-        nextSelection,
-        lineStartOffset(text, lineIndex),
-        indentDelta,
-      )
-      passChanged = true
-      changed = true
-    }
-    if (!passChanged) {
+    if (!rewriteUnderIndentedLinesPass(lines)) {
       break
     }
+    changed = true
   }
 
   if (!changed) {
     return null
   }
 
+  const nextText = lines.join('\n')
+  const nextSelection = selection
+    ? mapSelectionThroughLineRewrites(text, nextText, selection)
+    : { start: nextText.length, end: nextText.length }
+
   return {
-    text: lines.join('\n'),
+    text: nextText,
     selection: nextSelection,
   }
 }
@@ -210,6 +361,81 @@ function trimTrailingSpacesAndTabs(line: string): string {
     end -= 1
   }
   return end === line.length ? line : line.slice(0, end)
+}
+
+/** 0-based line index containing `offset` (clamped to the document). */
+export function lineIndexAtOffset(text: string, offset: number): number {
+  const clamped = Math.max(0, Math.min(offset, text.length))
+  let line = 0
+  for (let i = 0; i < clamped; i += 1) {
+    if (text[i] === '\n') {
+      line += 1
+    }
+  }
+  return line
+}
+
+/**
+ * Map a caret offset through {@link trimTrailingWhitespacePerLine}.
+ * Offsets in trimmed trailing whitespace snap to the new line end.
+ */
+export function mapOffsetThroughPerLineTrim(
+  prev: string,
+  next: string,
+  offset: number,
+): number {
+  if (prev === next) {
+    return Math.max(0, Math.min(offset, next.length))
+  }
+  const prevLines = prev.split('\n')
+  const nextLines = next.split('\n')
+  let prevPos = 0
+  let nextPos = 0
+  const target = Math.max(0, Math.min(offset, prev.length))
+
+  for (let i = 0; i < prevLines.length; i += 1) {
+    const prevLine = prevLines[i] ?? ''
+    const nextLine = nextLines[i] ?? prevLine
+    const lineStart = prevPos
+    const lineEnd = prevPos + prevLine.length
+
+    if (target <= lineEnd) {
+      const local = target - lineStart
+      return nextPos + Math.min(local, nextLine.length)
+    }
+
+    prevPos = lineEnd + 1
+    nextPos += nextLine.length + 1
+  }
+
+  return next.length
+}
+
+/**
+ * When the caret moves to another line: right-trim and fix under-indent.
+ * No-op for multi-caret selections. Returns null when nothing changes.
+ */
+export function formatComposeYamlOnLineChange(
+  text: string,
+  selection: { start: number; end: number },
+): YamlEditResult | null {
+  if (selection.start !== selection.end) {
+    return null
+  }
+
+  const trimmed = trimTrailingWhitespacePerLine(text)
+  const mapped = {
+    start: mapOffsetThroughPerLineTrim(text, trimmed, selection.start),
+    end: mapOffsetThroughPerLineTrim(text, trimmed, selection.end),
+  }
+  const fixed = fixComposeYamlIndentation(trimmed, mapped)
+  if (fixed) {
+    return fixed
+  }
+  if (trimmed === text) {
+    return null
+  }
+  return { text: trimmed, selection: mapped }
 }
 
 /**
@@ -281,12 +507,7 @@ export function expectedServicePropertyIndent(
     }
 
     // Service name (`  nginx:`) — properties nest one level deeper.
-    if (
-      key &&
-      lineOpensBlock(line) &&
-      !isComposeServicePropertyKey(key) &&
-      !isComposeTopLevelKey(key)
-    ) {
+    if (key && lineOpensBlock(line) && isComposeUserDefinedNameKey(key)) {
       return indent + YAML_INDENT.length
     }
   }

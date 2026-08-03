@@ -183,7 +183,7 @@ describe('blank compose drafts', () => {
   it('treats services: {} as an empty draft', () => {
     const doc = yamlToComposeDocument('services: {}\n')
     expect(doc).toEqual(emptyComposeDocument())
-    expect(composeDocumentToYaml(doc)).toBe('\n')
-    expect(composeDocumentToRuntimeYaml(doc)).toBe('\n')
+    expect(composeDocumentToYaml(doc)).toBe('')
+    expect(composeDocumentToRuntimeYaml(doc)).toBe('')
   })
 })

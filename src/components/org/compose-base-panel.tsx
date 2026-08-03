@@ -8,11 +8,13 @@ export function ComposeBasePanel({
   onSave,
   saving = false,
   defaultEditorView = 'visual',
+  onDraftChange,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
   saving?: boolean
   defaultEditorView?: 'visual' | 'editor'
+  onDraftChange?: (document: ComposeDocument | null) => void
 }>) {
   return (
     <View style={styles.root}>
@@ -22,6 +24,7 @@ export function ComposeBasePanel({
         saving={saving}
         title="Services"
         defaultView={defaultEditorView}
+        onDraftChange={onDraftChange}
       />
     </View>
   )

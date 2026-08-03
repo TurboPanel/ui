@@ -55,7 +55,7 @@ function formatServiceOptionLabel(
   return `${envName} · ${serviceName}`
 }
 
-function ProjectPrincipalsSection({
+export function ProjectPrincipalsSection({
   projectId,
   canManage,
 }: Readonly<{

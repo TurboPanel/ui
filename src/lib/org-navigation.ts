@@ -4,7 +4,14 @@ export const ORG_AREAS = [
     label: 'Projects',
     pathSegment: 'projects',
     hint: 'Projects filtered by the workspace switcher',
-    subRoutes: [],
+    subRoutes: [
+      {
+        id: 'settings',
+        label: 'Settings',
+        pathSegment: 'settings',
+        hint: 'Project defaults such as the default environment name',
+      },
+    ],
   },
   {
     id: 'managed',

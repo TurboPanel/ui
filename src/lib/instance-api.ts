@@ -379,6 +379,31 @@ export async function saveOrgServerCapacity(
   )
 }
 
+export type OrgDefaultEnvironment = {
+  defaultEnvironmentName: string | null
+}
+
+export async function fetchOrgDefaultEnvironment(
+  orgId: string,
+): Promise<OrgDefaultEnvironment> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/default-environment`,
+  )
+}
+
+export async function saveOrgDefaultEnvironment(
+  orgId: string,
+  defaultEnvironmentName: string | null,
+): Promise<OrgDefaultEnvironment & { ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/default-environment`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ defaultEnvironmentName }),
+    },
+  )
+}
+
 export type ServerDeleteBlocker = {
   kind: 'network' | 'container'
   count: number
@@ -741,17 +766,20 @@ export type ProjectRecord = {
   description: string | null;
   workspaceId: string;
   metadata: {
-    type?: 'docker-compose' | 'managed' | 'template' | null;
+    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | null;
     /** Managed engine catalog code (`postgres`, …). */
     code?: string;
   } | null;
   /**
    * `options.compose` is a versioned ComposeDocument.
    * `options.containerNaming` is `uuid` (default) or `custom`.
+   * `options.defaultServerId` is an optional placement pin inherited by
+   * environments that have no `serverId` of their own.
    */
   options: {
     compose?: ComposeDocument
     containerNaming?: 'uuid' | 'custom'
+    defaultServerId?: string
   } | null;
   createdAt: string;
   updatedAt: string;
@@ -819,9 +847,22 @@ export type CreateProjectBody = {
   workspaceId: string;
   displayName?: string;
   description?: string;
-  type?: 'docker-compose' | 'template' | 'managed';
+  /**
+   * `empty` creates an untyped project with one environment named from the org
+   * default (`defaultEnvironmentName`, falling back to `Production`); configure later.
+   */
+  type?: 'empty' | 'docker-compose' | 'template' | 'managed';
   code?: string;
-  /** Pins the scaffolded Production environment when creating a managed project. */
+  /**
+   * Pins the scaffolded default environment (org default name, else `Production`)
+   * when creating a managed project.
+   */
+  serverId?: string;
+};
+
+export type ConfigureProjectBody = {
+  type: 'docker-compose' | 'template' | 'managed';
+  code?: string;
   serverId?: string;
 };
 
@@ -831,6 +872,8 @@ export type ManagedCommandResponse = {
   status: 'queued'
   serverId: string
 }
+
+export type EnvironmentLifecycleAction = 'start' | 'stop' | 'restart'
 
 export type HealthCheckPolicy = 'disabled' | 'warn' | 'required';
 
@@ -1117,6 +1160,17 @@ export async function createProject(
   });
 }
 
+/** Apply type/catalog selection to an empty project (resumable setup). */
+export async function configureProject(
+  id: string,
+  body: ConfigureProjectBody,
+): Promise<{ ok: true; alreadyConfigured: boolean }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}/configure`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function updateProject(
   id: string,
   body: {
@@ -1125,6 +1179,8 @@ export async function updateProject(
     options?: {
       compose?: ComposeDocument
       containerNaming?: 'uuid' | 'custom'
+      /** Optional default placement; `null` clears it. */
+      defaultServerId?: string | null
     };
     workspaceId?: string;
   },
@@ -1349,11 +1405,18 @@ export async function deleteTlsCertificate(id: string): Promise<{ ok: true }> {
 }
 
 export async function fetchContainers(
-  serviceId?: string,
+  serviceIdOrOptions?: string | { serviceId?: string; environmentId?: string },
 ): Promise<{ containers: ContainerRecord[] }> {
-  const params = serviceId ? new URLSearchParams({ serviceId }) : null;
-  const suffix = params ? `?${params.toString()}` : "";
-  return await apiFetch(`${CLIENT_API}/containers${suffix}`);
+  const options =
+    typeof serviceIdOrOptions === 'string'
+      ? { serviceId: serviceIdOrOptions }
+      : serviceIdOrOptions
+  const params = new URLSearchParams()
+  if (options?.serviceId) params.set('serviceId', options.serviceId)
+  if (options?.environmentId) params.set('environmentId', options.environmentId)
+  const query = params.toString()
+  const suffix = query ? `?${query}` : ''
+  return await apiFetch(`${CLIENT_API}/containers${suffix}`)
 }
 
 export async function fetchContainer(
@@ -2675,6 +2738,19 @@ export async function runManagedLifecycle(
 ): Promise<ManagedCommandResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/lifecycle`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    },
+  )
+}
+
+export async function runEnvironmentLifecycle(
+  environmentId: string,
+  action: EnvironmentLifecycleAction,
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/lifecycle`,
     {
       method: 'POST',
       body: JSON.stringify({ action }),

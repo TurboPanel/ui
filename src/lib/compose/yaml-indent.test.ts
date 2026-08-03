@@ -4,6 +4,7 @@ import {
   applyTabIndent,
   applyTabOutdent,
   fixComposeYamlIndentation,
+  formatComposeYamlOnLineChange,
   indentAfterNewline,
   lineOpensBlock,
   trimTrailingWhitespacePerLine,
@@ -129,6 +130,52 @@ describe('trimTrailingWhitespacePerLine', () => {
   })
 })
 
+describe('formatComposeYamlOnLineChange', () => {
+  it('returns null when nothing needs formatting', () => {
+    const text = `services:
+  nginx:
+    image: nginx`
+    expect(
+      formatComposeYamlOnLineChange(text, { start: text.length, end: text.length }),
+    ).toBeNull()
+  })
+
+  it('right-trims and fixes under-indent when leaving a line', () => {
+    const text = `services:
+  nginx:
+image: nginx  
+`
+    const caret = text.length
+    const result = formatComposeYamlOnLineChange(text, {
+      start: caret,
+      end: caret,
+    })
+    expect(result?.text).toBe(`services:
+  nginx:
+    image: nginx
+`)
+  })
+
+  it('ignores multi-character selections', () => {
+    const text = `services:
+nginx:`
+    expect(
+      formatComposeYamlOnLineChange(text, { start: 0, end: text.length }),
+    ).toBeNull()
+  })
+
+  it('leaves a newly-typed sibling service name alone on caret move', () => {
+    const text = `services:
+  nginx:
+    image: nginx
+  another:`
+    const caret = text.length
+    expect(
+      formatComposeYamlOnLineChange(text, { start: caret, end: caret }),
+    ).toBeNull()
+  })
+})
+
 describe('fixComposeYamlIndentation', () => {
   it('nests service names and properties under services', () => {
     const broken = `services:
@@ -153,11 +200,76 @@ networks:
     expect(fixComposeYamlIndentation(source)).toBeNull()
   })
 
+  it('indents full-line comments to match the following content', () => {
+    const broken = `services:
+# web app
+nginx:
+# image tag
+image: nginx`
+    const fixed = fixComposeYamlIndentation(broken)
+    expect(fixed?.text).toBe(`services:
+  # web app
+  nginx:
+    # image tag
+    image: nginx`)
+  })
+
+  it('outdents over-indented comments to match siblings', () => {
+    const broken = `services:
+  nginx:
+        # too deep
+    image: nginx`
+    const fixed = fixComposeYamlIndentation(broken)
+    expect(fixed?.text).toBe(`services:
+  nginx:
+    # too deep
+    image: nginx`)
+  })
+
+  it('leaves top-level comments before services alone', () => {
+    const source = `# stack
+services:
+  nginx:
+    image: nginx`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+
   it('returns null when indentation is already valid', () => {
     const source = `services:
   nginx:
     image: nginx`
     expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+
+  it('does not pull a second service under the first one', () => {
+    const source = `services:
+  nginx:
+    image: nginx
+  another:`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+
+  it('does not pull a second fleshed-out service under the first one', () => {
+    const source = `services:
+  nginx:
+    image: nginx
+  another:
+    image: redis`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+
+  it('still deepens a genuinely under-indented service name', () => {
+    const broken = `services:
+  nginx:
+    image: nginx
+another:
+  image: redis`
+    const fixed = fixComposeYamlIndentation(broken)
+    expect(fixed?.text).toBe(`services:
+  nginx:
+    image: nginx
+  another:
+    image: redis`)
   })
 })
 

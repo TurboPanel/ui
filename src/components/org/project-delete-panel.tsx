@@ -70,7 +70,7 @@ async function loadActiveEnvRows(projectId: string): Promise<EnvStopRow[]> {
   for (const environment of environments) {
     const { services } = await fetchVisibleServices(environment.id)
     const containerLists = await Promise.all(
-      services.map((service) => fetchContainers(service.id)),
+      services.map((service) => fetchContainers({ serviceId: service.id })),
     )
     const containers = containerLists.flatMap((result) => result.containers)
     const active = containers.filter((container) =>

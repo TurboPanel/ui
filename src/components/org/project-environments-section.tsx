@@ -11,11 +11,10 @@ import {
   updateEnvironment,
   type EnvironmentRecord,
 } from '@/lib/instance-api'
+import { validateEnvironmentName } from '@/lib/environment-validation'
+import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-const DISPLAY_NAME_PATTERN = /^[A-Za-z0-9 ._-]+$/
-const DEFAULT_ENVIRONMENT_NAME = 'Production'
 
 function environmentLabel(environment: EnvironmentRecord): string {
   return environment.displayName?.trim() || 'Unnamed environment'
@@ -29,19 +28,6 @@ function resolveSelectedId(
     return previous
   }
   return environments[0]?.id ?? null
-}
-
-function validateEnvironmentName(name: string): string | null {
-  if (!name) {
-    return 'Name is required.'
-  }
-  if (name.length > 255) {
-    return 'Name must be 255 characters or fewer.'
-  }
-  if (!DISPLAY_NAME_PATTERN.test(name)) {
-    return 'Name may only contain letters, numbers, spaces, dots, underscores, and hyphens.'
-  }
-  return null
 }
 
 function EnvironmentTabs({
@@ -257,12 +243,19 @@ function EnvironmentToolbar({
 export function ProjectEnvironmentsSection({
   orgId,
   projectId,
+  embedDetail = true,
 }: Readonly<{
   orgId: string
   projectId: string
+  /** When false, only environment chrome (tabs/rename) — no compose detail body. */
+  embedDetail?: boolean
 }>) {
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
+  const {
+    defaultEnvironmentName,
+    isLoading: defaultNameLoading,
+  } = useOrgDefaultEnvironmentName(orgId)
   const [environments, setEnvironments] = useState<EnvironmentRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -290,6 +283,12 @@ export function ProjectEnvironmentsSection({
   }
 
   useEffect(() => {
+    // Wait for the org default name query to settle so a custom org default is
+    // never raced by the platform fallback while still loading.
+    if (defaultNameLoading) {
+      return
+    }
+
     let cancelled = false
 
     const load = async () => {
@@ -305,7 +304,7 @@ export function ProjectEnvironmentsSection({
           provisionAttemptedFor.current = projectId
           await createEnvironment({
             projectId,
-            displayName: DEFAULT_ENVIRONMENT_NAME,
+            displayName: defaultEnvironmentName,
           })
           envs = await reload()
         }
@@ -337,7 +336,13 @@ export function ProjectEnvironmentsSection({
     return () => {
       cancelled = true
     }
-  }, [projectId, canOwn, handleUnauthorized])
+  }, [
+    projectId,
+    canOwn,
+    handleUnauthorized,
+    defaultEnvironmentName,
+    defaultNameLoading,
+  ])
 
   const activeEnvironment =
     environments.find((env) => env.id === selectedId) ?? null
@@ -504,13 +509,15 @@ export function ProjectEnvironmentsSection({
             }}
           />
         ) : null}
-        <EnvironmentDetailBody
-          key={activeEnvironment.id}
-          orgId={orgId}
-          projectId={projectId}
-          environmentId={activeEnvironment.id}
-          embedded
-        />
+        {embedDetail ? (
+          <EnvironmentDetailBody
+            key={activeEnvironment.id}
+            orgId={orgId}
+            projectId={projectId}
+            environmentId={activeEnvironment.id}
+            embedded
+          />
+        ) : null}
       </>
     )
   }

@@ -4,10 +4,10 @@
 
 **Routes:**
 - `/[orgId]/managed` — org-wide managed services overview (`managed-overview-section.tsx`)
-- `/[orgId]/projects/new` — managed branch of the create wizard
-- `/[orgId]/projects/[projectId]` — managed detail (`managed-project-section.tsx`) when `metadata.type === 'managed'`
+- `/[orgId]/projects/new` — empty project create (then setup → managed catalog)
+- `/[orgId]/projects/[projectId]/{overview,environments,data,backups,settings}` — managed tab shell when `metadata.type === 'managed'`
 
-**Job:** See every managed service in the org at a glance, create a managed engine project (Postgres first), pin a server, reveal the root password once, then operate the service from six dense panels at the project detail route (exactly one detail surface).
+**Job:** See every managed service in the org at a glance, create via empty project + setup, pin a server, reveal the root password once, then operate from tabbed panels (Data / Backups / Settings / Environments).
 
 ---
 

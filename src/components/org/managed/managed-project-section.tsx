@@ -66,10 +66,10 @@ import {
   type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { withGuardedAction } from '@/lib/guarded-action'
+import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-const DEFAULT_ENVIRONMENT_NAME = 'Production'
 const STATUS_POLL_MS = 5_000
 
 const webInputStyle = {
@@ -371,16 +371,19 @@ function isServerPlacementRequiredError(err: unknown): boolean {
   )
 }
 
-function ManagedEnvironmentBody({
+export function ManagedEnvironmentBody({
   orgId,
   environmentId,
   engineCode,
   projectDisplayName,
+  focus = 'all',
 }: Readonly<{
   orgId: string
   environmentId: string
   engineCode: string | null
   projectDisplayName: string
+  /** When set, only render panels for that project shell tab. */
+  focus?: 'all' | 'overview' | 'data' | 'backups' | 'settings' | 'environments'
 }>) {
   const { handleUnauthorized } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
@@ -545,134 +548,150 @@ function ManagedEnvironmentBody({
 
   const managed = detail.managed
   const settings = detail.settings
+  const showOverview = focus === 'all' || focus === 'overview'
+  const showData = focus === 'all' || focus === 'data'
+  const showBackups = focus === 'all' || focus === 'backups'
+  const showSettings = focus === 'all' || focus === 'settings'
+  const showLifecycle =
+    focus === 'all' || focus === 'environments' || focus === 'settings'
 
   return (
     <View style={styles.panels}>
-      <ManagedConnectionPanel
-        managed={managed}
-        connection={detail.connection}
-        server={detail.server}
-      />
-      <ManagedCredentialsPanel
-        rootUsername={detail.rootUsername}
-        canManage={canManage}
-        busy={inFlight}
-        onRotate={async () => {
-          try {
-            const result = await rotateManagedRootPassword(environmentId)
-            registerCommand(result.commandId, 'Rotate root password')
-            return { rootPassword: result.rootPassword }
-          } catch (err) {
-            if (isForbiddenError(err)) {
-              await handleUnauthorized()
-              return null
+      {showOverview || showData ? (
+        <ManagedConnectionPanel
+          managed={managed}
+          connection={detail.connection}
+          server={detail.server}
+        />
+      ) : null}
+      {showData ? (
+        <>
+          <ManagedCredentialsPanel
+            rootUsername={detail.rootUsername}
+            canManage={canManage}
+            busy={inFlight}
+            onRotate={async () => {
+              try {
+                const result = await rotateManagedRootPassword(environmentId)
+                registerCommand(result.commandId, 'Rotate root password')
+                return { rootPassword: result.rootPassword }
+              } catch (err) {
+                if (isForbiddenError(err)) {
+                  await handleUnauthorized()
+                  return null
+                }
+                throw new Error(
+                  managedErrorMessage(err, 'Failed to rotate password'),
+                )
+              }
+            }}
+          />
+          <ManagedUsersPanel
+            databases={databases}
+            users={users}
+            canManage={canManage}
+            busy={inFlight}
+            onCreateDatabase={async (name) => {
+              const result = await createManagedDatabase(environmentId, { name })
+              registerCommand(result.commandId, 'Create database')
+            }}
+            onDeleteDatabase={async (name) => {
+              const result = await deleteManagedDatabase(environmentId, name)
+              registerCommand(result.commandId, 'Delete database')
+            }}
+            onCreateUser={async (input) => {
+              try {
+                const result = await createManagedUser(environmentId, input)
+                registerCommand(result.commandId, 'Create user')
+                return { password: result.password }
+              } catch (err) {
+                if (isForbiddenError(err)) {
+                  await handleUnauthorized()
+                  return null
+                }
+                throw err
+              }
+            }}
+            onDeleteUser={async (principalId) => {
+              const result = await deleteManagedUser(environmentId, principalId)
+              registerCommand(result.commandId, 'Delete user')
+            }}
+            onReload={reloadAll}
+          />
+        </>
+      ) : null}
+      {showBackups ? (
+        <ManagedBackupsPanel
+          backups={backups}
+          supported={supportsBackup}
+          managedDisplayName={managed.displayName?.trim() || projectDisplayName}
+          canManage={canManage}
+          busy={inFlight}
+          onBackupNow={async () => {
+            const result = await createManagedBackup(environmentId)
+            registerCommand(result.commandId, 'Back up now')
+          }}
+          onDelete={async (backupId) => {
+            const result = await deleteManagedBackup(environmentId, backupId)
+            registerCommand(result.commandId, 'Delete backup')
+          }}
+          onRestore={async (backupId) => {
+            const result = await restoreManagedBackup(environmentId, backupId)
+            registerCommand(result.commandId, 'Restore backup')
+          }}
+        />
+      ) : null}
+      {showLifecycle ? (
+        <ManagedLifecyclePanel
+          status={managed.status}
+          projectDisplayName={projectDisplayName}
+          canManage={canManage}
+          busy={inFlight}
+          onLifecycle={async (action) => {
+            try {
+              const result = await runManagedLifecycle(environmentId, action)
+              registerCommand(result.commandId, action)
+            } catch (err) {
+              if (isForbiddenError(err)) {
+                await handleUnauthorized()
+                return
+              }
+              throw new Error(managedErrorMessage(err, 'Lifecycle action failed'))
             }
-            throw new Error(managedErrorMessage(err, 'Failed to rotate password'))
-          }
-        }}
-      />
-      <ManagedUsersPanel
-        databases={databases}
-        users={users}
-        canManage={canManage}
-        busy={inFlight}
-        onCreateDatabase={async (name) => {
-          const result = await createManagedDatabase(environmentId, { name })
-          registerCommand(result.commandId, 'Create database')
-        }}
-        onDeleteDatabase={async (name) => {
-          const result = await deleteManagedDatabase(environmentId, name)
-          registerCommand(result.commandId, 'Delete database')
-        }}
-        onCreateUser={async (input) => {
-          try {
-            const result = await createManagedUser(environmentId, input)
-            registerCommand(result.commandId, 'Create user')
-            return { password: result.password }
-          } catch (err) {
-            if (isForbiddenError(err)) {
-              await handleUnauthorized()
-              return null
+          }}
+          onApply={async () => {
+            try {
+              const result = await applyEnvironmentManaged(environmentId)
+              registerCommand(result.commandId, 'Apply')
+            } catch (err) {
+              if (isForbiddenError(err)) {
+                await handleUnauthorized()
+                return
+              }
+              throw new Error(managedErrorMessage(err, 'Apply failed'))
             }
-            throw err
-          }
-        }}
-        onDeleteUser={async (principalId) => {
-          const result = await deleteManagedUser(environmentId, principalId)
-          registerCommand(result.commandId, 'Delete user')
-        }}
-        onReload={reloadAll}
-      />
-      <ManagedBackupsPanel
-        backups={backups}
-        supported={supportsBackup}
-        managedDisplayName={managed.displayName?.trim() || projectDisplayName}
-        canManage={canManage}
-        busy={inFlight}
-        onBackupNow={async () => {
-          const result = await createManagedBackup(environmentId)
-          registerCommand(result.commandId, 'Back up now')
-        }}
-        onDelete={async (backupId) => {
-          const result = await deleteManagedBackup(environmentId, backupId)
-          registerCommand(result.commandId, 'Delete backup')
-        }}
-        onRestore={async (backupId) => {
-          const result = await restoreManagedBackup(environmentId, backupId)
-          registerCommand(result.commandId, 'Restore backup')
-        }}
-      />
-      <ManagedLifecyclePanel
-        status={managed.status}
-        projectDisplayName={projectDisplayName}
-        canManage={canManage}
-        busy={inFlight}
-        onLifecycle={async (action) => {
-          try {
-            const result = await runManagedLifecycle(environmentId, action)
-            registerCommand(result.commandId, action)
-          } catch (err) {
-            if (isForbiddenError(err)) {
-              await handleUnauthorized()
-              return
+          }}
+          onDelete={async () => {
+            try {
+              const result = await deleteEnvironmentManaged(environmentId)
+              if (result.deleted) {
+                await reloadAll()
+                return
+              }
+              if (result.commandId && result.serverId) {
+                registerCommand(result.commandId, 'Delete')
+              }
+            } catch (err) {
+              if (isForbiddenError(err)) {
+                await handleUnauthorized()
+                return
+              }
+              throw new Error(managedErrorMessage(err, 'Delete failed'))
             }
-            throw new Error(managedErrorMessage(err, 'Lifecycle action failed'))
-          }
-        }}
-        onApply={async () => {
-          try {
-            const result = await applyEnvironmentManaged(environmentId)
-            registerCommand(result.commandId, 'Apply')
-          } catch (err) {
-            if (isForbiddenError(err)) {
-              await handleUnauthorized()
-              return
-            }
-            throw new Error(managedErrorMessage(err, 'Apply failed'))
-          }
-        }}
-        onDelete={async () => {
-          try {
-            const result = await deleteEnvironmentManaged(environmentId)
-            if (result.deleted) {
-              // Hard delete removes only the managed row — stay on the project
-              // route so this tab can fall back to setup / other environments.
-              await reloadAll()
-              return
-            }
-            if (result.commandId && result.serverId) {
-              registerCommand(result.commandId, 'Delete')
-            }
-          } catch (err) {
-            if (isForbiddenError(err)) {
-              await handleUnauthorized()
-              return
-            }
-            throw new Error(managedErrorMessage(err, 'Delete failed'))
-          }
-        }}
-      />
-      {settings ? (
+          }}
+        />
+      ) : null}
+      {showSettings && settings ? (
         <ManagedSettingsPanel
           settings={settings}
           canManage={canManage}
@@ -693,16 +712,18 @@ function ManagedEnvironmentBody({
           }}
         />
       ) : null}
-      <ManagedStatusPanel
-        status={status?.status ?? managed.status}
-        host={status?.host ?? managed.host}
-        port={status?.port ?? managed.port}
-        containers={status?.containers ?? []}
-        onFetchLogs={async (tail) => {
-          const result = await fetchManagedLogs(environmentId, tail)
-          return result.logs
-        }}
-      />
+      {showOverview || showSettings ? (
+        <ManagedStatusPanel
+          status={status?.status ?? managed.status}
+          host={status?.host ?? managed.host}
+          port={status?.port ?? managed.port}
+          containers={status?.containers ?? []}
+          onFetchLogs={async (tail) => {
+            const result = await fetchManagedLogs(environmentId, tail)
+            return result.logs
+          }}
+        />
+      ) : null}
     </View>
   )
 }
@@ -721,6 +742,7 @@ async function loadOrProvisionEnvironments(
   projectId: string,
   canOwn: boolean,
   provisionAttemptedFor: { current: string | null },
+  displayName: string,
 ): Promise<EnvironmentRecord[]> {
   const envs = (await fetchVisibleEnvironments(projectId)).environments
   const shouldProvision =
@@ -729,7 +751,7 @@ async function loadOrProvisionEnvironments(
     return envs
   }
   provisionAttemptedFor.current = projectId
-  await createEnvironment({ projectId, displayName: DEFAULT_ENVIRONMENT_NAME })
+  await createEnvironment({ projectId, displayName })
   return (await fetchVisibleEnvironments(projectId)).environments
 }
 
@@ -1049,6 +1071,10 @@ export function ManagedProjectSection({
 }>) {
   const { handleUnauthorized } = useAuth()
   const canOwn = useCan('organization', orgId, 'organization:own')
+  const {
+    defaultEnvironmentName,
+    isLoading: defaultNameLoading,
+  } = useOrgDefaultEnvironmentName(orgId)
   const [environments, setEnvironments] = useState<EnvironmentRecord[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1056,13 +1082,24 @@ export function ManagedProjectSection({
   const provisionAttemptedFor = useRef<string | null>(null)
 
   useEffect(() => {
+    // Wait for the org default name query to settle so a custom org default is
+    // never raced by the platform fallback while still loading.
+    if (defaultNameLoading) {
+      return
+    }
+
     let cancelled = false
     const load = async () => {
       setLoading(true)
       setError(null)
       const result = await withGuardedAction(
         () =>
-          loadOrProvisionEnvironments(projectId, canOwn, provisionAttemptedFor),
+          loadOrProvisionEnvironments(
+            projectId,
+            canOwn,
+            provisionAttemptedFor,
+            defaultEnvironmentName,
+          ),
         handleUnauthorized,
         'Failed to load environments',
       )
@@ -1082,7 +1119,13 @@ export function ManagedProjectSection({
     return () => {
       cancelled = true
     }
-  }, [projectId, canOwn, handleUnauthorized])
+  }, [
+    projectId,
+    canOwn,
+    handleUnauthorized,
+    defaultEnvironmentName,
+    defaultNameLoading,
+  ])
 
   const activeEnvironment =
     environments.find((env) => env.id === selectedId) ?? null

@@ -2,6 +2,10 @@
   "extends": "./node_modules/expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true,
+    // Mirrors Metro's platform-extension resolution (`.native.tsx` /
+    // `.web.tsx`) so `tsc` resolves bare imports like `./compose-yaml-editor`
+    // the same way the bundler does instead of failing to find a module.
+    "moduleSuffixes": [".native", ".web", ""],
     "paths": {
       "@/*": [
         "./src/*"

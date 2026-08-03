@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
+import { persistEnvironmentCompose } from '@/components/org/compose-persistence'
 import { DeployPreviewPanel } from '@/components/org/deploy-preview-panel'
 import {
   ContainerRoleBadge,
@@ -336,7 +337,7 @@ async function fetchContainersByService(
 ): Promise<Record<string, ContainerRecord[]>> {
   const entries = await Promise.all(
     services.map(async (service) => {
-      const result = await fetchContainers(service.id)
+      const result = await fetchContainers({ serviceId: service.id })
       return [service.id, result.containers] as const
     }),
   )
@@ -955,11 +956,13 @@ function EnvironmentPlacementPanel({
   placementServerId,
   sortedServers,
   savingPlacement,
+  inheritsProjectDefault,
   onSavePlacement,
 }: Readonly<{
   placementServerId: string | null
   sortedServers: OrgServerRecord[]
   savingPlacement: boolean
+  inheritsProjectDefault?: boolean
   onSavePlacement: (serverId: string) => void
 }>) {
   const options = placementDropdownOptions(sortedServers, placementServerId)
@@ -1053,12 +1056,16 @@ function EnvironmentPlacementPanel({
   return (
     <SectionPanel
       title="Server"
-      hint="Required — this environment deploys to one server"
+      hint={
+        inheritsProjectDefault
+          ? 'Inherited from project Base — pick a server to override for this environment'
+          : 'Required — this environment deploys to one server'
+      }
     >
       {picker}
       {!placementServerId ? (
         <Text style={orgPanelStyles.error}>
-          Select a server before deploying.
+          Select a server before deploying (or set a default on Base).
         </Text>
       ) : null}
       {selectedOffline ? (
@@ -1138,6 +1145,7 @@ function EnvironmentLoadedPanels({
   savingCompose,
   savingPlacement,
   onSavePlacement,
+  inheritsProjectDefault = false,
   services,
   setServices,
   hostingEditors,
@@ -1168,6 +1176,7 @@ function EnvironmentLoadedPanels({
   savingCompose: boolean
   savingPlacement: boolean
   onSavePlacement: (serverId: string) => void
+  inheritsProjectDefault?: boolean
   services: ServiceRecord[]
   setServices: Dispatch<SetStateAction<ServiceRecord[]>>
   hostingEditors: Record<string, HostingEditorState>
@@ -1223,6 +1232,7 @@ function EnvironmentLoadedPanels({
         placementServerId={placementServerId}
         sortedServers={sortedServers}
         savingPlacement={savingPlacement}
+        inheritsProjectDefault={inheritsProjectDefault}
         onSavePlacement={onSavePlacement}
       />
 
@@ -1403,6 +1413,9 @@ export function EnvironmentDetailBody({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [projectCompose, setProjectCompose] = useState<unknown>(null)
+  const [projectDefaultServerId, setProjectDefaultServerId] = useState<
+    string | null
+  >(null)
   const [savingCompose, setSavingCompose] = useState(false)
   const [savingPlacement, setSavingPlacement] = useState(false)
   const [allServers, setAllServers] = useState<OrgServerRecord[]>([])
@@ -1449,6 +1462,9 @@ export function EnvironmentDetailBody({
         }
         setEnvironment(result.environment)
         setProjectCompose(projectResult.project.options?.compose)
+        setProjectDefaultServerId(
+          projectResult.project.options?.defaultServerId ?? null,
+        )
         setAllServers(serversResult.servers)
         setServices(servicesResult.services)
         setTlsLibrary(tlsResult.tls)
@@ -1498,7 +1514,11 @@ export function EnvironmentDetailBody({
     [environment?.options?.compose, projectCompose],
   )
   const serviceNames = useMemo(() => composeServiceNames(mergedCompose), [mergedCompose])
-  const placementServerId = environment?.serverId ?? null
+  const envServerId = environment?.serverId ?? null
+  const placementServerId =
+    envServerId ?? projectDefaultServerId
+  const inheritsProjectDefault =
+    !envServerId && Boolean(projectDefaultServerId)
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
     [allServers, placementServerId],
@@ -1514,34 +1534,29 @@ export function EnvironmentDetailBody({
   )
 
   const saveCompose = async (compose: ComposeDocument) => {
-    setSavingCompose(true)
-    setError(null)
-    try {
-      await updateEnvironment(environmentId, { options: { compose } })
-      setEnvironment((current) =>
-        current
-          ? { ...current, options: { compose } }
-          : current,
-      )
-      const servicesResult = await fetchVisibleServices(environmentId)
-      setServices(servicesResult.services)
-      const [hostingState, containersState] = await Promise.all([
-        fetchHostingsByService(servicesResult.services),
-        fetchContainersByService(servicesResult.services),
-      ])
-      setHostingsByService(hostingState.byService)
-      setHostingEditors(hostingState.editors)
-      setContainersByService(containersState)
-    } catch (err) {
-      await reportSectionError(
-        err,
-        handleUnauthorized,
-        setError,
-        'Failed to save compose overlay',
-      )
-    } finally {
-      setSavingCompose(false)
-    }
+    await persistEnvironmentCompose({
+      environmentId,
+      compose,
+      setError,
+      setSaving: setSavingCompose,
+      handleUnauthorized,
+      onSaved: async () => {
+        setEnvironment((current) =>
+          current
+            ? { ...current, options: { compose } }
+            : current,
+        )
+        const servicesResult = await fetchVisibleServices(environmentId)
+        setServices(servicesResult.services)
+        const [hostingState, containersState] = await Promise.all([
+          fetchHostingsByService(servicesResult.services),
+          fetchContainersByService(servicesResult.services),
+        ])
+        setHostingsByService(hostingState.byService)
+        setHostingEditors(hostingState.editors)
+        setContainersByService(containersState)
+      },
+    })
   }
 
   const savePlacement = async (serverIdToPin: string) => {
@@ -1702,6 +1717,7 @@ export function EnvironmentDetailBody({
           onSavePlacement={(nextServerId) => {
             void savePlacement(nextServerId)
           }}
+          inheritsProjectDefault={inheritsProjectDefault}
           services={services}
           setServices={setServices}
           hostingEditors={hostingEditors}

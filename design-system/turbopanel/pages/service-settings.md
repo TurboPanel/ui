@@ -8,7 +8,7 @@ Per-service operational settings live in `service.options` (not compose YAML). D
 | `container.name` | — | compose `container_name` |
 | `operations.stopGracePeriodSeconds` | 30 | compose `stop_grace_period` |
 | `operations.maxRestartAttempts` | 10 | compose `deploy.restart_policy.max_attempts` |
-| `healthCheck.policy` | `warn` | pre-deploy gate; optional bypass |
+| `healthCheck.policy` | `disabled` | optional; `warn`/`required` gate only when set; compose `healthcheck:` (or image HEALTHCHECK) is enough when present |
 | `preDeployCommand` / `postDeployCommand` | — | daemon shell hooks |
 | `resources.cpus` / `memoryBytes` | — | compose limits |
 
