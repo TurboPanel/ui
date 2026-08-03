@@ -2,10 +2,11 @@
   "extends": "./node_modules/expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true,
-    // Mirrors Metro's platform-extension resolution (`.native.tsx` /
-    // `.web.tsx`) so `tsc` resolves bare imports like `./compose-yaml-editor`
-    // the same way the bundler does instead of failing to find a module.
-    "moduleSuffixes": [".native", ".web", ""],
+    // Prefer a bare module when it exists (package entrypoints + stubs), then
+    // platform suffixes so `tsc` can resolve `./compose-yaml-editor` like Metro.
+    // Bare-first also keeps `react-native-svg` on its non-web typings — `.web`
+    // first made Defs reject children and Svg style reject AbsoluteFillStyle.
+    "moduleSuffixes": ["", ".native", ".web"],
     "paths": {
       "@/*": [
         "./src/*"

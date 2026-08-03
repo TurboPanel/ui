@@ -75,10 +75,11 @@ function useEnvironmentContainers(
   const [containersByEnv, setContainersByEnv] = useState<ContainersByEnv>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const envIds = environments.map((env) => env.id)
   const envKey = joinedEnvironmentIds(environments)
-  const envIdsRef = useRef(envIds)
-  envIdsRef.current = envIds
+  const envIdsRef = useRef(environments.map((env) => env.id))
+  useEffect(() => {
+    envIdsRef.current = environments.map((env) => env.id)
+  }, [envKey, environments])
 
   const refreshOne = useCallback(async (environmentId: string) => {
     const result = await fetchContainers({ environmentId })
