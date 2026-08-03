@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -456,29 +456,44 @@ export function OverviewEnvironmentsPanel() {
     selectedEnvironment?.id ?? '',
   )
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
+  const commandMetaRef = useRef(commandMeta)
+  commandMetaRef.current = commandMeta
+  const refetchOneRef = useRef(containersQuery.refetchOne)
+  refetchOneRef.current = containersQuery.refetchOne
 
   useEffect(() => {
-    if (!commandsQuery.data) return
+    if (!commandsQuery.data || trackedEntries.length === 0) return
+
     for (const [index, record] of commandsQuery.data.entries()) {
       const entry = trackedEntries[index]
       if (!entry) continue
-      const meta = commandMeta[entry.commandId]
+      const meta = commandMetaRef.current[entry.commandId]
       if (!meta || isTerminalCommandStatus(meta.status)) continue
 
       const nextStatus = record.status
-      setCommandMeta((current) => ({
-        ...current,
-        [entry.commandId]: {
-          ...meta,
-          status: nextStatus,
-          error: record.error ?? null,
-        },
-      }))
+      const nextError = record.error ?? null
+      if (meta.status !== nextStatus || meta.error !== nextError) {
+        setCommandMeta((current) => {
+          const latest = current[entry.commandId]
+          if (!latest || isTerminalCommandStatus(latest.status)) return current
+          if (latest.status === nextStatus && latest.error === nextError) {
+            return current
+          }
+          return {
+            ...current,
+            [entry.commandId]: {
+              ...latest,
+              status: nextStatus,
+              error: nextError,
+            },
+          }
+        })
+      }
 
       if (!isTerminalCommandStatus(nextStatus)) continue
 
       if (nextStatus === 'succeeded') {
-        void containersQuery.refetchOne(meta.environmentId)
+        void refetchOneRef.current(meta.environmentId)
         if (meta.label === 'Destroy' || meta.label === 'Start') {
           void invalidateEnvironments()
         }
@@ -488,13 +503,7 @@ export function OverviewEnvironmentsPanel() {
         current.filter((row) => row.commandId !== entry.commandId),
       )
     }
-  }, [
-    commandsQuery.data,
-    trackedEntries,
-    commandMeta,
-    containersQuery,
-    invalidateEnvironments,
-  ])
+  }, [commandsQuery.data, trackedEntries, invalidateEnvironments])
 
   const commands = commandMeta
   const inFlight = Object.values(commands).some(

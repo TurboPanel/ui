@@ -1,5 +1,5 @@
-import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { keepPreviousData, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useMemo } from 'react'
 import { fetchContainers, type ContainerRecord } from '@/lib/instance-api'
 import { queryKeys, type ContainerListFilters } from '@/lib/query-keys'
 
@@ -35,6 +35,7 @@ export function useContainersByEnvironments(
   environmentIds: readonly string[],
   options?: Readonly<{ enabled?: boolean }>,
 ) {
+  const queryClient = useQueryClient()
   const enabled = (options?.enabled ?? true) && orgId.length > 0
   const queries = useQueries({
     queries: environmentIds.map((environmentId) => ({
@@ -63,16 +64,24 @@ export function useContainersByEnvironments(
   const isLoading =
     enabled && environmentIds.length > 0 && queries.some((query) => query.isLoading)
 
-  const refetchAll = async () => {
-    await Promise.all(queries.map((query) => query.refetch()))
-  }
+  const refetchAll = useCallback(async () => {
+    await Promise.all(
+      environmentIds.map((environmentId) =>
+        queryClient.refetchQueries({
+          queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
+        }),
+      ),
+    )
+  }, [environmentIds, orgId, queryClient])
 
-  const refetchOne = async (environmentId: string) => {
-    const index = environmentIds.indexOf(environmentId)
-    if (index >= 0) {
-      await queries[index]?.refetch()
-    }
-  }
+  const refetchOne = useCallback(
+    async (environmentId: string) => {
+      await queryClient.refetchQueries({
+        queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
+      })
+    },
+    [orgId, queryClient],
+  )
 
   return { containersByEnv, isLoading, refetchAll, refetchOne }
 }
