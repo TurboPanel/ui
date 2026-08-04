@@ -234,51 +234,7 @@ export const queryKeys = {
   },
 } as const
 
-/** @deprecated Prefer {@link queryKeys.auth} — kept for import-stable re-exports. */
-export const authQueryKeys = {
-  authStatus: queryKeys.auth.status,
-  session: queryKeys.auth.session,
-  organizations: queryKeys.auth.organizations,
-  permissions: queryKeys.auth.permissions,
-  accessGrants: queryKeys.auth.accessGrants,
-}
-
-/**
- * @deprecated Prefer {@link queryKeys} — kept for import-stable re-exports.
- * `orgServers` is org-scoped; pass `orgId` when available, or use
- * `queryKeys.org(orgId).servers.list`.
- */
-export const visibilityQueryKeys = {
-  teams: queryKeys.auth.teams,
-  /** Legacy unscoped root — prefer `queryKeys.org(orgId).servers.list`. */
-  orgServers: ['org', 'servers'] as const,
-  workspaces: ['org', 'workspaces', 'list'] as const,
-  environments: (projectId?: string) =>
-    ['org', 'environments', 'list', projectId ?? 'all'] as const,
-  projects: (workspaceId?: string) =>
-    ['org', 'projects', 'list', workspaceId ?? 'all'] as const,
-  services: (environmentId?: string) =>
-    ['org', 'services', 'list', environmentId ?? 'all'] as const,
-  hostings: (serviceId: string) =>
-    ['org', 'hostings', 'list', serviceId] as const,
-  can: queryKeys.auth.can,
-}
-
-const VISIBILITY_ROOTS = new Set<unknown>([
-  'org',
-  'auth',
-  // Legacy roots still accepted so in-flight caches invalidate on 403.
-  'org-servers',
-  'visible-teams',
-  'visible-workspaces',
-  'visible-environments',
-  'visible-projects',
-  'visible-services',
-  'visible-hostings',
-  'access-grants',
-  'can',
-  'resource-id',
-])
+const VISIBILITY_ROOTS = new Set<unknown>(['org', 'auth'])
 
 /**
  * True when a query belongs to a visibility-scoped subtree that should be
@@ -288,20 +244,7 @@ const VISIBILITY_ROOTS = new Set<unknown>([
 export function isVisibilityQuery(query: {
   queryKey: readonly unknown[]
 }): boolean {
-  const root = query.queryKey[0]
-  if (VISIBILITY_ROOTS.has(root)) return true
-  // Nested auth permission helpers
-  if (root === 'auth') {
-    const second = query.queryKey[1]
-    return (
-      second === 'can' ||
-      second === 'access-grants' ||
-      second === 'resource-id' ||
-      second === 'permissions' ||
-      second === 'teams'
-    )
-  }
-  return false
+  return VISIBILITY_ROOTS.has(query.queryKey[0])
 }
 
 /** Mirrors instance `getAccessManagementPermission()` in access-management.ts. */

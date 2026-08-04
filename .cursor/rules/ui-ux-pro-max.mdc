@@ -17,7 +17,7 @@ This repo is the **signed-in OLED ops console** (Tamagui / Expo). Visual work mu
 | Page overrides | `design-system/turbopanel/pages/<page>.md` (wins over Master) |
 | Tokens | `src/lib/theme.ts` |
 
-Do **not** install or search a second copy under `.cursor/skills/ui-ux-pro-max/`. Expo/platform skills live under `.agents/skills/`; unrelated design toolkit skills under `.cursor/skills/` are not a substitute for this workflow.
+Do **not** install or search a second copy under `.cursor/skills/ui-ux-pro-max/`. Do **not** add unrelated design toolkit packs under `.cursor/skills/` — they are not part of this repo’s skill footprint. Expo/platform skills live under `.agents/skills/` only (see `AGENTS.md` → Agent skills).
 
 ## When to use
 

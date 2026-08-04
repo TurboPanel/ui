@@ -3,9 +3,9 @@ import Svg, { G, Path } from 'react-native-svg'
 import { colors } from '@/lib/theme'
 
 /** Path data shared with `assets/brand/turbopanel-logo*.svg`. */
-const BAR_A = 'M55 40h55L70 140H15z'
-const BAR_B = 'M125 40h75l-40 100H85z'
-const TEE = 'M215 40h420l-40 100H420L310 400H200l110-260H175z'
+const BAR_A = 'M55 40h55L62 160H7z'
+const BAR_B = 'M125 40h78l-48 120H77z'
+const TEE = 'M220 40h415l-48 120H435L335 410H180l100-250H172z'
 
 /** Visible letters after the T mark; a11y label stays “TurboPanel”. */
 const WORDMARK = 'urboPanel'
@@ -13,9 +13,9 @@ const WORDMARK = 'urboPanel'
 /** Mark viewBox 680×520. */
 const MARK_ASPECT = 680 / 520
 /** Empty pad above/below ink in the mark viewBox. */
-const INK_PAD = 80 / 520
+const INK_PAD = 75 / 520
 /** Stem tip → top of blue/green bars. */
-const INK_HEIGHT = 360 / 520
+const INK_HEIGHT = 370 / 520
 /**
  * Plus Jakarta Sans ExtraBold Italic: `actualBoundingBoxAscent / fontSize`
  * for tall letters (P, l, b). True measured match to the T ink height is
@@ -42,7 +42,7 @@ export const TURBOPANEL_BRAND_FONT = 'PlusJakartaSansItalic'
 
 /**
  * Extra oblique beyond the italic face so the wordmark matches the T lean
- * (mark edges are ~atan(40/100) ≈ 22°; italic alone is ~12°).
+ * (mark edges are ~atan(48/120) ≈ 22°; italic alone is ~12°).
  */
 const WORDMARK_SKEW = '-14deg'
 
@@ -84,7 +84,7 @@ export function TurboPanelLogoMark({
   const width = square ? size : Math.round(size * MARK_ASPECT)
   const height = size
   const viewBox = square ? '0 0 680 680' : '0 0 680 520'
-  const translateY = square ? 120 : 40
+  const translateY = square ? 115 : 35
   const decorative = accessibilityLabel.length === 0
 
   return (

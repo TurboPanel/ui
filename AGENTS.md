@@ -38,6 +38,7 @@ Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) 
 | Need | Go to |
 |------|--------|
 | **Any visual / UX work** | [Design system (ui-ux-pro-max)](#design-system-ui-ux-pro-max) — mandatory skill + MASTER/page workflow |
+| **Agent skills** | [Agent skills](#agent-skills) — canonical `.agents/skills/` footprint |
 | Stack / fonts / Tamagui | [Stack](#stack) |
 | Auth, install, sign-up | [End-user auth & first-run install](#end-user-auth--first-run-install-self-hosted) |
 | Org routes & shell | [Organization console](#organization-console-organizationid) |
@@ -47,6 +48,26 @@ Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) 
 | Commands / polling | [Command Pipeline UI](#command-pipeline-ui) + `src/lib/queries/commands.ts` |
 | Deploy modes | [Build output & deployment](#build-output--deployment-dev-vs-prod) |
 | Pre-commit / typecheck | [Testing & pre-commit](#testing--pre-commit) |
+
+## Agent skills
+
+Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills-lock.json`). Do not add packs under `.cursor/skills/`.
+
+| Skill | Why retained |
+| --- | --- |
+| **ui-ux-pro-max** | Mandatory design workflow for console visuals — see [Design system (ui-ux-pro-max)](#design-system-ui-ux-pro-max) |
+| **building-native-ui** | Expo Router / native UI patterns for this Expo app |
+| **native-data-fetching** | Fetch / React Query / Expo Router loader guidance |
+| **expo-deployment** | Web / store / hosting deploy paths for the Expo export |
+| **expo-dev-client** | Development client builds when native modules are needed |
+| **expo-cicd-workflows** | EAS workflow YAML for CI/CD |
+| **eas-update-insights** | OTA update health when EAS Update is in play |
+| **expo-module** | Expo Modules API if native module work is required |
+| **upgrading-expo** | SDK upgrade guidance |
+| **use-dom** | Expo DOM components for web-in-native incremental migration |
+| **add-app-clip** | iOS App Clip target when that surface is needed |
+
+Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`, and `src/lib/theme.ts` — never commit `.tamagui/` generated cache.
 
 ## Stack
 
@@ -331,7 +352,7 @@ Authorization helpers:
 - `restartSystemComponent(serverId, component)` → `POST /api/client/v1/servers/:id/system/:component/restart` — `CommandEnqueueResponse` + `serverId`; errors `unknown_system_component` / `system_component_not_provisioned` / `system_reconcile_unavailable`; descendant mutations may return **403** `system_resource_immutable`
 - `ProjectRecord.metadata.component` — optional internal system-component idempotency key (e.g. `hosting-ingress`); never an authorization source
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
-- `createProject({ type: 'empty' | 'docker-compose' | 'template' | 'managed', serverId?, … })` — UI create uses `type: 'empty'` then configure on setup; Docker Compose remains the omit-type API default. Project/workspace names are unique per org (trim + case-insensitive; **409** `project_name_in_use` / `workspace_name_in_use`). Managed create may pass `serverId` to pin the scaffolded Production environment
+- `createProject({ type: 'empty' | 'docker-compose' | 'template' | 'managed', serverId?, … })` — `type` is **required**. UI create uses `type: 'empty'` then configure on setup. Project/workspace names are unique per org (trim + case-insensitive; **409** `project_name_in_use` / `workspace_name_in_use`). Managed create may pass `serverId` to pin the scaffolded Production environment
 - `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`); `updateProject` also accepts `options.containerNaming` (`uuid` \| `custom`)
 - `deployEnvironment(environmentId, body?)` → `POST /api/client/v1/environments/:id/deploy`; the UI always requires `EnvironmentRecord.serverId` first and calls deploy without a body so the instance resolves the target from that column; poll with `fetchCommand(serverId, commandId)` (Postgres only)
 - `fetchDeployPreview(environmentId)` → `GET /api/client/v1/environments/:id/deploy-preview` — `DeployPreviewResponse` (`composeYaml`, `projectName`, `containers[]`, `volumes[]`, `warnings[]`); secret values redacted; same prepare path as deploy

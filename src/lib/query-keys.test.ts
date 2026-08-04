@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isVisibilityQuery,
-  queryKeys,
-  visibilityQueryKeys,
-} from './query-keys'
+import { isVisibilityQuery, queryKeys } from './query-keys'
 
 describe('isVisibilityQuery', () => {
   it('matches org-scoped hierarchical keys', () => {
@@ -47,29 +43,6 @@ describe('isVisibilityQuery', () => {
     expect(isVisibilityQuery({ queryKey: queryKeys.auth.teams })).toBe(true)
   })
 
-  it('matches legacy visibility roots', () => {
-    expect(
-      isVisibilityQuery({ queryKey: visibilityQueryKeys.orgServers }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({ queryKey: visibilityQueryKeys.workspaces }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({ queryKey: visibilityQueryKeys.environments('p-1') }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({ queryKey: visibilityQueryKeys.projects('ws-1') }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({ queryKey: visibilityQueryKeys.services('env-1') }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({
-        queryKey: visibilityQueryKeys.hostings('svc-1'),
-      }),
-    ).toBe(true)
-  })
-
   it('rejects non-visibility keys', () => {
     expect(isVisibilityQuery({ queryKey: queryKeys.timezones })).toBe(false)
     expect(
@@ -89,13 +62,13 @@ describe('isVisibilityQuery', () => {
     ).toBe(true)
   })
 
-  it('accepts legacy flat roots for in-flight cache invalidation', () => {
-    expect(isVisibilityQuery({ queryKey: ['org-servers'] })).toBe(true)
-    expect(isVisibilityQuery({ queryKey: ['visible-teams'] })).toBe(true)
-    expect(isVisibilityQuery({ queryKey: ['visible-workspaces'] })).toBe(true)
-    expect(isVisibilityQuery({ queryKey: ['access-grants'] })).toBe(true)
-    expect(isVisibilityQuery({ queryKey: ['can'] })).toBe(true)
-    expect(isVisibilityQuery({ queryKey: ['resource-id'] })).toBe(true)
+  it('rejects retired flat visibility roots', () => {
+    expect(isVisibilityQuery({ queryKey: ['org-servers'] })).toBe(false)
+    expect(isVisibilityQuery({ queryKey: ['visible-teams'] })).toBe(false)
+    expect(isVisibilityQuery({ queryKey: ['visible-workspaces'] })).toBe(false)
+    expect(isVisibilityQuery({ queryKey: ['access-grants'] })).toBe(false)
+    expect(isVisibilityQuery({ queryKey: ['can'] })).toBe(false)
+    expect(isVisibilityQuery({ queryKey: ['resource-id'] })).toBe(false)
   })
 })
 

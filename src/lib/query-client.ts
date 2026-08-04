@@ -19,11 +19,9 @@ import { queryKeys } from '@/lib/query-keys'
 
 export {
   ACCESS_MANAGEMENT_PERMISSION,
-  authQueryKeys,
   getAccessManagementPermissionKey,
   isVisibilityQuery,
   queryKeys,
-  visibilityQueryKeys,
 } from '@/lib/query-keys'
 
 type ForbiddenHandler = (error: unknown) => void | Promise<void>

@@ -861,10 +861,11 @@ export type CreateProjectBody = {
   displayName?: string;
   description?: string;
   /**
-   * `empty` creates an untyped project with one environment named from the org
-   * default (`defaultEnvironmentName`, falling back to `Production`); configure later.
+   * Required. `empty` creates an untyped project with one environment named
+   * from the org default (`defaultEnvironmentName`, falling back to
+   * `Production`); configure later via setup.
    */
-  type?: 'empty' | 'docker-compose' | 'template' | 'managed';
+  type: 'empty' | 'docker-compose' | 'template' | 'managed';
   code?: string;
   /**
    * Pins the scaffolded default environment (org default name, else `Production`)
