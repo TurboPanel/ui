@@ -31,6 +31,7 @@ Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) 
 - Mark React component props **`Readonly<{…}>`** (`typescript:S6759`).
 - Do not leave **`TODO`** in code — use `Future:` in a normal comment (`typescript:S1135`).
 - Avoid widening unions with bare **`string`** when a literal union exists (`typescript:S6571`).
+- Web-only CSS (`position: 'sticky'`, `overflowX`, `backdropFilter`, …) is not in RN `ViewStyle` — cast via `as unknown as ViewStyle` (same pattern as `src/lib/glass.ts`). Do **not** use `as const` on those objects inside `StyleSheet.create` or `tsc` fails.
 
 ## At a glance
 
@@ -45,12 +46,28 @@ Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) 
 | Admin surface | [Admin area](#admin-area-admin) |
 | Commands / polling | [Command Pipeline UI](#command-pipeline-ui) + `src/lib/queries/commands.ts` |
 | Deploy modes | [Build output & deployment](#build-output--deployment-dev-vs-prod) |
+| Pre-commit / typecheck | [Testing & pre-commit](#testing--pre-commit) |
 
 ## Stack
 
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
 - **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
 - **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.
+
+## Testing & pre-commit
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm typecheck` | `tsc --noEmit` — same gate as CI `verify.yml` and deploy |
+| `pnpm lint` | Expo ESLint |
+| `pnpm test` | Vitest once |
+
+**Pre-commit** (`.githooks/pre-commit`): secret scan → `pnpm lint` → `pnpm typecheck` → `pnpm test`. Requires `core.hooksPath=.githooks` (otherwise Git never runs the hook and type errors only fail in CI/deploy).
+
+- **`pnpm install`** runs `prepare` → `scripts/ensure-git-hooks.sh`, which sets `core.hooksPath=.githooks` locally.
+- Dev console `./console` / `ensureAllGitHooksPaths` also wires every co-located checkout.
+- Do **not** set `TURBOPANEL_SKIP_HOOK_TESTS` for normal commits — that skips lint/typecheck/tests after the secret scan.
+- After a fresh clone, run `pnpm install` (or `sh scripts/ensure-git-hooks.sh`) before committing; confirm with `git config --local --get core.hooksPath` → `.githooks`.
 
 ## Server state (React Query)
 

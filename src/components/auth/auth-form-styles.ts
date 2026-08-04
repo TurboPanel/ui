@@ -8,8 +8,10 @@ export const AUTH_FORM_MAX_WIDTH = 400
 export const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {}
 
 /** RN Web: keep auth scrollers from bleeding past the viewport. */
-export const authScrollWebStyle =
-  Platform.OS === 'web' ? ({ overflowX: 'hidden' } as const) : null
+export const authScrollWebStyle: ViewStyle | null =
+  Platform.OS === 'web'
+    ? ({ overflowX: 'hidden' } as unknown as ViewStyle)
+    : null
 
 export const authWebInputStyle = {
   borderWidth: 1,

@@ -10,6 +10,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ImageStyle,
+  type ViewStyle,
 } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -273,7 +275,7 @@ function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
         {logo ? (
           <Image
             source={logo}
-            style={styles.osLogoBesideName}
+            style={styles.osLogoBesideName as ImageStyle}
             contentFit="contain"
             accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
           />
@@ -638,8 +640,8 @@ const styles = StyleSheet.create({
           zIndex: 3,
           backgroundColor: colors.bgArea,
           paddingTop: spacing.xs,
-        } as const)
-      : {}),
+        } as unknown as ViewStyle)
+      : null),
     borderBottomColor: chrome.accent,
   },
   toolbarRow: {
@@ -711,8 +713,8 @@ const styles = StyleSheet.create({
           position: 'sticky',
           top: 0,
           zIndex: 2,
-        } as const)
-      : {}),
+        } as unknown as ViewStyle)
+      : null),
   },
   tableCell: {
     justifyContent: 'center',

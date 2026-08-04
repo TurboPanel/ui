@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type ViewStyle,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -660,8 +661,8 @@ const styles = StyleSheet.create({
           position: 'sticky',
           top: 0,
           zIndex: 2,
-        } as const)
-      : {}),
+        } as unknown as ViewStyle)
+      : null),
   },
   tableCell: {
     justifyContent: 'center',
