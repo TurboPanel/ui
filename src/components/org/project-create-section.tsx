@@ -12,6 +12,7 @@ import {
   type TextStyle,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
+import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
@@ -29,6 +30,7 @@ import {
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectSetupHref } from '@/lib/project-navigation'
+import { userWorkspaces } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
@@ -90,7 +92,7 @@ function resolveLoadError(
   return null
 }
 
-function conflictOrRawError(error: string | undefined): string | null {
+function conflictOrRawError(error: string | null | undefined): string | null {
   if (!error) return null
   return displayNameConflictMessage(error) ?? error
 }
@@ -100,6 +102,8 @@ function validateProjectCreateFields(options: {
   description: string
   workspaceMode: WorkspaceMode
   pickedWorkspaceId: string
+  /** Ids the picker offers — existing mode must pick one of these. */
+  allowedWorkspaceIds: readonly string[]
   newWorkspaceNameMode: NewWorkspaceNameMode
   customWorkspaceName: string
   projectNames: readonly (string | null | undefined)[]
@@ -119,6 +123,10 @@ function validateProjectCreateFields(options: {
   if (options.workspaceMode === 'existing') {
     if (!options.pickedWorkspaceId) {
       errors.workspaceId = 'Select a workspace.'
+    } else if (
+      !options.allowedWorkspaceIds.includes(options.pickedWorkspaceId)
+    ) {
+      errors.workspaceId = 'Select a user workspace.'
     }
     return errors
   }
@@ -401,10 +409,14 @@ export function ProjectCreateSection({
 
   const workspaces = useMemo(
     () =>
-      [...(workspacesQuery.data?.workspaces ?? [])].sort((a, b) =>
+      [...userWorkspaces(workspacesQuery.data?.workspaces ?? [])].sort((a, b) =>
         (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
       ),
     [workspacesQuery.data?.workspaces],
+  )
+  const allowedWorkspaceIds = useMemo(
+    () => workspaces.map((workspace) => workspace.id),
+    [workspaces],
   )
   const projectNames = useMemo(
     () => (projectsQuery.data?.projects ?? []).map((row) => row.displayName),
@@ -427,6 +439,12 @@ export function ProjectCreateSection({
     workspaceScope?.scopeId,
   )
 
+  /** True when URL/scope pointed at system (or unknown) workspace — not creatable. */
+  const scopedWorkspaceBlocked = useMemo(() => {
+    if (!scopedWorkspaceId || loadingWorkspaces) return false
+    return !allowedWorkspaceIds.includes(scopedWorkspaceId)
+  }, [scopedWorkspaceId, loadingWorkspaces, allowedWorkspaceIds])
+
   const loadError = resolveLoadError(
     workspacesQuery.error,
     projectsQuery.error,
@@ -439,17 +457,27 @@ export function ProjectCreateSection({
   }, [workspaces.length, loadingWorkspaces])
 
   useEffect(() => {
-    if (!scopedWorkspaceId) return
+    if (!scopedWorkspaceId || loadingWorkspaces) return
+    if (!allowedWorkspaceIds.includes(scopedWorkspaceId)) {
+      setPickedWorkspaceId('')
+      return
+    }
     setWorkspaceMode('existing')
     setPickedWorkspaceId(scopedWorkspaceId)
-  }, [scopedWorkspaceId])
+  }, [scopedWorkspaceId, loadingWorkspaces, allowedWorkspaceIds])
 
   useEffect(() => {
-    if (pickedWorkspaceId || scopedWorkspaceId) return
+    if (pickedWorkspaceId) return
+    if (
+      scopedWorkspaceId &&
+      allowedWorkspaceIds.includes(scopedWorkspaceId)
+    ) {
+      return
+    }
     if (workspaces.length === 1) {
       setPickedWorkspaceId(workspaces[0]?.id ?? '')
     }
-  }, [workspaces, pickedWorkspaceId, scopedWorkspaceId])
+  }, [workspaces, pickedWorkspaceId, scopedWorkspaceId, allowedWorkspaceIds])
 
   const submit = async () => {
     const errors = validateProjectCreateFields({
@@ -457,6 +485,7 @@ export function ProjectCreateSection({
       description,
       workspaceMode,
       pickedWorkspaceId,
+      allowedWorkspaceIds,
       newWorkspaceNameMode,
       customWorkspaceName,
       projectNames,
@@ -486,6 +515,9 @@ export function ProjectCreateSection({
       }
       workspaceId = workspaceResult.value.id
       await workspaceScope?.refreshWorkspaces()
+    } else if (!allowedWorkspaceIds.includes(workspaceId)) {
+      setFieldErrors({ workspaceId: 'Select a user workspace.' })
+      return
     }
 
     const result = await createProject.run({
@@ -523,6 +555,17 @@ export function ProjectCreateSection({
       >
         {apiError ?? loadError ? (
           <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
+        ) : null}
+
+        {scopedWorkspaceBlocked ? (
+          <SystemManagedNotice
+            title="Platform workspace"
+            description="Projects cannot be created in the System workspace. Choose a user workspace below."
+            onBack={() => {
+              router.replace(`/${orgId}/projects` as Href)
+            }}
+            backLabel="Back to projects"
+          />
         ) : null}
 
         <Text style={styles.label}>Name</Text>

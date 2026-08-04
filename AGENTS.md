@@ -310,7 +310,9 @@ Authorization helpers:
 - `POST /api/client/v1/access` → `createAccessGrant(body: CreateAccessBody)` — body: `{ resourceId, subjectKind, subjectId, effect, permissionKey }`; grant targets are organization or team entities only
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations/:id/accept` → `acceptInvitation(id)`
-- `fetchVisibleWorkspaces()` → `GET /api/client/v1/workspaces`
+- `fetchVisibleWorkspaces()` → `GET /api/client/v1/workspaces` — each row includes `kind` (`'user' | 'system'`); never infer platform from `displayName`
+- `restartSystemComponent(serverId, component)` → `POST /api/client/v1/servers/:id/system/:component/restart` — `CommandEnqueueResponse` + `serverId`; errors `unknown_system_component` / `system_component_not_provisioned` / `system_reconcile_unavailable`; descendant mutations may return **403** `system_resource_immutable`
+- `ProjectRecord.metadata.component` — optional internal system-component idempotency key (e.g. `hosting-ingress`); never an authorization source
 - `fetchVisibleProjects(workspaceId?)` → `GET /api/client/v1/projects` (optional `?workspaceId=` filter)
 - `createProject({ type: 'empty' | 'docker-compose' | 'template' | 'managed', serverId?, … })` — UI create uses `type: 'empty'` then configure on setup; Docker Compose remains the omit-type API default. Project/workspace names are unique per org (trim + case-insensitive; **409** `project_name_in_use` / `workspace_name_in_use`). Managed create may pass `serverId` to pin the scaffolded Production environment
 - `updateProject` / `updateEnvironment` accept `options.compose` as a ComposeDocument (`src/lib/compose/`); `updateProject` also accepts `options.containerNaming` (`uuid` \| `custom`)

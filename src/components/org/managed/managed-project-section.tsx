@@ -413,7 +413,8 @@ export function ManagedEnvironmentBody({
     )
   }
 
-  if (!hasServerPin || !detail?.managed) {
+  const managed = detail?.managed ?? null
+  if (!hasServerPin || !detail || !managed) {
     return (
       <ManagedSetupPanel
         orgId={orgId}
@@ -444,7 +445,7 @@ export function ManagedEnvironmentBody({
       projectDisplayName={projectDisplayName}
       supportsBackup={engineCode === 'postgres'}
       canManage={canManage}
-      detail={detail}
+      detail={{ ...detail, managed }}
     />
   )
 }

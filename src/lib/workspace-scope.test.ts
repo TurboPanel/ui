@@ -18,6 +18,7 @@ const WORKSPACES: WorkspaceRecord[] = [
     displayName: 'Alpha',
     description: null,
     organizationId: 'org-1',
+    kind: 'user',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -26,10 +27,21 @@ const WORKSPACES: WorkspaceRecord[] = [
     displayName: '  ',
     description: 'blank name',
     organizationId: 'org-1',
+    kind: 'user',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
 ]
+
+const SYSTEM_WORKSPACE: WorkspaceRecord = {
+  id: 'ws-system',
+  displayName: 'System',
+  description: null,
+  organizationId: 'org-1',
+  kind: 'system',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
 
 describe('ORG_AREAS navigation', () => {
   it('does not list workspaces as a top-level area', () => {
@@ -82,6 +94,43 @@ describe('resolveWorkspaceScope', () => {
     expect(resolveWorkspaceScope(WORKSPACES, 'missing').id).toBe(
       ALL_WORKSPACES_SCOPE,
     )
+  })
+
+  it('treats one user workspace plus system as the sole user workspace', () => {
+    const withSystem = [WORKSPACES[0]!, SYSTEM_WORKSPACE]
+    expect(resolveWorkspaceScope(withSystem, null)).toEqual({
+      id: 'ws-a',
+      label: 'Alpha',
+      workspace: WORKSPACES[0],
+    })
+    expect(resolveWorkspaceScope(withSystem, ALL_WORKSPACES_SCOPE)).toEqual({
+      id: 'ws-a',
+      label: 'Alpha',
+      workspace: WORKSPACES[0],
+    })
+  })
+
+  it('never falls back to the system workspace for unknown ids', () => {
+    const withSystem = [WORKSPACES[0]!, SYSTEM_WORKSPACE]
+    expect(resolveWorkspaceScope(withSystem, 'missing')).toEqual({
+      id: 'ws-a',
+      label: 'Alpha',
+      workspace: WORKSPACES[0],
+    })
+    const multiUser = [...WORKSPACES, SYSTEM_WORKSPACE]
+    expect(resolveWorkspaceScope(multiUser, 'missing').id).toBe(
+      ALL_WORKSPACES_SCOPE,
+    )
+    expect(resolveWorkspaceScope(multiUser, 'missing').workspace).toBeNull()
+  })
+
+  it('allows explicit selection of the system workspace', () => {
+    const withSystem = [WORKSPACES[0]!, SYSTEM_WORKSPACE]
+    expect(resolveWorkspaceScope(withSystem, 'ws-system')).toEqual({
+      id: 'ws-system',
+      label: 'System',
+      workspace: SYSTEM_WORKSPACE,
+    })
   })
 })
 

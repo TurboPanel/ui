@@ -46,6 +46,25 @@ export const COMPOSE_SECTION_TAB_IDS = ['networking', 'storage'] as const
 
 export type ComposeSectionTabId = (typeof COMPOSE_SECTION_TAB_IDS)[number]
 
+/** System projects are compose-shaped but never accept mutations from the UI. */
+export function systemProjectAllowsMutations(): boolean {
+  return false
+}
+
+/**
+ * Compose section tabs (Networking / Storage) after Project / environment chips.
+ * Empty for system projects — those surfaces are mutation-heavy with nothing
+ * useful for hosting-ingress.
+ */
+export function composeSectionTabsForProject(
+  isSystem: boolean,
+): readonly ComposeSectionTabId[] {
+  if (isSystem) {
+    return []
+  }
+  return COMPOSE_SECTION_TAB_IDS
+}
+
 export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
   overview: 'Overview',
   networking: 'Networking',

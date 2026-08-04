@@ -29,6 +29,14 @@
 - Tab targets ≥ 44pt; horizontal scroll ok on phone
 - Service detail and hosting deep links under `/services/:id` and `/networking/:id`
 
+## System / platform projects
+
+- Detection is by `workspace.kind === 'system'` (and optional `project.metadata.component`) — **never** by display name.
+- System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Networking/Storage chips.
+- Overview shows a platform panel (component key, target server, container status + name) plus optional read-only YAML; Restart when `system:operate` permits.
+- Platform badge label is **Platform** (SVG shield/gear + text — never emoji); paired with existing type badge on the System workspace project list.
+- All-workspaces scope hides system projects; they appear only when the System workspace is explicitly selected.
+
 ## Anti-patterns (page-specific)
 
 - ❌ Giant stacked project detail as primary experience  
@@ -38,3 +46,5 @@
 - ❌ Auto-polling deploy preview  
 - ❌ Separate Overview / Environments section tabs next to Project / env chips (one group only)  
 - ❌ Networking / Storage visible while Project (base) compose is selected  
+- ❌ Treating a user workspace named “System” as platform-managed  
+- ❌ Compose editor / lifecycle / delete chrome on system projects  

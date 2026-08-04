@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from 'react-native'
+import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -13,6 +14,10 @@ import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
 import { useProjects, useWorkspaces } from '@/lib/queries'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
+import {
+  isSystemProject,
+  isSystemWorkspace,
+} from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   ALL_WORKSPACES_SCOPE,
@@ -70,6 +75,8 @@ function ProjectOverviewCard({
   canOwn,
   showWorkspaceLabels,
   workspaceName,
+  showPlatformBadge,
+  hideDelete,
   isDeleting,
   deletingProject,
   onOpen,
@@ -82,6 +89,8 @@ function ProjectOverviewCard({
   canOwn: boolean
   showWorkspaceLabels: boolean
   workspaceName: string
+  showPlatformBadge: boolean
+  hideDelete: boolean
   isDeleting: boolean
   deletingProject: ProjectRecord | null
   onOpen: () => void
@@ -97,12 +106,13 @@ function ProjectOverviewCard({
             {project.displayName?.trim() || 'Unnamed project'}
           </Text>
           {projectTypeBadge(project.metadata)}
+          {showPlatformBadge ? <PlatformBadge /> : null}
         </View>
         <View style={styles.cardActions}>
           <Pressable style={styles.secondaryButton} onPress={onOpen}>
             <Text style={styles.secondaryButtonText}>Open</Text>
           </Pressable>
-          {canOwn ? (
+          {canOwn && !hideDelete ? (
             <Pressable
               style={[
                 styles.secondaryButton,
@@ -160,15 +170,35 @@ export function ProjectsOverviewSection({
 
   const scopeWorkspaces = workspaceScope?.workspaces
   const scopeLabel = workspaceScope?.scope.label
+  const scopeWorkspace = workspaceScope?.scope.workspace
+  const isSystemScope =
+    scopeWorkspace != null && isSystemWorkspace(scopeWorkspace)
 
   const projectsQuery = useProjects(orgId, scopedWorkspaceId)
   const needsWorkspaceNames =
     showWorkspaceLabels && (!scopeWorkspaces || scopeWorkspaces.length === 0)
   const workspacesQuery = useWorkspaces(orgId, {
-    enabled: needsWorkspaceNames,
+    enabled: needsWorkspaceNames || showWorkspaceLabels,
   })
 
-  const projects = projectsQuery.data?.projects ?? []
+  const allWorkspaces = useMemo(() => {
+    if (scopeWorkspaces && scopeWorkspaces.length > 0) {
+      return scopeWorkspaces
+    }
+    return workspacesQuery.data?.workspaces ?? []
+  }, [scopeWorkspaces, workspacesQuery.data?.workspaces])
+
+  const rawProjects = projectsQuery.data?.projects ?? []
+  const projects = useMemo(() => {
+    // All-workspaces scope hides platform infrastructure projects.
+    if (scopeId === ALL_WORKSPACES_SCOPE) {
+      return rawProjects.filter(
+        (project) => !isSystemProject(project, allWorkspaces),
+      )
+    }
+    return rawProjects
+  }, [rawProjects, scopeId, allWorkspaces])
+
   const workspaces = needsWorkspaceNames
     ? (workspacesQuery.data?.workspaces ?? [])
     : []
@@ -178,13 +208,11 @@ export function ProjectsOverviewSection({
 
   const workspaceNameById = useMemo(() => {
     const map = new Map<string, string>()
-    const source =
-      scopeWorkspaces && scopeWorkspaces.length > 0 ? scopeWorkspaces : workspaces
-    for (const workspace of source) {
+    for (const workspace of allWorkspaces.length > 0 ? allWorkspaces : workspaces) {
       map.set(workspace.id, workspaceDisplayName(workspace))
     }
     return map
-  }, [scopeWorkspaces, workspaces])
+  }, [allWorkspaces, workspaces])
 
   const scopedWorkspaceName = scopedWorkspaceId
     ? (workspaceNameById.get(scopedWorkspaceId) ?? scopeLabel ?? 'this workspace')
@@ -222,6 +250,8 @@ export function ProjectsOverviewSection({
             workspaceName={
               workspaceNameById.get(project.workspaceId) ?? 'Unknown'
             }
+            showPlatformBadge={isSystemScope}
+            hideDelete={isSystemScope}
             isDeleting={deletingProjectId === project.id}
             deletingProject={deletingProject}
             onOpen={() =>
@@ -246,7 +276,7 @@ export function ProjectsOverviewSection({
       </View>
 
       <SectionPanel title="Projects" hint={panelHint}>
-        {canOwn ? (
+        {canOwn && !isSystemScope ? (
           <Pressable
             style={styles.primaryButton}
             onPress={() => router.push(newProjectHref)}

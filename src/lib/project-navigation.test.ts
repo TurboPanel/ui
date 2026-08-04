@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  composeSectionTabsForProject,
   isProjectOverviewBasePath,
   parseProjectEnvironmentId,
   projectEnvironmentHref,
@@ -8,6 +9,7 @@ import {
   projectTabHref,
   resolveBaseComposeSelected,
   resolveSelectedEnvironmentId,
+  systemProjectAllowsMutations,
 } from './project-navigation'
 import type { ProjectRecord } from './instance-api'
 
@@ -35,6 +37,26 @@ describe('projectNeedsSetup', () => {
     expect(
       projectNeedsSetup(project({ type: 'managed', code: 'postgres' })),
     ).toBe(false)
+  })
+})
+
+describe('system project predicates', () => {
+  it('disallows mutations and suppresses compose section tabs', () => {
+    expect(systemProjectAllowsMutations()).toBe(false)
+    expect(composeSectionTabsForProject(true)).toEqual([])
+    expect(composeSectionTabsForProject(false)).toEqual([
+      'networking',
+      'storage',
+    ])
+  })
+
+  it('treats system projects as compose-shaped (not managed)', () => {
+    const systemCompose = project({
+      type: 'docker-compose',
+      component: 'hosting-ingress',
+    })
+    expect(projectNeedsSetup(systemCompose)).toBe(false)
+    expect(systemCompose.metadata?.type).not.toBe('managed')
   })
 })
 

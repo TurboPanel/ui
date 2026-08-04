@@ -29,6 +29,7 @@ import {
 } from '@/components/org/server-commands-panel'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
+import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { formatLocalDateTime, formatRelativeLocalDateTime } from '@/lib/format-datetime'
@@ -132,7 +133,9 @@ type DetailActiveCommand = ActiveCommand
 
 type DetailPollCommand = {
   commandId: string
-  kind: ActiveCommand['kind'] | 'timezone' | 'ntp'
+  kind: ActiveCommand['kind'] | 'timezone' | 'ntp' | 'systemRestart'
+  /** When kind is systemRestart — invalidate this environment's containers. */
+  environmentId?: string
 }
 
 type UpdateState = {
@@ -291,6 +294,8 @@ function DetailTabBody({
   onTriggerUpdate,
   onResetUpdate,
   onEnqueueCommand,
+  systemRestartInFlight,
+  systemRestartPollError,
   deletePanel,
 }: Readonly<{
   tab: ServerDetailTabId
@@ -312,8 +317,11 @@ function DetailTabBody({
   onResetUpdate: () => void
   onEnqueueCommand: (
     response: CommandEnqueueResponse,
-    kind: 'timezone' | 'ntp',
+    kind: 'timezone' | 'ntp' | 'systemRestart',
+    meta?: Readonly<{ environmentId?: string }>,
   ) => void
+  systemRestartInFlight: boolean
+  systemRestartPollError: string | null
   deletePanel: ReactNode
 }>): ReactNode {
   switch (tab) {
@@ -322,6 +330,7 @@ function DetailTabBody({
     case 'control':
       return (
         <ServerControlTab
+          orgId={orgId}
           server={server}
           canManage={canManage}
           commandState={commandState}
@@ -332,6 +341,11 @@ function DetailTabBody({
           onReboot={onReboot}
           onTriggerUpdate={onTriggerUpdate}
           onResetUpdate={onResetUpdate}
+          systemRestartInFlight={systemRestartInFlight}
+          systemRestartPollError={systemRestartPollError}
+          onEnqueueRestart={(response, environmentId) => {
+            onEnqueueCommand(response, 'systemRestart', { environmentId })
+          }}
           deletePanel={deletePanel}
         />
       )
@@ -422,6 +436,8 @@ function applyTerminalPollSuccess(
     setCommandState: Dispatch<SetStateAction<ServerCommandState>>
     setTimezonePollError: (error: string | null) => void
     setNtpPollError: (error: string | null) => void
+    setSystemRestartPollError: (error: string | null) => void
+    invalidateSystemContainers: (environmentId: string | undefined) => void
   }>,
 ): void {
   if (isControlCommandKind(entry.kind)) {
@@ -450,6 +466,18 @@ function applyTerminalPollSuccess(
     return
   }
 
+  if (entry.kind === 'systemRestart') {
+    if (record.status === 'succeeded') {
+      handlers.setSystemRestartPollError(null)
+      handlers.invalidateSystemContainers(entry.environmentId)
+      return
+    }
+    handlers.setSystemRestartPollError(
+      record.error ?? `System restart ${record.status}`,
+    )
+    return
+  }
+
   if (record.status === 'succeeded') {
     handlers.setNtpPollError(null)
     handlers.onRefreshServer()
@@ -465,6 +493,7 @@ function applyPollFailure(
     patchCommand: (patch: Partial<ServerCommandState>) => void
     setTimezonePollError: (error: string | null) => void
     setNtpPollError: (error: string | null) => void
+    setSystemRestartPollError: (error: string | null) => void
   }>,
 ): void {
   if (isControlCommandKind(entry.kind)) {
@@ -482,6 +511,12 @@ function applyPollFailure(
     )
     return
   }
+  if (entry.kind === 'systemRestart') {
+    handlers.setSystemRestartPollError(
+      err instanceof Error ? err.message : 'Failed to poll system restart',
+    )
+    return
+  }
   handlers.setNtpPollError(
     err instanceof Error ? err.message : 'Failed to poll NTP command',
   )
@@ -492,6 +527,8 @@ type PollHandlers = Readonly<{
   setCommandState: Dispatch<SetStateAction<ServerCommandState>>
   setTimezonePollError: (error: string | null) => void
   setNtpPollError: (error: string | null) => void
+  setSystemRestartPollError: (error: string | null) => void
+  invalidateSystemContainers: (environmentId: string | undefined) => void
   patchCommand: (patch: Partial<ServerCommandState>) => void
 }>
 
@@ -563,6 +600,9 @@ export function ServerDetailSection({
   const [pollCommands, setPollCommands] = useState<DetailPollCommand[]>([])
   const [timezonePollError, setTimezonePollError] = useState<string | null>(null)
   const [ntpPollError, setNtpPollError] = useState<string | null>(null)
+  const [systemRestartPollError, setSystemRestartPollError] = useState<
+    string | null
+  >(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
@@ -629,6 +669,16 @@ export function ServerDetailSection({
 
   const timezoneCommandInFlight = pollCommands.some((item) => item.kind === 'timezone')
   const ntpCommandInFlight = pollCommands.some((item) => item.kind === 'ntp')
+  const systemRestartInFlight = pollCommands.some(
+    (item) => item.kind === 'systemRestart',
+  )
+
+  const invalidateSystemContainers = (environmentId: string | undefined) => {
+    if (!environmentId) return
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
+    })
+  }
 
   useEffect(() => {
     const records = commandsQuery.data
@@ -639,6 +689,8 @@ export function ServerDetailSection({
       setCommandState,
       setTimezonePollError,
       setNtpPollError,
+      setSystemRestartPollError,
+      invalidateSystemContainers,
       patchCommand,
     }
 
@@ -663,6 +715,8 @@ export function ServerDetailSection({
       setCommandState,
       setTimezonePollError,
       setNtpPollError,
+      setSystemRestartPollError,
+      invalidateSystemContainers,
       patchCommand,
     }
 
@@ -872,14 +926,22 @@ export function ServerDetailSection({
         onReboot={onReboot}
         onTriggerUpdate={onTriggerUpdate}
         onResetUpdate={onResetUpdate}
-        onEnqueueCommand={(response, kind) => {
+        onEnqueueCommand={(response, kind, meta) => {
           if (kind === 'timezone') {
             setTimezonePollError(null)
-          } else {
+          } else if (kind === 'ntp') {
             setNtpPollError(null)
+          } else {
+            setSystemRestartPollError(null)
           }
-          registerPollCommand({ commandId: response.commandId, kind })
+          registerPollCommand({
+            commandId: response.commandId,
+            kind,
+            environmentId: meta?.environmentId,
+          })
         }}
+        systemRestartInFlight={systemRestartInFlight}
+        systemRestartPollError={systemRestartPollError}
         deletePanel={deletePanel}
       />
     </View>
@@ -1025,6 +1087,7 @@ function ServerOverviewTab({
 }
 
 function ServerControlTab({
+  orgId,
   server,
   canManage,
   commandState,
@@ -1035,8 +1098,12 @@ function ServerControlTab({
   onReboot,
   onTriggerUpdate,
   onResetUpdate,
+  systemRestartInFlight,
+  systemRestartPollError,
+  onEnqueueRestart,
   deletePanel,
 }: Readonly<{
+  orgId: string
   server: ServerDetailRecord
   canManage: boolean
   commandState: ServerCommandState
@@ -1047,6 +1114,12 @@ function ServerControlTab({
   onReboot: () => void
   onTriggerUpdate: () => void
   onResetUpdate: () => void
+  systemRestartInFlight: boolean
+  systemRestartPollError: string | null
+  onEnqueueRestart: (
+    response: CommandEnqueueResponse,
+    environmentId: string | undefined,
+  ) => void
   deletePanel: ReactNode
 }>) {
   return (
@@ -1060,6 +1133,17 @@ function ServerControlTab({
           onPing={onPing}
           onSetHostname={onSetHostname}
           onReboot={onReboot}
+        />
+      </SectionPanel>
+
+      <SectionPanel title="Server proxy" hint="Platform managed">
+        <ServerSystemComponentPanel
+          orgId={orgId}
+          serverId={server.id}
+          serverConnected={Boolean(server.connected)}
+          restartInFlight={systemRestartInFlight}
+          pollError={systemRestartPollError}
+          onEnqueueRestart={onEnqueueRestart}
         />
       </SectionPanel>
 

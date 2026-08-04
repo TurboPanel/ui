@@ -1,4 +1,5 @@
-import type { WorkspaceRecord } from '@/lib/instance-api'
+import type { WorkspaceRecord } from './instance-api'
+import { isSystemWorkspace, userWorkspaces } from './system-inventory'
 
 /** Sentinel for the organization-wide (unfiltered) projects view. */
 export const ALL_WORKSPACES_SCOPE = 'all'
@@ -17,10 +18,13 @@ export function workspaceDisplayName(workspace: WorkspaceRecord): string {
 function soleWorkspaceScope(
   workspaces: readonly WorkspaceRecord[],
 ): WorkspaceScope | null {
-  if (workspaces.length !== 1) {
+  // Sole-workspace auto-select must ignore the platform System workspace,
+  // otherwise every org looks like it has ≥2 workspaces and All stays visible.
+  const users = userWorkspaces(workspaces)
+  if (users.length !== 1) {
     return null
   }
-  const workspace = workspaces[0]
+  const workspace = users[0]
   if (!workspace) {
     return null
   }
@@ -51,7 +55,17 @@ export function resolveWorkspaceScope(
 
   const workspace = workspaces.find((entry) => entry.id === requestedId) ?? null
   if (!workspace) {
+    // Unknown / absent ids never fall back *to* the system workspace.
     return sole ?? allWorkspacesScope()
+  }
+
+  // Explicit selection of the system workspace is allowed.
+  if (isSystemWorkspace(workspace)) {
+    return {
+      id: workspace.id,
+      label: workspaceDisplayName(workspace),
+      workspace,
+    }
   }
 
   return {

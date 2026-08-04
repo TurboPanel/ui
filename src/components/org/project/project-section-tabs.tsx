@@ -16,6 +16,7 @@ import {
   COMPOSE_PROJECT_TAB_LABELS,
   MANAGED_PROJECT_TAB_IDS,
   MANAGED_PROJECT_TAB_LABELS,
+  composeSectionTabsForProject,
   isManagedProject,
   parseProjectEnvironmentId,
   projectEnvironmentHref,
@@ -120,12 +121,14 @@ function ComposeUnifiedTabs() {
     selectedEnvironmentId,
     baseSelected,
     selectBaseCompose,
+    isSystemProject,
   } = useProjectContext()
 
   const pathEnvironmentId = parseProjectEnvironmentId(pathname, projectId)
   const activeTab = activeProjectTabFromPathname(pathname, projectId)
+  const sectionTabs = composeSectionTabsForProject(isSystemProject)
   const showSectionTabs =
-    Boolean(selectedEnvironmentId) && !baseSelected
+    Boolean(selectedEnvironmentId) && !baseSelected && sectionTabs.length > 0
 
   const environmentIds = useMemo(
     () => environments.map((env) => env.id),
@@ -194,7 +197,7 @@ function ComposeUnifiedTabs() {
         })}
 
         {showSectionTabs
-          ? COMPOSE_SECTION_TAB_IDS.map((tabId) => {
+          ? sectionTabs.map((tabId) => {
               const active = activeTab === tabId
               const href = projectTabHref(orgId, projectId, tabId) as Href
               const label = COMPOSE_PROJECT_TAB_LABELS[tabId]

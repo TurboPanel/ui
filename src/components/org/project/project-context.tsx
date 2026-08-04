@@ -15,6 +15,7 @@ import { useWorkspaces } from '@/lib/queries/workspaces'
 import {
   type EnvironmentRecord,
   type ProjectRecord,
+  type WorkspaceKind,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
 import {
@@ -26,6 +27,10 @@ import {
   resolveSelectedEnvironmentId,
 } from '@/lib/project-navigation'
 import { queryKeys, useCan } from '@/lib/query-client'
+import {
+  isSystemProject,
+  systemComponentKey,
+} from '@/lib/system-inventory'
 
 type ProjectContextValue = {
   orgId: string
@@ -33,6 +38,20 @@ type ProjectContextValue = {
   project: ProjectRecord | null
   environments: EnvironmentRecord[]
   workspaces: WorkspaceRecord[]
+  /** Owning workspace kind when known. */
+  workspaceKind: WorkspaceKind | null
+  /**
+   * True once the owning workspace row is known, or workspaces finished loading
+   * without a match. Until then, treat the project as read-only.
+   */
+  isWorkspaceKindResolved: boolean
+  isSystemProject: boolean
+  /**
+   * True only when the owning workspace kind is definitively `user`.
+   * Suppresses mutation chrome while kind is unresolved or `system`.
+   */
+  projectAllowsMutations: boolean
+  systemComponent: string | null
   selectedEnvironmentId: string | null
   selectedEnvironment: EnvironmentRecord | null
   /**
@@ -158,6 +177,23 @@ export function ProjectProvider({
 
   const needsSetup = project ? projectNeedsSetup(project) : false
 
+  const owningWorkspace = useMemo(() => {
+    if (!project) return null
+    return workspaces.find((entry) => entry.id === project.workspaceId) ?? null
+  }, [project, workspaces])
+
+  const workspaceKind = owningWorkspace?.kind ?? null
+  const isWorkspaceKindResolved =
+    project == null ||
+    owningWorkspace != null ||
+    (workspacesQuery.isFetched && !workspacesQuery.isLoading)
+  const projectIsSystem = project
+    ? isSystemProject(project, workspaceKind ?? workspaces)
+    : false
+  const projectAllowsMutations =
+    isWorkspaceKindResolved && workspaceKind === 'user'
+  const systemComponent = project ? systemComponentKey(project) : null
+
   const value = useMemo<ProjectContextValue>(
     () => ({
       orgId,
@@ -165,6 +201,11 @@ export function ProjectProvider({
       project,
       environments,
       workspaces,
+      workspaceKind,
+      isWorkspaceKindResolved,
+      isSystemProject: projectIsSystem,
+      projectAllowsMutations,
+      systemComponent,
       selectedEnvironmentId,
       selectedEnvironment,
       baseSelected,
@@ -185,6 +226,11 @@ export function ProjectProvider({
       project,
       environments,
       workspaces,
+      workspaceKind,
+      isWorkspaceKindResolved,
+      projectIsSystem,
+      projectAllowsMutations,
+      systemComponent,
       selectedEnvironmentId,
       selectedEnvironment,
       baseSelected,

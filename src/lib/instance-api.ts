@@ -664,7 +664,10 @@ export type PermissionKey =
   | "organization:own"
   | "organization:manage"
   | "team:own"
-  | "team:manage";
+  | "team:manage"
+  | "system:read"
+  | "system:operate"
+  | "system:manage";
 
 export type PermissionRecord = {
   key: PermissionKey;
@@ -737,11 +740,15 @@ export async function checkPermission(
   return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
 }
 
+export type WorkspaceKind = 'system' | 'user';
+
 export type WorkspaceRecord = {
   id: string;
   displayName: string | null;
   description: string | null;
   organizationId: string;
+  /** Platform vs tenant workspace — never infer from displayName. */
+  kind: WorkspaceKind;
   createdAt: string;
   updatedAt: string;
 };
@@ -769,6 +776,12 @@ export type ProjectRecord = {
     type?: 'docker-compose' | 'managed' | 'template' | 'empty' | null;
     /** Managed engine catalog code (`postgres`, …). */
     code?: string;
+    /**
+     * Internal system-component idempotency key (e.g. `hosting-ingress`).
+     * Never an authorization source — gate mutations on `workspace.kind` /
+     * `system:*` permissions instead.
+     */
+    component?: string;
   } | null;
   /**
    * `options.compose` is a versioned ComposeDocument.
@@ -1090,6 +1103,12 @@ export const WORKSPACE_HAS_CHILDREN_ERROR = "Cannot delete while child resources
 export const PROJECT_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
 
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = "project_has_running_services";
+
+export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component';
+export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR =
+  'system_component_not_provisioned';
+export const SYSTEM_RECONCILE_UNAVAILABLE_ERROR = 'system_reconcile_unavailable';
+export const SYSTEM_RESOURCE_IMMUTABLE_ERROR = 'system_resource_immutable';
 
 export async function fetchWorkspace(
   id: string,
@@ -2152,6 +2171,20 @@ export async function rebootServer(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/reboot`, {
     method: 'POST',
   })
+}
+
+/**
+ * Restart a provisioned system component on a server (e.g. hosting-ingress).
+ * Returns the enqueue shape widened with `serverId` (mirrors ManagedCommandResponse).
+ */
+export async function restartSystemComponent(
+  serverId: string,
+  component: string,
+): Promise<CommandEnqueueResponse & { serverId: string }> {
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/system/${encodeURIComponent(component)}/restart`,
+    { method: 'POST' },
+  )
 }
 
 export async function fetchCommand(

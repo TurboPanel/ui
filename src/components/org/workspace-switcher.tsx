@@ -1,5 +1,5 @@
 import { useRouter, type Href } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Modal,
   Pressable,
@@ -8,7 +8,14 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import { PlatformBadge } from '@/components/org/platform-badge'
 import { useCan } from '@/lib/query-client'
+import {
+  findSystemWorkspace,
+  isSystemWorkspace,
+  SYSTEM_WORKSPACE_DESCRIPTION,
+  userWorkspaces,
+} from '@/lib/system-inventory'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import {
@@ -30,6 +37,12 @@ export function WorkspaceSwitcher({
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<View>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
+
+  const users = useMemo(() => userWorkspaces(workspaces), [workspaces])
+  const systemWorkspace = useMemo(
+    () => findSystemWorkspace(workspaces),
+    [workspaces],
+  )
 
   useEffect(() => {
     if (!open || isCompact) {
@@ -71,7 +84,7 @@ export function WorkspaceSwitcher({
     <View style={[styles.menu, isCompact && styles.menuSheet]}>
       <Text style={styles.menuHeading}>Switch workspace</Text>
 
-      {workspaces.length > 1 ? (
+      {users.length > 1 ? (
         <Pressable
           style={[
             styles.menuItem,
@@ -91,11 +104,11 @@ export function WorkspaceSwitcher({
         </Pressable>
       ) : null}
 
-      {workspaces.length === 0 && !isLoading ? (
+      {users.length === 0 && !systemWorkspace && !isLoading ? (
         <Text style={styles.emptyHint}>No workspaces yet.</Text>
       ) : null}
 
-      {workspaces.map((workspace) => {
+      {users.map((workspace) => {
         const active = scope.id === workspace.id
         return (
           <Pressable
@@ -116,6 +129,34 @@ export function WorkspaceSwitcher({
           </Pressable>
         )
       })}
+
+      {systemWorkspace ? (
+        <>
+          <View style={styles.menuDivider} />
+          <Pressable
+            style={[
+              styles.menuItem,
+              scope.id === systemWorkspace.id && styles.menuItemActive,
+            ]}
+            onPress={() => selectWorkspace(systemWorkspace.id)}
+          >
+            <View style={styles.systemTitleRow}>
+              <Text
+                style={[
+                  styles.menuItemLabel,
+                  scope.id === systemWorkspace.id && styles.menuItemLabelActive,
+                ]}
+              >
+                {workspaceDisplayName(systemWorkspace)}
+              </Text>
+              <PlatformBadge />
+            </View>
+            <Text style={styles.menuItemHint} numberOfLines={2}>
+              {SYSTEM_WORKSPACE_DESCRIPTION}
+            </Text>
+          </Pressable>
+        </>
+      ) : null}
 
       <View style={styles.menuDivider} />
 
@@ -141,9 +182,14 @@ export function WorkspaceSwitcher({
           accessibilityLabel={`Workspace: ${triggerLabel}`}
         >
           <Text style={styles.triggerCaption}>Workspace</Text>
-          <Text style={styles.triggerLabel} numberOfLines={1}>
-            {triggerLabel}
-          </Text>
+          <View style={styles.triggerLabelRow}>
+            <Text style={styles.triggerLabel} numberOfLines={1}>
+              {triggerLabel}
+            </Text>
+            {scope.workspace && isSystemWorkspace(scope.workspace) ? (
+              <PlatformBadge />
+            ) : null}
+          </View>
         </Pressable>
       </View>
 
@@ -197,10 +243,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
+  triggerLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   triggerLabel: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '700',
+    flexShrink: 1,
   },
   backdrop: {
     flex: 1,
@@ -264,6 +316,12 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 12,
     lineHeight: 16,
+  },
+  systemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   emptyHint: {
     color: colors.textDim,

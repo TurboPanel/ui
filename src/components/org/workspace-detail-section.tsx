@@ -1,9 +1,14 @@
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { PlatformBadge } from '@/components/org/platform-badge'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { useProjects, useWorkspace } from '@/lib/queries'
 import type { ProjectRecord, WorkspaceRecord } from '@/lib/instance-api'
+import {
+  isSystemWorkspace,
+  SYSTEM_WORKSPACE_DESCRIPTION,
+} from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function renderWorkspaceBody({
@@ -21,17 +26,27 @@ function renderWorkspaceBody({
   if (!workspace) {
     return null
   }
+  const system = isSystemWorkspace(workspace)
   return (
     <>
       <View style={styles.header}>
-        <Text style={orgPanelStyles.detailTitle}>
-          {workspace.displayName?.trim() || 'Unnamed workspace'}
-        </Text>
-        <Pressable style={styles.secondaryButton} onPress={onEdit}>
-          <Text style={styles.secondaryButtonText}>Edit</Text>
-        </Pressable>
+        <View style={styles.titleRow}>
+          <Text style={orgPanelStyles.detailTitle}>
+            {workspace.displayName?.trim() || 'Unnamed workspace'}
+          </Text>
+          {system ? <PlatformBadge /> : null}
+        </View>
+        {!system ? (
+          <Pressable style={styles.secondaryButton} onPress={onEdit}>
+            <Text style={styles.secondaryButtonText}>Edit</Text>
+          </Pressable>
+        ) : null}
       </View>
-      {workspace.description ? (
+      {system ? (
+        <Text style={orgPanelStyles.detailLine}>
+          {SYSTEM_WORKSPACE_DESCRIPTION}
+        </Text>
+      ) : workspace.description ? (
         <Text style={orgPanelStyles.detailLine}>{workspace.description}</Text>
       ) : null}
     </>
@@ -87,6 +102,7 @@ export function WorkspaceDetailSection({
   const workspace = workspaceQuery.data?.workspace ?? null
   const projects = projectsQuery.data?.projects ?? []
   const loading = workspaceQuery.isLoading || projectsQuery.isLoading
+  const system = workspace != null && isSystemWorkspace(workspace)
   let error: string | null = null
   if (workspaceQuery.error instanceof Error) {
     error = workspaceQuery.error.message
@@ -96,7 +112,10 @@ export function WorkspaceDetailSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>{workspace?.displayName?.trim() || 'Workspace'}</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>{workspace?.displayName?.trim() || 'Workspace'}</Text>
+        {system ? <PlatformBadge /> : null}
+      </View>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       <SectionPanel title="Workspace" hint="Workspace details">
@@ -109,16 +128,18 @@ export function WorkspaceDetailSection({
 
       <SectionPanel title="Projects" hint="Projects in this workspace">
         <View style={styles.projectActions}>
-          <Pressable
-            style={styles.primaryButton}
-            onPress={() =>
-              router.push(
-                `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`,
-              )
-            }
-          >
-            <Text style={styles.primaryButtonText}>New project</Text>
-          </Pressable>
+          {!system ? (
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() =>
+                router.push(
+                  `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`,
+                )
+              }
+            >
+              <Text style={styles.primaryButtonText}>New project</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             style={styles.secondaryButton}
             onPress={() =>
@@ -142,8 +163,21 @@ export function WorkspaceDetailSection({
 
 const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   heading: { color: colors.text, fontSize: 28, fontWeight: '700' },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    flex: 1,
+  },
   list: { gap: spacing.sm },
   projectActions: {
     flexDirection: 'row',

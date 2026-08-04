@@ -18,7 +18,6 @@ import {
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
   type CommandStatus,
-  type ContainerRecord,
   type EnvironmentRecord,
   type OrgServerRecord,
 } from '@/lib/instance-api'
@@ -37,18 +36,12 @@ import {
 import { resolveEffectiveServerId } from '@/lib/project-options'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-type ContainersByEnv = Record<string, ContainerRecord[]>
-
 type TrackedCommand = {
   environmentId: string
   serverId: string
   label: string
   status: CommandStatus
   error: string | null
-}
-
-function environmentLabel(env: EnvironmentRecord): string {
-  return env.displayName?.trim() || 'Environment'
 }
 
 function latestCommandForEnv(
@@ -413,6 +406,7 @@ export function OverviewEnvironmentsPanel() {
     setSelectedEnvironmentId,
     invalidateEnvironments,
     canManage,
+    projectAllowsMutations,
   } = useProjectContext()
 
   const environmentIds = useMemo(
@@ -436,7 +430,8 @@ export function OverviewEnvironmentsPanel() {
   const containersQuery = useContainersByEnvironments(orgId, environmentIds)
   const containersByEnv = containersQuery.containersByEnv
   const loading = containersQuery.isLoading
-  const serversQuery = useOrgServers(orgId, { enabled: canManage })
+  const canMutateLifecycle = canManage && projectAllowsMutations
+  const serversQuery = useOrgServers(orgId, { enabled: canMutateLifecycle })
 
   const createEnvironmentMutation = useCreateEnvironment(orgId)
   const updateEnvironmentMutation = useUpdateEnvironment(
@@ -457,9 +452,12 @@ export function OverviewEnvironmentsPanel() {
   )
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
   const commandMetaRef = useRef(commandMeta)
-  commandMetaRef.current = commandMeta
   const refetchOneRef = useRef(containersQuery.refetchOne)
-  refetchOneRef.current = containersQuery.refetchOne
+
+  useEffect(() => {
+    commandMetaRef.current = commandMeta
+    refetchOneRef.current = containersQuery.refetchOne
+  }, [commandMeta, containersQuery.refetchOne])
 
   useEffect(() => {
     if (!commandsQuery.data || trackedEntries.length === 0) return
@@ -732,8 +730,8 @@ export function OverviewEnvironmentsPanel() {
           <View style={styles.barSpacer} />
 
           <BarTrailingActions
-            showLifecycle={canManage}
-            showRefreshOnly={!canManage}
+            showLifecycle={canMutateLifecycle}
+            showRefreshOnly={!canMutateLifecycle}
             hasServer={hasServer}
             hasContainers={hasContainers}
             inFlight={inFlight}
@@ -757,7 +755,7 @@ export function OverviewEnvironmentsPanel() {
       ) : null}
 
       <OverviewPlacementPins
-        canManage={canManage}
+        canManage={canMutateLifecycle}
         baseSelected={baseSelected}
         selectedEnvironment={selectedEnvironment}
         hasServer={hasServer}
@@ -768,7 +766,7 @@ export function OverviewEnvironmentsPanel() {
         }
       />
 
-      {canManage && !baseSelected ? (
+      {canMutateLifecycle && !baseSelected ? (
         <ManageExtras
           busy={busy}
           showCreate={showCreate}

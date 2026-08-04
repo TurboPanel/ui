@@ -25,10 +25,16 @@
 | Tab | Content |
 |-----|---------|
 | Overview | Identity, OS, connection (egress + 24h metrics reporting), geo, timezone |
-| Control | Ping, hostname, reboot, trunk update, delete (two-step) |
+| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
 | Time | NTP status, timezone picker, NTP apply form |
 | Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
+
+## Server proxy (Control tab)
+
+- Read-only panel between Commands and Daemon update: status dot + label, container name (mono), compose service name, link into the System workspace project/environment.
+- **Restart** is the only mutation; gated by `useCan('organization', orgId, 'system:operate')` as a display hint. Shares the page’s single `useCommandsBatch` timer (`kind: 'systemRestart'`) — no second poll loop.
+- States: not provisioned, pending allocation, running, exited/failed, load error. Never color-only status.
 
 ## Motion
 

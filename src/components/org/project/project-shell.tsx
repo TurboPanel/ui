@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
@@ -197,6 +198,8 @@ function ProjectHeader({
     projectId,
     project,
     canOwn,
+    isSystemProject,
+    projectAllowsMutations,
     setError,
   } = useProjectContext()
   const updateProject = useUpdateProject(orgId, projectId)
@@ -223,11 +226,12 @@ function ProjectHeader({
   }
 
   const saving = updateProject.isPending
+  const showMutableChrome = canOwn && projectAllowsMutations
 
   return (
     <View style={styles.header}>
       <View style={styles.headerRow}>
-        {canOwn ? (
+        {showMutableChrome ? (
           <TextInput
             value={editName}
             onChangeText={setEditName}
@@ -246,15 +250,23 @@ function ProjectHeader({
             ]}
           />
         ) : (
-          <Text style={styles.titleText} accessibilityRole="header">
-            {project.displayName?.trim() || 'Unnamed project'}
-          </Text>
+          <View style={styles.titleReadOnly}>
+            <Text style={styles.titleText} accessibilityRole="header">
+              {project.displayName?.trim() || 'Unnamed project'}
+            </Text>
+            {isSystemProject ? <PlatformBadge /> : null}
+          </View>
         )}
-        <ProjectTrashButton
-          deletingProject={deletingProject}
-          onRequestDeleteProject={onRequestDeleteProject}
-        />
+        {showMutableChrome ? (
+          <ProjectTrashButton
+            deletingProject={deletingProject}
+            onRequestDeleteProject={onRequestDeleteProject}
+          />
+        ) : null}
       </View>
+      {isSystemProject ? (
+        <Text style={styles.platformEyebrow}>Platform managed</Text>
+      ) : null}
       {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
     </View>
   )
@@ -291,6 +303,8 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     loading,
     error,
     needsSetup,
+    isWorkspaceKindResolved,
+    projectAllowsMutations,
   } = useProjectContext()
   const [deletingProject, setDeletingProject] = useState(false)
 
@@ -310,7 +324,9 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     paddingTop: Platform.OS === 'web' ? 0 : Math.max(insets.top - 8, 0),
   }
 
-  if (loading && !project) {
+  // Hold the shell until the owning workspace kind is known so system projects
+  // never briefly mount rename/trash/compose mutation chrome as user projects.
+  if ((loading && !project) || (project != null && !isWorkspaceKindResolved)) {
     return (
       <View style={[styles.root, { paddingBottom: insets.bottom }]}>
         <Text style={orgPanelStyles.muted}>Loading project…</Text>
@@ -337,7 +353,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-      {deletingProject && project ? (
+      {deletingProject && project && projectAllowsMutations ? (
         <ProjectDeletePanel
           orgId={orgId}
           project={project}
@@ -405,13 +421,28 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     minHeight: 44,
   },
-  titleText: {
+  titleReadOnly: {
     flex: 1,
     minWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  titleText: {
+    flexShrink: 1,
+    minWidth: 120,
     color: colors.text,
     fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.3,
+  },
+  platformEyebrow: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   trashRow: {
     flexDirection: 'row',

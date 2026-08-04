@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -7,12 +7,18 @@ import {
   View,
 } from 'react-native'
 import { FirstRunWizard } from '@/components/org/first-run-wizard'
+import { PlatformBadge } from '@/components/org/platform-badge'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { displayNameConflictMessage, isDisplayNameTaken } from '@/lib/display-name'
 import { WORKSPACE_HAS_CHILDREN_ERROR } from '@/lib/instance-api'
 import { useCreateWorkspace, useDeleteWorkspace, useWorkspaces } from '@/lib/queries'
 import { useCan } from '@/lib/query-client'
+import {
+  isSystemWorkspace,
+  SYSTEM_WORKSPACE_DESCRIPTION,
+  userWorkspaces,
+} from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
 import { validateWorkspaceName } from '@/lib/workspace-validation'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
@@ -32,6 +38,10 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   const deleteWorkspaceMutation = useDeleteWorkspace(orgId)
 
   const workspaces = workspacesQuery.data?.workspaces ?? []
+  const userFacingWorkspaces = useMemo(
+    () => userWorkspaces(workspaces),
+    [workspaces],
+  )
   const loading = workspacesQuery.isLoading
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
@@ -52,7 +62,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     if (
       isDisplayNameTaken(
         createName,
-        workspaces.map((workspace) => workspace.displayName),
+        userFacingWorkspaces.map((workspace) => workspace.displayName),
       )
     ) {
       setCreateError(
@@ -107,48 +117,61 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   } else {
     workspaceListContent = (
       <View style={styles.list}>
-        {workspaces.map((ws) => (
-          <View key={ws.id} style={orgPanelStyles.detailCard}>
-            <View style={styles.cardHeader}>
-              <Pressable onPress={() => router.push(`/${orgId}/workspaces/${ws.id}`)}>
-                <Text style={orgPanelStyles.detailTitle}>
-                  {ws.displayName?.trim() || 'Unnamed workspace'}
-                </Text>
-              </Pressable>
-              {canOwn ? (
-                <View style={styles.cardActions}>
-                  <Pressable
-                    style={styles.secondaryButton}
-                    onPress={() =>
-                      router.push(`/${orgId}/workspaces/${ws.id}/edit`)
-                    }
-                  >
-                    <Text style={styles.secondaryButtonText}>Edit</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.secondaryButton,
-                      deleting.has(ws.id) && styles.buttonDisabled,
-                    ]}
-                    disabled={deleting.has(ws.id)}
-                    onPress={() => void handleDelete(ws.id)}
-                  >
-                    <Text style={styles.secondaryButtonText}>
-                      {deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
+        {workspaces.map((ws) => {
+          const system = isSystemWorkspace(ws)
+          return (
+            <View key={ws.id} style={orgPanelStyles.detailCard}>
+              <View style={styles.cardHeader}>
+                <Pressable
+                  style={styles.titlePress}
+                  onPress={() => router.push(`/${orgId}/workspaces/${ws.id}`)}
+                >
+                  <View style={styles.titleRow}>
+                    <Text style={orgPanelStyles.detailTitle}>
+                      {ws.displayName?.trim() || 'Unnamed workspace'}
                     </Text>
-                  </Pressable>
-                </View>
+                    {system ? <PlatformBadge /> : null}
+                  </View>
+                </Pressable>
+                {canOwn && !system ? (
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      style={styles.secondaryButton}
+                      onPress={() =>
+                        router.push(`/${orgId}/workspaces/${ws.id}/edit`)
+                      }
+                    >
+                      <Text style={styles.secondaryButtonText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.secondaryButton,
+                        deleting.has(ws.id) && styles.buttonDisabled,
+                      ]}
+                      disabled={deleting.has(ws.id)}
+                      onPress={() => void handleDelete(ws.id)}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+              {system ? (
+                <Text style={orgPanelStyles.detailLine}>
+                  {SYSTEM_WORKSPACE_DESCRIPTION}
+                </Text>
+              ) : ws.description ? (
+                <Text style={orgPanelStyles.detailLine}>{ws.description}</Text>
               ) : null}
+              <Text style={orgPanelStyles.detailLine}>
+                <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+                {new Date(ws.createdAt).toLocaleString()}
+              </Text>
             </View>
-            {ws.description ? (
-              <Text style={orgPanelStyles.detailLine}>{ws.description}</Text>
-            ) : null}
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-              {new Date(ws.createdAt).toLocaleString()}
-            </Text>
-          </View>
-        ))}
+          )
+        })}
       </View>
     )
   }
@@ -211,8 +234,17 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  titlePress: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   cardActions: {

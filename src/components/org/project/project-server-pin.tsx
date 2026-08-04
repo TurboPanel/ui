@@ -1,4 +1,4 @@
-import { createElement, useRef } from 'react'
+import { createElement, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -34,13 +34,14 @@ type HtmlSelect = {
  * `project.options.defaultServerId`.
  */
 export function ProjectServerHeaderControl() {
-  const { orgId, projectId, project, canManage, setError } =
+  const { orgId, projectId, project, canManage, projectAllowsMutations, setError } =
     useProjectContext()
-  const serversQuery = useOrgServers(orgId, { enabled: canManage })
+  const canEdit = canManage && projectAllowsMutations
+  const serversQuery = useOrgServers(orgId, { enabled: canEdit })
   const updateProject = useUpdateProject(orgId, projectId)
-  const selectRef = useRef<HtmlSelect | null>(null)
+  const [selectEl, setSelectEl] = useState<HtmlSelect | null>(null)
 
-  if (!canManage || !project) return null
+  if (!canEdit || !project) return null
 
   const placementServerId = project.options?.defaultServerId ?? null
   const servers = serversQuery.data?.servers ?? []
@@ -67,18 +68,17 @@ export function ProjectServerHeaderControl() {
   }
 
   const openPicker = () => {
-    const el = selectRef.current
-    if (!el || busy || options.length === 0) return
+    if (!selectEl || busy || options.length === 0) return
     try {
-      if (typeof el.showPicker === 'function') {
-        el.showPicker()
+      if (typeof selectEl.showPicker === 'function') {
+        selectEl.showPicker()
         return
       }
     } catch {
       // Fall through to click() when showPicker is blocked.
     }
-    el.focus()
-    el.click()
+    selectEl.focus()
+    selectEl.click()
   }
 
   const hiddenSelect =
@@ -86,9 +86,7 @@ export function ProjectServerHeaderControl() {
       ? createElement(
           'select',
           {
-            ref: (node: HtmlSelect | null) => {
-              selectRef.current = node
-            },
+            ref: setSelectEl,
             value: placementServerId ?? '',
             disabled: busy || options.length === 0,
             onChange: (event: { target: { value: string } }) => {

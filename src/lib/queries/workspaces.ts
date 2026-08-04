@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createWorkspace,
@@ -7,6 +8,7 @@ import {
   updateWorkspace,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { findSystemWorkspace } from '@/lib/system-inventory'
 
 export function useWorkspaces(
   orgId: string,
@@ -17,6 +19,16 @@ export function useWorkspaces(
     queryFn: fetchVisibleWorkspaces,
     enabled: (options?.enabled ?? true) && orgId.length > 0,
   })
+}
+
+/** Selector over `useWorkspaces` — no extra round trip. */
+export function useSystemWorkspace(orgId: string) {
+  const query = useWorkspaces(orgId)
+  const systemWorkspace = useMemo(
+    () => findSystemWorkspace(query.data?.workspaces ?? []),
+    [query.data?.workspaces],
+  )
+  return { ...query, systemWorkspace }
 }
 
 export function useWorkspace(

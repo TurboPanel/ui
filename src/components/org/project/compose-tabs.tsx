@@ -19,6 +19,7 @@ import {
 } from '@/components/org/compose-persistence'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { StorageSection } from '@/components/org/storage-section'
+import { SystemProjectOverviewPanel } from '@/components/org/project/system-project-overview-panel'
 import {
   type ComposeDocument,
   type ContainerRecord,
@@ -37,6 +38,7 @@ import {
   projectServiceHref,
   projectSettingsSubHref,
 } from '@/lib/project-navigation'
+import { userWorkspaces } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   buildProjectOptionsPatch,
@@ -195,13 +197,17 @@ export function ComposeServicesTab() {
     invalidateEnvironments,
     setError,
     canManage,
+    isSystemProject,
+    isWorkspaceKindResolved,
+    projectAllowsMutations,
   } = useProjectContext()
   const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
   const persistEnvironmentCompose = usePersistEnvironmentCompose(
     orgId,
     selectedEnvironmentId ?? '',
   )
-  const servicesEnabled = Boolean(selectedEnvironmentId) && !baseSelected
+  const servicesEnabled =
+    Boolean(selectedEnvironmentId) && !baseSelected && projectAllowsMutations
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
     enabled: servicesEnabled,
   })
@@ -265,6 +271,14 @@ export function ComposeServicesTab() {
 
   if (!project) return null
 
+  if (!isWorkspaceKindResolved) {
+    return <Text style={orgPanelStyles.muted}>Loading project…</Text>
+  }
+
+  if (isSystemProject) {
+    return <SystemProjectOverviewPanel />
+  }
+
   const allContainers = Object.values(containersByService).flat()
   const isStarted =
     !baseSelected &&
@@ -272,7 +286,7 @@ export function ComposeServicesTab() {
 
   return (
     <View style={styles.root}>
-      {!canManage ? (
+      {!canManage || !projectAllowsMutations ? (
         <Text style={orgPanelStyles.muted}>View only</Text>
       ) : null}
 
@@ -300,7 +314,7 @@ export function ComposeServicesTab() {
         <EffectiveComposePanel
           orgId={orgId}
           environmentId={selectedEnvironment.id}
-          canManage={canManage}
+          canManage={canManage && projectAllowsMutations}
           placementServerId={resolveEffectiveServerId(
             selectedEnvironment.serverId,
             project.options?.defaultServerId,
@@ -358,7 +372,7 @@ export function ComposeStorageTab() {
 }
 
 export function ComposeSettingsHub() {
-  const { orgId, projectId, canOwn } = useProjectContext()
+  const { orgId, projectId, canOwn, projectAllowsMutations } = useProjectContext()
   const links: { sub: 'compose' | 'overrides' | 'variables' | 'principals' | 'naming' | 'workspace' | 'danger'; label: string; hint: string }[] = [
     {
       sub: 'compose',
@@ -391,7 +405,7 @@ export function ComposeSettingsHub() {
       hint: 'Move this project between workspaces',
     },
   ]
-  if (canOwn) {
+  if (canOwn && projectAllowsMutations) {
     links.push({
       sub: 'danger',
       label: 'Delete project',
@@ -432,7 +446,8 @@ export function ComposeSettingsHub() {
 }
 
 export function SettingsComposePanel() {
-  const { orgId, projectId, project, setError, canManage } = useProjectContext()
+  const { orgId, projectId, project, setError, canManage, projectAllowsMutations } =
+    useProjectContext()
   const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
   if (!project) return null
 
@@ -444,13 +459,15 @@ export function SettingsComposePanel() {
     }
   }
 
+  const canEdit = canManage && projectAllowsMutations
+
   return (
     <SectionPanel
       title="Base Compose"
       hint="Shared stack — each environment can override"
       accent
     >
-      {!canManage ? (
+      {!canEdit ? (
         <Text style={orgPanelStyles.muted}>View only</Text>
       ) : null}
       <ComposeBasePanel
@@ -478,12 +495,13 @@ export function SettingsOverridesPanel() {
 }
 
 export function SettingsPrincipalsPanel() {
-  const { orgId, projectId, canManage } = useProjectContext()
+  const { orgId, projectId, canManage, projectAllowsMutations } =
+    useProjectContext()
   return (
     <ProjectPrincipalsSection
       orgId={orgId}
       projectId={projectId}
-      canManage={canManage}
+      canManage={canManage && projectAllowsMutations}
     />
   )
 }
@@ -494,10 +512,12 @@ export function SettingsVariablesPanel() {
 }
 
 export function SettingsNamingPanel() {
-  const { orgId, projectId, project, setError, canManage } = useProjectContext()
+  const { orgId, projectId, project, setError, canManage, projectAllowsMutations } =
+    useProjectContext()
   const updateProjectMutation = useUpdateProject(orgId, projectId)
   if (!project) return null
   const value = project.options?.containerNaming ?? 'uuid'
+  const canEdit = canManage && projectAllowsMutations
 
   const save = async (containerNaming: 'uuid' | 'custom') => {
     if (value === containerNaming) return
@@ -516,7 +536,7 @@ export function SettingsNamingPanel() {
       title="Container naming"
       hint="How Docker container_name values are generated at deploy"
     >
-      {canManage ? (
+      {canEdit ? (
         <View style={orgPanelStyles.segmentGroup}>
           {(
             [
@@ -571,14 +591,16 @@ export function SettingsWorkspacePanel() {
     project,
     workspaces,
     canOwn,
+    projectAllowsMutations,
     setError,
   } = useProjectContext()
   const updateProjectMutation = useUpdateProject(orgId, projectId)
   if (!project) return null
 
-  const sorted = [...workspaces].sort((a, b) =>
+  const sorted = [...userWorkspaces(workspaces)].sort((a, b) =>
     (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
   )
+  const canMove = canOwn && projectAllowsMutations
 
   const move = async (workspaceId: string) => {
     if (workspaceId === project.workspaceId) return
@@ -593,7 +615,7 @@ export function SettingsWorkspacePanel() {
 
   return (
     <SectionPanel title="Workspace" hint="Move this project to another workspace">
-      {canOwn ? (
+      {canMove ? (
         <View style={styles.list}>
           {sorted.map((ws) => {
             const selected = ws.id === project.workspaceId
@@ -637,9 +659,16 @@ export function SettingsWorkspacePanel() {
 }
 
 export function SettingsDangerPanel() {
-  const { orgId, project } = useProjectContext()
+  const { orgId, project, projectAllowsMutations } = useProjectContext()
   const router = useRouter()
   if (!project) return null
+  if (!projectAllowsMutations) {
+    return (
+      <SectionPanel title="Delete project">
+        <Text style={orgPanelStyles.muted}>Platform managed — read only</Text>
+      </SectionPanel>
+    )
+  }
   return (
     <ProjectDeletePanel
       orgId={orgId}

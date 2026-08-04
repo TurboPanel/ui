@@ -1,11 +1,13 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
+import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { displayNameConflictMessage } from '@/lib/display-name'
 import {
   useCreateWorkspace,
   useUpdateWorkspace,
   useWorkspace,
 } from '@/lib/queries'
+import { isSystemWorkspace } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   validateWorkspaceDescription,
@@ -123,6 +125,9 @@ export function WorkspaceFormSection({
 
   const submitting = createWorkspace.isPending || updateWorkspace.isPending
   const loadingWorkspace = mode === 'edit' && workspaceQuery.isLoading
+  const loadedWorkspace = workspaceQuery.data?.workspace ?? null
+  const systemEdit =
+    mode === 'edit' && loadedWorkspace != null && isSystemWorkspace(loadedWorkspace)
   const apiError =
     workspaceQuery.error instanceof Error
       ? workspaceQuery.error.message
@@ -133,6 +138,19 @@ export function WorkspaceFormSection({
     submitLabel = 'Saving…'
   } else if (mode === 'create') {
     submitLabel = 'Create workspace'
+  }
+
+  if (systemEdit) {
+    return (
+      <View style={styles.root}>
+        <Text style={styles.heading}>Edit workspace</Text>
+        <SectionPanel title="Edit workspace">
+          <SystemManagedNotice
+            onBack={() => router.replace(`/${orgId}/workspaces`)}
+          />
+        </SectionPanel>
+      </View>
+    )
   }
 
   return (
