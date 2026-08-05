@@ -1877,17 +1877,32 @@ export async function applyPublicUrls(urls?: string[]): Promise<ApplyPublicUrlsR
   })
 }
 
+export type ReencryptSecretsCursor = {
+  stage: 'variables' | 'tls' | 'principals' | 'email'
+  afterId?: string
+}
+
 export type ReencryptSecretsResponse = {
   ok: boolean
   scanned: number
   reencrypted: number
   skipped: number
   failed: number
+  completed: boolean
+  cursor: ReencryptSecretsCursor | null
 }
 
-export async function applyReencryptSecrets(): Promise<ReencryptSecretsResponse> {
+export type ReencryptSecretsRequest = {
+  cursor?: ReencryptSecretsCursor | null
+  limit?: number
+}
+
+export async function applyReencryptSecrets(
+  body?: ReencryptSecretsRequest,
+): Promise<ReencryptSecretsResponse> {
   return await apiFetch(`${ADMIN_API}/secrets/reencrypt`, {
     method: 'POST',
+    body: JSON.stringify(body ?? {}),
   })
 }
 

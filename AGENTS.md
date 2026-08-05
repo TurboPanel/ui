@@ -496,7 +496,7 @@ Admin helpers in `src/lib/instance-api.ts` (`ADMIN_API = '/api/admin/v1'`):
 - `savePublicUrls(urls)` → `PUT /api/admin/v1/instance/public-urls`
 - `applyPublicUrls(urls?)` → `POST /api/admin/v1/instance/public-urls/apply` (Deno self-hosted only)
 - `fetchSignupSettings()` / `saveSignupSettings(enabled)` → `GET/PUT /api/admin/v1/settings/signup` — panel toggle for public sign-up (`IS_SIGNUP_ENABLED`); **409** when env force override is set
-- `applyReencryptSecrets()` → `POST /api/admin/v1/secrets/reencrypt` (superadmin only; returns `{ ok, scanned, reencrypted, skipped, failed }`)
+- `applyReencryptSecrets(body?)` → `POST /api/admin/v1/secrets/reencrypt` (superadmin only; bounded batches — pass prior `cursor` until `completed`; returns `{ ok, scanned, reencrypted, skipped, failed, completed, cursor }`; **409** `reencrypt_in_progress` when another sweep is running)
 
 When apply returns 422 with `"cert apply is not applicable on this runtime"` (Workers), hide the Apply button and show an informational note instead.
 

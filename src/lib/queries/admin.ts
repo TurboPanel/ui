@@ -84,7 +84,8 @@ export function useEmailSettings(options?: Readonly<{ enabled?: boolean }>) {
 
 export function useApplyReencryptSecrets() {
   return useApiMutation({
-    mutationFn: applyReencryptSecrets,
+    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) =>
+      applyReencryptSecrets(body),
   })
 }
 
