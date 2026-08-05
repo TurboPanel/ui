@@ -1,14 +1,17 @@
 import { usePathname } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
+import { HeaderAccountControls } from '@/components/header-account-controls'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import { orgAreaFromPathname } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 
 export function OrgHeader({
+  orgId,
   onMenuPress,
 }: Readonly<{
+  orgId: string
   onMenuPress?: () => void
 }>) {
   const pathname = usePathname()
@@ -66,30 +69,12 @@ export function OrgHeader({
       </View>
 
       <View style={styles.headerActions}>
-        {userLabel ? (
-          <View style={orgPanelStyles.userChip}>
-            <Text style={orgPanelStyles.userChipText} numberOfLines={1}>
-              {userLabel}
-            </Text>
-          </View>
-        ) : null}
-        {session ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.signOutButton,
-              pressed && styles.buttonPressed,
-              webPointer,
-            ]}
-            onPress={() => {
-              signOut().catch(() => {
-                // Sign-out failures are non-blocking in the header.
-              })
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-          >
-            <Text style={styles.signOutText}>Sign out</Text>
-          </Pressable>
+        {session && userLabel ? (
+          <HeaderAccountControls
+            orgId={orgId}
+            email={userLabel}
+            onSignOut={signOut}
+          />
         ) : null}
       </View>
     </GlassSurface>
@@ -163,19 +148,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
     flexShrink: 0,
-  },
-  signOutButton: {
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    backgroundColor: colors.bgInput,
-  },
-  signOutText: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '600',
   },
   buttonPressed: {
     opacity: 0.85,

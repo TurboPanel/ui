@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   bootstrapInstall,
   completeInstall,
+  createOrganization,
   fetchInstallStatus,
   fetchOrganizations,
   fetchSession,
@@ -37,6 +38,18 @@ export function useOrganizationsQuery(options?: Readonly<{ enabled?: boolean }>)
     queryKey: queryKeys.auth.organizations,
     queryFn: fetchOrganizations,
     enabled: options?.enabled ?? true,
+  })
+}
+
+export function useCreateOrganization() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: createOrganization,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.auth.organizations,
+      })
+    },
   })
 }
 

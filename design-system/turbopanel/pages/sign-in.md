@@ -9,9 +9,9 @@
 
 ## Layout
 
-- Centered single column; **TurboPanel logo** (T mark + italic “urboPanel”) and **page title** on one row above the form panel (lockup left, title right-aligned) — not inside the box; no “Ops console” product line  
+- Centered single column; **TurboPanel T mark** and **page title** on one row above the form panel (mark left, title right-aligned) — not inside the box; no “Ops console” product line  
 - Constrain the form column to **`maxWidth: 400`** (`AUTH_FORM_MAX_WIDTH`) — never full-bleed fields on desktop  
-- Shared shell: `src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`; lockup via `TurboPanelLogo`  
+- Shared shell: `src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`; mark via `TurboPanelLogo` (T only — full wordmark is website-only)  
 - One primary CTA (accent fill); secondary text link for alternate path below the panel  
 - Footer copyright: `© {year} TurboPanel` (muted) under the panel / alt-path link  
 - Install is a two-step host→superadmin flow — progressive disclosure, not one long form

@@ -61,12 +61,13 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   brand: {
-    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
     gap: spacing.xs,
   },
   brandHint: {
     color: colors.textDim,
     fontSize: 11,
+    textAlign: 'center',
   },
   nav: {
     gap: 8,

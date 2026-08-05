@@ -501,6 +501,15 @@ export async function fetchOrganizations(): Promise<{ organizations: Organizatio
   return await apiFetch(`${CLIENT_API}/organizations`);
 }
 
+export async function createOrganization(body: {
+  displayName: string;
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/organizations`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export type InstallCompleteResult = SessionInfo & {
   organizationId: string;
 };

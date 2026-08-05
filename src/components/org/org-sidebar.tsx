@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   brand: {
     marginBottom: spacing.xl,
-    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
   },
   nav: {
     flex: 1,

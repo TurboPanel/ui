@@ -53,6 +53,7 @@ export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
 
           <View style={styles.main}>
             <OrgHeader
+              orgId={orgId}
               onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
             />
             <ScrollView

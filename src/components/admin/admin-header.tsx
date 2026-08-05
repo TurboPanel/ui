@@ -1,6 +1,7 @@
 import { usePathname } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
+import { HeaderUserAccountControl } from '@/components/header-account-controls'
 import { useAuth } from '@/lib/auth-context'
 import { adminAreaFromPathname } from '@/lib/admin-navigation'
 import { colors, spacing } from '@/lib/theme'
@@ -13,6 +14,7 @@ export function AdminHeader({
   const match = adminAreaFromPathname(pathname)
 
   const title = match ? match.area.label : 'Admin'
+  const userLabel = session?.email ?? session?.username
 
   return (
     <GlassSurface style={styles.header} intensity="strong">
@@ -31,22 +33,8 @@ export function AdminHeader({
       </View>
 
       <View style={styles.headerActions}>
-        {session?.email || session?.username ? (
-          <Text style={styles.userLabel}>
-            {session.email ?? session.username}
-          </Text>
-        ) : null}
-        {session ? (
-          <Pressable
-            style={styles.linkButton}
-            onPress={() => {
-              signOut().catch(() => {
-                // Sign-out failures are non-blocking in the header.
-              })
-            }}
-          >
-            <Text style={styles.linkButtonText}>Sign out</Text>
-          </Pressable>
+        {session && userLabel ? (
+          <HeaderUserAccountControl email={userLabel} onSignOut={signOut} />
         ) : null}
       </View>
     </GlassSurface>
@@ -103,22 +91,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
-  },
-  userLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    maxWidth: 180,
-  },
-  linkButton: {
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  linkButtonText: {
-    color: colors.textChip,
-    fontSize: 14,
-    fontWeight: '600',
   },
 })

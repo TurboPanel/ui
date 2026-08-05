@@ -147,6 +147,17 @@ export function wordmarkLetterSpacingPx(fontSizePx: number): number {
   return fontSizePx * TURBOPANEL_WORDMARK_STYLE.letterSpacingEm
 }
 
+/** Ink height for mark-only console chrome (maps legacy full-lockup `size` props). */
+export function consoleMarkRenderSize(designSize: number): number {
+  return Math.round(
+    computeTurboPanelWordmarkLockup({
+      size: designSize,
+      markOnly: true,
+      profile: 'console',
+    }).markRenderHeight,
+  )
+}
+
 /** Console sidebar / auth / shell lockup from a caller `size`. */
 export function consoleWordmarkLockup(
   size: number,
