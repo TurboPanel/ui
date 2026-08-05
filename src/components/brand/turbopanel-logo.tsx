@@ -17,12 +17,17 @@ const INK_PAD = 75 / 520
 /** Stem tip → top of blue/green bars. */
 const INK_HEIGHT = 370 / 520
 /**
- * Plus Jakarta Sans ExtraBold Italic: `actualBoundingBoxAscent / fontSize`
+ * Plus Jakarta Sans Bold Italic: `actualBoundingBoxAscent / fontSize`
  * for tall letters (P, l, b). True measured match to the T ink height is
  * ~0.757; we size noticeably smaller (~1.02) so the wordmark sits optically
- * under the T rather than matching its full weight.
+ * under the T rather than matching its full weight. The chunkier T mark then
+ * gets an extra trim so “urboPanel” does not compete with the stem.
  */
 const ASCENDER_RATIO = 1.02
+/** Extra optical shrink so “urboPanel” stays under the T’s crossbar, not past it. */
+const WORDMARK_SIZE_TRIM_PX = 4
+/** Draw the T a bit larger than the wordmark’s size basis so the mark leads. */
+const MARK_SCALE = 1.12
 /**
  * Baseline offset **below** the CSS box’s bottom edge, as a fraction of
  * font-size — for this face at `lineHeight === fontSize`. NOT
@@ -35,7 +40,7 @@ const ASCENDER_RATIO = 1.02
  */
 const BASELINE_TRIM_RATIO = 0.0851
 /** Optical nudge: lift wordmark above the geometric T-tip baseline. */
-const WORDMARK_BASELINE_LIFT_PX = 2
+const WORDMARK_BASELINE_LIFT_PX = 3
 
 /** Brand display face — Plus Jakarta Sans (matches website `--font-display`). */
 export const TURBOPANEL_BRAND_FONT = 'PlusJakartaSansItalic'
@@ -123,28 +128,32 @@ export function TurboPanelLogo({
   markOnly = false,
   style,
 }: LogoProps) {
-  const markWidth = Math.round(size * MARK_ASPECT)
+  const markSize = Math.round(size * MARK_SCALE)
+  const markWidth = Math.round(markSize * MARK_ASPECT)
+  /** Sized from the caller `size` (not the boosted mark) so the T stays dominant. */
+  const wordSize = Math.max(
+    1,
+    Math.round((size * INK_HEIGHT) / ASCENDER_RATIO) - WORDMARK_SIZE_TRIM_PX,
+  )
   /** Under the blue bar, right of the stem — a little air after the T. */
-  const wordLeft = Math.round(markWidth * 0.6)
-  /** Tall letters (P, l) span the same ink height as the T mark. */
-  const wordSize = Math.round((size * INK_HEIGHT) / ASCENDER_RATIO)
+  const wordLeft = Math.round(markWidth * 0.62)
   /** Baseline on the T stem tip, then lift a couple px for optical balance. */
   const wordBottom = Math.round(
-    size * INK_PAD - wordSize * BASELINE_TRIM_RATIO + WORDMARK_BASELINE_LIFT_PX,
+    markSize * INK_PAD - wordSize * BASELINE_TRIM_RATIO + WORDMARK_BASELINE_LIFT_PX,
   )
   const width = markOnly
     ? markWidth
-    : Math.max(markWidth, wordLeft + Math.round(wordSize * 5.9))
+    : Math.max(markWidth, wordLeft + Math.round(wordSize * 5.5))
 
   return (
     <View
-      style={[{ width, height: size }, styles.lockup, style]}
+      style={[{ width, height: markSize }, styles.lockup, style]}
       accessibilityRole="image"
       accessibilityLabel="TurboPanel"
     >
       <View style={styles.markLayer} pointerEvents="none">
         <TurboPanelLogoMark
-          size={size}
+          size={markSize}
           variant={variant}
           accessibilityLabel=""
         />
@@ -185,8 +194,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     // Italic face file — do not also set fontStyle or some platforms double-slant.
     fontFamily: TURBOPANEL_BRAND_FONT,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    // Bold italic — presence without ExtraBold fighting the chunky T.
+    fontWeight: '700',
+    letterSpacing: 0.35,
     // Keep baseline planted while skewing to the T angle.
     transformOrigin: 'left bottom',
   },

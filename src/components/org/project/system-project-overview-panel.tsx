@@ -376,6 +376,7 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   badgeRow: {
     flexDirection: 'row',

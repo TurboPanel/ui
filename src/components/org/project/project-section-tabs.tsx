@@ -1,10 +1,12 @@
 import { Link, usePathname, useRouter, type Href } from 'expo-router'
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type ViewStyle,
 } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -26,6 +28,21 @@ import {
 import { useContainersByEnvironments } from '@/lib/queries'
 import { chrome, colors } from '@/lib/theme'
 import { useMemo } from 'react'
+
+/** RN Web ScrollView expands by default; keep the chip strip content-sized. */
+const scrollHostWebStyle = {
+  width: 'max-content',
+  maxWidth: '100%',
+} as unknown as ViewStyle
+
+const scrollHostStyle = StyleSheet.flatten([
+  {
+    flexGrow: 0,
+    flexShrink: 1,
+    maxWidth: '100%' as const,
+  },
+  Platform.OS === 'web' ? scrollHostWebStyle : null,
+])
 
 export function activeProjectTabFromPathname(
   pathname: string,
@@ -72,6 +89,7 @@ function ManagedSectionTabs() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={scrollHostStyle}
       contentContainerStyle={styles.scroll}
       accessibilityRole="tablist"
       accessibilityLabel="Project sections"
@@ -82,6 +100,7 @@ function ManagedSectionTabs() {
           const href = projectTabHref(orgId, projectId, tabId) as Href
           const tabStyle = StyleSheet.flatten([
             orgPanelStyles.segmentChip,
+            styles.chip,
             active ? orgPanelStyles.segmentChipActive : null,
             webPointer,
           ])
@@ -141,6 +160,7 @@ function ComposeUnifiedTabs() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={scrollHostStyle}
       contentContainerStyle={styles.scroll}
       accessibilityRole="tablist"
       accessibilityLabel="Project and environments"
@@ -152,6 +172,7 @@ function ComposeUnifiedTabs() {
           accessibilityLabel="Project"
           style={[
             orgPanelStyles.segmentChip,
+            styles.chip,
             baseSelected && orgPanelStyles.segmentChipActive,
             webPointer,
           ]}
@@ -177,6 +198,7 @@ function ComposeUnifiedTabs() {
               accessibilityLabel={`${name}, ${tone.label}`}
               style={[
                 orgPanelStyles.segmentChip,
+                styles.chip,
                 active && orgPanelStyles.segmentChipActive,
                 webPointer,
               ]}
@@ -203,6 +225,7 @@ function ComposeUnifiedTabs() {
               const label = COMPOSE_PROJECT_TAB_LABELS[tabId]
               const tabStyle = StyleSheet.flatten([
                 orgPanelStyles.segmentChip,
+                styles.chip,
                 active ? orgPanelStyles.segmentChipActive : null,
                 webPointer,
               ])
@@ -250,6 +273,14 @@ const styles = StyleSheet.create({
   },
   group: {
     flexWrap: 'nowrap',
+    padding: 2,
+    borderRadius: 6,
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minWidth: 40,
+    borderRadius: 5,
   },
   tabText: {
     color: colors.textDim,

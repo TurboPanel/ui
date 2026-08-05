@@ -8,6 +8,10 @@ import {
 } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
+import {
+  ComposeEditorIcon,
+  ComposeVisualIcon,
+} from '@/components/org/compose-view-icons'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { ComposeYamlEditor } from '@/components/org/compose-yaml-editor'
 import type {
@@ -148,7 +152,10 @@ function ComposeLintPanel({
 
 const LINT_DEBOUNCE_MS = 150
 
-/** Editor / Visual segmented control (shared button-group chrome). */
+/**
+ * Compose / Visual mode tabs — quiet underline tabs on the surface header
+ * (distinct from the Project/env segment buttons on the right).
+ */
 export function ComposeEditorViewTabs({
   value,
   onChange,
@@ -157,33 +164,34 @@ export function ComposeEditorViewTabs({
   onChange: (view: ComposeEditorView) => void
 }>) {
   return (
-    <View style={orgPanelStyles.segmentGroup} accessibilityRole="tablist">
+    <View style={styles.surfaceTabList} accessibilityRole="tablist">
       {([
-        ['editor', 'Editor'],
-        ['visual', 'Visual'],
-      ] as const).map(([entry, label]) => {
+        ['editor', 'Compose', ComposeEditorIcon],
+        ['visual', 'Visual', ComposeVisualIcon],
+      ] as const).map(([entry, label, Icon]) => {
         const active = value === entry
+        const tone = active ? colors.text : colors.textMuted
         return (
           <Pressable
             key={entry}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            style={[
-              orgPanelStyles.segmentChip,
-              active && orgPanelStyles.segmentChipActive,
-            ]}
+            style={[styles.surfaceTab, active && styles.surfaceTabActive]}
             onPress={() => {
               onChange(entry)
             }}
           >
-            <Text
-              style={[
-                orgPanelStyles.segmentChipText,
-                active && orgPanelStyles.segmentChipTextActive,
-              ]}
-            >
-              {label}
-            </Text>
+            <View style={styles.surfaceTabInner}>
+              <Icon size={15} color={tone} />
+              <Text
+                style={[
+                  styles.surfaceTabText,
+                  active && styles.surfaceTabTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </View>
           </Pressable>
         )
       })}
@@ -192,8 +200,9 @@ export function ComposeEditorViewTabs({
 }
 
 /**
- * Shared editor chrome: leading tools, trailing tools, optional Editor/Visual
- * tabs. Used by the compose editor and the started-status shell.
+ * Shared editor chrome: bordered compose surface with an optional header row
+ * (Compose/Visual tabs + server pin + Project/env buttons) and the editor body.
+ * Used by the compose editor and the started-status shell.
  */
 export function ComposeEditorChrome({
   leading,
@@ -206,17 +215,40 @@ export function ComposeEditorChrome({
   tabs?: ReactNode
   children: ReactNode
 }>) {
+  const hasSurfaceHeader = Boolean(tabs || leading || trailing)
+  if (!hasSurfaceHeader) {
+    return (
+      <View style={styles.editorShell}>
+        <View style={styles.editorBody}>{children}</View>
+      </View>
+    )
+  }
+
+  const hasEnd = Boolean(trailing || leading)
+
   return (
     <View style={styles.editorShell}>
-      <View style={styles.editorTabBar}>
-        {leading ? <View style={styles.toolbarLeading}>{leading}</View> : null}
-        <View style={styles.toolbarSpacer} />
-        {trailing ? (
-          <View style={styles.toolbarTrailing}>{trailing}</View>
-        ) : null}
-        {tabs}
+      <View style={styles.editorSurface}>
+        <View
+          style={[
+            styles.editorSurfaceHeader,
+            !tabs && styles.editorSurfaceHeaderPadded,
+          ]}
+        >
+          {tabs}
+          {hasEnd ? (
+            <View style={styles.toolbarEnd}>
+              {trailing ? (
+                <View style={styles.toolbarTrailing}>{trailing}</View>
+              ) : null}
+              {leading ? (
+                <View style={styles.toolbarLeading}>{leading}</View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.editorBody}>{children}</View>
       </View>
-      <View style={styles.editorBody}>{children}</View>
     </View>
   )
 }
@@ -241,13 +273,13 @@ export function ComposeEditorSection({
   /** Debounced draft updates; `null` while editor YAML is unparseable. */
   onDraftChange?: (document: ComposeDocument | null) => void
   /**
-   * Hide title / service count. Editor/Visual remain as a right-aligned tab
-   * strip attached to the top of the editor surface.
+   * Hide title / service count. Compose/Visual and Project/env share the
+   * editor surface header row.
    */
   hideHeader?: boolean
-  /** Left of Editor/Visual (e.g. Project / environment chips). */
+  /** Surface header: Project / environment buttons (right-aligned). */
   toolbarLeading?: ReactNode
-  /** Right-aligned before Editor/Visual (e.g. project server pin). */
+  /** Surface header: before section buttons (e.g. project server pin). */
   toolbarTrailing?: ReactNode
 }>) {
   const source = normalizeCompose(document)
@@ -635,27 +667,79 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 16, fontWeight: '700' },
   serviceCount: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   editorShell: {
-    gap: spacing.xs,
-  },
-  editorTabBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 36,
+  },
+  toolbarEnd: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    marginLeft: 'auto',
+    flexShrink: 1,
+    minWidth: 0,
+    paddingVertical: 2,
+    paddingRight: spacing.xs,
   },
   toolbarLeading: {
     flexShrink: 1,
     minWidth: 0,
+    maxWidth: '100%',
     justifyContent: 'center',
-  },
-  toolbarSpacer: {
-    flexGrow: 1,
-    minWidth: spacing.sm,
   },
   toolbarTrailing: {
     flexShrink: 0,
     justifyContent: 'center',
+  },
+  editorSurface: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.bgInput,
+    overflow: 'hidden',
+  },
+  editorSurfaceHeader: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'stretch',
+    gap: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.bgSecondary,
+  },
+  editorSurfaceHeaderPadded: {
+    paddingLeft: spacing.xs,
+  },
+  surfaceTabList: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    flexShrink: 0,
+  },
+  surfaceTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    marginBottom: -1,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  surfaceTabActive: {
+    borderBottomColor: chrome.accent,
+  },
+  surfaceTabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  surfaceTabText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  surfaceTabTextActive: {
+    color: colors.text,
+    fontWeight: '700',
   },
   editorBody: {
     minHeight: 120,

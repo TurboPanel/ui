@@ -287,7 +287,11 @@ function ProjectShellChrome({
   return (
     <>
       {hideEnvSelector ? null : <EnvironmentSelector />}
-      {sectionTabsInOverview ? null : <ProjectSectionTabs />}
+      {sectionTabsInOverview ? null : (
+        <View style={styles.sectionTabsRow}>
+          <ProjectSectionTabs />
+        </View>
+      )}
     </>
   )
 }
@@ -522,5 +526,10 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
     paddingTop: spacing.sm,
+  },
+  sectionTabsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: '100%',
   },
 })

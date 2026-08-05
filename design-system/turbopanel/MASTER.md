@@ -105,7 +105,7 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 
 - Geometry lives in **`assets/brand/`** (`turbopanel-logo*`) and the inline SVG component **`src/components/brand/turbopanel-logo.tsx`**
 - Color mark uses `colors.green` + `colors.blue`; `white` / `mono` variants for special surfaces
-- Org sidebar, admin sidebar, auth shell, and `AppShell` use `TurboPanelLogo` / `TurboPanelLogoMark` — T mark + Plus Jakarta Sans extrabold italic “urboPanel” under the blue crossbar (`assets/fonts/PlusJakartaSans-Italic.ttf`)
+- Org sidebar, admin sidebar, auth shell, and `AppShell` use `TurboPanelLogo` / `TurboPanelLogoMark` — T mark + Plus Jakarta Sans bold italic “urboPanel” under the blue crossbar (`assets/fonts/PlusJakartaSans-Italic.ttf`), tight display tracking. The mark **is** the T — never render “TurboPanel” beside it.
 - Public downloads + usage copy: marketing site **`/about/logo`**
 
 ## Component Specs
