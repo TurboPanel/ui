@@ -1,55 +1,26 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import Svg, { G, Path } from 'react-native-svg'
+import {
+  TURBOPANEL_MARK_INK,
+  consoleWordmarkLockup,
+  wordmarkLetterSpacingPx,
+} from '@/lib/wordmark-lockup'
 import { colors } from '@/lib/theme'
 
-/** Path data shared with `assets/brand/turbopanel-logo*.svg`. */
-const BAR_A = 'M55 40h55L62 160H7z'
-const BAR_B = 'M125 40h78l-48 120H77z'
-const TEE = 'M220 40h415l-48 120H435L335 410H180l100-250H172z'
-
-/** Visible letters after the T mark; a11y label stays “TurboPanel”. */
-const WORDMARK = 'urboPanel'
-
-/** Mark viewBox 680×520. */
-const MARK_ASPECT = 680 / 520
-/** Empty pad above/below ink in the mark viewBox. */
-const INK_PAD = 75 / 520
-/** Stem tip → top of blue/green bars. */
-const INK_HEIGHT = 370 / 520
 /**
- * Plus Jakarta Sans Bold Italic: `actualBoundingBoxAscent / fontSize`
- * for tall letters (P, l, b). True measured match to the T ink height is
- * ~0.757; we size noticeably smaller (~1.02) so the wordmark sits optically
- * under the T rather than matching its full weight. The chunkier T mark then
- * gets an extra trim so “urboPanel” does not compete with the stem.
+ * Path data shared with `assets/brand/turbopanel-logo*.svg` — ink-tight
+ * viewBox 628×370 (origin at green-bar tip / top of crossbar).
  */
-const ASCENDER_RATIO = 1.02
-/** Extra optical shrink so “urboPanel” stays under the T’s crossbar, not past it. */
-const WORDMARK_SIZE_TRIM_PX = 4
-/** Draw the T a bit larger than the wordmark’s size basis so the mark leads. */
-const MARK_SCALE = 1.12
-/**
- * Baseline offset **below** the CSS box’s bottom edge, as a fraction of
- * font-size — for this face at `lineHeight === fontSize`. NOT
- * `fontBoundingBoxDescent / fontSize` (that overshoots by ~2.5x): with a
- * tight line box shorter than the font’s natural em-box (ascent+descent),
- * the engine applies negative half-leading, pulling the baseline up toward
- * the box’s top. Measured:
- * `(halfLeading + fontBoundingBoxDescent) / fontSize` where
- * `halfLeading = fontSize - (fontBoundingBoxAscent + fontBoundingBoxDescent)`.
- */
-const BASELINE_TRIM_RATIO = 0.0851
-/** Optical nudge: lift wordmark above the geometric T-tip baseline. */
-const WORDMARK_BASELINE_LIFT_PX = 3
+const BAR_A = 'M48 0h55L55 120H0z'
+const BAR_B = 'M118 0h78l-48 120H70z'
+const TEE = 'M213 0h415l-48 120H428L328 370H173l100-250H165z'
 
-/** Brand display face — Plus Jakarta Sans (matches website `--font-display`). */
-export const TURBOPANEL_BRAND_FONT = 'PlusJakartaSansItalic'
+/** Square canvas side equals landscape width; vertical center pad = 129. */
+const SQUARE_SIDE = TURBOPANEL_MARK_INK.width
+const SQUARE_TRANSLATE_Y = 129
 
-/**
- * Extra oblique beyond the italic face so the wordmark matches the T lean
- * (mark edges are ~atan(48/120) ≈ 22°; italic alone is ~12°).
- */
-const WORDMARK_SKEW = '-14deg'
+/** Brand lockup face — Plus Jakarta ExtraBold Italic (matches website lockup). */
+export const TURBOPANEL_BRAND_FONT = 'PlusJakartaSansExtraBoldItalic'
 
 export type TurboPanelLogoVariant = 'color' | 'white' | 'mono'
 
@@ -86,10 +57,12 @@ export function TurboPanelLogoMark({
   accessibilityLabel = 'TurboPanel',
 }: MarkProps) {
   const { bars, tee } = fillsForVariant(variant)
-  const width = square ? size : Math.round(size * MARK_ASPECT)
+  /** Keep exact landscape aspect — independent rounding letterboxes the stem tip. */
+  const width = square ? size : size * (TURBOPANEL_MARK_INK.width / TURBOPANEL_MARK_INK.height)
   const height = size
-  const viewBox = square ? '0 0 680 680' : '0 0 680 520'
-  const translateY = square ? 115 : 35
+  const viewBox = square
+    ? `0 0 ${SQUARE_SIDE} ${SQUARE_SIDE}`
+    : `0 0 ${TURBOPANEL_MARK_INK.width} ${TURBOPANEL_MARK_INK.height}`
   const decorative = accessibilityLabel.length === 0
 
   return (
@@ -100,7 +73,7 @@ export function TurboPanelLogoMark({
       accessibilityLabel={decorative ? undefined : accessibilityLabel}
     >
       <Svg width={width} height={height} viewBox={viewBox}>
-        <G transform={`translate(35 ${translateY})`}>
+        <G {...(square ? { transform: `translate(0 ${SQUARE_TRANSLATE_Y})` } : {})}>
           <Path d={BAR_A} fill={bars} />
           <Path d={BAR_B} fill={bars} />
           <Path d={TEE} fill={tee} />
@@ -120,7 +93,7 @@ type LogoProps = Readonly<{
 }>
 
 /**
- * Logotype: T mark + italic “urboPanel” tucked under the blue crossbar.
+ * Logotype: T mark + Plus Jakarta ExtraBold Italic “urboPanel” under the blue crossbar.
  */
 export function TurboPanelLogo({
   size = 40,
@@ -128,32 +101,17 @@ export function TurboPanelLogo({
   markOnly = false,
   style,
 }: LogoProps) {
-  const markSize = Math.round(size * MARK_SCALE)
-  const markWidth = Math.round(markSize * MARK_ASPECT)
-  /** Sized from the caller `size` (not the boosted mark) so the T stays dominant. */
-  const wordSize = Math.max(
-    1,
-    Math.round((size * INK_HEIGHT) / ASCENDER_RATIO) - WORDMARK_SIZE_TRIM_PX,
-  )
-  /** Under the blue bar, right of the stem — a little air after the T. */
-  const wordLeft = Math.round(markWidth * 0.62)
-  /** Baseline on the T stem tip, then lift a couple px for optical balance. */
-  const wordBottom = Math.round(
-    markSize * INK_PAD - wordSize * BASELINE_TRIM_RATIO + WORDMARK_BASELINE_LIFT_PX,
-  )
-  const width = markOnly
-    ? markWidth
-    : Math.max(markWidth, wordLeft + Math.round(wordSize * 5.5))
+  const lockup = consoleWordmarkLockup(size, markOnly)
 
   return (
     <View
-      style={[{ width, height: markSize }, styles.lockup, style]}
+      style={[{ width: lockup.lockupWidth, height: lockup.lockupHeight }, styles.lockup, style]}
       accessibilityRole="image"
       accessibilityLabel="TurboPanel"
     >
       <View style={styles.markLayer} pointerEvents="none">
         <TurboPanelLogoMark
-          size={markSize}
+          size={Math.round(lockup.markRenderHeight)}
           variant={variant}
           accessibilityLabel=""
         />
@@ -163,16 +121,17 @@ export function TurboPanelLogo({
           style={[
             styles.wordmark,
             {
-              left: wordLeft,
-              bottom: wordBottom,
-              fontSize: wordSize,
-              lineHeight: wordSize,
-              transform: [{ skewX: WORDMARK_SKEW }],
+              left: lockup.wordLeft,
+              bottom: lockup.wordBottomOffset,
+              fontSize: lockup.wordSize,
+              lineHeight: lockup.wordSize,
+              letterSpacing: wordmarkLetterSpacingPx(lockup.wordSize),
+              transform: [{ skewX: lockup.skew }],
             },
           ]}
           importantForAccessibility="no"
         >
-          {WORDMARK}
+          {lockup.text}
         </Text>
       )}
     </View>
@@ -187,16 +146,14 @@ const styles = StyleSheet.create({
   markLayer: {
     position: 'absolute',
     left: 0,
-    top: 0,
+    bottom: 0,
   },
   wordmark: {
     position: 'absolute',
     color: colors.text,
-    // Italic face file — do not also set fontStyle or some platforms double-slant.
     fontFamily: TURBOPANEL_BRAND_FONT,
-    // Bold italic — presence without ExtraBold fighting the chunky T.
-    fontWeight: '700',
-    letterSpacing: 0.35,
+    // ExtraBold Italic face; keep explicit for web.
+    fontWeight: '900',
     // Keep baseline planted while skewing to the T angle.
     transformOrigin: 'left bottom',
   },
