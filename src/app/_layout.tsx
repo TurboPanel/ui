@@ -1,4 +1,4 @@
-import { Redirect, Stack, useSegments, type Href } from 'expo-router'
+import { Redirect, Stack, useSegments } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { useEffect } from 'react'
 import {
@@ -13,13 +13,8 @@ import { focusManager } from '@tanstack/react-query'
 import { AppProviders } from '@/components/app-providers'
 import { SafeAreaRoot } from '@/components/safe-area-root'
 import { authSpinnerColor } from '@/lib/auth-accent'
-import {
-  dashboardHref,
-  hasUserSession,
-  isAdminSession,
-  useAuth,
-} from '@/lib/auth-context'
-import type { SessionInfo } from '@/lib/instance-api'
+import { useAuth } from '@/lib/auth-context'
+import { resolveAuthGuardHref } from '@/lib/auth-guard'
 import { colors } from '@/lib/theme'
 
 const STACK_SCREEN_OPTIONS = { headerShown: false } as const
@@ -80,111 +75,16 @@ function AuthGuard() {
     developerDevBypass: __DEV__ && topSegment === 'developer',
   })
 
-  if (href !== null) {
-    return <Redirect href={href} />
-  }
-
-  return <Stack screenOptions={STACK_SCREEN_OPTIONS} />
-}
-
-type AuthGuardContext = Readonly<{
-  session: SessionInfo | null
-  needsInstall: boolean
-  topSegment: string | undefined
-  developerDevBypass: boolean
-}>
-
-/** Returns a redirect target, or `null` to render the root Stack. */
-function resolveAuthGuardHref(ctx: AuthGuardContext): Href | null {
-  const { needsInstall, topSegment, developerDevBypass } = ctx
-
-  if (topSegment === 'recovering') {
-    return null
-  }
-
-  if (needsInstall) {
-    return resolveNeedsInstallHref(topSegment, developerDevBypass)
-  }
-
-  // Install wizard is only for fresh hosts; leave once install is complete.
-  if (topSegment === 'install') {
-    return dashboardHref(ctx.session, needsInstall) as Href
-  }
-
-  return resolveSessionRouteHref(ctx)
-}
-
-function resolveNeedsInstallHref(
-  topSegment: string | undefined,
-  developerDevBypass: boolean,
-): Href | null {
-  if (developerDevBypass || topSegment === 'install') {
-    return null
-  }
-  return '/install' as Href
-}
-
-function resolveSessionRouteHref(ctx: AuthGuardContext): Href | null {
-  const { session, needsInstall, topSegment, developerDevBypass } = ctx
-  const signedIn = hasUserSession(session)
-  const onAuthRoute = isPublicAuthRoute(topSegment)
-  const dash = dashboardHref(session, needsInstall) as Href
-
-  if (!signedIn && !onAuthRoute && !developerDevBypass) {
-    return '/sign-in' as Href
-  }
-
-  if (signedIn && (topSegment === 'sign-in' || topSegment === 'sign-up')) {
-    return dash
-  }
-
-  if (signedIn && topSegment === 'welcome' && dash !== '/welcome') {
-    return dash
-  }
-
-  if (signedIn && shouldLeaveUnknownSignedInRoute(ctx)) {
-    return dash
-  }
-
-  return null
-}
-
-function isPublicAuthRoute(topSegment: string | undefined): boolean {
+  // Keep Stack mounted while redirecting. Swapping Stack out for <Redirect />
+  // leaves useSegments() empty, so signed-in users keep resolving to /welcome
+  // and expo-router's replace loop hits "Maximum update depth exceeded"
+  // (seen right after install completes).
   return (
-    topSegment === 'sign-in' ||
-    topSegment === 'sign-up' ||
-    topSegment === 'verify-email'
+    <>
+      <Stack screenOptions={STACK_SCREEN_OPTIONS} />
+      {href !== null ? <Redirect href={href} /> : null}
+    </>
   )
-}
-
-function shouldLeaveUnknownSignedInRoute(ctx: AuthGuardContext): boolean {
-  const { session, topSegment, developerDevBypass } = ctx
-
-  if (topSegment === 'welcome' || isPublicAuthRoute(topSegment)) {
-    return false
-  }
-  if (developerDevBypass) {
-    return false
-  }
-  if (topSegment === 'admin' && isAdminSession(session)) {
-    return false
-  }
-  return !isOrgRoute(topSegment)
-}
-
-const PUBLIC_ROUTE_SEGMENTS = new Set([
-  'sign-in',
-  'sign-up',
-  'verify-email',
-  'install',
-  'welcome',
-  'admin',
-  'recovering',
-  'developer',
-])
-
-function isOrgRoute(topSegment: string | undefined): boolean {
-  return Boolean(topSegment && !PUBLIC_ROUTE_SEGMENTS.has(topSegment))
 }
 
 const styles = StyleSheet.create({

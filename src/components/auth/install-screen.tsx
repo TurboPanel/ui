@@ -185,11 +185,9 @@ export function InstallScreenContent() {
   ])
 
   useEffect(() => {
-    if (instanceInfoLoading) return
+    if (instanceInfoLoading || success) return
     if (!isInstallMode) router.replace('/sign-in')
-  }, [instanceInfoLoading, isInstallMode, router])
-
-  if (instanceInfoLoading || !isInstallMode) return null
+  }, [instanceInfoLoading, isInstallMode, success, router])
 
   if (success) {
     return (
@@ -203,6 +201,9 @@ export function InstallScreenContent() {
       </YStack>
     )
   }
+
+  if (instanceInfoLoading || !isInstallMode) return null
+
 
   const introText = hostVerified
     ? 'Host verified. Create your superadmin account below.'

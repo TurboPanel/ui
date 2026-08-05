@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest'
+import { resolveAuthGuardHref } from '@/lib/auth-guard'
+import type { SessionInfo } from '@/lib/instance-api'
+
+const session: SessionInfo = {
+  userId: 'user-1',
+  username: null,
+  email: 'admin@example.com',
+  role: 'superadmin',
+}
+
+describe('resolveAuthGuardHref', () => {
+  it('keeps recovering reachable without a session', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'recovering',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('sends unsigned hosts to install when setup is required', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'sign-in',
+        developerDevBypass: false,
+      }),
+    ).toBe('/install')
+  })
+
+  it('allows the install wizard while setup is required', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'install',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('leaves install after setup completes with a session', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'install',
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+
+  it('leaves install after setup completes without a session', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'install',
+        developerDevBypass: false,
+      }),
+    ).toBe('/sign-in')
+  })
+
+  it('does not bounce signed-in users off welcome when that is the dashboard', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'welcome',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('allows signed-in org routes', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: '11111111-1111-1111-1111-111111111111',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('sends signed-in guests on auth routes to the dashboard', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'sign-in',
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+})

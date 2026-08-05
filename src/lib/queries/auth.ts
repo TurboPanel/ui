@@ -11,6 +11,7 @@ import {
   signUp,
   verifyEmail,
   type InstallCompleteResult,
+  type InstallStatus,
   type SessionInfo,
 } from '@/lib/instance-api'
 import { setActiveOrganizationId } from '@/lib/org-context'
@@ -119,6 +120,25 @@ export function useCompleteInstall() {
       queryClient.setQueryData<SessionInfo | null>(
         queryKeys.auth.session,
         result,
+      )
+      // Clear install mode before navigation so AuthGuard / org layout do not
+      // bounce back to /install while status refetch is in flight.
+      queryClient.setQueryData<InstallStatus>(
+        queryKeys.auth.status,
+        (previous) => {
+          if (!previous) {
+            return {
+              needsInstall: false,
+              isInstallMode: false,
+              isSignupEnabled: false,
+            }
+          }
+          return {
+            ...previous,
+            needsInstall: false,
+            isInstallMode: false,
+          }
+        },
       )
       await Promise.all([
         queryClient.invalidateQueries({

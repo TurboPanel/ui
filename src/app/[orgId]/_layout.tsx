@@ -35,6 +35,12 @@ export default function OrganizationLayout() {
     }
   }, [orgAllowed, orgId])
 
+  useEffect(() => {
+    if (orgAllowed === false) {
+      setActiveOrganizationId(null)
+    }
+  }, [orgAllowed])
+
   if (isLoading || (session && orgId && (orgAllowed === null || !orgReady))) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
@@ -55,9 +61,6 @@ export default function OrganizationLayout() {
   }
 
   if (!orgId || orgAllowed === false) {
-    if (orgAllowed === false) {
-      setActiveOrganizationId(null)
-    }
     return <Redirect href={'/welcome' as Href} />
   }
 
