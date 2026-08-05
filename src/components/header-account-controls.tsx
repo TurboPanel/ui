@@ -17,7 +17,6 @@ export function HeaderAccountControls({
   return (
     <View style={headerMenuGroupStyles.group}>
       <OrganizationSwitcherSegment orgId={orgId} />
-      <View style={headerMenuGroupStyles.groupDivider} />
       <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
     </View>
   )

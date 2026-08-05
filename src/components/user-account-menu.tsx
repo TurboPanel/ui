@@ -7,6 +7,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import { GlassSurface } from '@/components/glass/glass-surface'
+import { HeaderChevron } from '@/components/header-chevron'
 import {
   HEADER_MENU_WIDTH,
   headerMenuGroupStyles,
@@ -48,10 +50,13 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
   }
 
   const menuBody = (
-    <View style={[headerMenuGroupStyles.menu, isCompact && styles.menuSheet]}>
+    <GlassSurface
+      style={[headerMenuGroupStyles.menu, isCompact && styles.menuSheet]}
+      intensity="strong"
+    >
       <View style={styles.accountBlock}>
-        <Text style={styles.accountLabel}>Signed in as</Text>
-        <Text style={styles.accountEmail} selectable>
+        <Text style={headerMenuGroupStyles.menuHeading}>Signed in as</Text>
+        <Text style={styles.accountEmail} selectable numberOfLines={2}>
           {email}
         </Text>
       </View>
@@ -60,7 +65,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
 
       <Pressable
         style={({ pressed }) => [
-          styles.signOutItem,
+          headerMenuGroupStyles.menuAction,
           pressed && headerMenuGroupStyles.itemPressed,
           webPointer,
         ]}
@@ -70,22 +75,17 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
       >
         <Text style={styles.signOutLabel}>Sign out</Text>
       </Pressable>
-    </View>
+    </GlassSurface>
   )
 
   return (
     <>
-      <View
-        ref={buttonRef}
-        collapsable={false}
-        style={[headerMenuGroupStyles.segment, headerMenuGroupStyles.userSegment]}
-      >
+      <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
         <Pressable
           style={({ pressed }) => [
-            headerMenuGroupStyles.segmentMain,
-            styles.segmentFill,
-            open && headerMenuGroupStyles.segmentOpen,
-            pressed && headerMenuGroupStyles.itemPressed,
+            headerMenuGroupStyles.trigger,
+            open && headerMenuGroupStyles.triggerOpen,
+            pressed && headerMenuGroupStyles.triggerPressed,
             webPointer,
           ]}
           onPress={() => setOpen((current) => !current)}
@@ -93,17 +93,15 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
           accessibilityLabel={`Account menu for ${email}`}
           accessibilityState={{ expanded: open }}
         >
-          <Text style={headerMenuGroupStyles.segmentLabel} numberOfLines={1}>
-            {email}
-          </Text>
-          <Text
-            style={[
-              headerMenuGroupStyles.segmentChevron,
-              open && headerMenuGroupStyles.segmentChevronOpen,
-            ]}
-          >
-            ▾
-          </Text>
+          <View style={headerMenuGroupStyles.triggerCopy}>
+            <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
+              {email}
+            </Text>
+          </View>
+          <HeaderChevron
+            color={open ? colors.text : colors.textDim}
+            open={open}
+          />
         </Pressable>
       </View>
 
@@ -113,7 +111,12 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
         animationType={isCompact ? 'slide' : 'fade'}
         onRequestClose={close}
       >
-        <View style={headerMenuGroupStyles.backdrop}>
+        <View
+          style={[
+            headerMenuGroupStyles.backdrop,
+            isCompact && headerMenuGroupStyles.backdropCompact,
+          ]}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={close}
@@ -143,38 +146,27 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
 }
 
 const styles = StyleSheet.create({
-  segmentFill: {
-    flex: 1,
+  triggerWrap: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   menuSheet: {
     maxHeight: '40%',
   },
   accountBlock: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 4,
-  },
-  accountLabel: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    paddingBottom: 2,
+    gap: 2,
   },
   accountEmail: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
-  },
-  signOutItem: {
-    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 8,
   },
   signOutLabel: {
     color: colors.errorText,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
 })

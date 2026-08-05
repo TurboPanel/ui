@@ -9,6 +9,9 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { CreateOrganizationModal } from '@/components/create-organization-modal'
+import { GlassSurface } from '@/components/glass/glass-surface'
+import { HeaderCheck } from '@/components/header-check'
+import { HeaderChevron } from '@/components/header-chevron'
 import {
   HEADER_MENU_WIDTH,
   headerMenuGroupStyles,
@@ -18,7 +21,7 @@ import type { OrganizationRecord } from '@/lib/instance-api'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { layout } from '@/lib/theme'
+import { chrome, colors, layout } from '@/lib/theme'
 
 function organizationLabel(org: OrganizationRecord): string {
   return org.displayName?.trim() || org.id
@@ -94,10 +97,13 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   }
 
   const menuBody = (
-    <View style={[headerMenuGroupStyles.menu, isCompact && headerMenuGroupStyles.menuSheet]}>
+    <GlassSurface
+      style={[headerMenuGroupStyles.menu, isCompact && headerMenuGroupStyles.menuSheet]}
+      intensity="strong"
+    >
       {canSwitch ? (
         <>
-          <Text style={headerMenuGroupStyles.menuHeading}>Switch organization</Text>
+          <Text style={headerMenuGroupStyles.menuHeading}>Organizations</Text>
           {organizations.map((org) => {
             const active = org.id === orgId
             const name = organizationLabel(org)
@@ -115,6 +121,9 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
                 accessibilityLabel={`Switch to ${name}`}
                 accessibilityState={{ selected: active }}
               >
+                <View style={headerMenuGroupStyles.menuItemMark}>
+                  {active ? <HeaderCheck color={chrome.accent} /> : null}
+                </View>
                 <Text
                   style={[
                     headerMenuGroupStyles.menuItemLabel,
@@ -133,7 +142,7 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
 
       <Pressable
         style={({ pressed }) => [
-          headerMenuGroupStyles.menuActionPrimary,
+          headerMenuGroupStyles.menuAction,
           pressed && headerMenuGroupStyles.itemPressed,
           webPointer,
         ]}
@@ -141,74 +150,38 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
         accessibilityRole="menuitem"
         accessibilityLabel="Create new organization"
       >
-        <Text style={headerMenuGroupStyles.menuActionPrimaryLabel}>
-          Create new organization
+        <Text style={headerMenuGroupStyles.menuActionLabel}>
+          Create organization
         </Text>
       </Pressable>
-    </View>
-  )
-
-  const chevron = (
-    <Text
-      style={[
-        headerMenuGroupStyles.segmentChevron,
-        menuOpen && headerMenuGroupStyles.segmentChevronOpen,
-      ]}
-    >
-      ▾
-    </Text>
+    </GlassSurface>
   )
 
   return (
     <>
-      <View
-        ref={buttonRef}
-        collapsable={false}
-        style={[headerMenuGroupStyles.segment, headerMenuGroupStyles.orgSegment]}
-      >
-        {canSwitch ? (
-          <Pressable
-            style={({ pressed }) => [
-              headerMenuGroupStyles.segmentMain,
-              styles.segmentFill,
-              menuOpen && headerMenuGroupStyles.segmentOpen,
-              pressed && headerMenuGroupStyles.itemPressed,
-              webPointer,
-            ]}
-            onPress={() => setMenuOpen((current) => !current)}
-            accessibilityRole="button"
-            accessibilityLabel={`Organization: ${label}`}
-            accessibilityState={{ expanded: menuOpen }}
-          >
-            <Text style={headerMenuGroupStyles.segmentLabel} numberOfLines={1}>
+      <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
+        <Pressable
+          style={({ pressed }) => [
+            headerMenuGroupStyles.trigger,
+            menuOpen && headerMenuGroupStyles.triggerOpen,
+            pressed && headerMenuGroupStyles.triggerPressed,
+            webPointer,
+          ]}
+          onPress={() => setMenuOpen((current) => !current)}
+          accessibilityRole="button"
+          accessibilityLabel={`Organization: ${label}`}
+          accessibilityState={{ expanded: menuOpen }}
+        >
+          <View style={headerMenuGroupStyles.triggerCopy}>
+            <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
               {label}
             </Text>
-            {chevron}
-          </Pressable>
-        ) : (
-          <>
-            <View style={headerMenuGroupStyles.segmentMainStatic}>
-              <Text style={headerMenuGroupStyles.segmentLabel} numberOfLines={1}>
-                {label}
-              </Text>
-            </View>
-            <View style={headerMenuGroupStyles.segmentSplitDivider} />
-            <Pressable
-              style={({ pressed }) => [
-                headerMenuGroupStyles.segmentChevronButton,
-                menuOpen && headerMenuGroupStyles.segmentOpen,
-                pressed && headerMenuGroupStyles.itemPressed,
-                webPointer,
-              ]}
-              onPress={() => setMenuOpen((current) => !current)}
-              accessibilityRole="button"
-              accessibilityLabel={`Organization menu for ${label}`}
-              accessibilityState={{ expanded: menuOpen }}
-            >
-              {chevron}
-            </Pressable>
-          </>
-        )}
+          </View>
+          <HeaderChevron
+            color={menuOpen ? colors.text : colors.textDim}
+            open={menuOpen}
+          />
+        </Pressable>
       </View>
 
       <Modal
@@ -217,7 +190,12 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
         animationType={isCompact ? 'slide' : 'fade'}
         onRequestClose={closeMenu}
       >
-        <View style={headerMenuGroupStyles.backdrop}>
+        <View
+          style={[
+            headerMenuGroupStyles.backdrop,
+            isCompact && headerMenuGroupStyles.backdropCompact,
+          ]}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={closeMenu}
@@ -253,7 +231,8 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
 }
 
 const styles = StyleSheet.create({
-  segmentFill: {
-    flex: 1,
+  triggerWrap: {
+    flexShrink: 1,
+    minWidth: 0,
   },
 })

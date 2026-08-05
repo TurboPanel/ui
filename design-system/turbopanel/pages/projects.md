@@ -9,7 +9,7 @@
 
 ## Layout
 
-- Overview: workspace switcher + project list (workspace label when viewing all); **setup** badge when type is unset
+- Overview: full-width workspace bar under the page title (click expands inline search + workspace list) + project list (workspace label when viewing all); **setup** badge when type is unset
 - Detail: **Project shell** — header with red trash delete (environment when multiple exist; otherwise project), environment selector (managed / non-Overview tabs), section tabs, tab body
 - Compose: one unified tab group — **Project · environments · Networking · Storage**. Networking / Storage only appear after an environment is selected (hidden on Project compose). No separate Overview or Environments section tabs — Project / env chips *are* the compose surface; env detail lives under the selected environment. Networking focuses on hostnames/ports — no compose overlay editor (edit overlays on Overview or Settings → overrides).
 - Overview: opens on **Project** by default at `/overview` (no `?env=`). No outer panel chrome — editor surface and Save sit flush on the page. One bordered editor surface header: quiet **Compose / Visual** underline tabs (left) plus **Set Default Project Server (Optional)** and the **Project / environment / section** segment buttons (right). Section tabs leave the shell on Overview so they live in that surface header; Networking / Storage keep the same unified group in the shell. Lifecycle Start / Stop / Refresh / Destroy sits below when an environment is selected (`/environments/:environmentId`). After start, collapsed service rows with green / yellow / red dots.

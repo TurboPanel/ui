@@ -1,14 +1,17 @@
 import { useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native'
+import { HeaderChevron } from '@/components/header-chevron'
 import { PlatformBadge } from '@/components/org/platform-badge'
+import { webPointer } from '@/components/org/org-panel-styles'
+import type { WorkspaceRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import {
   findSystemWorkspace,
@@ -16,13 +19,155 @@ import {
   SYSTEM_WORKSPACE_DESCRIPTION,
   userWorkspaces,
 } from '@/lib/system-inventory'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import {
   ALL_WORKSPACES_SCOPE,
   manageWorkspacesHref,
   workspaceDisplayName,
+  type WorkspaceScope,
 } from '@/lib/workspace-scope'
+
+function matchesWorkspaceQuery(
+  workspace: WorkspaceRecord,
+  query: string,
+): boolean {
+  if (!query) {
+    return true
+  }
+  const name = workspaceDisplayName(workspace).toLowerCase()
+  const description = workspace.description?.toLowerCase() ?? ''
+  return name.includes(query) || description.includes(query)
+}
+
+function triggerLabelForScope(
+  scope: WorkspaceScope,
+  isLoading: boolean,
+  workspaceCount: number,
+): string {
+  if (isLoading && workspaceCount === 0) {
+    return 'Loading…'
+  }
+  return scope.label
+}
+
+function WorkspaceMenuItem({
+  active,
+  label,
+  hint,
+  badge,
+  onPress,
+}: Readonly<{
+  active: boolean
+  label: string
+  hint?: string
+  badge?: boolean
+  onPress: () => void
+}>) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.menuItem,
+        active && styles.menuItemActive,
+        pressed && styles.menuItemPressed,
+        webPointer,
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <View style={styles.systemTitleRow}>
+        <Text
+          style={[styles.menuItemLabel, active && styles.menuItemLabelActive]}
+        >
+          {label}
+        </Text>
+        {badge ? <PlatformBadge /> : null}
+      </View>
+      {hint ? (
+        <Text style={styles.menuItemHint} numberOfLines={2}>
+          {hint}
+        </Text>
+      ) : null}
+    </Pressable>
+  )
+}
+
+function WorkspaceResultsList({
+  showAllOption,
+  allActive,
+  onSelectAll,
+  emptyWithoutQuery,
+  hasNoMatches,
+  queryLabel,
+  filteredUsers,
+  scopeId,
+  onSelectWorkspace,
+  showSystem,
+  systemWorkspace,
+}: Readonly<{
+  showAllOption: boolean
+  allActive: boolean
+  onSelectAll: () => void
+  emptyWithoutQuery: boolean
+  hasNoMatches: boolean
+  queryLabel: string
+  filteredUsers: readonly WorkspaceRecord[]
+  scopeId: string
+  onSelectWorkspace: (workspaceId: string) => void
+  showSystem: boolean
+  systemWorkspace: WorkspaceRecord | null
+}>) {
+  return (
+    <ScrollView
+      style={styles.list}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+    >
+      {showAllOption ? (
+        <WorkspaceMenuItem
+          active={allActive}
+          label="All workspaces"
+          hint="Every project in this organization"
+          onPress={onSelectAll}
+        />
+      ) : null}
+
+      {emptyWithoutQuery ? (
+        <Text style={styles.emptyHint}>No workspaces yet.</Text>
+      ) : null}
+
+      {hasNoMatches ? (
+        <Text style={styles.emptyHint}>
+          No workspaces match “{queryLabel}”.
+        </Text>
+      ) : null}
+
+      {filteredUsers.map((workspace) => (
+        <WorkspaceMenuItem
+          key={workspace.id}
+          active={scopeId === workspace.id}
+          label={workspaceDisplayName(workspace)}
+          hint={workspace.description ?? undefined}
+          onPress={() => onSelectWorkspace(workspace.id)}
+        />
+      ))}
+
+      {showSystem && systemWorkspace ? (
+        <>
+          <View style={styles.menuDivider} />
+          <WorkspaceMenuItem
+            active={scopeId === systemWorkspace.id}
+            label={workspaceDisplayName(systemWorkspace)}
+            hint={SYSTEM_WORKSPACE_DESCRIPTION}
+            badge
+            onPress={() => onSelectWorkspace(systemWorkspace.id)}
+          />
+        </>
+      ) : null}
+    </ScrollView>
+  )
+}
 
 export function WorkspaceSwitcher({
   orgId,
@@ -30,13 +175,11 @@ export function WorkspaceSwitcher({
   orgId: string
 }>) {
   const router = useRouter()
-  const { width } = useWindowDimensions()
-  const isCompact = width < layout.desktopBreakpoint
   const canOwn = useCan('organization', orgId, 'organization:own')
   const { workspaces, scope, isLoading, setScopeId } = useWorkspaceScope()
   const [open, setOpen] = useState(false)
-  const buttonRef = useRef<View>(null)
-  const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<TextInput>(null)
 
   const users = useMemo(() => userWorkspaces(workspaces), [workspaces])
   const systemWorkspace = useMemo(
@@ -44,24 +187,52 @@ export function WorkspaceSwitcher({
     [workspaces],
   )
 
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((workspace) =>
+        matchesWorkspaceQuery(workspace, normalizedQuery),
+      ),
+    [users, normalizedQuery],
+  )
+
+  const showAllOption =
+    users.length > 1 &&
+    (!normalizedQuery || 'all workspaces'.includes(normalizedQuery))
+  const showSystem =
+    systemWorkspace != null &&
+    matchesWorkspaceQuery(systemWorkspace, normalizedQuery)
+  const emptyWithoutQuery =
+    users.length === 0 && !systemWorkspace && !isLoading
+  const hasNoMatches =
+    !showAllOption &&
+    filteredUsers.length === 0 &&
+    !showSystem &&
+    !isLoading &&
+    Boolean(normalizedQuery)
+
   useEffect(() => {
-    if (!open || isCompact) {
+    if (!open) {
       return
     }
-    buttonRef.current?.measureInWindow((x, y, _w, h) => {
-      setMenuPosition({ top: y + h + 6, left: x })
-    })
-  }, [open, isCompact])
+    const timer = setTimeout(() => {
+      searchRef.current?.focus()
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [open])
 
-  const close = () => setOpen(false)
+  const close = () => {
+    setOpen(false)
+    setQuery('')
+  }
 
-  const selectAll = () => {
-    setScopeId(ALL_WORKSPACES_SCOPE)
+  const selectAndClose = (workspaceId: string) => {
+    setScopeId(workspaceId)
     close()
   }
 
-  const selectWorkspace = (workspaceId: string) => {
-    setScopeId(workspaceId)
+  const selectAll = () => {
+    setScopeId(ALL_WORKSPACES_SCOPE)
     close()
   }
 
@@ -70,117 +241,30 @@ export function WorkspaceSwitcher({
     router.push(manageWorkspacesHref(orgId) as Href)
   }
 
-  const goCreate = () => {
-    close()
-    router.push(manageWorkspacesHref(orgId) as Href)
+  const toggleOpen = () => {
+    if (open) {
+      close()
+      return
+    }
+    setOpen(true)
   }
 
-  let triggerLabel = scope.label
-  if (isLoading && workspaces.length === 0) {
-    triggerLabel = 'Loading…'
-  }
-
-  const menuBody = (
-    <View style={[styles.menu, isCompact && styles.menuSheet]}>
-      <Text style={styles.menuHeading}>Switch workspace</Text>
-
-      {users.length > 1 ? (
-        <Pressable
-          style={[
-            styles.menuItem,
-            scope.id === ALL_WORKSPACES_SCOPE && styles.menuItemActive,
-          ]}
-          onPress={selectAll}
-        >
-          <Text
-            style={[
-              styles.menuItemLabel,
-              scope.id === ALL_WORKSPACES_SCOPE && styles.menuItemLabelActive,
-            ]}
-          >
-            All workspaces
-          </Text>
-          <Text style={styles.menuItemHint}>Every project in this organization</Text>
-        </Pressable>
-      ) : null}
-
-      {users.length === 0 && !systemWorkspace && !isLoading ? (
-        <Text style={styles.emptyHint}>No workspaces yet.</Text>
-      ) : null}
-
-      {users.map((workspace) => {
-        const active = scope.id === workspace.id
-        return (
-          <Pressable
-            key={workspace.id}
-            style={[styles.menuItem, active && styles.menuItemActive]}
-            onPress={() => selectWorkspace(workspace.id)}
-          >
-            <Text
-              style={[styles.menuItemLabel, active && styles.menuItemLabelActive]}
-            >
-              {workspaceDisplayName(workspace)}
-            </Text>
-            {workspace.description ? (
-              <Text style={styles.menuItemHint} numberOfLines={2}>
-                {workspace.description}
-              </Text>
-            ) : null}
-          </Pressable>
-        )
-      })}
-
-      {systemWorkspace ? (
-        <>
-          <View style={styles.menuDivider} />
-          <Pressable
-            style={[
-              styles.menuItem,
-              scope.id === systemWorkspace.id && styles.menuItemActive,
-            ]}
-            onPress={() => selectWorkspace(systemWorkspace.id)}
-          >
-            <View style={styles.systemTitleRow}>
-              <Text
-                style={[
-                  styles.menuItemLabel,
-                  scope.id === systemWorkspace.id && styles.menuItemLabelActive,
-                ]}
-              >
-                {workspaceDisplayName(systemWorkspace)}
-              </Text>
-              <PlatformBadge />
-            </View>
-            <Text style={styles.menuItemHint} numberOfLines={2}>
-              {SYSTEM_WORKSPACE_DESCRIPTION}
-            </Text>
-          </Pressable>
-        </>
-      ) : null}
-
-      <View style={styles.menuDivider} />
-
-      <Pressable style={styles.menuAction} onPress={goManage}>
-        <Text style={styles.menuActionLabel}>Manage workspaces</Text>
-      </Pressable>
-
-      {canOwn ? (
-        <Pressable style={styles.menuActionPrimary} onPress={goCreate}>
-          <Text style={styles.menuActionPrimaryLabel}>Create workspace</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  )
+  const triggerLabel = triggerLabelForScope(scope, isLoading, workspaces.length)
 
   return (
-    <View style={styles.root}>
-      <View ref={buttonRef} collapsable={false}>
-        <Pressable
-          style={styles.trigger}
-          onPress={() => setOpen((current) => !current)}
-          accessibilityRole="button"
-          accessibilityLabel={`Workspace: ${triggerLabel}`}
-        >
+    <View style={[styles.root, open && styles.rootOpen]}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.trigger,
+          pressed && styles.triggerPressed,
+          webPointer,
+        ]}
+        onPress={toggleOpen}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`Workspace: ${triggerLabel}`}
+      >
+        <View style={styles.triggerText}>
           <Text style={styles.triggerCaption}>Workspace</Text>
           <View style={styles.triggerLabelRow}>
             <Text style={styles.triggerLabel} numberOfLines={1}>
@@ -190,50 +274,98 @@ export function WorkspaceSwitcher({
               <PlatformBadge />
             ) : null}
           </View>
-        </Pressable>
-      </View>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType={isCompact ? 'slide' : 'fade'}
-        onRequestClose={close}
-      >
-        <View style={styles.backdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close} />
-          {isCompact ? (
-            <View style={styles.sheetWrap}>
-              {menuBody}
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.desktopMenuWrap,
-                { top: menuPosition.top, left: menuPosition.left },
-              ]}
-            >
-              {menuBody}
-            </View>
-          )}
         </View>
-      </Modal>
+        <HeaderChevron color={colors.textMuted} open={open} />
+      </Pressable>
+
+      {open ? (
+        <View style={styles.panel}>
+          <TextInput
+            ref={searchRef}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search workspaces…"
+            placeholderTextColor={colors.textDim}
+            style={styles.searchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Search workspaces"
+            returnKeyType="search"
+          />
+
+          <WorkspaceResultsList
+            showAllOption={showAllOption}
+            allActive={scope.id === ALL_WORKSPACES_SCOPE}
+            onSelectAll={selectAll}
+            emptyWithoutQuery={emptyWithoutQuery}
+            hasNoMatches={hasNoMatches}
+            queryLabel={query.trim()}
+            filteredUsers={filteredUsers}
+            scopeId={scope.id}
+            onSelectWorkspace={selectAndClose}
+            showSystem={showSystem}
+            systemWorkspace={systemWorkspace}
+          />
+
+          <View style={styles.menuDivider} />
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuAction,
+              pressed && styles.menuItemPressed,
+              webPointer,
+            ]}
+            onPress={goManage}
+          >
+            <Text style={styles.menuActionLabel}>Manage workspaces</Text>
+          </Pressable>
+
+          {canOwn ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuActionPrimary,
+                pressed && styles.menuItemPressed,
+                webPointer,
+              ]}
+              onPress={goManage}
+            >
+              <Text style={styles.menuActionPrimaryLabel}>Create workspace</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   root: {
-    alignSelf: 'flex-start',
-    minWidth: 160,
-    maxWidth: 280,
-  },
-  trigger: {
+    width: '100%',
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    overflow: 'hidden',
+  },
+  rootOpen: {
+    borderColor: colors.borderMuted,
+    backgroundColor: colors.bgPanel,
+  },
+  trigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    minHeight: 52,
+  },
+  triggerPressed: {
+    backgroundColor: colors.bgAreaHeader,
+  },
+  triggerText: {
+    flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   triggerCaption: {
@@ -250,47 +382,29 @@ const styles = StyleSheet.create({
   },
   triggerLabel: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     flexShrink: 1,
   },
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-start',
-  },
-  desktopMenuWrap: {
-    position: 'absolute',
-    width: 300,
-    zIndex: 2,
-    pointerEvents: 'box-none',
-  },
-  sheetWrap: {
-    marginTop: 'auto',
-    padding: spacing.md,
-    zIndex: 2,
-    pointerEvents: 'box-none',
-  },
-  menu: {
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
+  panel: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     padding: spacing.sm,
-    gap: 4,
-    maxHeight: 420,
+    gap: spacing.sm,
   },
-  menuSheet: {
-    maxHeight: '70%',
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgInput,
+    color: colors.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    borderRadius: 8,
+    minHeight: 44,
   },
-  menuHeading: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+  list: {
+    maxHeight: 280,
   },
   menuItem: {
     borderRadius: 8,
@@ -303,6 +417,9 @@ const styles = StyleSheet.create({
   menuItemActive: {
     borderColor: chrome.accent,
     backgroundColor: chrome.bgActive,
+  },
+  menuItemPressed: {
+    opacity: 0.85,
   },
   menuItemLabel: {
     color: colors.textBody,
@@ -351,7 +468,6 @@ const styles = StyleSheet.create({
     backgroundColor: chrome.bgActive,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    marginTop: 2,
   },
   menuActionPrimaryLabel: {
     color: chrome.accent,

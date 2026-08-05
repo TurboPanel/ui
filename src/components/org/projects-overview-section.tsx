@@ -269,9 +269,7 @@ export function ProjectsOverviewSection({
   return (
     <View style={styles.root}>
       <View style={styles.pageHeader}>
-        <View style={styles.pageIntro}>
-          <Text style={orgPanelStyles.pageTitle}>Projects</Text>
-        </View>
+        <Text style={orgPanelStyles.pageTitle}>Projects</Text>
         <WorkspaceSwitcher orgId={orgId} />
       </View>
 
@@ -299,26 +297,8 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   pageHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    width: '100%',
     gap: spacing.md,
-    flexWrap: 'wrap',
-  },
-  pageIntro: {
-    flex: 1,
-    minWidth: 200,
-    gap: spacing.sm,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
   },
   list: {
     gap: 8,
