@@ -57,25 +57,43 @@ export function ContainerStatusBadge({
   )
 }
 
-/** Classifier pill — renders nothing for app rows so callers can drop it in unconditionally. */
+const containerRoleBadgeVariants: Record<
+  ContainerRole,
+  {
+    label: string
+    badge: { borderColor: string; backgroundColor: string }
+    text: { color: string }
+  } | null
+> = {
+  service: null,
+  ingress: {
+    label: 'Ingress',
+    badge: {
+      borderColor: colors.borderChip,
+      backgroundColor: colors.bgSecondary,
+    },
+    text: { color: colors.textMuted },
+  },
+  system: {
+    label: 'System',
+    badge: {
+      borderColor: colors.command,
+      backgroundColor: colors.bgSecondary,
+    },
+    text: { color: colors.command },
+  },
+}
+
+/** Classifier pill — renders nothing for ordinary `service` rows so callers can drop it in unconditionally. */
 export function ContainerRoleBadge({
   role,
 }: Readonly<{ role: ContainerRole }>) {
-  if (role === 'app') return null
+  const variant = containerRoleBadgeVariants[role]
+  if (!variant) return null
   return (
-    <View
-      style={[
-        styles.statusBadge,
-        statusBadgeVariantStyles.unknown.badge,
-      ]}
-    >
-      <Text
-        style={[
-          styles.statusBadgeText,
-          statusBadgeVariantStyles.unknown.text,
-        ]}
-      >
-        Ingress
+    <View style={[styles.statusBadge, variant.badge]}>
+      <Text style={[styles.statusBadgeText, variant.text]}>
+        {variant.label}
       </Text>
     </View>
   )

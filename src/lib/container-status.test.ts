@@ -11,7 +11,7 @@ function container(
     serverId: 'srv1',
     containerId: '',
     containerName: 'name',
-    role: 'app',
+    role: 'service',
     composeServiceName: 'web',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

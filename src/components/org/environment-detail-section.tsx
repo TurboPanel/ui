@@ -319,13 +319,13 @@ function containerDisplayName(container: ContainerRecord): string {
   return container.containerName || container.composeServiceName || container.id
 }
 
-/** App rows first (existing ordinal order), then the single ingress row. */
+/** Service rows first (existing ordinal order), then the single ingress row. */
 function partitionContainersForDisplay(
   containers: ContainerRecord[],
 ): ContainerRecord[] {
-  const appRows = containers.filter((row) => row.role !== 'ingress')
+  const serviceRows = containers.filter((row) => row.role !== 'ingress')
   const ingressRows = containers.filter((row) => row.role === 'ingress')
-  return [...appRows, ...ingressRows]
+  return [...serviceRows, ...ingressRows]
 }
 
 function containerHostLabel(

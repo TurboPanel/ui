@@ -64,13 +64,13 @@ function containerDisplayName(container: ContainerRecord): string {
   return container.containerName || container.composeServiceName || container.id
 }
 
-/** Engine (app) first, then ingress. */
+/** Engine (service) first, then ingress. */
 function partitionContainersForDisplay(
   containers: ContainerRecord[],
 ): ContainerRecord[] {
-  const appRows = containers.filter((row) => row.role !== 'ingress')
+  const serviceRows = containers.filter((row) => row.role !== 'ingress')
   const ingressRows = containers.filter((row) => row.role === 'ingress')
-  return [...appRows, ...ingressRows]
+  return [...serviceRows, ...ingressRows]
 }
 
 export function ManagedStatusPanel({

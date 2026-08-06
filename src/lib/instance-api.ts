@@ -978,8 +978,14 @@ export type TlsRecord = {
   updatedAt: string
 }
 
-/** Allocator-owned container classifier. */
-export type ContainerRole = 'app' | 'ingress'
+/**
+ * Allocator-owned container classifier.
+ * - `service` — ordinary workload container
+ * - `ingress` — per-service Traefik container (ordinal 1, named `<serviceId>-in`)
+ * - `system` — platform component in the `turbopanel-system` Compose stack
+ *   (database / queue / analytics), inspect-only
+ */
+export type ContainerRole = 'service' | 'ingress' | 'system'
 
 export type ContainerRecord = {
   id: string;
@@ -989,8 +995,10 @@ export type ContainerRecord = {
   containerName: string;
   status: string;
   /**
-   * Allocator-owned. Ingress rows are the per-service Traefik container,
-   * always ordinal 1, named `<serviceId>-ingress`.
+   * Allocator-owned. `service` is an ordinary workload container; `ingress` is
+   * the per-service Traefik container, always ordinal 1, named `<serviceId>-in`;
+   * `system` is a platform component in the `turbopanel-system` Compose stack
+   * (database / queue / analytics), inspect-only.
    */
   role: ContainerRole;
   composeServiceName: string;
