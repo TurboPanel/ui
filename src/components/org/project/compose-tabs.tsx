@@ -5,7 +5,6 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
-import { EffectiveComposePanel } from '@/components/org/project/effective-compose-panel'
 import { ProjectSettingsArea } from '@/components/org/project-settings-area'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
@@ -30,7 +29,6 @@ import {
 } from '@/lib/container-status'
 import { projectServiceHref } from '@/lib/project-navigation'
 import { colors, spacing } from '@/lib/theme'
-import { resolveEffectiveServerId } from '@/lib/project-options'
 
 function ServicesStatusList({
   orgId,
@@ -287,24 +285,6 @@ export function ComposeServicesTab() {
         />
         <OverviewEnvironmentsPanel />
       </View>
-
-      <EffectiveComposePanel
-        orgId={orgId}
-        environmentId={baseSelected ? null : (selectedEnvironment?.id ?? null)}
-        canManage={canManage && projectAllowsMutations}
-        placementServerId={
-          baseSelected
-            ? (project.options?.defaultServerId ?? null)
-            : resolveEffectiveServerId(
-                selectedEnvironment?.serverId ?? null,
-                project.options?.defaultServerId,
-              )
-        }
-        projectCompose={project.options?.compose}
-        environmentCompose={
-          baseSelected ? undefined : selectedEnvironment?.options?.compose
-        }
-      />
 
       <ProjectSettingsArea />
     </View>

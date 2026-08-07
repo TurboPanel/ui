@@ -30,6 +30,6 @@ Project principals: `principal.project_id` + `/api/client/v1/projects/:id/princi
 
 Resource limits: `organization.options.resourceLimits` and `server.options.resourceLimits`; validated at deploy in `deploy-prepare.ts`.
 
-**Deploy preview:** environment detail shows a collapsible read-only preview of the exact prepared compose YAML (container/volume names) via `GET …/deploy-preview`. Fetch on expand and explicit refresh only — never auto-poll. Prepare gates appear as warnings so the panel still renders.
+**Deploy preview:** shown in the **Preview Deployment** modal when deploying / redeploying an environment (`GET …/deploy-preview`). Fetch on modal open only — never auto-poll. Prepare gates appear as warnings so the preview still renders.
 
 **Container naming:** project settings expose `options.containerNaming` (`uuid` default vs `custom`) via segment chips; gated by manage as a display hint.

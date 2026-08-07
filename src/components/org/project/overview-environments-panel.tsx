@@ -8,6 +8,7 @@ import {
 } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { PreviewDeploymentModal } from '@/components/org/project/preview-deployment-modal'
 import {
   environmentStatusTone,
   hasHostDeployedContainers,
@@ -388,6 +389,8 @@ export function OverviewEnvironmentsPanel() {
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
+  const [previewDeployOpen, setPreviewDeployOpen] = useState(false)
+  const [deployConfirmBusy, setDeployConfirmBusy] = useState(false)
 
   const containersQuery = useContainersByEnvironments(orgId, environmentIds)
   const containersByEnv = containersQuery.containersByEnv
@@ -468,6 +471,8 @@ export function OverviewEnvironmentsPanel() {
   useEffect(() => {
     setDestroyArmed(false)
     setActionError(null)
+    setPreviewDeployOpen(false)
+    setDeployConfirmBusy(false)
   }, [selectedEnvironmentId, baseSelected])
 
   const projectDefaultServerId = project?.options?.defaultServerId ?? null
@@ -525,21 +530,13 @@ export function OverviewEnvironmentsPanel() {
     })
   }
 
-  const handleStart = async () => {
+  const runLifecycleStart = async () => {
     if (!selectedEnvironment) return
     setActionError(null)
-    const containers = containersByEnv[selectedEnvironment.id] ?? []
-    const useLifecycle = hasHostDeployedContainers(containers)
     try {
-      const result = useLifecycle
-        ? await lifecycleMutation.run('start')
-        : await deployEnvironmentMutation.run(undefined)
+      const result = await lifecycleMutation.run('start')
       if (!result.ok) {
-        setActionError(
-          lifecycleMutation.actionError ??
-            deployEnvironmentMutation.actionError ??
-            'Failed to start',
-        )
+        setActionError(lifecycleMutation.actionError ?? 'Failed to start')
         return
       }
       trackEnqueue(
@@ -549,7 +546,32 @@ export function OverviewEnvironmentsPanel() {
         'Start',
       )
     } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to start')
+    }
+  }
+
+  const runDeployFromPreview = async () => {
+    if (!selectedEnvironment) return
+    setActionError(null)
+    setDeployConfirmBusy(true)
+    try {
+      const result = await deployEnvironmentMutation.run(undefined)
+      if (!result.ok) {
+        setActionError(
+          deployEnvironmentMutation.actionError ?? 'Failed to deploy',
+        )
+        return
+      }
+      setPreviewDeployOpen(false)
+      trackEnqueue(
+        selectedEnvironment.id,
+        effectiveServerId ?? selectedEnvironment.serverId,
+        result.value,
+        'Start',
+      )
+    } catch (err) {
       if (err instanceof DeployHealthCheckMissingError) {
+        setPreviewDeployOpen(false)
         setActionError(
           err.required
             ? 'A service requires a compose healthcheck before the first start. Add healthcheck: in Compose, or set Health check policy to Disabled in service settings.'
@@ -558,13 +580,29 @@ export function OverviewEnvironmentsPanel() {
         return
       }
       if (err instanceof DeployResourceLimitExceededError) {
+        setPreviewDeployOpen(false)
         setActionError(
           'This start would exceed a resource limit. Open the Environments tab to review capacity and try again.',
         )
         return
       }
-      setActionError(err instanceof Error ? err.message : 'Failed to start')
+      setActionError(err instanceof Error ? err.message : 'Failed to deploy')
+    } finally {
+      setDeployConfirmBusy(false)
     }
+  }
+
+  const handleStart = () => {
+    if (!selectedEnvironment) return
+    const containers = containersByEnv[selectedEnvironment.id] ?? []
+    // Redeploy / first deploy goes through Preview Deployment; lifecycle start
+    // of already-deployed containers does not.
+    if (hasHostDeployedContainers(containers)) {
+      void runLifecycleStart()
+      return
+    }
+    setActionError(null)
+    setPreviewDeployOpen(true)
   }
 
   const handleStop = async () => {
@@ -684,7 +722,7 @@ export function OverviewEnvironmentsPanel() {
             busy={busy}
             destroyArmed={destroyArmed}
             destroyBusy={destroyBusy}
-            onStart={() => void handleStart()}
+            onStart={handleStart}
             onStop={() => void handleStop()}
             onToggleDestroy={() => setDestroyArmed((current) => !current)}
             onConfirmDestroy={() => void handleDestroy()}
@@ -733,6 +771,30 @@ export function OverviewEnvironmentsPanel() {
       {actionError ? <Text style={orgPanelStyles.error}>{actionError}</Text> : null}
       {commandError ? (
         <Text style={orgPanelStyles.error}>{commandError}</Text>
+      ) : null}
+
+      {selectedEnvironment && !baseSelected ? (
+        <PreviewDeploymentModal
+          visible={previewDeployOpen}
+          orgId={orgId}
+          environmentId={selectedEnvironment.id}
+          environmentLabel={
+            selectedEnvironment.displayName?.trim() || 'this environment'
+          }
+          canManage={canMutateLifecycle}
+          placementServerId={effectiveServerId}
+          projectCompose={project?.options?.compose}
+          environmentCompose={selectedEnvironment.options?.compose}
+          deploying={deployConfirmBusy}
+          confirmLabel="Deploy"
+          onCancel={() => {
+            if (deployConfirmBusy) return
+            setPreviewDeployOpen(false)
+          }}
+          onConfirm={() => {
+            void runDeployFromPreview()
+          }}
+        />
       ) : null}
     </View>
   )

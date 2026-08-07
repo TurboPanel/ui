@@ -1,8 +1,6 @@
-import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useDeployPreview } from '@/lib/queries'
 import type { DeployPreviewResponse } from '@/lib/instance-api'
 
@@ -107,70 +105,3 @@ export function usePreparedComposePreview(
 
   return { loading, error, preview }
 }
-
-export function DeployPreviewPanel({
-  orgId,
-  environmentId,
-  canManage,
-  placementServerId,
-  title = 'Deploy preview',
-  hint = 'Compose TurboPanel will deploy on the server',
-  alwaysExpanded = false,
-}: Readonly<{
-  orgId: string
-  environmentId: string
-  canManage: boolean
-  placementServerId: string | null
-  title?: string
-  hint?: string
-  /** When true, fetch immediately and skip the Show/Hide control. */
-  alwaysExpanded?: boolean
-}>) {
-  const [expanded, setExpanded] = useState(alwaysExpanded)
-  const [localError, setLocalError] = useState<string | null>(null)
-
-  const open = alwaysExpanded || expanded
-  const prepared = usePreparedComposePreview(
-    orgId,
-    environmentId,
-    canManage,
-    placementServerId,
-    open,
-  )
-
-  const error = localError ?? prepared.error
-
-  return (
-    <SectionPanel title={title} hint={hint}>
-      {alwaysExpanded ? null : (
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer, styles.toggle]}
-          onPress={() => {
-            setExpanded((current) => !current)
-            setLocalError(null)
-          }}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            {open ? 'Hide preview' : 'Show preview'}
-          </Text>
-        </Pressable>
-      )}
-
-      {open ? (
-        <DeployPreviewBody
-          loading={prepared.loading}
-          error={error}
-          preview={prepared.preview}
-        />
-      ) : null}
-    </SectionPanel>
-  )
-}
-
-const styles = StyleSheet.create({
-  toggle: {
-    alignSelf: 'flex-start',
-  },
-})

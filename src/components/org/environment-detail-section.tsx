@@ -11,7 +11,7 @@ import {
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
-import { DeployPreviewPanel } from '@/components/org/deploy-preview-panel'
+import { PreviewDeploymentModal } from '@/components/org/project/preview-deployment-modal'
 import {
   ContainerRoleBadge,
   ContainerStatusBadge,
@@ -1074,9 +1074,6 @@ function EnvironmentComposeOverlayPanel({
 }
 
 function EnvironmentDeployChromePanels({
-  orgId,
-  environment,
-  canManage,
   placementServerId,
   sortedServers,
   savingPlacement,
@@ -1088,9 +1085,6 @@ function EnvironmentDeployChromePanels({
   onDeploy,
   deployStatus,
 }: Readonly<{
-  orgId: string
-  environment: EnvironmentRecord
-  canManage: boolean
   placementServerId: string | null
   sortedServers: OrgServerRecord[]
   savingPlacement: boolean
@@ -1104,13 +1098,6 @@ function EnvironmentDeployChromePanels({
 }>) {
   return (
     <>
-      <DeployPreviewPanel
-        orgId={orgId}
-        environmentId={environment.id}
-        canManage={canManage}
-        placementServerId={placementServerId}
-      />
-
       <EnvironmentPlacementPanel
         placementServerId={placementServerId}
         sortedServers={sortedServers}
@@ -1426,9 +1413,6 @@ function EnvironmentLoadedPanels({
 
       {showEnvironmentChrome ? (
         <EnvironmentDeployChromePanels
-          orgId={orgId}
-          environment={environment}
-          canManage={canManage}
           placementServerId={placementServerId}
           sortedServers={sortedServers}
           savingPlacement={savingPlacement}
@@ -1555,6 +1539,7 @@ export function EnvironmentDetailBody({
     required: boolean
   } | null>(null)
   const [deployStatus, setDeployStatus] = useState<string | null>(null)
+  const [previewDeployOpen, setPreviewDeployOpen] = useState(false)
   const [trackedEntries, setTrackedEntries] = useState<
     readonly TrackedCommandEntry[]
   >([])
@@ -1763,6 +1748,7 @@ export function EnvironmentDetailBody({
         blockedReason ??
           'Select a server for this environment before deploying.',
       )
+      setPreviewDeployOpen(false)
       return
     }
     setDeployStatus('Queueing deployment…')
@@ -1774,6 +1760,7 @@ export function EnvironmentDetailBody({
           : {}),
       })
       setHealthCheckPrompt(null)
+      setPreviewDeployOpen(false)
       setActiveDeployCommandId(result.commandId)
       setTrackedEntries([
         {
@@ -1784,6 +1771,7 @@ export function EnvironmentDetailBody({
       setDeployStatus('Deploying…')
     } catch (err) {
       if (err instanceof DeployHealthCheckMissingError) {
+        setPreviewDeployOpen(false)
         setHealthCheckPrompt({
           services: err.services,
           required: err.required,
@@ -1801,6 +1789,11 @@ export function EnvironmentDetailBody({
 
   const deploy = async () => {
     await runDeploy(false)
+  }
+
+  const openPreviewDeploy = () => {
+    setError(null)
+    setPreviewDeployOpen(true)
   }
 
   const saveHosting = async (composeServiceName: string) => {
@@ -1885,11 +1878,7 @@ export function EnvironmentDetailBody({
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
-          onDeploy={() => {
-            deploy().catch(() => {
-              // Errors are surfaced via deployStatus.
-            })
-          }}
+          onDeploy={openPreviewDeploy}
           onSaveCompose={saveCompose}
           savingCompose={savingCompose}
           savingPlacement={savingPlacement}
@@ -1917,6 +1906,32 @@ export function EnvironmentDetailBody({
           sections={resolvedSections}
           showEnvironmentChrome={showEnvironmentChrome}
           focusHostingId={focusHostingId}
+        />
+      ) : null}
+
+      {showEnvironmentChrome && environment ? (
+        <PreviewDeploymentModal
+          visible={previewDeployOpen}
+          orgId={orgId}
+          environmentId={environment.id}
+          environmentLabel={
+            environment.displayName?.trim() || 'this environment'
+          }
+          canManage={canManage}
+          placementServerId={placementServerId}
+          projectCompose={projectCompose}
+          environmentCompose={environment.options?.compose}
+          deploying={deployEnvironmentMutation.isPending}
+          confirmLabel="Deploy"
+          onCancel={() => {
+            if (deployEnvironmentMutation.isPending) return
+            setPreviewDeployOpen(false)
+          }}
+          onConfirm={() => {
+            deploy().catch(() => {
+              // Errors are surfaced via deployStatus.
+            })
+          }}
         />
       ) : null}
 
