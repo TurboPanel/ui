@@ -7,7 +7,6 @@ import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { SectionPanel } from '@/components/org/section-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
-import { ProjectSectionTabs } from '@/components/org/project/project-section-tabs'
 import {
   SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR,
   SYSTEM_RECONCILE_UNAVAILABLE_ERROR,
@@ -306,10 +305,6 @@ export function SystemProjectOverviewPanel() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.toolbar}>
-        <ProjectSectionTabs />
-      </View>
-
       <OverviewEnvironmentsPanel />
 
       <SectionPanel title="Platform component" hint="Read only">
@@ -372,11 +367,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.md,
-  },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
   },
   badgeRow: {
     flexDirection: 'row',

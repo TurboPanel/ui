@@ -549,6 +549,7 @@ function HostingPanelRow({
   composeServiceName,
   serviceContext,
   hostingId,
+  focused = false,
   editor,
   tlsOptions,
   publicIps,
@@ -562,6 +563,8 @@ function HostingPanelRow({
   serviceContext: HostingServiceContext
   /** Persisted hosting row id; null until the first successful save. */
   hostingId: string | null
+  /** Highlight when opened from a `/networking/:hostingId` deep link. */
+  focused?: boolean
   editor: HostingEditorState
   tlsOptions: TlsRecord[]
   publicIps: IpRecord[]
@@ -582,7 +585,10 @@ function HostingPanelRow({
   const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
 
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View
+      style={[orgPanelStyles.detailCard, focused && styles.hostingRowFocused]}
+      accessibilityState={focused ? { selected: true } : undefined}
+    >
       <View style={styles.hostingTitleRow}>
         <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
         <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
@@ -1008,105 +1014,96 @@ function HealthCheckAckModal({
   )
 }
 
-function EnvironmentLoadedPanels({
+export type EnvironmentDetailSectionId =
+  | 'hosting'
+  | 'service-settings'
+  | 'storage'
+  | 'containers'
+
+const ALL_ENVIRONMENT_DETAIL_SECTIONS: readonly EnvironmentDetailSectionId[] = [
+  'hosting',
+  'service-settings',
+  'storage',
+  'containers',
+]
+
+function EnvironmentInfoPanel({
   environment,
   projectId,
-  orgId,
-  mergedCompose,
-  serviceNames,
-  allServers,
-  sortedServers,
-  placementServerId,
-  pinnedServer,
-  deployBlocked,
-  deploying,
-  deployStatus,
-  onDeploy,
-  onSaveCompose,
-  savingCompose,
-  savingPlacement,
-  onSavePlacement,
-  inheritsProjectDefault = false,
-  services,
-  onServiceChange,
-  hostingEditors,
-  setHostingEditors,
-  hostingsByService,
-  tlsLibrary,
-  publicIps,
-  savingHosting,
-  onSaveHosting,
-  containersByService,
-  canManage,
-  showEnvironmentPanel = true,
-  showComposeOverlay = true,
 }: Readonly<{
   environment: EnvironmentRecord
   projectId: string
-  orgId: string
-  mergedCompose: ComposeDocument
-  serviceNames: string[]
-  allServers: OrgServerRecord[]
-  sortedServers: OrgServerRecord[]
-  placementServerId: string | null
-  pinnedServer: OrgServerRecord | null
-  deployBlocked: boolean
-  deploying: boolean
-  deployStatus: string | null
-  onDeploy: () => void
+}>) {
+  return (
+    <SectionPanel title="Environment" hint="Environment details">
+      <Text style={orgPanelStyles.detailTitle}>
+        {environment.displayName?.trim() || 'Unnamed environment'}
+      </Text>
+      {environment.description ? (
+        <Text style={orgPanelStyles.detailLine}>
+          {environment.description}
+        </Text>
+      ) : null}
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Project: </Text>
+        {projectId}
+      </Text>
+    </SectionPanel>
+  )
+}
+
+function EnvironmentComposeOverlayPanel({
+  environment,
+  onSaveCompose,
+  savingCompose,
+}: Readonly<{
+  environment: EnvironmentRecord
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
-  savingPlacement: boolean
-  onSavePlacement: (serverId: string) => void
-  inheritsProjectDefault?: boolean
-  services: ServiceRecord[]
-  onServiceChange: (nextService: ServiceRecord) => void
-  hostingEditors: Record<string, HostingEditorState>
-  setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
-  hostingsByService: Record<string, HostingRecord[]>
-  tlsLibrary: TlsRecord[]
-  publicIps: IpRecord[]
-  savingHosting: string | null
-  onSaveHosting: (composeServiceName: string) => void
-  containersByService: Record<string, ContainerRecord[]>
-  canManage: boolean
-  showEnvironmentPanel?: boolean
-  showComposeOverlay?: boolean
 }>) {
-  const hasContainers = services.some(
-    (service) => (containersByService[service.id] ?? []).length > 0,
+  return (
+    <SectionPanel title="Compose overlay" hint="Overrides the project compose">
+      <ComposeEditorSection
+        document={environment.options?.compose}
+        onSave={onSaveCompose}
+        saving={savingCompose}
+        title="Environment compose overlay"
+      />
+    </SectionPanel>
   )
+}
 
+function EnvironmentDeployChromePanels({
+  orgId,
+  environment,
+  canManage,
+  placementServerId,
+  sortedServers,
+  savingPlacement,
+  inheritsProjectDefault,
+  onSavePlacement,
+  mergedCompose,
+  deploying,
+  deployBlocked,
+  onDeploy,
+  deployStatus,
+}: Readonly<{
+  orgId: string
+  environment: EnvironmentRecord
+  canManage: boolean
+  placementServerId: string | null
+  sortedServers: OrgServerRecord[]
+  savingPlacement: boolean
+  inheritsProjectDefault: boolean
+  onSavePlacement: (serverId: string) => void
+  mergedCompose: ComposeDocument
+  deploying: boolean
+  deployBlocked: boolean
+  onDeploy: () => void
+  deployStatus: string | null
+}>) {
   return (
     <>
-      {showEnvironmentPanel ? (
-        <SectionPanel title="Environment" hint="Environment details">
-          <Text style={orgPanelStyles.detailTitle}>
-            {environment.displayName?.trim() || 'Unnamed environment'}
-          </Text>
-          {environment.description ? (
-            <Text style={orgPanelStyles.detailLine}>
-              {environment.description}
-            </Text>
-          ) : null}
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Project: </Text>
-            {projectId}
-          </Text>
-        </SectionPanel>
-      ) : null}
-
-      {showComposeOverlay ? (
-        <SectionPanel title="Compose overlay" hint="Overrides the project compose">
-          <ComposeEditorSection
-            document={environment.options?.compose}
-            onSave={onSaveCompose}
-            saving={savingCompose}
-            title="Environment compose overlay"
-          />
-        </SectionPanel>
-      ) : null}
-
       <DeployPreviewPanel
         orgId={orgId}
         environmentId={environment.id}
@@ -1155,128 +1152,338 @@ function EnvironmentLoadedPanels({
           <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text>
         ) : null}
       </SectionPanel>
+    </>
+  )
+}
 
-      <SectionPanel
-        title="Hosting"
-        hint="Map compose services to hostnames (http) or raw ports (tcp/udp)"
-      >
-        {serviceNames.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
-        ) : (
-          <View style={styles.hostingList}>
-            {serviceNames.map((composeServiceName) => {
-              const service = services.find(
-                (item) => item.composeServiceName === composeServiceName,
-              )
-              const serviceKey = service?.id ?? composeServiceName
-              const editor =
-                hostingEditors[serviceKey] ??
-                readHostingEditor([])
-              const hostingId = hostingsByService[serviceKey]?.[0]?.id ?? null
-              return (
-                <HostingPanelRow
-                  key={composeServiceName}
-                  orgId={orgId}
-                  composeServiceName={composeServiceName}
-                  serviceContext={resolveHostingServiceContext(
-                    mergedCompose,
-                    composeServiceName,
-                  )}
-                  hostingId={hostingId}
-                  editor={editor}
-                  tlsOptions={tlsLibrary}
-                  publicIps={publicIps}
-                  saving={savingHosting === composeServiceName}
-                  disabled={savingHosting !== null}
-                  onChange={(patch) =>
-                    setHostingEditors((current) => ({
-                      ...current,
-                      [serviceKey]: { ...editor, ...patch },
-                    }))
-                  }
-                  onSave={() => onSaveHosting(composeServiceName)}
-                />
-              )
-            })}
-          </View>
-        )}
-      </SectionPanel>
+function EnvironmentHostingSectionPanel({
+  orgId,
+  serviceNames,
+  services,
+  mergedCompose,
+  hostingEditors,
+  setHostingEditors,
+  hostingsByService,
+  tlsLibrary,
+  publicIps,
+  savingHosting,
+  onSaveHosting,
+  focusHostingId,
+}: Readonly<{
+  orgId: string
+  serviceNames: string[]
+  services: ServiceRecord[]
+  mergedCompose: ComposeDocument
+  hostingEditors: Record<string, HostingEditorState>
+  setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
+  hostingsByService: Record<string, HostingRecord[]>
+  tlsLibrary: TlsRecord[]
+  publicIps: IpRecord[]
+  savingHosting: string | null
+  onSaveHosting: (composeServiceName: string) => void
+  focusHostingId: string | null
+}>) {
+  return (
+    <SectionPanel
+      title="Hosting"
+      hint="Map compose services to hostnames (http) or raw ports (tcp/udp)"
+    >
+      {serviceNames.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
+      ) : (
+        <View style={styles.hostingList}>
+          {serviceNames.map((composeServiceName) => {
+            const service = services.find(
+              (item) => item.composeServiceName === composeServiceName,
+            )
+            const serviceKey = service?.id ?? composeServiceName
+            const editor =
+              hostingEditors[serviceKey] ??
+              readHostingEditor([])
+            const hostingId = hostingsByService[serviceKey]?.[0]?.id ?? null
+            return (
+              <HostingPanelRow
+                key={composeServiceName}
+                orgId={orgId}
+                composeServiceName={composeServiceName}
+                serviceContext={resolveHostingServiceContext(
+                  mergedCompose,
+                  composeServiceName,
+                )}
+                hostingId={hostingId}
+                focused={
+                  focusHostingId != null && hostingId === focusHostingId
+                }
+                editor={editor}
+                tlsOptions={tlsLibrary}
+                publicIps={publicIps}
+                saving={savingHosting === composeServiceName}
+                disabled={savingHosting !== null}
+                onChange={(patch) =>
+                  setHostingEditors((current) => ({
+                    ...current,
+                    [serviceKey]: { ...editor, ...patch },
+                  }))
+                }
+                onSave={() => onSaveHosting(composeServiceName)}
+              />
+            )
+          })}
+        </View>
+      )}
+    </SectionPanel>
+  )
+}
 
-      <SectionPanel title="Service settings" hint="Per-service deploy options">
-        {serviceNames.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Add services to Compose first.</Text>
-        ) : (
-          <View style={styles.hostingList}>
-            {serviceNames.map((composeServiceName) => {
-              const service = services.find(
-                (item) => item.composeServiceName === composeServiceName,
-              )
-              return (
-                <ServiceSettingsPanel
-                  key={composeServiceName}
-                  orgId={orgId}
-                  composeServiceName={composeServiceName}
-                  service={service}
-                  canManage={canManage}
-                  onServiceChange={onServiceChange}
-                />
-              )
-            })}
-          </View>
-        )}
-      </SectionPanel>
+function EnvironmentServiceSettingsSectionPanel({
+  orgId,
+  serviceNames,
+  services,
+  canManage,
+  onServiceChange,
+}: Readonly<{
+  orgId: string
+  serviceNames: string[]
+  services: ServiceRecord[]
+  canManage: boolean
+  onServiceChange: (nextService: ServiceRecord) => void
+}>) {
+  return (
+    <SectionPanel title="Service settings" hint="Per-service deploy options">
+      {serviceNames.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>Add services to Compose first.</Text>
+      ) : (
+        <View style={styles.hostingList}>
+          {serviceNames.map((composeServiceName) => {
+            const service = services.find(
+              (item) => item.composeServiceName === composeServiceName,
+            )
+            return (
+              <ServiceSettingsPanel
+                key={composeServiceName}
+                orgId={orgId}
+                composeServiceName={composeServiceName}
+                service={service}
+                canManage={canManage}
+                onServiceChange={onServiceChange}
+              />
+            )
+          })}
+        </View>
+      )}
+    </SectionPanel>
+  )
+}
 
-      <StorageSection
-        orgId={orgId}
-        environmentId={environment.id}
-        defaultServerId={placementServerId}
-      />
-
-      <SectionPanel title="Containers" hint="Deployed containers and their status">
-        {!hasContainers ? (
-          <Text style={orgPanelStyles.muted}>No containers deployed yet.</Text>
-        ) : (
-          <View style={styles.containerList}>
-            {services.map((service) => {
-              const containers = partitionContainersForDisplay(
-                containersByService[service.id] ?? [],
-              )
-              if (containers.length === 0) {
-                return null
-              }
-              return (
-                <View key={service.id} style={orgPanelStyles.detailCard}>
-                  <Text style={orgPanelStyles.detailTitle}>
-                    {service.displayName?.trim() ||
-                      String(service.composeServiceName ?? service.id)}
-                  </Text>
-                  {containers.map((container) => (
-                    <View
-                      key={container.id}
-                      style={[
-                        styles.containerRow,
-                        container.role === 'ingress' && styles.containerRowIngress,
-                      ]}
-                    >
-                      <View style={styles.containerHeader}>
-                        <Text style={orgPanelStyles.detailLine}>
-                          {containerDisplayName(container)}
-                        </Text>
-                        <ContainerRoleBadge role={container.role} />
-                        <ContainerStatusBadge status={container.status} />
-                      </View>
+function EnvironmentContainersSectionPanel({
+  services,
+  containersByService,
+  allServers,
+}: Readonly<{
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+  allServers: OrgServerRecord[]
+}>) {
+  const hasContainers = services.some(
+    (service) => (containersByService[service.id] ?? []).length > 0,
+  )
+  return (
+    <SectionPanel title="Containers" hint="Deployed containers and their status">
+      {!hasContainers ? (
+        <Text style={orgPanelStyles.muted}>No containers deployed yet.</Text>
+      ) : (
+        <View style={styles.containerList}>
+          {services.map((service) => {
+            const containers = partitionContainersForDisplay(
+              containersByService[service.id] ?? [],
+            )
+            if (containers.length === 0) {
+              return null
+            }
+            return (
+              <View key={service.id} style={orgPanelStyles.detailCard}>
+                <Text style={orgPanelStyles.detailTitle}>
+                  {service.displayName?.trim() ||
+                    String(service.composeServiceName ?? service.id)}
+                </Text>
+                {containers.map((container) => (
+                  <View
+                    key={container.id}
+                    style={[
+                      styles.containerRow,
+                      container.role === 'ingress' && styles.containerRowIngress,
+                    ]}
+                  >
+                    <View style={styles.containerHeader}>
                       <Text style={orgPanelStyles.detailLine}>
-                        <Text style={orgPanelStyles.detailLabel}>Host: </Text>
-                        {containerHostLabel(container, allServers)}
+                        {containerDisplayName(container)}
                       </Text>
+                      <ContainerRoleBadge role={container.role} />
+                      <ContainerStatusBadge status={container.status} />
                     </View>
-                  ))}
-                </View>
-              )
-            })}
-          </View>
-        )}
-      </SectionPanel>
+                    <Text style={orgPanelStyles.detailLine}>
+                      <Text style={orgPanelStyles.detailLabel}>Host: </Text>
+                      {containerHostLabel(container, allServers)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )
+          })}
+        </View>
+      )}
+    </SectionPanel>
+  )
+}
+
+function EnvironmentLoadedPanels({
+  environment,
+  projectId,
+  orgId,
+  mergedCompose,
+  serviceNames,
+  allServers,
+  sortedServers,
+  placementServerId,
+  deployBlocked,
+  deploying,
+  deployStatus,
+  onDeploy,
+  onSaveCompose,
+  savingCompose,
+  savingPlacement,
+  onSavePlacement,
+  inheritsProjectDefault = false,
+  services,
+  onServiceChange,
+  hostingEditors,
+  setHostingEditors,
+  hostingsByService,
+  tlsLibrary,
+  publicIps,
+  savingHosting,
+  onSaveHosting,
+  containersByService,
+  canManage,
+  showEnvironmentPanel = true,
+  showComposeOverlay = true,
+  sections = ALL_ENVIRONMENT_DETAIL_SECTIONS,
+  showEnvironmentChrome = true,
+  focusHostingId = null,
+}: Readonly<{
+  environment: EnvironmentRecord
+  projectId: string
+  orgId: string
+  mergedCompose: ComposeDocument
+  serviceNames: string[]
+  allServers: OrgServerRecord[]
+  sortedServers: OrgServerRecord[]
+  placementServerId: string | null
+  pinnedServer: OrgServerRecord | null
+  deployBlocked: boolean
+  deploying: boolean
+  deployStatus: string | null
+  onDeploy: () => void
+  onSaveCompose: (compose: ComposeDocument) => Promise<void>
+  savingCompose: boolean
+  savingPlacement: boolean
+  onSavePlacement: (serverId: string) => void
+  inheritsProjectDefault?: boolean
+  services: ServiceRecord[]
+  onServiceChange: (nextService: ServiceRecord) => void
+  hostingEditors: Record<string, HostingEditorState>
+  setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
+  hostingsByService: Record<string, HostingRecord[]>
+  tlsLibrary: TlsRecord[]
+  publicIps: IpRecord[]
+  savingHosting: string | null
+  onSaveHosting: (composeServiceName: string) => void
+  containersByService: Record<string, ContainerRecord[]>
+  canManage: boolean
+  showEnvironmentPanel?: boolean
+  showComposeOverlay?: boolean
+  sections?: readonly EnvironmentDetailSectionId[]
+  /** Deploy / placement / merged YAML chrome — off when reusing hosting-only. */
+  showEnvironmentChrome?: boolean
+  /** Hosting row id from a `/networking/:id` deep link (`?hostingId=`). */
+  focusHostingId?: string | null
+}>) {
+  const showSection = (id: EnvironmentDetailSectionId) => sections.includes(id)
+
+  return (
+    <>
+      {showEnvironmentChrome && showEnvironmentPanel ? (
+        <EnvironmentInfoPanel environment={environment} projectId={projectId} />
+      ) : null}
+
+      {showEnvironmentChrome && showComposeOverlay ? (
+        <EnvironmentComposeOverlayPanel
+          environment={environment}
+          onSaveCompose={onSaveCompose}
+          savingCompose={savingCompose}
+        />
+      ) : null}
+
+      {showEnvironmentChrome ? (
+        <EnvironmentDeployChromePanels
+          orgId={orgId}
+          environment={environment}
+          canManage={canManage}
+          placementServerId={placementServerId}
+          sortedServers={sortedServers}
+          savingPlacement={savingPlacement}
+          inheritsProjectDefault={inheritsProjectDefault}
+          onSavePlacement={onSavePlacement}
+          mergedCompose={mergedCompose}
+          deploying={deploying}
+          deployBlocked={deployBlocked}
+          onDeploy={onDeploy}
+          deployStatus={deployStatus}
+        />
+      ) : null}
+
+      {showSection('hosting') ? (
+        <EnvironmentHostingSectionPanel
+          orgId={orgId}
+          serviceNames={serviceNames}
+          services={services}
+          mergedCompose={mergedCompose}
+          hostingEditors={hostingEditors}
+          setHostingEditors={setHostingEditors}
+          hostingsByService={hostingsByService}
+          tlsLibrary={tlsLibrary}
+          publicIps={publicIps}
+          savingHosting={savingHosting}
+          onSaveHosting={onSaveHosting}
+          focusHostingId={focusHostingId}
+        />
+      ) : null}
+
+      {showSection('service-settings') ? (
+        <EnvironmentServiceSettingsSectionPanel
+          orgId={orgId}
+          serviceNames={serviceNames}
+          services={services}
+          canManage={canManage}
+          onServiceChange={onServiceChange}
+        />
+      ) : null}
+
+      {showSection('storage') ? (
+        <StorageSection
+          orgId={orgId}
+          environmentId={environment.id}
+          defaultServerId={placementServerId}
+        />
+      ) : null}
+
+      {showSection('containers') ? (
+        <EnvironmentContainersSectionPanel
+          services={services}
+          containersByService={containersByService}
+          allServers={allServers}
+        />
+      ) : null}
     </>
   )
 }
@@ -1287,6 +1494,8 @@ export function EnvironmentDetailBody({
   environmentId,
   embedded = false,
   showComposeOverlay = true,
+  sections,
+  focusHostingId = null,
 }: Readonly<{
   orgId: string
   projectId: string
@@ -1294,7 +1503,17 @@ export function EnvironmentDetailBody({
   embedded?: boolean
   /** Compose overlay editor — off on Networking (edit on Overview / Settings). */
   showComposeOverlay?: boolean
+  /**
+   * Resource panels to render. Default: all four (full environment body).
+   * Pass e.g. `['hosting']` to reuse hostnames/ports/TLS without Storage /
+   * Service settings / Containers (Settings Networking).
+   */
+  sections?: readonly EnvironmentDetailSectionId[]
+  /** Hosting row id from a `/networking/:id` deep link (`?hostingId=`). */
+  focusHostingId?: string | null
 }>) {
+  const resolvedSections = sections ?? ALL_ENVIRONMENT_DETAIL_SECTIONS
+  const showEnvironmentChrome = sections == null
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const persistEnvironmentCompose = usePersistEnvironmentCompose(
@@ -1695,10 +1914,13 @@ export function EnvironmentDetailBody({
           canManage={canManage}
           showEnvironmentPanel={!embedded}
           showComposeOverlay={showComposeOverlay}
+          sections={resolvedSections}
+          showEnvironmentChrome={showEnvironmentChrome}
+          focusHostingId={focusHostingId}
         />
       ) : null}
 
-      {healthCheckPrompt ? (
+      {showEnvironmentChrome && healthCheckPrompt ? (
         <HealthCheckAckModal
           services={healthCheckPrompt.services}
           required={healthCheckPrompt.required}
@@ -1712,7 +1934,9 @@ export function EnvironmentDetailBody({
         />
       ) : null}
 
-      <VariablesSection orgId={orgId} parentField={{ environmentId }} />
+      {showEnvironmentChrome ? (
+        <VariablesSection orgId={orgId} parentField={{ environmentId }} />
+      ) : null}
     </View>
   )
 }
@@ -1785,6 +2009,10 @@ const styles = StyleSheet.create({
   },
   deployButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
   hostingList: { gap: spacing.sm },
+  hostingRowFocused: {
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
+  },
   hostingTitleRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

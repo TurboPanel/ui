@@ -201,7 +201,7 @@ export function ComposeEditorViewTabs({
 
 /**
  * Shared editor chrome: bordered compose surface with an optional header row
- * (Compose/Visual tabs + server pin + Project/env buttons) and the editor body.
+ * (Compose/Visual tabs + Project/env buttons) and the editor body.
  * Used by the compose editor and the started-status shell.
  */
 export function ComposeEditorChrome({
@@ -279,7 +279,7 @@ export function ComposeEditorSection({
   hideHeader?: boolean
   /** Surface header: Project / environment buttons (right-aligned). */
   toolbarLeading?: ReactNode
-  /** Surface header: before section buttons (e.g. project server pin). */
+  /** Surface header: trailing chrome before section buttons. */
   toolbarTrailing?: ReactNode
 }>) {
   const source = normalizeCompose(document)

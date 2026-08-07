@@ -28,7 +28,7 @@ type HtmlSelect = {
 }
 
 /**
- * Compact project-level server pin for the Compose panel header.
+ * Project-level default server pin for the compose Overview editor toolbar.
  * Empty state is a muted "+ Set Default Project Server (Optional)" button that
  * opens the native server picker (no custom dropdown / chevron). Writes
  * `project.options.defaultServerId`.
@@ -173,66 +173,66 @@ export function ProjectServerHeaderControl() {
 const styles = StyleSheet.create({
   root: {
     position: 'relative',
-    alignItems: 'flex-end',
-    maxWidth: 280,
+    alignItems: 'flex-start',
+    alignSelf: 'stretch',
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    borderRadius: 5,
+    gap: 6,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: 'transparent',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    minHeight: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 36,
   },
   addPlus: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    lineHeight: 15,
+    lineHeight: 16,
   },
   addLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '500',
   },
   selectedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
   },
   selectedChip: {
-    borderRadius: 5,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    minHeight: 24,
-    maxWidth: 200,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 36,
+    maxWidth: 320,
     justifyContent: 'center',
   },
   selectedText: {
     color: colors.text,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     fontFamily: 'monospace',
   },
   clearBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 5,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearText: {
     color: colors.textMuted,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    lineHeight: 16,
+    lineHeight: 18,
   },
   disabled: {
     opacity: 0.45,

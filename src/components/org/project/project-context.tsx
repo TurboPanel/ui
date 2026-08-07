@@ -24,6 +24,7 @@ import {
   projectNeedsSetup,
   projectOverviewHref,
   resolveBaseComposeSelected,
+  resolveEnvironmentScopeActive,
   resolveSelectedEnvironmentId,
 } from '@/lib/project-navigation'
 import { queryKeys, useCan } from '@/lib/query-client'
@@ -55,10 +56,23 @@ type ProjectContextValue = {
   selectedEnvironmentId: string | null
   selectedEnvironment: EnvironmentRecord | null
   /**
+   * Environment id from `/environments/:id`, or null on Overview Base and
+   * retired Networking / Storage paths. Unlike {@link selectedEnvironmentId},
+   * this is never a sticky remembered id under Project scope.
+   */
+  pathEnvironmentId: string | null
+  /**
    * True on Overview Base (`/overview`). False when the path is
    * `/environments/:id` or Networking / Storage (env chip not Project).
    */
   baseSelected: boolean
+  /**
+   * True when environment scope is active (`/environments/:id`) or was when
+   * navigating to a retired Networking / Storage path. False on Project
+   * overview and on cold loads of retired routes — never inferred solely from
+   * the first-environment fallback on {@link selectedEnvironmentId}.
+   */
+  environmentScopeActive: boolean
   loading: boolean
   error: string | null
   canOwn: boolean
@@ -101,6 +115,7 @@ export function ProjectProvider({
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
     string | null
   >(null)
+  const [environmentScopeActive, setEnvironmentScopeActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loading =
@@ -149,6 +164,16 @@ export function ProjectProvider({
       ),
     )
   }, [environments, pathEnvironmentId, baseSelected])
+
+  useEffect(() => {
+    setEnvironmentScopeActive((previous) =>
+      resolveEnvironmentScopeActive(
+        baseSelected,
+        pathEnvironmentId,
+        previous,
+      ),
+    )
+  }, [baseSelected, pathEnvironmentId])
 
   const setSelectedEnvironmentIdWithRoute = useCallback(
     (id: string | null) => {
@@ -208,7 +233,9 @@ export function ProjectProvider({
       systemComponent,
       selectedEnvironmentId,
       selectedEnvironment,
+      pathEnvironmentId,
       baseSelected,
+      environmentScopeActive,
       loading,
       error,
       canOwn,
@@ -233,7 +260,9 @@ export function ProjectProvider({
       systemComponent,
       selectedEnvironmentId,
       selectedEnvironment,
+      pathEnvironmentId,
       baseSelected,
+      environmentScopeActive,
       loading,
       error,
       canOwn,

@@ -29,46 +29,21 @@ export function projectTypeLabel(project: ProjectRecord): string {
 }
 
 /**
- * Compose project routes. Overview is Project / environment compose (chips),
- * not a separate section tab. Environments tab removed — env work lives under
- * the selected environment chip plus Networking / Storage.
+ * Compose project routes. Overview is Project / environment compose (chips).
+ * Networking / Storage section chips were removed — those routes redirect to
+ * the current scope path.
  */
-export const COMPOSE_PROJECT_TAB_IDS = [
-  'overview',
-  'networking',
-  'storage',
-] as const
+export const COMPOSE_PROJECT_TAB_IDS = ['overview'] as const
 
 export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
-
-/** Section chips after Project / environment (Overview is the compose surface). */
-export const COMPOSE_SECTION_TAB_IDS = ['networking', 'storage'] as const
-
-export type ComposeSectionTabId = (typeof COMPOSE_SECTION_TAB_IDS)[number]
 
 /** System projects are compose-shaped but never accept mutations from the UI. */
 export function systemProjectAllowsMutations(): boolean {
   return false
 }
 
-/**
- * Compose section tabs (Networking / Storage) after Project / environment chips.
- * Empty for system projects — those surfaces are mutation-heavy with nothing
- * useful for hosting-ingress.
- */
-export function composeSectionTabsForProject(
-  isSystem: boolean,
-): readonly ComposeSectionTabId[] {
-  if (isSystem) {
-    return []
-  }
-  return COMPOSE_SECTION_TAB_IDS
-}
-
 export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
   overview: 'Overview',
-  networking: 'Networking',
-  storage: 'Storage',
 }
 
 export const MANAGED_PROJECT_TAB_IDS = [
@@ -142,6 +117,31 @@ export function projectHostingHref(
   hostingId: string,
 ): string {
   return `${projectHref(orgId, projectId)}/networking/${hostingId}`
+}
+
+/**
+ * Append `?hostingId=` so Overview / environment redirects from retired
+ * `/networking/:id` deep links can expand and focus the matching hosting row.
+ */
+export function withHostingIdQuery(href: string, hostingId: string): string {
+  const separator = href.includes('?') ? '&' : '?'
+  return `${href}${separator}hostingId=${encodeURIComponent(hostingId)}`
+}
+
+/**
+ * Sticky Project vs environment scope for retired `/networking` / `/storage`
+ * redirects. Project overview clears the flag; `/environments/:id` sets it;
+ * other paths (retired routes) keep the previous value so a cold load never
+ * invents environment scope from the first-env fallback.
+ */
+export function resolveEnvironmentScopeActive(
+  baseSelected: boolean,
+  pathEnvironmentId: string | null,
+  previousActive: boolean,
+): boolean {
+  if (baseSelected) return false
+  if (pathEnvironmentId != null) return true
+  return previousActive
 }
 
 export function projectSettingsSubHref(

@@ -15,6 +15,7 @@ import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
+  ProjectScopeSelector,
   ProjectSectionTabs,
   activeProjectTabFromPathname,
 } from '@/components/org/project/project-section-tabs'
@@ -87,7 +88,11 @@ function EnvironmentSelector() {
   )
 }
 
-function ProjectTrashButton({
+/**
+ * Managed projects still delete from the header trash; compose projects use
+ * Danger sections in {@link ProjectSettingsArea}.
+ */
+function ManagedProjectTrashButton({
   deletingProject,
   onRequestDeleteProject,
 }: Readonly<{
@@ -187,11 +192,15 @@ function ProjectTrashButton({
 }
 
 function ProjectHeader({
+  showManagedTrash,
   deletingProject,
   onRequestDeleteProject,
+  showScopeSelector,
 }: Readonly<{
+  showManagedTrash: boolean
   deletingProject: boolean
   onRequestDeleteProject: () => void
+  showScopeSelector: boolean
 }>) {
   const {
     orgId,
@@ -257,8 +266,9 @@ function ProjectHeader({
             {isSystemProject ? <PlatformBadge /> : null}
           </View>
         )}
-        {showMutableChrome ? (
-          <ProjectTrashButton
+        {showScopeSelector ? <ProjectScopeSelector /> : null}
+        {showManagedTrash && showMutableChrome ? (
+          <ManagedProjectTrashButton
             deletingProject={deletingProject}
             onRequestDeleteProject={onRequestDeleteProject}
           />
@@ -274,12 +284,12 @@ function ProjectHeader({
 
 function ProjectShellChrome({
   hideEnvSelector,
-  sectionTabsInOverview,
+  showManagedSectionTabs,
   needsSetup,
   activeTab,
 }: Readonly<{
   hideEnvSelector: boolean
-  sectionTabsInOverview: boolean
+  showManagedSectionTabs: boolean
   needsSetup: boolean
   activeTab: ReturnType<typeof activeProjectTabFromPathname>
 }>) {
@@ -287,11 +297,11 @@ function ProjectShellChrome({
   return (
     <>
       {hideEnvSelector ? null : <EnvironmentSelector />}
-      {sectionTabsInOverview ? null : (
+      {showManagedSectionTabs ? (
         <View style={styles.sectionTabsRow}>
           <ProjectSectionTabs />
         </View>
-      )}
+      ) : null}
     </>
   )
 }
@@ -314,13 +324,17 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
 
   const activeTab = activeProjectTabFromPathname(pathname, projectId)
   const managed = project ? isManagedProject(project) : false
-  // Compose overview hosts the unified Project/env/section tabs in the editor toolbar.
-  const sectionTabsInOverview = !managed && activeTab === 'overview'
-  // Compose: env chips live in ProjectSectionTabs. Managed: hide selector on
-  // Overview / Environments (those surfaces own their own env chrome).
+  // Managed: hide selector on Overview / Environments (those surfaces own their
+  // own env chrome). Compose never uses EnvironmentSelector — scope chips live
+  // in the header via ProjectScopeSelector.
   const hideEnvSelector = managed
     ? activeTab === 'environments' || activeTab === 'overview'
     : true
+  const showScopeSelector =
+    Boolean(project) &&
+    !managed &&
+    !needsSetup &&
+    activeTab !== 'setup'
 
   const backStyle = StyleSheet.flatten([styles.backLink, webPointer])
   const rootPadding = {
@@ -351,13 +365,15 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
       </Link>
 
       <ProjectHeader
+        showManagedTrash={managed}
         deletingProject={deletingProject}
         onRequestDeleteProject={() => setDeletingProject(true)}
+        showScopeSelector={showScopeSelector}
       />
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-      {deletingProject && project && projectAllowsMutations ? (
+      {deletingProject && project && projectAllowsMutations && managed ? (
         <ProjectDeletePanel
           orgId={orgId}
           project={project}
@@ -370,7 +386,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
         <>
           <ProjectShellChrome
             hideEnvSelector={hideEnvSelector}
-            sectionTabsInOverview={sectionTabsInOverview}
+            showManagedSectionTabs={managed}
             needsSetup={needsSetup}
             activeTab={activeTab}
           />

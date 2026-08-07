@@ -8,7 +8,6 @@ import {
 } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { ServerPinSelect } from '@/components/org/project/server-pin-select'
 import {
   environmentStatusTone,
   hasHostDeployedContainers,
@@ -19,7 +18,6 @@ import {
   DeployResourceLimitExceededError,
   type CommandStatus,
   type EnvironmentRecord,
-  type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
   isTerminalCommandStatus,
@@ -27,10 +25,8 @@ import {
   useContainersByEnvironments,
   useCreateEnvironment,
   useDeployEnvironment,
-  useOrgServers,
   useRunEnvironmentLifecycle,
   useStopEnvironment,
-  useUpdateEnvironment,
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { resolveEffectiveServerId } from '@/lib/project-options'
@@ -354,45 +350,11 @@ function BarTrailingActions({
   return null
 }
 
-function OverviewPlacementPins({
-  canManage,
-  baseSelected,
-  selectedEnvironment,
-  hasServer,
-  servers,
-  savingPlacement,
-  onSaveEnvironmentServer,
-}: Readonly<{
-  canManage: boolean
-  baseSelected: boolean
-  selectedEnvironment: EnvironmentRecord | null
-  hasServer: boolean
-  servers: OrgServerRecord[]
-  savingPlacement: boolean
-  onSaveEnvironmentServer: (serverId: string) => void
-}>) {
-  if (!canManage) return null
-  // Project default server lives in the Compose header; only show an
-  // env-level pin when the selected environment has no effective server yet.
-  if (!baseSelected && selectedEnvironment && !hasServer) {
-    return (
-      <ServerPinSelect
-        label="Server"
-        hint="Pin a server for this environment, or set Project server in the header."
-        placementServerId={null}
-        servers={servers}
-        saving={savingPlacement}
-        onSelect={onSaveEnvironmentServer}
-      />
-    )
-  }
-  return null
-}
-
 /**
  * Overview lifecycle strip (Start / Stop / Refresh / Destroy) and env management.
  * Project / environment / section chips live in the compose editor toolbar via
  * {@link ProjectSectionTabs}.
+ * Server placement lives exclusively in {@link ProjectSettingsArea}.
  */
 export function OverviewEnvironmentsPanel() {
   const {
@@ -431,13 +393,8 @@ export function OverviewEnvironmentsPanel() {
   const containersByEnv = containersQuery.containersByEnv
   const loading = containersQuery.isLoading
   const canMutateLifecycle = canManage && projectAllowsMutations
-  const serversQuery = useOrgServers(orgId, { enabled: canMutateLifecycle })
 
   const createEnvironmentMutation = useCreateEnvironment(orgId)
-  const updateEnvironmentMutation = useUpdateEnvironment(
-    orgId,
-    selectedEnvironment?.id ?? '',
-  )
   const deployEnvironmentMutation = useDeployEnvironment(
     orgId,
     selectedEnvironment?.id ?? '',
@@ -513,7 +470,6 @@ export function OverviewEnvironmentsPanel() {
     setActionError(null)
   }, [selectedEnvironmentId, baseSelected])
 
-  const servers = serversQuery.data?.servers ?? []
   const projectDefaultServerId = project?.options?.defaultServerId ?? null
   const effectiveServerId = useMemo(
     () =>
@@ -550,15 +506,6 @@ export function OverviewEnvironmentsPanel() {
       ...current,
       { serverId: input.serverId, commandId },
     ])
-  }
-
-  const saveEnvironmentServer = async (serverId: string) => {
-    if (!selectedEnvironment) return
-    setActionError(null)
-    const result = await updateEnvironmentMutation.run({ serverId })
-    if (!result.ok && updateEnvironmentMutation.actionError) {
-      setActionError(updateEnvironmentMutation.actionError)
-    }
   }
 
   const trackEnqueue = (
@@ -704,8 +651,7 @@ export function OverviewEnvironmentsPanel() {
   const hasContainers = hasHostDeployedContainers(containers)
   const creating = createEnvironmentMutation.isPending
   const destroyBusy = stopEnvironmentMutation.isPending
-  const savingPlacement = updateEnvironmentMutation.isPending
-  const busy = inFlight || destroyBusy || creating || savingPlacement
+  const busy = inFlight || destroyBusy || creating
 
   let statusLabel: string = tone.label
   if (inheritsBaseServer) {
@@ -753,18 +699,6 @@ export function OverviewEnvironmentsPanel() {
           />
         </View>
       ) : null}
-
-      <OverviewPlacementPins
-        canManage={canMutateLifecycle}
-        baseSelected={baseSelected}
-        selectedEnvironment={selectedEnvironment}
-        hasServer={hasServer}
-        servers={servers}
-        savingPlacement={savingPlacement}
-        onSaveEnvironmentServer={(serverId) =>
-          void saveEnvironmentServer(serverId)
-        }
-      />
 
       {canMutateLifecycle && !baseSelected ? (
         <ManageExtras

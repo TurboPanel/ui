@@ -10,13 +10,15 @@
 ## Layout
 
 - Overview: full-width workspace bar under the page title (click expands inline search + workspace list) + project list (workspace label when viewing all); **setup** badge when type is unset
-- Detail: **Project shell** — header with red trash delete (environment when multiple exist; otherwise project), environment selector (managed / non-Overview tabs), section tabs, tab body
-- Compose: one unified tab group — **Project · environments · Networking · Storage**. Networking / Storage only appear after an environment is selected (hidden on Project compose). No separate Overview or Environments section tabs — Project / env chips *are* the compose surface; env detail lives under the selected environment. Networking focuses on hostnames/ports — no compose overlay editor (edit overlays on Overview or Settings → overrides).
-- Overview: opens on **Project** by default at `/overview` (no `?env=`). No outer panel chrome — editor surface and Save sit flush on the page. One bordered editor surface header: quiet **Compose / Visual** underline tabs (left) plus **Set Default Project Server (Optional)** and the **Project / environment / section** segment buttons (right). Section tabs leave the shell on Overview so they live in that surface header; Networking / Storage keep the same unified group in the shell. Lifecycle Start / Stop / Refresh / Destroy sits below when an environment is selected (`/environments/:environmentId`). After start, collapsed service rows with green / yellow / red dots.
+- Detail: **Project shell** — header with project name + compose **Project · environments** scope chips (`ProjectScopeSelector` in the project header). Managed projects keep a header trash for delete; compose projects have **no** header trash — all compose delete (project and environment) lives in the **Settings** area (`ProjectSettingsArea` → Danger). Environment selector (managed / non-Overview tabs), section tabs, tab body
+- Compose: **Project · environments** scope chips in the project header (`ProjectScopeSelector`). Networking / Storage section routes (`/networking`, `/storage`) redirect to the current scope path when an environment scope is already active, otherwise Overview (no first-env invent on cold load). Hosting deep links `/networking/:id` preserve `?hostingId=` so Settings can expand the matching hosting row. Project / env chips *are* the compose surface; env detail lives under the selected environment. Collapsible **Settings** area (`ProjectSettingsArea` in `src/components/org/project-settings-area.tsx`) sits below the compose / effective-compose panels — **Project scope** (`ProjectSettingsSections`): Servers, Variables, Container naming, Workspace, System users, Danger → Delete project; **Environment scope** (`EnvironmentSettingsSections`): Server, Networking, Storage, Danger → Delete environment
+- Scope banner: `ComposeScopeBanner` (`src/components/org/project/compose-scope-banner.tsx`) above the editor. **Project** scope: "Project compose (base)" + environment count. **Environment** scope: inheriting (with **Create override** / **Start from project compose**) vs overriding (with **Clear overrides**, two-press) plus an inherited-services chip hint
+- **What will run** (`EffectiveComposePanel`): segmented **Merged** / **Prepared** toggle. **Merged** — client-side `mergeComposeOverlay` + `withEffectivePlacement`, always available (including Project scope). **Prepared** — server `deploy-preview`, requires an environment + server pin; disabled on Project scope
+- Overview: opens on **Project** by default at `/overview` (no `?env=`). No outer panel chrome — editor surface and Save sit flush on the page. One bordered editor surface header: quiet **Compose / Visual** underline tabs (left) plus **Set Default Project Server (Optional)** (right). Scope chips live in the project header, not this surface. Lifecycle Start / Stop / Refresh / Destroy sits below when an environment is selected (`/environments/:environmentId`). After start, collapsed service rows with green / yellow / red dots.
 - Managed tabs: Overview · Environments · Data · Backups
 - Single environment: shell shows name (no chip strip) on managed non-Overview tabs; multi-env: chip selector on those tabs keeps selection in memory (compose Overview uses path `/environments/:id`)
 - Service detail deep links remain under `/services/:id`; `/services` redirects to Overview
-- Delete: header trash can — two-press confirm deletes the selected environment when more than one exists; with a single environment it opens the project-delete wizard. Old `/settings` routes redirect to Overview. Bare compose `/environments` redirects to Overview.
+- Delete: compose — **Danger** rows in `ProjectSettingsArea` (two-press environment delete when multiple exist; `ProjectDeletePanel` for project delete). Managed — header trash can (same two-press / project-wizard behavior). Old `/settings` routes redirect to Overview. Bare compose `/environments` redirects to Overview.
 
 ## Creation / setup
 
@@ -46,5 +48,8 @@
 - ❌ Auto-polling deploy preview  
 - ❌ Separate Overview / Environments section tabs next to Project / env chips (one group only)  
 - ❌ Networking / Storage visible while Project (base) compose is selected  
+- ❌ Reintroducing section chips (Networking / Storage / Servers) in the editor toolbar  
+- ❌ Putting delete back in the project header for compose projects  
+- ❌ Showing an environment editor with no inheritance / scope statement above it (banner-less editing)  
 - ❌ Treating a user workspace named “System” as platform-managed  
 - ❌ Compose editor / lifecycle / delete chrome on system projects  

@@ -22,7 +22,7 @@ function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): 
   return warning.message
 }
 
-function PreviewWarnings({
+export function PreviewWarnings({
   warnings,
 }: Readonly<{ warnings: DeployPreviewResponse['warnings'] }>) {
   if (warnings.length === 0) return null
@@ -40,7 +40,7 @@ function PreviewWarnings({
   )
 }
 
-function DeployPreviewBody({
+export function DeployPreviewBody({
   loading,
   error,
   preview,
@@ -70,6 +70,44 @@ function DeployPreviewBody({
   )
 }
 
+/**
+ * Fetch + gate the server-prepared deploy preview (variables resolved,
+ * container/volume names, traditional-web split). Callers control `enabled`
+ * so only the active UI mode hits the network (`refetchInterval: false`).
+ */
+export function usePreparedComposePreview(
+  orgId: string,
+  environmentId: string | null,
+  canManage: boolean,
+  placementServerId: string | null,
+  enabled: boolean,
+): {
+  loading: boolean
+  error: string | null
+  preview: DeployPreviewResponse | null
+} {
+  const open = enabled
+  const canFetch =
+    open && canManage && Boolean(placementServerId) && Boolean(environmentId)
+  const previewQuery = useDeployPreview(orgId, environmentId ?? '', {
+    enabled: canFetch,
+  })
+
+  const preview = previewQuery.data ?? null
+  const loading = previewQuery.isFetching
+  const queryError =
+    previewQuery.error instanceof Error ? previewQuery.error.message : null
+
+  let error = queryError
+  if (open && canManage && !placementServerId) {
+    error = 'Select a server for this environment before previewing deploy.'
+  } else if (open && !canManage) {
+    error = 'Organization manage permission is required to preview deploy.'
+  }
+
+  return { loading, error, preview }
+}
+
 export function DeployPreviewPanel({
   orgId,
   environmentId,
@@ -92,22 +130,15 @@ export function DeployPreviewPanel({
   const [localError, setLocalError] = useState<string | null>(null)
 
   const open = alwaysExpanded || expanded
-  const canFetch = open && canManage && Boolean(placementServerId)
-  const previewQuery = useDeployPreview(orgId, environmentId, {
-    enabled: canFetch,
-  })
+  const prepared = usePreparedComposePreview(
+    orgId,
+    environmentId,
+    canManage,
+    placementServerId,
+    open,
+  )
 
-  const preview = previewQuery.data ?? null
-  const loading = previewQuery.isFetching
-  const queryError =
-    previewQuery.error instanceof Error ? previewQuery.error.message : null
-
-  let error = localError ?? queryError
-  if (open && canManage && !placementServerId) {
-    error = 'Select a server for this environment before previewing deploy.'
-  } else if (open && !canManage) {
-    error = 'Organization manage permission is required to preview deploy.'
-  }
+  const error = localError ?? prepared.error
 
   return (
     <SectionPanel title={title} hint={hint}>
@@ -129,9 +160,9 @@ export function DeployPreviewPanel({
 
       {open ? (
         <DeployPreviewBody
-          loading={loading}
+          loading={prepared.loading}
           error={error}
-          preview={preview}
+          preview={prepared.preview}
         />
       ) : null}
     </SectionPanel>

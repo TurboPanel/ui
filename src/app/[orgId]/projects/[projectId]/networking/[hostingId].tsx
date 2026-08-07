@@ -1,21 +1,54 @@
-import { useLocalSearchParams } from 'expo-router'
-import { Text } from 'react-native'
-import { ComposeNetworkingTab } from '@/components/org/project/compose-tabs'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { useProjectContext } from '@/components/org/project/project-context'
+import {
+  isManagedProject,
+  projectEnvironmentHref,
+  projectOverviewHref,
+  projectTabHref,
+  withHostingIdQuery,
+} from '@/lib/project-navigation'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+
+function readHostingIdParam(
+  value: string | string[] | undefined,
+): string | null {
+  if (typeof value === 'string' && value.length > 0) return value
+  if (Array.isArray(value)) {
+    const first = value[0]
+    return typeof first === 'string' && first.length > 0 ? first : null
+  }
+  return null
+}
 
 /**
- * Hosting deep-link route. Hosting editors still live in the environment
- * networking surface; this route keeps bookmarks/deep links valid.
+ * Hosting deep-link route. Standalone networking chrome is retired — redirect
+ * to the current Project/environment scope path while preserving `hostingId`
+ * so Settings can expand and focus the matching hosting row.
  */
 export default function ProjectHostingDetailScreen() {
-  const { hostingId } = useLocalSearchParams<{ hostingId: string }>()
-  return (
-    <>
-      <Text style={orgPanelStyles.muted}>
-        Hosting {hostingId ? hostingId.slice(0, 8) : ''} — edit hostnames and
-        ports below.
-      </Text>
-      <ComposeNetworkingTab />
-    </>
-  )
+  const { hostingId: rawHostingId } = useLocalSearchParams<{
+    hostingId?: string | string[]
+  }>()
+  const hostingId = readHostingIdParam(rawHostingId)
+  const {
+    orgId,
+    projectId,
+    project,
+    environmentScopeActive,
+    selectedEnvironmentId,
+  } = useProjectContext()
+  if (project && isManagedProject(project)) {
+    return (
+      <Redirect
+        href={projectTabHref(orgId, projectId, 'overview') as Href}
+      />
+    )
+  }
+  // Only follow sticky environment scope when it was explicitly active
+  // (`/environments/:id`). Do not use the first-env fallback on a cold load.
+  const target =
+    environmentScopeActive && selectedEnvironmentId
+      ? projectEnvironmentHref(orgId, projectId, selectedEnvironmentId)
+      : projectOverviewHref(orgId, projectId)
+  const href = hostingId ? withHostingIdQuery(target, hostingId) : target
+  return <Redirect href={href as Href} />
 }

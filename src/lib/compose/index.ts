@@ -69,6 +69,8 @@ export {
   parseComposeImageRef,
   patchComposeImageRef,
 } from './image-ref'
+export type { ComposeOverlayState } from './overlay-state'
+export { resolveComposeOverlayState } from './overlay-state'
 export type {
   ComposeRestartPolicy,
   ParsedComposeRestart,

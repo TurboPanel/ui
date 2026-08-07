@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  composeSectionTabsForProject,
   isProjectOverviewBasePath,
   parseProjectEnvironmentId,
   projectEnvironmentHref,
@@ -8,8 +7,10 @@ import {
   projectOverviewHref,
   projectTabHref,
   resolveBaseComposeSelected,
+  resolveEnvironmentScopeActive,
   resolveSelectedEnvironmentId,
   systemProjectAllowsMutations,
+  withHostingIdQuery,
 } from './project-navigation'
 import type { ProjectRecord } from './instance-api'
 
@@ -41,13 +42,8 @@ describe('projectNeedsSetup', () => {
 })
 
 describe('system project predicates', () => {
-  it('disallows mutations and suppresses compose section tabs', () => {
+  it('disallows mutations on system projects', () => {
     expect(systemProjectAllowsMutations()).toBe(false)
-    expect(composeSectionTabsForProject(true)).toEqual([])
-    expect(composeSectionTabsForProject(false)).toEqual([
-      'networking',
-      'storage',
-    ])
   })
 
   it('treats system projects as compose-shaped (not managed)', () => {
@@ -76,9 +72,6 @@ describe('path-based environment selection', () => {
     )
     expect(projectEnvironmentHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1',
-    )
-    expect(projectTabHref('org', 'proj', 'networking')).toBe(
-      '/org/projects/proj/networking',
     )
     expect(projectTabHref('org', 'proj', 'environments')).toBe(
       '/org/projects/proj/environments',
@@ -113,5 +106,28 @@ describe('path-based environment selection', () => {
     expect(
       resolveBaseComposeSelected('/org/projects/proj/networking', 'proj'),
     ).toBe(false)
+  })
+})
+
+describe('resolveEnvironmentScopeActive', () => {
+  it('clears on Project overview and sets on environment path', () => {
+    expect(resolveEnvironmentScopeActive(true, null, true)).toBe(false)
+    expect(resolveEnvironmentScopeActive(false, 'env1', false)).toBe(true)
+  })
+
+  it('keeps sticky scope on retired paths without inventing it on cold load', () => {
+    expect(resolveEnvironmentScopeActive(false, null, false)).toBe(false)
+    expect(resolveEnvironmentScopeActive(false, null, true)).toBe(true)
+  })
+})
+
+describe('withHostingIdQuery', () => {
+  it('appends hostingId for overview and environment redirects', () => {
+    expect(withHostingIdQuery('/org/projects/proj/overview', 'h1')).toBe(
+      '/org/projects/proj/overview?hostingId=h1',
+    )
+    expect(
+      withHostingIdQuery('/org/projects/proj/environments/env1', 'h1'),
+    ).toBe('/org/projects/proj/environments/env1?hostingId=h1')
   })
 })

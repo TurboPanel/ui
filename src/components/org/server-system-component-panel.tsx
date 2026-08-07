@@ -25,13 +25,126 @@ function statusCopy(
       return 'Not provisioned — hosting is not enabled on this server yet.'
     case 'pending':
       return 'Pending allocation — waiting for a Docker container id.'
-    case 'running':
-      return toneLabel
-    case 'exited':
-      return toneLabel
     default:
       return toneLabel
   }
+}
+
+function SystemWorkspaceLink({
+  orgId,
+  projectId,
+  environmentId,
+}: Readonly<{
+  orgId: string
+  projectId: string | null
+  environmentId: string | null
+}>) {
+  if (!projectId || !environmentId) {
+    return null
+  }
+  return (
+    <Link
+      href={projectEnvironmentHref(orgId, projectId, environmentId) as Href}
+      asChild
+    >
+      <Pressable
+        style={StyleSheet.flatten([styles.linkBtn, webPointer])}
+        accessibilityRole="link"
+        accessibilityLabel="Open in System workspace"
+      >
+        <Text style={styles.linkBtnText}>Open in System workspace</Text>
+      </Pressable>
+    </Link>
+  )
+}
+
+function ProvisionedIngressStatus({
+  orgId,
+  ingress,
+  tone,
+  containerName,
+  composeServiceName,
+}: Readonly<{
+  orgId: string
+  ingress: ReturnType<typeof useServerSystemIngress>
+  tone: ReturnType<typeof serviceStatusTone>
+  containerName: string | null
+  composeServiceName: string | null
+}>) {
+  return (
+    <View style={styles.statusBlock}>
+      <View style={styles.statusRow}>
+        <View
+          style={[styles.statusDot, { backgroundColor: tone.color }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+        <Text style={styles.statusLabel}>
+          {statusCopy(ingress.status, tone.label)}
+        </Text>
+      </View>
+      {containerName ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Container: </Text>
+          <Text style={styles.mono}>{containerName}</Text>
+        </Text>
+      ) : null}
+      {composeServiceName ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Service: </Text>
+          <Text style={styles.mono}>{composeServiceName}</Text>
+        </Text>
+      ) : null}
+      <SystemWorkspaceLink
+        orgId={orgId}
+        projectId={ingress.workspaceId ? ingress.projectId : null}
+        environmentId={ingress.environment?.id ?? null}
+      />
+    </View>
+  )
+}
+
+function IngressStatusBody({
+  orgId,
+  ingress,
+  tone,
+  containerName,
+  composeServiceName,
+}: Readonly<{
+  orgId: string
+  ingress: ReturnType<typeof useServerSystemIngress>
+  tone: ReturnType<typeof serviceStatusTone>
+  containerName: string | null
+  composeServiceName: string | null
+}>) {
+  if (ingress.isLoading) {
+    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+  }
+  if (ingress.error) {
+    return (
+      <Text style={orgPanelStyles.error}>
+        {ingress.error instanceof Error
+          ? ingress.error.message
+          : 'Failed to load system component'}
+      </Text>
+    )
+  }
+  if (ingress.status === 'not_provisioned') {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        {statusCopy('not_provisioned', tone.label)}
+      </Text>
+    )
+  }
+  return (
+    <ProvisionedIngressStatus
+      orgId={orgId}
+      ingress={ingress}
+      tone={tone}
+      containerName={containerName}
+      composeServiceName={composeServiceName}
+    />
+  )
 }
 
 export function ServerSystemComponentPanel({
@@ -88,73 +201,15 @@ export function ServerSystemComponentPanel({
     onEnqueueRestart(result.value, ingress.environment?.id)
   }
 
-  let body: React.ReactNode
-  if (ingress.isLoading) {
-    body = <Text style={orgPanelStyles.muted}>Loading…</Text>
-  } else if (ingress.error) {
-    body = (
-      <Text style={orgPanelStyles.error}>
-        {ingress.error instanceof Error
-          ? ingress.error.message
-          : 'Failed to load system component'}
-      </Text>
-    )
-  } else if (ingress.status === 'not_provisioned') {
-    body = (
-      <Text style={orgPanelStyles.muted}>
-        {statusCopy('not_provisioned', tone.label)}
-      </Text>
-    )
-  } else {
-    body = (
-      <View style={styles.statusBlock}>
-        <View style={styles.statusRow}>
-          <View
-            style={[styles.statusDot, { backgroundColor: tone.color }]}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          />
-          <Text style={styles.statusLabel}>
-            {statusCopy(ingress.status, tone.label)}
-          </Text>
-        </View>
-        {containerName ? (
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Container: </Text>
-            <Text style={styles.mono}>{containerName}</Text>
-          </Text>
-        ) : null}
-        {composeServiceName ? (
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Service: </Text>
-            <Text style={styles.mono}>{composeServiceName}</Text>
-          </Text>
-        ) : null}
-        {ingress.workspaceId &&
-        ingress.projectId &&
-        ingress.environment?.id ? (
-          <Link
-            href={
-              projectEnvironmentHref(
-                orgId,
-                ingress.projectId,
-                ingress.environment.id,
-              ) as Href
-            }
-            asChild
-          >
-            <Pressable
-              style={[styles.linkBtn, webPointer]}
-              accessibilityRole="link"
-              accessibilityLabel="Open in System workspace"
-            >
-              <Text style={styles.linkBtnText}>Open in System workspace</Text>
-            </Pressable>
-          </Link>
-        ) : null}
-      </View>
-    )
-  }
+  const body = (
+    <IngressStatusBody
+      orgId={orgId}
+      ingress={ingress}
+      tone={tone}
+      containerName={containerName}
+      composeServiceName={composeServiceName}
+    />
+  )
 
   const error = actionError ?? pollError
 

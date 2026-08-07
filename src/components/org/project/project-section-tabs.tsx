@@ -14,11 +14,8 @@ import {
   environmentStatusTone,
 } from '@/lib/container-status'
 import {
-  COMPOSE_SECTION_TAB_IDS,
-  COMPOSE_PROJECT_TAB_LABELS,
   MANAGED_PROJECT_TAB_IDS,
   MANAGED_PROJECT_TAB_LABELS,
-  composeSectionTabsForProject,
   isManagedProject,
   parseProjectEnvironmentId,
   projectEnvironmentHref,
@@ -68,11 +65,12 @@ export function activeProjectTabFromPathname(
   if (segment === 'data' || segment === 'backups') {
     return segment
   }
-  if (
-    (COMPOSE_SECTION_TAB_IDS as readonly string[]).includes(segment) ||
-    segment === 'overview'
-  ) {
-    return segment as ProjectTabId
+  // Retired compose section routes redirect to the current scope; treat as Overview.
+  if (segment === 'networking' || segment === 'storage') {
+    return 'overview'
+  }
+  if (segment === 'overview') {
+    return 'overview'
   }
   if ((MANAGED_PROJECT_TAB_IDS as readonly string[]).includes(segment)) {
     return segment as ProjectTabId
@@ -127,27 +125,21 @@ function ManagedSectionTabs() {
 }
 
 /**
- * Single compose tab group: Project · environments · Networking · Storage.
- * Networking / Storage only appear when an environment is selected (not Project).
+ * Compose scope selector: Project · environments only.
+ * Lives in the project header (not the compose toolbar).
  */
-function ComposeUnifiedTabs() {
+export function ProjectScopeSelector() {
   const pathname = usePathname()
   const router = useRouter()
   const {
     orgId,
     projectId,
     environments,
-    selectedEnvironmentId,
     baseSelected,
     selectBaseCompose,
-    isSystemProject,
   } = useProjectContext()
 
   const pathEnvironmentId = parseProjectEnvironmentId(pathname, projectId)
-  const activeTab = activeProjectTabFromPathname(pathname, projectId)
-  const sectionTabs = composeSectionTabsForProject(isSystemProject)
-  const showSectionTabs =
-    Boolean(selectedEnvironmentId) && !baseSelected && sectionTabs.length > 0
 
   const environmentIds = useMemo(
     () => environments.map((env) => env.id),
@@ -208,52 +200,29 @@ function ComposeUnifiedTabs() {
                 )
               }}
             >
-              <Text
-                style={[styles.tabText, active && styles.tabTextActive]}
-                numberOfLines={1}
-              >
-                {name}
-              </Text>
+              <View style={styles.chipContent}>
+                <View
+                  style={[styles.statusDot, { backgroundColor: tone.color }]}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+                <Text
+                  style={[styles.tabText, active && styles.tabTextActive]}
+                  numberOfLines={1}
+                >
+                  {name}
+                </Text>
+              </View>
             </Pressable>
           )
         })}
-
-        {showSectionTabs
-          ? sectionTabs.map((tabId) => {
-              const active = activeTab === tabId
-              const href = projectTabHref(orgId, projectId, tabId) as Href
-              const label = COMPOSE_PROJECT_TAB_LABELS[tabId]
-              const tabStyle = StyleSheet.flatten([
-                orgPanelStyles.segmentChip,
-                styles.chip,
-                active ? orgPanelStyles.segmentChipActive : null,
-                webPointer,
-              ])
-              return (
-                <Link key={tabId} href={href} asChild>
-                  <Pressable
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={label}
-                    style={tabStyle}
-                  >
-                    <Text
-                      style={[styles.tabText, active && styles.tabTextActive]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                </Link>
-              )
-            })
-          : null}
       </View>
     </ScrollView>
   )
 }
 
 /**
- * Project area nav. Compose: one group (Project · envs · Networking · Storage).
+ * Project area nav. Compose: Project · environments scope selector.
  * Managed: Overview · Environments · Data · Backups.
  */
 export function ProjectSectionTabs() {
@@ -263,7 +232,7 @@ export function ProjectSectionTabs() {
   if (isManagedProject(project)) {
     return <ManagedSectionTabs />
   }
-  return <ComposeUnifiedTabs />
+  return <ProjectScopeSelector />
 }
 
 const styles = StyleSheet.create({
@@ -281,6 +250,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     minWidth: 40,
     borderRadius: 5,
+  },
+  chipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    flexShrink: 0,
   },
   tabText: {
     color: colors.textDim,
