@@ -2308,7 +2308,7 @@ async function throwClientFetchFailed(path: string, response: Response): Promise
 
 export async function deployEnvironment(
   environmentId: string,
-  body?: { acknowledgeHealthCheckWarnings?: boolean },
+  body?: { acknowledgeHealthCheckWarnings?: boolean; noCache?: boolean },
 ): Promise<CommandEnqueueResponse> {
   const path = `${CLIENT_API}/environments/${environmentId}/deploy`
   const resolvedOrgId = getActiveOrganizationId()

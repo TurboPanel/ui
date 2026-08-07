@@ -72,6 +72,14 @@ export {
 export type { ComposeOverlayState } from './overlay-state'
 export { resolveComposeOverlayState } from './overlay-state'
 export type {
+  ComposeDocumentSummary,
+  ComposeSummaryChip,
+} from './summary'
+export {
+  formatComposeSummaryChips,
+  summarizeComposeDocument,
+} from './summary'
+export type {
   ComposeRestartPolicy,
   ParsedComposeRestart,
   VisualFieldDef,

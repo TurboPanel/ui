@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
 import { HeaderChevron } from '@/components/header-chevron'
@@ -9,9 +9,9 @@ import { ProjectPrincipalsSection } from '@/components/org/project-detail-sectio
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
-import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { SectionPanel } from '@/components/org/section-panel'
 import { StorageSection } from '@/components/org/storage-section'
+import { VariablesSection } from '@/components/org/variables-section'
 import type {
   EnvironmentRecord,
   OrgServerRecord,
@@ -28,12 +28,41 @@ import {
 } from '@/lib/project-options'
 import {
   useDeleteEnvironment,
+  useHostingsByServices,
   useOrgServers,
+  useProjectPrincipals,
+  useServices,
+  useStorage,
   useUpdateEnvironment,
   useUpdateProject,
+  useVariables,
 } from '@/lib/queries'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
+
+type ProjectAddKind = 'server' | 'variables' | 'principals'
+type EnvironmentAddKind = 'server' | 'networking' | 'storage'
+
+function openAddKind<K extends string>(
+  kind: K,
+  setOpened: (updater: (current: ReadonlySet<K>) => ReadonlySet<K>) => void,
+  setAddSeed: (
+    updater: (
+      current: Partial<Record<K, number>>,
+    ) => Partial<Record<K, number>>,
+  ) => void,
+) {
+  setOpened((current) => {
+    if (current.has(kind)) return current
+    const next = new Set(current)
+    next.add(kind)
+    return next
+  })
+  setAddSeed((current) => ({
+    ...current,
+    [kind]: (current[kind] ?? 0) + 1,
+  }))
+}
 
 function serverDisplayLabel(server: OrgServerRecord): string {
   return (
@@ -43,37 +72,66 @@ function serverDisplayLabel(server: OrgServerRecord): string {
   )
 }
 
-function SettingsSectionRow({
+function AddChip({
+  label,
+  onPress,
+  disabled,
+}: Readonly<{
+  label: string
+  onPress: () => void
+  disabled?: boolean
+}>) {
+  return (
+    <Pressable
+      style={[styles.addChip, disabled && styles.disabled, webPointer]}
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={styles.addPlus}>+</Text>
+      <Text style={styles.addLabel}>{label}</Text>
+    </Pressable>
+  )
+}
+
+function ResourceSection({
   title,
-  scopeHint,
-  expanded: controlledExpanded,
+  hint,
+  children,
+}: Readonly<{
+  title: string
+  hint: string
+  children: ReactNode
+}>) {
+  return (
+    <SectionPanel title={title} hint={hint}>
+      {children}
+    </SectionPanel>
+  )
+}
+
+function DangerSection({
+  title,
+  hint,
+  expanded,
   onExpandedChange,
   children,
 }: Readonly<{
   title: string
-  scopeHint: string
-  expanded?: boolean
-  onExpandedChange?: (expanded: boolean) => void
+  hint: string
+  expanded: boolean
+  onExpandedChange: (expanded: boolean) => void
   children: ReactNode
 }>) {
-  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(false)
-  const expanded = controlledExpanded ?? uncontrolledExpanded
-  const setExpanded = (next: boolean) => {
-    if (onExpandedChange) {
-      onExpandedChange(next)
-      return
-    }
-    setUncontrolledExpanded(next)
-  }
-
   return (
     <SectionPanel
       title={title}
-      hint={scopeHint}
+      hint={hint}
       headerRight={
         <Pressable
           style={[orgPanelStyles.toolbarBtnSecondary, webPointer, styles.chevronBtn]}
-          onPress={() => setExpanded(!expanded)}
+          onPress={() => onExpandedChange(!expanded)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={expanded ? `Collapse ${title}` : `Expand ${title}`}
@@ -224,6 +282,14 @@ function ProjectSettingsSections() {
   } = useProjectContext()
   const router = useRouter()
   const updateProjectMutation = useUpdateProject(orgId, projectId)
+  const variablesQuery = useVariables(orgId, { projectId })
+  const principalsQuery = useProjectPrincipals(orgId, projectId)
+  const [opened, setOpened] = useState<ReadonlySet<ProjectAddKind>>(
+    () => new Set(),
+  )
+  const [addSeed, setAddSeed] = useState<Partial<Record<ProjectAddKind, number>>>(
+    {},
+  )
   const [dangerExpanded, setDangerExpanded] = useState(false)
   const scopeHint = 'Applies to every environment'
 
@@ -231,22 +297,91 @@ function ProjectSettingsSections() {
 
   const canEdit = canManage && projectAllowsMutations
   const canMove = canOwn && projectAllowsMutations
+  const hasServer = Boolean(project.options?.defaultServerId)
+  const hasVariables = (variablesQuery.data?.variables?.length ?? 0) > 0
+  const hasPrincipals = (principalsQuery.data?.principals?.length ?? 0) > 0
+
+  const showServer = hasServer || opened.has('server')
+  const showVariables = hasVariables || opened.has('variables')
+  const showPrincipals = hasPrincipals || opened.has('principals')
+
+  const openKind = (kind: ProjectAddKind) => {
+    openAddKind(kind, setOpened, setAddSeed)
+  }
+
+  const pendingAdds: { kind: ProjectAddKind; label: string }[] = []
+  if (!showServer) pendingAdds.push({ kind: 'server', label: 'Add Server' })
+  if (!showVariables) {
+    pendingAdds.push({ kind: 'variables', label: 'Add Variable' })
+  }
+  if (!showPrincipals) {
+    pendingAdds.push({ kind: 'principals', label: 'Add System user' })
+  }
 
   return (
     <>
-      <SettingsSectionRow title="Servers" scopeHint={scopeHint}>
-        {canEdit ? (
-          <ProjectServerHeaderControl />
-        ) : (
-          <Text style={orgPanelStyles.muted}>View only</Text>
-        )}
-      </SettingsSectionRow>
+      <SettingsAddChipRow
+        canEdit={canEdit}
+        pendingAdds={pendingAdds}
+        onOpen={openKind}
+      />
 
-      <SettingsSectionRow title="Variables" scopeHint={scopeHint}>
-        <ProjectVariablesSection orgId={orgId} projectId={projectId} />
-      </SettingsSectionRow>
+      {showServer ? (
+        <ResourceSection title="Servers" hint={scopeHint}>
+          {canEdit ? (
+            <ProjectServerHeaderControl />
+          ) : (
+            <Text style={orgPanelStyles.muted}>View only</Text>
+          )}
+        </ResourceSection>
+      ) : null}
 
-      <SettingsSectionRow title="Container naming" scopeHint={scopeHint}>
+      {showVariables ? (
+        <ResourceSection title="Variables" hint={scopeHint}>
+          <VariablesSection
+            key={`variables-${addSeed.variables ?? 0}`}
+            orgId={orgId}
+            parentField={{ projectId }}
+            embedded
+            showPresets
+            initialShowAdd={opened.has('variables') && !hasVariables}
+          />
+        </ResourceSection>
+      ) : null}
+
+      {showPrincipals ? (
+        <ResourceSection title="System users" hint={scopeHint}>
+          <ProjectPrincipalsSection
+            orgId={orgId}
+            projectId={projectId}
+            canManage={canManage && projectAllowsMutations}
+            embedded
+          />
+        </ResourceSection>
+      ) : null}
+
+      <SectionPanel
+        title="Workspace"
+        hint="Which workspace this project belongs to — not per service"
+      >
+        <WorkspaceMoveBody
+          project={project}
+          workspaces={userWorkspaces(workspaces)}
+          canMove={canMove}
+          saving={updateProjectMutation.isPending}
+          onMove={(workspaceId) => {
+            void (async () => {
+              setError(null)
+              const result = await updateProjectMutation.run({ workspaceId })
+              if (!result.ok && updateProjectMutation.actionError) {
+                setError(updateProjectMutation.actionError)
+              }
+            })()
+          }}
+        />
+      </SectionPanel>
+
+      <SectionPanel title="Container naming" hint={scopeHint}>
         <ContainerNamingBody
           project={project}
           canEdit={canEdit}
@@ -264,37 +399,11 @@ function ProjectSettingsSections() {
             })()
           }}
         />
-      </SettingsSectionRow>
+      </SectionPanel>
 
-      <SettingsSectionRow title="Workspace" scopeHint={scopeHint}>
-        <WorkspaceMoveBody
-          project={project}
-          workspaces={userWorkspaces(workspaces)}
-          canMove={canMove}
-          saving={updateProjectMutation.isPending}
-          onMove={(workspaceId) => {
-            void (async () => {
-              setError(null)
-              const result = await updateProjectMutation.run({ workspaceId })
-              if (!result.ok && updateProjectMutation.actionError) {
-                setError(updateProjectMutation.actionError)
-              }
-            })()
-          }}
-        />
-      </SettingsSectionRow>
-
-      <SettingsSectionRow title="System users" scopeHint={scopeHint}>
-        <ProjectPrincipalsSection
-          orgId={orgId}
-          projectId={projectId}
-          canManage={canManage && projectAllowsMutations}
-        />
-      </SettingsSectionRow>
-
-      <SettingsSectionRow
+      <DangerSection
         title="Danger → Delete project"
-        scopeHint={scopeHint}
+        hint={scopeHint}
         expanded={dangerExpanded}
         onExpandedChange={setDangerExpanded}
       >
@@ -310,7 +419,7 @@ function ProjectSettingsSections() {
         ) : (
           <Text style={orgPanelStyles.muted}>View only</Text>
         )}
-      </SettingsSectionRow>
+      </DangerSection>
     </>
   )
 }
@@ -454,6 +563,68 @@ function resolveInheritServerLabel(
   return 'No project server set — pick a server for this environment'
 }
 
+function SettingsAddChipRow<K extends string>({
+  canEdit,
+  pendingAdds,
+  onOpen,
+}: Readonly<{
+  canEdit: boolean
+  pendingAdds: readonly { kind: K; label: string }[]
+  onOpen: (kind: K) => void
+}>) {
+  if (!canEdit || pendingAdds.length === 0) return null
+  return (
+    <View style={styles.addRow}>
+      {pendingAdds.map((item) => (
+        <AddChip
+          key={item.kind}
+          label={item.label}
+          onPress={() => onOpen(item.kind)}
+        />
+      ))}
+    </View>
+  )
+}
+
+function EnvironmentServerPinBody({
+  selectedEnvironment,
+  canEdit,
+  inheritLabel,
+  servers,
+  saving,
+  onSelect,
+  onClear,
+}: Readonly<{
+  selectedEnvironment: EnvironmentRecord
+  canEdit: boolean
+  inheritLabel: string
+  servers: OrgServerRecord[]
+  saving: boolean
+  onSelect: (serverId: string) => void
+  onClear: () => void
+}>) {
+  if (!canEdit) {
+    return <Text style={orgPanelStyles.muted}>View only</Text>
+  }
+  return (
+    <>
+      {!selectedEnvironment.serverId ? (
+        <Text style={orgPanelStyles.muted}>{inheritLabel}</Text>
+      ) : null}
+      <ServerPinSelect
+        label="Server"
+        hint="Pin a server for this environment, or clear to inherit the project default."
+        placementServerId={selectedEnvironment.serverId}
+        servers={servers}
+        saving={saving}
+        allowClear={Boolean(selectedEnvironment.serverId)}
+        onSelect={onSelect}
+        onClear={onClear}
+      />
+    </>
+  )
+}
+
 function readFocusHostingId(
   value: string | string[] | undefined,
 ): string | null {
@@ -482,10 +653,23 @@ function EnvironmentSettingsSections({
     hostingId?: string | string[]
   }>()
   const focusHostingId = readFocusHostingId(hostingIdParam)
-  const [networkingExpanded, setNetworkingExpanded] = useState(
-    Boolean(focusHostingId),
+  const [opened, setOpened] = useState<ReadonlySet<EnvironmentAddKind>>(
+    () => new Set(focusHostingId ? (['networking'] as EnvironmentAddKind[]) : []),
   )
+  const [addSeed, setAddSeed] = useState<Partial<Record<EnvironmentAddKind, number>>>(
+    {},
+  )
+  const [dangerExpanded, setDangerExpanded] = useState(false)
   const serversQuery = useOrgServers(orgId)
+  const servicesQuery = useServices(orgId, selectedEnvironment.id)
+  const serviceIds = useMemo(
+    () => (servicesQuery.data?.services ?? []).map((service) => service.id),
+    [servicesQuery.data?.services],
+  )
+  const hostingsQuery = useHostingsByServices(orgId, serviceIds)
+  const storageQuery = useStorage(orgId, {
+    environmentId: selectedEnvironment.id,
+  })
   const updateEnvironment = useUpdateEnvironment(
     orgId,
     selectedEnvironment.id,
@@ -501,59 +685,85 @@ function EnvironmentSettingsSections({
     inheritedServer,
     projectDefaultServerId,
   )
+  const hasServer = Boolean(selectedEnvironment.serverId)
+  const hasNetworking = useMemo(
+    () =>
+      Object.values(hostingsQuery.hostingsByService).some(
+        (rows) => rows.length > 0,
+      ),
+    [hostingsQuery.hostingsByService],
+  )
+  const hasStorage = (storageQuery.data?.storage?.length ?? 0) > 0
 
   useEffect(() => {
-    if (focusHostingId) setNetworkingExpanded(true)
+    if (!focusHostingId) return
+    setOpened((current) => {
+      if (current.has('networking')) return current
+      const next = new Set(current)
+      next.add('networking')
+      return next
+    })
   }, [focusHostingId])
+
+  const showServer = hasServer || opened.has('server')
+  const showNetworking =
+    hasNetworking || Boolean(focusHostingId) || opened.has('networking')
+  const showStorage = hasStorage || opened.has('storage')
+
+  const openKind = (kind: EnvironmentAddKind) => {
+    openAddKind(kind, setOpened, setAddSeed)
+  }
+
+  const pendingAdds: { kind: EnvironmentAddKind; label: string }[] = []
+  if (!showServer) pendingAdds.push({ kind: 'server', label: 'Add Server' })
+  if (!showNetworking) {
+    pendingAdds.push({ kind: 'networking', label: 'Add Network' })
+  }
+  if (!showStorage) {
+    pendingAdds.push({ kind: 'storage', label: 'Add Storage' })
+  }
 
   return (
     <>
-      <SettingsSectionRow title="Server" scopeHint={scopeHint}>
-        {canEdit ? (
-          <>
-            {!selectedEnvironment.serverId ? (
-              <Text style={orgPanelStyles.muted}>{inheritLabel}</Text>
-            ) : null}
-            <ServerPinSelect
-              label="Server"
-              hint="Pin a server for this environment, or clear to inherit the project default."
-              placementServerId={selectedEnvironment.serverId}
-              servers={servers}
-              saving={updateEnvironment.isPending}
-              allowClear={Boolean(selectedEnvironment.serverId)}
-              onSelect={(serverId) => {
-                void (async () => {
-                  setError(null)
-                  const result = await updateEnvironment.run({ serverId })
-                  if (!result.ok && updateEnvironment.actionError) {
-                    setError(updateEnvironment.actionError)
-                  }
-                })()
-              }}
-              onClear={() => {
-                void (async () => {
-                  setError(null)
-                  const result = await updateEnvironment.run({
-                    serverId: null,
-                  })
-                  if (!result.ok && updateEnvironment.actionError) {
-                    setError(updateEnvironment.actionError)
-                  }
-                })()
-              }}
-            />
-          </>
-        ) : (
-          <Text style={orgPanelStyles.muted}>View only</Text>
-        )}
-      </SettingsSectionRow>
+      <SettingsAddChipRow
+        canEdit={canEdit}
+        pendingAdds={pendingAdds}
+        onOpen={openKind}
+      />
 
-      <SettingsSectionRow
-        title="Networking"
-        scopeHint={scopeHint}
-        expanded={networkingExpanded}
-        onExpandedChange={setNetworkingExpanded}
-      >
+      {showServer ? (
+        <ResourceSection title="Server" hint={scopeHint}>
+          <EnvironmentServerPinBody
+            selectedEnvironment={selectedEnvironment}
+            canEdit={canEdit}
+            inheritLabel={inheritLabel}
+            servers={servers}
+            saving={updateEnvironment.isPending}
+            onSelect={(serverId) => {
+              void (async () => {
+                setError(null)
+                const result = await updateEnvironment.run({ serverId })
+                if (!result.ok && updateEnvironment.actionError) {
+                  setError(updateEnvironment.actionError)
+                }
+              })()
+            }}
+            onClear={() => {
+              void (async () => {
+                setError(null)
+                const result = await updateEnvironment.run({
+                  serverId: null,
+                })
+                if (!result.ok && updateEnvironment.actionError) {
+                  setError(updateEnvironment.actionError)
+                }
+              })()
+            }}
+          />
+        </ResourceSection>
+      ) : null}
+
+      {showNetworking ? (
         <EnvironmentDetailBody
           orgId={orgId}
           projectId={projectId}
@@ -563,33 +773,44 @@ function EnvironmentSettingsSections({
           sections={['hosting']}
           focusHostingId={focusHostingId}
         />
-      </SettingsSectionRow>
+      ) : null}
 
-      <SettingsSectionRow title="Storage" scopeHint={scopeHint}>
-        {canEdit ? (
-          <StorageSection
-            orgId={orgId}
-            environmentId={selectedEnvironment.id}
-            defaultServerId={resolveEffectiveServerId(
-              selectedEnvironment.serverId,
-              project?.options?.defaultServerId,
-            )}
-          />
-        ) : (
-          <Text style={orgPanelStyles.muted}>View only</Text>
-        )}
-      </SettingsSectionRow>
+      {showStorage ? (
+        <ResourceSection title="Storage" hint={scopeHint}>
+          {canEdit ? (
+            <StorageSection
+              key={`storage-${addSeed.storage ?? 0}`}
+              orgId={orgId}
+              environmentId={selectedEnvironment.id}
+              defaultServerId={resolveEffectiveServerId(
+                selectedEnvironment.serverId,
+                project?.options?.defaultServerId,
+              )}
+              embedded
+              initialShowAdd={opened.has('storage') && !hasStorage}
+            />
+          ) : (
+            <Text style={orgPanelStyles.muted}>View only</Text>
+          )}
+        </ResourceSection>
+      ) : null}
 
-      <SettingsSectionRow title="Danger → Delete environment" scopeHint={scopeHint}>
+      <DangerSection
+        title="Danger → Delete environment"
+        hint={scopeHint}
+        expanded={dangerExpanded}
+        onExpandedChange={setDangerExpanded}
+      >
         <EnvironmentDeleteControl selectedEnvironment={selectedEnvironment} />
-      </SettingsSectionRow>
+      </DangerSection>
     </>
   )
 }
 
 /**
- * Scope-aware project / environment settings list on the compose Overview.
- * Collapsed by default; bodies reuse existing panels and hooks.
+ * Scope-aware project / environment settings on the compose Overview.
+ * Addable resources start as quiet chips; sections appear once opened or when
+ * data already exists. Workspace stays its own always-visible area.
  */
 export function ProjectSettingsArea() {
   const {
@@ -620,7 +841,10 @@ export function ProjectSettingsArea() {
     body = <ProjectSettingsSections />
   } else if (selectedEnvironment) {
     body = (
-      <EnvironmentSettingsSections selectedEnvironment={selectedEnvironment} />
+      <EnvironmentSettingsSections
+        key={selectedEnvironment.id}
+        selectedEnvironment={selectedEnvironment}
+      />
     )
   } else {
     body = <Text style={orgPanelStyles.muted}>Select an environment.</Text>
@@ -645,6 +869,36 @@ const styles = StyleSheet.create({
     color: colors.textTitle,
     fontSize: 15,
     fontWeight: '600',
+  },
+  addRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  addChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 44,
+    minWidth: 44,
+  },
+  addPlus: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  addLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
   },
   chevronBtn: {
     minWidth: 44,

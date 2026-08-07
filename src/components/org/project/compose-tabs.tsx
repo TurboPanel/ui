@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Link, type Href } from 'expo-router'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
+import { ComposeSavedView } from '@/components/org/project/compose-saved-view'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ProjectSettingsArea } from '@/components/org/project-settings-area'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
@@ -16,71 +16,37 @@ import { EnvironmentDetailBody } from '@/components/org/environment-detail-secti
 import { StorageSection } from '@/components/org/storage-section'
 import { SystemProjectOverviewPanel } from '@/components/org/project/system-project-overview-panel'
 import {
+  mergeComposeOverlay,
+  resolveComposeOverlayState,
   type ComposeDocument,
+} from '@/lib/compose'
+import {
   type ContainerRecord,
   type EnvironmentRecord,
   type ProjectRecord,
   type ServiceRecord,
 } from '@/lib/instance-api'
 import { useContainersByServices, useServices } from '@/lib/queries'
-import {
-  isActiveContainerStatus,
-  serviceStatusTone,
-} from '@/lib/container-status'
-import { projectServiceHref } from '@/lib/project-navigation'
+import { isActiveContainerStatus } from '@/lib/container-status'
+import { resolveEffectiveServerId } from '@/lib/project-options'
 import { colors, spacing } from '@/lib/theme'
 
-function ServicesStatusList({
-  orgId,
-  projectId,
-  services,
-  containersByService,
+function QuietButton({
+  label,
+  onPress,
 }: Readonly<{
-  orgId: string
-  projectId: string
-  services: ServiceRecord[]
-  containersByService: Record<string, ContainerRecord[]>
+  label: string
+  onPress: () => void
 }>) {
-  if (services.length === 0) {
-    return <Text style={orgPanelStyles.muted}>No services yet.</Text>
-  }
   return (
-    <View style={styles.list}>
-      {services.map((service) => {
-        const label =
-          service.displayName?.trim() ||
-          service.composeServiceName ||
-          'Service'
-        const tone = serviceStatusTone(containersByService[service.id] ?? [])
-        return (
-          <Link
-            key={service.id}
-            href={projectServiceHref(orgId, projectId, service.id) as Href}
-            asChild
-          >
-            <Pressable
-              style={StyleSheet.flatten([
-                styles.row,
-                styles.statusRow,
-                webPointer,
-              ])}
-              accessibilityRole="link"
-              accessibilityLabel={`${label}, ${tone.label}`}
-            >
-              <View
-                style={[styles.statusDot, { backgroundColor: tone.color }]}
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-              />
-              <View style={styles.statusTextCol}>
-                <Text style={styles.rowTitle}>{label}</Text>
-                <Text style={styles.rowMeta}>{tone.label}</Text>
-              </View>
-            </Pressable>
-          </Link>
-        )
-      })}
-    </View>
+    <Pressable
+      style={[styles.quietBtn, webPointer]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={styles.quietBtnText}>{label}</Text>
+    </Pressable>
   )
 }
 
@@ -95,6 +61,10 @@ function ServicesPanelBody({
   loading,
   saving,
   isStarted,
+  editing,
+  canEdit,
+  onEdit,
+  onCancelEdit,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
 }: Readonly<{
@@ -108,17 +78,43 @@ function ServicesPanelBody({
   loading: boolean
   saving: boolean
   isStarted: boolean
+  editing: boolean
+  canEdit: boolean
+  onEdit: () => void
+  onCancelEdit: () => void
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
+  const editTrailing = (
+    <QuietButton label="Cancel" onPress={onCancelEdit} />
+  )
+
   if (baseSelected) {
+    if (editing) {
+      return (
+        <ComposeBasePanel
+          document={project.options?.compose}
+          onSave={onSaveProjectCompose}
+          saving={saving}
+          defaultEditorView="editor"
+          hideHeader
+          toolbarTrailing={editTrailing}
+        />
+      )
+    }
+    const hasServer = Boolean(project.options?.defaultServerId)
     return (
-      <ComposeBasePanel
+      <ComposeSavedView
+        title="Compose - Project"
         document={project.options?.compose}
-        onSave={onSaveProjectCompose}
-        saving={saving}
-        defaultEditorView="editor"
-        hideHeader
+        hasServer={hasServer}
+        canEdit={canEdit}
+        onEdit={onEdit}
+        orgId={orgId}
+        projectId={projectId}
+        services={services}
+        containersByService={containersByService}
+        showServiceStatus={false}
       />
     )
   }
@@ -139,26 +135,52 @@ function ServicesPanelBody({
     )
   }
 
-  if (isStarted) {
+  if (editing) {
     return (
-      <ComposeEditorChrome>
-        <ServicesStatusList
-          orgId={orgId}
-          projectId={projectId}
-          services={services}
-          containersByService={containersByService}
-        />
-      </ComposeEditorChrome>
+      <ComposeBasePanel
+        document={selectedEnvironment.options?.compose}
+        onSave={onSaveEnvironmentCompose}
+        saving={saving}
+        defaultEditorView="editor"
+        hideHeader
+        toolbarTrailing={editTrailing}
+      />
     )
   }
 
+  const overlayState = resolveComposeOverlayState(
+    selectedEnvironment.options?.compose,
+  )
+  const merged = mergeComposeOverlay(
+    project.options?.compose,
+    selectedEnvironment.options?.compose,
+  )
+  const effectiveServerId = resolveEffectiveServerId(
+    selectedEnvironment.serverId,
+    project.options?.defaultServerId,
+  )
+  const envLabel =
+    selectedEnvironment.displayName?.trim() || 'Environment'
+  const inheriting = overlayState.blank
+
   return (
-    <ComposeBasePanel
-      document={selectedEnvironment.options?.compose}
-      onSave={onSaveEnvironmentCompose}
-      saving={saving}
-      defaultEditorView="editor"
-      hideHeader
+    <ComposeSavedView
+      title={`${envLabel} compose`}
+      document={
+        inheriting ? merged : selectedEnvironment.options?.compose
+      }
+      summaryDocument={merged}
+      hasServer={Boolean(effectiveServerId)}
+      canEdit={canEdit}
+      inheritedCaption={
+        inheriting ? 'Inherited from project compose' : null
+      }
+      onEdit={onEdit}
+      orgId={orgId}
+      projectId={projectId}
+      services={services}
+      containersByService={containersByService}
+      showServiceStatus={isStarted}
     />
   )
 }
@@ -183,6 +205,13 @@ export function ComposeServicesTab() {
     orgId,
     selectedEnvironmentId ?? '',
   )
+  const [editing, setEditing] = useState(false)
+  const canEdit = canManage && projectAllowsMutations
+
+  useEffect(() => {
+    setEditing(false)
+  }, [baseSelected, selectedEnvironmentId])
+
   const servicesEnabled =
     Boolean(selectedEnvironmentId) && !baseSelected && projectAllowsMutations
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
@@ -210,7 +239,9 @@ export function ComposeServicesTab() {
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
         setError(persistProjectCompose.actionError)
+        return
       }
+      if (result.ok) setEditing(false)
     },
     [persistProjectCompose, setError],
   )
@@ -224,6 +255,7 @@ export function ComposeServicesTab() {
         setError(persistEnvironmentCompose.actionError)
         return
       }
+      if (result.ok) setEditing(false)
       await invalidateEnvironments()
       await Promise.all([
         servicesQuery.refetch(),
@@ -280,6 +312,10 @@ export function ComposeServicesTab() {
           loading={loading}
           saving={composeSaving}
           isStarted={isStarted}
+          editing={editing}
+          canEdit={canEdit}
+          onEdit={() => setEditing(true)}
+          onCancelEdit={() => setEditing(false)}
           onSaveProjectCompose={handleSaveProjectCompose}
           onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
         />
@@ -330,33 +366,20 @@ export function ComposeStorageTab() {
 const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
   overviewCompose: { width: '100%', gap: spacing.md },
-  list: { gap: spacing.xs },
-  row: {
+  quietBtn: {
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 8,
     backgroundColor: colors.bgSecondary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 52,
-    gap: 2,
-  },
-  statusRow: {
-    flexDirection: 'row',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 32,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.md,
   },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    flexShrink: 0,
+  quietBtnText: {
+    color: colors.textChip,
+    fontSize: 12,
+    fontWeight: '600',
   },
-  statusTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  rowTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  rowMeta: { color: colors.textMuted, fontSize: 13 },
 })

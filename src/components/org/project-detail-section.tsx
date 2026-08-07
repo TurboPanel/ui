@@ -60,10 +60,13 @@ export function ProjectPrincipalsSection({
   orgId,
   projectId,
   canManage,
+  embedded = false,
 }: Readonly<{
   orgId: string
   projectId: string
   canManage: boolean
+  /** Body only — no surrounding `SectionPanel` (Settings Add System user). */
+  embedded?: boolean
 }>) {
   const principalsQuery = useProjectPrincipals(orgId, projectId)
   const environmentsQuery = useEnvironments(orgId, projectId)
@@ -172,11 +175,8 @@ export function ProjectPrincipalsSection({
 
   const adding = createPrincipal.isPending
 
-  return (
-    <SectionPanel
-      title="Project principals"
-      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — traditional-web sites use that principal for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one principal per traditional-web service."
-    >
+  const body = (
+    <>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
       {loading && principals.length === 0 ? (
         <Text style={orgPanelStyles.muted}>Loading…</Text>
@@ -272,6 +272,19 @@ export function ProjectPrincipalsSection({
           </Pressable>
         </View>
       ) : null}
+    </>
+  )
+
+  if (embedded) {
+    return <View style={styles.principalEmbedded}>{body}</View>
+  }
+
+  return (
+    <SectionPanel
+      title="Project principals"
+      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — traditional-web sites use that principal for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one principal per traditional-web service."
+    >
+      {body}
     </SectionPanel>
   )
 }
@@ -879,6 +892,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderRadius: 6,
     minHeight: 44,
+  },
+  principalEmbedded: {
+    gap: spacing.sm,
   },
   principalList: {
     gap: spacing.sm,

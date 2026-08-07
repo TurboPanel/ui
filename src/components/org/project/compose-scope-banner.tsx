@@ -80,23 +80,6 @@ function InheritedServicesHint({
   )
 }
 
-function ProjectScopeBanner({
-  environmentCount,
-}: Readonly<{ environmentCount: number }>) {
-  const environmentLabel =
-    environmentCount === 1 ? '1 environment' : `${environmentCount} environments`
-
-  return (
-    <View style={[orgPanelStyles.detailCard, styles.banner]}>
-      <Text style={orgPanelStyles.detailTitle}>Project compose (base)</Text>
-      <Text style={orgPanelStyles.muted}>
-        This is the base stack inherited by every environment ({environmentLabel}
-        ). Environments can add overrides without changing this document.
-      </Text>
-    </View>
-  )
-}
-
 function EnvironmentInheritingBanner({
   displayName,
   canMutate,
@@ -207,7 +190,6 @@ export function ComposeScopeBanner() {
     selectedEnvironment,
     selectedEnvironmentId,
     baseSelected,
-    environments,
     canManage,
     projectAllowsMutations,
     isSystemProject,
@@ -258,11 +240,7 @@ export function ComposeScopeBanner() {
     invalidateEnvironments,
   ])
 
-  if (isSystemProject || !project) return null
-
-  if (baseSelected) {
-    return <ProjectScopeBanner environmentCount={environments.length} />
-  }
+  if (isSystemProject || !project || baseSelected) return null
 
   if (!selectedEnvironment) return null
 

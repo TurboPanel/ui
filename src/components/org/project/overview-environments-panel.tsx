@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -31,7 +33,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { resolveEffectiveServerId } from '@/lib/project-options'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing } from '@/lib/theme'
 
 type TrackedCommand = {
   environmentId: string
@@ -40,6 +42,8 @@ type TrackedCommand = {
   status: CommandStatus
   error: string | null
 }
+
+type DeployPreviewMode = 'deploy' | 'redeploy' | 'cacheless'
 
 function latestCommandForEnv(
   commands: Record<string, TrackedCommand>,
@@ -139,13 +143,140 @@ function EnvironmentCreateInline({
   )
 }
 
+function RedeploySplitButton({
+  inFlight,
+  disabled,
+  onRedeploy,
+  onCachelessRedeploy,
+}: Readonly<{
+  inFlight: boolean
+  disabled: boolean
+  onRedeploy: () => void
+  onCachelessRedeploy: () => void
+}>) {
+  const { width } = useWindowDimensions()
+  const isCompact = width < layout.desktopBreakpoint
+  const [menuOpen, setMenuOpen] = useState(false)
+  const buttonRef = useRef<View>(null)
+  const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
+
+  useEffect(() => {
+    if (!menuOpen || isCompact) return
+    buttonRef.current?.measureInWindow((x, y, w, h) => {
+      setMenuPosition({
+        top: y + h + 6,
+        left: Math.max(12, x + w - 240),
+      })
+    })
+  }, [menuOpen, isCompact])
+
+  const close = () => setMenuOpen(false)
+
+  return (
+    <>
+      <View ref={buttonRef} collapsable={false} style={styles.splitGroup}>
+        <Pressable
+          style={[
+            styles.quietBtn,
+            styles.quietBtnPrimary,
+            styles.splitPrimary,
+            disabled && styles.buttonDisabled,
+            webPointer,
+          ]}
+          disabled={disabled}
+          onPress={onRedeploy}
+          accessibilityRole="button"
+          accessibilityLabel="Redeploy environment"
+        >
+          <Text style={styles.quietBtnTextPrimary}>
+            {inFlight ? 'Working…' : 'Redeploy'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.quietBtn,
+            styles.quietBtnPrimary,
+            styles.splitCaret,
+            disabled && styles.buttonDisabled,
+            webPointer,
+          ]}
+          disabled={disabled}
+          onPress={() => setMenuOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityLabel="Redeploy options"
+          accessibilityState={{ expanded: menuOpen }}
+        >
+          <Text style={styles.caretGlyph}>▾</Text>
+        </Pressable>
+      </View>
+
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType={isCompact ? 'slide' : 'fade'}
+        onRequestClose={close}
+      >
+        <View
+          style={[
+            styles.menuBackdrop,
+            isCompact && styles.menuBackdropCompact,
+          ]}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss menu"
+          />
+          <View
+            style={[
+              styles.menuCard,
+              isCompact
+                ? styles.menuCardCompact
+                : {
+                    position: 'absolute',
+                    top: menuPosition.top,
+                    left: menuPosition.left,
+                    width: 240,
+                  },
+            ]}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed && styles.menuItemPressed,
+                webPointer,
+              ]}
+              onPress={() => {
+                close()
+                onCachelessRedeploy()
+              }}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Cacheless redeploy"
+            >
+              <Text style={styles.menuItemTitle}>Cacheless redeploy</Text>
+              <Text style={styles.menuItemSub}>
+                Rebuilds images without the Docker build cache — slower
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </>
+  )
+}
+
 function LifecycleToolbar({
   hasServer,
   hasContainers,
+  isRunning,
   inFlight,
   busy,
   destroyArmed,
   destroyBusy,
+  onDeploy,
+  onRedeploy,
+  onCachelessRedeploy,
   onStart,
   onStop,
   onToggleDestroy,
@@ -154,17 +285,21 @@ function LifecycleToolbar({
 }: Readonly<{
   hasServer: boolean
   hasContainers: boolean
+  isRunning: boolean
   inFlight: boolean
   busy: boolean
   destroyArmed: boolean
   destroyBusy: boolean
+  onDeploy: () => void
+  onRedeploy: () => void
+  onCachelessRedeploy: () => void
   onStart: () => void
   onStop: () => void
   onToggleDestroy: () => void
   onConfirmDestroy: () => void
   onRefresh: () => void
 }>) {
-  const startDisabled = !hasServer || busy
+  const actionDisabled = !hasServer || busy
   let destroyLabel = 'Destroy'
   let destroyA11y = 'Destroy'
   if (destroyBusy) {
@@ -175,25 +310,47 @@ function LifecycleToolbar({
     destroyA11y = 'Confirm destroy'
   }
 
+  const showStop = hasContainers && isRunning
+  const showStart = hasContainers && !isRunning
+  const showDeploy = !hasContainers
+  const showRedeploy = hasContainers
+
   return (
     <View style={styles.actionsRow}>
-      <QuietButton
-        label={inFlight ? 'Working…' : 'Start'}
-        accessibilityLabel={
-          hasContainers
-            ? 'Start environment'
-            : 'Start environment for the first time'
-        }
-        tone="primary"
-        disabled={startDisabled}
-        onPress={onStart}
-      />
-      <QuietButton
-        label="Stop"
-        accessibilityLabel="Stop environment"
-        disabled={busy}
-        onPress={onStop}
-      />
+      {showDeploy ? (
+        <QuietButton
+          label={inFlight ? 'Working…' : 'Deploy'}
+          accessibilityLabel="Deploy environment"
+          tone="primary"
+          disabled={actionDisabled}
+          onPress={onDeploy}
+        />
+      ) : null}
+      {showStart ? (
+        <QuietButton
+          label={inFlight ? 'Working…' : 'Start'}
+          accessibilityLabel="Start environment"
+          tone="primary"
+          disabled={actionDisabled}
+          onPress={onStart}
+        />
+      ) : null}
+      {showRedeploy ? (
+        <RedeploySplitButton
+          inFlight={inFlight}
+          disabled={actionDisabled}
+          onRedeploy={onRedeploy}
+          onCachelessRedeploy={onCachelessRedeploy}
+        />
+      ) : null}
+      {showStop ? (
+        <QuietButton
+          label="Stop"
+          accessibilityLabel="Stop environment"
+          disabled={busy}
+          onPress={onStop}
+        />
+      ) : null}
       <QuietButton
         label="Refresh"
         accessibilityLabel="Refresh environment status"
@@ -298,10 +455,14 @@ function BarTrailingActions({
   showRefreshOnly,
   hasServer,
   hasContainers,
+  isRunning,
   inFlight,
   busy,
   destroyArmed,
   destroyBusy,
+  onDeploy,
+  onRedeploy,
+  onCachelessRedeploy,
   onStart,
   onStop,
   onToggleDestroy,
@@ -312,10 +473,14 @@ function BarTrailingActions({
   showRefreshOnly: boolean
   hasServer: boolean
   hasContainers: boolean
+  isRunning: boolean
   inFlight: boolean
   busy: boolean
   destroyArmed: boolean
   destroyBusy: boolean
+  onDeploy: () => void
+  onRedeploy: () => void
+  onCachelessRedeploy: () => void
   onStart: () => void
   onStop: () => void
   onToggleDestroy: () => void
@@ -327,10 +492,14 @@ function BarTrailingActions({
       <LifecycleToolbar
         hasServer={hasServer}
         hasContainers={hasContainers}
+        isRunning={isRunning}
         inFlight={inFlight}
         busy={busy}
         destroyArmed={destroyArmed}
         destroyBusy={destroyBusy}
+        onDeploy={onDeploy}
+        onRedeploy={onRedeploy}
+        onCachelessRedeploy={onCachelessRedeploy}
         onStart={onStart}
         onStop={onStop}
         onToggleDestroy={onToggleDestroy}
@@ -351,10 +520,83 @@ function BarTrailingActions({
   return null
 }
 
+function deployModeLabel(mode: DeployPreviewMode): string {
+  if (mode === 'cacheless') return 'Cacheless redeploy'
+  if (mode === 'redeploy') return 'Redeploy'
+  return 'Deploy'
+}
+
+function shouldInvalidateEnvironmentsForCommand(label: string): boolean {
+  return (
+    label === 'Destroy' ||
+    label === 'Deploy' ||
+    label === 'Redeploy' ||
+    label === 'Cacheless redeploy' ||
+    label === 'Start'
+  )
+}
+
+function deriveLifecycleContainerState(
+  containers: Parameters<typeof hasHostDeployedContainers>[0],
+  toneLabel: string,
+): { hasContainers: boolean; isRunning: boolean } {
+  return {
+    hasContainers: hasHostDeployedContainers(containers),
+    isRunning: toneLabel === 'Running',
+  }
+}
+
+function resolveCommandError(
+  selectedCommand: TrackedCommand | null,
+): string | null {
+  if (
+    !selectedCommand ||
+    !isTerminalCommandStatus(selectedCommand.status) ||
+    selectedCommand.status === 'succeeded'
+  ) {
+    return null
+  }
+  return selectedCommand.error ?? `Command ${selectedCommand.status}`
+}
+
+function resolveLifecycleStatusLabel(
+  toneLabel: string,
+  inheritsBaseServer: boolean,
+): string {
+  if (inheritsBaseServer) {
+    return `${toneLabel} · via project server`
+  }
+  return toneLabel
+}
+
+function applySucceededCommandSideEffects(
+  meta: TrackedCommand,
+  refetchOne: (environmentId: string) => unknown,
+  invalidateEnvironments: () => unknown,
+): void {
+  void refetchOne(meta.environmentId)
+  if (shouldInvalidateEnvironmentsForCommand(meta.label)) {
+    void invalidateEnvironments()
+  }
+}
+
+function deployPreviewFailureMessage(err: unknown): string | null {
+  if (err instanceof DeployHealthCheckMissingError) {
+    if (err.required) {
+      return 'A service requires a compose healthcheck before the first start. Add healthcheck: in Compose, or set Health check policy to Disabled in service settings.'
+    }
+    return 'Health-check warnings are enabled for a service. Confirm deploy on the Environments tab, or set Health check policy to Disabled.'
+  }
+  if (err instanceof DeployResourceLimitExceededError) {
+    return 'This start would exceed a resource limit. Open the Environments tab to review capacity and try again.'
+  }
+  return null
+}
+
 /**
- * Overview lifecycle strip (Start / Stop / Refresh / Destroy) and env management.
- * Project / environment / section chips live in the compose editor toolbar via
- * {@link ProjectSectionTabs}.
+ * Overview lifecycle strip (Deploy / Redeploy / Start / Stop / Refresh /
+ * Destroy) and env management. Project / environment / section chips live
+ * in the compose editor toolbar via {@link ProjectSectionTabs}.
  * Server placement lives exclusively in {@link ProjectSettingsArea}.
  */
 export function OverviewEnvironmentsPanel() {
@@ -391,6 +633,8 @@ export function OverviewEnvironmentsPanel() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [previewDeployOpen, setPreviewDeployOpen] = useState(false)
   const [deployConfirmBusy, setDeployConfirmBusy] = useState(false)
+  const [deployPreviewMode, setDeployPreviewMode] =
+    useState<DeployPreviewMode>('deploy')
 
   const containersQuery = useContainersByEnvironments(orgId, environmentIds)
   const containersByEnv = containersQuery.containersByEnv
@@ -451,10 +695,11 @@ export function OverviewEnvironmentsPanel() {
       if (!isTerminalCommandStatus(nextStatus)) continue
 
       if (nextStatus === 'succeeded') {
-        void refetchOneRef.current(meta.environmentId)
-        if (meta.label === 'Destroy' || meta.label === 'Start') {
-          void invalidateEnvironments()
-        }
+        applySucceededCommandSideEffects(
+          meta,
+          refetchOneRef.current,
+          invalidateEnvironments,
+        )
       }
 
       setTrackedEntries((current) =>
@@ -473,6 +718,7 @@ export function OverviewEnvironmentsPanel() {
     setActionError(null)
     setPreviewDeployOpen(false)
     setDeployConfirmBusy(false)
+    setDeployPreviewMode('deploy')
   }, [selectedEnvironmentId, baseSelected])
 
   const projectDefaultServerId = project?.options?.defaultServerId ?? null
@@ -550,12 +796,20 @@ export function OverviewEnvironmentsPanel() {
     }
   }
 
+  const openDeployPreview = (mode: DeployPreviewMode) => {
+    setActionError(null)
+    setDeployPreviewMode(mode)
+    setPreviewDeployOpen(true)
+  }
+
   const runDeployFromPreview = async () => {
     if (!selectedEnvironment) return
     setActionError(null)
     setDeployConfirmBusy(true)
     try {
-      const result = await deployEnvironmentMutation.run(undefined)
+      const result = await deployEnvironmentMutation.run(
+        deployPreviewMode === 'cacheless' ? { noCache: true } : undefined,
+      )
       if (!result.ok) {
         setActionError(
           deployEnvironmentMutation.actionError ?? 'Failed to deploy',
@@ -567,42 +821,19 @@ export function OverviewEnvironmentsPanel() {
         selectedEnvironment.id,
         effectiveServerId ?? selectedEnvironment.serverId,
         result.value,
-        'Start',
+        deployModeLabel(deployPreviewMode),
       )
     } catch (err) {
-      if (err instanceof DeployHealthCheckMissingError) {
+      const previewMessage = deployPreviewFailureMessage(err)
+      if (previewMessage) {
         setPreviewDeployOpen(false)
-        setActionError(
-          err.required
-            ? 'A service requires a compose healthcheck before the first start. Add healthcheck: in Compose, or set Health check policy to Disabled in service settings.'
-            : 'Health-check warnings are enabled for a service. Confirm deploy on the Environments tab, or set Health check policy to Disabled.',
-        )
-        return
-      }
-      if (err instanceof DeployResourceLimitExceededError) {
-        setPreviewDeployOpen(false)
-        setActionError(
-          'This start would exceed a resource limit. Open the Environments tab to review capacity and try again.',
-        )
+        setActionError(previewMessage)
         return
       }
       setActionError(err instanceof Error ? err.message : 'Failed to deploy')
     } finally {
       setDeployConfirmBusy(false)
     }
-  }
-
-  const handleStart = () => {
-    if (!selectedEnvironment) return
-    const containers = containersByEnv[selectedEnvironment.id] ?? []
-    // Redeploy / first deploy goes through Preview Deployment; lifecycle start
-    // of already-deployed containers does not.
-    if (hasHostDeployedContainers(containers)) {
-      void runLifecycleStart()
-      return
-    }
-    setActionError(null)
-    setPreviewDeployOpen(true)
   }
 
   const handleStop = async () => {
@@ -674,27 +905,25 @@ export function OverviewEnvironmentsPanel() {
     selectedEnvironment == null
       ? null
       : latestCommandForEnv(commands, selectedEnvironment.id)
-  const commandError =
-    selectedCommand &&
-    isTerminalCommandStatus(selectedCommand.status) &&
-    selectedCommand.status !== 'succeeded'
-      ? selectedCommand.error ?? `Command ${selectedCommand.status}`
-      : null
+  const commandError = resolveCommandError(selectedCommand)
 
   const containers = selectedEnvironment
     ? (containersByEnv[selectedEnvironment.id] ?? [])
     : []
   const tone = environmentStatusTone(containers)
   const hasServer = Boolean(effectiveServerId)
-  const hasContainers = hasHostDeployedContainers(containers)
+  const { hasContainers, isRunning } = deriveLifecycleContainerState(
+    containers,
+    tone.label,
+  )
   const creating = createEnvironmentMutation.isPending
   const destroyBusy = stopEnvironmentMutation.isPending
   const busy = inFlight || destroyBusy || creating
 
-  let statusLabel: string = tone.label
-  if (inheritsBaseServer) {
-    statusLabel = `${tone.label} · via project server`
-  }
+  const statusLabel = resolveLifecycleStatusLabel(
+    tone.label,
+    inheritsBaseServer,
+  )
 
   const showLifecycleBar =
     !baseSelected && Boolean(selectedEnvironment)
@@ -718,11 +947,17 @@ export function OverviewEnvironmentsPanel() {
             showRefreshOnly={!canMutateLifecycle}
             hasServer={hasServer}
             hasContainers={hasContainers}
+            isRunning={isRunning}
             inFlight={inFlight}
             busy={busy}
             destroyArmed={destroyArmed}
             destroyBusy={destroyBusy}
-            onStart={handleStart}
+            onDeploy={() => openDeployPreview('deploy')}
+            onRedeploy={() => openDeployPreview('redeploy')}
+            onCachelessRedeploy={() => openDeployPreview('cacheless')}
+            onStart={() => {
+              void runLifecycleStart()
+            }}
             onStop={() => void handleStop()}
             onToggleDestroy={() => setDestroyArmed((current) => !current)}
             onConfirmDestroy={() => void handleDestroy()}
@@ -786,7 +1021,7 @@ export function OverviewEnvironmentsPanel() {
           projectCompose={project?.options?.compose}
           environmentCompose={selectedEnvironment.options?.compose}
           deploying={deployConfirmBusy}
-          confirmLabel="Deploy"
+          confirmLabel={deployModeLabel(deployPreviewMode)}
           onCancel={() => {
             if (deployConfirmBusy) return
             setPreviewDeployOpen(false)
@@ -842,6 +1077,63 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
+  },
+  splitGroup: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  splitPrimary: {
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    borderRightWidth: 0,
+  },
+  splitCaret: {
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+    paddingHorizontal: 8,
+    minWidth: 28,
+  },
+  caretGlyph: {
+    color: chrome.accent,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+  },
+  menuBackdropCompact: {
+    justifyContent: 'flex-end',
+  },
+  menuCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgPanel,
+    overflow: 'hidden',
+  },
+  menuCardCompact: {
+    margin: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  menuItem: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: 4,
+  },
+  menuItemPressed: {
+    backgroundColor: colors.bgSecondary,
+  },
+  menuItemTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  menuItemSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
   },
   quietBtn: {
     borderRadius: 6,

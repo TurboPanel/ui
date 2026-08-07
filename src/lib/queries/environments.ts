@@ -118,8 +118,10 @@ export function useDeleteEnvironment(orgId: string) {
 export function useDeployEnvironment(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body?: { acknowledgeHealthCheckWarnings?: boolean }) =>
-      deployEnvironment(environmentId, body),
+    mutationFn: (body?: {
+      acknowledgeHealthCheckWarnings?: boolean
+      noCache?: boolean
+    }) => deployEnvironment(environmentId, body),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({

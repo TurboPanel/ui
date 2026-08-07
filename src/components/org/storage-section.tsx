@@ -44,10 +44,12 @@ function useStorageSection({
   orgId,
   environmentId,
   defaultServerId,
+  initialShowAdd = false,
 }: Readonly<{
   orgId: string
   environmentId: string
   defaultServerId?: string | null
+  initialShowAdd?: boolean
 }>) {
   const filter = { environmentId }
   const storageQuery = useStorage(orgId, filter)
@@ -57,7 +59,7 @@ function useStorageSection({
   const deleteMutation = useDeleteStorage(orgId, filter)
 
   const [error, setError] = useState<string | null>(null)
-  const [showAdd, setShowAdd] = useState(false)
+  const [showAdd, setShowAdd] = useState(initialShowAdd)
   const [name, setName] = useState('')
   const [kind, setKind] = useState<StorageKind>('docker_volume')
   const [serverId, setServerId] = useState(defaultServerId ?? '')
@@ -437,16 +439,27 @@ export function StorageSection({
   orgId,
   environmentId,
   defaultServerId,
+  embedded = false,
+  initialShowAdd = false,
 }: Readonly<{
   orgId: string
   environmentId: string
   defaultServerId?: string | null
+  /** Body only — no surrounding `SectionPanel` (Settings Add Storage). */
+  embedded?: boolean
+  /** Open the add form on mount. */
+  initialShowAdd?: boolean
 }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const storage = useStorageSection({ orgId, environmentId, defaultServerId })
+  const storage = useStorageSection({
+    orgId,
+    environmentId,
+    defaultServerId,
+    initialShowAdd,
+  })
 
-  return (
-    <SectionPanel title="Storage" hint="Volumes and bind mounts for this environment">
+  const body = (
+    <>
       {storage.error ? <Text style={orgPanelStyles.error}>{storage.error}</Text> : null}
 
       {canManage ? (
@@ -491,11 +504,24 @@ export function StorageSection({
           />
         ))}
       </View>
+    </>
+  )
+
+  if (embedded) {
+    return <View style={styles.embedded}>{body}</View>
+  }
+
+  return (
+    <SectionPanel title="Storage" hint="Volumes and bind mounts for this environment">
+      {body}
     </SectionPanel>
   )
 }
 
 const styles = StyleSheet.create({
+  embedded: {
+    gap: spacing.sm,
+  },
   list: {
     gap: spacing.sm,
   },
