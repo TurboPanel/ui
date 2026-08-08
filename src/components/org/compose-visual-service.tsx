@@ -306,14 +306,12 @@ function ImageRefFields({
   value,
   disabled,
   registryOpen,
-  hasInlineBuild,
   onRegistryOpenChange,
   onChange,
 }: Readonly<{
   value: unknown
   disabled: boolean
   registryOpen: boolean
-  hasInlineBuild: boolean
   onRegistryOpenChange: (open: boolean) => void
   onChange: (image: string) => void
 }>) {
@@ -372,12 +370,6 @@ function ImageRefFields({
         autoCorrect={false}
         style={styles.input}
       />
-      {hasInlineBuild ? (
-        <Text style={styles.hint}>
-          With an inline Dockerfile, Image/Tag name the built image rather than
-          a registry pull and may be left blank.
-        </Text>
-      ) : null}
 
       {ref.digest ? (
         <>
@@ -540,8 +532,9 @@ export function ComposeVisualServiceCard({
   const showContainerName =
     !traditional &&
     serviceHasVisualField(service, visualFieldById('container_name'))
-  const hasInlineBuild = parseComposeBuild(service.build).kind === 'inline'
-  const showRegistryAdd = !traditional && !registryOpen
+  // Image/Tag/Registry are for pulled images — hide when a Dockerfile builds on deploy.
+  const showImageFields = !traditional && !showBuild
+  const showRegistryAdd = showImageFields && !registryOpen
   const hasAddChips = addable.length > 0 || showRegistryAdd
 
   const applyExtension = (
@@ -695,15 +688,15 @@ export function ComposeVisualServiceCard({
             </Text>
           </View>
         </>
-      ) : (
+      ) : null}
+
+      {showImageFields ? (
         <ImageRefFields
           value={service.image}
           disabled={saving}
           registryOpen={registryOpen}
-          hasInlineBuild={hasInlineBuild}
           onRegistryOpenChange={setRegistryOpen}
           onChange={(image) => {
-            // Blank image must omit the key (valid for inline-build services).
             if (image.trim() === '') {
               onClearField('image')
               return
@@ -711,7 +704,7 @@ export function ComposeVisualServiceCard({
             onPatchService({ image })
           }}
         />
-      )}
+      ) : null}
 
       {showBuild ? (
         <DockerfileField

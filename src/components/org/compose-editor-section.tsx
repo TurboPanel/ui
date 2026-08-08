@@ -505,6 +505,14 @@ export function ComposeEditorSection({
       return
     }
     const { [key]: _removed, ...remaining } = current
+    // Removing Dockerfile leaves a pull-based service — restore a default image
+    // when none remains so lint stays satisfied (image or build required).
+    if (key === 'build') {
+      const image = remaining.image
+      if (typeof image !== 'string' || image.trim() === '') {
+        remaining.image = 'nginx:alpine'
+      }
+    }
     updateDraft({
       ...draft,
       data: {
@@ -527,13 +535,10 @@ export function ComposeEditorSection({
       ...current,
       [field.key]: field.defaultValue,
     }
-    // Adding an inline Dockerfile to a blank-image service should omit `image`,
-    // not leave `image: ""` which fails deploy and is invalid Compose.
-    if (field.id === 'build' && Object.hasOwn(nextService, 'image')) {
-      const image = nextService.image
-      if (typeof image !== 'string' || image.trim() === '') {
-        delete nextService.image
-      }
+    // Dockerfile builds on deploy — drop image so Services UI stays build-only
+    // (avoids a stale pull ref naming the built image).
+    if (field.id === 'build') {
+      delete nextService.image
     }
     updateDraft({
       ...draft,
