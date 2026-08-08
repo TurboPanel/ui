@@ -48,7 +48,7 @@ export function SignInScreenContent() {
   const onSubmit = useCallback(async () => {
     setError('')
     try {
-      await signInMutation.mutateAsync({ username: email, password })
+      await signInMutation.mutateAsync({ email, password })
       const href = await resolveDashboardHref()
       router.replace(href as Href)
     } catch (err) {

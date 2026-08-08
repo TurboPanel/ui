@@ -1,9 +1,9 @@
 /**
- * Split / join Compose `build:` values for the Visual editor.
+ * Split / join Compose `build:` values for the Services form editor.
  *
  * Compose accepts either a string shorthand (`build: .`) or a mapping with
  * `context`, `dockerfile`, `dockerfile_inline`, `args`, `target`, etc.
- * Visual edit support focuses on the inline Dockerfile form
+ * Form-editor support focuses on the inline Dockerfile form
  * (`context: .` + `dockerfile_inline`); external builds are surfaceable but
  * not silently rewritten.
  */

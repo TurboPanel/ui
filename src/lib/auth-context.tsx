@@ -43,7 +43,7 @@ type AuthContextValue = {
   controlPlaneRuntime: ControlPlaneRuntime | undefined
   isLoading: boolean
   bootstrapError: string | null
-  signIn: (username: string, password: string) => Promise<SessionInfo>
+  signIn: (email: string, password: string) => Promise<SessionInfo>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   clearSession: () => void
@@ -168,8 +168,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [needsInstall, queryClient, session])
 
   const signIn = useCallback(
-    async (username: string, password: string) => {
-      return await signInMutation.mutateAsync({ username, password })
+    async (email: string, password: string) => {
+      return await signInMutation.mutateAsync({ email, password })
     },
     [signInMutation],
   )

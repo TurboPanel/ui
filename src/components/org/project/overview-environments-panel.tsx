@@ -28,6 +28,7 @@ import {
   useContainersByEnvironments,
   useCreateEnvironment,
   useDeployEnvironment,
+  useOrgServers,
   useRunEnvironmentLifecycle,
   useStopEnvironment,
   type TrackedCommandEntry,
@@ -730,6 +731,17 @@ export function OverviewEnvironmentsPanel() {
       ),
     [selectedEnvironment?.serverId, projectDefaultServerId],
   )
+  const serversQuery = useOrgServers(orgId, {
+    enabled: Boolean(effectiveServerId) && previewDeployOpen,
+  })
+  const placementServerLabel = useMemo(() => {
+    if (!effectiveServerId) return null
+    const server = serversQuery.data?.servers.find(
+      (row) => row.id === effectiveServerId,
+    )
+    if (!server) return effectiveServerId
+    return server.displayName?.trim() || server.hostname || server.id
+  }, [effectiveServerId, serversQuery.data?.servers])
   const inheritsBaseServer =
     Boolean(selectedEnvironment) &&
     !selectedEnvironment?.serverId &&
@@ -1018,6 +1030,7 @@ export function OverviewEnvironmentsPanel() {
           }
           canManage={canMutateLifecycle}
           placementServerId={effectiveServerId}
+          placementServerLabel={placementServerLabel}
           projectCompose={project?.options?.compose}
           environmentCompose={selectedEnvironment.options?.compose}
           deploying={deployConfirmBusy}

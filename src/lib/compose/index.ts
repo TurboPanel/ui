@@ -1,3 +1,4 @@
+import { hideComposeTurbopanelExtensions as hideTurboExtensions } from './hidden-extension'
 import {
   isBlankComposeData,
   isComposeEditorView,
@@ -28,13 +29,23 @@ export {
   composeDocumentToYaml,
   yamlToComposeDocument,
 } from './convert'
-export type { ComposeLintIssue, ComposeLintLevel } from './lint'
+export type {
+  ComposeLintIssue,
+  ComposeLintLevel,
+  ComposeLintOptions,
+} from './lint'
 export {
   blockingComposeLintIssues,
   isComposeServicePropertyKey,
   isComposeTopLevelKey,
   lintComposeYaml,
 } from './lint'
+export type { ComposeHiddenExtensions } from './hidden-extension'
+export {
+  hideComposeTurbopanelExtensions,
+  hiddenTraditionalWebServiceNames,
+  restoreComposeTurbopanelExtensions,
+} from './hidden-extension'
 export type {
   ComposeServiceKind,
   ComposeServiceTurbopanelExtension,
@@ -246,45 +257,6 @@ export function stripComposePlacement(document: ComposeDocument): ComposeDocumen
   return stripTurbopanelField(document, 'placement')
 }
 
-/**
- * Display-only: attach effective placement as top-level
- * `x-turbopanel.placement.server_id` for “what will actually run” YAML.
- * Does not persist — stored compose never carries placement (see
- * {@link stripComposePlacement}). When `serverId` is null/blank, placement is
- * omitted (other `x-turbopanel` fields preserved).
- */
-export function withEffectivePlacement(
-  document: ComposeDocument,
-  serverId: string | null | undefined,
-): ComposeDocument {
-  const normalized = stripComposePlacement(document)
-  const trimmed = typeof serverId === 'string' ? serverId.trim() : ''
-  if (!trimmed) return normalized
-
-  const existing = normalized.data[TURBOPANEL_EXTENSION_KEY]
-  const rest = isRecord(existing) ? { ...existing } : {}
-  const data = {
-    ...normalized.data,
-    [TURBOPANEL_EXTENSION_KEY]: {
-      ...rest,
-      placement: { server_id: trimmed },
-    },
-  }
-  const keyOrder = [...normalized.presentation.keyOrder]
-  if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
-    keyOrder.push(TURBOPANEL_EXTENSION_KEY)
-  }
-
-  return {
-    version: 1,
-    data,
-    presentation: buildPresentation(normalized.presentation, {
-      keyOrder,
-      comments: { ...normalized.presentation.comments },
-    }),
-  }
-}
-
 export function readComposeEditorView(
   document: ComposeDocument,
 ): ComposeEditorView | null {
@@ -314,12 +286,16 @@ export function setComposeEditorView(
 }
 
 /**
- * Fields managed outside the YAML textarea: placement (Server control).
+ * Compose document for the YAML editor surface: native Docker Compose only.
+ * Every `x-turbopanel` field (top-level and per-service) is managed by the
+ * TurboPanel UI (Services tab / Server control) and is hidden from the text
+ * surface. Placement is stripped as input sanitization first; the rest of the
+ * extension tree is removed via {@link hideComposeTurbopanelExtensions}.
  * Editor view lives in `presentation.editorView` and is not part of compose YAML.
  */
 export function stripComposeManagedExtension(
   document: ComposeDocument,
 ): ComposeDocument {
-  return stripComposePlacement(document)
+  return hideTurboExtensions(stripComposePlacement(document)).document
 }
 

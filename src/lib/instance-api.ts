@@ -44,7 +44,6 @@ export const DEV_SYNC_WEB_AVAILABLE = false;
 
 export type SessionInfo = {
   userId: string | null;
-  username: string | null;
   email: string | null;
   role: string | null;
   /** Deno self-hosted only — absent on Workers. */
@@ -96,7 +95,6 @@ export async function fetchSession(): Promise<SessionInfo | null> {
   const body = await response.json() as SessionInfo & { ok: true };
   return {
     userId: body.userId ?? null,
-    username: body.username ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
     ...(body.needsInstall === undefined
@@ -106,16 +104,15 @@ export async function fetchSession(): Promise<SessionInfo | null> {
 }
 
 export async function signIn(
-  username: string,
+  email: string,
   password: string,
 ): Promise<SessionInfo> {
   const body = await apiFetch<SessionInfo & { ok: true }>(`${CLIENT_API}/auth/sign-in`, {
     method: "POST",
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
   return {
     userId: body.userId ?? null,
-    username: body.username ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
     ...(body.needsInstall === undefined
@@ -529,7 +526,6 @@ export async function completeInstall(body: {
   );
   return {
     userId: response.userId ?? null,
-    username: response.username ?? null,
     email: response.email ?? null,
     role: response.role ?? null,
     needsInstall: false,
@@ -905,9 +901,6 @@ export type ServiceOptions = {
   postDeployCommand?: string;
   build?: {
     disableCache?: boolean;
-  };
-  container?: {
-    name?: string;
   };
   operations?: {
     stopGracePeriodSeconds?: number;
@@ -1356,6 +1349,7 @@ export async function createService(
 export async function updateService(
   id: string,
   body: {
+    displayName?: string
     options?: ServiceOptions
     metadata?: Record<string, unknown> | null
   },

@@ -30,7 +30,11 @@ export type ComposePresentation = {
   documentCommentBefore?: string
   /** Trailing `#` lines after the document root (`Document.comment`). */
   documentComment?: string
-  /** Editor | Visual tab preference — presentation only, never written to compose YAML. */
+  /**
+   * Compose (`editor`) | Services form-cards (`visual`) tab preference —
+   * presentation only, never written to compose YAML. Id `visual` is legacy;
+   * UI label is Services so "Visual" can later mean a topology/canvas tab.
+   */
   editorView?: ComposeEditorView
 }
 

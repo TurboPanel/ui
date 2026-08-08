@@ -1,5 +1,5 @@
 /**
- * Split / join Compose `image:` references for the Visual editor.
+ * Split / join Compose `image:` references for the Services form editor.
  *
  * Format (OCI / Docker distribution reference):
  *   [registry[:port]/]<image>[:tag][@digest]

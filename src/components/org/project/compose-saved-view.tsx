@@ -6,6 +6,7 @@ import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import {
   composeDocumentToYaml,
   formatComposeSummaryChips,
+  hideComposeTurbopanelExtensions,
   isBlankComposeData,
   normalizeCompose,
   summarizeComposeDocument,
@@ -145,7 +146,7 @@ function SummaryChips({
 
 /**
  * Read-only saved-compose card for Overview: summary chips + YAML (and
- * optional running-service status). Edit mounts the Compose/Visual editor.
+ * optional running-service status). Edit mounts the Compose/Services editor.
  */
 export function ComposeSavedView({
   title,
@@ -182,7 +183,11 @@ export function ComposeSavedView({
 }>) {
   const normalized = normalizeCompose(document)
   const blank = isBlankComposeData(normalized.data)
-  const yaml = blank ? '' : composeDocumentToYaml(normalized)
+  const yaml = blank
+    ? ''
+    : composeDocumentToYaml(
+        hideComposeTurbopanelExtensions(normalized).document,
+      )
 
   return (
     <ComposeEditorChrome

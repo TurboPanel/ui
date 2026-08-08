@@ -9,7 +9,7 @@ export function AdminHeader({
   onMenuPress,
 }: Readonly<{ onMenuPress?: () => void }>) {
   const { session, signOut } = useAuth()
-  const userLabel = session?.email ?? session?.username
+  const userLabel = session?.email
 
   return (
     <GlassSurface style={styles.header} intensity="strong">

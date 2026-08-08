@@ -157,6 +157,43 @@ function FieldHeader({
   )
 }
 
+function ContainerNameField({
+  value,
+  disabled,
+  onChange,
+  onRemove,
+}: Readonly<{
+  value: unknown
+  disabled: boolean
+  onChange: (containerName: string) => void
+  onRemove: () => void
+}>) {
+  const text = typeof value === 'string' ? value : ''
+  return (
+    <View style={styles.fieldBlock}>
+      <FieldHeader
+        label="Container name"
+        onRemove={onRemove}
+        disabled={disabled}
+      />
+      <TextInput
+        value={text}
+        onChangeText={onChange}
+        editable={!disabled}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="Explicit Docker container_name"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>
+        Sets Compose container_name. Leave blank / remove so project naming
+        (uuid or Docker defaults) applies at deploy.
+      </Text>
+    </View>
+  )
+}
+
 function RestartField({
   value,
   disabled,
@@ -500,6 +537,9 @@ export function ComposeVisualServiceCard({
     !traditional && serviceHasVisualField(service, visualFieldById('ports'))
   const showBuild =
     !traditional && serviceHasVisualField(service, visualFieldById('build'))
+  const showContainerName =
+    !traditional &&
+    serviceHasVisualField(service, visualFieldById('container_name'))
   const hasInlineBuild = parseComposeBuild(service.build).kind === 'inline'
   const showRegistryAdd = !traditional && !registryOpen
   const hasAddChips = addable.length > 0 || showRegistryAdd
@@ -688,6 +728,17 @@ export function ComposeVisualServiceCard({
           disabled={saving}
           onChange={(restart) => onPatchService({ restart })}
           onRemove={() => onClearField('restart')}
+        />
+      ) : null}
+
+      {showContainerName ? (
+        <ContainerNameField
+          value={service.container_name}
+          disabled={saving}
+          onChange={(containerName) =>
+            onPatchService({ container_name: containerName })
+          }
+          onRemove={() => onClearField('container_name')}
         />
       ) : null}
 

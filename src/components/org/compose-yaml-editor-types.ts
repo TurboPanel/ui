@@ -13,7 +13,7 @@ export type ComposeYamlEditorProps = Readonly<{
   onChangeText: (value: string) => void
   /**
    * Drop the editor's own border/radius when nested inside a shared chrome
-   * shell (e.g. Editor/Visual tab strip above the surface).
+   * shell (e.g. Compose/Services tab strip above the surface).
    */
   embedded?: boolean
   /**

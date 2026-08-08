@@ -24,7 +24,11 @@ import {
 } from '@/lib/queries/commands'
 import { useContainers, useServices } from '@/lib/queries'
 import { useRestartSystemComponent } from '@/lib/queries/system'
-import { composeDocumentToYaml } from '@/lib/compose/convert'
+import {
+  composeDocumentToYaml,
+  hideComposeTurbopanelExtensions,
+  normalizeCompose,
+} from '@/lib/compose'
 import {
   isSystemOperateComponent,
   SYSTEM_WORKSPACE_DESCRIPTION,
@@ -274,7 +278,9 @@ export function SystemProjectOverviewPanel() {
       selectedEnvironment?.options?.compose ?? project?.options?.compose
     if (!doc) return null
     try {
-      return composeDocumentToYaml(doc)
+      return composeDocumentToYaml(
+        hideComposeTurbopanelExtensions(normalizeCompose(doc)).document,
+      )
     } catch {
       return null
     }

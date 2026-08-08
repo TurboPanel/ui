@@ -21,12 +21,14 @@ import type {
 import {
   blockingComposeLintIssues,
   composeDocumentToYaml,
+  hideComposeTurbopanelExtensions,
+  hiddenTraditionalWebServiceNames,
   isBlankComposeData,
   lintComposeYaml,
   normalizeCompose,
   readComposeEditorView,
+  restoreComposeTurbopanelExtensions,
   setComposeEditorView,
-  stripComposeManagedExtension,
   stripComposePlacement,
   yamlToComposeDocument,
   type ComposeDocument,
@@ -73,6 +75,18 @@ function serviceCountLabel(count: number): string {
 
 function countComposeServices(document: ComposeDocument): number {
   return Object.keys(servicesFrom(document)).length
+}
+
+/**
+ * YAML surface for the Compose tab / lint line numbers: native Docker Compose
+ * only. Full document stays in `draft` (extensions intact for Services tab).
+ */
+function visibleYaml(doc: ComposeDocument): string {
+  return composeDocumentToYaml(hideComposeTurbopanelExtensions(doc).document)
+}
+
+function fullYaml(doc: ComposeDocument): string {
+  return composeDocumentToYaml(doc)
 }
 
 function saveButtonLabel(saving: boolean): string {
@@ -154,8 +168,10 @@ function ComposeLintPanel({
 const LINT_DEBOUNCE_MS = 150
 
 /**
- * Compose / Visual mode tabs — quiet underline tabs on the surface header
+ * Compose / Services mode tabs — quiet underline tabs on the surface header
  * (distinct from the Project/env segment buttons on the right).
+ * Internal view id remains `visual` (form cards); leave the word "Visual"
+ * free for a future canvas/topology tab.
  */
 export function ComposeEditorViewTabs({
   value,
@@ -168,7 +184,7 @@ export function ComposeEditorViewTabs({
     <View style={styles.surfaceTabList} accessibilityRole="tablist">
       {([
         ['editor', 'Compose', ComposeEditorIcon],
-        ['visual', 'Visual', ComposeVisualIcon],
+        ['visual', 'Services', ComposeVisualIcon],
       ] as const).map(([entry, label, Icon]) => {
         const active = value === entry
         const tone = active ? colors.text : colors.textMuted
@@ -202,7 +218,7 @@ export function ComposeEditorViewTabs({
 
 /**
  * Shared editor chrome: bordered compose surface with an optional header row
- * (Compose/Visual tabs + Project/env buttons) and the editor body.
+ * (Compose/Services tabs + Project/env buttons) and the editor body.
  * Used by the compose editor and the started-status shell.
  */
 export function ComposeEditorChrome({
@@ -274,7 +290,7 @@ export function ComposeEditorSection({
   /** Debounced draft updates; `null` while editor YAML is unparseable. */
   onDraftChange?: (document: ComposeDocument | null) => void
   /**
-   * Hide title / service count. Compose/Visual and Project/env share the
+   * Hide title / service count. Compose/Services and Project/env share the
    * editor surface header row.
    */
   hideHeader?: boolean
@@ -287,14 +303,20 @@ export function ComposeEditorSection({
   const [tab, setTab] = useState<EditorTab>(
     () => readComposeEditorView(source) ?? defaultView ?? 'editor',
   )
+  // Full document (x-turbopanel intact). YAML tab shows visibleYaml(draft) only.
+  // Renaming or deleting a service in the Compose tab drops that service's
+  // TurboPanel metadata (shadow is keyed by service name); renames on the
+  // Services tab keep it because they move the whole service object.
   const [draft, setDraft] = useState<ComposeDocument>(() =>
-    stripComposeManagedExtension(source),
+    stripComposePlacement(source),
   )
   const [yaml, setYaml] = useState(() =>
-    composeDocumentToYaml(stripComposeManagedExtension(source)),
+    visibleYaml(stripComposePlacement(source)),
   )
+  // Baseline is the full document so Services-tab-only edits (e.g. description)
+  // still mark the form dirty.
   const [baselineYaml, setBaselineYaml] = useState(() =>
-    composeDocumentToYaml(stripComposeManagedExtension(source)),
+    fullYaml(stripComposePlacement(source)),
   )
   const [error, setError] = useState<string | null>(null)
   const [lintYaml, setLintYaml] = useState('')
@@ -307,21 +329,31 @@ export function ComposeEditorSection({
   const onDraftChangeRef = useRef(onDraftChange)
   onDraftChangeRef.current = onDraftChange
 
+  const currentDocument = (): ComposeDocument => {
+    if (tab === 'visual') {
+      return draft
+    }
+    // Platform shadow re-attaches extensions the YAML tab never showed.
+    return restoreComposeTurbopanelExtensions(
+      yamlToComposeDocument(yaml),
+      hideComposeTurbopanelExtensions(draft).hidden,
+    )
+  }
+
   useEffect(() => {
-    const visible = stripComposeManagedExtension(normalizeCompose(document))
-    const serialized = composeDocumentToYaml(visible)
-    setDraft(visible)
-    setYaml(serialized)
-    setBaselineYaml(serialized)
-    onDraftChangeRef.current?.(visible)
+    const full = stripComposePlacement(normalizeCompose(document))
+    setDraft(full)
+    setYaml(visibleYaml(full))
+    setBaselineYaml(fullYaml(full))
+    onDraftChangeRef.current?.(full)
     // Tab preference is loaded on mount (and on remount when environment changes).
     // Do not reset it here — placement saves refresh `document` and would wipe an
-    // unsaved Editor/Visual switch.
+    // unsaved Compose/Services tab switch.
   }, [document])
 
   useEffect(() => {
     if (tab !== 'editor') {
-      setLintYaml(composeDocumentToYaml(draft))
+      setLintYaml(visibleYaml(draft))
       onDraftChangeRef.current?.(draft)
       return
     }
@@ -329,7 +361,10 @@ export function ComposeEditorSection({
       setLintYaml(yaml)
       try {
         onDraftChangeRef.current?.(
-          stripComposeManagedExtension(yamlToComposeDocument(yaml)),
+          restoreComposeTurbopanelExtensions(
+            yamlToComposeDocument(yaml),
+            hideComposeTurbopanelExtensions(draft).hidden,
+          ),
         )
       } catch {
         onDraftChangeRef.current?.(null)
@@ -382,9 +417,9 @@ export function ComposeEditorSection({
   }
 
   const updateDraft = (next: ComposeDocument) => {
-    const visible = stripComposeManagedExtension(next)
-    setDraft(visible)
-    setYaml(composeDocumentToYaml(visible))
+    // Keep full next document; Services-tab extension edits stay out of YAML text.
+    setDraft(next)
+    setYaml(visibleYaml(next))
     setServiceNameDrafts({})
     setError(null)
     setShowSaveLint(false)
@@ -395,11 +430,13 @@ export function ComposeEditorSection({
       if (entry === tab) return
       if (tab === 'editor' && entry !== 'editor') {
         try {
-          const parsed = stripComposeManagedExtension(
+          // Compose → Services: parse YAML and re-attach shadow extensions.
+          const parsed = restoreComposeTurbopanelExtensions(
             yamlToComposeDocument(yaml),
+            hideComposeTurbopanelExtensions(draft).hidden,
           )
           setDraft(parsed)
-          setYaml(composeDocumentToYaml(parsed))
+          setYaml(visibleYaml(parsed))
           setError(null)
         } catch (err) {
           setError(
@@ -409,7 +446,7 @@ export function ComposeEditorSection({
         }
       }
       if (entry === 'editor' && tab === 'visual') {
-        setYaml(composeDocumentToYaml(draft))
+        setYaml(visibleYaml(draft))
       }
       setTab(entry)
     },
@@ -425,12 +462,11 @@ export function ComposeEditorSection({
 
   const handleSave = async () => {
     try {
-      const edited = tab === 'editor' ? yamlToComposeDocument(yaml) : draft
+      const edited = currentDocument()
       const next = documentForSave(edited, tab)
+      // Blocking lint on full document YAML — matches instance validateComposeDocument.
       const blocking = blockingComposeLintIssues(
-        lintComposeYaml(
-          composeDocumentToYaml(stripComposeManagedExtension(next)),
-        ),
+        lintComposeYaml(composeDocumentToYaml(next)),
       )
       if (blocking.length > 0) {
         setShowSaveLint(true)
@@ -441,7 +477,7 @@ export function ComposeEditorSection({
       setShowSaveLint(false)
       await onSave(next)
       updateDraft(next)
-      setBaselineYaml(composeDocumentToYaml(stripComposeManagedExtension(next)))
+      setBaselineYaml(fullYaml(next))
     } catch (err) {
       setShowSaveLint(true)
       setError(err instanceof Error ? err.message : 'Compose YAML is invalid')
@@ -564,8 +600,16 @@ export function ComposeEditorSection({
   }
 
   const lintIssues = useMemo<ComposeLintIssue[]>(() => {
-    const lintSource = tab === 'visual' ? composeDocumentToYaml(draft) : lintYaml
-    return lintComposeYaml(lintSource)
+    // Lint the *visible* text so line numbers match the textarea. Traditional-
+    // web service kinds live only on the full draft shadow when hidden.
+    const lintSource = tab === 'visual' ? visibleYaml(draft) : lintYaml
+    const traditionalWebServices = hiddenTraditionalWebServiceNames(
+      hideComposeTurbopanelExtensions(draft).hidden,
+    )
+    return lintComposeYaml(lintSource, {
+      traditionalWebServices,
+      managedExtensionHidden: true,
+    })
   }, [tab, lintYaml, draft])
   const blockingLintIssues = useMemo(
     () => blockingComposeLintIssues(lintIssues),
@@ -580,8 +624,16 @@ export function ComposeEditorSection({
     () => tab === 'editor' && canFixComposeYamlIndentation(lintYaml),
     [tab, lintYaml],
   )
-  const currentYaml = tab === 'editor' ? yaml : composeDocumentToYaml(draft)
-  const isDirty = currentYaml !== baselineYaml
+  // Dirty vs full-document baseline (not visible YAML).
+  const isDirty = useMemo(() => {
+    try {
+      const current =
+        tab === 'visual' ? draft : currentDocument()
+      return fullYaml(current) !== baselineYaml
+    } catch {
+      return yaml !== visibleYaml(draft)
+    }
+  }, [tab, draft, yaml, baselineYaml])
   // Blank project/environment drafts are valid to save; deploy (not save)
   // requires a non-empty merged compose.
   const isBlankDraft = useMemo(() => {

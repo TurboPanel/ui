@@ -4,7 +4,6 @@ import type { SessionInfo } from '@/lib/instance-api'
 
 const session: SessionInfo = {
   userId: 'user-1',
-  username: null,
   email: 'admin@example.com',
   role: 'superadmin',
 }

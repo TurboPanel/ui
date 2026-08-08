@@ -1,9 +1,9 @@
 /**
- * Optional service fields for the Visual compose editor.
+ * Optional service fields for the Services (form-card) compose editor.
  *
  * Flip {@link VisualFieldDef.offerAdd} to expose a field as an "Add …" button.
  * Fields already present on a service (e.g. from YAML) still render even when
- * `offerAdd` is false so Editor ↔ Visual round-trips stay lossless.
+ * `offerAdd` is false so Compose ↔ Services round-trips stay lossless.
  *
  * Restart values follow the Compose Specification:
  * https://compose-spec.github.io/compose-spec/05-services.html#restart
@@ -11,7 +11,7 @@
 
 import { DEFAULT_INLINE_DOCKERFILE } from './build-ref'
 
-export type VisualFieldId = 'restart' | 'ports' | 'build'
+export type VisualFieldId = 'restart' | 'ports' | 'build' | 'container_name'
 
 export type VisualFieldDef = {
   id: VisualFieldId
@@ -24,7 +24,7 @@ export type VisualFieldDef = {
 }
 
 /**
- * Catalog of Visual-managed optional fields. Order = Add-button order.
+ * Catalog of Services-tab optional fields. Order = Add-button order.
  * Only entries with `offerAdd: true` appear as buttons.
  */
 export const VISUAL_SERVICE_FIELDS: readonly VisualFieldDef[] = [
@@ -41,6 +41,13 @@ export const VISUAL_SERVICE_FIELDS: readonly VisualFieldDef[] = [
     label: 'Ports',
     offerAdd: false,
     defaultValue: [],
+  },
+  {
+    id: 'container_name',
+    key: 'container_name',
+    label: 'Container name',
+    offerAdd: true,
+    defaultValue: '',
   },
   {
     id: 'build',

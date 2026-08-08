@@ -16,8 +16,8 @@ import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   composeDocumentToYaml,
+  hideComposeTurbopanelExtensions,
   mergeComposeOverlay,
-  withEffectivePlacement,
 } from '@/lib/compose'
 import { colors, layout, spacing } from '@/lib/theme'
 
@@ -35,6 +35,7 @@ export function PreviewDeploymentModal({
   environmentLabel,
   canManage,
   placementServerId,
+  placementServerLabel,
   projectCompose,
   environmentCompose,
   deploying = false,
@@ -48,6 +49,8 @@ export function PreviewDeploymentModal({
   environmentLabel?: string
   canManage: boolean
   placementServerId: string | null
+  /** Human-readable target server when known; falls back to id in UI. */
+  placementServerLabel?: string | null
   projectCompose: unknown
   environmentCompose?: unknown
   deploying?: boolean
@@ -68,10 +71,9 @@ export function PreviewDeploymentModal({
   )
 
   const mergedYaml = composeDocumentToYaml(
-    withEffectivePlacement(
+    hideComposeTurbopanelExtensions(
       mergeComposeOverlay(projectCompose, environmentCompose),
-      placementServerId,
-    ),
+    ).document,
   )
 
   const handleClose = () => {
@@ -82,6 +84,8 @@ export function PreviewDeploymentModal({
   const subtitle = environmentLabel
     ? `Review what will run on ${environmentLabel}, then deploy.`
     : 'Review what will run, then deploy.'
+  const targetServerDisplay =
+    placementServerLabel?.trim() || placementServerId
 
   return (
     <Modal
@@ -100,6 +104,11 @@ export function PreviewDeploymentModal({
         <View style={[styles.panel, isCompact && styles.panelSheet]}>
           <Text style={styles.title}>Preview Deployment</Text>
           <Text style={styles.copy}>{subtitle}</Text>
+          {placementServerId && targetServerDisplay ? (
+            <Text style={styles.targetServer}>
+              Target server: {targetServerDisplay}
+            </Text>
+          ) : null}
 
           <View style={orgPanelStyles.segmentGroup}>
             {(
@@ -233,6 +242,11 @@ const styles = StyleSheet.create({
     color: colors.textBody,
     fontSize: 14,
     lineHeight: 20,
+  },
+  targetServer: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
   },
   previewScroll: {
     flexGrow: 0,

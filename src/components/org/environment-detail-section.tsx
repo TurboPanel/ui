@@ -58,6 +58,7 @@ import { useIps } from '@/lib/queries/topology'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
+  hideComposeTurbopanelExtensions,
   hostingDockerBridgeHint,
   hostingPathPrefixHint,
   hostingPhpSectionCopy,
@@ -68,7 +69,6 @@ import {
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
   stripComposePlacement,
-  withEffectivePlacement,
   type HostingServiceContext,
 } from '@/lib/compose'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -1113,7 +1113,9 @@ function EnvironmentDeployChromePanels({
         <TextInput
           editable={false}
           multiline
-          value={composeDocumentToRuntimeYaml(mergedCompose)}
+          value={composeDocumentToRuntimeYaml(
+            hideComposeTurbopanelExtensions(mergedCompose).document,
+          )}
           style={styles.preview}
           textAlignVertical="top"
         />
@@ -1661,14 +1663,11 @@ export function EnvironmentDetailBody({
     !envServerId && Boolean(projectDefaultServerId)
   const mergedCompose = useMemo(
     () =>
-      withEffectivePlacement(
-        mergeComposeOverlay(
-          stripComposePlacement(normalizeCompose(projectCompose)),
-          environment?.options?.compose,
-        ),
-        placementServerId,
+      mergeComposeOverlay(
+        stripComposePlacement(normalizeCompose(projectCompose)),
+        environment?.options?.compose,
       ),
-    [environment?.options?.compose, projectCompose, placementServerId],
+    [environment?.options?.compose, projectCompose],
   )
   const serviceNames = useMemo(
     () => composeServiceNames(mergedCompose),
@@ -1919,6 +1918,11 @@ export function EnvironmentDetailBody({
           }
           canManage={canManage}
           placementServerId={placementServerId}
+          placementServerLabel={
+            pinnedServer
+              ? serverLabel(pinnedServer)
+              : placementServerId
+          }
           projectCompose={projectCompose}
           environmentCompose={environment.options?.compose}
           deploying={deployEnvironmentMutation.isPending}

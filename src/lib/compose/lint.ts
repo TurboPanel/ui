@@ -19,6 +19,26 @@ export type ComposeLintIssue = {
   line?: number
 }
 
+/**
+ * Optional UI-editor-only flags. The zero-arg lint still mirrors instance —
+ * these options never affect server-side validation of the full document.
+ */
+export type ComposeLintOptions = {
+  /**
+   * Service names to treat as traditional-web when the visible text no longer
+   * carries `x-turbopanel.serviceKind` (hidden by the YAML surface).
+   */
+  traditionalWebServices?: readonly string[]
+  /**
+   * When true, warn on any author-typed `x-turbopanel` key — the block is
+   * managed by TurboPanel and ignored/restored from the platform shadow.
+   */
+  managedExtensionHidden?: boolean
+}
+
+const MANAGED_EXTENSION_WARNING =
+  'x-turbopanel is managed by TurboPanel, editable on the Services tab, and ignored here'
+
 /** Top-level Compose Specification keys. `x-*` extensions are always allowed. */
 const TOP_LEVEL_KEYS = new Set([
   'configs',
@@ -224,12 +244,68 @@ function serviceIsTraditionalWeb(valueNode: YAMLMap): boolean {
   return false
 }
 
+/**
+ * Whether missing image/build is allowed. When the managed extension is hidden
+ * from YAML, only the shadow-backed name list counts — author-typed
+ * `x-turbopanel.serviceKind` is ignored on save and must not suppress lint.
+ */
+function isTraditionalWebForLint(
+  name: string,
+  valueNode: YAMLMap,
+  options?: ComposeLintOptions,
+): boolean {
+  if (options?.traditionalWebServices?.includes(name)) return true
+  if (options?.managedExtensionHidden) return false
+  return serviceIsTraditionalWeb(valueNode)
+}
+
+function lintServiceKeys(
+  path: string,
+  valueNode: YAMLMap,
+  lineCounter: LineCounter,
+  issues: ComposeLintIssue[],
+  options?: ComposeLintOptions,
+): { hasImage: boolean; hasBuild: boolean } {
+  let hasImage = false
+  let hasBuild = false
+  for (const item of valueNode.items) {
+    const key = stringKey(item.key)
+    if (key === null) continue
+    if (key === 'image' && !isEmptyImageValue(item.value as Node)) {
+      hasImage = true
+    }
+    if (key === 'build') hasBuild = true
+    if (
+      options?.managedExtensionHidden &&
+      key === TURBOPANEL_SERVICE_EXTENSION_KEY
+    ) {
+      issues.push({
+        level: 'warning',
+        message: MANAGED_EXTENSION_WARNING,
+        path: `${path}.${key}`,
+        line: nodeLine(item.key as Node, lineCounter),
+      })
+      continue
+    }
+    if (!SERVICE_KEYS.has(key) && !isExtensionKey(key)) {
+      issues.push({
+        level: 'warning',
+        message: unknownKeyMessage(key, 'service', SERVICE_KEYS),
+        path: `${path}.${key}`,
+        line: nodeLine(item.key as Node, lineCounter),
+      })
+    }
+  }
+  return { hasImage, hasBuild }
+}
+
 function lintService(
   name: string,
   valueNode: Node | null | undefined,
   keyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
+  options?: ComposeLintOptions,
 ): void {
   const path = `services.${name}`
   if (!isMap(valueNode)) {
@@ -242,27 +318,15 @@ function lintService(
     return
   }
 
-  let hasImage = false
-  let hasBuild = false
-  for (const item of valueNode.items) {
-    const key = stringKey(item.key)
-    if (key === null) continue
-    if (key === 'image' && !isEmptyImageValue(item.value as Node)) {
-      hasImage = true
-    }
-    if (key === 'build') hasBuild = true
-    if (!SERVICE_KEYS.has(key) && !isExtensionKey(key)) {
-      issues.push({
-        level: 'warning',
-        message: unknownKeyMessage(key, 'service', SERVICE_KEYS),
-        path: `${path}.${key}`,
-        line: nodeLine(item.key as Node, lineCounter),
-      })
-    }
-  }
+  const { hasImage, hasBuild } = lintServiceKeys(
+    path,
+    valueNode,
+    lineCounter,
+    issues,
+    options,
+  )
 
-  const traditionalWeb = serviceIsTraditionalWeb(valueNode)
-  if (!traditionalWeb && !hasImage && !hasBuild) {
+  if (!isTraditionalWebForLint(name, valueNode, options) && !hasImage && !hasBuild) {
     issues.push({
       level: 'error',
       message: `Service "${name}" must define "image" or "build"`,
@@ -277,6 +341,7 @@ function lintServices(
   servicesKeyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
+  options?: ComposeLintOptions,
 ): void {
   if (!isMap(servicesNode)) {
     issues.push({
@@ -307,6 +372,7 @@ function lintServices(
       nodeLine(item.key as Node, lineCounter),
       lineCounter,
       issues,
+      options,
     )
   }
 }
@@ -315,6 +381,7 @@ function lintTopLevel(
   root: YAMLMap,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
+  options?: ComposeLintOptions,
 ): void {
   let servicesItem: (typeof root.items)[number] | null = null
   for (const item of root.items) {
@@ -322,6 +389,18 @@ function lintTopLevel(
     if (key === null) continue
     if (key === 'services') {
       servicesItem = item
+      continue
+    }
+    if (
+      options?.managedExtensionHidden &&
+      key === TURBOPANEL_SERVICE_EXTENSION_KEY
+    ) {
+      issues.push({
+        level: 'warning',
+        message: MANAGED_EXTENSION_WARNING,
+        path: key,
+        line: nodeLine(item.key as Node, lineCounter),
+      })
       continue
     }
     if (!TOP_LEVEL_KEYS.has(key) && !isExtensionKey(key)) {
@@ -348,6 +427,7 @@ function lintTopLevel(
     nodeLine(servicesItem.key as Node, lineCounter),
     lineCounter,
     issues,
+    options,
   )
 }
 
@@ -375,8 +455,14 @@ function compareLintIssues(a: ComposeLintIssue, b: ComposeLintIssue): number {
  * services missing image/build). Returns an empty list for empty input. Issues
  * are ordered by line number. Intended as an editor aid — it does not enforce
  * the full Compose Specification.
+ *
+ * Zero-arg signature mirrors instance `lintComposeYaml`. Optional `options` are
+ * UI-editor-only (hidden traditional-web services + managed-extension warnings).
  */
-export function lintComposeYaml(source: string): ComposeLintIssue[] {
+export function lintComposeYaml(
+  source: string,
+  options?: ComposeLintOptions,
+): ComposeLintIssue[] {
   const trimmed = source.trim()
   if (!trimmed) return []
 
@@ -407,7 +493,7 @@ export function lintComposeYaml(source: string): ComposeLintIssue[] {
   }
 
   const issues: ComposeLintIssue[] = []
-  lintTopLevel(root, lineCounter, issues)
+  lintTopLevel(root, lineCounter, issues, options)
   return issues.sort(compareLintIssues)
 }
 

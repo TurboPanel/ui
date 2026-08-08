@@ -3,12 +3,12 @@ import {
   composeDocumentToRuntimeYaml,
   composeDocumentToYaml,
   emptyComposeDocument,
+  hideComposeTurbopanelExtensions,
   normalizeCompose,
   readComposeEditorView,
   setComposeEditorView,
   stripComposeManagedExtension,
   stripComposePlacement,
-  withEffectivePlacement,
   yamlToComposeDocument,
 } from './index'
 
@@ -147,24 +147,34 @@ x-turbopanel:
     expect(composeDocumentToRuntimeYaml(stripped)).not.toContain(projectPin)
   })
 
-  it('withEffectivePlacement injects server_id for display YAML', () => {
-    const projectPin = '11111111-1111-4111-8111-111111111111'
+  it('stripComposeManagedExtension hides all x-turbopanel from the YAML surface', () => {
     const source = yamlToComposeDocument(`services:
+  site:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: nginx
   nginx:
     image: nginx:alpine
     x-turbopanel:
       serviceKind: container
+      description: Edge proxy
+x-turbopanel:
+  placement:
+    server_id: 11111111-1111-4111-8111-111111111111
 `)
-    const withPin = withEffectivePlacement(source, projectPin)
-    const yaml = composeDocumentToRuntimeYaml(withPin)
-    expect(yaml).toContain('x-turbopanel:')
-    expect(yaml).toContain('server_id:')
-    expect(yaml).toContain(projectPin)
-    expect(yaml).toContain('serviceKind: container')
-
-    const withoutPin = withEffectivePlacement(source, null)
-    expect(composeDocumentToRuntimeYaml(withoutPin)).not.toContain('server_id:')
-    expect(composeDocumentToRuntimeYaml(withoutPin)).toContain('serviceKind: container')
+    const visible = stripComposeManagedExtension(source)
+    const yaml = composeDocumentToYaml(visible)
+    expect(yaml).not.toContain('x-turbopanel')
+    expect(yaml).not.toContain('serviceKind')
+    expect(yaml).not.toContain('description')
+    expect(yaml).toContain('nginx:')
+    expect(yaml).toContain('site:')
+    // Full document still retained extensions before hide; managed strip is display-only.
+    expect(
+      (source.data.services as Record<string, unknown>).site,
+    ).toMatchObject({
+      'x-turbopanel': { serviceKind: 'traditional-web', engine: 'nginx' },
+    })
   })
 
   it('stores editor view in presentation only, not x-turbopanel', () => {
@@ -196,6 +206,9 @@ x-turbopanel:
     })
     expect(normalized.presentation.editorView).toBeUndefined()
     expect(normalized.data['x-turbopanel']).toEqual({ view: 'visual' })
+    expect(
+      composeDocumentToYaml(hideComposeTurbopanelExtensions(normalized).document),
+    ).not.toContain('x-turbopanel')
   })
 
 })

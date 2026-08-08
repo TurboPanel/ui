@@ -127,6 +127,73 @@ describe('lintComposeYaml', () => {
     expect(unknown?.message).toContain('did you mean "services"')
   })
 
+  it('allows traditional-web services without image or build when listed via options', () => {
+    const source = `services:
+  site: {}
+`
+    expect(
+      lintComposeYaml(source, { traditionalWebServices: ['site'] }),
+    ).toEqual([])
+  })
+
+  it('still errors for missing image when traditionalWebServices omits the service', () => {
+    const source = `services:
+  site: {}
+`
+    const issues = lintComposeYaml(source, {
+      traditionalWebServices: ['other'],
+    })
+    expect(
+      issues.some(
+        (issue) =>
+          issue.level === 'error' && issue.path === 'services.site',
+      ),
+    ).toBe(true)
+  })
+
+  it('warns when x-turbopanel is typed and managedExtensionHidden is set', () => {
+    const source = `services:
+  nginx:
+    image: nginx:alpine
+    x-turbopanel:
+      serviceKind: container
+x-turbopanel:
+  placement:
+    server_id: abc
+`
+    const issues = lintComposeYaml(source, { managedExtensionHidden: true })
+    const serviceExt = issues.find(
+      (issue) => issue.path === 'services.nginx.x-turbopanel',
+    )
+    const rootExt = issues.find((issue) => issue.path === 'x-turbopanel')
+    expect(serviceExt?.level).toBe('warning')
+    expect(serviceExt?.message).toContain('managed by TurboPanel')
+    expect(serviceExt?.line).toBe(4)
+    expect(rootExt?.level).toBe('warning')
+    expect(rootExt?.line).toBe(6)
+  })
+
+  it('still errors for missing image when author types traditional-web under managedExtensionHidden', () => {
+    const source = `services:
+  site:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: nginx
+`
+    const issues = lintComposeYaml(source, { managedExtensionHidden: true })
+    const managedWarning = issues.find(
+      (issue) => issue.path === 'services.site.x-turbopanel',
+    )
+    const missing = issues.find(
+      (issue) => issue.level === 'error' && issue.path === 'services.site',
+    )
+    expect(managedWarning?.level).toBe('warning')
+    expect(managedWarning?.message).toContain('managed by TurboPanel')
+    expect(missing).toBeDefined()
+    expect(missing?.message).toContain('image')
+    expect(missing?.message).toContain('build')
+  })
+
   it('allows x- extension keys', () => {
     const source = `x-turbopanel:
   placement:

@@ -58,12 +58,12 @@ export function useSignIn() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: ({
-      username,
+      email,
       password,
     }: {
-      username: string
+      email: string
       password: string
-    }) => signIn(username, password),
+    }) => signIn(email, password),
     onSuccess: async (session) => {
       queryClient.setQueryData<SessionInfo | null>(
         queryKeys.auth.session,

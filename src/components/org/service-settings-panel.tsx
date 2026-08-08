@@ -130,7 +130,6 @@ export function ServiceSettingsPanel({
   const updateMutation = useUpdateService(orgId, service?.id ?? '')
   const parsed = parseServiceOptions(service?.options)
   const [disableCache, setDisableCache] = useState(parsed.build?.disableCache === true)
-  const [containerName, setContainerName] = useState(parsed.container?.name ?? '')
   const [stopGrace, setStopGrace] = useState(
     parsed.operations?.stopGracePeriodSeconds?.toString() ?? '',
   )
@@ -160,7 +159,6 @@ export function ServiceSettingsPanel({
   useEffect(() => {
     const next = parseServiceOptions(service?.options)
     setDisableCache(next.build?.disableCache === true)
-    setContainerName(next.container?.name ?? '')
     setStopGrace(next.operations?.stopGracePeriodSeconds?.toString() ?? '')
     setMaxRestart(next.operations?.maxRestartAttempts?.toString() ?? '')
     setPreDeploy(next.preDeployCommand ?? '')
@@ -184,7 +182,6 @@ export function ServiceSettingsPanel({
     if (preDeploy.trim()) options.preDeployCommand = preDeploy.trim()
     if (postDeploy.trim()) options.postDeployCommand = postDeploy.trim()
     if (disableCache) options.build = { disableCache: true }
-    if (containerName.trim()) options.container = { name: containerName.trim() }
 
     const operations = buildOperationsOptions(stopGrace, maxRestart)
     if (operations) options.operations = operations
@@ -225,20 +222,6 @@ export function ServiceSettingsPanel({
         disabled={!canManage || saving}
         onToggle={() => setDisableCache((current) => !current)}
       />
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Container name</Text>
-        <TextInput
-          style={fieldInputStyle()}
-          value={containerName}
-          onChangeText={setContainerName}
-          placeholder="Optional override"
-          placeholderTextColor={colors.textDim}
-          editable={canManage && !saving}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
 
       <View style={styles.fieldRow}>
         <View style={styles.fieldHalf}>

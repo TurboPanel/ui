@@ -27,7 +27,7 @@ export function ComposeEditorIcon({ size = 16, color }: ComposeViewIconProps) {
   )
 }
 
-/** Outline 2×2 squares — Visual mode. */
+/** Outline 2×2 squares — Services (form-card) compose mode. */
 export function ComposeVisualIcon({ size = 16, color }: ComposeViewIconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
