@@ -13,6 +13,7 @@ import {
   HEADER_MENU_WIDTH,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
+import { UserIcon } from '@/components/icons/nav-icons'
 import { webPointer } from '@/components/org/org-panel-styles'
 import { colors, layout } from '@/lib/theme'
 
@@ -93,6 +94,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
           accessibilityLabel={`Account menu for ${email}`}
           accessibilityState={{ expanded: open }}
         >
+          <UserIcon size={15} color={colors.textDim} />
           <View style={headerMenuGroupStyles.triggerCopy}>
             <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
               {email}

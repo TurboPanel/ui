@@ -90,6 +90,32 @@ describe('lintComposeYaml', () => {
     expect(lintComposeYaml(source)).toEqual([])
   })
 
+  it('treats empty-string image as missing', () => {
+    const source = `services:
+  app:
+    image: ""
+`
+    const issues = lintComposeYaml(source)
+    const missing = issues.find(
+      (issue) => issue.level === 'error' && issue.path === 'services.app',
+    )
+    expect(missing).toBeDefined()
+    expect(missing?.message).toContain('image')
+    expect(missing?.message).toContain('build')
+  })
+
+  it('allows build-only when image is an empty string', () => {
+    const source = `services:
+  app:
+    image: ""
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM alpine
+`
+    expect(lintComposeYaml(source)).toEqual([])
+  })
+
   it('flags an unknown top-level key', () => {
     const source = `servces:
   nginx:

@@ -85,12 +85,14 @@ function EnvironmentInheritingBanner({
   canMutate,
   saving,
   inheritedServiceNames,
+  onCreateOverride,
   onStartFromProject,
 }: Readonly<{
   displayName: string
   canMutate: boolean
   saving: boolean
   inheritedServiceNames: string[]
+  onCreateOverride: () => void
   onStartFromProject: () => void
 }>) {
   const [acknowledged, setAcknowledged] = useState(false)
@@ -120,7 +122,10 @@ function EnvironmentInheritingBanner({
             label="Create override"
             tone="primary"
             disabled={saving}
-            onPress={() => setAcknowledged(true)}
+            onPress={() => {
+              setAcknowledged(true)
+              onCreateOverride()
+            }}
           />
           <QuietButton
             label="Start from project compose"
@@ -183,7 +188,12 @@ function EnvironmentOverridingBanner({
   )
 }
 
-export function ComposeScopeBanner() {
+export function ComposeScopeBanner({
+  onCreateOverride,
+}: Readonly<{
+  /** Enter environment overlay edit mode (Create override). */
+  onCreateOverride?: () => void
+}>) {
   const {
     orgId,
     project,
@@ -262,6 +272,7 @@ export function ComposeScopeBanner() {
         canMutate={canMutate}
         saving={saving}
         inheritedServiceNames={inheritedServiceNames}
+        onCreateOverride={() => onCreateOverride?.()}
         onStartFromProject={() => {
           void handleStartFromProject()
         }}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -16,7 +16,9 @@ import { EnvironmentDetailBody } from '@/components/org/environment-detail-secti
 import { StorageSection } from '@/components/org/storage-section'
 import { SystemProjectOverviewPanel } from '@/components/org/project/system-project-overview-panel'
 import {
+  isBlankComposeData,
   mergeComposeOverlay,
+  normalizeCompose,
   resolveComposeOverlayState,
   type ComposeDocument,
 } from '@/lib/compose'
@@ -48,6 +50,11 @@ function QuietButton({
       <Text style={styles.quietBtnText}>{label}</Text>
     </Pressable>
   )
+}
+
+/** True when project compose has nothing to preview yet (fresh create / cleared). */
+function isBlankComposeDocument(document: unknown): boolean {
+  return isBlankComposeData(normalizeCompose(document).data)
 }
 
 function ServicesPanelBody({
@@ -86,7 +93,7 @@ function ServicesPanelBody({
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
   const editTrailing = (
-    <QuietButton label="Cancel" onPress={onCancelEdit} />
+    <QuietButton label="Discard Changes" onPress={onCancelEdit} />
   )
 
   if (baseSelected) {
@@ -207,10 +214,37 @@ export function ComposeServicesTab() {
   )
   const [editing, setEditing] = useState(false)
   const canEdit = canManage && projectAllowsMutations
+  const projectComposeBlank = isBlankComposeDocument(
+    project?.options?.compose,
+  )
+  // After save/cancel of a blank draft, stay in view — blank is a valid
+  // saved state (deploy gates on merged compose, not on save).
+  const blankEditDismissedRef = useRef(false)
 
   useEffect(() => {
-    setEditing(false)
+    blankEditDismissedRef.current = false
   }, [baseSelected, selectedEnvironmentId])
+
+  useEffect(() => {
+    // Fresh project compose has nothing to preview — open the editor once.
+    if (
+      baseSelected &&
+      canEdit &&
+      projectComposeBlank &&
+      !blankEditDismissedRef.current
+    ) {
+      setEditing(true)
+      return
+    }
+    if (!baseSelected || !projectComposeBlank) {
+      setEditing(false)
+    }
+  }, [baseSelected, selectedEnvironmentId, canEdit, projectComposeBlank])
+
+  const leaveComposeEdit = useCallback(() => {
+    blankEditDismissedRef.current = true
+    setEditing(false)
+  }, [])
 
   const servicesEnabled =
     Boolean(selectedEnvironmentId) && !baseSelected && projectAllowsMutations
@@ -241,9 +275,9 @@ export function ComposeServicesTab() {
         setError(persistProjectCompose.actionError)
         return
       }
-      if (result.ok) setEditing(false)
+      if (result.ok) leaveComposeEdit()
     },
-    [persistProjectCompose, setError],
+    [persistProjectCompose, setError, leaveComposeEdit],
   )
 
   const handleSaveEnvironmentCompose = useCallback(
@@ -255,7 +289,7 @@ export function ComposeServicesTab() {
         setError(persistEnvironmentCompose.actionError)
         return
       }
-      if (result.ok) setEditing(false)
+      if (result.ok) leaveComposeEdit()
       await invalidateEnvironments()
       await Promise.all([
         servicesQuery.refetch(),
@@ -266,6 +300,7 @@ export function ComposeServicesTab() {
       selectedEnvironmentId,
       persistEnvironmentCompose,
       setError,
+      leaveComposeEdit,
       invalidateEnvironments,
       servicesQuery,
       containersQuery,
@@ -300,7 +335,7 @@ export function ComposeServicesTab() {
       ) : null}
 
       <View style={styles.overviewCompose}>
-        <ComposeScopeBanner />
+        <ComposeScopeBanner onCreateOverride={() => setEditing(true)} />
         <ServicesPanelBody
           baseSelected={baseSelected}
           project={project}
@@ -315,7 +350,7 @@ export function ComposeServicesTab() {
           editing={editing}
           canEdit={canEdit}
           onEdit={() => setEditing(true)}
-          onCancelEdit={() => setEditing(false)}
+          onCancelEdit={leaveComposeEdit}
           onSaveProjectCompose={handleSaveProjectCompose}
           onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
         />

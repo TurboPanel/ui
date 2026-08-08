@@ -6,6 +6,9 @@ export type ComposeServiceKind = 'container' | 'traditional-web'
 
 export type TraditionalWebEngine = 'apache' | 'nginx' | 'openlitespeed'
 
+/** Max length for operator-facing service description metadata. */
+export const SERVICE_DESCRIPTION_MAX_LENGTH = 500
+
 export type ComposeServiceTurbopanelExtension = {
   serviceKind?: ComposeServiceKind
   engine?: TraditionalWebEngine
@@ -14,6 +17,10 @@ export type ComposeServiceTurbopanelExtension = {
    * Default `public` when omitted for traditional-web.
    */
   root?: string
+  /**
+   * Optional human description (TurboPanel-only metadata; not used by Docker).
+   */
+  description?: string
 }
 
 const SERVICE_KINDS = new Set<ComposeServiceKind>(['container', 'traditional-web'])
@@ -56,6 +63,15 @@ export function parseServiceTurbopanelExtension(
     const root = value.root.trim()
     if (root.length > 0) extension.root = root
   }
+  if (typeof value.description === 'string') {
+    const description = value.description.trim()
+    if (
+      description.length > 0 &&
+      description.length <= SERVICE_DESCRIPTION_MAX_LENGTH
+    ) {
+      extension.description = description
+    }
+  }
 
   return extension
 }
@@ -87,10 +103,25 @@ export function patchServiceTurbopanelExtension(
     delete next.root
   }
 
+  // Empty string clears description so the extension can collapse when unused.
+  // Cap length so we never persist a value parseServiceTurbopanelExtension drops.
+  if (typeof next.description === 'string') {
+    let description = next.description.trim()
+    if (description.length === 0) {
+      delete next.description
+    } else {
+      if (description.length > SERVICE_DESCRIPTION_MAX_LENGTH) {
+        description = description.slice(0, SERVICE_DESCRIPTION_MAX_LENGTH)
+      }
+      next.description = description
+    }
+  }
+
   const cleaned: Record<string, unknown> = {}
   if (next.serviceKind) cleaned.serviceKind = next.serviceKind
   if (next.engine) cleaned.engine = next.engine
   if (next.root) cleaned.root = next.root
+  if (next.description) cleaned.description = next.description
 
   if (Object.keys(cleaned).length === 0) {
     const { [TURBOPANEL_SERVICE_EXTENSION_KEY]: _removed, ...rest } = service

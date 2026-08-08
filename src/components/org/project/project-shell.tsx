@@ -10,6 +10,7 @@ import {
   type TextStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { BreadcrumbChevron } from '@/components/header-chevron'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
@@ -19,6 +20,7 @@ import {
   ProjectSectionTabs,
   activeProjectTabFromPathname,
 } from '@/components/org/project/project-section-tabs'
+import { ProjectTitleIcon } from '@/components/org/project/project-title-icon'
 import { TrashIcon } from '@/components/org/project/trash-icon'
 import {
   isManagedProject,
@@ -236,36 +238,57 @@ function ProjectHeader({
 
   const saving = updateProject.isPending
   const showMutableChrome = canOwn && projectAllowsMutations
+  const projectsHref = `/${orgId}/projects` as Href
+  const crumbLinkStyle = StyleSheet.flatten([styles.crumbLink, webPointer])
 
   return (
     <View style={styles.header}>
-      <View style={styles.headerRow}>
-        {showMutableChrome ? (
-          <TextInput
-            value={editName}
-            onChangeText={setEditName}
-            onBlur={() => {
-              void saveName()
-            }}
-            onSubmitEditing={() => {
-              void saveName()
-            }}
-            placeholder="Project name"
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Project name"
-            style={[
-              styles.titleInput,
-              Platform.OS === 'web' ? titleInputWebStyle : null,
-            ]}
-          />
-        ) : (
-          <View style={styles.titleReadOnly}>
-            <Text style={styles.titleText} accessibilityRole="header">
-              {project.displayName?.trim() || 'Unnamed project'}
-            </Text>
-            {isSystemProject ? <PlatformBadge /> : null}
+      <View
+        style={styles.headerRow}
+        accessibilityRole="header"
+        accessibilityLabel="Project"
+      >
+        <View style={styles.breadcrumb} accessibilityRole="navigation">
+          <Link href={projectsHref} asChild>
+            <Pressable
+              style={crumbLinkStyle}
+              accessibilityRole="link"
+              accessibilityLabel="Projects"
+            >
+              <Text style={styles.crumbLinkText}>Projects</Text>
+            </Pressable>
+          </Link>
+          <BreadcrumbChevron size={12} color={colors.textMuted} />
+          <View style={styles.currentCrumb}>
+            <ProjectTitleIcon project={project} compact />
+            {showMutableChrome ? (
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                onBlur={() => {
+                  void saveName()
+                }}
+                onSubmitEditing={() => {
+                  void saveName()
+                }}
+                placeholder="Project name"
+                placeholderTextColor={colors.textMuted}
+                accessibilityLabel="Project name"
+                style={[
+                  styles.titleInput,
+                  Platform.OS === 'web' ? titleInputWebStyle : null,
+                ]}
+              />
+            ) : (
+              <View style={styles.titleReadOnly}>
+                <Text style={styles.titleText}>
+                  {project.displayName?.trim() || 'Unnamed project'}
+                </Text>
+                {isSystemProject ? <PlatformBadge /> : null}
+              </View>
+            )}
           </View>
-        )}
+        </View>
         {showScopeSelector ? <ProjectScopeSelector /> : null}
         {showManagedTrash && showMutableChrome ? (
           <ManagedProjectTrashButton
@@ -336,7 +359,6 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     !needsSetup &&
     activeTab !== 'setup'
 
-  const backStyle = StyleSheet.flatten([styles.backLink, webPointer])
   const rootPadding = {
     paddingBottom: Math.max(insets.bottom, spacing.md),
     paddingTop: Platform.OS === 'web' ? 0 : Math.max(insets.top - 8, 0),
@@ -354,16 +376,6 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
 
   return (
     <View style={[styles.root, rootPadding]}>
-      <Link href={`/${orgId}/projects` as Href} asChild>
-        <Pressable
-          style={backStyle}
-          accessibilityRole="link"
-          accessibilityLabel="Back to projects"
-        >
-          <Text style={styles.backLinkText}>← Projects</Text>
-        </Pressable>
-      </Link>
-
       <ProjectHeader
         showManagedTrash={managed}
         deletingProject={deletingProject}
@@ -411,17 +423,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.md,
   },
-  backLink: {
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingVertical: spacing.xs,
-  },
-  backLinkText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
-  },
   header: {
     gap: spacing.xs,
   },
@@ -431,9 +432,35 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  titleInput: {
+  breadcrumb: {
+    flex: 1,
+    minWidth: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  crumbLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    paddingRight: 2,
+  },
+  crumbLinkText: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  currentCrumb: {
     flex: 1,
     minWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  titleInput: {
+    flex: 1,
+    minWidth: 120,
     color: colors.text,
     fontSize: 24,
     fontWeight: '700',
@@ -443,7 +470,7 @@ const styles = StyleSheet.create({
   },
   titleReadOnly: {
     flex: 1,
-    minWidth: 160,
+    minWidth: 120,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -451,7 +478,7 @@ const styles = StyleSheet.create({
   },
   titleText: {
     flexShrink: 1,
-    minWidth: 120,
+    minWidth: 80,
     color: colors.text,
     fontSize: 24,
     fontWeight: '700',

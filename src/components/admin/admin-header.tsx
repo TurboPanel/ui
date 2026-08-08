@@ -1,40 +1,44 @@
-import { usePathname } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { HeaderUserAccountControl } from '@/components/header-account-controls'
+import { HeaderAdminAccountControls } from '@/components/header-account-controls'
+import { webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
-import { adminAreaFromPathname } from '@/lib/admin-navigation'
 import { colors, spacing } from '@/lib/theme'
 
 export function AdminHeader({
   onMenuPress,
 }: Readonly<{ onMenuPress?: () => void }>) {
-  const pathname = usePathname()
   const { session, signOut } = useAuth()
-  const match = adminAreaFromPathname(pathname)
-
-  const title = match ? match.area.label : 'Admin'
   const userLabel = session?.email ?? session?.username
 
   return (
     <GlassSurface style={styles.header} intensity="strong">
       <View style={styles.headerMain}>
         {onMenuPress ? (
-          <Pressable style={styles.menuButton} onPress={onMenuPress}>
-            <Text style={styles.menuButtonText}>Menu</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuButton,
+              pressed && styles.buttonPressed,
+              webPointer,
+            ]}
+            onPress={onMenuPress}
+            accessibilityRole="button"
+            accessibilityLabel="Open navigation menu"
+          >
+            <View style={styles.menuIcon}>
+              <View style={styles.menuBar} />
+              <View style={styles.menuBar} />
+              <View style={styles.menuBarShort} />
+            </View>
           </Pressable>
-        ) : null}
-        <View style={styles.titleBlock}>
-          <Text style={styles.title}>{title}</Text>
-          {match?.area.hint ? (
-            <Text style={styles.hint}>{match.area.hint}</Text>
-          ) : null}
-        </View>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <View style={styles.headerActions}>
         {session && userLabel ? (
-          <HeaderUserAccountControl email={userLabel} onSignOut={signOut} />
+          <HeaderAdminAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
       </View>
     </GlassSurface>
@@ -59,31 +63,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     flexShrink: 1,
+    flex: 1,
+  },
+  headerSpacer: {
+    flex: 1,
   },
   menuButton: {
     borderColor: colors.borderChip,
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
+    backgroundColor: colors.bgSecondary,
   },
-  menuButtonText: {
-    color: colors.textChip,
-    fontSize: 14,
-    fontWeight: '600',
+  menuIcon: {
+    width: 16,
+    gap: 3,
   },
-  titleBlock: {
-    gap: spacing.xs,
-    flexShrink: 1,
+  menuBar: {
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.textChip,
+    width: 16,
   },
-  title: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: '700',
+  menuBarShort: {
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.textChip,
+    width: 11,
   },
-  hint: {
-    color: colors.textDim,
-    fontSize: 13,
+  buttonPressed: {
+    opacity: 0.85,
   },
   headerActions: {
     flexDirection: 'row',

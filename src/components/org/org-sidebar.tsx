@@ -2,6 +2,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
+import {
+  AdminNavIcon,
+  OrgAreaIcon,
+} from '@/components/icons/nav-icons'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
@@ -45,6 +49,7 @@ export function OrgSidebar({
               ? pathname === projectsBase ||
                 pathname.startsWith(`${projectsBase}/`)
               : pathname === areaHref || pathname.startsWith(`${areaHref}/`)
+          const iconColor = areaActive ? chrome.accent : colors.textMuted
 
           return (
             <View key={area.id} style={styles.areaGroup}>
@@ -61,6 +66,7 @@ export function OrgSidebar({
                 }}
               >
                 {areaActive ? <View style={styles.areaActiveBar} /> : null}
+                <OrgAreaIcon areaId={area.id} size={16} color={iconColor} />
                 <Text
                   style={[
                     styles.areaLabel,
@@ -132,6 +138,10 @@ export function OrgSidebar({
             }}
           >
             {adminActive ? <View style={styles.areaActiveBar} /> : null}
+            <AdminNavIcon
+              size={16}
+              color={adminActive ? colors.text : colors.textMuted}
+            />
             <Text
               style={[
                 styles.adminLabel,
@@ -172,6 +182,7 @@ const styles = StyleSheet.create({
   areaItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     paddingVertical: 9,
     paddingHorizontal: spacing.md,
     borderRadius: 8,
@@ -252,6 +263,7 @@ const styles = StyleSheet.create({
   adminItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     paddingVertical: 9,
     paddingHorizontal: spacing.md,
     borderRadius: 8,

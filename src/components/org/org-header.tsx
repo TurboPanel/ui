@@ -1,10 +1,8 @@
-import { usePathname } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
-import { orgAreaFromPathname } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 
 export function OrgHeader({
@@ -14,22 +12,7 @@ export function OrgHeader({
   orgId: string
   onMenuPress?: () => void
 }>) {
-  const pathname = usePathname()
   const { session, signOut } = useAuth()
-  const match = orgAreaFromPathname(pathname)
-
-  let title = 'Dashboard'
-  let eyebrow: string | null = null
-  if (match?.subRoute) {
-    eyebrow = match.area.label
-    title = match.subRoute.label
-  } else if (match) {
-    title = match.area.label
-  } else if (pathname.includes('/workspaces')) {
-    title = 'Workspaces'
-  }
-
-  const hint = match?.subRoute?.hint ?? match?.area.hint
   const userLabel = session?.email ?? session?.username
 
   return (
@@ -52,20 +35,9 @@ export function OrgHeader({
               <View style={styles.menuBarShort} />
             </View>
           </Pressable>
-        ) : null}
-        <View style={styles.titleBlock}>
-          {eyebrow ? (
-            <Text style={orgPanelStyles.pageEyebrow}>{eyebrow}</Text>
-          ) : null}
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          {hint ? (
-            <Text style={styles.hint} numberOfLines={2}>
-              {hint}
-            </Text>
-          ) : null}
-        </View>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <View style={styles.headerActions}>
@@ -100,6 +72,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     flexShrink: 1,
     minWidth: 0,
+    flex: 1,
+  },
+  headerSpacer: {
+    flex: 1,
   },
   menuButton: {
     borderColor: colors.borderChip,
@@ -124,22 +100,6 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: colors.textChip,
     width: 11,
-  },
-  titleBlock: {
-    gap: 2,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  hint: {
-    color: colors.textDim,
-    fontSize: 12,
-    lineHeight: 16,
   },
   headerActions: {
     flexDirection: 'row',

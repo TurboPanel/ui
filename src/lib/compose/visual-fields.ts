@@ -9,7 +9,9 @@
  * https://compose-spec.github.io/compose-spec/05-services.html#restart
  */
 
-export type VisualFieldId = 'restart' | 'ports'
+import { DEFAULT_INLINE_DOCKERFILE } from './build-ref'
+
+export type VisualFieldId = 'restart' | 'ports' | 'build'
 
 export type VisualFieldDef = {
   id: VisualFieldId
@@ -39,6 +41,16 @@ export const VISUAL_SERVICE_FIELDS: readonly VisualFieldDef[] = [
     label: 'Ports',
     offerAdd: false,
     defaultValue: [],
+  },
+  {
+    id: 'build',
+    key: 'build',
+    label: 'Dockerfile',
+    offerAdd: true,
+    defaultValue: {
+      context: '.',
+      dockerfile_inline: DEFAULT_INLINE_DOCKERFILE,
+    },
   },
 ]
 

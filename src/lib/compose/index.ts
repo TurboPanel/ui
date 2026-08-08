@@ -69,6 +69,15 @@ export {
   parseComposeImageRef,
   patchComposeImageRef,
 } from './image-ref'
+export type { ComposeBuildRef } from './build-ref'
+export {
+  DEFAULT_INLINE_DOCKERFILE,
+  clearComposeBuildInline,
+  dockerfileHasFromInstruction,
+  emptyComposeBuildRef,
+  parseComposeBuild,
+  setComposeBuildInline,
+} from './build-ref'
 export type { ComposeOverlayState } from './overlay-state'
 export { resolveComposeOverlayState } from './overlay-state'
 export type {

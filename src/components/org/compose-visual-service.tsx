@@ -7,7 +7,15 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { DockerfileEditor } from '@/components/org/dockerfile-editor'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  clearComposeBuildInline,
+  DEFAULT_INLINE_DOCKERFILE,
+  dockerfileHasFromInstruction,
+  parseComposeBuild,
+  setComposeBuildInline,
+} from '@/lib/compose/build-ref'
 import {
   formatComposeImageRef,
   parseComposeImageRef,
@@ -28,6 +36,7 @@ import {
   isTraditionalWebComposeService,
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
+  SERVICE_DESCRIPTION_MAX_LENGTH,
   TRADITIONAL_WEB_ENGINE_OPTIONS,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
   type TraditionalWebEngine,
@@ -260,12 +269,14 @@ function ImageRefFields({
   value,
   disabled,
   registryOpen,
+  hasInlineBuild,
   onRegistryOpenChange,
   onChange,
 }: Readonly<{
   value: unknown
   disabled: boolean
   registryOpen: boolean
+  hasInlineBuild: boolean
   onRegistryOpenChange: (open: boolean) => void
   onChange: (image: string) => void
 }>) {
@@ -324,6 +335,12 @@ function ImageRefFields({
         autoCorrect={false}
         style={styles.input}
       />
+      {hasInlineBuild ? (
+        <Text style={styles.hint}>
+          With an inline Dockerfile, Image/Tag name the built image rather than
+          a registry pull and may be left blank.
+        </Text>
+      ) : null}
 
       {ref.digest ? (
         <>
@@ -345,6 +362,98 @@ function ImageRefFields({
         <Text style={styles.hint} selectable>
           image: {composed}
         </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function DockerfileField({
+  value,
+  disabled,
+  onPatch,
+  onClear,
+}: Readonly<{
+  value: unknown
+  disabled: boolean
+  onPatch: (build: Record<string, unknown>) => void
+  onClear: () => void
+}>) {
+  const buildRef = parseComposeBuild(value)
+
+  const handleRemove = () => {
+    // Path-based / external builds have no inline body to strip — drop the key.
+    if (buildRef.kind !== 'inline') {
+      onClear()
+      return
+    }
+    const next = clearComposeBuildInline(value)
+    if (next === undefined) {
+      onClear()
+      return
+    }
+    onPatch(next)
+  }
+
+  return (
+    <View style={styles.fieldBlock}>
+      <FieldHeader
+        label="Dockerfile"
+        onRemove={handleRemove}
+        disabled={disabled}
+      />
+
+      {buildRef.kind === 'inline' ? (
+        <>
+          <DockerfileEditor
+            value={buildRef.dockerfileInline}
+            editable={!disabled}
+            onChangeText={(text) => {
+              onPatch(setComposeBuildInline(value, text))
+            }}
+          />
+          <Text style={styles.hint}>
+            Build context is the deployment directory (context: .).
+          </Text>
+          {!dockerfileHasFromInstruction(buildRef.dockerfileInline) ? (
+            <Text style={styles.hintWarn}>
+              Dockerfile has no FROM instruction — the build will fail.
+            </Text>
+          ) : null}
+          <Text style={styles.hint}>
+            Edits are picked up on Cacheless redeploy or when Disable build
+            cache is enabled for this service in Service settings.
+          </Text>
+        </>
+      ) : null}
+
+      {buildRef.kind === 'external' ? (
+        <>
+          <Text style={styles.hint}>
+            This service uses an external build
+            {buildRef.context ? ` (context: ${buildRef.context}` : ''}
+            {buildRef.dockerfilePath
+              ? `${buildRef.context ? ', ' : ' ('}dockerfile: ${buildRef.dockerfilePath}`
+              : ''}
+            {buildRef.context || buildRef.dockerfilePath ? ')' : ''}. Edit the
+            Compose YAML to change path-based builds, or convert to an inline
+            Dockerfile below.
+          </Text>
+          <Pressable
+            style={styles.convertChip}
+            disabled={disabled}
+            onPress={() => {
+              onPatch(setComposeBuildInline(value, DEFAULT_INLINE_DOCKERFILE))
+            }}
+          >
+            <Text style={styles.convertChipText}>
+              Convert to inline Dockerfile
+            </Text>
+          </Pressable>
+        </>
+      ) : null}
+
+      {buildRef.kind === 'none' ? (
+        <Text style={styles.hint}>No build configuration.</Text>
       ) : null}
     </View>
   )
@@ -389,6 +498,9 @@ export function ComposeVisualServiceCard({
     !traditional && serviceHasVisualField(service, visualFieldById('restart'))
   const showPorts =
     !traditional && serviceHasVisualField(service, visualFieldById('ports'))
+  const showBuild =
+    !traditional && serviceHasVisualField(service, visualFieldById('build'))
+  const hasInlineBuild = parseComposeBuild(service.build).kind === 'inline'
   const showRegistryAdd = !traditional && !registryOpen
   const hasAddChips = addable.length > 0 || showRegistryAdd
 
@@ -415,7 +527,11 @@ export function ComposeVisualServiceCard({
       return
     }
     applyExtension({ serviceKind: 'container' })
-    if (typeof service.image !== 'string' || service.image.trim() === '') {
+    const hasBuild = Object.hasOwn(service, 'build')
+    if (
+      !hasBuild &&
+      (typeof service.image !== 'string' || service.image.trim() === '')
+    ) {
       onPatchService({ image: 'nginx:alpine' })
     }
   }
@@ -423,16 +539,52 @@ export function ComposeVisualServiceCard({
   return (
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.serviceHeader}>
+        <Text style={styles.serviceHeaderTitle}>Service</Text>
+        <Pressable onPress={onRemoveService} disabled={saving}>
+          <Text style={styles.removeText}>Remove</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.fieldBlock}>
+        <Text style={styles.label}>Name</Text>
         <TextInput
           value={nameDraft}
           onChangeText={onNameDraftChange}
           onEndEditing={(event) => onRename(event.nativeEvent.text)}
           editable={!saving}
-          style={styles.serviceNameInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="web, api, worker…"
+          placeholderTextColor={colors.textDim}
+          style={styles.input}
         />
-        <Pressable onPress={onRemoveService} disabled={saving}>
-          <Text style={styles.removeText}>Remove</Text>
-        </Pressable>
+      </View>
+
+      <View style={styles.fieldBlock}>
+        <Text style={styles.label}>Description</Text>
+        <TextInput
+          value={extension.description ?? ''}
+          onChangeText={(description) => {
+            if (description.length > SERVICE_DESCRIPTION_MAX_LENGTH) {
+              return
+            }
+            applyExtension({
+              description: description.trim() ? description : '',
+            })
+          }}
+          editable={!saving}
+          multiline
+          numberOfLines={3}
+          maxLength={SERVICE_DESCRIPTION_MAX_LENGTH}
+          textAlignVertical="top"
+          placeholder="Optional notes for operators"
+          placeholderTextColor={colors.textDim}
+          style={[styles.input, styles.descriptionInput]}
+        />
+        <Text style={styles.hint}>
+          TurboPanel-only metadata stored under x-turbopanel — not used by
+          Docker Compose.
+        </Text>
       </View>
 
       <View style={styles.fieldBlock}>
@@ -441,7 +593,10 @@ export function ComposeVisualServiceCard({
           value={traditional ? 'traditional-web' : 'container'}
           options={[
             { value: 'container', label: 'Container (Docker)' },
-            { value: 'traditional-web', label: 'Traditional web (host nginx/Apache/OLS)' },
+            {
+              value: 'traditional-web',
+              label: 'Traditional web (host nginx/Apache/OLS)',
+            },
           ]}
           disabled={saving}
           onChange={(value) => {
@@ -495,7 +650,8 @@ export function ComposeVisualServiceCard({
               style={styles.input}
             />
             <Text style={styles.hint}>
-              Relative path under the site directory on the server (default public).
+              Relative path under the site directory on the server (default
+              public).
             </Text>
           </View>
         </>
@@ -504,10 +660,27 @@ export function ComposeVisualServiceCard({
           value={service.image}
           disabled={saving}
           registryOpen={registryOpen}
+          hasInlineBuild={hasInlineBuild}
           onRegistryOpenChange={setRegistryOpen}
-          onChange={(image) => onPatchService({ image })}
+          onChange={(image) => {
+            // Blank image must omit the key (valid for inline-build services).
+            if (image.trim() === '') {
+              onClearField('image')
+              return
+            }
+            onPatchService({ image })
+          }}
         />
       )}
+
+      {showBuild ? (
+        <DockerfileField
+          value={service.build}
+          disabled={saving}
+          onPatch={(build) => onPatchService({ build })}
+          onClear={() => onClearField('build')}
+        />
+      ) : null}
 
       {showRestart ? (
         <RestartField
@@ -564,17 +737,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  serviceNameInput: {
-    color: colors.accent,
-    fontFamily: 'monospace',
-    fontSize: 13,
+  serviceHeaderTitle: {
+    color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '600',
-    flex: 1,
   },
   removeText: { color: colors.errorText, fontSize: 12, fontWeight: '600' },
   removeFieldText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
   label: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   hint: { color: colors.textDim, fontSize: 11, lineHeight: 16 },
+  hintWarn: { color: colors.pending, fontSize: 11, lineHeight: 16 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -584,6 +756,10 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  descriptionInput: {
+    minHeight: 72,
+    fontFamily: 'System',
   },
   fieldBlock: { gap: 6 },
   fieldHeader: {
@@ -606,6 +782,16 @@ const styles = StyleSheet.create({
   },
   optionChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   optionChipTextActive: { color: chrome.accent },
+  convertChip: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 6,
+    borderStyle: 'dashed',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  convertChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   addRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

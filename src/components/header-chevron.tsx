@@ -30,3 +30,24 @@ export function HeaderChevron({
     </Svg>
   )
 }
+
+/** Right-pointing chevron for breadcrumb separators. */
+export function BreadcrumbChevron({
+  size = 12,
+  color,
+}: Readonly<{
+  size?: number
+  color: string
+}>) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 12 12" fill="none">
+      <Path
+        d="M4.25 2.5 7.75 6l-3.5 3.5"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}

@@ -16,6 +16,7 @@ import {
   HEADER_MENU_WIDTH,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
+import { OrganizationIcon } from '@/components/icons/nav-icons'
 import { webPointer } from '@/components/org/org-panel-styles'
 import type { OrganizationRecord } from '@/lib/instance-api'
 import { setActiveOrganizationId } from '@/lib/org-context'
@@ -172,6 +173,7 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
           accessibilityLabel={`Organization: ${label}`}
           accessibilityState={{ expanded: menuOpen }}
         >
+          <OrganizationIcon size={15} color={colors.textDim} />
           <View style={headerMenuGroupStyles.triggerCopy}>
             <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
               {label}

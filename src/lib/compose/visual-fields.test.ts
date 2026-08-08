@@ -64,9 +64,17 @@ describe('visual field catalog', () => {
   it('offers only fields with offerAdd when absent', () => {
     expect(addableVisualFields({ image: 'nginx' }).map((f) => f.id)).toEqual([
       'restart',
+      'build',
     ])
     expect(
       addableVisualFields({ image: 'nginx', restart: 'always' }).map((f) => f.id),
+    ).toEqual(['build'])
+    expect(
+      addableVisualFields({
+        image: 'nginx',
+        restart: 'always',
+        build: { context: '.', dockerfile_inline: 'FROM alpine\n' },
+      }).map((f) => f.id),
     ).toEqual([])
   })
 
@@ -75,5 +83,25 @@ describe('visual field catalog', () => {
     expect(ports?.offerAdd).toBe(false)
     expect(serviceHasVisualField({ ports: ['8080:80'] }, ports!)).toBe(true)
     expect(serviceHasVisualField({ image: 'nginx' }, ports!)).toBe(false)
+  })
+
+  it('registers the Dockerfile (build) field for add/remove plumbing', () => {
+    const build = VISUAL_SERVICE_FIELDS.find((f) => f.id === 'build')
+    expect(build).toMatchObject({
+      id: 'build',
+      key: 'build',
+      label: 'Dockerfile',
+      offerAdd: true,
+    })
+    expect(serviceHasVisualField({ image: 'nginx' }, build!)).toBe(false)
+    expect(
+      serviceHasVisualField(
+        { build: { context: '.', dockerfile_inline: 'FROM alpine\n' } },
+        build!,
+      ),
+    ).toBe(true)
+    expect(
+      addableVisualFields({ image: 'nginx' }).some((f) => f.id === 'build'),
+    ).toBe(true)
   })
 })

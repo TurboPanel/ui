@@ -12,7 +12,7 @@ import {
   ComposeEditorIcon,
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ComposeYamlEditor } from '@/components/org/compose-yaml-editor'
 import type {
   ComposeYamlEditorHandle,
@@ -21,6 +21,7 @@ import type {
 import {
   blockingComposeLintIssues,
   composeDocumentToYaml,
+  isBlankComposeData,
   lintComposeYaml,
   normalizeCompose,
   readComposeEditorView,
@@ -279,7 +280,7 @@ export function ComposeEditorSection({
   hideHeader?: boolean
   /** Surface header: Project / environment buttons (right-aligned). */
   toolbarLeading?: ReactNode
-  /** Surface header: trailing chrome before section buttons. */
+  /** Surface header: actions left of Save (e.g. Discard Changes). */
   toolbarTrailing?: ReactNode
 }>) {
   const source = normalizeCompose(document)
@@ -486,7 +487,28 @@ export function ComposeEditorSection({
     if (!current || Object.hasOwn(current, field.key)) {
       return
     }
-    updateService(name, { [field.key]: field.defaultValue })
+    const nextService: Record<string, unknown> = {
+      ...current,
+      [field.key]: field.defaultValue,
+    }
+    // Adding an inline Dockerfile to a blank-image service should omit `image`,
+    // not leave `image: ""` which fails deploy and is invalid Compose.
+    if (field.id === 'build' && Object.hasOwn(nextService, 'image')) {
+      const image = nextService.image
+      if (typeof image !== 'string' || image.trim() === '') {
+        delete nextService.image
+      }
+    }
+    updateDraft({
+      ...draft,
+      data: {
+        ...draft.data,
+        services: {
+          ...services,
+          [name]: nextService,
+        },
+      },
+    })
   }
 
   const renameService = (name: string, nextName: string) => {
@@ -560,6 +582,19 @@ export function ComposeEditorSection({
   )
   const currentYaml = tab === 'editor' ? yaml : composeDocumentToYaml(draft)
   const isDirty = currentYaml !== baselineYaml
+  // Blank project/environment drafts are valid to save; deploy (not save)
+  // requires a non-empty merged compose.
+  const isBlankDraft = useMemo(() => {
+    if (tab === 'visual') {
+      return isBlankComposeData(draft.data)
+    }
+    try {
+      return isBlankComposeData(yamlToComposeDocument(yaml).data)
+    } catch {
+      return false
+    }
+  }, [tab, draft.data, yaml])
+  const canSave = !saving && (isDirty || isBlankDraft)
   const serviceCount = useMemo(() => {
     if (hideHeader) return 0
     if (tab === 'visual') {
@@ -626,7 +661,26 @@ export function ComposeEditorSection({
 
       <ComposeEditorChrome
         leading={toolbarLeading}
-        trailing={toolbarTrailing}
+        trailing={
+          <View style={styles.headerActions}>
+            {toolbarTrailing}
+            <Pressable
+              style={[
+                styles.saveButton,
+                webPointer,
+                !canSave && styles.buttonDisabled,
+              ]}
+              onPress={() => void handleSave()}
+              disabled={!canSave}
+              accessibilityRole="button"
+              accessibilityLabel={saveButtonLabel(saving)}
+            >
+              <Text style={styles.saveButtonText}>
+                {saveButtonLabel(saving)}
+              </Text>
+            </Pressable>
+          </View>
+        }
         tabs={
           <ComposeEditorViewTabs value={tab} onChange={requestView} />
         }
@@ -647,15 +701,6 @@ export function ComposeEditorSection({
       />
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      <Pressable
-        style={[styles.saveButton, (!isDirty || saving) && styles.buttonDisabled]}
-        onPress={() => void handleSave()}
-        disabled={!isDirty || saving}
-      >
-        <Text style={styles.saveButtonText}>
-          {saveButtonLabel(saving)}
-        </Text>
-      </Pressable>
     </View>
   )
 }
@@ -690,6 +735,12 @@ const styles = StyleSheet.create({
   toolbarTrailing: {
     flexShrink: 0,
     justifyContent: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   editorSurface: {
     borderWidth: 1,
@@ -782,8 +833,20 @@ const styles = StyleSheet.create({
   visualBody: {
     padding: spacing.sm,
   },
-  saveButton: { alignSelf: 'flex-start', borderRadius: 8, backgroundColor: chrome.accent, paddingHorizontal: 14, paddingVertical: 10 },
-  saveButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
+  saveButton: {
+    borderRadius: 6,
+    backgroundColor: chrome.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: chrome.onAccent,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   secondaryButton: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, borderColor: colors.borderChip, paddingHorizontal: 10, paddingVertical: 7 },
   secondaryButtonText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },

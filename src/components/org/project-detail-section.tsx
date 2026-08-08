@@ -455,56 +455,61 @@ function ContainerNamingPanel({
   saving: boolean
   onChange: (mode: ContainerNamingMode) => void
 }>) {
+  const keepOriginal = value === 'custom'
   return (
     <SectionPanel
       title="Container naming"
       hint="How Docker container_name values are generated at deploy"
     >
       {canManage ? (
-        <View style={orgPanelStyles.segmentGroup}>
-          {(
-            [
-              { mode: 'uuid' as const, label: 'UUID' },
-              { mode: 'custom' as const, label: 'Custom' },
-            ] as const
-          ).map((option) => {
-            const active = value === option.mode
-            return (
-              <Pressable
-                key={option.mode}
-                style={[
-                  orgPanelStyles.segmentChip,
-                  active && orgPanelStyles.segmentChipActive,
-                  webPointer,
-                  saving && styles.namingDisabled,
-                ]}
-                disabled={saving}
-                onPress={() => {
-                  onChange(option.mode)
-                }}
-              >
-                <Text
-                  style={[
-                    orgPanelStyles.segmentChipText,
-                    active && orgPanelStyles.segmentChipTextActive,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            )
-          })}
+        <View style={styles.namingBlock}>
+          <View style={styles.namingSwitchRow}>
+            <View style={styles.namingSwitchCopy}>
+              <Text style={styles.namingSwitchLabel}>
+                Keep original container names
+              </Text>
+              <Text style={orgPanelStyles.muted}>
+                By default TurboPanel renames containers so you can run multiple
+                instances of this project.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: keepOriginal, disabled: saving }}
+              accessibilityLabel="Keep original container names"
+              disabled={saving}
+              onPress={() => {
+                onChange(keepOriginal ? 'uuid' : 'custom')
+              }}
+              style={[
+                styles.namingToggle,
+                keepOriginal ? styles.namingToggleOn : styles.namingToggleOff,
+                webPointer,
+                saving && styles.namingDisabled,
+              ]}
+            >
+              <Text style={styles.namingToggleText}>
+                {keepOriginal ? 'On' : 'Off'}
+              </Text>
+            </Pressable>
+          </View>
+          {keepOriginal ? (
+            <View style={orgPanelStyles.calloutWarning}>
+              <Text style={orgPanelStyles.calloutWarningText}>
+                Keeping original names disables rolling updates. We rename
+                containers by default so multiple instances of this project can
+                run side by side.
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : (
         <Text style={orgPanelStyles.detailLine}>
-          {value === 'custom' ? 'Custom' : 'UUID'}
+          {keepOriginal
+            ? 'Keep original container names'
+            : 'Rename containers (default)'}
         </Text>
       )}
-      <Text style={orgPanelStyles.muted}>
-        {value === 'custom'
-          ? 'Uses each service’s explicit container name when set; otherwise Compose default names.'
-          : 'Default — each container is named from its service UUID (with -<n> when scaled).'}
-      </Text>
       {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
     </SectionPanel>
   )
@@ -864,6 +869,44 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   namingDisabled: { opacity: 0.55 },
+  namingBlock: {
+    gap: spacing.sm,
+  },
+  namingSwitchRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  namingSwitchCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  namingSwitchLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  namingToggle: {
+    minWidth: 52,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 6,
+    alignItems: 'center',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  namingToggleOn: {
+    backgroundColor: chrome.accent,
+  },
+  namingToggleOff: {
+    backgroundColor: colors.border,
+  },
+  namingToggleText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   serverList: { gap: spacing.xs },
   serverOption: {
     borderWidth: 1,
