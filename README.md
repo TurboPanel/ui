@@ -8,6 +8,8 @@
 
 GitHub: [turbopanel/ui](https://github.com/turbopanel/ui). Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel).
 
+> **Private alpha** — Neither TurboPanel High Availability nor self-hosted is publicly available yet. See the [roadmap](https://turbopanel.io/roadmap) for progress toward a beta release.
+
 ![TurboPanel console — servers overview](https://turbopanel.io/screenshots/servers-overview.png)
 
 ## What this repo is
@@ -52,7 +54,7 @@ Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trun
 
 | Need | Where |
 | --- | --- |
-| Usage questions | [Discussions → Help & Q&A](https://github.com/turbopanel/turbopanel/discussions/categories/help-q-a) |
+| Usage questions | [Discord](https://turbopanel.io/discord) |
 | UI bugs | [turbopanel/ui issues](https://github.com/turbopanel/ui/issues) |
 | Security | [turbopanel.io/security](https://turbopanel.io/security) |
 
