@@ -43,6 +43,119 @@ function reencryptErrorMessage(error: unknown): string {
   return 'Re-encryption failed'
 }
 
+function sweepStatusLabel(
+  running: boolean,
+  completed: boolean,
+  totals: SweepTotals | null,
+  resumeCursor: ReencryptSecretsCursor | null,
+): string | null {
+  if (running) return 'Running…'
+  if (completed && totals) return 'Completed'
+  if (resumeCursor && totals) return 'Paused — resume to continue'
+  return null
+}
+
+/** True when this batch ends the sweep (finished or empty resume cursor). */
+function isTerminalBatch(batch: ReencryptSecretsResponse): boolean {
+  return batch.completed || !batch.cursor
+}
+
+type SweepProgressHandlers = Readonly<{
+  onTotals: (totals: SweepTotals) => void
+  onResumeCursor: (cursor: ReencryptSecretsCursor | null) => void
+  onCompleted: (completed: boolean) => void
+}>
+
+/**
+ * Drive bounded re-encrypt batches until the server reports completion or the
+ * cursor runs out. Does not touch loading/error UI — callers wrap in try/finally.
+ */
+async function driveReencryptBatches(
+  startCursor: ReencryptSecretsCursor | null,
+  initialTotals: SweepTotals,
+  handlers: SweepProgressHandlers,
+): Promise<void> {
+  let cursor = startCursor
+  let nextTotals = initialTotals
+
+  for (;;) {
+    const batch = await applyReencryptSecrets(cursor ? { cursor } : {})
+    nextTotals = addBatch(nextTotals, batch)
+    handlers.onTotals(nextTotals)
+
+    if (isTerminalBatch(batch)) {
+      handlers.onCompleted(true)
+      handlers.onResumeCursor(null)
+      return
+    }
+
+    cursor = batch.cursor
+    handlers.onResumeCursor(batch.cursor)
+    handlers.onCompleted(false)
+  }
+}
+
+function ReencryptActions(props: Readonly<{
+  running: boolean
+  resumeCursor: ReencryptSecretsCursor | null
+  onReencrypt: () => void
+  onResume: () => void
+}>) {
+  const { running, resumeCursor, onReencrypt, onResume } = props
+  return (
+    <View style={styles.actions}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={running}
+        onPress={onReencrypt}
+        style={[styles.primaryButton, running ? styles.buttonDisabled : null]}
+      >
+        <Text style={styles.primaryButtonText}>
+          {running ? 'Re-encrypting…' : 'Re-encrypt secrets'}
+        </Text>
+      </Pressable>
+      {resumeCursor && !running ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onResume}
+          style={styles.secondaryButton}
+        >
+          <Text style={styles.secondaryButtonText}>Resume sweep</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+}
+
+function ReencryptTotalsSummary(props: Readonly<{
+  totals: SweepTotals
+  statusLabel: string | null
+  resumeCursor: ReencryptSecretsCursor | null
+}>) {
+  const { totals, statusLabel, resumeCursor } = props
+  const resumeDetail = resumeCursor?.afterId
+    ? ` after ${resumeCursor.afterId.slice(0, 8)}…`
+    : ''
+
+  return (
+    <View style={styles.summary}>
+      <Text style={styles.summaryTitle}>
+        {statusLabel ? `Sweep · ${statusLabel}` : 'Sweep'}
+      </Text>
+      <Text style={styles.summaryLine}>Scanned: {totals.scanned}</Text>
+      <Text style={styles.summaryLine}>Re-encrypted: {totals.reencrypted}</Text>
+      <Text style={styles.summaryLine}>Skipped: {totals.skipped}</Text>
+      <Text style={styles.summaryLine}>Failed: {totals.failed}</Text>
+      {resumeCursor ? (
+        <Text style={styles.summaryLine}>
+          Resume at: {resumeCursor.stage}
+          {resumeDetail}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
 export function SecretsReencryptSection() {
   const { session } = useAuth()
   const isSuperadmin = isSuperadminSession(session)
@@ -56,8 +169,7 @@ export function SecretsReencryptSection() {
   const runSweep = async (startCursor: ReencryptSecretsCursor | null) => {
     setRunning(true)
     setDisplayError(null)
-    let cursor = startCursor
-    let nextTotals = startCursor ? (totals ?? emptyTotals()) : emptyTotals()
+    const initialTotals = startCursor ? (totals ?? emptyTotals()) : emptyTotals()
     if (!startCursor) {
       setTotals(emptyTotals())
       setCompleted(false)
@@ -65,29 +177,11 @@ export function SecretsReencryptSection() {
     }
 
     try {
-      for (;;) {
-        const batch = await applyReencryptSecrets(
-          cursor ? { cursor } : {},
-        )
-        nextTotals = addBatch(nextTotals, batch)
-        setTotals(nextTotals)
-
-        if (batch.completed) {
-          setCompleted(true)
-          setResumeCursor(null)
-          return
-        }
-
-        if (!batch.cursor) {
-          setCompleted(true)
-          setResumeCursor(null)
-          return
-        }
-
-        cursor = batch.cursor
-        setResumeCursor(batch.cursor)
-        setCompleted(false)
-      }
+      await driveReencryptBatches(startCursor, initialTotals, {
+        onTotals: setTotals,
+        onResumeCursor: setResumeCursor,
+        onCompleted: setCompleted,
+      })
     } catch (error) {
       setDisplayError(reencryptErrorMessage(error))
       setCompleted(false)
@@ -96,21 +190,7 @@ export function SecretsReencryptSection() {
     }
   }
 
-  const onReencrypt = () => {
-    void runSweep(null)
-  }
-
-  const onResume = () => {
-    if (!resumeCursor) return
-    void runSweep(resumeCursor)
-  }
-
-  const statusLabel = (() => {
-    if (running) return 'Running…'
-    if (completed && totals) return 'Completed'
-    if (resumeCursor && totals) return 'Paused — resume to continue'
-    return null
-  })()
+  const statusLabel = sweepStatusLabel(running, completed, totals, resumeCursor)
 
   return (
     <View style={styles.root}>
@@ -118,8 +198,8 @@ export function SecretsReencryptSection() {
       <Text style={styles.copy}>
         Re-seal at-rest secret envelopes to the current encryption key version
         after a key rotation. Runs in bounded batches so large installs can
-        resume. Daemon-bound envelopes are left untouched; plaintext secret
-        columns are sealed under the current key.
+        resume. Daemon-bound envelopes are left untouched; invalid plaintext
+        secret rows are reported as failures and are not auto-sealed.
       </Text>
 
       <SectionPanel
@@ -129,27 +209,17 @@ export function SecretsReencryptSection() {
         {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
         {isSuperadmin ? (
-          <View style={styles.actions}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={running}
-              onPress={onReencrypt}
-              style={[styles.primaryButton, running ? styles.buttonDisabled : null]}
-            >
-              <Text style={styles.primaryButtonText}>
-                {running ? 'Re-encrypting…' : 'Re-encrypt secrets'}
-              </Text>
-            </Pressable>
-            {resumeCursor && !running ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={onResume}
-                style={styles.secondaryButton}
-              >
-                <Text style={styles.secondaryButtonText}>Resume sweep</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          <ReencryptActions
+            running={running}
+            resumeCursor={resumeCursor}
+            onReencrypt={() => {
+              void runSweep(null)
+            }}
+            onResume={() => {
+              if (!resumeCursor) return
+              void runSweep(resumeCursor)
+            }}
+          />
         ) : (
           <Text style={orgPanelStyles.muted}>
             Superadmin required to re-encrypt at-rest secrets.
@@ -157,21 +227,11 @@ export function SecretsReencryptSection() {
         )}
 
         {totals ? (
-          <View style={styles.summary}>
-            <Text style={styles.summaryTitle}>
-              {statusLabel ? `Sweep · ${statusLabel}` : 'Sweep'}
-            </Text>
-            <Text style={styles.summaryLine}>Scanned: {totals.scanned}</Text>
-            <Text style={styles.summaryLine}>Re-encrypted: {totals.reencrypted}</Text>
-            <Text style={styles.summaryLine}>Skipped: {totals.skipped}</Text>
-            <Text style={styles.summaryLine}>Failed: {totals.failed}</Text>
-            {resumeCursor ? (
-              <Text style={styles.summaryLine}>
-                Resume at: {resumeCursor.stage}
-                {resumeCursor.afterId ? ` after ${resumeCursor.afterId.slice(0, 8)}…` : ''}
-              </Text>
-            ) : null}
-          </View>
+          <ReencryptTotalsSummary
+            totals={totals}
+            statusLabel={statusLabel}
+            resumeCursor={resumeCursor}
+          />
         ) : null}
       </SectionPanel>
     </View>

@@ -30,8 +30,6 @@ export function projectTypeLabel(project: ProjectRecord): string {
 
 /**
  * Compose project routes. Overview is Project / environment compose (chips).
- * Networking / Storage section chips were removed — those routes redirect to
- * the current scope path.
  */
 export const COMPOSE_PROJECT_TAB_IDS = ['overview'] as const
 
@@ -113,28 +111,12 @@ export function projectServiceHref(
   return `${projectHref(orgId, projectId)}/services/${serviceId}`
 }
 
-export function projectHostingHref(
-  orgId: string,
-  projectId: string,
-  hostingId: string,
-): string {
-  return `${projectHref(orgId, projectId)}/networking/${hostingId}`
-}
+
 
 /**
- * Append `?hostingId=` so Overview / environment redirects from retired
- * `/networking/:id` deep links can expand and focus the matching hosting row.
- */
-export function withHostingIdQuery(href: string, hostingId: string): string {
-  const separator = href.includes('?') ? '&' : '?'
-  return `${href}${separator}hostingId=${encodeURIComponent(hostingId)}`
-}
-
-/**
- * Sticky Project vs environment scope for retired `/networking` / `/storage`
- * redirects. Project overview clears the flag; `/environments/:id` sets it;
- * other paths (retired routes) keep the previous value so a cold load never
- * invents environment scope from the first-env fallback.
+ * Sticky Project vs environment scope. Project overview clears the flag;
+ * `/environments/:id` sets it; other paths keep the previous value so a cold
+ * load never invents environment scope from the first-env fallback.
  */
 export function resolveEnvironmentScopeActive(
   baseSelected: boolean,

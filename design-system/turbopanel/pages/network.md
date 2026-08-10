@@ -57,7 +57,6 @@ Sites is the **area root** (not a sub-route). Links, Addresses, and Docker netwo
 - Scopes: `public | datacenter | vpn` (no `loopback`)
 - Scope / allocation filters use `segmentGroup` / `segmentChip`; site filter remains chips
 - `scope === 'vpn'` rows read-only with pointer to link detail; **409** `ip_in_use` copy retained
-- Optional `?serverId=` filter (legacy networks redirect)
 
 ## Docker networks
 

@@ -85,13 +85,6 @@ function SegmentFilterChip({
   )
 }
 
-function filterIpsByServerPin(
-  ips: IpRecord[],
-  serverIdPin: string,
-): IpRecord[] {
-  if (!serverIdPin) return ips
-  return ips.filter((ip) => ip.serverId === serverIdPin)
-}
 
 function isCreateIpDisabled(
   creating: boolean,
@@ -792,11 +785,8 @@ function AddressPoolPanel({
 
 export function NetworkAddressesSection({
   orgId,
-  serverId: serverIdFilter,
 }: Readonly<{
   orgId: string
-  /** Optional pre-filter from legacy /servers/networks?serverId= redirect. */
-  serverId?: string
 }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
@@ -837,9 +827,7 @@ export function NetworkAddressesSection({
   const updateMutation = useUpdateIp(orgId)
   const deleteMutation = useDeleteIp(orgId)
 
-  const ipsRaw = ipsQuery.data?.ips ?? []
-  const serverIdPin = serverIdFilter?.trim() || ''
-  const ips = filterIpsByServerPin(ipsRaw, serverIdPin)
+  const ips = ipsQuery.data?.ips ?? []
   const servers = serversQuery.data?.servers ?? []
   const networks = networksQuery.data?.networks ?? []
   const datacenters = datacentersQuery.data?.datacenters ?? []

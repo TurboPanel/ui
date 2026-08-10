@@ -10,7 +10,6 @@ import {
   resolveEnvironmentScopeActive,
   resolveSelectedEnvironmentId,
   systemProjectAllowsMutations,
-  withHostingIdQuery,
 } from './project-navigation'
 import type { ProjectRecord } from './instance-api'
 
@@ -118,16 +117,5 @@ describe('resolveEnvironmentScopeActive', () => {
   it('keeps sticky scope on retired paths without inventing it on cold load', () => {
     expect(resolveEnvironmentScopeActive(false, null, false)).toBe(false)
     expect(resolveEnvironmentScopeActive(false, null, true)).toBe(true)
-  })
-})
-
-describe('withHostingIdQuery', () => {
-  it('appends hostingId for overview and environment redirects', () => {
-    expect(withHostingIdQuery('/org/projects/proj/overview', 'h1')).toBe(
-      '/org/projects/proj/overview?hostingId=h1',
-    )
-    expect(
-      withHostingIdQuery('/org/projects/proj/environments/env1', 'h1'),
-    ).toBe('/org/projects/proj/environments/env1?hostingId=h1')
   })
 })

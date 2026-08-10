@@ -65,19 +65,29 @@ function SetupProjectGlyph({ size = 18, color }: IconProps) {
   )
 }
 
-function glyphForType(type: ProjectType | undefined) {
-  if (type === 'managed') return ManagedProjectGlyph
-  if (type === 'docker-compose' || type === 'template') {
-    return ComposeProjectGlyph
-  }
-  return SetupProjectGlyph
-}
-
 function accessibilityLabelForType(type: ProjectType | undefined): string {
   if (type === 'managed') return 'Managed project'
   if (type === 'template') return 'Template project'
   if (type === 'docker-compose') return 'Compose project'
   return 'Project setup'
+}
+
+function ProjectTypeGlyph({
+  type,
+  size,
+  color,
+}: Readonly<{
+  type: ProjectType | undefined
+  size: number
+  color: string
+}>) {
+  if (type === 'managed') {
+    return <ManagedProjectGlyph size={size} color={color} />
+  }
+  if (type === 'docker-compose' || type === 'template') {
+    return <ComposeProjectGlyph size={size} color={color} />
+  }
+  return <SetupProjectGlyph size={size} color={color} />
 }
 
 /**
@@ -93,7 +103,6 @@ export function ProjectTitleIcon({
   compact?: boolean
 }>) {
   const type = project.metadata?.type
-  const Glyph = glyphForType(type)
   const label = accessibilityLabelForType(type)
   const glyphSize = compact ? 18 : 22
 
@@ -103,7 +112,7 @@ export function ProjectTitleIcon({
       accessibilityRole="image"
       accessibilityLabel={label}
     >
-      <Glyph size={glyphSize} color={chrome.accent} />
+      <ProjectTypeGlyph type={type} size={glyphSize} color={chrome.accent} />
     </View>
   )
 }

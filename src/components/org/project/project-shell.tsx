@@ -248,7 +248,10 @@ function ProjectHeader({
         accessibilityRole="header"
         accessibilityLabel="Project"
       >
-        <View style={styles.breadcrumb} accessibilityRole="navigation">
+        <View
+          style={styles.breadcrumb}
+          accessibilityLabel="Breadcrumb"
+        >
           <Link href={projectsHref} asChild>
             <Pressable
               style={crumbLinkStyle}
