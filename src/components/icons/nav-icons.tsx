@@ -265,6 +265,7 @@ const AREA_ICONS = {
   projects: ProjectsNavIcon,
   managed: ManagedNavIcon,
   servers: ServersNavIcon,
+  network: NetworkingNavIcon,
   access: AccessNavIcon,
 } as const satisfies Record<OrgAreaId, (props: NavIconProps) => ReactElement>
 

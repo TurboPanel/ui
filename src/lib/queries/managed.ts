@@ -5,6 +5,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query'
 import {
+  addManagedReplica,
   applyEnvironmentManaged,
   createEnvironmentManaged,
   createManagedBackup,
@@ -20,13 +21,19 @@ import {
   fetchManagedLogs,
   fetchManagedStatus,
   fetchManagedUsers,
+  fetchOrganizationCa,
   fetchOrganizationManaged,
   isForbiddenError,
+  promoteManagedMember,
+  removeManagedMember,
   restoreManagedBackup,
   rotateManagedRootPassword,
+  rotateManagedUserPassword,
   runManagedLifecycle,
   updateEnvironmentManaged,
+  updateManagedMember,
 } from '@/lib/instance-api'
+import type { ManagedMemberRecord } from '@/lib/managed-services'
 import {
   useApiMutation,
   queryKeys,
@@ -421,5 +428,129 @@ export function useRestoreManagedBackup(orgId: string, environmentId: string) {
           queryKey: queryKeys.org(orgId).commands.all,
         }),
       ]),
+  })
+}
+
+/**
+ * Merge status snapshot members (fresh lag/health) onto detail identity.
+ * Prefer `status.members` per member id; fall back to detail for missing rows.
+ * No separate members poll — status only refetches while provisioning/applying.
+ */
+export function mergeManagedMembers(
+  detailMembers: readonly ManagedMemberRecord[] | null | undefined,
+  statusMembers: readonly ManagedMemberRecord[] | null | undefined,
+): ManagedMemberRecord[] {
+  const byId = new Map<string, ManagedMemberRecord>()
+  for (const member of detailMembers ?? []) {
+    byId.set(member.id, member)
+  }
+  for (const member of statusMembers ?? []) {
+    const prior = byId.get(member.id)
+    byId.set(member.id, prior ? { ...prior, ...member } : member)
+  }
+  return [...byId.values()].sort((a, b) => {
+    if (a.role !== b.role) {
+      return a.role === 'primary' ? -1 : 1
+    }
+    return a.ordinal - b.ordinal
+  })
+}
+
+function invalidateManagedMembers(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  environmentId: string,
+) {
+  return Promise.all([
+    invalidateManagedEnvironment(queryClient, orgId, environmentId),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).managed.members(environmentId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).commands.all,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).managed.orgList,
+    }),
+  ])
+}
+
+export function useAddManagedReplica(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: { serverId: string; readEligible?: boolean }) =>
+      addManagedReplica(environmentId, body),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function useUpdateManagedMemberReadEligible(
+  orgId: string,
+  environmentId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (input: { memberId: string; readEligible: boolean }) =>
+      updateManagedMember(environmentId, input.memberId, {
+        readEligible: input.readEligible,
+      }),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function useRemoveManagedMember(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (memberId: string) =>
+      removeManagedMember(environmentId, memberId),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function usePromoteManagedMember(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (input: { memberId: string; force?: boolean }) =>
+      promoteManagedMember(environmentId, input.memberId, {
+        ...(input.force ? { force: true } : {}),
+      }),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function useRotateManagedUserPassword(
+  orgId: string,
+  environmentId: string,
+) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (principalId: string) =>
+      rotateManagedUserPassword(environmentId, principalId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.users(environmentId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).bindings.all,
+        }),
+      ]),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to rotate user password')
+}
+
+/** Long-lived org CA — no polling. */
+export function useOrganizationCa(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).tlsCa,
+    queryFn: () => fetchOrganizationCa(),
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+    staleTime: 60 * 60 * 1000,
   })
 }

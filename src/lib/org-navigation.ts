@@ -33,34 +33,36 @@ export const ORG_AREAS = [
         hint: 'Fleet defaults such as the default server timezone',
       },
       {
-        id: 'networks',
-        label: 'Networks',
-        pathSegment: 'networks',
-        hint: 'Addresses, interfaces, and connectivity',
-      },
-      {
-        id: 'datacenters',
-        label: 'Datacenters',
-        pathSegment: 'datacenters',
-        hint: 'Physical locations grouping servers on a private network',
-      },
-      {
-        id: 'ips',
-        label: 'IP addresses',
-        pathSegment: 'ips',
-        hint: 'Managed address pool for ingress and internal routing',
-      },
-      {
-        id: 'vpns',
-        label: 'VPNs',
-        pathSegment: 'vpns',
-        hint: 'WireGuard meshes linking datacenters via peer servers',
-      },
-      {
         id: 'tls',
         label: 'TLS',
         pathSegment: 'tls',
         hint: 'Organization certificate library',
+      },
+    ],
+  },
+  {
+    id: 'network',
+    label: 'Network',
+    pathSegment: 'network',
+    hint: 'Sites, private networks, addresses, and links',
+    subRoutes: [
+      {
+        id: 'links',
+        label: 'Links',
+        pathSegment: 'links',
+        hint: 'Site-to-site WireGuard meshes',
+      },
+      {
+        id: 'addresses',
+        label: 'Addresses',
+        pathSegment: 'addresses',
+        hint: 'Managed address pool for ingress and internal routing',
+      },
+      {
+        id: 'docker',
+        label: 'Docker networks',
+        pathSegment: 'docker',
+        hint: 'Compose external Docker network registry',
       },
     ],
   },
@@ -110,18 +112,18 @@ export function serverDetailHref(
   return `/${orgId}/servers/${serverId}`
 }
 
-export function datacenterDetailHref(
+export function networkSiteHref(
   orgId: string,
   datacenterId: string,
-): `/${string}/servers/datacenters/${string}` {
-  return `/${orgId}/servers/datacenters/${datacenterId}`
+): `/${string}/network/sites/${string}` {
+  return `/${orgId}/network/sites/${datacenterId}`
 }
 
-export function vpnDetailHref(
+export function networkLinkHref(
   orgId: string,
   vpnId: string,
-): `/${string}/servers/vpns/${string}` {
-  return `/${orgId}/servers/vpns/${vpnId}`
+): `/${string}/network/links/${string}` {
+  return `/${orgId}/network/links/${vpnId}`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [
@@ -164,6 +166,13 @@ const SERVER_METRICS_SUB_ROUTE = {
   hint: 'Host metrics charts',
 } as const
 
+const SITE_DETAIL_SUB_ROUTE = {
+  id: 'site-detail',
+  label: 'Site',
+  pathSegment: 'sites',
+  hint: 'Site private network and members',
+} as const
+
 export function orgAreaFromPathname(pathname: string) {
   const parts = pathname.split('/').filter(Boolean)
   if (parts.length < 2) {
@@ -192,6 +201,17 @@ export function orgAreaFromPathname(pathname: string) {
     if (!knownSub && maybeSub !== 'metrics') {
       return { area, subRoute: SERVER_DETAIL_SUB_ROUTE }
     }
+  }
+
+  if (areaSegment === 'network' && parts.length >= 4 && parts[2] === 'sites') {
+    return { area, subRoute: SITE_DETAIL_SUB_ROUTE }
+  }
+
+  if (areaSegment === 'network' && parts.length >= 4 && parts[2] === 'links') {
+    const linksSub = area.subRoutes.find(
+      (entry) => entry.pathSegment === 'links',
+    )
+    return { area, subRoute: linksSub ?? null }
   }
 
   const subRouteSegment = parts[2]

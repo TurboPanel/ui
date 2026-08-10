@@ -34,6 +34,10 @@ function displayVariableValue(variable: VariableRecord): string {
   return variable.value ?? ''
 }
 
+function isBindingOwnedVariable(variable: VariableRecord): boolean {
+  return variable.bindingId != null && variable.bindingId.length > 0
+}
+
 function resolveVariablesLoadError(
   isError: boolean,
   error: unknown,
@@ -1005,6 +1009,9 @@ function VariablesEnvView({
     )
   }
 
+  const bindingOwned = variables.filter(isBindingOwnedVariable)
+  const editable = variables.filter((v) => !isBindingOwnedVariable(v))
+
   return (
     <View style={styles.envWrapper}>
       <Text style={styles.envHint}>
@@ -1017,15 +1024,56 @@ function VariablesEnvView({
         accessibilityRole="text"
       >
         <Text style={styles.envText} selectable={Platform.OS === 'web'}>
-          {variables.map((variable, index) => (
+          {bindingOwned.length > 0 ? (
+            <Text style={styles.envComment}>
+              {`# From connected databases (locked)\n`}
+            </Text>
+          ) : null}
+          {bindingOwned.map((variable, index) => (
             <VariableEnvLine
               key={variable.id}
               variable={variable}
-              isLast={index === variables.length - 1}
+              isLast={
+                index === bindingOwned.length - 1 && editable.length === 0
+              }
+            />
+          ))}
+          {bindingOwned.length > 0 && editable.length > 0 ? (
+            <Text style={styles.envComment}>{`\n# Operator variables\n`}</Text>
+          ) : null}
+          {editable.map((variable, index) => (
+            <VariableEnvLine
+              key={variable.id}
+              variable={variable}
+              isLast={index === editable.length - 1}
             />
           ))}
         </Text>
       </ScrollView>
+    </View>
+  )
+}
+
+function BindingOwnedVariablesGroup({
+  variables,
+}: Readonly<{ variables: VariableRecord[] }>) {
+  if (variables.length === 0) return null
+  return (
+    <View style={styles.bindingGroup}>
+      <Text style={styles.bindingGroupTitle}>From connected databases</Text>
+      <Text style={orgPanelStyles.muted}>
+        Locked keys delivered by database connections — edit or disconnect from
+        the managed Connect tab or Bound databases panel.
+      </Text>
+      {variables.map((variable) => (
+        <View key={variable.id} style={styles.bindingRow}>
+          <Text style={styles.bindingLock}>locked</Text>
+          <Text style={styles.bindingKey}>{variable.key}</Text>
+          <Text style={styles.bindingValue}>
+            {displayVariableValue(variable)}
+          </Text>
+        </View>
+      ))}
     </View>
   )
 }
@@ -1062,6 +1110,8 @@ export function VariablesSection({
   const deleteMutation = useDeleteVariable(orgId, parentField)
 
   const variables = variablesQuery.data?.variables ?? []
+  const bindingVariables = variables.filter(isBindingOwnedVariable)
+  const editableVariables = variables.filter((v) => !isBindingOwnedVariable(v))
   const loading = variablesQuery.isLoading
   const [view, setView] = useState<VariableViewMode>('table')
   const [error, setError] = useState<string | null>(null)
@@ -1148,8 +1198,21 @@ export function VariablesSection({
           setNewForRuntime(true)
           setShowAddForm(false)
         },
-        onError: () => {
-          setError(createMutation.actionError ?? 'Failed to create variable')
+        onError: (err) => {
+          const message =
+            createMutation.actionError ??
+            (err instanceof Error ? err.message : 'Failed to create variable')
+          if (
+            message.includes('binding_key_conflict') ||
+            message.includes('binding_owned_variable')
+          ) {
+            setAddFieldError(
+              `${trimmedKey} is provided by a connected database.`,
+            )
+            setError(null)
+            return
+          }
+          setError(message)
         },
       },
     )
@@ -1294,58 +1357,61 @@ export function VariablesSection({
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       {view === 'table' ? (
-        <VariablesTable
-          loading={loading}
-          variables={variables}
-          canOwn={canOwn}
-          showAddForm={showAddForm && canOwn}
-          newKey={newKey}
-          newValue={newValue}
-          newDescription={newDescription}
-          newIsSecret={newIsSecret}
-          newIsLiteral={newIsLiteral}
-          newForBuild={newForBuild}
-          newForRuntime={newForRuntime}
-          addFieldError={addFieldError}
-          adding={adding}
-          deletingId={deletingId}
-          editingId={editingId}
-          updatingSecretId={updatingSecretId}
-          editKey={editKey}
-          editValue={editValue}
-          editDescription={editDescription}
-          editSaving={editSaving}
-          secretNewValue={secretNewValue}
-          secretSaving={secretSaving}
-          togglingKey={togglingKey}
-          onNewKeyChange={(text) => {
-            setNewKey(text)
-            setAddFieldError(null)
-          }}
-          onNewValueChange={setNewValue}
-          onNewDescriptionChange={setNewDescription}
-          onToggleNewSecret={() => setNewIsSecret((current) => !current)}
-          onToggleNewLiteral={() => setNewIsLiteral((current) => !current)}
-          onToggleNewForBuild={() => setNewForBuild((current) => !current)}
-          onToggleNewForRuntime={() => setNewForRuntime((current) => !current)}
-          onSubmitNew={handleAddVariable}
-          onCancelNew={() => setShowAddForm(false)}
-          onEditKeyChange={setEditKey}
-          onEditValueChange={setEditValue}
-          onEditDescriptionChange={setEditDescription}
-          onSaveEdit={handleSaveEdit}
-          onCancelEdit={() => setEditingId(null)}
-          onSecretValueChange={setSecretNewValue}
-          onSaveSecret={handleSaveSecretValue}
-          onCancelSecret={() => {
-            setUpdatingSecretId(null)
-            setSecretNewValue('')
-          }}
-          onStartEdit={startEdit}
-          onStartSecretUpdate={startSecretUpdate}
-          onDelete={handleDeleteVariable}
-          onToggleFlag={handleToggleFlag}
-        />
+        <>
+          <BindingOwnedVariablesGroup variables={bindingVariables} />
+          <VariablesTable
+            loading={loading}
+            variables={editableVariables}
+            canOwn={canOwn}
+            showAddForm={showAddForm && canOwn}
+            newKey={newKey}
+            newValue={newValue}
+            newDescription={newDescription}
+            newIsSecret={newIsSecret}
+            newIsLiteral={newIsLiteral}
+            newForBuild={newForBuild}
+            newForRuntime={newForRuntime}
+            addFieldError={addFieldError}
+            adding={adding}
+            deletingId={deletingId}
+            editingId={editingId}
+            updatingSecretId={updatingSecretId}
+            editKey={editKey}
+            editValue={editValue}
+            editDescription={editDescription}
+            editSaving={editSaving}
+            secretNewValue={secretNewValue}
+            secretSaving={secretSaving}
+            togglingKey={togglingKey}
+            onNewKeyChange={(text) => {
+              setNewKey(text)
+              setAddFieldError(null)
+            }}
+            onNewValueChange={setNewValue}
+            onNewDescriptionChange={setNewDescription}
+            onToggleNewSecret={() => setNewIsSecret((current) => !current)}
+            onToggleNewLiteral={() => setNewIsLiteral((current) => !current)}
+            onToggleNewForBuild={() => setNewForBuild((current) => !current)}
+            onToggleNewForRuntime={() => setNewForRuntime((current) => !current)}
+            onSubmitNew={handleAddVariable}
+            onCancelNew={() => setShowAddForm(false)}
+            onEditKeyChange={setEditKey}
+            onEditValueChange={setEditValue}
+            onEditDescriptionChange={setEditDescription}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={() => setEditingId(null)}
+            onSecretValueChange={setSecretNewValue}
+            onSaveSecret={handleSaveSecretValue}
+            onCancelSecret={() => {
+              setUpdatingSecretId(null)
+              setSecretNewValue('')
+            }}
+            onStartEdit={startEdit}
+            onStartSecretUpdate={startSecretUpdate}
+            onDelete={handleDeleteVariable}
+            onToggleFlag={handleToggleFlag}
+          />
+        </>
       ) : (
         <VariablesEnvView variables={variables} />
       )}
@@ -1367,6 +1433,45 @@ const styles = StyleSheet.create({
   embedded: {
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  bindingGroup: {
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 8,
+    padding: spacing.sm,
+    backgroundColor: colors.bgSecondary,
+  },
+  bindingGroupTitle: {
+    color: colors.textBody,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bindingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 4,
+  },
+  bindingLock: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  bindingKey: {
+    color: colors.command,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+  },
+  bindingValue: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    flexShrink: 1,
   },
   presetSection: {
     gap: spacing.xs,

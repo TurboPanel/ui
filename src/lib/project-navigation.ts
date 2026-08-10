@@ -48,15 +48,17 @@ export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
 
 export const MANAGED_PROJECT_TAB_IDS = [
   'overview',
-  'environments',
+  'connect',
   'data',
   'backups',
+  'environments',
 ] as const
 
 export type ManagedProjectTabId = (typeof MANAGED_PROJECT_TAB_IDS)[number]
 
 export const MANAGED_PROJECT_TAB_LABELS: Record<ManagedProjectTabId, string> = {
   overview: 'Overview',
+  connect: 'Connect',
   environments: 'Environments',
   data: 'Data',
   backups: 'Backups',

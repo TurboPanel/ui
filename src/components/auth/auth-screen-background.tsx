@@ -260,17 +260,21 @@ const AuthGridStreak = memo(function AuthGridStreak({
 })
 
 /**
- * Auth backdrop: GPU-friendly static layer + 4 cheap Reanimated streaks.
+ * Auth backdrop: GPU-friendly static layer + optional Reanimated streaks.
  * Decorative only — sits behind the form panel.
  */
 export function AuthScreenBackground({
   accentColor,
+  animate = true,
 }: Readonly<{
   accentColor: string
+  /** When false, render wash + grid only (no streak motion). */
+  animate?: boolean
 }>) {
   const reduceMotion = useReducedMotion()
   const { width, height } = useWindowDimensions()
   const ready = width > 0 && height > 0
+  const showStreaks = animate && ready && !reduceMotion
 
   return (
     <View
@@ -285,7 +289,7 @@ export function AuthScreenBackground({
     >
       <AuthGridLayer accentColor={accentColor} />
 
-      {ready && !reduceMotion
+      {showStreaks
         ? STREAKS.map((streak) => {
             const horizontal = isHorizontal(streak.direction)
             const lengthSpan = horizontal ? width : height

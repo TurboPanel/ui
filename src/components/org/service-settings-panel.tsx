@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
   type HealthCheckPolicy,
@@ -211,7 +212,15 @@ export function ServiceSettingsPanel({
   }
 
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={{ gap: spacing.md }}>
+      {service?.id ? (
+        <ServiceBindingsPanel
+          orgId={orgId}
+          serviceId={service.id}
+          canManage={canManage}
+        />
+      ) : null}
+      <View style={orgPanelStyles.detailCard}>
       <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
       {savedHint ? <Text style={orgPanelStyles.muted}>{savedHint}</Text> : null}
@@ -355,6 +364,7 @@ export function ServiceSettingsPanel({
           </Pressable>
         </>
       ) : null}
+      </View>
     </View>
   )
 }

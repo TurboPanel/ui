@@ -10,6 +10,8 @@ import type {
   ManagedDetailResponse,
   ManagedEnvironmentRecord,
   ManagedListRecord,
+  ManagedMemberRecord,
+  ManagedServiceEngine,
   ManagedSettings,
   ManagedUserRecord,
 } from '@/lib/managed-services'
@@ -24,12 +26,43 @@ export type {
   ManagedEngineAvailability,
   ManagedEnvironmentRecord,
   ManagedListRecord,
+  ManagedMemberRecord,
+  ManagedMemberRole,
+  ManagedMemberTransport,
+  ManagedReplicationHealth,
   ManagedServerSummary,
   ManagedServiceEngine,
   ManagedSettings,
   ManagedStatus,
   ManagedUserRecord,
 } from '@/lib/managed-services'
+
+/** Exported so panels compare against symbols, not string literals. */
+export const USERNAME_IN_USE_ERROR = 'username_in_use'
+export const MANAGED_REPLICA_LIMIT_ERROR = 'managed_replica_limit'
+export const MANAGED_MEMBER_EXISTS_ERROR = 'managed_member_exists'
+export const MANAGED_MEMBER_IS_PRIMARY_ERROR = 'managed_member_is_primary'
+export const DATACENTER_REQUIRED_ERROR = 'datacenter_required'
+export const DATACENTER_CIDR_REQUIRED_ERROR = 'datacenter_cidr_required'
+export const DATACENTER_IP_REQUIRED_ERROR = 'datacenter_ip_required'
+export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
+export const PEER_TUNNEL_ADDRESS_REQUIRED_ERROR = 'peer_tunnel_address_required'
+export const MANAGED_PRIVATE_PORT_EXHAUSTED_ERROR = 'managed_private_port_exhausted'
+export const MANAGED_REPLICA_NOT_STREAMING_ERROR = 'managed_replica_not_streaming'
+export const MANAGED_REPLICA_LAGGING_ERROR = 'managed_replica_lagging'
+export const MANAGED_REPLICA_HEALTH_STALE_ERROR = 'managed_replica_health_stale'
+export const MANAGED_PRIMARY_FENCE_FAILED_ERROR = 'managed_primary_fence_failed'
+export const MANAGED_USER_HAS_BINDINGS_ERROR = 'managed_user_has_bindings'
+export const MANAGED_DATABASE_HAS_BINDINGS_ERROR = 'managed_database_has_bindings'
+export const BINDING_KEY_PREFIX_IN_USE_ERROR = 'binding_key_prefix_in_use'
+export const BINDING_ENGINE_DEFAULTS_IN_USE_ERROR = 'binding_engine_defaults_in_use'
+export const BINDING_KEY_CONFLICT_ERROR = 'binding_key_conflict'
+export const BINDING_ENDPOINT_UNAVAILABLE_ERROR = 'binding_endpoint_unavailable'
+export const BINDING_PASSWORD_UNAVAILABLE_ERROR =
+  'binding_password_unavailable' // NOSONAR typescript:S2068 — API error code, not a credential
+export const BINDING_ENGINE_UNSUPPORTED_ERROR = 'binding_engine_unsupported'
+export const BINDING_OWNED_VARIABLE_ERROR = 'binding_owned_variable'
+export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
 
 const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
@@ -829,10 +862,52 @@ export type VariableRecord = {
   serviceId: string | null;
   hostingId: string | null;
   serverId: string | null;
+  /**
+   * When set, this variable is materialised by a service binding and is not
+   * operator-editable. Secret values stay write-only / redacted.
+   */
+  bindingId: string | null;
   description: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/**
+ * Managed DB principal → compose service binding.
+ *
+ * **Secret write-only rule:** binding password/URL/CA values never cross this
+ * API. `keys[]` is metadata only (names of materialised env keys). Render
+ * locked chips from `keys[]`; never invent a reveal for binding secrets.
+ */
+export type BindingRecord = {
+  id: string
+  principalId: string
+  serviceId: string
+  databaseName: string
+  keyPrefix: string
+  emitEngineDefaults: boolean
+  keys: string[]
+  endpoint: { host: string; port: number } | null
+  engine: ManagedServiceEngine | null
+  managedId: string | null
+  managedEnvironmentId: string | null
+  readSplit: boolean | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type BindingImpactService = {
+  serviceId: string
+  displayName: string | null
+  environmentId: string
+  projectId: string
+  keyPrefix: string
+}
+
+export type BindingRedeployRequired = {
+  count: number
+  services: BindingImpactService[]
+}
 
 export type VariableParentFilter =
   | { organizationId: string }
@@ -972,6 +1047,22 @@ export type TlsRecord = {
 }
 
 /**
+ * Active organization CA — public fields only. **Never** includes a private key.
+ * Shape matches the `tls` object from `GET /tls/ca` (ensure-or-create).
+ */
+export type OrganizationCaRecord = {
+  id: string
+  source: TlsSource
+  certificatePem?: string | null
+  metadata: TlsMetadata | Record<string, unknown>
+  status?: TlsStatus
+  organizationId?: string
+  displayName?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+/**
  * Allocator-owned container classifier.
  * - `service` — ordinary workload container
  * - `ingress` — per-service Traefik container (ordinal 1, named `<serviceId>-in`)
@@ -1001,7 +1092,7 @@ export type ContainerRecord = {
   updatedAt: string;
 };
 
-export type NetworkKind = 'datacenter' | 'server' | 'docker'
+export type NetworkKind = 'datacenter' | 'docker'
 
 export type NetworkRecord = {
   id: string
@@ -1035,6 +1126,8 @@ export type DatacenterRecord = {
   displayName: string | null
   description: string | null
   organizationId: string
+  /** Private `kind: 'datacenter'` network CIDRs; always present (default `[]`). */
+  privateCidrs: string[]
   metadata: Record<string, unknown> | null
   options: DatacenterOptions | null
   createdAt: string
@@ -1043,7 +1136,7 @@ export type DatacenterRecord = {
 
 export type IpVersion = 4 | 6
 export type IpAllocation = 'dedicated' | 'shared'
-export type IpScope = 'public' | 'datacenter' | 'loopback' | 'vpn'
+export type IpScope = 'public' | 'datacenter' | 'vpn'
 
 export type IpRecord = {
   id: string
@@ -2745,7 +2838,6 @@ export async function createEnvironmentManaged(
     displayName?: string
     exposure?: {
       enabled: boolean
-      publishedPort?: number
       bind?: ManagedBindScope
     }
   },
@@ -2834,7 +2926,9 @@ export async function deleteEnvironmentManaged(
 
 /**
  * Rotate the managed root password. The returned `rootPassword` is
- * **show-once** — never persist it beyond the reveal UI.
+ * **show-once** — never persist it beyond the reveal UI. When the root
+ * principal owns bindings, `redeployRequired` lists consumers that need a
+ * redeploy to pick up the new password (API never restarts silently).
  */
 export async function rotateManagedRootPassword(
   environmentId: string,
@@ -2843,9 +2937,31 @@ export async function rotateManagedRootPassword(
   rootPassword: string
   commandId: string
   serverId: string
+  redeployRequired?: BindingRedeployRequired
 }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/root-password`,
+    { method: 'POST', body: JSON.stringify({}) },
+  )
+}
+
+/**
+ * Rotate a managed user password. The returned `password` is **show-once**.
+ * `redeployRequired` lists services whose bindings rematerialise with the new
+ * credential — the UI must offer redeploy, never restart automatically.
+ */
+export async function rotateManagedUserPassword(
+  environmentId: string,
+  principalId: string,
+): Promise<{
+  ok: true
+  password: string
+  commandId: string
+  serverId: string
+  redeployRequired?: BindingRedeployRequired
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}/password`,
     { method: 'POST', body: JSON.stringify({}) },
   )
 }
@@ -2943,6 +3059,7 @@ export async function fetchManagedStatus(
   host: string | null
   port: number | null
   containers: ContainerRecord[]
+  members: ManagedMemberRecord[]
 }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/status`,
@@ -3015,4 +3132,158 @@ export async function restoreManagedBackup(
     `${CLIENT_API}/environments/${environmentId}/managed/backups/${encodeURIComponent(backupId)}/restore`,
     { method: 'POST', body: JSON.stringify({}) },
   )
+}
+
+export async function fetchManagedMembers(
+  environmentId: string,
+): Promise<{ members: ManagedMemberRecord[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/members`,
+  )
+}
+
+export async function addManagedReplica(
+  environmentId: string,
+  body: { serverId: string; readEligible?: boolean },
+): Promise<ManagedCommandResponse & { member?: ManagedMemberRecord }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/members`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function updateManagedMember(
+  environmentId: string,
+  memberId: string,
+  body: { readEligible: boolean },
+): Promise<ManagedCommandResponse & { member?: ManagedMemberRecord }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function removeManagedMember(
+  environmentId: string,
+  memberId: string,
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function promoteManagedMember(
+  environmentId: string,
+  memberId: string,
+  body?: { force?: boolean },
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}/promote`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    },
+  )
+}
+
+export type BindingListFilter =
+  | { serviceId: string }
+  | { environmentId: string }
+  | { managedEnvironmentId: string }
+
+function bindingListQueryParams(filter: BindingListFilter): URLSearchParams {
+  if ('serviceId' in filter) {
+    return new URLSearchParams({ serviceId: filter.serviceId })
+  }
+  if ('managedEnvironmentId' in filter) {
+    return new URLSearchParams({
+      managedEnvironmentId: filter.managedEnvironmentId,
+    })
+  }
+  return new URLSearchParams({ environmentId: filter.environmentId })
+}
+
+export async function fetchBindings(
+  filter: BindingListFilter,
+): Promise<{ bindings: BindingRecord[] }> {
+  const params = bindingListQueryParams(filter)
+  return await apiFetch(`${CLIENT_API}/bindings?${params.toString()}`)
+}
+
+export async function createBinding(body: {
+  principalId: string
+  serviceId: string
+  databaseName: string
+  keyPrefix?: string
+  emitEngineDefaults?: boolean
+}): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/bindings`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateBinding(
+  id: string,
+  body: {
+    keyPrefix?: string
+    emitEngineDefaults?: boolean
+    databaseName?: string
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/bindings/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteBinding(
+  id: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/bindings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+/** Ensure-or-create organization CA (public certificate only — never a private key). */
+export async function fetchOrganizationCa(): Promise<{
+  tls: OrganizationCaRecord
+}> {
+  return await apiFetch(`${CLIENT_API}/tls/ca`)
+}
+
+/**
+ * Download the organization CA PEM (`application/x-pem-file`). Private key is
+ * never included. Returns PEM text for browser save / clipboard copy.
+ */
+export async function downloadOrganizationCaPem(): Promise<string> {
+  const resolvedOrgId = getActiveOrganizationId()
+  const headers: Record<string, string> = {}
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+  const response = await fetch(`${CLIENT_API}/tls/ca/download`, {
+    credentials: 'include',
+    headers,
+  })
+  if (!response.ok) {
+    let detail = formatFetchFailureDetail(response.status)
+    try {
+      const body = (await response.json()) as { error?: string }
+      if (body.error) {
+        detail = formatFetchFailureDetail(response.status, body.error)
+      }
+    } catch {
+      // Non-JSON error body — keep the status-only message.
+    }
+    throw new Error(`${CLIENT_API}/tls/ca/download failed: ${detail}`)
+  }
+  return await response.text()
 }

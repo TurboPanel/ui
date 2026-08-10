@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native'
 import { ManagedBackupsPanel } from '@/components/org/managed/managed-backups-panel'
+import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-panel'
+import { ManagedClusterPanel } from '@/components/org/managed/managed-cluster-panel'
 import { ManagedConnectionPanel } from '@/components/org/managed/managed-connection-panel'
 import { ManagedCredentialsPanel } from '@/components/org/managed/managed-credentials-panel'
 import { ManagedLifecyclePanel } from '@/components/org/managed/managed-lifecycle-panel'
@@ -25,8 +27,8 @@ import {
   type EnvironmentRecord,
 } from '@/lib/instance-api'
 import {
-  isValidPublishedPort,
   managedCatalogEntryForCode,
+  managedEngineSupportsBackup,
   managedErrorMessage,
   type ManagedDetailResponse,
   type ManagedSettings,
@@ -62,8 +64,10 @@ import {
   useManagedUsers,
   useRestoreManagedBackup,
   useRotateManagedRootPassword,
+  useRotateManagedUserPassword,
   useRunManagedLifecycle,
   useUpdateEnvironmentManaged,
+  mergeManagedMembers,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
 import { queryKeys } from '@/lib/query-keys'
@@ -92,6 +96,7 @@ function ignorePromise(promise: Promise<unknown>): void {
 type ManagedBodyFocus =
   | 'all'
   | 'overview'
+  | 'connect'
   | 'data'
   | 'backups'
   | 'settings'
@@ -99,6 +104,7 @@ type ManagedBodyFocus =
 
 function managedFocusVisibility(focus: ManagedBodyFocus): {
   showOverview: boolean
+  showConnect: boolean
   showData: boolean
   showBackups: boolean
   showSettings: boolean
@@ -106,6 +112,7 @@ function managedFocusVisibility(focus: ManagedBodyFocus): {
 } {
   return {
     showOverview: focus === 'all' || focus === 'overview',
+    showConnect: focus === 'all' || focus === 'connect',
     showData: focus === 'all' || focus === 'data',
     showBackups: focus === 'all' || focus === 'backups',
     showSettings: focus === 'all' || focus === 'settings',
@@ -180,7 +187,7 @@ function EnvironmentTabs({
 function ManagedSetupPanel({
   orgId,
   environmentId,
-  engineCode,
+  engineCode: _engineCode,
   canManage,
   onCreated,
 }: Readonly<{
@@ -192,10 +199,8 @@ function ManagedSetupPanel({
 }>) {
   const [serverId, setServerId] = useState<string | null>(null)
   const [expose, setExpose] = useState(false)
-  const [publishedPort, setPublishedPort] = useState('')
   const [error, setError] = useState<string | null>(null)
   const submitGuard = useRef(false)
-  const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
 
   const serversQuery = useOrgServers(orgId)
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
@@ -212,21 +217,8 @@ function ManagedSetupPanel({
     setServerId(connected?.id ?? null)
   }, [serverId, servers])
 
-  useEffect(() => {
-    if (catalog?.defaultPort != null) {
-      setPublishedPort(String(catalog.defaultPort))
-    }
-  }, [catalog?.defaultPort])
-
   const create = async () => {
     if (submitGuard.current || !serverId) return
-    if (expose) {
-      const port = Number(publishedPort)
-      if (!isValidPublishedPort(port)) {
-        setError('Enter a valid published port (1–65535, not reserved).')
-        return
-      }
-    }
     submitGuard.current = true
     setError(null)
     try {
@@ -242,7 +234,6 @@ function ManagedSetupPanel({
           ? {
               exposure: {
                 enabled: true,
-                publishedPort: Number(publishedPort),
               },
             }
           : undefined,
@@ -298,18 +289,8 @@ function ManagedSetupPanel({
         <View style={[styles.checkbox, expose && styles.checkboxChecked]}>
           {expose ? <Text style={styles.checkmark}>✓</Text> : null}
         </View>
-        <Text style={styles.toggleLabel}>Expose on port</Text>
+        <Text style={styles.toggleLabel}>Expose externally</Text>
       </Pressable>
-      {expose ? (
-        <TextInput
-          style={Platform.OS === 'web' ? webInputStyle : styles.input}
-          value={publishedPort}
-          onChangeText={setPublishedPort}
-          keyboardType="numeric"
-          editable={!submitting}
-          placeholderTextColor={colors.textDim}
-        />
-      ) : null}
 
       {canManage ? (
         <Pressable
@@ -443,7 +424,7 @@ export function ManagedEnvironmentBody({
       environmentId={environmentId}
       focus={focus}
       projectDisplayName={projectDisplayName}
-      supportsBackup={engineCode === 'postgres'}
+      supportsBackup={managedEngineSupportsBackup(engineCode)}
       canManage={canManage}
       detail={{ ...detail, managed }}
     />
@@ -475,6 +456,7 @@ function ManagedEnvironmentReadyPanels({
   >([])
   const {
     showOverview,
+    showConnect,
     showData,
     showBackups,
     showSettings,
@@ -491,6 +473,10 @@ function ManagedEnvironmentReadyPanels({
   })
 
   const rotatePasswordMutation = useRotateManagedRootPassword(orgId, environmentId)
+  const rotateUserPasswordMutation = useRotateManagedUserPassword(
+    orgId,
+    environmentId,
+  )
   const createDatabaseMutation = useCreateManagedDatabase(orgId, environmentId)
   const deleteDatabaseMutation = useDeleteManagedDatabase(orgId, environmentId)
   const createUserMutation = useCreateManagedUser(orgId, environmentId)
@@ -508,6 +494,10 @@ function ManagedEnvironmentReadyPanels({
   const users = usersQuery.data?.users ?? []
   const databases = databasesQuery.data?.databases ?? []
   const backups = backupsQuery.data?.backups ?? []
+  const members = mergeManagedMembers(
+    detail.members ?? [],
+    status?.members ?? [],
+  )
   const serverId = managed.serverId ?? detail.server?.id ?? null
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
 
@@ -551,21 +541,47 @@ function ManagedEnvironmentReadyPanels({
 
   return (
     <View style={styles.panels}>
-      {showOverview || showData ? (
-        <ManagedConnectionPanel
-          managed={managed}
-          connection={detail.connection}
-          server={detail.server}
+      {showOverview ? (
+        <ManagedClusterPanel
+          orgId={orgId}
+          environmentId={environmentId}
+          members={members}
+          managedDisplayName={managed.displayName?.trim() || projectDisplayName}
+          canManage={canManage}
+          busy={inFlight}
+          onRegisterCommand={registerCommand}
         />
+      ) : null}
+      {showConnect ? (
+        <>
+          <ManagedConnectionPanel
+            managed={managed}
+            connection={detail.connection}
+            server={detail.server}
+            members={members}
+          />
+          <ManagedBindingsPanel
+            orgId={orgId}
+            environmentId={environmentId}
+            engine={managed.engine}
+            users={users}
+            databases={databases}
+            canManage={canManage}
+            busy={inFlight}
+          />
+        </>
       ) : null}
       {showData ? (
         <ManagedDataPanels
+          orgId={orgId}
+          environmentId={environmentId}
           rootUsername={detail.rootUsername}
           databases={databases}
           users={users}
           canManage={canManage}
           inFlight={inFlight}
           rotatePasswordMutation={rotatePasswordMutation}
+          rotateUserPasswordMutation={rotateUserPasswordMutation}
           createDatabaseMutation={createDatabaseMutation}
           deleteDatabaseMutation={deleteDatabaseMutation}
           createUserMutation={createUserMutation}
@@ -641,6 +657,7 @@ function ManagedEnvironmentReadyPanels({
       {showSettings && settings ? (
         <ManagedSettingsPanel
           settings={settings}
+          engineCode={managed.engine}
           canManage={canManage}
           busy={inFlight}
           onApply={async (next: ManagedSettings) => {
@@ -673,12 +690,15 @@ function ManagedEnvironmentReadyPanels({
 }
 
 function ManagedDataPanels({
+  orgId,
+  environmentId,
   rootUsername,
   databases,
   users,
   canManage,
   inFlight,
   rotatePasswordMutation,
+  rotateUserPasswordMutation,
   createDatabaseMutation,
   deleteDatabaseMutation,
   createUserMutation,
@@ -687,12 +707,15 @@ function ManagedDataPanels({
   databasesQuery,
   registerCommand,
 }: Readonly<{
+  orgId: string
+  environmentId: string
   rootUsername: string | null
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
   inFlight: boolean
   rotatePasswordMutation: ReturnType<typeof useRotateManagedRootPassword>
+  rotateUserPasswordMutation: ReturnType<typeof useRotateManagedUserPassword>
   createDatabaseMutation: ReturnType<typeof useCreateManagedDatabase>
   deleteDatabaseMutation: ReturnType<typeof useDeleteManagedDatabase>
   createUserMutation: ReturnType<typeof useCreateManagedUser>
@@ -708,16 +731,27 @@ function ManagedDataPanels({
   return (
     <>
       <ManagedCredentialsPanel
+        orgId={orgId}
         rootUsername={rootUsername}
         canManage={canManage}
         busy={inFlight}
         onRotate={async () => {
           const result = await rotatePasswordMutation.mutateAsync()
           registerCommand(result.commandId, 'Rotate root password')
-          return { rootPassword: result.rootPassword }
+          return {
+            rootPassword: result.rootPassword,
+            redeployRequired: result.redeployRequired,
+          }
+        }}
+        onRedeployService={async (serviceEnvironmentId) => {
+          const { deployEnvironment } = await import('@/lib/instance-api')
+          const result = await deployEnvironment(serviceEnvironmentId)
+          registerCommand(result.commandId, 'Redeploy service', result.serverId)
         }}
       />
       <ManagedUsersPanel
+        orgId={orgId}
+        environmentId={environmentId}
         databases={databases}
         users={users}
         canManage={canManage}
@@ -745,10 +779,9 @@ function ManagedDataPanels({
         onCreateUser={async (input) => {
           const result = await createUserMutation.run(input)
           if (!result.ok) {
-            if (createUserMutation.actionError) {
-              throw new Error(createUserMutation.actionError)
-            }
-            return null
+            throw new Error(
+              createUserMutation.actionError ?? 'Failed to create user',
+            )
           }
           registerCommand(result.value.commandId, 'Create user')
           return { password: result.value.password }
@@ -761,6 +794,19 @@ function ManagedDataPanels({
             )
           }
           registerCommand(result.value.commandId, 'Delete user')
+        }}
+        onRotateUserPassword={async (principalId) => {
+          const result = await rotateUserPasswordMutation.mutateAsync(principalId)
+          registerCommand(result.commandId, 'Rotate user password')
+          return {
+            password: result.password,
+            redeployRequired: result.redeployRequired,
+          }
+        }}
+        onRedeployService={async (serviceEnvironmentId) => {
+          const { deployEnvironment } = await import('@/lib/instance-api')
+          const result = await deployEnvironment(serviceEnvironmentId)
+          registerCommand(result.commandId, 'Redeploy service', result.serverId)
         }}
         onReload={async () => {
           await Promise.all([usersQuery.refetch(), databasesQuery.refetch()])

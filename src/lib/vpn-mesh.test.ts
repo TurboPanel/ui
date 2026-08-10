@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { IpRecord, PeerRecord } from './instance-api'
 import {
+  formatSiteLinkLabel,
   overlayAddressForPeer,
   peerRoleLabel,
   resolvePrimaryGatewayByDatacenter,
+  resolveSiteLinks,
   type MeshServerRef,
 } from './vpn-mesh'
 
@@ -138,5 +140,85 @@ describe('overlayAddressForPeer', () => {
     ])
     expect(overlayAddressForPeer(p, ipById)).toBe('10.200.0.2')
     expect(overlayAddressForPeer({ ...p, tunnelIpId: null }, ipById)).toBeNull()
+  })
+})
+
+describe('resolveSiteLinks', () => {
+  it('collects multi-site peer landings per VPN', () => {
+    const peers = [
+      peer({
+        id: 'p-a',
+        serverId: 's-a',
+        role: 'gateway',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        vpnId: 'vpn-1',
+      }),
+      peer({
+        id: 'p-b',
+        serverId: 's-b',
+        role: 'gateway',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        vpnId: 'vpn-1',
+      }),
+    ]
+    const servers = new Map([
+      ['s-a', { datacenterId: 'dc-ams' }],
+      ['s-b', { datacenterId: 'dc-fra' }],
+    ])
+    const result = resolveSiteLinks(peers, servers, [{ id: 'vpn-1' }])
+    expect(result.get('vpn-1')).toEqual({
+      datacenterIds: ['dc-ams', 'dc-fra'],
+      hasUnassignedPeers: false,
+    })
+  })
+
+  it('keeps a single-site mesh as one datacenter id', () => {
+    const peers = [
+      peer({
+        id: 'p-1',
+        serverId: 's-1',
+        role: 'member',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        vpnId: 'vpn-1',
+      }),
+    ]
+    const servers = new Map([['s-1', { datacenterId: 'dc-1' }]])
+    expect(resolveSiteLinks(peers, servers, [{ id: 'vpn-1' }]).get('vpn-1')).toEqual({
+      datacenterIds: ['dc-1'],
+      hasUnassignedPeers: false,
+    })
+  })
+
+  it('flags peers without a datacenter as unassigned', () => {
+    const peers = [
+      peer({
+        id: 'p-1',
+        serverId: 's-1',
+        role: 'member',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        vpnId: 'vpn-1',
+      }),
+      peer({
+        id: 'p-2',
+        serverId: 's-2',
+        role: 'gateway',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        vpnId: 'vpn-1',
+      }),
+    ]
+    const servers = new Map([
+      ['s-1', { datacenterId: null }],
+      ['s-2', { datacenterId: 'dc-1' }],
+    ])
+    const sites = resolveSiteLinks(peers, servers, [{ id: 'vpn-1' }]).get(
+      'vpn-1',
+    )
+    expect(sites).toEqual({
+      datacenterIds: ['dc-1'],
+      hasUnassignedPeers: true,
+    })
+    expect(
+      formatSiteLinkLabel(sites!, new Map([['dc-1', 'AMS']])),
+    ).toBe('AMS ↔ Unassigned hosts')
   })
 })

@@ -18,17 +18,24 @@ import {
   useDeleteVpn,
   useRenameVpn,
   useVpns,
+  useDatacenters,
 } from '@/lib/queries/topology'
+import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
-import { vpnDetailHref } from '@/lib/org-navigation'
+import { networkLinkHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
+import {
+  formatSiteLinkLabel,
+  resolveSiteLinks,
+} from '@/lib/vpn-mesh'
 
-function vpnTitle(vpn: VpnRecord): string {
-  return vpn.displayName?.trim() || 'Unnamed VPN'
+function linkTitle(vpn: VpnRecord): string {
+  return vpn.displayName?.trim() || 'Unnamed link'
 }
 
-function VpnCard({
+function LinkCard({
   vpn,
+  siteLabel,
   peerCountLabel,
   canManage,
   renaming,
@@ -40,6 +47,7 @@ function VpnCard({
   onCancelDelete,
 }: Readonly<{
   vpn: VpnRecord
+  siteLabel: string
   peerCountLabel: string
   canManage: boolean
   renaming: boolean
@@ -57,16 +65,16 @@ function VpnCard({
       style={[orgPanelStyles.detailCard, webPointer]}
       onPress={onOpen}
     >
-      <Text style={orgPanelStyles.detailTitle}>{vpnTitle(vpn)}</Text>
+      <Text style={orgPanelStyles.detailTitle}>{siteLabel}</Text>
+      <Text style={orgPanelStyles.muted}>{linkTitle(vpn)}</Text>
       <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>CIDR: </Text>
+        <Text style={orgPanelStyles.detailLabel}>Mesh CIDR: </Text>
         <Text style={styles.mono}>{vpn.cidr}</Text>
       </Text>
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Peers · gateways: </Text>
         {peerCountLabel}
       </Text>
-      <Text style={orgPanelStyles.muted}>Open to manage peers and apply.</Text>
 
       {canManage ? (
         <View style={styles.cardActions} onStartShouldSetResponder={() => true}>
@@ -134,7 +142,7 @@ function VpnCard({
           </View>
           {confirmDelete ? (
             <Text style={orgPanelStyles.muted}>
-              Deletes this VPN and its peers. WireGuard configs already applied
+              Deletes this link and its peers. WireGuard configs already applied
               on hosts are not torn down automatically.
             </Text>
           ) : null}
@@ -144,7 +152,7 @@ function VpnCard({
   )
 }
 
-export function VpnsOverviewSection({
+export function NetworkLinksSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
   const router = useRouter()
@@ -156,11 +164,15 @@ export function VpnsOverviewSection({
   const [renamingId, setRenamingId] = useState<string | null>(null)
 
   const vpnsQuery = useVpns(orgId)
+  const serversQuery = useOrgServers(orgId)
+  const datacentersQuery = useDatacenters(orgId)
   const createMutation = useCreateVpn(orgId)
   const renameMutation = useRenameVpn(orgId)
   const deleteMutation = useDeleteVpn(orgId)
 
   const vpns = vpnsQuery.data?.vpns ?? []
+  const servers = serversQuery.data?.servers ?? []
+  const datacenters = datacentersQuery.data?.datacenters ?? []
 
   const peerQueries = useQueries({
     queries: vpns.map((vpn) => ({
@@ -168,6 +180,41 @@ export function VpnsOverviewSection({
       enabled: vpns.length > 0,
     })),
   })
+
+  const allPeers = useMemo(() => {
+    const peers = []
+    for (const query of peerQueries) {
+      if (query.data?.peers) peers.push(...query.data.peers)
+    }
+    return peers
+  }, [peerQueries])
+
+  const serverById = useMemo(
+    () =>
+      new Map(
+        servers.map((server) => [
+          server.id,
+          { datacenterId: server.datacenterId },
+        ]),
+      ),
+    [servers],
+  )
+
+  const siteNameById = useMemo(
+    () =>
+      new Map(
+        datacenters.map((dc) => [
+          dc.id,
+          dc.displayName?.trim() || dc.id,
+        ]),
+      ),
+    [datacenters],
+  )
+
+  const siteLinks = useMemo(
+    () => resolveSiteLinks(allPeers, serverById, vpns),
+    [allPeers, serverById, vpns],
+  )
 
   const peerCountByVpnId = useMemo(() => {
     const map = new Map<string, string>()
@@ -191,10 +238,14 @@ export function VpnsOverviewSection({
     queryError =
       vpnsQuery.error instanceof Error
         ? vpnsQuery.error.message
-        : 'Failed to load VPNs'
+        : 'Failed to load links'
   }
   const displayError =
-    error ?? createMutation.actionError ?? renameMutation.actionError ?? deleteMutation.actionError ?? queryError
+    error ??
+    createMutation.actionError ??
+    renameMutation.actionError ??
+    deleteMutation.actionError ??
+    queryError
 
   const loading = vpnsQuery.isLoading
   const createDisabled =
@@ -202,16 +253,16 @@ export function VpnsOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>VPNs</Text>
+      <Text style={orgPanelStyles.pageTitle}>Links</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        WireGuard meshes that link datacenters through peer servers. Not every
-        host needs to be a peer — more peers per site improve redundancy.
+        Site-to-site WireGuard meshes. Each link carries private traffic —
+        including database replication — between the sites its peers connect.
       </Text>
 
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
       {canManage ? (
-        <SectionPanel title="Create VPN" hint="Manage-gated">
+        <SectionPanel title="Create link" hint="Manage-gated">
           <Text style={styles.fieldLabel}>Display name</Text>
           <TextInput
             value={displayName}
@@ -254,9 +305,11 @@ export function VpnsOverviewSection({
                     setDisplayName('')
                     setMeshCidr('')
                   },
-                  onError: () => {
+                  onError: (err) => {
                     const message =
-                      createMutation.actionError ?? 'Failed to create VPN'
+                      err instanceof Error
+                        ? err.message
+                        : 'Failed to create link'
                     setError(
                       message.includes(VPN_CIDR_IN_USE_ERROR)
                         ? 'Another mesh already uses that CIDR.'
@@ -270,59 +323,78 @@ export function VpnsOverviewSection({
             {createMutation.isPending ? (
               <ActivityIndicator size="small" color={colors.textMuted} />
             ) : (
-              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Create VPN</Text>
+              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Create link</Text>
             )}
           </Pressable>
         </SectionPanel>
       ) : null}
 
       <SectionPanel
-        title="VPN meshes"
-        hint={loading ? 'Loading…' : `${vpns.length} mesh(es)`}
+        title="Site links"
+        hint={loading ? 'Loading…' : `${vpns.length} link(s)`}
       >
         {loading && vpns.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading VPNs…</Text>
+          <Text style={orgPanelStyles.muted}>Loading links…</Text>
         ) : null}
         {!loading && vpns.length === 0 ? (
           <Text style={orgPanelStyles.muted}>
-            No VPNs yet. Create a mesh, add peer servers, then apply WireGuard.
+            No links yet. Create a mesh, add peer servers, then apply WireGuard.
           </Text>
         ) : null}
         <View style={styles.list}>
-          {vpns.map((vpn) => (
-            <VpnCard
-              key={vpn.id}
-              vpn={vpn}
-              peerCountLabel={peerCountByVpnId.get(vpn.id) ?? '—'}
-              canManage={canManage}
-              renaming={renamingId === vpn.id}
-              confirmDelete={confirmDeleteId === vpn.id}
-              onOpen={() => router.push(vpnDetailHref(orgId, vpn.id))}
-              onRename={(name) => {
-                setRenamingId(vpn.id)
-                renameMutation.mutate(
-                  { vpnId: vpn.id, name },
-                  {
-                    onSuccess: () => setRenamingId(null),
-                    onError: () => {
-                      setError(renameMutation.actionError ?? 'Failed to rename VPN')
-                      setRenamingId(null)
+          {vpns.map((vpn) => {
+            const sites = siteLinks.get(vpn.id) ?? {
+              datacenterIds: [],
+              hasUnassignedPeers: false,
+            }
+            const peersLoading = peerCountByVpnId.get(vpn.id) === '—'
+            const siteLabel = peersLoading
+              ? '—'
+              : formatSiteLinkLabel(sites, siteNameById)
+            return (
+              <LinkCard
+                key={vpn.id}
+                vpn={vpn}
+                siteLabel={siteLabel}
+                peerCountLabel={peerCountByVpnId.get(vpn.id) ?? '—'}
+                canManage={canManage}
+                renaming={renamingId === vpn.id}
+                confirmDelete={confirmDeleteId === vpn.id}
+                onOpen={() => router.push(networkLinkHref(orgId, vpn.id))}
+                onRename={(name) => {
+                  setRenamingId(vpn.id)
+                  renameMutation.mutate(
+                    { vpnId: vpn.id, name },
+                    {
+                      onSuccess: () => setRenamingId(null),
+                      onError: (err) => {
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : 'Failed to rename link',
+                        )
+                        setRenamingId(null)
+                      },
                     },
-                  },
-                )
-              }}
-              onRequestDelete={() => setConfirmDeleteId(vpn.id)}
-              onConfirmDelete={() => {
-                deleteMutation.mutate(vpn.id, {
-                  onSuccess: () => setConfirmDeleteId(null),
-                  onError: () => {
-                    setError(deleteMutation.actionError ?? 'Failed to delete VPN')
-                  },
-                })
-              }}
-              onCancelDelete={() => setConfirmDeleteId(null)}
-            />
-          ))}
+                  )
+                }}
+                onRequestDelete={() => setConfirmDeleteId(vpn.id)}
+                onConfirmDelete={() => {
+                  deleteMutation.mutate(vpn.id, {
+                    onSuccess: () => setConfirmDeleteId(null),
+                    onError: (err) => {
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : 'Failed to delete link',
+                      )
+                    },
+                  })
+                }}
+                onCancelDelete={() => setConfirmDeleteId(null)}
+              />
+            )
+          })}
         </View>
       </SectionPanel>
     </View>

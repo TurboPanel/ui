@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Platform,
   Pressable,
@@ -12,10 +12,12 @@ import {
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import type { BindingRedeployRequired } from '@/lib/instance-api'
 import {
   managedErrorMessage,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
+import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
@@ -48,6 +50,7 @@ function DeleteActions({
   onCancel,
   onArm,
   buttonStyle,
+  label = 'Delete',
 }: Readonly<{
   armed: boolean
   disabled: boolean
@@ -55,6 +58,7 @@ function DeleteActions({
   onCancel: () => void
   onArm: () => void
   buttonStyle?: StyleProp<ViewStyle>
+  label?: string
 }>) {
   if (armed) {
     return (
@@ -84,12 +88,61 @@ function DeleteActions({
       disabled={disabled}
       onPress={onArm}
     >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Delete</Text>
+      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>{label}</Text>
     </Pressable>
   )
 }
 
+function RedeployServicesPanel({
+  redeployRequired,
+  onRedeploy,
+  onDismiss,
+}: Readonly<{
+  redeployRequired: BindingRedeployRequired
+  onRedeploy: (environmentId: string) => Promise<void>
+  onDismiss: () => void
+}>) {
+  const [busyId, setBusyId] = useState<string | null>(null)
+  return (
+    <View style={styles.redeployCard}>
+      <Text style={orgPanelStyles.detailTitle}>
+        {redeployRequired.count} service(s) need a redeploy to pick up the new
+        password
+      </Text>
+      {redeployRequired.services.map((service) => (
+        <View key={service.serviceId} style={styles.redeployRow}>
+          <Text style={styles.rowLabel}>
+            {service.displayName?.trim() || service.keyPrefix}
+          </Text>
+          <Pressable
+            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+            disabled={busyId === service.serviceId}
+            onPress={() => {
+              setBusyId(service.serviceId)
+              void onRedeploy(service.environmentId).finally(() =>
+                setBusyId(null),
+              )
+            }}
+          >
+            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+              {busyId === service.serviceId ? 'Redeploying…' : 'Redeploy'}
+            </Text>
+          </Pressable>
+        </View>
+      ))}
+      <Pressable
+        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+        onPress={onDismiss}
+      >
+        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Done</Text>
+      </Pressable>
+    </View>
+  )
+}
+
 export function ManagedUsersPanel({
+  orgId,
+  environmentId,
   databases,
   users,
   canManage,
@@ -98,8 +151,12 @@ export function ManagedUsersPanel({
   onDeleteDatabase,
   onCreateUser,
   onDeleteUser,
+  onRotateUserPassword,
+  onRedeployService,
   onReload,
 }: Readonly<{
+  orgId: string
+  environmentId: string
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
@@ -111,17 +168,45 @@ export function ManagedUsersPanel({
     databases: string[]
   }) => Promise<{ password: string } | null>
   onDeleteUser: (principalId: string) => Promise<void>
+  onRotateUserPassword: (principalId: string) => Promise<{
+    password: string
+    redeployRequired?: BindingRedeployRequired
+  } | null>
+  onRedeployService: (environmentId: string) => Promise<void>
   onReload: () => Promise<void>
 }>) {
+  const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [deleteArmedDb, setDeleteArmedDb] = useState<string | null>(null)
   const [deleteArmedUser, setDeleteArmedUser] = useState<string | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
   const [revealedUsername, setRevealedUsername] = useState<string | null>(null)
+  const [redeployRequired, setRedeployRequired] =
+    useState<BindingRedeployRequired | null>(null)
+
+  const bindings = bindingsQuery.data?.bindings ?? []
+  const bindingCountByPrincipal = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const binding of bindings) {
+      map.set(binding.principalId, (map.get(binding.principalId) ?? 0) + 1)
+    }
+    return map
+  }, [bindings])
+  const bindingCountByDatabase = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const binding of bindings) {
+      map.set(
+        binding.databaseName,
+        (map.get(binding.databaseName) ?? 0) + 1,
+      )
+    }
+    return map
+  }, [bindings])
 
   useEffect(() => {
     setSelectedDbs((current) => {
@@ -191,6 +276,7 @@ export function ManagedUsersPanel({
     }
     setWorking(true)
     setError(null)
+    setUsernameHint(null)
     try {
       const result = await onCreateUser({
         username: trimmed,
@@ -203,7 +289,18 @@ export function ManagedUsersPanel({
       setUsername('')
       await onReload()
     } catch (err) {
-      setError(managedErrorMessage(err, 'Failed to create user'))
+      const message = managedErrorMessage(err, 'Failed to create user')
+      const code =
+        err instanceof Error
+          ? /HTTP \d+:\s*([a-z0-9_]+)/i.exec(err.message)?.[1]
+          : null
+      if (code === 'username_in_use') {
+        const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 3)
+        setUsernameHint(`${message} Try ${trimmed}_${suffix}.`)
+        setError(null)
+      } else {
+        setError(message)
+      }
     } finally {
       setWorking(false)
     }
@@ -224,6 +321,25 @@ export function ManagedUsersPanel({
     }
   }
 
+  const rotateUser = async (principalId: string, uname: string) => {
+    setWorking(true)
+    setError(null)
+    try {
+      const result = await onRotateUserPassword(principalId)
+      if (result?.password) {
+        setRevealedUsername(uname)
+        setRevealedPassword(result.password)
+        if (result.redeployRequired && result.redeployRequired.count > 0) {
+          setRedeployRequired(result.redeployRequired)
+        }
+      }
+    } catch (err) {
+      setError(managedErrorMessage(err, 'Failed to rotate user password'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
   if (revealedPassword) {
     return (
       <SectionPanel title="Users & databases" hint="Engine users and databases">
@@ -236,6 +352,13 @@ export function ManagedUsersPanel({
           }}
           continueLabel="Done"
         />
+        {redeployRequired ? (
+          <RedeployServicesPanel
+            redeployRequired={redeployRequired}
+            onRedeploy={onRedeployService}
+            onDismiss={() => setRedeployRequired(null)}
+          />
+        ) : null}
       </SectionPanel>
     )
   }
@@ -248,22 +371,37 @@ export function ManagedUsersPanel({
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
-        {databases.map((name) => (
-          <View key={name} style={styles.row}>
-            <Text style={styles.rowLabel}>{name}</Text>
-            {canManage ? (
-              <DeleteActions
-                armed={deleteArmedDb === name}
-                disabled={disabled}
-                onConfirm={() => {
-                  void deleteDatabase(name)
-                }}
-                onCancel={() => setDeleteArmedDb(null)}
-                onArm={() => setDeleteArmedDb(name)}
-              />
-            ) : null}
-          </View>
-        ))}
+        {databases.map((name) => {
+          const bindingCount = bindingCountByDatabase.get(name) ?? 0
+          const deleteBlocked = bindingCount > 0
+          return (
+            <View key={name} style={styles.row}>
+              <Text style={styles.rowLabel}>{name}</Text>
+              {bindingCount > 0 ? (
+                <Text style={styles.connectedChip}>
+                  Connected to {bindingCount} service
+                  {bindingCount === 1 ? '' : 's'} — remove on Connect tab
+                </Text>
+              ) : null}
+              {canManage && deleteBlocked ? (
+                <Text style={orgPanelStyles.muted}>
+                  Remove connections first ({bindingCount})
+                </Text>
+              ) : null}
+              {canManage && !deleteBlocked ? (
+                <DeleteActions
+                  armed={deleteArmedDb === name}
+                  disabled={disabled}
+                  onConfirm={() => {
+                    void deleteDatabase(name)
+                  }}
+                  onCancel={() => setDeleteArmedDb(null)}
+                  onArm={() => setDeleteArmedDb(name)}
+                />
+              ) : null}
+            </View>
+          )
+        })}
       </View>
 
       {canManage ? (
@@ -295,34 +433,67 @@ export function ManagedUsersPanel({
       ) : null}
 
       <Text style={styles.subheading}>Users</Text>
+      <Text style={orgPanelStyles.muted}>
+        Usernames are unique across every database on this server&apos;s
+        organization.
+      </Text>
       <View style={styles.list}>
-        {users.map((user) => (
-          <View key={user.id} style={styles.userCard}>
-            <Text style={styles.rowLabel}>{user.username}</Text>
-            <View style={styles.chipRow}>
-              {user.databases.map((db) => (
-                <Chip key={db} label={db} />
-              ))}
+        {users.map((user) => {
+          const bindingCount = bindingCountByPrincipal.get(user.id) ?? 0
+          const deleteBlocked = bindingCount > 0
+          return (
+            <View key={user.id} style={styles.userCard}>
+              <Text style={styles.rowLabel}>{user.username}</Text>
+              <View style={styles.chipRow}>
+                {user.databases.map((db) => (
+                  <Chip key={db} label={db} />
+                ))}
+              </View>
+              {bindingCount > 0 ? (
+                <Text style={styles.connectedChip}>
+                  Connected to {bindingCount} service
+                  {bindingCount === 1 ? '' : 's'}
+                </Text>
+              ) : null}
+              {user.privileges.length > 0 ? (
+                <Text style={orgPanelStyles.muted}>
+                  {user.privileges.join(', ')}
+                </Text>
+              ) : null}
+              {canManage ? (
+                <View style={styles.userActions}>
+                  <Pressable
+                    style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+                    disabled={disabled}
+                    onPress={() => {
+                      void rotateUser(user.id, user.username)
+                    }}
+                  >
+                    <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                      Rotate password
+                    </Text>
+                  </Pressable>
+                  {deleteBlocked ? (
+                    <Text style={orgPanelStyles.muted}>
+                      Remove connections first ({bindingCount})
+                    </Text>
+                  ) : (
+                    <DeleteActions
+                      armed={deleteArmedUser === user.id}
+                      disabled={disabled}
+                      onConfirm={() => {
+                        void deleteUser(user.id)
+                      }}
+                      onCancel={() => setDeleteArmedUser(null)}
+                      onArm={() => setDeleteArmedUser(user.id)}
+                      buttonStyle={styles.deleteBtn}
+                    />
+                  )}
+                </View>
+              ) : null}
             </View>
-            {user.privileges.length > 0 ? (
-              <Text style={orgPanelStyles.muted}>
-                {user.privileges.join(', ')}
-              </Text>
-            ) : null}
-            {canManage ? (
-              <DeleteActions
-                armed={deleteArmedUser === user.id}
-                disabled={disabled}
-                onConfirm={() => {
-                  void deleteUser(user.id)
-                }}
-                onCancel={() => setDeleteArmedUser(null)}
-                onArm={() => setDeleteArmedUser(user.id)}
-                buttonStyle={styles.deleteBtn}
-              />
-            ) : null}
-          </View>
-        ))}
+          )
+        })}
         {users.length === 0 ? (
           <Text style={orgPanelStyles.muted}>No additional users yet.</Text>
         ) : null}
@@ -333,13 +504,19 @@ export function ManagedUsersPanel({
           <TextInput
             style={Platform.OS === 'web' ? webInputStyle : styles.input}
             value={username}
-            onChangeText={setUsername}
+            onChangeText={(value) => {
+              setUsername(value)
+              setUsernameHint(null)
+            }}
             placeholder="username"
             placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!disabled}
           />
+          {usernameHint ? (
+            <Text style={orgPanelStyles.calloutWarning}>{usernameHint}</Text>
+          ) : null}
           <Text style={orgPanelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
             {databases.map((name) => {
@@ -467,5 +644,31 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.55,
+  },
+  connectedChip: {
+    color: chrome.accent,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  userActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  redeployCard: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 8,
+    padding: spacing.sm,
+  },
+  redeployRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
 })

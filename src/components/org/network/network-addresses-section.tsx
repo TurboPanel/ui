@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
+import { IpListRow } from '@/components/org/network/network-rows'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import type {
   DatacenterRecord,
@@ -31,7 +32,7 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-const SCOPES: IpScope[] = ['public', 'datacenter', 'loopback', 'vpn']
+const SCOPES: IpScope[] = ['public', 'datacenter', 'vpn']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
 /** Simple client pre-check; server `ip-address.ts` is authoritative. */
@@ -57,6 +58,52 @@ function FilterChip({
       </Text>
     </Pressable>
   )
+}
+
+function SegmentFilterChip({
+  label,
+  active,
+  onPress,
+}: Readonly<{ label: string; active: boolean; onPress: () => void }>) {
+  return (
+    <Pressable
+      style={[
+        orgPanelStyles.segmentChip,
+        active && orgPanelStyles.segmentChipActive,
+      ]}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          orgPanelStyles.segmentChipText,
+          active && orgPanelStyles.segmentChipTextActive,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
+function filterIpsByServerPin(
+  ips: IpRecord[],
+  serverIdPin: string,
+): IpRecord[] {
+  if (!serverIdPin) return ips
+  return ips.filter((ip) => ip.serverId === serverIdPin)
+}
+
+function isCreateIpDisabled(
+  creating: boolean,
+  scope: IpScope,
+  vpnId: string,
+): boolean {
+  if (creating) return true
+  return scope === 'vpn' && !vpnId
+}
+
+function mutationErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
 }
 
 function vpnTitle(vpn: VpnRecord): string {
@@ -190,7 +237,7 @@ function CreateIpScopeFields({
         <View style={styles.chipRow}>
           {vpns.length === 0 ? (
             <Text style={orgPanelStyles.muted}>
-              Create a VPN mesh first on the VPNs page.
+              Create a mesh first on the Links page.
             </Text>
           ) : (
             vpns.map((vpn) => (
@@ -257,93 +304,6 @@ function CreateIpScopeFields({
         ))}
       </View>
     </>
-  )
-}
-
-export function IpListRow({
-  ip,
-  serverLabel,
-  networkLabel,
-  datacenterLabel,
-  vpnLabel,
-  isDeleting,
-  onDelete,
-  showDelete = true,
-  onEdit,
-  showEdit = false,
-}: Readonly<{
-  ip: IpRecord
-  serverLabel?: string | null
-  networkLabel?: string | null
-  datacenterLabel?: string | null
-  vpnLabel?: string | null
-  isDeleting?: boolean
-  onDelete?: (ipId: string) => void
-  showDelete?: boolean
-  onEdit?: (ipId: string) => void
-  showEdit?: boolean
-}>) {
-  return (
-    <View style={orgPanelStyles.detailCard}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.mono} selectable>
-          {ip.address}
-        </Text>
-        <View style={styles.cardActions}>
-          {showEdit && onEdit ? (
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={() => onEdit(ip.id)}
-            >
-              <Text style={styles.secondaryButtonText}>Edit</Text>
-            </Pressable>
-          ) : null}
-          {showDelete && onDelete ? (
-            <Pressable
-              style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
-              disabled={isDeleting}
-              onPress={() => onDelete(ip.id)}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {isDeleting ? 'Deleting…' : 'Delete'}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-      {ip.displayName?.trim() ? (
-        <Text style={orgPanelStyles.detailTitle}>{ip.displayName}</Text>
-      ) : null}
-      <View style={styles.badgeRow}>
-        <Text style={styles.badge}>v{ip.version}</Text>
-        <Text style={styles.badge}>{ip.scope}</Text>
-        <Text style={styles.badge}>{ip.allocation}</Text>
-      </View>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Server: </Text>
-        {serverLabel ?? '—'}
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Network: </Text>
-        {networkLabel ?? '—'}
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Datacenter: </Text>
-        {datacenterLabel ?? '—'}
-      </Text>
-      {ip.vpnId ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>VPN: </Text>
-          {vpnLabel ?? '—'}
-        </Text>
-      ) : null}
-      {ip.scope === 'vpn' ? (
-        <Text style={orgPanelStyles.muted}>
-          Mesh-managed address — override or remove the peer on the VPN detail
-          page. Released when the peer is removed.
-        </Text>
-      ) : null}
-    </View>
   )
 }
 
@@ -477,9 +437,367 @@ function IpEditPanel({
   )
 }
 
-export function IpsOverviewSection({
+function AddressFiltersPanel({
+  scopeFilter,
+  allocationFilter,
+  datacenterFilter,
+  datacenters,
+  onScopeFilterChange,
+  onAllocationFilterChange,
+  onDatacenterFilterChange,
+}: Readonly<{
+  scopeFilter: IpScope | 'all'
+  allocationFilter: IpAllocation | 'all'
+  datacenterFilter: string
+  datacenters: DatacenterRecord[]
+  onScopeFilterChange: (value: IpScope | 'all') => void
+  onAllocationFilterChange: (value: IpAllocation | 'all') => void
+  onDatacenterFilterChange: (value: string) => void
+}>) {
+  return (
+    <SectionPanel title="Filters" hint="Optional narrowing">
+      <Text style={styles.fieldLabel}>Scope</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        <SegmentFilterChip
+          label="All"
+          active={scopeFilter === 'all'}
+          onPress={() => onScopeFilterChange('all')}
+        />
+        {SCOPES.map((value) => (
+          <SegmentFilterChip
+            key={value}
+            label={value}
+            active={scopeFilter === value}
+            onPress={() => onScopeFilterChange(value)}
+          />
+        ))}
+      </View>
+      <Text style={styles.fieldLabel}>Allocation</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        <SegmentFilterChip
+          label="All"
+          active={allocationFilter === 'all'}
+          onPress={() => onAllocationFilterChange('all')}
+        />
+        {ALLOCATIONS.map((value) => (
+          <SegmentFilterChip
+            key={value}
+            label={value}
+            active={allocationFilter === value}
+            onPress={() => onAllocationFilterChange(value)}
+          />
+        ))}
+      </View>
+      <Text style={styles.fieldLabel}>Site</Text>
+      <View style={styles.chipRow}>
+        <FilterChip
+          label="All"
+          active={datacenterFilter === ''}
+          onPress={() => onDatacenterFilterChange('')}
+        />
+        {datacenters.map((row) => (
+          <FilterChip
+            key={row.id}
+            label={row.displayName?.trim() || row.id}
+            active={datacenterFilter === row.id}
+            onPress={() => onDatacenterFilterChange(row.id)}
+          />
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
+function AddAddressPanel({
+  address,
+  displayName,
+  allocation,
+  scope,
+  vpns,
+  datacenters,
+  networks,
+  servers,
+  createVpnId,
+  createDatacenterId,
+  createNetworkId,
+  createServerId,
+  createDisabled,
+  creating,
+  onAddressChange,
+  onDisplayNameChange,
+  onAllocationChange,
+  onScopeChange,
+  onVpnIdChange,
+  onDatacenterIdChange,
+  onNetworkIdChange,
+  onServerIdChange,
+  onCreate,
+}: Readonly<{
+  address: string
+  displayName: string
+  allocation: IpAllocation
+  scope: IpScope
+  vpns: VpnRecord[]
+  datacenters: DatacenterRecord[]
+  networks: NetworkRecord[]
+  servers: OrgServerRecord[]
+  createVpnId: string
+  createDatacenterId: string
+  createNetworkId: string
+  createServerId: string
+  createDisabled: boolean
+  creating: boolean
+  onAddressChange: (value: string) => void
+  onDisplayNameChange: (value: string) => void
+  onAllocationChange: (value: IpAllocation) => void
+  onScopeChange: (value: IpScope) => void
+  onVpnIdChange: (id: string) => void
+  onDatacenterIdChange: (id: string) => void
+  onNetworkIdChange: (id: string) => void
+  onServerIdChange: (id: string) => void
+  onCreate: () => void
+}>) {
+  return (
+    <SectionPanel title="Add IP address" hint="Manage-gated">
+      <Text style={styles.fieldLabel}>Address</Text>
+      <TextInput
+        value={address}
+        onChangeText={onAddressChange}
+        placeholder="203.0.113.10 or 2001:db8::1"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <Text style={styles.fieldLabel}>Display name</Text>
+      <TextInput
+        value={displayName}
+        onChangeText={onDisplayNameChange}
+        placeholder="Optional label"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.fieldLabel}>Allocation</Text>
+      <View style={styles.chipRow}>
+        {ALLOCATIONS.map((value) => (
+          <FilterChip
+            key={value}
+            label={value}
+            active={allocation === value}
+            onPress={() => onAllocationChange(value)}
+          />
+        ))}
+      </View>
+      <Text style={styles.fieldLabel}>Scope</Text>
+      <View style={styles.chipRow}>
+        {SCOPES.map((value) => (
+          <FilterChip
+            key={value}
+            label={value}
+            active={scope === value}
+            onPress={() => onScopeChange(value)}
+          />
+        ))}
+      </View>
+      <CreateIpScopeFields
+        scope={scope}
+        vpns={vpns}
+        datacenters={datacenters}
+        networks={networks}
+        servers={servers}
+        createVpnId={createVpnId}
+        createDatacenterId={createDatacenterId}
+        createNetworkId={createNetworkId}
+        createServerId={createServerId}
+        onVpnIdChange={onVpnIdChange}
+        onDatacenterIdChange={onDatacenterIdChange}
+        onNetworkIdChange={onNetworkIdChange}
+        onServerIdChange={onServerIdChange}
+      />
+      <Pressable
+        style={[
+          orgPanelStyles.toolbarBtnPrimary,
+          createDisabled && styles.buttonDisabled,
+          webPointer,
+        ]}
+        disabled={createDisabled}
+        onPress={onCreate}
+      >
+        {creating ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : (
+          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add address</Text>
+        )}
+      </Pressable>
+    </SectionPanel>
+  )
+}
+
+function addressRowLabels(
+  ip: IpRecord,
+  lookups: Readonly<{
+    serverById: Map<string, OrgServerRecord>
+    networkById: Map<string, NetworkRecord>
+    datacenterById: Map<string, DatacenterRecord>
+    vpnById: Map<string, VpnRecord>
+  }>,
+): {
+  serverLabel: string | null
+  networkLabel: string | null
+  datacenterLabel: string | null
+  vpnLabel: string | null
+} {
+  const server = ip.serverId ? lookups.serverById.get(ip.serverId) : null
+  const network = ip.networkId ? lookups.networkById.get(ip.networkId) : null
+  const datacenter = ip.datacenterId
+    ? lookups.datacenterById.get(ip.datacenterId)
+    : null
+  const vpn = ip.vpnId ? lookups.vpnById.get(ip.vpnId) : null
+  return {
+    serverLabel: server ? serverTitle(server) : null,
+    networkLabel: network?.displayName?.trim() || network?.cidr || null,
+    datacenterLabel: datacenter?.displayName?.trim() || null,
+    vpnLabel: vpn ? vpnTitle(vpn) : null,
+  }
+}
+
+function AddressPoolPanel({
+  loading,
+  ips,
+  editingId,
+  editAddress,
+  editDisplayName,
+  editAllocation,
+  editScope,
+  editDatacenterId,
+  editNetworkId,
+  editServerId,
+  datacenters,
+  networks,
+  servers,
+  savingEdit,
+  deletingId,
+  canManage,
+  serverById,
+  networkById,
+  datacenterById,
+  vpnById,
+  onDisplayNameChange,
+  onDatacenterIdChange,
+  onNetworkIdChange,
+  onServerIdChange,
+  onCancelEdit,
+  onSaveEdit,
+  onBeginEdit,
+  onDelete,
+}: Readonly<{
+  loading: boolean
+  ips: IpRecord[]
+  editingId: string | null
+  editAddress: string
+  editDisplayName: string
+  editAllocation: IpAllocation
+  editScope: IpScope
+  editDatacenterId: string
+  editNetworkId: string
+  editServerId: string
+  datacenters: DatacenterRecord[]
+  networks: NetworkRecord[]
+  servers: OrgServerRecord[]
+  savingEdit: boolean
+  deletingId: string | undefined
+  canManage: boolean
+  serverById: Map<string, OrgServerRecord>
+  networkById: Map<string, NetworkRecord>
+  datacenterById: Map<string, DatacenterRecord>
+  vpnById: Map<string, VpnRecord>
+  onDisplayNameChange: (value: string) => void
+  onDatacenterIdChange: (value: string) => void
+  onNetworkIdChange: (value: string) => void
+  onServerIdChange: (value: string) => void
+  onCancelEdit: () => void
+  onSaveEdit: () => void
+  onBeginEdit: (ip: IpRecord) => void
+  onDelete: (ipId: string) => void
+}>) {
+  let emptyState: string | null = null
+  if (loading && ips.length === 0) emptyState = 'Loading addresses…'
+  else if (!loading && ips.length === 0) {
+    emptyState = 'No addresses match these filters.'
+  }
+
+  return (
+    <SectionPanel
+      title="Address pool"
+      hint={loading ? 'Loading…' : `${ips.length} address(es)`}
+    >
+      {emptyState ? (
+        <Text style={orgPanelStyles.muted}>{emptyState}</Text>
+      ) : null}
+      <View style={styles.list}>
+        {ips.map((ip) => {
+          if (editingId === ip.id) {
+            return (
+              <IpEditPanel
+                key={ip.id}
+                address={editAddress}
+                displayName={editDisplayName}
+                allocation={editAllocation}
+                scope={editScope}
+                datacenterId={editDatacenterId}
+                networkId={editNetworkId}
+                serverId={editServerId}
+                datacenters={datacenters}
+                networks={networks}
+                servers={servers}
+                saving={savingEdit}
+                onDisplayNameChange={onDisplayNameChange}
+                onDatacenterIdChange={onDatacenterIdChange}
+                onNetworkIdChange={onNetworkIdChange}
+                onServerIdChange={onServerIdChange}
+                onCancel={onCancelEdit}
+                onSave={onSaveEdit}
+              />
+            )
+          }
+          // Mesh overlay rows are managed via VPN peer override/remove —
+          // not the flat IP edit/delete actions.
+          const isMeshManaged = ip.scope === 'vpn'
+          const labels = addressRowLabels(ip, {
+            serverById,
+            networkById,
+            datacenterById,
+            vpnById,
+          })
+          return (
+            <IpListRow
+              key={ip.id}
+              ip={ip}
+              serverLabel={labels.serverLabel}
+              networkLabel={labels.networkLabel}
+              datacenterLabel={labels.datacenterLabel}
+              vpnLabel={labels.vpnLabel}
+              isDeleting={deletingId === ip.id}
+              showDelete={canManage && !isMeshManaged}
+              showEdit={canManage && !isMeshManaged}
+              onEdit={() => onBeginEdit(ip)}
+              onDelete={onDelete}
+            />
+          )
+        })}
+      </View>
+    </SectionPanel>
+  )
+}
+
+export function NetworkAddressesSection({
   orgId,
-}: Readonly<{ orgId: string }>) {
+  serverId: serverIdFilter,
+}: Readonly<{
+  orgId: string
+  /** Optional pre-filter from legacy /servers/networks?serverId= redirect. */
+  serverId?: string
+}>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [scopeFilter, setScopeFilter] = useState<IpScope | 'all'>('all')
@@ -519,7 +837,9 @@ export function IpsOverviewSection({
   const updateMutation = useUpdateIp(orgId)
   const deleteMutation = useDeleteIp(orgId)
 
-  const ips = ipsQuery.data?.ips ?? []
+  const ipsRaw = ipsQuery.data?.ips ?? []
+  const serverIdPin = serverIdFilter?.trim() || ''
+  const ips = filterIpsByServerPin(ipsRaw, serverIdPin)
   const servers = serversQuery.data?.servers ?? []
   const networks = networksQuery.data?.networks ?? []
   const datacenters = datacentersQuery.data?.datacenters ?? []
@@ -546,7 +866,7 @@ export function IpsOverviewSection({
     ? deleteMutation.variables
     : undefined
   const creating = createMutation.isPending
-  const createDisabled = creating || (scope === 'vpn' && !createVpnId)
+  const createDisabled = isCreateIpDisabled(creating, scope, createVpnId)
   const savingEdit = updateMutation.isPending
 
   const serverById = useMemo(() => indexById(servers), [servers])
@@ -599,8 +919,8 @@ export function IpsOverviewSection({
       }),
       {
         onSuccess: () => resetCreateForm(),
-        onError: () => {
-          setError(createMutation.actionError ?? 'Failed to create IP')
+        onError: (err) => {
+          setError(mutationErrorMessage(err, 'Failed to create IP'))
         },
       },
     )
@@ -615,8 +935,8 @@ export function IpsOverviewSection({
       onSuccess: () => {
         if (editingId === ipId) setEditingId(null)
       },
-      onError: () => {
-        setError(deleteMutation.actionError ?? 'Failed to delete IP')
+      onError: (err) => {
+        setError(mutationErrorMessage(err, 'Failed to delete IP'))
       },
     })
   }
@@ -653,8 +973,8 @@ export function IpsOverviewSection({
       },
       {
         onSuccess: () => setEditingId(null),
-        onError: () => {
-          setError(updateMutation.actionError ?? 'Failed to update IP')
+        onError: (err) => {
+          setError(mutationErrorMessage(err, 'Failed to update IP'))
         },
       },
     )
@@ -662,205 +982,84 @@ export function IpsOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>IP addresses</Text>
+      <Text style={orgPanelStyles.pageTitle}>Addresses</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Managed address pool for ingress and internal routing across the
-        organization.
+        Organization address pool for ingress and internal routing.
+        Mesh overlay addresses are managed on the link detail page.
       </Text>
 
-      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
-
-      <SectionPanel title="Filters" hint="Optional narrowing">
-        <Text style={styles.fieldLabel}>Scope</Text>
-        <View style={styles.chipRow}>
-          <FilterChip
-            label="All"
-            active={scopeFilter === 'all'}
-            onPress={() => setScopeFilter('all')}
-          />
-          {SCOPES.map((value) => (
-            <FilterChip
-              key={value}
-              label={value}
-              active={scopeFilter === value}
-              onPress={() => setScopeFilter(value)}
-            />
-          ))}
-        </View>
-        <Text style={styles.fieldLabel}>Allocation</Text>
-        <View style={styles.chipRow}>
-          <FilterChip
-            label="All"
-            active={allocationFilter === 'all'}
-            onPress={() => setAllocationFilter('all')}
-          />
-          {ALLOCATIONS.map((value) => (
-            <FilterChip
-              key={value}
-              label={value}
-              active={allocationFilter === value}
-              onPress={() => setAllocationFilter(value)}
-            />
-          ))}
-        </View>
-        <Text style={styles.fieldLabel}>Datacenter</Text>
-        <View style={styles.chipRow}>
-          <FilterChip
-            label="All"
-            active={datacenterFilter === ''}
-            onPress={() => setDatacenterFilter('')}
-          />
-          {datacenters.map((row) => (
-            <FilterChip
-              key={row.id}
-              label={row.displayName?.trim() || row.id}
-              active={datacenterFilter === row.id}
-              onPress={() => setDatacenterFilter(row.id)}
-            />
-          ))}
-        </View>
-      </SectionPanel>
-
-      {canManage ? (
-        <SectionPanel title="Add IP address" hint="Manage-gated">
-          <Text style={styles.fieldLabel}>Address</Text>
-          <TextInput
-            value={address}
-            onChangeText={setAddress}
-            placeholder="203.0.113.10 or 2001:db8::1"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.fieldLabel}>Display name</Text>
-          <TextInput
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Optional label"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.fieldLabel}>Allocation</Text>
-          <View style={styles.chipRow}>
-            {ALLOCATIONS.map((value) => (
-              <FilterChip
-                key={value}
-                label={value}
-                active={allocation === value}
-                onPress={() => setAllocation(value)}
-              />
-            ))}
-          </View>
-          <Text style={styles.fieldLabel}>Scope</Text>
-          <View style={styles.chipRow}>
-            {SCOPES.map((value) => (
-              <FilterChip
-                key={value}
-                label={value}
-                active={scope === value}
-                onPress={() => handleCreateScopeChange(value)}
-              />
-            ))}
-          </View>
-          <CreateIpScopeFields
-            scope={scope}
-            vpns={vpns}
-            datacenters={datacenters}
-            networks={networks}
-            servers={servers}
-            createVpnId={createVpnId}
-            createDatacenterId={createDatacenterId}
-            createNetworkId={createNetworkId}
-            createServerId={createServerId}
-            onVpnIdChange={setCreateVpnId}
-            onDatacenterIdChange={setCreateDatacenterId}
-            onNetworkIdChange={setCreateNetworkId}
-            onServerIdChange={setCreateServerId}
-          />
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              createDisabled && styles.buttonDisabled,
-              webPointer,
-            ]}
-            disabled={createDisabled}
-            onPress={handleCreate}
-          >
-            {creating ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            ) : (
-              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add address</Text>
-            )}
-          </Pressable>
-        </SectionPanel>
+      {displayError ? (
+        <Text style={orgPanelStyles.error}>{displayError}</Text>
       ) : null}
 
-      <SectionPanel
-        title="Address pool"
-        hint={loading ? 'Loading…' : `${ips.length} address(es)`}
-      >
-        {loading && ips.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>Loading addresses…</Text>
-        ) : null}
-        {!loading && ips.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No addresses match these filters.</Text>
-        ) : null}
-        <View style={styles.list}>
-          {ips.map((ip) => {
-            const server = ip.serverId ? serverById.get(ip.serverId) : null
-            const network = ip.networkId ? networkById.get(ip.networkId) : null
-            const datacenter = ip.datacenterId
-              ? datacenterById.get(ip.datacenterId)
-              : null
-            const vpn = ip.vpnId ? vpnById.get(ip.vpnId) : null
-            if (editingId === ip.id) {
-              return (
-                <IpEditPanel
-                  key={ip.id}
-                  address={editAddress}
-                  displayName={editDisplayName}
-                  allocation={editAllocation}
-                  scope={editScope}
-                  datacenterId={editDatacenterId}
-                  networkId={editNetworkId}
-                  serverId={editServerId}
-                  datacenters={datacenters}
-                  networks={networks}
-                  servers={servers}
-                  saving={savingEdit}
-                  onDisplayNameChange={setEditDisplayName}
-                  onDatacenterIdChange={setEditDatacenterId}
-                  onNetworkIdChange={setEditNetworkId}
-                  onServerIdChange={setEditServerId}
-                  onCancel={cancelEdit}
-                  onSave={handleSaveEdit}
-                />
-              )
-            }
-            // Mesh overlay rows are managed via VPN peer override/remove —
-            // not the flat IP edit/delete actions.
-            const isMeshManaged = ip.scope === 'vpn'
-            return (
-              <IpListRow
-                key={ip.id}
-                ip={ip}
-                serverLabel={server ? serverTitle(server) : null}
-                networkLabel={
-                  network?.displayName?.trim() || network?.cidr || null
-                }
-                datacenterLabel={datacenter?.displayName?.trim() || null}
-                vpnLabel={vpn ? vpnTitle(vpn) : null}
-                isDeleting={deletingId === ip.id}
-                showDelete={canManage && !isMeshManaged}
-                showEdit={canManage && !isMeshManaged}
-                onEdit={() => beginEdit(ip)}
-                onDelete={handleDelete}
-              />
-            )
-          })}
-        </View>
-      </SectionPanel>
+      <AddressFiltersPanel
+        scopeFilter={scopeFilter}
+        allocationFilter={allocationFilter}
+        datacenterFilter={datacenterFilter}
+        datacenters={datacenters}
+        onScopeFilterChange={setScopeFilter}
+        onAllocationFilterChange={setAllocationFilter}
+        onDatacenterFilterChange={setDatacenterFilter}
+      />
+
+      {canManage ? (
+        <AddAddressPanel
+          address={address}
+          displayName={displayName}
+          allocation={allocation}
+          scope={scope}
+          vpns={vpns}
+          datacenters={datacenters}
+          networks={networks}
+          servers={servers}
+          createVpnId={createVpnId}
+          createDatacenterId={createDatacenterId}
+          createNetworkId={createNetworkId}
+          createServerId={createServerId}
+          createDisabled={createDisabled}
+          creating={creating}
+          onAddressChange={setAddress}
+          onDisplayNameChange={setDisplayName}
+          onAllocationChange={setAllocation}
+          onScopeChange={handleCreateScopeChange}
+          onVpnIdChange={setCreateVpnId}
+          onDatacenterIdChange={setCreateDatacenterId}
+          onNetworkIdChange={setCreateNetworkId}
+          onServerIdChange={setCreateServerId}
+          onCreate={handleCreate}
+        />
+      ) : null}
+
+      <AddressPoolPanel
+        loading={loading}
+        ips={ips}
+        editingId={editingId}
+        editAddress={editAddress}
+        editDisplayName={editDisplayName}
+        editAllocation={editAllocation}
+        editScope={editScope}
+        editDatacenterId={editDatacenterId}
+        editNetworkId={editNetworkId}
+        editServerId={editServerId}
+        datacenters={datacenters}
+        networks={networks}
+        servers={servers}
+        savingEdit={savingEdit}
+        deletingId={deletingId}
+        canManage={canManage}
+        serverById={serverById}
+        networkById={networkById}
+        datacenterById={datacenterById}
+        vpnById={vpnById}
+        onDisplayNameChange={setEditDisplayName}
+        onDatacenterIdChange={setEditDatacenterId}
+        onNetworkIdChange={setEditNetworkId}
+        onServerIdChange={setEditServerId}
+        onCancelEdit={cancelEdit}
+        onSaveEdit={handleSaveEdit}
+        onBeginEdit={beginEdit}
+        onDelete={handleDelete}
+      />
     </View>
   )
 }

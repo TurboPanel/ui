@@ -1,4 +1,10 @@
-import type { AccessScopeKind, VariableParentFilter } from '@/lib/instance-api'
+import type {
+  AccessScopeKind,
+  IpAllocation,
+  IpScope,
+  NetworkKind,
+  VariableParentFilter,
+} from '@/lib/instance-api'
 
 /**
  * Hierarchical React Query key factory.
@@ -22,15 +28,15 @@ export type IpListFilters = Readonly<{
   datacenterId?: string
   serverId?: string
   vpnId?: string
-  scope?: string
-  allocation?: string
+  scope?: IpScope
+  allocation?: IpAllocation
 }>
 
 export type NetworkListFilters = Readonly<{
   organizationId?: string
   datacenterId?: string
   serverId?: string
-  kind?: string
+  kind?: NetworkKind
 }>
 
 export type ContainerListFilters = Readonly<{
@@ -95,6 +101,12 @@ export const queryKeys = {
           ['org', orgId, 'server', serverId, 'metrics', 'summary', rangeId] as const,
         ips: (serverId: string, filters?: IpListFilters) =>
           ['org', orgId, 'server', serverId, 'ips', filters ?? {}] as const,
+        /**
+         * Combined server Network tab payload (IPs + networks + sites).
+         * Not an `IpListFilters` key — do not reuse fake scopes here.
+         */
+        networkPanel: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'network-panel'] as const,
       },
 
       settings: {
@@ -129,6 +141,8 @@ export const queryKeys = {
       },
 
       tls: ['org', orgId, 'tls'] as const,
+      /** Org CA sits under the tls prefix so one invalidation clears library + CA. */
+      tlsCa: ['org', orgId, 'tls', 'ca'] as const,
 
       workspaces: {
         all: ['org', orgId, 'workspaces'] as const,
@@ -199,6 +213,9 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId] as const,
         status: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'status'] as const,
+        /** Identity-only cache key — members ride environment + status queries. */
+        members: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'members'] as const,
         users: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users'] as const,
         databases: (environmentId: string) =>
@@ -207,6 +224,42 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'backups'] as const,
         logs: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'logs'] as const,
+      },
+
+      bindings: {
+        all: ['org', orgId, 'bindings'] as const,
+        list: (
+          filter:
+            | { serviceId: string }
+            | { environmentId: string }
+            | { managedEnvironmentId: string },
+        ) => {
+          if ('serviceId' in filter) {
+            return [
+              'org',
+              orgId,
+              'bindings',
+              'serviceId',
+              filter.serviceId,
+            ] as const
+          }
+          if ('managedEnvironmentId' in filter) {
+            return [
+              'org',
+              orgId,
+              'bindings',
+              'managedEnvironmentId',
+              filter.managedEnvironmentId,
+            ] as const
+          }
+          return [
+            'org',
+            orgId,
+            'bindings',
+            'environmentId',
+            filter.environmentId,
+          ] as const
+        },
       },
 
       commands: {

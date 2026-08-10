@@ -1,10 +1,20 @@
-import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useRouter } from 'expo-router'
+import { useMemo, useState } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { useQueries } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
+import {
+  IpListRow,
+  NetworkListItem,
+} from '@/components/org/network/network-rows'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { NetworkListItem } from '@/components/org/networks-overview-section'
-import { IpListRow } from '@/components/org/ips-overview-section'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import type {
   DatacenterRecord,
@@ -16,27 +26,176 @@ import type {
 } from '@/lib/instance-api'
 import {
   peersQueryOptions,
+  useCreateNetwork,
   useDatacenter,
+  useDatacenters,
+  useDeleteNetwork,
   useIps,
   useNetworks,
   useUpdateDatacenter,
   useVpns,
 } from '@/lib/queries/topology'
 import { useOrgServers, usePatchServer, useTimezones } from '@/lib/queries/servers'
+import { networkLinkHref } from '@/lib/org-navigation'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
+  formatSiteLinkLabel,
   overlayAddressForPeer,
   resolvePrimaryGatewayByDatacenter,
+  resolveSiteLinks,
+  type SiteLinkSites,
 } from '@/lib/vpn-mesh'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
 }
 
+function PrivateNetworkPanel({
+  orgId,
+  datacenterId,
+  networks,
+  loading,
+  canManage,
+}: Readonly<{
+  orgId: string
+  datacenterId: string
+  networks: NetworkRecord[]
+  loading: boolean
+  canManage: boolean
+}>) {
+  const [error, setError] = useState<string | null>(null)
+  const [cidr, setCidr] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const createMutation = useCreateNetwork(orgId)
+  const deleteMutation = useDeleteNetwork(orgId)
+
+  const privateNetworks = networks.filter((n) => n.kind === 'datacenter')
+  const creating = createMutation.isPending
+  const createDisabled = creating || cidr.trim().length === 0
+
+  return (
+    <SectionPanel
+      title="Private network"
+      hint={`${privateNetworks.length} CIDR(s)`}
+    >
+      {error || createMutation.actionError || deleteMutation.actionError ? (
+        <Text style={orgPanelStyles.error}>
+          {error ??
+            createMutation.actionError ??
+            deleteMutation.actionError}
+        </Text>
+      ) : null}
+
+      {loading && privateNetworks.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>Loading private network…</Text>
+      ) : null}
+      {!loading && privateNetworks.length === 0 ? (
+        <View style={orgPanelStyles.calloutWarning}>
+          <Text style={orgPanelStyles.calloutWarningText}>
+            This site has no private network — it can&apos;t host database
+            replicas until one is added.
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.list}>
+        {privateNetworks.map((network) => (
+          <NetworkListItem
+            key={network.id}
+            network={network}
+            showDelete={canManage}
+            isDeleting={
+              deleteMutation.isPending &&
+              deleteMutation.variables === network.id
+            }
+            onDelete={(networkId) => {
+              setError(null)
+              deleteMutation.mutate(networkId, {
+                onError: (err) => {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : 'Failed to delete network',
+                  )
+                },
+              })
+            }}
+          />
+        ))}
+      </View>
+
+      {canManage ? (
+        <View style={styles.createBlock}>
+          <Text style={styles.fieldLabel}>Add private network</Text>
+          <TextInput
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="Optional name"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <TextInput
+            value={cidr}
+            onChangeText={setCidr}
+            // NOSONAR typescript:S1313 — example private CIDR placeholder
+            placeholder="e.g. 10.0.0.0/24"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Pressable
+            style={[
+              orgPanelStyles.toolbarBtnPrimary,
+              createDisabled && styles.buttonDisabled,
+              webPointer,
+            ]}
+            disabled={createDisabled}
+            onPress={() => {
+              setError(null)
+              createMutation.mutate(
+                {
+                  organizationId: orgId,
+                  kind: 'datacenter',
+                  datacenterId,
+                  cidr: cidr.trim(),
+                  displayName: displayName.trim() || undefined,
+                },
+                {
+                  onSuccess: () => {
+                    setCidr('')
+                    setDisplayName('')
+                  },
+                  onError: (err) => {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : 'Failed to create private network',
+                    )
+                  },
+                },
+              )
+            }}
+          >
+            {creating ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+                Add private network
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
 function MemberServersPanel({
   memberServers,
   unassignedServers,
+  privateAddressByServerId,
   canManage,
   pending,
   assignServerId,
@@ -46,6 +205,7 @@ function MemberServersPanel({
 }: Readonly<{
   memberServers: OrgServerRecord[]
   unassignedServers: OrgServerRecord[]
+  privateAddressByServerId: Map<string, string>
   canManage: boolean
   pending: boolean
   assignServerId: string
@@ -60,36 +220,51 @@ function MemberServersPanel({
     >
       {memberServers.length === 0 ? (
         <Text style={orgPanelStyles.muted}>
-          No servers assigned to this datacenter yet.
+          No servers assigned to this site yet.
         </Text>
       ) : (
         <View style={styles.list}>
-          {memberServers.map((server) => (
-            <View key={server.id} style={orgPanelStyles.detailCard}>
-              <Text style={orgPanelStyles.detailTitle}>
-                {serverTitle(server)}
-              </Text>
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Status: </Text>
-                {server.connected ? 'Online' : 'Offline'}
-              </Text>
-              {canManage ? (
-                <Pressable
-                  style={[
-                    orgPanelStyles.toolbarBtnSecondary,
-                    pending && styles.buttonDisabled,
-                    webPointer,
-                  ]}
-                  disabled={pending}
-                  onPress={() => onUnassign(server.id)}
-                >
-                  <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                    Unassign
+          {memberServers.map((server) => {
+            const privateAddress = privateAddressByServerId.get(server.id)
+            return (
+              <View key={server.id} style={orgPanelStyles.detailCard}>
+                <Text style={orgPanelStyles.detailTitle}>
+                  {serverTitle(server)}
+                </Text>
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>Status: </Text>
+                  {server.connected ? 'Online' : 'Offline'}
+                </Text>
+                {privateAddress ? (
+                  <Text style={orgPanelStyles.detailLine}>
+                    <Text style={orgPanelStyles.detailLabel}>
+                      Private address:{' '}
+                    </Text>
+                    <Text style={styles.mono} selectable>
+                      {privateAddress}
+                    </Text>
                   </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
+                ) : (
+                  <Text style={orgPanelStyles.muted}>No private address</Text>
+                )}
+                {canManage ? (
+                  <Pressable
+                    style={[
+                      orgPanelStyles.toolbarBtnSecondary,
+                      pending && styles.buttonDisabled,
+                      webPointer,
+                    ]}
+                    disabled={pending}
+                    onPress={() => onUnassign(server.id)}
+                  >
+                    <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                      Unassign
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            )
+          })}
         </View>
       )}
 
@@ -98,7 +273,7 @@ function MemberServersPanel({
           <Text style={styles.fieldLabel}>Assign unassigned server</Text>
           {unassignedServers.length === 0 ? (
             <Text style={orgPanelStyles.muted}>
-              All org servers already belong to a datacenter.
+              All org servers already belong to a site.
             </Text>
           ) : (
             <View style={styles.chipRow}>
@@ -134,7 +309,7 @@ function MemberServersPanel({
             onPress={onAssign}
           >
             <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-              Assign to datacenter
+              Assign to site
             </Text>
           </Pressable>
         </View>
@@ -143,39 +318,10 @@ function MemberServersPanel({
   )
 }
 
-function DatacenterNetworksPanel({
-  networks,
-  loading,
-}: Readonly<{
-  networks: NetworkRecord[]
-  loading: boolean
-}>) {
-  return (
-    <SectionPanel title="Networks" hint={`${networks.length} network(s)`}>
-      {loading && networks.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading networks…</Text>
-      ) : null}
-      {!loading && networks.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>
-          No networks scoped to this datacenter.
-        </Text>
-      ) : null}
-      <View style={styles.list}>
-        {networks.map((network) => (
-          <NetworkListItem
-            key={network.id}
-            network={network}
-            showDelete={false}
-          />
-        ))}
-      </View>
-    </SectionPanel>
-  )
-}
-
-type MeshGatewayRow = {
+type LinkFromSiteRow = {
   peer: PeerRecord
   vpn: VpnRecord
+  otherSiteLabel: string
   serverLabel: string
   overlayAddress: string | null
   isPrimary: boolean
@@ -192,17 +338,6 @@ function collectSiteCidrs(networks: readonly NetworkRecord[]): string[] {
   return siteCidrs
 }
 
-function collectPeersFromQueries(
-  peerQueries: readonly { data?: { peers: PeerRecord[] } }[],
-): PeerRecord[] {
-  const allPeers: PeerRecord[] = []
-  for (const peerQuery of peerQueries) {
-    const peers = peerQuery.data?.peers
-    if (peers) allPeers.push(...peers)
-  }
-  return allPeers
-}
-
 function groupPeersByVpnId(
   peers: readonly PeerRecord[],
 ): Map<string, PeerRecord[]> {
@@ -215,7 +350,6 @@ function groupPeersByVpnId(
   return byVpn
 }
 
-/** Primary gateway peer IDs resolved per VPN (mirrors apply-prep for one mesh). */
 function collectPrimaryPeerIds(
   peers: readonly PeerRecord[],
   serverById: ReadonlyMap<
@@ -235,91 +369,164 @@ function collectPrimaryPeerIds(
   return primaryPeerIds
 }
 
-function buildMeshGatewayRows(input: {
-  peers: readonly PeerRecord[]
+function resolveSiteCidrs(
+  datacenter: DatacenterRecord | undefined,
+  networks: readonly NetworkRecord[],
+): string[] {
+  const privateCidrs = datacenter?.privateCidrs
+  if ((privateCidrs?.length ?? 0) > 0) {
+    return [...(privateCidrs ?? [])].sort((a, b) => a.localeCompare(b))
+  }
+  return collectSiteCidrs(networks)
+}
+
+function resolveOtherSiteLabel(
+  sites: SiteLinkSites | undefined,
+  datacenterId: string,
+  siteNameById: ReadonlyMap<string, string>,
+): string {
+  if (!sites) return '—'
+  const otherIds = sites.datacenterIds.filter((id) => id !== datacenterId)
+  if (otherIds.length === 0 && sites.hasUnassignedPeers) {
+    return 'Unassigned hosts'
+  }
+  if (otherIds.length === 0) return '—'
+  return formatSiteLinkLabel(
+    {
+      datacenterIds: otherIds,
+      hasUnassignedPeers: sites.hasUnassignedPeers,
+    },
+    siteNameById,
+  )
+}
+
+function collectPeersFromQueries(
+  peerQueries: ReadonlyArray<{ data?: { peers?: PeerRecord[] } }>,
+): PeerRecord[] {
+  const allPeers: PeerRecord[] = []
+  for (const peerQuery of peerQueries) {
+    const peers = peerQuery.data?.peers
+    if (peers) allPeers.push(...peers)
+  }
+  return allPeers
+}
+
+function buildLinkRowsFromSite({
+  allPeers,
+  servers,
+  vpns,
+  datacenterId,
+  siteLinks,
+  siteNameById,
+  ipById,
+  primaryPeerIds,
+}: Readonly<{
+  allPeers: readonly PeerRecord[]
   servers: readonly OrgServerRecord[]
-  vpnById: ReadonlyMap<string, VpnRecord>
-  ipById: ReadonlyMap<string, IpRecord>
+  vpns: readonly VpnRecord[]
   datacenterId: string
+  siteLinks: ReadonlyMap<string, SiteLinkSites>
+  siteNameById: ReadonlyMap<string, string>
+  ipById: ReadonlyMap<string, IpRecord>
   primaryPeerIds: ReadonlySet<string>
-}): MeshGatewayRow[] {
-  const rows: MeshGatewayRow[] = []
-  for (const peer of input.peers) {
+}>): LinkFromSiteRow[] {
+  const linkRows: LinkFromSiteRow[] = []
+  for (const peer of allPeers) {
     if (peer.role !== 'gateway') continue
-    const server = input.servers.find((row) => row.id === peer.serverId)
+    const server = servers.find(
+      (row) =>
+        row.id === peer.serverId && row.datacenterId === datacenterId,
+    )
     if (!server) continue
-    if (server.datacenterId !== input.datacenterId) continue
-    const vpn = input.vpnById.get(peer.vpnId)
+    const vpn = vpns.find((v) => v.id === peer.vpnId)
     if (!vpn) continue
-    rows.push({
+    linkRows.push({
       peer,
       vpn,
+      otherSiteLabel: resolveOtherSiteLabel(
+        siteLinks.get(vpn.id),
+        datacenterId,
+        siteNameById,
+      ),
       serverLabel: serverTitle(server),
-      overlayAddress: overlayAddressForPeer(peer, input.ipById),
-      isPrimary: input.primaryPeerIds.has(peer.id),
+      overlayAddress: overlayAddressForPeer(peer, ipById),
+      isPrimary: primaryPeerIds.has(peer.id),
     })
   }
-  rows.sort((a, b) => {
+  linkRows.sort((a, b) => {
     const nameCmp = (a.vpn.displayName ?? a.vpn.id).localeCompare(
       b.vpn.displayName ?? b.vpn.id,
     )
     if (nameCmp !== 0) return nameCmp
     return a.serverLabel.localeCompare(b.serverLabel)
   })
-  return rows
+  return linkRows
 }
 
-function MeshGatewaysPanel({
+function datacenterLoadError(
+  isError: boolean,
+  error: unknown,
+): string | null {
+  if (!isError) return null
+  if (error instanceof Error) return error.message
+  return 'Failed to load site'
+}
+
+function mutationErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message
+  return fallback
+}
+
+function LinksFromSitePanel({
+  orgId,
   rows,
   siteCidrs,
   loading,
 }: Readonly<{
-  rows: MeshGatewayRow[]
+  orgId: string
+  rows: LinkFromSiteRow[]
   siteCidrs: string[]
   loading: boolean
 }>) {
+  const router = useRouter()
   const missingSiteCidr = rows.length > 0 && siteCidrs.length === 0
 
   return (
     <SectionPanel
-      title="Mesh gateways"
-      hint={`${rows.length} gateway(s) at this site`}
+      title="Links from this site"
+      hint={`${rows.length} gateway(s)`}
     >
+      <Text style={orgPanelStyles.muted}>
+        Path cross-site replication takes when peers use this site as a gateway.
+      </Text>
       {loading && rows.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading mesh gateways…</Text>
+        <Text style={orgPanelStyles.muted}>Loading links…</Text>
       ) : null}
       {!loading && rows.length === 0 ? (
         <View style={orgPanelStyles.statePanel}>
           <Text style={orgPanelStyles.muted}>
-            No mesh gateway here — this site is not reachable over the VPN.
+            No link from this site — it is not reachable from other sites.
           </Text>
-        </View>
-      ) : null}
-
-      {siteCidrs.length > 0 ? (
-        <View style={styles.siteCidrBlock}>
-          <Text style={orgPanelStyles.detailTitle}>Advertised site CIDRs</Text>
-          {siteCidrs.map((cidr) => (
-            <Text key={cidr} style={orgPanelStyles.detailLine} selectable>
-              {cidr}
-            </Text>
-          ))}
         </View>
       ) : null}
 
       {missingSiteCidr ? (
         <View style={orgPanelStyles.calloutWarning}>
           <Text style={orgPanelStyles.calloutWarningText}>
-            This site has a mesh gateway but no datacenter network CIDR.
-            Apply will fail until a datacenter-scoped network advertises the
-            site prefix (gateway_datacenter_cidr_required).
+            This site has a mesh gateway but no private network CIDR. Apply will
+            fail until a private network advertises the site prefix
+            (gateway_datacenter_cidr_required).
           </Text>
         </View>
       ) : null}
 
       <View style={styles.list}>
         {rows.map((row) => (
-          <View key={row.peer.id} style={orgPanelStyles.detailCard}>
+          <Pressable
+            key={row.peer.id}
+            style={[orgPanelStyles.detailCard, webPointer]}
+            onPress={() => router.push(networkLinkHref(orgId, row.vpn.id))}
+          >
             <View style={styles.gatewayTitleRow}>
               <Text style={orgPanelStyles.detailTitle}>
                 {row.vpn.displayName?.trim() || 'Unnamed mesh'}
@@ -329,6 +536,10 @@ function MeshGatewaysPanel({
               ) : null}
             </View>
             <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Other end: </Text>
+              {row.otherSiteLabel}
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
               <Text style={orgPanelStyles.detailLabel}>Gateway: </Text>
               {row.serverLabel}
             </Text>
@@ -336,14 +547,14 @@ function MeshGatewaysPanel({
               <Text style={orgPanelStyles.detailLabel}>Overlay: </Text>
               {row.overlayAddress ?? '—'}
             </Text>
-          </View>
+          </Pressable>
         ))}
       </View>
     </SectionPanel>
   )
 }
 
-function DatacenterIpPoolPanel({
+function SiteIpPoolPanel({
   ips,
   servers,
   loading,
@@ -359,7 +570,7 @@ function DatacenterIpPoolPanel({
       ) : null}
       {!loading && ips.length === 0 ? (
         <Text style={orgPanelStyles.muted}>
-          No IP addresses in this datacenter pool.
+          No IP addresses in this site pool.
         </Text>
       ) : null}
       <View style={styles.list}>
@@ -381,7 +592,7 @@ function DatacenterIpPoolPanel({
   )
 }
 
-function DatacenterTimezonePanel({
+function SiteTimezonePanel({
   datacenter,
   timezoneOptions,
   effectiveTimezone,
@@ -403,23 +614,23 @@ function DatacenterTimezonePanel({
   onSave: () => void
 }>) {
   return (
-    <SectionPanel title="Timezone" hint="Datacenter default · manage-gated">
+    <SectionPanel title="Timezone" hint="Site default · manage-gated">
       <Text style={orgPanelStyles.muted}>
-        When enforcement is on, this datacenter&apos;s default beats the org
-        fleet default for its member servers.
+        When enforcement is on, this site&apos;s default beats the org fleet
+        default for its member servers.
       </Text>
       <ServerTimezonePicker
         value={effectiveTimezone}
         options={timezoneOptions}
         disabled={readOnly || pending || !datacenter}
-        placeholder="Select datacenter timezone…"
+        placeholder="Select site timezone…"
         noneLabel="None (inherit org default)"
         onChange={onTimezoneChange}
       />
       <View style={styles.switchRow}>
         <View style={styles.switchCopy}>
           <Text style={styles.switchLabel}>
-            Enforce datacenter default on member servers
+            Enforce site default on member servers
           </Text>
           <Text style={orgPanelStyles.muted}>
             When on, member hosts use this timezone over the org default.
@@ -465,7 +676,7 @@ function DatacenterTimezonePanel({
   )
 }
 
-export function DatacenterDetailSection({
+export function NetworkSiteDetailSection({
   orgId,
   datacenterId,
 }: Readonly<{
@@ -494,10 +705,20 @@ export function DatacenterDetailSection({
     { datacenterId },
     { enabled: Boolean(datacenterId) },
   )
+  // O(1) scope filter only — includes server-owned private rows where
+  // datacenterId is null (matches instance loadServerDatacenterAddress).
+  const privateIpsQuery = useIps(
+    orgId,
+    { scope: 'datacenter' },
+    { enabled: Boolean(datacenterId) },
+  )
   const timezonesQuery = useTimezones()
   const vpnsQuery = useVpns(orgId)
   const vpnIpsQuery = useIps(orgId, { scope: 'vpn' })
+  const datacentersQuery = useDatacenters(orgId)
+
   const vpns = vpnsQuery.data?.vpns ?? []
+  const allDatacenters = datacentersQuery.data?.datacenters ?? []
   const peerQueries = useQueries({
     queries: vpns.map((vpn) => ({
       ...peersQueryOptions(orgId, vpn.id),
@@ -516,7 +737,19 @@ export function DatacenterDetailSection({
   const unassignedServers = servers.filter((server) => !server.datacenterId)
   const networks = networksQuery.data?.networks ?? []
   const ips = ipsQuery.data?.ips ?? []
-  const siteCidrs = collectSiteCidrs(networks)
+  const siteCidrs = resolveSiteCidrs(datacenter, networks)
+
+  const privateAddressByServerId = useMemo(() => {
+    const map = new Map<string, string>()
+    const memberIds = new Set(memberServers.map((server) => server.id))
+    for (const ip of privateIpsQuery.data?.ips ?? []) {
+      if (!ip.serverId || !memberIds.has(ip.serverId)) continue
+      if (!map.has(ip.serverId)) {
+        map.set(ip.serverId, ip.address)
+      }
+    }
+    return map
+  }, [privateIpsQuery.data?.ips, memberServers])
 
   const serverById = new Map(
     servers.map((server) => [
@@ -527,27 +760,44 @@ export function DatacenterDetailSection({
       },
     ]),
   )
+  const siteNameById = useMemo(() => {
+    const map = new Map(
+      allDatacenters.map((dc) => [
+        dc.id,
+        dc.displayName?.trim() || dc.id,
+      ]),
+    )
+    if (datacenter) {
+      map.set(
+        datacenterId,
+        datacenter.displayName?.trim() || datacenterId,
+      )
+    }
+    return map
+  }, [allDatacenters, datacenter, datacenterId])
+
   const ipById = new Map(
     (vpnIpsQuery.data?.ips ?? []).map((ip) => [ip.id, ip]),
   )
-  const vpnById = new Map(vpns.map((vpn) => [vpn.id, vpn]))
   const allPeers = collectPeersFromQueries(peerQueries)
   const primaryPeerIds = collectPrimaryPeerIds(allPeers, serverById)
-  const meshGatewayRows = buildMeshGatewayRows({
-    peers: allPeers,
+  const siteLinks = resolveSiteLinks(allPeers, serverById, vpns)
+  const linkRows = buildLinkRowsFromSite({
+    allPeers,
     servers,
-    vpnById,
-    ipById,
+    vpns,
     datacenterId,
+    siteLinks,
+    siteNameById,
+    ipById,
     primaryPeerIds,
   })
 
-  const meshGatewaysLoading =
+  const linksLoading =
     vpnsQuery.isLoading ||
     vpnIpsQuery.isLoading ||
     peerQueries.some((query) => query.isLoading)
 
-  // draftTimezone uses undefined = "no draft"; null = explicit "None".
   let effectiveTimezone = datacenter?.options?.defaultServerTimezone ?? null
   if (draftTimezone !== undefined) {
     effectiveTimezone = draftTimezone
@@ -558,13 +808,10 @@ export function DatacenterDetailSection({
     timezoneMutation.isPending || patchServerMutation.isPending
   const readOnly = !canManage
 
-  let queryError: string | null = null
-  if (datacenterQuery.isError) {
-    queryError =
-      datacenterQuery.error instanceof Error
-        ? datacenterQuery.error.message
-        : 'Failed to load datacenter'
-  }
+  const queryError = datacenterLoadError(
+    datacenterQuery.isError,
+    datacenterQuery.error,
+  )
   const displayError =
     error ??
     patchServerMutation.actionError ??
@@ -573,21 +820,30 @@ export function DatacenterDetailSection({
 
   const title =
     datacenter?.displayName?.trim() ||
-    (datacenterQuery.isLoading ? 'Datacenter' : 'Unnamed datacenter')
+    (datacenterQuery.isLoading ? 'Site' : 'Unnamed site')
 
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>{title}</Text>
       <Text style={orgPanelStyles.pageCopy}>
         {datacenter?.description?.trim() ||
-          'Member servers, networks, IP pool, and timezone defaults for this location.'}
+          'Private network, member servers, links, IP pool, and timezone for this site.'}
       </Text>
 
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
 
+      <PrivateNetworkPanel
+        orgId={orgId}
+        datacenterId={datacenterId}
+        networks={networks}
+        loading={networksQuery.isLoading}
+        canManage={canManage}
+      />
+
       <MemberServersPanel
         memberServers={memberServers}
         unassignedServers={unassignedServers}
+        privateAddressByServerId={privateAddressByServerId}
         canManage={canManage}
         pending={pending}
         assignServerId={assignServerId}
@@ -598,10 +854,8 @@ export function DatacenterDetailSection({
             { serverId: assignServerId, body: { datacenterId } },
             {
               onSuccess: () => setAssignServerId(''),
-              onError: () => {
-                setError(
-                  patchServerMutation.actionError ?? 'Failed to assign server',
-                )
+              onError: (err) => {
+                setError(mutationErrorMessage(err, 'Failed to assign server'))
               },
             },
           )
@@ -611,9 +865,9 @@ export function DatacenterDetailSection({
           patchServerMutation.mutate(
             { serverId, body: { datacenterId: null } },
             {
-              onError: () => {
+              onError: (err) => {
                 setError(
-                  patchServerMutation.actionError ?? 'Failed to unassign server',
+                  mutationErrorMessage(err, 'Failed to unassign server'),
                 )
               },
             },
@@ -621,24 +875,20 @@ export function DatacenterDetailSection({
         }}
       />
 
-      <DatacenterNetworksPanel
-        networks={networks}
-        loading={networksQuery.isLoading}
-      />
-
-      <MeshGatewaysPanel
-        rows={meshGatewayRows}
+      <LinksFromSitePanel
+        orgId={orgId}
+        rows={linkRows}
         siteCidrs={siteCidrs}
-        loading={meshGatewaysLoading}
+        loading={linksLoading}
       />
 
-      <DatacenterIpPoolPanel
+      <SiteIpPoolPanel
         ips={ips}
         servers={servers}
         loading={ipsQuery.isLoading}
       />
 
-      <DatacenterTimezonePanel
+      <SiteTimezonePanel
         datacenter={datacenter}
         timezoneOptions={timezonesQuery.data?.timezones ?? []}
         effectiveTimezone={effectiveTimezone}
@@ -661,10 +911,9 @@ export function DatacenterDetailSection({
                 setDraftTimezone(undefined)
                 setDraftEnforce(null)
               },
-              onError: () => {
+              onError: (err) => {
                 setError(
-                  timezoneMutation.actionError ??
-                    'Failed to save datacenter timezone',
+                  mutationErrorMessage(err, 'Failed to save site timezone'),
                 )
               },
             },
@@ -683,9 +932,9 @@ const styles = StyleSheet.create({
   list: {
     gap: 8,
   },
-  siteCidrBlock: {
+  createBlock: {
+    marginTop: spacing.md,
     gap: spacing.xs,
-    marginBottom: spacing.sm,
   },
   gatewayTitleRow: {
     flexDirection: 'row',
@@ -709,6 +958,22 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    backgroundColor: colors.bgInput,
+    color: colors.text,
+    fontSize: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: spacing.sm,
+    minHeight: 44,
+  },
+  mono: {
+    fontFamily: 'monospace',
+    color: colors.textBody,
   },
   chipRow: {
     flexDirection: 'row',

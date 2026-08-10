@@ -8,7 +8,12 @@ import {
 } from '@/components/icons/nav-icons'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
-import { ORG_AREAS, orgAreaHref, orgRouteHref } from '@/lib/org-navigation'
+import {
+  ORG_AREAS,
+  orgAreaFromPathname,
+  orgAreaHref,
+  orgRouteHref,
+} from '@/lib/org-navigation'
 import { webPointer } from '@/components/org/org-panel-styles'
 import { glass } from '@/lib/glass'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
@@ -30,6 +35,9 @@ export function OrgSidebar({
   const adminHref = adminAreaHref('networking')
   const adminActive =
     pathname === adminHref || pathname.startsWith('/admin/')
+  const resolved = orgAreaFromPathname(pathname)
+  const activeAreaId = resolved?.area.id ?? null
+  const activeSubRouteId = resolved?.subRoute?.id ?? null
 
   return (
     <GlassSurface style={styles.sidebar} intensity="strong">
@@ -48,7 +56,9 @@ export function OrgSidebar({
             area.id === 'projects'
               ? pathname === projectsBase ||
                 pathname.startsWith(`${projectsBase}/`)
-              : pathname === areaHref || pathname.startsWith(`${areaHref}/`)
+              : activeAreaId === area.id ||
+                pathname === areaHref ||
+                pathname.startsWith(`${areaHref}/`)
           const iconColor = areaActive ? chrome.accent : colors.textMuted
 
           return (
@@ -87,7 +97,10 @@ export function OrgSidebar({
                         area.pathSegment,
                         subRoute.pathSegment,
                       )
-                      const subActive = pathname === subHref
+                      const subActive =
+                        activeSubRouteId === subRoute.id ||
+                        pathname === subHref ||
+                        pathname.startsWith(`${subHref}/`)
 
                       return (
                         <Pressable

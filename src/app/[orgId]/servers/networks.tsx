@@ -1,20 +1,21 @@
-import { useLocalSearchParams } from 'expo-router'
-import { NetworksOverviewSection } from '@/components/org/networks-overview-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 
-export default function ServersNetworksScreen() {
+/** Legacy → Network sites root. Forwards ?serverId= to addresses pool filter. */
+export default function LegacyServersNetworksRedirect() {
   const { orgId, serverId } = useLocalSearchParams<{
     orgId: string
     serverId?: string | string[]
   }>()
-
-  const resolvedServerId = Array.isArray(serverId)
-    ? serverId[0]
-    : serverId
-
-  return (
-    <NetworksOverviewSection
-      orgId={orgId ?? ''}
-      serverId={resolvedServerId}
-    />
-  )
+  const id = orgId ?? ''
+  const resolved = Array.isArray(serverId) ? serverId[0] : serverId
+  if (resolved?.trim()) {
+    return (
+      <Redirect
+        href={
+          `/${id}/network/addresses?serverId=${encodeURIComponent(resolved.trim())}` as Href
+        }
+      />
+    )
+  }
+  return <Redirect href={`/${id}/network` as Href} />
 }

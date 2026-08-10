@@ -111,8 +111,8 @@ function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
 }
 
-function vpnTitle(vpn: VpnRecord): string {
-  return vpn.displayName?.trim() || 'Unnamed VPN'
+function linkTitle(vpn: VpnRecord): string {
+  return vpn.displayName?.trim() || 'Unnamed link'
 }
 
 function truncateKey(publicKey: string): string {
@@ -726,7 +726,7 @@ function vpnDetailGate(input: {
   return null
 }
 
-export function VpnDetailSection({
+export function NetworkLinkDetailSection({
   orgId,
   vpnId,
 }: Readonly<{ orgId: string; vpnId: string }>) {
@@ -822,10 +822,11 @@ export function VpnDetailSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>{vpnTitle(vpn)}</Text>
+      <Text style={orgPanelStyles.pageTitle}>{linkTitle(vpn)}</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Peer servers form the WireGuard mesh. Apply pushes config to each peer
-        daemon — overlay addresses are assigned from the mesh CIDR.
+        This link carries private traffic (including database replication)
+        between the sites its peers connect. Apply pushes WireGuard config to
+        each peer daemon — overlay addresses come from the mesh CIDR.
       </Text>
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
@@ -842,12 +843,9 @@ export function VpnDetailSection({
             { cidr: meshCidr.trim() },
             {
               onSuccess: () => setCidrDraft(undefined),
-              onError: () => {
+              onError: (err) => {
                 setError(
-                  friendlyApiError(
-                    saveCidrMutation.actionError,
-                    'Failed to update mesh CIDR',
-                  ),
+                  friendlyApiError(err, 'Failed to update mesh CIDR'),
                 )
               },
             },
@@ -873,13 +871,8 @@ export function VpnDetailSection({
         onDelete={(peerId) => {
           setError(null)
           deletePeerMutation.mutate(peerId, {
-            onError: () => {
-              setError(
-                friendlyApiError(
-                  deletePeerMutation.actionError,
-                  'Failed to remove peer',
-                ),
-              )
+            onError: (err) => {
+              setError(friendlyApiError(err, 'Failed to remove peer'))
             },
           })
         }}
@@ -937,13 +930,8 @@ export function VpnDetailSection({
                   setPeerRole('member')
                   setPeerTunnelAddress('')
                 },
-                onError: () => {
-                  setError(
-                    friendlyApiError(
-                      createPeerMutation.actionError,
-                      'Failed to add peer',
-                    ),
-                  )
+                onError: (err) => {
+                  setError(friendlyApiError(err, 'Failed to add peer'))
                 },
               },
             )
@@ -968,9 +956,9 @@ export function VpnDetailSection({
                   results: data.results,
                 })
               },
-              onError: () => {
+              onError: (err) => {
                 const message = friendlyApiError(
-                  applyMutation.actionError,
+                  err,
                   'Failed to apply WireGuard',
                 )
                 setApplyError(message)

@@ -13,6 +13,8 @@
 - Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar inside `SectionPanel` (no title/hint bar): **+ Server** (own-gated) + batch Update for selected updatable hosts  
 - **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
+- **TLS** sub-route (`/servers/tls`) for the organization certificate library  
+- Networking topology (**Sites**, **Links**, **Addresses**, **Docker networks**) lives under the **Network** area — see `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle` / `pageCopy`; route context lives in `OrgHeader` eyebrow  
 - No hero, no stat strip, no decorative bento above the table
 

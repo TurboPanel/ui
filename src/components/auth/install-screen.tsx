@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Platform, TextInput } from 'react-native'
-import Animated, {
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated'
-import { YStack, XStack, Input, Button, Text } from 'tamagui'
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  View,
+} from 'react-native'
 import { useRouter, type Href } from 'expo-router'
+import { AuthFloatingField } from '@/components/auth/auth-floating-field'
+import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
+import {
+  authFormStyles,
+  webPointer,
+} from '@/components/auth/auth-form-styles'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref } from '@/lib/org-navigation'
 import {
@@ -15,18 +19,11 @@ import {
   useCompleteInstall,
 } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
+import { colors, spacing } from '@/lib/theme'
 
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: '#3d3d3d',
-  backgroundColor: '#1a1a1a',
-  color: '#e0e0e0',
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
+/** Neutral chrome for install — no runtime accent wash or CTA tint. */
+const INSTALL_CHROME = colors.borderMuted
+const INSTALL_FOCUS = colors.textMuted
 
 function submitButtonLabel(loading: boolean, hostVerified: boolean): string {
   if (loading) {
@@ -35,51 +32,14 @@ function submitButtonLabel(loading: boolean, hostVerified: boolean): string {
   return hostVerified ? 'Complete setup' : 'Continue'
 }
 
-function PasswordField({
-  value,
-  onChangeText,
-  showPassword,
-  onToggleShow,
-  disabled,
-}: Readonly<{
-  value: string
-  onChangeText: (text: string) => void
-  showPassword: boolean
-  onToggleShow: () => void
-  disabled: boolean
-}>) {
-  return (
-    <XStack position="relative" items="center">
-      {Platform.OS === 'web' ? (
-        <TextInput
-          placeholder="Password"
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!disabled}
-          style={{ ...webInputStyle, flex: 1 }}
-        />
-      ) : (
-        <Input
-          flex={1}
-          placeholder="Password"
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          autoCorrect={false as unknown as undefined}
-          borderColor="$borderColor"
-          bg="$background"
-          disabled={disabled}
-        />
-      )}
-      <Button size="$2" chromeless position="absolute" r="$2" onPress={onToggleShow}>
-        {showPassword ? 'Hide' : 'Show'}
-      </Button>
-    </XStack>
-  )
+function submitAccessibilityLabel(
+  loading: boolean,
+  hostVerified: boolean,
+): string {
+  if (loading) {
+    return hostVerified ? 'Setting up' : 'Authenticating'
+  }
+  return hostVerified ? 'Complete setup' : 'Continue'
 }
 
 export function InstallScreenContent() {
@@ -100,35 +60,34 @@ export function InstallScreenContent() {
   const loading =
     bootstrapInstallMutation.isPending || completeInstallMutation.isPending
 
-  const hostSectionTranslateY = useSharedValue(0)
-  const superadminSectionOpacity = useSharedValue(0)
-  const superadminSectionHeight = useSharedValue(0)
-
-  useEffect(() => {
-    const duration = 250
-    if (hostVerified) {
-      hostSectionTranslateY.value = withTiming(-8, { duration })
-      superadminSectionOpacity.value = withTiming(1, { duration })
-      superadminSectionHeight.value = withTiming(1, { duration })
-    } else {
-      hostSectionTranslateY.value = withTiming(0, { duration })
-      superadminSectionOpacity.value = withTiming(0, { duration })
-      superadminSectionHeight.value = withTiming(0, { duration })
-    }
-  }, [hostVerified, hostSectionTranslateY, superadminSectionOpacity, superadminSectionHeight])
-
-  const hostSectionStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: hostSectionTranslateY.value }],
-  }))
-
-  const superadminSectionStyle = useAnimatedStyle(() => ({
-    opacity: superadminSectionOpacity.value,
-    maxHeight: interpolate(superadminSectionHeight.value, [0, 1], [0, 300]),
-    overflow: 'hidden' as const,
-  }))
-
   const resetHostVerification = useCallback(() => {
     setHostVerified(false)
+    setError('')
+  }, [])
+
+  const onUsernameChange = useCallback(
+    (text: string) => {
+      setUsername(text)
+      resetHostVerification()
+    },
+    [resetHostVerification],
+  )
+
+  const onHostPasswordChange = useCallback(
+    (text: string) => {
+      setPassword(text)
+      resetHostVerification()
+    },
+    [resetHostVerification],
+  )
+
+  const onSuperadminEmailChange = useCallback((text: string) => {
+    setSuperadminEmail(text)
+    setError('')
+  }, [])
+
+  const onSuperadminPasswordChange = useCallback((text: string) => {
+    setSuperadminPassword(text)
     setError('')
   }, [])
 
@@ -184,6 +143,13 @@ export function InstallScreenContent() {
     router,
   ])
 
+  const onSubmit = useCallback(() => {
+    const run = hostVerified ? handleCompleteSetup : handleHostAuth
+    run().catch(() => {
+      // Errors are surfaced via setError inside the handlers.
+    })
+  }, [hostVerified, handleCompleteSetup, handleHostAuth])
+
   useEffect(() => {
     if (instanceInfoLoading || success) return
     if (!isInstallMode) router.replace('/sign-in')
@@ -191,143 +157,147 @@ export function InstallScreenContent() {
 
   if (success) {
     return (
-      <YStack flex={1} bg="$background" p="$6" justify="center" gap="$4">
-        <Text fontSize="$6" fontWeight="bold" color="$color">
-          Installation complete 🎉
-        </Text>
-        <Text color="$gray11" fontSize="$4">
-          Signing you in…
-        </Text>
-      </YStack>
+      <AuthScreenShell
+        title="Install"
+        description="Signing you in…"
+        accentColor={INSTALL_CHROME}
+        animateBackdrop={false}
+      >
+        <Text style={authFormStyles.pageCopy}>Installation complete.</Text>
+      </AuthScreenShell>
     )
   }
 
   if (instanceInfoLoading || !isInstallMode) return null
 
-
   const introText = hostVerified
     ? 'Host verified. Create your superadmin account below.'
     : 'Sign in with root or a sudo-capable host account to begin setup.'
 
+  const completeDisabled =
+    loading ||
+    (hostVerified && (!superadminEmail.trim() || !superadminPassword))
+
   return (
-    <YStack flex={1} bg="$background" p="$6" justify="center" gap="$4">
-      <Text fontSize="$6" fontWeight="bold" color="$color">
-        Set up your TurboPanel instance
-      </Text>
-      <Text color="$gray11" fontSize="$4">
-        {introText}
-      </Text>
+    <AuthScreenShell
+      title="Install"
+      description={introText}
+      accentColor={INSTALL_CHROME}
+      animateBackdrop={false}
+    >
+      <Text style={authFormStyles.label}>Host administrator</Text>
 
-      <Animated.View style={hostSectionStyle}>
-        <YStack gap="$2">
-          <Text color="$color" fontSize="$4">
-            Host administrator
-          </Text>
-          {Platform.OS === 'web' ? (
-            <TextInput
-              placeholder="Username"
-              value={username}
-              onChangeText={(text) => {
-                setUsername(text)
-                resetHostVerification()
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-              style={webInputStyle}
-            />
-          ) : (
-            <Input
-              placeholder="Username"
-              value={username}
-              onChangeText={(text) => {
-                setUsername(text)
-                resetHostVerification()
-              }}
-              autoCapitalize="none"
-              autoCorrect={false as unknown as undefined}
-              borderColor="$borderColor"
-              bg="$background"
-              disabled={loading}
-            />
-          )}
-          <PasswordField
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text)
-              resetHostVerification()
-            }}
-            showPassword={showHostPassword}
-            onToggleShow={() => setShowHostPassword((v) => !v)}
-            disabled={loading}
-          />
-        </YStack>
-      </Animated.View>
+      <View style={authFormStyles.field}>
+        <AuthFloatingField
+          label="Username"
+          value={username}
+          onChangeText={onUsernameChange}
+          accentColor={INSTALL_FOCUS}
+          autoComplete="username"
+          editable={!loading}
+          returnKeyType="next"
+        />
+      </View>
 
-      <Animated.View style={[{ overflow: 'hidden' }, superadminSectionStyle]}>
-        <YStack gap="$2" pt="$2">
-          <Text color="$color" fontSize="$4">
+      <View style={[authFormStyles.field, authFormStyles.fieldSpaced]}>
+        <AuthFloatingField
+          label="Password"
+          value={password}
+          onChangeText={onHostPasswordChange}
+          accentColor={INSTALL_FOCUS}
+          autoComplete="password"
+          secureTextEntry={!showHostPassword}
+          showPasswordToggle
+          passwordVisible={showHostPassword}
+          onTogglePasswordVisible={() => setShowHostPassword((v) => !v)}
+          editable={!loading}
+          returnKeyType={hostVerified ? 'next' : 'go'}
+          onSubmitEditing={hostVerified ? undefined : onSubmit}
+        />
+      </View>
+
+      {hostVerified ? (
+        <>
+          <Text style={[authFormStyles.label, { marginTop: spacing.sm }]}>
             Superadmin account
           </Text>
-          {Platform.OS === 'web' ? (
-            <TextInput
-              placeholder="you@example.com"
+
+          <View style={authFormStyles.field}>
+            <AuthFloatingField
+              label="Email"
               value={superadminEmail}
-              onChangeText={(text) => {
-                setSuperadminEmail(text)
-                setError('')
-              }}
+              onChangeText={onSuperadminEmailChange}
+              accentColor={INSTALL_FOCUS}
               autoComplete="email"
               keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
               editable={!loading}
-              style={webInputStyle}
+              returnKeyType="next"
             />
-          ) : (
-            <Input
-              placeholder="you@example.com"
-              value={superadminEmail}
-              onChangeText={(text) => {
-                setSuperadminEmail(text)
-                setError('')
-              }}
-              autoComplete="email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false as unknown as undefined}
-              borderColor="$borderColor"
-              bg="$background"
-              disabled={loading}
+          </View>
+
+          <View style={[authFormStyles.field, authFormStyles.fieldSpaced]}>
+            <AuthFloatingField
+              label="Password"
+              value={superadminPassword}
+              onChangeText={onSuperadminPasswordChange}
+              accentColor={INSTALL_FOCUS}
+              autoComplete="new-password"
+              secureTextEntry={!showSuperadminPassword}
+              showPasswordToggle
+              passwordVisible={showSuperadminPassword}
+              onTogglePasswordVisible={() =>
+                setShowSuperadminPassword((v) => !v)
+              }
+              editable={!loading}
+              returnKeyType="go"
+              onSubmitEditing={onSubmit}
             />
-          )}
-          <PasswordField
-            value={superadminPassword}
-            onChangeText={(text) => {
-              setSuperadminPassword(text)
-              setError('')
-            }}
-            showPassword={showSuperadminPassword}
-            onToggleShow={() => setShowSuperadminPassword((v) => !v)}
-            disabled={loading}
-          />
-        </YStack>
-      </Animated.View>
+          </View>
+        </>
+      ) : null}
 
       {error ? (
-        <Text color="$red10" fontSize="$3">
+        <Text style={authFormStyles.error} accessibilityRole="alert">
           {error}
         </Text>
       ) : null}
-      <Button
-        onPress={hostVerified ? handleCompleteSetup : handleHostAuth}
-        theme="accent"
-        size="$4"
-        disabled={loading || (hostVerified && (!superadminEmail.trim() || !superadminPassword))}
-        opacity={loading ? 0.7 : 1}
+
+      <Pressable
+        onPress={onSubmit}
+        disabled={completeDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={submitAccessibilityLabel(loading, hostVerified)}
+        style={({ pressed }) => [
+          authFormStyles.primaryButton,
+          { backgroundColor: colors.text },
+          completeDisabled && authFormStyles.primaryButtonDisabled,
+          pressed && !completeDisabled && authFormStyles.primaryButtonPressed,
+          webPointer,
+        ]}
       >
-        {submitButtonLabel(loading, hostVerified)}
-      </Button>
-    </YStack>
+        {loading ? (
+          <View style={authFormStyles.primaryButtonContent}>
+            <ActivityIndicator size="small" color={colors.buttonText} />
+            <Text
+              style={[
+                authFormStyles.primaryButtonText,
+                { color: colors.buttonText },
+              ]}
+            >
+              {submitButtonLabel(true, hostVerified)}
+            </Text>
+          </View>
+        ) : (
+          <Text
+            style={[
+              authFormStyles.primaryButtonText,
+              { color: colors.buttonText },
+            ]}
+          >
+            {submitButtonLabel(false, hostVerified)}
+          </Text>
+        )}
+      </Pressable>
+    </AuthScreenShell>
   )
 }

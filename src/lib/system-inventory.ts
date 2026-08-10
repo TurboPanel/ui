@@ -10,6 +10,7 @@ export const SYSTEM_WORKSPACE_KIND: WorkspaceKind = 'system'
 
 /** Idempotency key for the per-server hosting ingress Traefik stack. */
 export const SYSTEM_HOSTING_INGRESS_COMPONENT = 'hosting-ingress'
+export const SYSTEM_MANAGED_INGRESS_COMPONENT = 'managed-ingress'
 
 /**
  * Allowlisted system components that may be restarted via
@@ -17,6 +18,7 @@ export const SYSTEM_HOSTING_INGRESS_COMPONENT = 'hosting-ingress'
  */
 export const SYSTEM_OPERATE_COMPONENTS = [
   SYSTEM_HOSTING_INGRESS_COMPONENT,
+  SYSTEM_MANAGED_INGRESS_COMPONENT,
 ] as const
 
 export type SystemOperateComponent = (typeof SYSTEM_OPERATE_COMPONENTS)[number]
@@ -29,7 +31,7 @@ export const SYSTEM_WORKSPACE_DESCRIPTION =
   'Platform managed — created and maintained by TurboPanel'
 
 export function isSystemWorkspace(
-  workspace: Readonly<{ kind?: WorkspaceKind | string | null }>,
+  workspace: Readonly<{ kind?: WorkspaceKind | null }>,
 ): boolean {
   return workspace.kind === SYSTEM_WORKSPACE_KIND
 }
@@ -89,6 +91,18 @@ export function findServerIngressEnvironment(
     environments.find((environment) => environment.serverId === serverId) ??
     null
   )
+}
+
+/** User-facing labels for system project component keys (not for auth). */
+export function systemComponentLabel(component: string | null | undefined): string {
+  switch (component) {
+    case SYSTEM_HOSTING_INGRESS_COMPONENT:
+      return 'Hosting ingress'
+    case SYSTEM_MANAGED_INGRESS_COMPONENT:
+      return 'Database ingress'
+    default:
+      return component?.trim() || '—'
+  }
 }
 
 export function isSystemOperateComponent(

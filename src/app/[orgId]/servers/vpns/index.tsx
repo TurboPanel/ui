@@ -1,8 +1,7 @@
-import { useLocalSearchParams } from 'expo-router'
-import { VpnsOverviewSection } from '@/components/org/vpns-overview-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 
-export default function ServersVpnsScreen() {
+/** Legacy → Network links. */
+export default function LegacyServersVpnsRedirect() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-
-  return <VpnsOverviewSection orgId={orgId ?? ''} />
+  return <Redirect href={`/${orgId ?? ''}/network/links` as Href} />
 }

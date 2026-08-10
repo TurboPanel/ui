@@ -7,7 +7,7 @@ import { spacing } from '@/lib/theme'
 export function ManagedFocusTab({
   focus,
 }: Readonly<{
-  focus: 'overview' | 'data' | 'backups' | 'settings' | 'environments'
+  focus: 'overview' | 'connect' | 'data' | 'backups' | 'settings' | 'environments'
 }>) {
   const { orgId, project, selectedEnvironment } = useProjectContext()
 

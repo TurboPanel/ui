@@ -1,8 +1,7 @@
-import { useLocalSearchParams } from 'expo-router'
-import { IpsOverviewSection } from '@/components/org/ips-overview-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 
-export default function ServersIpsScreen() {
+/** Legacy → Network addresses. */
+export default function LegacyServersIpsRedirect() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-
-  return <IpsOverviewSection orgId={orgId ?? ''} />
+  return <Redirect href={`/${orgId ?? ''}/network/addresses` as Href} />
 }

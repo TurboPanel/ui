@@ -31,6 +31,7 @@ import {
 } from '@/lib/compose'
 import {
   isSystemOperateComponent,
+  systemComponentLabel,
   SYSTEM_WORKSPACE_DESCRIPTION,
 } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
@@ -90,7 +91,7 @@ function useSystemRestartPoll(orgId: string) {
       processedCommandIdsRef.current.add(entry.commandId)
       if (record.status === 'succeeded') {
         setPollError(null)
-        void queryClient.invalidateQueries({
+        queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).containers.list({
             environmentId: entry.environmentId,
           }),
@@ -321,7 +322,9 @@ export function SystemProjectOverviewPanel() {
 
         <Text style={orgPanelStyles.detailLine}>
           <Text style={orgPanelStyles.detailLabel}>Component: </Text>
-          <Text style={styles.mono}>{componentKey ?? '—'}</Text>
+          <Text style={styles.mono}>
+            {systemComponentLabel(componentKey)}
+          </Text>
         </Text>
 
         {serverId ? (

@@ -14,7 +14,7 @@
 - Shared shell: `src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`; mark via `TurboPanelLogo` (T only — full wordmark is website-only)  
 - One primary CTA (accent fill); secondary text link for alternate path below the panel  
 - Footer copyright: `© {year} TurboPanel` (muted) under the panel / alt-path link  
-- Install is a two-step host→superadmin flow — progressive disclosure, not one long form
+- Install is a two-step host→superadmin flow — progressive disclosure, not one long form; same shell/column/`GlassSurface`/`AuthFloatingField` as sign-in, but **no** runtime accent tint and **no** backdrop streak motion (`animateBackdrop={false}`, muted chrome)
 
 ## Style
 

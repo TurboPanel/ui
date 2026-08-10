@@ -94,3 +94,48 @@ describe('queryKeys.org(…).topology', () => {
     ])
   })
 })
+
+describe('queryKeys.org(…).managed.members / bindings / tlsCa', () => {
+  it('scopes members under the managed environment prefix', () => {
+    const managed = queryKeys.org('org-1').managed
+    expect(managed.members('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'members',
+    ])
+  })
+
+  it('discriminates bindings list keys by serviceId / environmentId / managedEnvironmentId', () => {
+    const bindings = queryKeys.org('org-1').bindings
+    expect(bindings.list({ serviceId: 'svc-1' })).toEqual([
+      'org',
+      'org-1',
+      'bindings',
+      'serviceId',
+      'svc-1',
+    ])
+    expect(bindings.list({ environmentId: 'env-1' })).toEqual([
+      'org',
+      'org-1',
+      'bindings',
+      'environmentId',
+      'env-1',
+    ])
+    expect(bindings.list({ managedEnvironmentId: 'menv-1' })).toEqual([
+      'org',
+      'org-1',
+      'bindings',
+      'managedEnvironmentId',
+      'menv-1',
+    ])
+    expect(bindings.all).toEqual(['org', 'org-1', 'bindings'])
+  })
+
+  it('nests tlsCa under the tls prefix for combined invalidation', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.tlsCa).toEqual(['org', 'org-1', 'tls', 'ca'])
+    expect(org.tlsCa.slice(0, org.tls.length)).toEqual([...org.tls])
+  })
+})

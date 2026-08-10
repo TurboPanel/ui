@@ -10,7 +10,7 @@ import {
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
-  isValidPublishedPort,
+  managedCatalogEntryForCode,
   managedErrorMessage,
   type ManagedBindScope,
   type ManagedSettings,
@@ -54,14 +54,13 @@ type SettingsForm = {
   memoryBytes: string
   memoryReservationBytes: string
   exposureEnabled: boolean
-  publishedPort: string
   bind: ManagedBindScope
   labels: KvRow[]
   extraEnv: KvRow[]
   backupRetentionKeep: string
 }
 
-function settingsToForm(settings: ManagedSettings): SettingsForm {
+function settingsToForm(settings: ManagedSettings, defaultImage: string): SettingsForm {
   const labels = Object.entries(settings.dockerOptions?.labels ?? {}).map(
     ([key, value]) => createKvRow(key, value),
   )
@@ -69,7 +68,7 @@ function settingsToForm(settings: ManagedSettings): SettingsForm {
     ([key, value]) => createKvRow(key, value),
   )
   return {
-    image: settings.image ?? '',
+    image: settings.image ?? defaultImage,
     sslEnabled: settings.ssl.enabled,
     engineConfig: settings.engineConfig ?? '',
     restart: settings.dockerOptions?.restart ?? 'unless-stopped',
@@ -91,10 +90,6 @@ function settingsToForm(settings: ManagedSettings): SettingsForm {
         ? String(settings.resources.memoryReservationBytes)
         : '',
     exposureEnabled: settings.exposure.enabled,
-    publishedPort:
-      settings.exposure.publishedPort != null
-        ? String(settings.exposure.publishedPort)
-        : '',
     bind: settings.exposure.bind ?? 'public',
     labels: labels.length > 0 ? labels : [createKvRow()],
     extraEnv: extraEnv.length > 0 ? extraEnv : [createKvRow()],
@@ -135,16 +130,6 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
       error: `Engine config must be ${ENGINE_CONFIG_MAX} bytes or fewer.`,
     }
   }
-  let publishedPort: number | undefined
-  if (form.exposureEnabled) {
-    publishedPort = Number(form.publishedPort)
-    if (!isValidPublishedPort(publishedPort)) {
-      return {
-        ok: false,
-        error: 'Enter a valid published port (1–65535, not reserved).',
-      }
-    }
-  }
   const retentionKeep = parseOptionalNumber(form.backupRetentionKeep)
   return {
     ok: true,
@@ -166,7 +151,7 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
       },
       exposure: {
         enabled: form.exposureEnabled,
-        ...(form.exposureEnabled ? { publishedPort, bind: form.bind } : {}),
+        ...(form.exposureEnabled ? { bind: form.bind } : {}),
       },
       ...(retentionKeep !== undefined
         ? { backups: { retentionKeep } }
@@ -319,27 +304,63 @@ function KvEditor({
   )
 }
 
+/**
+ * Controlled selector of approved image variants for the current engine —
+ * replaces a free-form Image text field so an operator cannot type an
+ * unsupported/EOL image reference the settings parser will just reject on
+ * save. Falls back to a read-only display when the engine's allowlist is
+ * unknown (e.g. `redis` / `clickhouse`, which have no curated allowlist yet).
+ */
+function ImagePicker({
+  options,
+  value,
+  disabled,
+  onSelect,
+}: Readonly<{
+  options: readonly string[]
+  value: string
+  disabled: boolean
+  onSelect: (value: string) => void
+}>) {
+  if (options.length === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        {value || 'Default image applies.'}
+      </Text>
+    )
+  }
+  return (
+    <View style={styles.imageList}>
+      {options.map((option) => {
+        const selected = option === value
+        return (
+          <Pressable
+            key={option}
+            style={[styles.pickerRow, selected && styles.pickerRowSelected, webPointer]}
+            disabled={disabled}
+            onPress={() => onSelect(option)}
+          >
+            <Text style={[styles.pickerLabel, selected && styles.pickerLabelSelected]}>
+              {option}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
 function ExposureExtraFields({
-  publishedPort,
   bind,
   disabled,
-  onPublishedPortChange,
   onBindChange,
 }: Readonly<{
-  publishedPort: string
   bind: ManagedBindScope
   disabled: boolean
-  onPublishedPortChange: (value: string) => void
   onBindChange: (value: ManagedBindScope) => void
 }>) {
   return (
     <>
-      <LabeledNumber
-        label="Published port"
-        value={publishedPort}
-        disabled={disabled}
-        onChange={onPublishedPortChange}
-      />
       <Text style={orgPanelStyles.detailLabel}>Bind scope</Text>
       <SegmentPicker
         options={BIND_SCOPES}
@@ -385,6 +406,7 @@ function SettingsFormBody({
   canManage,
   saving,
   error,
+  imageOptions,
   onApply,
 }: Readonly<{
   form: SettingsForm
@@ -393,6 +415,7 @@ function SettingsFormBody({
   canManage: boolean
   saving: boolean
   error: string | null
+  imageOptions: readonly string[]
   onApply: () => void
 }>) {
   return (
@@ -400,14 +423,11 @@ function SettingsFormBody({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       <Text style={orgPanelStyles.detailLabel}>Image</Text>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+      <ImagePicker
+        options={imageOptions}
         value={form.image}
-        onChangeText={(image) => setForm((current) => ({ ...current, image }))}
-        placeholder="docker.io/library/postgres:18-alpine"
-        placeholderTextColor={colors.textDim}
-        autoCapitalize="none"
-        editable={!disabled}
+        disabled={disabled}
+        onSelect={(image) => setForm((current) => ({ ...current, image }))}
       />
 
       <ToggleRow
@@ -498,7 +518,7 @@ function SettingsFormBody({
       />
 
       <ToggleRow
-        label="Expose on port"
+        label="Expose externally"
         checked={form.exposureEnabled}
         disabled={disabled}
         onToggle={() =>
@@ -511,12 +531,8 @@ function SettingsFormBody({
 
       {form.exposureEnabled ? (
         <ExposureExtraFields
-          publishedPort={form.publishedPort}
           bind={form.bind}
           disabled={disabled}
-          onPublishedPortChange={(publishedPort) =>
-            setForm((current) => ({ ...current, publishedPort }))
-          }
           onBindChange={(bind) => setForm((current) => ({ ...current, bind }))}
         />
       ) : null}
@@ -533,23 +549,29 @@ function SettingsFormBody({
 
 export function ManagedSettingsPanel({
   settings,
+  engineCode,
   canManage,
   busy,
   onApply,
 }: Readonly<{
   settings: ManagedSettings
+  /** Selects the approved image allowlist shown in the Image picker (see `managedCatalogEntryForCode`). */
+  engineCode: string | null
   canManage: boolean
   busy: boolean
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
+  const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
+  const imageOptions = catalog?.allowedImages ?? []
+  const defaultImage = catalog?.defaultImage ?? ''
   const [expanded, setExpanded] = useState(false)
-  const [form, setForm] = useState(() => settingsToForm(settings))
+  const [form, setForm] = useState(() => settingsToForm(settings, defaultImage))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setForm(settingsToForm(settings))
-  }, [settings])
+    setForm(settingsToForm(settings, defaultImage))
+  }, [settings, defaultImage])
 
   const apply = async () => {
     const result = buildManagedSettingsPayload(form)
@@ -589,6 +611,7 @@ export function ManagedSettingsPanel({
           canManage={canManage}
           saving={saving}
           error={error}
+          imageOptions={imageOptions}
           onApply={() => {
             void apply()
           }}
@@ -607,6 +630,29 @@ const styles = StyleSheet.create({
   body: {
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  imageList: {
+    gap: spacing.xs,
+  },
+  pickerRow: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  pickerRowSelected: {
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
+  },
+  pickerLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: 'monospace',
+  },
+  pickerLabelSelected: {
+    color: colors.text,
+    fontWeight: '600',
   },
   input: {
     borderWidth: 1,

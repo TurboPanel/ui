@@ -22,6 +22,7 @@ export function AuthScreenShell({
   description,
   footer,
   accentColor = colors.accent,
+  animateBackdrop = true,
   children,
 }: Readonly<{
   title: string
@@ -29,11 +30,16 @@ export function AuthScreenShell({
   footer?: ReactNode
   /** Runtime accent for the gradient wash (Workers blue / Deno green). */
   accentColor?: string
+  /** When false, skip backdrop streak motion (static wash + grid only). */
+  animateBackdrop?: boolean
   children: ReactNode
 }>) {
   return (
     <View style={authFormStyles.shell}>
-      <AuthScreenBackground accentColor={accentColor} />
+      <AuthScreenBackground
+        accentColor={accentColor}
+        animate={animateBackdrop}
+      />
       <KeyboardAvoidingView
         style={[authFormStyles.scrollTransparent, authScrollWebStyle]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

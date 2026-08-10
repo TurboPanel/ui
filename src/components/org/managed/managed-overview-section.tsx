@@ -15,6 +15,8 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { type ManagedListRecord } from '@/lib/instance-api'
 import {
   MANAGED_SERVICE_CATALOG,
+  clusterHasUnhealthyMember,
+  formatClusterTopologyLabel,
   managedCatalogEntryForCode,
   managedStatusLabel,
   type ManagedServiceEngine,
@@ -87,6 +89,10 @@ function projectEnvironmentLabel(row: ManagedListRecord): string {
 function endpointLabel(row: ManagedListRecord): string {
   if (row.host && row.port != null) return `${row.host}:${row.port}`
   return 'Not exposed'
+}
+
+function topologyLabel(row: ManagedListRecord): string {
+  return formatClusterTopologyLabel(row.members)
 }
 
 function statusFilterLabel(status: ManagedStatus | 'all'): string {
@@ -188,6 +194,21 @@ function ManagedTableRow({
         </Text>
       </View>
       <ManagedStatusCell status={row.status} />
+      <View style={[styles.tableCell, styles.colTopology]}>
+        <View style={styles.topologyCell}>
+          {clusterHasUnhealthyMember(row.members) ? (
+            <View
+              style={styles.topologyWarnDot}
+              accessibilityLabel="Member needs attention"
+            />
+          ) : (
+            <View style={styles.topologyDot} accessibilityLabel="Healthy topology" />
+          )}
+          <Text style={styles.secondaryText} numberOfLines={1}>
+            {topologyLabel(row)}
+          </Text>
+        </View>
+      </View>
       <View style={[styles.tableCell, styles.colEndpoint]}>
         <Text
           style={
@@ -380,8 +401,11 @@ function ManagedFleetTable({
           <View style={[styles.tableCell, styles.colStatus]}>
             <Text style={styles.tableHeaderText}>Status</Text>
           </View>
+          <View style={[styles.tableCell, styles.colTopology]}>
+            <Text style={styles.tableHeaderText}>Topology</Text>
+          </View>
           <View style={[styles.tableCell, styles.colEndpoint]}>
-            <Text style={styles.tableHeaderText}>Endpoint</Text>
+            <Text style={styles.tableHeaderText}>Shared listener</Text>
           </View>
         </View>
         {rows.map((row, index) => (
@@ -630,7 +654,7 @@ const styles = StyleSheet.create({
   table: {
     flexGrow: 1,
     width: '100%',
-    minWidth: 920,
+    minWidth: 1080,
     borderWidth: 1,
     borderColor: colors.borderMuted,
     borderRadius: 10,
@@ -697,9 +721,30 @@ const styles = StyleSheet.create({
     minWidth: 130,
     alignItems: 'flex-start',
   },
+  colTopology: {
+    flex: 1.5,
+    minWidth: 140,
+  },
   colEndpoint: {
     flex: 1.6,
     minWidth: 140,
+  },
+  topologyCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  topologyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.green,
+  },
+  topologyWarnDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.pending,
   },
   engineBadge: {
     borderWidth: 1,

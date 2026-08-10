@@ -1,7 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { IpListRow } from '@/components/org/ips-overview-section'
+import { IpListRow } from '@/components/org/network/network-rows'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
@@ -13,7 +13,7 @@ import {
   type ServerDetailRecord,
   type VpnRecord,
 } from '@/lib/instance-api'
-import { vpnDetailHref } from '@/lib/org-navigation'
+import { networkLinkHref, networkSiteHref } from '@/lib/org-navigation'
 import { queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
@@ -54,7 +54,7 @@ function DatacenterPrivateAddress({
     )
   }
   return (
-    <Text style={orgPanelStyles.muted}>No datacenter address assigned</Text>
+    <Text style={orgPanelStyles.muted}>No private address assigned</Text>
   )
 }
 
@@ -74,7 +74,7 @@ function ServerMeshMembershipPanel({
   const router = useRouter()
 
   return (
-    <SectionPanel title="Mesh" hint="VPN overlay membership for this host">
+    <SectionPanel title="Mesh" hint="Link overlay membership for this host">
       {loading && rows.length === 0 ? (
         <Text style={orgPanelStyles.muted}>Loading mesh membership…</Text>
       ) : null}
@@ -89,7 +89,7 @@ function ServerMeshMembershipPanel({
             <Pressable
               style={webPointer}
               onPress={() =>
-                router.push(vpnDetailHref(orgId, vpn.id) as Href)
+                router.push(networkLinkHref(orgId, vpn.id) as Href)
               }
               accessibilityRole="link"
               accessibilityLabel={`Open ${vpnTitle(vpn)}`}
@@ -129,6 +129,7 @@ export function ServerNetworkSection({
   orgId,
   server,
 }: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
+  const router = useRouter()
   const addresses = server.addresses
   const hasLists =
     addresses != null &&
@@ -155,9 +156,7 @@ export function ServerNetworkSection({
   })
 
   const serverManagedIpsQuery = useQuery({
-    queryKey: queryKeys.org(orgId).servers.ips(server.id, {
-      scope: 'managed-panel',
-    }),
+    queryKey: queryKeys.org(orgId).servers.networkPanel(server.id),
     queryFn: async () => {
       const [ipsResult, networksResult, datacentersResult] = await Promise.all([
         fetchIps({ serverId: server.id }),
@@ -186,8 +185,6 @@ export function ServerNetworkSection({
   const datacenterById = new Map(
     (serverManagedIpsQuery.data?.datacenters ?? []).map((row) => [row.id, row]),
   )
-  // VPN overlay rows belong in the Mesh panel only — keep Managed addresses
-  // for public / datacenter / loopback pool assignments.
   const managedIps = (serverManagedIpsQuery.data?.ips ?? []).filter(
     (ip) => ip.scope !== 'vpn',
   )
@@ -197,16 +194,35 @@ export function ServerNetworkSection({
   )
   const meshLoading = vpnIpsQuery.isLoading || vpnsQuery.isLoading
 
+  const siteName = server.datacenterDisplayName?.trim() || null
+  const siteId = server.datacenterId
+
   return (
     <View style={styles.root}>
       <SectionPanel
-        title="Datacenter"
+        title="Site"
         hint="Assignment and private address for this host"
       >
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Location: </Text>
-          {server.datacenterDisplayName?.trim() || 'Not assigned'}
-        </Text>
+        {siteId ? (
+          <Pressable
+            style={webPointer}
+            onPress={() =>
+              router.push(networkSiteHref(orgId, siteId) as Href)
+            }
+            accessibilityRole="link"
+            accessibilityLabel={`Open site ${siteName ?? siteId}`}
+          >
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Site: </Text>
+              {siteName || siteId}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={orgPanelStyles.detailLine}>
+            <Text style={orgPanelStyles.detailLabel}>Site: </Text>
+            Not assigned
+          </Text>
+        )}
         <DatacenterPrivateAddress
           loading={datacenterIpsQuery.isLoading}
           address={privateAddress}

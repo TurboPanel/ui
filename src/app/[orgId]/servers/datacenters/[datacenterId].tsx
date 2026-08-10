@@ -1,20 +1,15 @@
-import { useLocalSearchParams } from 'expo-router'
-import { DatacenterDetailSection } from '@/components/org/datacenter-detail-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 
-export default function DatacenterDetailScreen() {
+/** Legacy → Network site detail. */
+export default function LegacyDatacenterDetailRedirect() {
   const { orgId, datacenterId } = useLocalSearchParams<{
     orgId: string
     datacenterId: string | string[]
   }>()
-
-  const resolvedDatacenterId = Array.isArray(datacenterId)
+  const id = Array.isArray(datacenterId)
     ? (datacenterId[0] ?? '')
     : (datacenterId ?? '')
-
   return (
-    <DatacenterDetailSection
-      orgId={orgId ?? ''}
-      datacenterId={resolvedDatacenterId}
-    />
+    <Redirect href={`/${orgId ?? ''}/network/sites/${id}` as Href} />
   )
 }

@@ -1,13 +1,13 @@
-import { useLocalSearchParams } from 'expo-router'
-import { VpnDetailSection } from '@/components/org/vpn-detail-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 
-export default function VpnDetailScreen() {
+/** Legacy → Network link detail. */
+export default function LegacyVpnDetailRedirect() {
   const { orgId, vpnId } = useLocalSearchParams<{
     orgId: string
     vpnId: string | string[]
   }>()
-
-  const resolvedVpnId = Array.isArray(vpnId) ? (vpnId[0] ?? '') : (vpnId ?? '')
-
-  return <VpnDetailSection orgId={orgId ?? ''} vpnId={resolvedVpnId} />
+  const id = Array.isArray(vpnId) ? (vpnId[0] ?? '') : (vpnId ?? '')
+  return (
+    <Redirect href={`/${orgId ?? ''}/network/links/${id}` as Href} />
+  )
 }
