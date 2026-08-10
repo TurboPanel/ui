@@ -64,15 +64,24 @@ describe('visual field catalog', () => {
   it('offers only fields with offerAdd when absent', () => {
     expect(addableVisualFields({ image: 'nginx' }).map((f) => f.id)).toEqual([
       'restart',
+      'container_name',
       'build',
     ])
     expect(
       addableVisualFields({ image: 'nginx', restart: 'always' }).map((f) => f.id),
-    ).toEqual(['build'])
+    ).toEqual(['container_name', 'build'])
     expect(
       addableVisualFields({
         image: 'nginx',
         restart: 'always',
+        build: { context: '.', dockerfile_inline: 'FROM alpine\n' },
+      }).map((f) => f.id),
+    ).toEqual(['container_name'])
+    expect(
+      addableVisualFields({
+        image: 'nginx',
+        restart: 'always',
+        container_name: 'web',
         build: { context: '.', dockerfile_inline: 'FROM alpine\n' },
       }).map((f) => f.id),
     ).toEqual([])
