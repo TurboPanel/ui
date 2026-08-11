@@ -5,8 +5,11 @@ import type {
   WorkspaceRecord,
 } from '@/lib/instance-api'
 
-/** Workspace kind value for the platform-managed System workspace. */
-export const SYSTEM_WORKSPACE_KIND: WorkspaceKind = 'system'
+/** Workspace kind value for the platform-managed TurboPanel workspace. */
+export const TURBOPANEL_WORKSPACE_KIND: WorkspaceKind = 'turbopanel'
+
+/** @deprecated Prefer {@link TURBOPANEL_WORKSPACE_KIND}. */
+export const SYSTEM_WORKSPACE_KIND = TURBOPANEL_WORKSPACE_KIND
 
 /** Idempotency key for the per-server hosting ingress Traefik stack. */
 export const SYSTEM_HOSTING_INGRESS_COMPONENT = 'hosting-ingress'
@@ -23,38 +26,50 @@ export const SYSTEM_OPERATE_COMPONENTS = [
 
 export type SystemOperateComponent = (typeof SYSTEM_OPERATE_COMPONENTS)[number]
 
-/** Badge label for system workspaces / projects — never derived from displayName. */
-export const SYSTEM_WORKSPACE_BADGE_LABEL = 'Platform'
+/** Badge label for platform workspaces / projects — never derived from displayName. */
+export const TURBOPANEL_WORKSPACE_BADGE_LABEL = 'Platform'
 
-/** Platform-managed copy for system workspace surfaces. */
-export const SYSTEM_WORKSPACE_DESCRIPTION =
+/** @deprecated Prefer {@link TURBOPANEL_WORKSPACE_BADGE_LABEL}. */
+export const SYSTEM_WORKSPACE_BADGE_LABEL = TURBOPANEL_WORKSPACE_BADGE_LABEL
+
+/** Platform-managed copy for TurboPanel workspace surfaces. */
+export const TURBOPANEL_WORKSPACE_DESCRIPTION =
   'Platform managed — created and maintained by TurboPanel'
 
-export function isSystemWorkspace(
+/** @deprecated Prefer {@link TURBOPANEL_WORKSPACE_DESCRIPTION}. */
+export const SYSTEM_WORKSPACE_DESCRIPTION = TURBOPANEL_WORKSPACE_DESCRIPTION
+
+export function isTurbopanelWorkspace(
   workspace: Readonly<{ kind?: WorkspaceKind | null }>,
 ): boolean {
-  return workspace.kind === SYSTEM_WORKSPACE_KIND
+  return workspace.kind === TURBOPANEL_WORKSPACE_KIND
 }
 
-export function findSystemWorkspace(
+/** @deprecated Prefer {@link isTurbopanelWorkspace}. */
+export const isSystemWorkspace = isTurbopanelWorkspace
+
+export function findTurbopanelWorkspace(
   workspaces: readonly WorkspaceRecord[],
 ): WorkspaceRecord | null {
-  return workspaces.find((workspace) => isSystemWorkspace(workspace)) ?? null
+  return workspaces.find((workspace) => isTurbopanelWorkspace(workspace)) ?? null
 }
 
-/** User-facing lists and uniqueness checks — excludes the system workspace. */
+/** @deprecated Prefer {@link findTurbopanelWorkspace}. */
+export const findSystemWorkspace = findTurbopanelWorkspace
+
+/** User-facing lists and uniqueness checks — excludes the platform workspace. */
 export function userWorkspaces(
   workspaces: readonly WorkspaceRecord[],
 ): WorkspaceRecord[] {
-  return workspaces.filter((workspace) => !isSystemWorkspace(workspace))
+  return workspaces.filter((workspace) => !isTurbopanelWorkspace(workspace))
 }
 
-export function isSystemProject(
+export function isTurbopanelProject(
   project: Readonly<{ workspaceId: string; metadata?: ProjectRecord['metadata'] }>,
   workspacesOrKind: readonly WorkspaceRecord[] | WorkspaceKind | null | undefined,
 ): boolean {
   if (typeof workspacesOrKind === 'string') {
-    return workspacesOrKind === SYSTEM_WORKSPACE_KIND
+    return workspacesOrKind === TURBOPANEL_WORKSPACE_KIND
   }
   if (!workspacesOrKind) {
     return false
@@ -62,8 +77,11 @@ export function isSystemProject(
   const workspace = workspacesOrKind.find(
     (entry) => entry.id === project.workspaceId,
   )
-  return workspace != null && isSystemWorkspace(workspace)
+  return workspace != null && isTurbopanelWorkspace(workspace)
 }
+
+/** @deprecated Prefer {@link isTurbopanelProject}. */
+export const isSystemProject = isTurbopanelProject
 
 export function systemComponentKey(
   project: Readonly<{ metadata?: ProjectRecord['metadata'] }>,
@@ -100,6 +118,8 @@ export function systemComponentLabel(component: string | null | undefined): stri
       return 'Hosting ingress'
     case SYSTEM_MANAGED_INGRESS_COMPONENT:
       return 'Database ingress'
+    case 'turbopanel':
+      return 'TurboPanel'
     default:
       return component?.trim() || '—'
   }

@@ -74,8 +74,8 @@ const containerRoleBadgeVariants: Record<
     },
     text: { color: colors.textMuted },
   },
-  system: {
-    label: 'System',
+  turbopanel: {
+    label: 'TurboPanel',
     badge: {
       borderColor: colors.command,
       backgroundColor: colors.bgSecondary,

@@ -33,12 +33,12 @@ const WORKSPACES: WorkspaceRecord[] = [
   },
 ]
 
-const SYSTEM_WORKSPACE: WorkspaceRecord = {
-  id: 'ws-system',
-  displayName: 'System',
+const PLATFORM_WORKSPACE: WorkspaceRecord = {
+  id: 'ws-platform',
+  displayName: 'TurboPanel Platform',
   description: null,
   organizationId: 'org-1',
-  kind: 'system',
+  kind: 'turbopanel',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
@@ -58,7 +58,7 @@ describe('ORG_AREAS navigation', () => {
 })
 
 describe('resolveWorkspaceScope', () => {
-  it('defaults to all workspaces when multiple exist', () => {
+  it('defaults to all workspaces even when only one user workspace exists', () => {
     expect(resolveWorkspaceScope(WORKSPACES, null)).toEqual({
       id: ALL_WORKSPACES_SCOPE,
       label: 'All workspaces',
@@ -67,24 +67,16 @@ describe('resolveWorkspaceScope', () => {
     expect(resolveWorkspaceScope(WORKSPACES, ALL_WORKSPACES_SCOPE).id).toBe(
       ALL_WORKSPACES_SCOPE,
     )
-  })
-
-  it('uses the sole workspace instead of all when only one exists', () => {
     const sole = [WORKSPACES[0]!]
     expect(resolveWorkspaceScope(sole, null)).toEqual({
-      id: 'ws-a',
-      label: 'Alpha',
-      workspace: WORKSPACES[0],
+      id: ALL_WORKSPACES_SCOPE,
+      label: 'All workspaces',
+      workspace: null,
     })
     expect(resolveWorkspaceScope(sole, ALL_WORKSPACES_SCOPE)).toEqual({
-      id: 'ws-a',
-      label: 'Alpha',
-      workspace: WORKSPACES[0],
-    })
-    expect(resolveWorkspaceScope(sole, 'missing')).toEqual({
-      id: 'ws-a',
-      label: 'Alpha',
-      workspace: WORKSPACES[0],
+      id: ALL_WORKSPACES_SCOPE,
+      label: 'All workspaces',
+      workspace: null,
     })
   })
 
@@ -96,46 +88,29 @@ describe('resolveWorkspaceScope', () => {
     })
   })
 
-  it('falls back to all workspaces for unknown ids when multiple exist', () => {
+  it('falls back to all workspaces for unknown ids', () => {
     expect(resolveWorkspaceScope(WORKSPACES, 'missing').id).toBe(
       ALL_WORKSPACES_SCOPE,
     )
-  })
-
-  it('treats one user workspace plus system as the sole user workspace', () => {
-    const withSystem = [WORKSPACES[0]!, SYSTEM_WORKSPACE]
-    expect(resolveWorkspaceScope(withSystem, null)).toEqual({
-      id: 'ws-a',
-      label: 'Alpha',
-      workspace: WORKSPACES[0],
-    })
-    expect(resolveWorkspaceScope(withSystem, ALL_WORKSPACES_SCOPE)).toEqual({
-      id: 'ws-a',
-      label: 'Alpha',
-      workspace: WORKSPACES[0],
+    const withPlatform = [WORKSPACES[0]!, PLATFORM_WORKSPACE]
+    expect(resolveWorkspaceScope(withPlatform, 'missing')).toEqual({
+      id: ALL_WORKSPACES_SCOPE,
+      label: 'All workspaces',
+      workspace: null,
     })
   })
 
-  it('never falls back to the system workspace for unknown ids', () => {
-    const withSystem = [WORKSPACES[0]!, SYSTEM_WORKSPACE]
-    expect(resolveWorkspaceScope(withSystem, 'missing')).toEqual({
-      id: 'ws-a',
-      label: 'Alpha',
-      workspace: WORKSPACES[0],
-    })
-    const multiUser = [...WORKSPACES, SYSTEM_WORKSPACE]
-    expect(resolveWorkspaceScope(multiUser, 'missing').id).toBe(
-      ALL_WORKSPACES_SCOPE,
-    )
-    expect(resolveWorkspaceScope(multiUser, 'missing').workspace).toBeNull()
+  it('never falls back to the platform workspace for unknown ids', () => {
+    const withPlatform = [WORKSPACES[0]!, PLATFORM_WORKSPACE]
+    expect(resolveWorkspaceScope(withPlatform, 'missing').workspace).toBeNull()
   })
 
-  it('allows explicit selection of the system workspace', () => {
-    const withSystem = [WORKSPACES[0]!, SYSTEM_WORKSPACE]
-    expect(resolveWorkspaceScope(withSystem, 'ws-system')).toEqual({
-      id: 'ws-system',
-      label: 'System',
-      workspace: SYSTEM_WORKSPACE,
+  it('allows explicit selection of the TurboPanel platform workspace', () => {
+    const withPlatform = [WORKSPACES[0]!, PLATFORM_WORKSPACE]
+    expect(resolveWorkspaceScope(withPlatform, 'ws-platform')).toEqual({
+      id: 'ws-platform',
+      label: 'TurboPanel Platform',
+      workspace: PLATFORM_WORKSPACE,
     })
   })
 })

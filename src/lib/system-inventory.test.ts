@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { EnvironmentRecord, ProjectRecord, WorkspaceRecord } from './instance-api'
 import {
   findServerIngressEnvironment,
-  findSystemWorkspace,
-  isSystemProject,
-  isSystemWorkspace,
+  findTurbopanelWorkspace,
+  isTurbopanelProject,
+  isTurbopanelWorkspace,
   SYSTEM_HOSTING_INGRESS_COMPONENT,
-  SYSTEM_WORKSPACE_BADGE_LABEL,
+  TURBOPANEL_WORKSPACE_BADGE_LABEL,
   systemComponentKey,
   userWorkspaces,
 } from './system-inventory'
@@ -39,44 +39,48 @@ function project(
 }
 
 describe('system-inventory', () => {
-  it('is driven by kind — a user workspace named System is not platform', () => {
-    const namedSystem = workspace({
-      id: 'ws-user-system',
+  it('is driven by kind — a user workspace named TurboPanel Platform is not platform', () => {
+    const namedPlatform = workspace({
+      id: 'ws-user-platform',
       kind: 'user',
-      displayName: 'System',
+      displayName: 'TurboPanel Platform',
     })
-    expect(isSystemWorkspace(namedSystem)).toBe(false)
-    expect(SYSTEM_WORKSPACE_BADGE_LABEL).toBe('Platform')
+    expect(isTurbopanelWorkspace(namedPlatform)).toBe(false)
+    expect(TURBOPANEL_WORKSPACE_BADGE_LABEL).toBe('Platform')
   })
 
-  it('findSystemWorkspace returns the kind=system row even when others are named System', () => {
+  it('findTurbopanelWorkspace returns the kind=turbopanel row', () => {
     const workspaces = [
-      workspace({ id: 'ws-a', kind: 'user', displayName: 'System' }),
-      workspace({ id: 'ws-sys', kind: 'system', displayName: 'System' }),
+      workspace({ id: 'ws-a', kind: 'user', displayName: 'TurboPanel Platform' }),
+      workspace({
+        id: 'ws-tp',
+        kind: 'turbopanel',
+        displayName: 'TurboPanel Platform',
+      }),
       workspace({ id: 'ws-b', kind: 'user', displayName: 'Default' }),
     ]
-    expect(findSystemWorkspace(workspaces)?.id).toBe('ws-sys')
+    expect(findTurbopanelWorkspace(workspaces)?.id).toBe('ws-tp')
     expect(userWorkspaces(workspaces).map((row) => row.id)).toEqual([
       'ws-a',
       'ws-b',
     ])
   })
 
-  it('isSystemProject resolves via workspace kind or an explicit kind', () => {
+  it('isTurbopanelProject resolves via workspace kind or an explicit kind', () => {
     const workspaces = [
       workspace({ id: 'ws-user', kind: 'user' }),
-      workspace({ id: 'ws-sys', kind: 'system' }),
+      workspace({ id: 'ws-tp', kind: 'turbopanel' }),
     ]
     const userProject = project({ id: 'p1', workspaceId: 'ws-user' })
-    const systemProject = project({
+    const platformProject = project({
       id: 'p2',
-      workspaceId: 'ws-sys',
+      workspaceId: 'ws-tp',
       metadata: { type: 'docker-compose', component: 'hosting-ingress' },
     })
-    expect(isSystemProject(userProject, workspaces)).toBe(false)
-    expect(isSystemProject(systemProject, workspaces)).toBe(true)
-    expect(isSystemProject(systemProject, 'system')).toBe(true)
-    expect(isSystemProject(userProject, 'user')).toBe(false)
+    expect(isTurbopanelProject(userProject, workspaces)).toBe(false)
+    expect(isTurbopanelProject(platformProject, workspaces)).toBe(true)
+    expect(isTurbopanelProject(platformProject, 'turbopanel')).toBe(true)
+    expect(isTurbopanelProject(userProject, 'user')).toBe(false)
   })
 
   it('systemComponentKey reads metadata.component', () => {

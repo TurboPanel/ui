@@ -9,7 +9,7 @@
 
 ## Layout
 
-- Overview: full-width workspace bar under the page title (click expands inline search + workspace list) + project list (workspace label when viewing all); **setup** badge when type is unset
+- Overview: compact workspace **filter** under the page title (defaults to **All workspaces**; expands to equal-height list) + project list (workspace label when viewing all); **setup** badge when type is unset
 - Detail: **Project shell** — breadcrumb title **Projects ›** type glyph (`ProjectTitleIcon`) + project name + compose **Project · environments** scope chips (`ProjectScopeSelector` in the project header). Managed projects keep a header trash for delete; compose projects have **no** header trash — all compose delete (project and environment) lives in the **Settings** area (`ProjectSettingsArea` → Settings chip → Danger). Environment selector (managed / non-Overview tabs), section tabs, tab body
 - Compose: **Project · environments** scope chips in the project header (`ProjectScopeSelector`). Project / env chips *are* the compose surface; env detail lives under the selected environment. Collapsible settings (`ProjectSettingsArea` in `src/components/org/project-settings-area.tsx`) sits below the compose panels — **not** a stack of empty sections. **Project scope:** quiet **Add Server / Add Variable / Add System user** chips; clicking one reveals that resource section (also auto-shows when data already exists). **Settings** chip reveals Workspace, **Keep original container names** toggle (default Off = rename; On warns that rolling updates are disabled), and Danger → Delete project. **Environment scope:** **Add Server / Add Network / Add Storage** chips with the same reveal pattern; **Settings** reveals Danger → Delete environment
 - Scope banner: `ComposeScopeBanner` (`src/components/org/project/compose-scope-banner.tsx`) above the editor. **Project** scope: no banner (saved view title **Compose - Project**). **Environment** scope: inheriting (with **Create override** / **Start from project compose**) vs overriding (with **Clear overrides**, two-press) plus an inherited-services chip hint
@@ -33,11 +33,18 @@
 
 ## System / platform projects
 
-- Detection is by `workspace.kind === 'system'` (and optional `project.metadata.component`) — **never** by display name.
+- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name.
+- Platform workspace display name is **TurboPanel Platform**; badge label is **Platform**.
 - System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Networking/Storage chips.
 - Overview shows a platform panel (component key, target server, container status + name) plus optional read-only YAML; Restart when `system:operate` permits.
-- Platform badge label is **Platform** (SVG shield/gear + text — never emoji); paired with existing type badge on the System workspace project list.
-- All-workspaces scope hides system projects; they appear only when the System workspace is explicitly selected.
+- Platform badge label is **Platform** (SVG shield/gear + text — never emoji); paired with existing type badge on the TurboPanel Platform workspace project list.
+- All-workspaces scope hides platform projects; they appear only when the TurboPanel Platform workspace is explicitly selected.
+
+## Workspace filter
+
+- Overview filter defaults to **All workspaces** (even with a single user workspace); last selection may be restored from localStorage / `?workspaceId=`.
+- Menu rows are equal height (no description hints); platform row shows the Platform badge only.
+- **All workspaces** is always listed as a filter option.
 
 ## Anti-patterns (page-specific)
 

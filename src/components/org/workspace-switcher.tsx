@@ -14,9 +14,8 @@ import { webPointer } from '@/components/org/org-panel-styles'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import {
-  findSystemWorkspace,
-  isSystemWorkspace,
-  SYSTEM_WORKSPACE_DESCRIPTION,
+  findTurbopanelWorkspace,
+  isTurbopanelWorkspace,
   userWorkspaces,
 } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -36,8 +35,7 @@ function matchesWorkspaceQuery(
     return true
   }
   const name = workspaceDisplayName(workspace).toLowerCase()
-  const description = workspace.description?.toLowerCase() ?? ''
-  return name.includes(query) || description.includes(query)
+  return name.includes(query)
 }
 
 function triggerLabelForScope(
@@ -54,13 +52,11 @@ function triggerLabelForScope(
 function WorkspaceMenuItem({
   active,
   label,
-  hint,
   badge,
   onPress,
 }: Readonly<{
   active: boolean
   label: string
-  hint?: string
   badge?: boolean
   onPress: () => void
 }>) {
@@ -76,19 +72,15 @@ function WorkspaceMenuItem({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
     >
-      <View style={styles.systemTitleRow}>
+      <View style={styles.menuItemRow}>
         <Text
           style={[styles.menuItemLabel, active && styles.menuItemLabelActive]}
+          numberOfLines={1}
         >
           {label}
         </Text>
         {badge ? <PlatformBadge /> : null}
       </View>
-      {hint ? (
-        <Text style={styles.menuItemHint} numberOfLines={2}>
-          {hint}
-        </Text>
-      ) : null}
     </Pressable>
   )
 }
@@ -103,8 +95,8 @@ function WorkspaceResultsList({
   filteredUsers,
   scopeId,
   onSelectWorkspace,
-  showSystem,
-  systemWorkspace,
+  showPlatform,
+  platformWorkspace,
 }: Readonly<{
   showAllOption: boolean
   allActive: boolean
@@ -115,8 +107,8 @@ function WorkspaceResultsList({
   filteredUsers: readonly WorkspaceRecord[]
   scopeId: string
   onSelectWorkspace: (workspaceId: string) => void
-  showSystem: boolean
-  systemWorkspace: WorkspaceRecord | null
+  showPlatform: boolean
+  platformWorkspace: WorkspaceRecord | null
 }>) {
   return (
     <ScrollView
@@ -128,7 +120,6 @@ function WorkspaceResultsList({
         <WorkspaceMenuItem
           active={allActive}
           label="All workspaces"
-          hint="Every project in this organization"
           onPress={onSelectAll}
         />
       ) : null}
@@ -148,20 +139,18 @@ function WorkspaceResultsList({
           key={workspace.id}
           active={scopeId === workspace.id}
           label={workspaceDisplayName(workspace)}
-          hint={workspace.description ?? undefined}
           onPress={() => onSelectWorkspace(workspace.id)}
         />
       ))}
 
-      {showSystem && systemWorkspace ? (
+      {showPlatform && platformWorkspace ? (
         <>
           <View style={styles.menuDivider} />
           <WorkspaceMenuItem
-            active={scopeId === systemWorkspace.id}
-            label={workspaceDisplayName(systemWorkspace)}
-            hint={SYSTEM_WORKSPACE_DESCRIPTION}
+            active={scopeId === platformWorkspace.id}
+            label={workspaceDisplayName(platformWorkspace)}
             badge
-            onPress={() => onSelectWorkspace(systemWorkspace.id)}
+            onPress={() => onSelectWorkspace(platformWorkspace.id)}
           />
         </>
       ) : null}
@@ -182,8 +171,8 @@ export function WorkspaceSwitcher({
   const searchRef = useRef<TextInput>(null)
 
   const users = useMemo(() => userWorkspaces(workspaces), [workspaces])
-  const systemWorkspace = useMemo(
-    () => findSystemWorkspace(workspaces),
+  const platformWorkspace = useMemo(
+    () => findTurbopanelWorkspace(workspaces),
     [workspaces],
   )
 
@@ -197,17 +186,16 @@ export function WorkspaceSwitcher({
   )
 
   const showAllOption =
-    users.length > 1 &&
-    (!normalizedQuery || 'all workspaces'.includes(normalizedQuery))
-  const showSystem =
-    systemWorkspace != null &&
-    matchesWorkspaceQuery(systemWorkspace, normalizedQuery)
+    !normalizedQuery || 'all workspaces'.includes(normalizedQuery)
+  const showPlatform =
+    platformWorkspace != null &&
+    matchesWorkspaceQuery(platformWorkspace, normalizedQuery)
   const emptyWithoutQuery =
-    users.length === 0 && !systemWorkspace && !isLoading
+    users.length === 0 && !platformWorkspace && !isLoading
   const hasNoMatches =
     !showAllOption &&
     filteredUsers.length === 0 &&
-    !showSystem &&
+    !showPlatform &&
     !isLoading &&
     Boolean(normalizedQuery)
 
@@ -262,15 +250,15 @@ export function WorkspaceSwitcher({
         onPress={toggleOpen}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`Workspace: ${triggerLabel}`}
+        accessibilityLabel={`Workspace filter: ${triggerLabel}`}
       >
         <View style={styles.triggerText}>
-          <Text style={styles.triggerCaption}>Workspace</Text>
+          <Text style={styles.triggerCaption}>Filter</Text>
           <View style={styles.triggerLabelRow}>
             <Text style={styles.triggerLabel} numberOfLines={1}>
               {triggerLabel}
             </Text>
-            {scope.workspace && isSystemWorkspace(scope.workspace) ? (
+            {scope.workspace && isTurbopanelWorkspace(scope.workspace) ? (
               <PlatformBadge />
             ) : null}
           </View>
@@ -280,18 +268,20 @@ export function WorkspaceSwitcher({
 
       {open ? (
         <View style={styles.panel}>
-          <TextInput
-            ref={searchRef}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search workspaces…"
-            placeholderTextColor={colors.textDim}
-            style={styles.searchInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel="Search workspaces"
-            returnKeyType="search"
-          />
+          {(users.length + (platformWorkspace ? 1 : 0) > 6) ? (
+            <TextInput
+              ref={searchRef}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search…"
+              placeholderTextColor={colors.textDim}
+              style={styles.searchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Search workspaces"
+              returnKeyType="search"
+            />
+          ) : null}
 
           <WorkspaceResultsList
             showAllOption={showAllOption}
@@ -303,8 +293,8 @@ export function WorkspaceSwitcher({
             filteredUsers={filteredUsers}
             scopeId={scope.id}
             onSelectWorkspace={selectAndClose}
-            showSystem={showSystem}
-            systemWorkspace={systemWorkspace}
+            showPlatform={showPlatform}
+            platformWorkspace={platformWorkspace}
           />
 
           <View style={styles.menuDivider} />
@@ -323,13 +313,13 @@ export function WorkspaceSwitcher({
           {canOwn ? (
             <Pressable
               style={({ pressed }) => [
-                styles.menuActionPrimary,
+                styles.menuAction,
                 pressed && styles.menuItemPressed,
                 webPointer,
               ]}
               onPress={goManage}
             >
-              <Text style={styles.menuActionPrimaryLabel}>Create workspace</Text>
+              <Text style={styles.menuActionLabel}>Create workspace</Text>
             </Pressable>
           ) : null}
         </View>
@@ -340,25 +330,29 @@ export function WorkspaceSwitcher({
 
 const styles = StyleSheet.create({
   root: {
-    width: '100%',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    minWidth: 220,
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: colors.bgSecondary,
     overflow: 'hidden',
   },
   rootOpen: {
     borderColor: colors.borderMuted,
     backgroundColor: colors.bgPanel,
+    width: '100%',
+    maxWidth: 360,
   },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    minHeight: 52,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 40,
   },
   triggerPressed: {
     backgroundColor: colors.bgAreaHeader,
@@ -366,11 +360,11 @@ const styles = StyleSheet.create({
   triggerText: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 1,
   },
   triggerCaption: {
     color: colors.textDim,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -382,37 +376,40 @@ const styles = StyleSheet.create({
   },
   triggerLabel: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     flexShrink: 1,
   },
   panel: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    padding: spacing.sm,
-    gap: spacing.sm,
+    padding: spacing.xs,
+    gap: spacing.xs,
   },
   searchInput: {
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.bgInput,
     color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 8,
-    minHeight: 44,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    borderRadius: 6,
+    minHeight: 36,
+    marginHorizontal: spacing.xs,
+    marginTop: spacing.xs,
   },
   list: {
-    maxHeight: 280,
+    maxHeight: 240,
   },
   menuItem: {
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: 'transparent',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    gap: 2,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   menuItemActive: {
     borderColor: chrome.accent,
@@ -421,57 +418,41 @@ const styles = StyleSheet.create({
   menuItemPressed: {
     opacity: 0.85,
   },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   menuItemLabel: {
     color: colors.textBody,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+    flexShrink: 1,
   },
   menuItemLabelActive: {
     color: chrome.accent,
   },
-  menuItemHint: {
-    color: colors.textDim,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  systemTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
   emptyHint: {
     color: colors.textDim,
-    fontSize: 13,
+    fontSize: 12,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
   menuDivider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: spacing.xs,
+    marginVertical: 2,
   },
   menuAction: {
-    borderRadius: 8,
+    borderRadius: 6,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   menuActionLabel: {
     color: colors.textChip,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-  },
-  menuActionPrimary: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  menuActionPrimaryLabel: {
-    color: chrome.accent,
-    fontSize: 13,
-    fontWeight: '700',
   },
 })

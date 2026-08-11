@@ -1,5 +1,5 @@
 import type { WorkspaceRecord } from './instance-api'
-import { isSystemWorkspace, userWorkspaces } from './system-inventory'
+import { isTurbopanelWorkspace } from './system-inventory'
 
 /** Sentinel for the organization-wide (unfiltered) projects view. */
 export const ALL_WORKSPACES_SCOPE = 'all'
@@ -15,26 +15,6 @@ export function workspaceDisplayName(workspace: WorkspaceRecord): string {
   return workspace.displayName?.trim() || 'Unnamed workspace'
 }
 
-function soleWorkspaceScope(
-  workspaces: readonly WorkspaceRecord[],
-): WorkspaceScope | null {
-  // Sole-workspace auto-select must ignore the platform System workspace,
-  // otherwise every org looks like it has ≥2 workspaces and All stays visible.
-  const users = userWorkspaces(workspaces)
-  if (users.length !== 1) {
-    return null
-  }
-  const workspace = users[0]
-  if (!workspace) {
-    return null
-  }
-  return {
-    id: workspace.id,
-    label: workspaceDisplayName(workspace),
-    workspace,
-  }
-}
-
 function allWorkspacesScope(): WorkspaceScope {
   return {
     id: ALL_WORKSPACES_SCOPE,
@@ -47,20 +27,18 @@ export function resolveWorkspaceScope(
   workspaces: readonly WorkspaceRecord[],
   requestedId: string | null | undefined,
 ): WorkspaceScope {
-  const sole = soleWorkspaceScope(workspaces)
-
   if (!requestedId || requestedId === ALL_WORKSPACES_SCOPE) {
-    return sole ?? allWorkspacesScope()
+    return allWorkspacesScope()
   }
 
   const workspace = workspaces.find((entry) => entry.id === requestedId) ?? null
   if (!workspace) {
-    // Unknown / absent ids never fall back *to* the system workspace.
-    return sole ?? allWorkspacesScope()
+    // Unknown / absent ids never fall back to the platform workspace.
+    return allWorkspacesScope()
   }
 
-  // Explicit selection of the system workspace is allowed.
-  if (isSystemWorkspace(workspace)) {
+  // Explicit selection of the TurboPanel platform workspace is allowed.
+  if (isTurbopanelWorkspace(workspace)) {
     return {
       id: workspace.id,
       label: workspaceDisplayName(workspace),

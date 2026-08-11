@@ -778,7 +778,7 @@ export async function checkPermission(
   return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
 }
 
-export type WorkspaceKind = 'system' | 'user';
+export type WorkspaceKind = 'turbopanel' | 'user'
 
 export type WorkspaceRecord = {
   id: string;
@@ -1066,10 +1066,10 @@ export type OrganizationCaRecord = {
  * Allocator-owned container classifier.
  * - `service` — ordinary workload container
  * - `ingress` — per-service Traefik container (ordinal 1, named `<serviceId>-in`)
- * - `system` — platform component in the `turbopanel-system` Compose stack
- *   (database / queue / analytics), inspect-only
+ * - `turbopanel` — platform component in the `turbopanel-system` Compose stack
+ *   (database / queue / analytics / ProxySQL), inspect-only where applicable
  */
-export type ContainerRole = 'service' | 'ingress' | 'system'
+export type ContainerRole = 'service' | 'ingress' | 'turbopanel'
 
 export type ContainerRecord = {
   id: string;
@@ -1081,8 +1081,8 @@ export type ContainerRecord = {
   /**
    * Allocator-owned. `service` is an ordinary workload container; `ingress` is
    * the per-service Traefik container, always ordinal 1, named `<serviceId>-in`;
-   * `system` is a platform component in the `turbopanel-system` Compose stack
-   * (database / queue / analytics), inspect-only.
+   * `turbopanel` is a platform component in the `turbopanel-system` Compose stack
+   * (database / queue / analytics / ProxySQL), inspect-only where applicable.
    */
   role: ContainerRole;
   composeServiceName: string;
