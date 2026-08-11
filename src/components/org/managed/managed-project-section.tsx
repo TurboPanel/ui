@@ -67,6 +67,7 @@ import {
   useRotateManagedUserPassword,
   useRunManagedLifecycle,
   useUpdateEnvironmentManaged,
+  alignMemberStatusesWithCluster,
   mergeManagedMembers,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
@@ -494,9 +495,9 @@ function ManagedEnvironmentReadyPanels({
   const users = usersQuery.data?.users ?? []
   const databases = databasesQuery.data?.databases ?? []
   const backups = backupsQuery.data?.backups ?? []
-  const members = mergeManagedMembers(
-    detail.members ?? [],
-    status?.members ?? [],
+  const members = alignMemberStatusesWithCluster(
+    mergeManagedMembers(detail.members ?? [], status?.members ?? []),
+    status?.status ?? managed.status,
   )
   const serverId = managed.serverId ?? detail.server?.id ?? null
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)

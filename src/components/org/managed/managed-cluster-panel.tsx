@@ -458,7 +458,7 @@ function ClusterMemberRow({
             </Text>
           </Text>
           <View style={styles.chipRow}>
-            {member.readEligible ? (
+            {member.role === 'replica' && member.readEligible ? (
               <View style={styles.readsChip}>
                 <Text style={styles.readsChipText}>Reads</Text>
               </View>

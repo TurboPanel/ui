@@ -432,27 +432,76 @@ export function useRestoreManagedBackup(orgId: string, environmentId: string) {
 }
 
 /**
+ * Resolve cluster member identity from detail (`id`) or legacy status
+ * (`memberId`). Empty / missing ids are dropped so merges never invent ghosts.
+ */
+function memberIdentityId(member: {
+  id?: string | null
+  memberId?: string | null
+}): string | null {
+  if (typeof member.id === 'string' && member.id.length > 0) return member.id
+  if (typeof member.memberId === 'string' && member.memberId.length > 0) {
+    return member.memberId
+  }
+  return null
+}
+
+/**
  * Merge status snapshot members (fresh lag/health) onto detail identity.
  * Prefer `status.members` per member id; fall back to detail for missing rows.
  * No separate members poll — status only refetches while provisioning/applying.
+ *
+ * Status historically emitted `memberId` instead of `id`. Treating that as a
+ * separate keyless row produced a ghost second Primary and a React key warning.
  */
 export function mergeManagedMembers(
   detailMembers: readonly ManagedMemberRecord[] | null | undefined,
-  statusMembers: readonly ManagedMemberRecord[] | null | undefined,
+  statusMembers: readonly unknown[] | null | undefined,
 ): ManagedMemberRecord[] {
   const byId = new Map<string, ManagedMemberRecord>()
   for (const member of detailMembers ?? []) {
-    byId.set(member.id, member)
+    const id = memberIdentityId(member)
+    if (!id) continue
+    byId.set(id, { ...member, id })
   }
-  for (const member of statusMembers ?? []) {
-    const prior = byId.get(member.id)
-    byId.set(member.id, prior ? { ...prior, ...member } : member)
+  for (const raw of statusMembers ?? []) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const statusRow = raw as ManagedMemberRecord & { memberId?: string }
+    const id = memberIdentityId(statusRow)
+    if (!id) continue
+    const prior = byId.get(id)
+    byId.set(
+      id,
+      prior
+        ? { ...prior, ...statusRow, id }
+        : { ...statusRow, id },
+    )
   }
   return [...byId.values()].sort((a, b) => {
     if (a.role !== b.role) {
       return a.role === 'primary' ? -1 : 1
     }
     return a.ordinal - b.ordinal
+  })
+}
+
+/**
+ * When the cluster row is already terminal-failed, in-flight member labels
+ * (`provisioning` / `applying`) are stale — older applies only flipped
+ * `managed.status`. Align display so Cluster does not claim work is ongoing.
+ */
+export function alignMemberStatusesWithCluster(
+  members: readonly ManagedMemberRecord[],
+  clusterStatus: string | null | undefined,
+): ManagedMemberRecord[] {
+  if (clusterStatus !== 'failed') {
+    return [...members]
+  }
+  return members.map((member) => {
+    if (member.status === 'provisioning' || member.status === 'applying') {
+      return { ...member, status: 'failed' }
+    }
+    return member
   })
 }
 
