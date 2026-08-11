@@ -11,7 +11,7 @@ import {
   type StyleProp,
   type TextStyle,
 } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
+import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -35,6 +35,8 @@ import { chrome, colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
+const FORM_MAX_WIDTH = 440
+
 const webInputStyle = {
   borderWidth: 1,
   borderColor: colors.border,
@@ -43,12 +45,12 @@ const webInputStyle = {
   paddingHorizontal: 12,
   paddingVertical: 10,
   fontSize: 16,
-  borderRadius: 6,
+  borderRadius: 8,
   minHeight: 44,
+  width: '100%' as const,
 } as const
 
 type WorkspaceMode = 'existing' | 'new'
-type NewWorkspaceNameMode = 'sameAsProject' | 'custom'
 
 type FieldErrors = {
   displayName?: string
@@ -74,13 +76,14 @@ function workspaceLabel(workspace: WorkspaceRecord): string {
   return workspace.displayName?.trim() || 'Workspace'
 }
 
-function resolveNewWorkspaceName(
-  nameMode: NewWorkspaceNameMode,
+/** Shown / submitted workspace name: mirrors project until the operator overrides. */
+function resolveMirroredWorkspaceName(
   projectName: string,
-  customWorkspaceName: string,
+  workspaceName: string,
+  overridden: boolean,
 ): string {
-  if (nameMode === 'sameAsProject') return projectName.trim()
-  return customWorkspaceName.trim()
+  if (overridden) return workspaceName.trim()
+  return projectName.trim()
 }
 
 function resolveLoadError(
@@ -104,8 +107,8 @@ function validateProjectCreateFields(options: {
   pickedWorkspaceId: string
   /** Ids the picker offers — existing mode must pick one of these. */
   allowedWorkspaceIds: readonly string[]
-  newWorkspaceNameMode: NewWorkspaceNameMode
-  customWorkspaceName: string
+  newWorkspaceName: string
+  newWorkspaceNameOverridden: boolean
   projectNames: readonly (string | null | undefined)[]
   workspaceNames: readonly (string | null | undefined)[]
 }): FieldErrors {
@@ -131,17 +134,16 @@ function validateProjectCreateFields(options: {
     return errors
   }
 
-  const workspaceName = resolveNewWorkspaceName(
-    options.newWorkspaceNameMode,
+  const workspaceName = resolveMirroredWorkspaceName(
     options.displayName,
-    options.customWorkspaceName,
+    options.newWorkspaceName,
+    options.newWorkspaceNameOverridden,
   )
   const workspaceNameError = validateDisplayName(workspaceName)
   if (workspaceNameError) {
-    errors.workspaceName =
-      options.newWorkspaceNameMode === 'sameAsProject'
-        ? 'Project name is required before creating a matching workspace.'
-        : workspaceNameError
+    errors.workspaceName = options.newWorkspaceNameOverridden
+      ? workspaceNameError
+      : 'Project name is required before creating a matching workspace.'
   } else if (isDisplayNameTaken(workspaceName, options.workspaceNames)) {
     errors.workspaceName =
       'A workspace with this name already exists in the organization.'
@@ -162,9 +164,9 @@ function SegmentChoice<T extends string>({
   onChange: (next: T) => void
 }>) {
   return (
-    <>
+    <View style={styles.fieldBlock}>
       <Text style={styles.label}>{label}</Text>
-      <View style={orgPanelStyles.segmentGroup}>
+      <View style={[orgPanelStyles.segmentGroup, styles.segmentStretch]}>
         {options.map((option) => {
           const active = value === option.id
           return (
@@ -172,6 +174,7 @@ function SegmentChoice<T extends string>({
               key={option.id}
               style={[
                 orgPanelStyles.segmentChip,
+                styles.segmentChipFlex,
                 active && orgPanelStyles.segmentChipActive,
                 webPointer,
               ]}
@@ -192,7 +195,7 @@ function SegmentChoice<T extends string>({
           )
         })}
       </View>
-    </>
+    </View>
   )
 }
 
@@ -217,6 +220,18 @@ function WorkspacePickerBody({
       </Text>
     )
   }
+
+  // Single workspace: no need for a tall picker list.
+  if (workspaces.length === 1) {
+    const only = workspaces[0]
+    if (!only) return null
+    return (
+      <View style={styles.singleWorkspace}>
+        <Text style={styles.singleWorkspaceText}>{workspaceLabel(only)}</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.workspaceList}>
       {workspaces.map((ws) => {
@@ -258,8 +273,10 @@ function WorkspacePicker({
   onSelect: (workspaceId: string) => void
 }>) {
   return (
-    <>
-      <Text style={styles.label}>Existing workspace</Text>
+    <View style={styles.fieldBlock}>
+      {workspaces.length > 1 ? (
+        <Text style={styles.subLabel}>Choose workspace</Text>
+      ) : null}
       <WorkspacePickerBody
         workspaces={workspaces}
         loading={loading}
@@ -267,63 +284,37 @@ function WorkspacePicker({
         onSelect={onSelect}
       />
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-    </>
+    </View>
   )
 }
 
 function NewWorkspaceFields({
-  displayName,
-  nameMode,
-  customWorkspaceName,
+  value,
   workspaceNameError,
   inputStyle,
-  onNameModeChange,
-  onCustomNameChange,
+  onChange,
 }: Readonly<{
-  displayName: string
-  nameMode: NewWorkspaceNameMode
-  customWorkspaceName: string
+  value: string
   workspaceNameError?: string
   inputStyle: (hasError: boolean) => StyleProp<TextStyle>
-  onNameModeChange: (mode: NewWorkspaceNameMode) => void
-  onCustomNameChange: (name: string) => void
+  onChange: (name: string) => void
 }>) {
-  const trimmedProjectName = displayName.trim()
-  const sameAsProjectHint = trimmedProjectName
-    ? `Will create workspace "${trimmedProjectName}".`
-    : 'Uses the project name once you enter it.'
-
   return (
-    <>
-      <SegmentChoice
-        label="New workspace name"
-        options={[
-          { id: 'sameAsProject', label: 'Same as project' },
-          { id: 'custom', label: 'Custom' },
-        ]}
-        value={nameMode}
-        onChange={onNameModeChange}
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>Workspace name</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder="Same as project"
+        placeholderTextColor={colors.textDim}
+        autoCapitalize="words"
+        accessibilityLabel="Workspace name"
+        style={inputStyle(Boolean(workspaceNameError))}
       />
-      {nameMode === 'sameAsProject' ? (
-        <Text style={orgPanelStyles.muted}>{sameAsProjectHint}</Text>
-      ) : (
-        <>
-          <Text style={styles.label}>Workspace name</Text>
-          <TextInput
-            value={customWorkspaceName}
-            onChangeText={onCustomNameChange}
-            placeholder="My workspace"
-            placeholderTextColor={colors.textDim}
-            autoCapitalize="words"
-            accessibilityLabel="Workspace name"
-            style={inputStyle(Boolean(workspaceNameError))}
-          />
-        </>
-      )}
       {workspaceNameError ? (
         <Text style={orgPanelStyles.error}>{workspaceNameError}</Text>
       ) : null}
-    </>
+    </View>
   )
 }
 
@@ -333,28 +324,22 @@ function ProjectWorkspaceFields({
   loadingWorkspaces,
   pickedWorkspaceId,
   fieldErrors,
-  displayName,
-  newWorkspaceNameMode,
-  customWorkspaceName,
+  newWorkspaceNameValue,
   inputStyle,
   onWorkspaceModeChange,
   onPickedWorkspaceIdChange,
-  onNewWorkspaceNameModeChange,
-  onCustomWorkspaceNameChange,
+  onNewWorkspaceNameChange,
 }: Readonly<{
   workspaceMode: WorkspaceMode
   workspaces: WorkspaceRecord[]
   loadingWorkspaces: boolean
   pickedWorkspaceId: string
   fieldErrors: FieldErrors
-  displayName: string
-  newWorkspaceNameMode: NewWorkspaceNameMode
-  customWorkspaceName: string
+  newWorkspaceNameValue: string
   inputStyle: (hasError: boolean) => StyleProp<TextStyle>
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onPickedWorkspaceIdChange: (id: string) => void
-  onNewWorkspaceNameModeChange: (mode: NewWorkspaceNameMode) => void
-  onCustomWorkspaceNameChange: (name: string) => void
+  onNewWorkspaceNameChange: (name: string) => void
 }>) {
   return (
     <>
@@ -377,13 +362,10 @@ function ProjectWorkspaceFields({
         />
       ) : (
         <NewWorkspaceFields
-          displayName={displayName}
-          nameMode={newWorkspaceNameMode}
-          customWorkspaceName={customWorkspaceName}
+          value={newWorkspaceNameValue}
           workspaceNameError={fieldErrors.workspaceName}
           inputStyle={inputStyle}
-          onNameModeChange={onNewWorkspaceNameModeChange}
-          onCustomNameChange={onCustomWorkspaceNameChange}
+          onChange={onNewWorkspaceNameChange}
         />
       )}
     </>
@@ -428,9 +410,9 @@ export function ProjectCreateSection({
   const [description, setDescription] = useState('')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
   const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
-  const [newWorkspaceNameMode, setNewWorkspaceNameMode] =
-    useState<NewWorkspaceNameMode>('sameAsProject')
-  const [customWorkspaceName, setCustomWorkspaceName] = useState('')
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [newWorkspaceNameOverridden, setNewWorkspaceNameOverridden] =
+    useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
 
@@ -486,8 +468,8 @@ export function ProjectCreateSection({
       workspaceMode,
       pickedWorkspaceId,
       allowedWorkspaceIds,
-      newWorkspaceNameMode,
-      customWorkspaceName,
+      newWorkspaceName,
+      newWorkspaceNameOverridden,
       projectNames,
       workspaceNames: workspaces.map((workspace) => workspace.displayName),
     })
@@ -501,10 +483,10 @@ export function ProjectCreateSection({
 
     let workspaceId = pickedWorkspaceId
     if (workspaceMode === 'new') {
-      const workspaceName = resolveNewWorkspaceName(
-        newWorkspaceNameMode,
+      const workspaceName = resolveMirroredWorkspaceName(
         displayName,
-        customWorkspaceName,
+        newWorkspaceName,
+        newWorkspaceNameOverridden,
       )
       const workspaceResult = await createWorkspace.run({
         displayName: workspaceName,
@@ -540,110 +522,209 @@ export function ProjectCreateSection({
   ]
 
   const submitting = createWorkspace.isPending || createProject.isPending
+  const mirroredWorkspaceName = resolveMirroredWorkspaceName(
+    displayName,
+    newWorkspaceName,
+    newWorkspaceNameOverridden,
+  )
+
+  const handleNewWorkspaceNameChange = (text: string) => {
+    // Blank field resumes mirroring the project name as they type.
+    if (text.trim() === '') {
+      setNewWorkspaceNameOverridden(false)
+      setNewWorkspaceName('')
+      return
+    }
+    setNewWorkspaceNameOverridden(true)
+    setNewWorkspaceName(text)
+  }
 
   return (
     <ScrollView
       contentContainerStyle={styles.root}
       keyboardShouldPersistTaps="handled"
+      style={styles.scroll}
     >
-      <WizardStepIndicator labels={['Details', 'Type']} activeIndex={0} />
+      <View style={styles.column}>
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>New project</Text>
+          <Text style={styles.pageCopy}>
+            Creates a {defaultEnvironmentName} environment. Choose type next.
+          </Text>
+        </View>
 
-      <SectionPanel
-        title="New project"
-        hint={`Creates an empty project with a ${defaultEnvironmentName} environment. You choose Compose, template, or managed next.`}
-        accent
-      >
-        {apiError ?? loadError ? (
-          <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
-        ) : null}
+        <View style={styles.steps}>
+          <WizardStepIndicator labels={['Details', 'Type']} activeIndex={0} />
+        </View>
 
-        {scopedWorkspaceBlocked ? (
-          <SystemManagedNotice
-            title="Platform workspace"
-            description="Projects cannot be created in the System workspace. Choose a user workspace below."
-            onBack={() => {
-              router.replace(`/${orgId}/projects` as Href)
-            }}
-            backLabel="Back to projects"
-          />
-        ) : null}
+        <GlassSurface style={styles.panel} intensity="regular">
+          <View style={styles.panelBody}>
+            {apiError ?? loadError ? (
+              <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
+            ) : null}
 
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          value={displayName}
-          onChangeText={setDisplayName}
-          placeholder="My project"
-          placeholderTextColor={colors.textDim}
-          autoCapitalize="words"
-          accessibilityLabel="Project name"
-          style={inputStyle(Boolean(fieldErrors.displayName))}
-        />
-        {fieldErrors.displayName ? (
-          <Text style={orgPanelStyles.error}>{fieldErrors.displayName}</Text>
-        ) : null}
+            {scopedWorkspaceBlocked ? (
+              <SystemManagedNotice
+                title="Platform workspace"
+                description="Projects cannot be created in the System workspace. Choose a user workspace below."
+                onBack={() => {
+                  router.replace(`/${orgId}/projects` as Href)
+                }}
+                backLabel="Back to projects"
+              />
+            ) : null}
 
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Optional"
-          placeholderTextColor={colors.textDim}
-          accessibilityLabel="Project description"
-          style={inputStyle(Boolean(fieldErrors.description))}
-        />
-        {fieldErrors.description ? (
-          <Text style={orgPanelStyles.error}>{fieldErrors.description}</Text>
-        ) : null}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="My project"
+                placeholderTextColor={colors.textDim}
+                autoCapitalize="words"
+                autoFocus
+                accessibilityLabel="Project name"
+                style={inputStyle(Boolean(fieldErrors.displayName))}
+              />
+              {fieldErrors.displayName ? (
+                <Text style={orgPanelStyles.error}>
+                  {fieldErrors.displayName}
+                </Text>
+              ) : null}
+            </View>
 
-        <ProjectWorkspaceFields
-          workspaceMode={workspaceMode}
-          workspaces={workspaces}
-          loadingWorkspaces={loadingWorkspaces}
-          pickedWorkspaceId={pickedWorkspaceId}
-          fieldErrors={fieldErrors}
-          displayName={displayName}
-          newWorkspaceNameMode={newWorkspaceNameMode}
-          customWorkspaceName={customWorkspaceName}
-          inputStyle={inputStyle}
-          onWorkspaceModeChange={setWorkspaceMode}
-          onPickedWorkspaceIdChange={setPickedWorkspaceId}
-          onNewWorkspaceNameModeChange={setNewWorkspaceNameMode}
-          onCustomWorkspaceNameChange={setCustomWorkspaceName}
-        />
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Description</Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Optional"
+                placeholderTextColor={colors.textDim}
+                accessibilityLabel="Project description"
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+                style={[
+                  inputStyle(Boolean(fieldErrors.description)),
+                  styles.descriptionInput,
+                ]}
+              />
+              {fieldErrors.description ? (
+                <Text style={orgPanelStyles.error}>
+                  {fieldErrors.description}
+                </Text>
+              ) : null}
+            </View>
+
+            <ProjectWorkspaceFields
+              workspaceMode={workspaceMode}
+              workspaces={workspaces}
+              loadingWorkspaces={loadingWorkspaces}
+              pickedWorkspaceId={pickedWorkspaceId}
+              fieldErrors={fieldErrors}
+              newWorkspaceNameValue={mirroredWorkspaceName}
+              inputStyle={inputStyle}
+              onWorkspaceModeChange={setWorkspaceMode}
+              onPickedWorkspaceIdChange={setPickedWorkspaceId}
+              onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
+            />
+
+            <Pressable
+              style={[
+                styles.primaryButton,
+                webPointer,
+                submitting && styles.disabled,
+              ]}
+              disabled={submitting}
+              onPress={() => {
+                void submit()
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Create project"
+            >
+              <Text style={styles.primaryButtonText}>
+                {submitting ? 'Creating…' : 'Create project'}
+              </Text>
+            </Pressable>
+          </View>
+        </GlassSurface>
 
         <Pressable
-          style={[
-            styles.primaryButton,
-            webPointer,
-            submitting && styles.disabled,
-          ]}
-          disabled={submitting}
+          style={[styles.cancelLink, webPointer]}
           onPress={() => {
-            void submit()
+            router.replace(`/${orgId}/projects` as Href)
           }}
           accessibilityRole="button"
-          accessibilityLabel="Create project"
+          accessibilityLabel="Cancel"
         >
-          <Text style={styles.primaryButtonText}>
-            {submitting ? 'Creating…' : 'Create project'}
-          </Text>
+          <Text style={styles.cancelLinkText}>Cancel</Text>
         </Pressable>
-      </SectionPanel>
+      </View>
     </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   root: {
-    gap: spacing.lg,
-    paddingBottom: spacing.xl,
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  column: {
+    width: '100%',
+    maxWidth: FORM_MAX_WIDTH,
+    alignSelf: 'center',
+    gap: spacing.md,
+  },
+  pageHeader: {
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  pageTitle: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    textAlign: 'center',
+  },
+  pageCopy: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  steps: {
+    alignItems: 'center',
+  },
+  panel: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+  },
+  panelBody: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  fieldBlock: {
+    gap: spacing.xs,
   },
   label: {
     color: colors.textLabel,
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
-    marginTop: spacing.sm,
+    letterSpacing: 0.4,
+  },
+  subLabel: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '600',
   },
   input: {
     borderWidth: 1,
@@ -653,14 +734,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 44,
   },
   inputError: {
     borderColor: colors.error,
   },
+  descriptionInput: {
+    minHeight: 72,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  segmentStretch: {
+    alignSelf: 'stretch',
+  },
+  segmentChipFlex: {
+    flex: 1,
+  },
   workspaceList: {
     gap: spacing.xs,
+    maxHeight: 160,
   },
   workspaceOption: {
     borderWidth: 1,
@@ -668,8 +761,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.bgSecondary,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 44,
+    paddingVertical: spacing.sm,
+    minHeight: 40,
     justifyContent: 'center',
   },
   workspaceOptionSelected: {
@@ -678,22 +771,47 @@ const styles = StyleSheet.create({
   },
   workspaceOptionText: {
     color: colors.text,
-    fontSize: 15,
+    fontSize: 14,
+  },
+  singleWorkspace: {
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    borderRadius: 8,
+    backgroundColor: colors.bgInset,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  singleWorkspaceText: {
+    color: colors.textBody,
+    fontSize: 14,
   },
   primaryButton: {
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
     alignSelf: 'stretch',
     backgroundColor: chrome.accent,
     borderRadius: 8,
-    minHeight: 48,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
   primaryButtonText: {
     color: chrome.onAccent,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
+  },
+  cancelLink: {
+    alignSelf: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  cancelLinkText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
   },
   disabled: {
     opacity: 0.55,

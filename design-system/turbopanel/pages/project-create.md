@@ -15,13 +15,23 @@
 
 Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
 
+## Layout (Details step)
+
+- **Centered single column** — `maxWidth: 440`, vertically centered in the org content area (`flexGrow` + `justifyContent: 'center'`)
+- Compact **GlassSurface** panel (not a full-bleed `SectionPanel`); short centered page title + one-line subtitle above the panel
+- Density closer to auth create flows than dense fleet tables — keep fields tight, avoid long panel hints
+- Description is always visible as a **2-line multiline** field (`minHeight` ~72) so longer copy is obvious
+- Single user workspace → quiet summary row (no tall picker list); multiple → compact scrollable list (`maxHeight` ~160)
+- Workspace segment chips stretch full panel width
+- Cancel text link under the panel → back to projects
+
 ## Details step fields
 
 - **Name** (required) — unique within the organization (trim + case-insensitive; enforced by API)
-- **Description** (optional)
+- **Description** (optional) — always-visible 2-row multiline input
 - **Workspace** — segment: Existing | Create new
   - Existing: picker of visible workspaces (preselected from `?workspaceId=` / active scope / sole workspace)
-  - Create new: Same as project | Custom name; creates the workspace first, then the project
+  - Create new: single **Workspace name** field — mirrors the project name as they type until edited; clearing the field resumes mirroring; creates the workspace first, then the project
 
 ## UX rules
 
@@ -35,5 +45,8 @@ Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
 
 - ❌ Choosing type before the project exists  
 - ❌ Requiring a second Production create  
-- ❌ Long explanatory paragraphs in the compose header  
+- ❌ Full-bleed / max-width content form on desktop  
+- ❌ Long explanatory paragraphs in the create header  
+- ❌ Single-line description that hides multi-line intent  
+- ❌ Same as project / Custom workspace-name segment  
 - ❌ Separate draft/runtime status field  
