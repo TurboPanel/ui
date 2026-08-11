@@ -366,7 +366,9 @@ function ServicesPanelBody({
     }
   }, [isDirty, scopeKey])
 
-  const saveOverviewDraft = useCallback(async () => {
+  // Plain handlers (not useCallback): React Compiler could not preserve manual
+  // memoization of this save path (`preserve-manual-memoization` on scopeKey).
+  async function saveOverviewDraft(): Promise<void> {
     const snapshot = resolveComposeDraftSnapshot(
       draftStore,
       scopeKey,
@@ -394,19 +396,11 @@ function ServicesPanelBody({
       yaml: seeded.yaml,
       baselineYaml: composeFullYaml(next),
     })
-  }, [
-    draftStore,
-    scopeKey,
-    savedDocument,
-    editView,
-    baseSelected,
-    onSaveProjectCompose,
-    onSaveEnvironmentCompose,
-  ])
+  }
 
-  const runOverviewSave = useCallback(() => {
+  function runOverviewSave(): void {
     void saveOverviewDraft()
-  }, [saveOverviewDraft])
+  }
 
   if (baseSelected) {
     if (editing) {
