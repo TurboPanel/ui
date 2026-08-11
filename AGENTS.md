@@ -439,15 +439,17 @@ Authorization helpers:
 
 #### Servers overview table
 
-- `servers-overview-section.tsx` renders a lean selectable table: Host (display name / hostname; OS logo — no UUID), Status (**Online** with country flag when known / Offline), checkbox column (header = select all). Row press navigates to `/<orgId>/servers/[serverId]`; checkbox uses `stopPropagation` so selection does not navigate.
+- `servers-overview-section.tsx` renders a lean selectable table: Host (display name / hostname; OS logo — no UUID), Status (Online / Offline), **Country** (flag + English name from geo), **Usage** (CPU / Mem / Swap bars from one `GET /servers/metrics/latest` fleet snapshot), Mesh, checkbox column (header = select all). Row press navigates to `/<orgId>/servers/[serverId]`; checkbox uses `stopPropagation` so selection does not navigate.
+- Lean inventory strip above the table: server count · avg CPU · avg memory (averages only servers with a recent sample).
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`.
 - Batch **Update** targets **selected** updatable hosts only; per-host commands, delete, time/network, and metrics live on the server detail page.
 - `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `addresses`, `timeSync`, `timezone`, `timezoneSource`, `datacenterId`, and `datacenterDisplayName` (Postgres projection).
+- Fleet usage: `useFleetServerUsage` → `fetchFleetMetricsLatest` — **one** O(1) call, never per-server metrics series on this page.
 
 #### Server control panel (`/<orgId>/servers/[serverId]`)
 
 - `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`).
-- Overview **Connection** shows observed egress (`remoteAddress` as Connected from), **Online/Offline since** from `statusChangedAt` (last `connected` flip — not null when offline), plus **24h host-metrics reporting** (`Last sample` / `Reporting (24h)` via `fetchServerMetricsSeries`). Do **not** use `connectedAt` / `lastInboundAt` as session uptime — `connectedAt` is null when offline, Workers steady-state cell pings do not refresh Postgres `lastInboundAt`, and sockets self-recycle about every 2h.
+- Overview header shows how the daemon reaches the control plane under Online/Offline: `via Local Unix Socket` when colocated / `__direct__`, otherwise `via <IP>` from observed `remoteAddress`. No Connection panel, Online/Offline since, last sample, or 24h reporting on Overview (metrics live on the Metrics tab).
 - Single command poll timer (`COMMAND_POLL_MS`) for ping, hostname, reboot, timezone, and NTP on this page; terminal hostname/reboot/timezone/NTP success invalidates `['server', serverId]`.
 - Legacy deep link `/<orgId>/servers/[serverId]/metrics` unchanged; Metrics tab embeds `ServerMetricsSection` with `embedded`.
 

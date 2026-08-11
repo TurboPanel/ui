@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createLicense,
   deleteServer,
+  fetchFleetMetricsLatest,
   fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServer,
@@ -19,12 +20,15 @@ import {
   triggerServerUpdate,
   updateServer,
   type FetchServerMetricsSeriesOptions,
+  type FleetMetricsLatestResponse,
   type MetricsSeriesResponse,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
 export const SERVERS_REFRESH_MS = 30_000
 export const UPDATE_PROGRESS_POLL_MS = 5000
+/** Fleet usage tracks ~1 sample/min host metrics — refresh once a minute. */
+export const FLEET_USAGE_REFRESH_MS = 60_000
 const REPORTING_WINDOW_MS = 24 * 60 * 60 * 1000
 const REPORTING_REFRESH_MS = 300_000
 
@@ -32,7 +36,14 @@ export function useOrgServers(
   orgId: string,
   options?: Readonly<{
     enabled?: boolean
-    refetchInterval?: number | false
+    refetchInterval?:
+      | number
+      | false
+      | ((
+          query: Readonly<{
+            state: { data?: { servers?: readonly unknown[] } | undefined }
+          }>,
+        ) => number | false | undefined)
     retry?: boolean | number
   }>,
 ) {
@@ -108,6 +119,26 @@ export function useOrgServerCapacity(
     queryKey: queryKeys.org(orgId).settings.serverCapacity,
     queryFn: () => fetchOrgServerCapacity(orgId),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
+  })
+}
+
+export function useFleetServerUsage(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.fleetUsage,
+    queryFn: async (): Promise<FleetMetricsLatestResponse | null> => {
+      try {
+        return await fetchFleetMetricsLatest(orgId)
+      } catch (error) {
+        if (error instanceof MetricsBackendUnavailableError) return null
+        throw error
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+    refetchInterval: FLEET_USAGE_REFRESH_MS,
+    staleTime: FLEET_USAGE_REFRESH_MS / 2,
   })
 }
 

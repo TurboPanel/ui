@@ -93,6 +93,8 @@ export const queryKeys = {
         updateStatus: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'update'] as const,
         updatesBatch: ['org', orgId, 'servers', 'updates'] as const,
+        /** One O(1) fleet usage snapshot (CPU / memory / swap). */
+        fleetUsage: ['org', orgId, 'servers', 'fleet-usage'] as const,
         reporting: (serverId: string, window: string) =>
           ['org', orgId, 'server', serverId, 'reporting', window] as const,
         metricsSeries: (serverId: string, rangeId: string) =>

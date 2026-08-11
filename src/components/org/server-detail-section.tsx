@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { TurboPanelLogoMark } from '@/components/brand/turbopanel-logo'
 import { SectionPanel } from '@/components/org/section-panel'
 import {
   defaultServerCommandState,
@@ -32,11 +33,7 @@ import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { formatLocalDateTime, formatRelativeLocalDateTime } from '@/lib/format-datetime'
-import {
-  formatCoveragePercent,
-  presentSamplesFromGaps,
-} from '@/lib/format-metrics'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   defaultOrgDashboardHref,
   SERVER_DETAIL_TAB_IDS,
@@ -48,7 +45,6 @@ import {
   isForbiddenError,
   type CommandEnqueueResponse,
   type CommandRecord,
-  type MetricsSeriesResponse,
   type OrgServerRecord,
   type ServerDetailRecord,
   type ServerOsLogoKey,
@@ -61,7 +57,6 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useServerDetail,
-  useServerReporting,
   useServerUpdateStatus,
   useSetServerHostname,
   useTriggerServerUpdate,
@@ -75,59 +70,6 @@ import {
   formatServerGeoLocation,
 } from '@/lib/server-geo'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-function latestMetricsSampleAt(data: MetricsSeriesResponse): string | null {
-  for (let i = data.points.length - 1; i >= 0; i -= 1) {
-    const point = data.points[i]
-    if (point && point.sampleCount > 0) return point.at
-  }
-  return null
-}
-
-function reportingCoverageLabel(data: MetricsSeriesResponse): string | null {
-  const expectedSamples = data.sampleCount + data.gapCount
-  if (expectedSamples <= 0) return null
-  const presentSamples = presentSamplesFromGaps(expectedSamples, data.gapCount)
-  return formatCoveragePercent(presentSamples, expectedSamples)
-}
-
-function formatReportingLine(data: MetricsSeriesResponse): string | null {
-  const coverageLabel = reportingCoverageLabel(data)
-  if (!coverageLabel) return null
-  if (data.gapCount <= 0) return coverageLabel
-  const gapWord = data.gapCount === 1 ? 'gap' : 'gaps'
-  return `${coverageLabel} · ${data.gapCount} ${gapWord}`
-}
-
-function ReportingStatusNote({
-  loading,
-  errored,
-  reporting,
-}: Readonly<{
-  loading: boolean
-  errored: boolean
-  reporting: MetricsSeriesResponse | null | undefined
-}>) {
-  if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading reporting…</Text>
-  }
-  if (errored) {
-    return <Text style={orgPanelStyles.muted}>Reporting unavailable.</Text>
-  }
-  if (!reporting) {
-    return (
-      <Text style={orgPanelStyles.muted}>
-        Metrics backend not configured for this control plane.
-      </Text>
-    )
-  }
-  if (!reporting.available) {
-    return (
-      <Text style={orgPanelStyles.muted}>Waiting for first metrics samples.</Text>
-    )
-  }
-  return null
-}
 
 type DetailActiveCommand = ActiveCommand
 
@@ -326,7 +268,7 @@ function DetailTabBody({
 }>): ReactNode {
   switch (tab) {
     case 'overview':
-      return <ServerOverviewTab orgId={orgId} server={server} />
+      return <ServerOverviewTab server={server} />
     case 'control':
       return (
         <ServerControlTab
@@ -369,7 +311,7 @@ function DetailTabBody({
         <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
       )
     default:
-      return <ServerOverviewTab orgId={orgId} server={server} />
+      return <ServerOverviewTab server={server} />
   }
 }
 
@@ -747,7 +689,7 @@ export function ServerDetailSection({
   const logo = osLogoSource(resolveOsLogoKey(server))
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
-  const daemonCommit = shortCommit(updateState.data?.current?.commit)
+  const connectedVia = resolveConnectedViaLabel(server)
 
   const onPing = () => {
     patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
@@ -870,11 +812,24 @@ export function ServerDetailSection({
               {server.connected ? 'Online' : 'Offline'}
             </Text>
             {flag ? <Text style={styles.flag}>{flag}</Text> : null}
-            <Text style={styles.chip}>Daemon {daemonCommit}</Text>
-            {server.colocatedWithInstance ? (
-              <Text style={styles.chipAccent}>Co-located daemon</Text>
+            {updateVm.colocated ? (
+              <View
+                style={styles.instanceDaemonBadge}
+                accessibilityRole="text"
+                accessibilityLabel="Instance Daemon"
+              >
+                <TurboPanelLogoMark
+                  size={12}
+                  square
+                  accessibilityLabel=""
+                />
+                <Text style={styles.instanceDaemonBadgeText}>Instance Daemon</Text>
+              </View>
             ) : null}
           </View>
+          {connectedVia ? (
+            <Text style={styles.connectedVia}>{connectedVia}</Text>
+          ) : null}
         </View>
       </View>
 
@@ -948,74 +903,28 @@ export function ServerDetailSection({
   )
 }
 
-function ServerConnectionOverview({
-  orgId,
-  server,
-}: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
-  // remoteAddress is the egress IP the control plane observed on the daemon WS
-  // (CF-Connecting-IP / X-Real-IP) — not the URL/hostname the daemon dials.
-  const seenFrom = server.remoteAddress?.trim()
-  const seenFromDisplay =
-    !seenFrom || seenFrom === '__direct__'
-      ? 'Co-located (Unix socket)'
-      : seenFrom
-
-  // statusChangedAt is the last online/offline flip (`status_changed_at`).
-  // Host-metrics coverage remains the durable continuity signal (~60s samples).
-  const statusSinceLabel = server.connected ? 'Online since' : 'Offline since'
-  const statusSince = server.statusChangedAt
-
-  const reportingQuery = useServerReporting(orgId, server.id)
-
-  const reporting = reportingQuery.data
-  const showSamples = Boolean(reporting?.available)
-  const latestSampleAt = reporting ? latestMetricsSampleAt(reporting) : null
-  const reportingLine = reporting ? formatReportingLine(reporting) : null
-
-  return (
-    <SectionPanel
-      title="Connection"
-      hint="Observed egress and host-metrics reporting (not WS session age)"
-    >
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Connected from: </Text>
-        <Text style={styles.mono}>{seenFromDisplay}</Text>
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>{statusSinceLabel}: </Text>
-        {statusSince ? formatLocalDateTime(statusSince) : '—'}
-      </Text>
-      <ReportingStatusNote
-        loading={reportingQuery.isLoading}
-        errored={reportingQuery.isError}
-        reporting={reporting}
-      />
-      {showSamples ? (
-        <>
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Last sample: </Text>
-            {formatRelativeLocalDateTime(latestSampleAt, {
-              neverLabel: 'No samples in the last 24h',
-              absolute: { includeSeconds: false },
-            })}
-          </Text>
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Reporting (24h): </Text>
-            {reportingLine ?? '—'}
-          </Text>
-        </>
-      ) : null}
-    </SectionPanel>
-  )
+/**
+ * Header connection line — colocated Unix socket or observed connecting IP.
+ * `remoteAddress` is egress seen by the control plane; `__direct__` is local socket.
+ */
+function resolveConnectedViaLabel(server: ServerDetailRecord): string | null {
+  const raw = server.remoteAddress?.trim() ?? ''
+  if (server.colocatedWithInstance === true || raw === '__direct__') {
+    return 'via Local Unix Socket'
+  }
+  if (raw) {
+    return `via ${raw}`
+  }
+  return null
 }
 
 function ServerOverviewTab({
-  orgId,
   server,
-}: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
+}: Readonly<{ server: ServerDetailRecord }>) {
   const geoLine = formatServerGeoLocation(server.geo)
   const country = formatServerGeoCountryCode(server.geo)
   const asn = formatServerGeoAsn(server.geo)
+  const hasGeo = Boolean(geoLine || country || asn)
 
   let timezoneSource = 'Not set'
   if (server.timezoneSource === 'server') timezoneSource = 'Server override'
@@ -1052,23 +961,17 @@ function ServerOverviewTab({
         ) : null}
       </SectionPanel>
 
-      <ServerConnectionOverview orgId={orgId} server={server} />
-
-      <SectionPanel title="Geo">
-        {geoLine || country || asn ? (
-          <>
-            {geoLine ? (
-              <Text style={orgPanelStyles.detailLine}>{geoLine}</Text>
-            ) : null}
-            {country ? (
-              <Text style={orgPanelStyles.detailLine}>{country}</Text>
-            ) : null}
-            {asn ? <Text style={orgPanelStyles.muted}>{asn}</Text> : null}
-          </>
-        ) : (
-          <Text style={orgPanelStyles.muted}>No geo reported yet.</Text>
-        )}
-      </SectionPanel>
+      {hasGeo ? (
+        <SectionPanel title="Geo">
+          {geoLine ? (
+            <Text style={orgPanelStyles.detailLine}>{geoLine}</Text>
+          ) : null}
+          {country ? (
+            <Text style={orgPanelStyles.detailLine}>{country}</Text>
+          ) : null}
+          {asn ? <Text style={orgPanelStyles.muted}>{asn}</Text> : null}
+        </SectionPanel>
+      ) : null}
 
       <SectionPanel title="Timezone">
         <Text style={orgPanelStyles.detailLine}>
@@ -1351,25 +1254,26 @@ const styles = StyleSheet.create({
   flag: {
     fontSize: 16,
   },
-  chip: {
+  connectedVia: {
     color: colors.textMuted,
     fontSize: 12,
     fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  instanceDaemonBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     borderWidth: 1,
     borderColor: colors.borderChip,
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
-  chipAccent: {
-    color: chrome.accent,
+  instanceDaemonBadgeText: {
+    color: colors.textBody,
     fontSize: 12,
     fontWeight: '600',
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
   },
   tabBody: {
     gap: spacing.lg,

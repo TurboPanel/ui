@@ -9,7 +9,7 @@
 
 ## Layout
 
-- Sticky detail header: back link, OS logo, title, hostname (mono), status dot + Online/Offline + flag, version chip, co-located chip when applicable  
+- Sticky detail header: back link, OS logo, title, hostname (mono), status dot + Online/Offline + flag, optional **Instance Daemon** pill (TurboPanel T mark + label) when colocated, then a muted `via Local Unix Socket` / `via <IP>` line — no Connection panel on Overview; version lives on Control → Daemon update  
 - Segmented tab rail (`orgPanelStyles.segmentGroup` / `segmentChip`) — active tab in `?tab=` query param  
 - Hairline borders between sections; panels only where they group an interaction — no nested decorative cards  
 - Tab body swaps instantly (no page transition animation)
@@ -24,7 +24,7 @@
 
 | Tab | Content |
 |-----|---------|
-| Overview | Identity, OS, connection (egress + 24h metrics reporting), geo, timezone |
+| Overview | Identity, OS, geo when reported, timezone |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
 | Time | NTP status, timezone picker, NTP apply form |
 | Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |

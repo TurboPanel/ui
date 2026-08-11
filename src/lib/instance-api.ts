@@ -2704,6 +2704,23 @@ export type MetricsSummaryResponse = {
   latestAt: string | null
 }
 
+export type FleetServerUsageRecord = {
+  serverId: string
+  latestAt: string | null
+  sampleCount: number
+  values: Partial<Record<HostMetricKey, number | null>>
+}
+
+export type FleetMetricsLatestResponse = {
+  ok: true
+  from: string
+  to: string
+  backend: MetricsBackendKind
+  available: boolean
+  metrics: HostMetricKey[]
+  servers: FleetServerUsageRecord[]
+}
+
 export class MetricsBackendUnavailableError extends Error {
   readonly code = 'metrics_backend_unavailable'
   readonly backend: MetricsBackendKind
@@ -2819,6 +2836,57 @@ export async function fetchServerMetricsSummary(
     query,
     organizationId,
   )
+}
+
+/**
+ * One fleet usage snapshot for the servers overview (CPU / memory / swap %).
+ * Authz is server-side via listVisible — never pass client serverIds.
+ */
+export async function fetchFleetMetricsLatest(
+  organizationId?: string | null,
+): Promise<FleetMetricsLatestResponse> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const path = `${CLIENT_API}/servers/metrics/latest`
+  const response = await fetch(path, {
+    credentials: 'include',
+    headers,
+  })
+
+  if (response.status === 503) {
+    let body: { error?: string; backend?: MetricsBackendKind } = {}
+    try {
+      body = (await response.json()) as typeof body
+    } catch {
+      // Non-JSON error body.
+    }
+    if (body.error === 'metrics_backend_unavailable') {
+      throw new MetricsBackendUnavailableError(
+        body.backend ?? 'disabled',
+        `${path} failed: metrics_backend_unavailable`,
+      )
+    }
+  }
+
+  if (!response.ok) {
+    let bodyError: string | undefined
+    try {
+      const body = (await response.json()) as { error?: string }
+      if (body.error) bodyError = body.error
+    } catch {
+      // Non-JSON error body.
+    }
+    const detail = formatFetchFailureDetail(response.status, bodyError)
+    throw new Error(`${path} failed: ${detail}`)
+  }
+
+  return (await response.json()) as FleetMetricsLatestResponse
 }
 
 export async function fetchEnvironmentManaged(

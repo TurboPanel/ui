@@ -21,6 +21,7 @@ import {
   fetchIps,
   fetchVpns,
   isForbiddenError,
+  type FleetServerUsageRecord,
   type IpRecord,
   type OrgServerRecord,
   type ServerOsLogoKey,
@@ -29,17 +30,23 @@ import {
 import { serverDetailHref } from '@/lib/org-navigation'
 import {
   useBatchTriggerServerUpdates,
+  useFleetServerUsage,
   useOrgServerCapacity,
   useOrgServers,
   useServersUpdateStatus,
   SERVERS_REFRESH_MS,
 } from '@/lib/queries/servers'
 import { useCan, queryKeys } from '@/lib/query-client'
+import { useAuth } from '@/lib/auth-context'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
-import { countryCodeToFlagEmoji } from '@/lib/server-geo'
+import {
+  countryCodeToFlagEmoji,
+  formatServerGeoCountryName,
+} from '@/lib/server-geo'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { ServerUsageBars } from '@/components/org/server-usage-bars'
 
 /** Group VPN-scope overlay addresses by server — O(1) page-level fan-in. */
 function overlayByServerId(
@@ -135,6 +142,94 @@ function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
   if (err instanceof Error) return err.message
   if (forbidden) return 'Access to servers was denied'
   return 'Failed to load servers'
+}
+
+function averageFinite(values: readonly number[]): number | null {
+  if (values.length === 0) return null
+  let sum = 0
+  for (const value of values) sum += value
+  return sum / values.length
+}
+
+function formatAvgPercent(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return `${Math.round(value)}%`
+}
+
+function pushFinitePercent(
+  target: number[],
+  value: number | null | undefined,
+): void {
+  if (value != null && Number.isFinite(value)) target.push(value)
+}
+
+function computeFleetAverages(
+  servers: readonly OrgServerRecord[],
+  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>,
+): { avgCpu: number | null; avgMemory: number | null } {
+  const cpu: number[] = []
+  const memory: number[] = []
+  for (const server of servers) {
+    const usage = usageByServerId.get(server.id)
+    if (!usage || usage.sampleCount <= 0) continue
+    pushFinitePercent(cpu, usage.values.cpuUsagePercent)
+    pushFinitePercent(memory, usage.values.memoryUsedPercent)
+  }
+  return {
+    avgCpu: averageFinite(cpu),
+    avgMemory: averageFinite(memory),
+  }
+}
+
+function usageByServerIdMap(
+  rows: readonly FleetServerUsageRecord[] | undefined,
+): Map<string, FleetServerUsageRecord> {
+  const map = new Map<string, FleetServerUsageRecord>()
+  for (const entry of rows ?? []) {
+    map.set(entry.serverId, entry)
+  }
+  return map
+}
+
+function serversListRefetchMs(
+  controlPlaneRuntime: string | null | undefined,
+  serverCount: number,
+): number {
+  if (controlPlaneRuntime === 'deno' && serverCount === 0) return 2_000
+  return SERVERS_REFRESH_MS
+}
+
+function FleetInventoryTotals({
+  inventoryCount,
+  avgCpu,
+  avgMemory,
+}: Readonly<{
+  inventoryCount: number
+  avgCpu: number | null
+  avgMemory: number | null
+}>) {
+  const serverLabel = inventoryCount === 1 ? 'server' : 'servers'
+  return (
+    <View
+      style={styles.totalsStrip}
+      accessibilityLabel={`${inventoryCount} ${serverLabel} in inventory, average CPU ${formatAvgPercent(avgCpu)}, average memory ${formatAvgPercent(avgMemory)}`}
+    >
+      <Text style={styles.totalsItem}>
+        <Text style={styles.totalsValue}>{inventoryCount}</Text>
+        <Text style={styles.totalsLabel}> in inventory</Text>
+      </Text>
+      <Text style={styles.totalsSep}>·</Text>
+      <Text style={styles.totalsItem}>
+        <Text style={styles.totalsLabel}>Avg CPU </Text>
+        <Text style={styles.totalsValue}>{formatAvgPercent(avgCpu)}</Text>
+      </Text>
+      <Text style={styles.totalsSep}>·</Text>
+      <Text style={styles.totalsItem}>
+        <Text style={styles.totalsLabel}>Avg memory </Text>
+        <Text style={styles.totalsValue}>{formatAvgPercent(avgMemory)}</Text>
+      </Text>
+    </View>
+  )
 }
 
 function SelectionCheckbox({
@@ -296,8 +391,6 @@ function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
 }
 
 function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
-  const flag = countryCodeToFlagEmoji(server.geo?.country)
-
   if (!server.connected) {
     return (
       <View style={[styles.tableCell, styles.colStatus]}>
@@ -316,8 +409,45 @@ function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
       <View style={[styles.statusBadge, styles.statusOnline]}>
         <View style={[styles.statusDot, styles.statusDotOnline]} />
         <Text style={[styles.statusText, styles.statusTextOnline]}>Online</Text>
-        {flag ? <Text style={styles.statusFlag}>{flag}</Text> : null}
       </View>
+    </View>
+  )
+}
+
+function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const flag = countryCodeToFlagEmoji(server.geo?.country)
+  const country = formatServerGeoCountryName(server.geo)
+
+  if (!country && !flag) {
+    return (
+      <View style={[styles.tableCell, styles.colLocation]}>
+        <Text style={styles.locationMuted}>—</Text>
+      </View>
+    )
+  }
+
+  return (
+    <View style={[styles.tableCell, styles.colLocation]}>
+      <View style={styles.locationRow}>
+        {flag ? <Text style={styles.locationFlag}>{flag}</Text> : null}
+        <Text style={styles.locationText} numberOfLines={1}>
+          {country || '—'}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+function ServerUsageCell({
+  usage,
+}: Readonly<{ usage: FleetServerUsageRecord | null }>) {
+  return (
+    <View style={[styles.tableCell, styles.colUsage]}>
+      <ServerUsageBars
+        cpuPercent={usage?.values.cpuUsagePercent}
+        memoryPercent={usage?.values.memoryUsedPercent}
+        swapPercent={usage?.values.swapUsedPercent}
+      />
     </View>
   )
 }
@@ -340,6 +470,7 @@ function OrgServerTableRow({
   rowIndex,
   selected,
   overlayAddress,
+  usage,
   onToggleSelected,
 }: Readonly<{
   orgId: string
@@ -347,6 +478,7 @@ function OrgServerTableRow({
   rowIndex: number
   selected: boolean
   overlayAddress: string | null
+  usage: FleetServerUsageRecord | null
   onToggleSelected: () => void
 }>) {
   const router = useRouter()
@@ -370,6 +502,8 @@ function OrgServerTableRow({
     >
       <ServerNameCell server={server} />
       <ServerStatusCell server={server} />
+      <ServerLocationCell server={server} />
+      <ServerUsageCell usage={usage} />
       <ServerMeshCell overlayAddress={overlayAddress} />
       <Pressable
         onPress={(event) => {
@@ -392,8 +526,98 @@ function OrgServerTableRow({
   )
 }
 
+function ServersFleetEmptyState({
+  controlPlaneRuntime,
+}: Readonly<{ controlPlaneRuntime: string | null | undefined }>) {
+  const waiting = controlPlaneRuntime === 'deno'
+  return (
+    <View style={orgPanelStyles.statePanel}>
+      <Text style={orgPanelStyles.statePanelTitle}>
+        {waiting ? 'Waiting for this server' : 'No servers yet'}
+      </Text>
+      <Text style={orgPanelStyles.muted}>
+        {waiting
+          ? 'The colocated host is registering with the control plane. This page refreshes automatically.'
+          : 'Add a host to start deploying projects to your fleet.'}
+      </Text>
+    </View>
+  )
+}
+
+function ServersFleetTable({
+  orgId,
+  servers,
+  selectedIds,
+  allSelected,
+  someSelected,
+  meshOverlayByServer,
+  usageByServerId,
+  onToggleSelectAll,
+  onToggleSelected,
+}: Readonly<{
+  orgId: string
+  servers: readonly OrgServerRecord[]
+  selectedIds: ReadonlySet<string>
+  allSelected: boolean
+  someSelected: boolean
+  meshOverlayByServer: ReadonlyMap<string, string>
+  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
+  onToggleSelectAll: () => void
+  onToggleSelected: (serverId: string) => void
+}>) {
+  return (
+    <ScrollView
+      horizontal
+      nestedScrollEnabled
+      style={styles.tableScroll}
+      contentContainerStyle={styles.tableScrollContent}
+    >
+      <View style={styles.table}>
+        <View style={[styles.tableRow, styles.tableHeaderRow]}>
+          <View style={[styles.tableCell, styles.colName]}>
+            <Text style={styles.tableHeaderText}>Host</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colStatus]}>
+            <Text style={styles.tableHeaderText}>Status</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colLocation]}>
+            <Text style={styles.tableHeaderText}>Country</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colUsage]}>
+            <Text style={styles.tableHeaderText}>Usage</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colMesh]}>
+            <Text style={styles.tableHeaderText}>Mesh</Text>
+          </View>
+          <View style={[styles.tableCell, styles.colCheck]}>
+            <SelectionCheckbox
+              checked={allSelected}
+              indeterminate={someSelected}
+              onPress={onToggleSelectAll}
+              accessibilityLabel="Select all servers"
+            />
+          </View>
+        </View>
+        {servers.map((server, index) => (
+          <OrgServerTableRow
+            key={server.id}
+            orgId={orgId}
+            server={server}
+            rowIndex={index}
+            selected={selectedIds.has(server.id)}
+            overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+            usage={usageByServerId.get(server.id) ?? null}
+            onToggleSelected={() => onToggleSelected(server.id)}
+          />
+        ))}
+      </View>
+    </ScrollView>
+  )
+}
+
 export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
+  const { controlPlaneRuntime } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
 
@@ -412,10 +636,17 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   )
 
   const serversQuery = useOrgServers(orgId, {
-    refetchInterval: SERVERS_REFRESH_MS,
+    refetchInterval: (query) =>
+      serversListRefetchMs(
+        controlPlaneRuntime,
+        query.state.data?.servers?.length ?? 0,
+      ),
   })
   const updatesQuery = useServersUpdateStatus(orgId, { pollWhileUpdating: true })
   const capacityQuery = useOrgServerCapacity(orgId, { enabled: canOwn })
+  const fleetUsageQuery = useFleetServerUsage(orgId, {
+    enabled: !serversQuery.isLoading,
+  })
   const batchUpdateMutation = useBatchTriggerServerUpdates(orgId)
 
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
@@ -429,6 +660,16 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         isForbiddenError(serversQuery.error),
       )
     : null
+
+  const usageByServerId = useMemo(
+    () => usageByServerIdMap(fleetUsageQuery.data?.servers),
+    [fleetUsageQuery.data],
+  )
+
+  const fleetAverages = useMemo(
+    () => computeFleetAverages(servers, usageByServerId),
+    [servers, usageByServerId],
+  )
 
   const addServerEligibility = useMemo(
     () =>
@@ -523,6 +764,14 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         Select hosts to update, or open a server for its control panel.
       </Text>
 
+      {!loading || servers.length > 0 ? (
+        <FleetInventoryTotals
+          inventoryCount={servers.length}
+          avgCpu={fleetAverages.avgCpu}
+          avgMemory={fleetAverages.avgMemory}
+        />
+      ) : null}
+
       <SectionPanel>
         <ServersOverviewToolbar
           canOwn={canOwn}
@@ -549,54 +798,21 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         ) : null}
 
         {!loading && servers.length === 0 ? (
-          <View style={orgPanelStyles.statePanel}>
-            <Text style={orgPanelStyles.statePanelTitle}>No servers yet</Text>
-            <Text style={orgPanelStyles.muted}>
-              Add a host to start deploying projects to your fleet.
-            </Text>
-          </View>
+          <ServersFleetEmptyState controlPlaneRuntime={controlPlaneRuntime} />
         ) : null}
 
         {servers.length > 0 ? (
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            style={styles.tableScroll}
-            contentContainerStyle={styles.tableScrollContent}
-          >
-            <View style={styles.table}>
-              <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                <View style={[styles.tableCell, styles.colName]}>
-                  <Text style={styles.tableHeaderText}>Host</Text>
-                </View>
-                <View style={[styles.tableCell, styles.colStatus]}>
-                  <Text style={styles.tableHeaderText}>Status</Text>
-                </View>
-                <View style={[styles.tableCell, styles.colMesh]}>
-                  <Text style={styles.tableHeaderText}>Mesh</Text>
-                </View>
-                <View style={[styles.tableCell, styles.colCheck]}>
-                  <SelectionCheckbox
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onPress={toggleSelectAll}
-                    accessibilityLabel="Select all servers"
-                  />
-                </View>
-              </View>
-              {servers.map((server, index) => (
-                <OrgServerTableRow
-                  key={server.id}
-                  orgId={orgId}
-                  server={server}
-                  rowIndex={index}
-                  selected={selectedIds.has(server.id)}
-                  overlayAddress={meshOverlayByServer.get(server.id) ?? null}
-                  onToggleSelected={() => toggleSelected(server.id)}
-                />
-              ))}
-            </View>
-          </ScrollView>
+          <ServersFleetTable
+            orgId={orgId}
+            servers={servers}
+            selectedIds={selectedIds}
+            allSelected={allSelected}
+            someSelected={someSelected}
+            meshOverlayByServer={meshOverlayByServer}
+            usageByServerId={usageByServerId}
+            onToggleSelectAll={toggleSelectAll}
+            onToggleSelected={toggleSelected}
+          />
         ) : null}
       </SectionPanel>
 
@@ -679,11 +895,37 @@ const styles = StyleSheet.create({
   table: {
     flexGrow: 1,
     width: '100%',
-    minWidth: 640,
+    minWidth: 920,
     borderWidth: 1,
     borderColor: colors.borderMuted,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  totalsStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  totalsItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  totalsValue: {
+    color: colors.textTitle,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  totalsLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  totalsSep: {
+    color: colors.textFaint,
+    fontSize: 13,
   },
   tableRow: {
     flexDirection: 'row',
@@ -733,14 +975,24 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   colStatus: {
-    flex: 1.4,
-    minWidth: 140,
+    flex: 1.1,
+    minWidth: 110,
     gap: 4,
     alignItems: 'flex-start',
   },
+  colLocation: {
+    flex: 1.4,
+    minWidth: 130,
+    alignItems: 'flex-start',
+  },
+  colUsage: {
+    flex: 1.8,
+    minWidth: 170,
+    alignItems: 'stretch',
+  },
   colMesh: {
-    flex: 1.2,
-    minWidth: 120,
+    flex: 1.1,
+    minWidth: 110,
     alignItems: 'flex-start',
   },
   meshText: {
@@ -748,6 +1000,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'monospace',
     lineHeight: 16,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+  },
+  locationFlag: {
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  locationText: {
+    color: colors.textBody,
+    fontSize: 12,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  locationMuted: {
+    color: colors.textDim,
+    fontSize: 12,
   },
   colCheck: {
     width: 40,
@@ -828,10 +1100,6 @@ const styles = StyleSheet.create({
   },
   statusTextOffline: {
     color: colors.textDim,
-  },
-  statusFlag: {
-    fontSize: 14,
-    lineHeight: 16,
   },
   checkboxHit: {
     padding: 2,

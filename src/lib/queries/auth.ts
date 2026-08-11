@@ -147,6 +147,9 @@ export function useCompleteInstall() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.auth.organizations,
         }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(result.organizationId).servers.list,
+        }),
       ])
     },
   })

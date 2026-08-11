@@ -3,6 +3,18 @@ import type { ServerGeo } from '@/lib/instance-api'
 const REGIONAL_INDICATOR_BASE = 0x1f1e6
 const ASCII_UPPER_A = 65
 
+let regionDisplayNames: Intl.DisplayNames | null | undefined
+
+function getRegionDisplayNames(): Intl.DisplayNames | null {
+  if (regionDisplayNames !== undefined) return regionDisplayNames
+  try {
+    regionDisplayNames = new Intl.DisplayNames(['en'], { type: 'region' })
+  } catch {
+    regionDisplayNames = null
+  }
+  return regionDisplayNames
+}
+
 /** Convert ISO-3166-1 alpha-2 (e.g. `"US"`) to a regional-indicator flag emoji. */
 export function countryCodeToFlagEmoji(country?: string | null): string {
   const code = country?.trim().toUpperCase()
@@ -20,6 +32,15 @@ export function countryCodeToFlagEmoji(country?: string | null): string {
     REGIONAL_INDICATOR_BASE + ((first.codePointAt(0) ?? 0) - ASCII_UPPER_A),
     REGIONAL_INDICATOR_BASE + ((second.codePointAt(0) ?? 0) - ASCII_UPPER_A),
   )
+}
+
+/** English country/region name from ISO-3166-1 alpha-2 (e.g. `"United States"`). */
+export function formatServerGeoCountryName(geo?: ServerGeo | null): string {
+  const code = formatServerGeoCountryCode(geo)
+  if (!code) return ''
+  const names = getRegionDisplayNames()
+  const label = names?.of(code)?.trim()
+  return label && label !== code ? label : code
 }
 
 /** Build "City, State/Region" omitting absent parts. */

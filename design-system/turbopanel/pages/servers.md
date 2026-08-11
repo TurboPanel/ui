@@ -3,20 +3,21 @@
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/servers`.
 
 **Route:** `src/app/[orgId]/servers` → `servers-overview-section.tsx`  
-**Job:** Fleet glance — who is online, OS, batch update, add server; row opens server detail.
+**Job:** Fleet glance — inventory totals, who is online, country, CPU/memory/swap usage, batch update, add server; row opens server detail.
 
 ---
 
 ## Layout
 
 - One job: **fleet table**, not a dashboard of widgets  
+- Lean **inventory strip** above the table (count · avg CPU · avg memory) — monospace values, no cards  
 - Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar inside `SectionPanel` (no title/hint bar): **+ Server** (own-gated) + batch Update for selected updatable hosts  
 - **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
 - Networking topology (**Sites**, **Links**, **Addresses**, **Docker networks**) lives under the **Network** area — see `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle` / `pageCopy`; route context lives in `OrgHeader` eyebrow  
-- No hero, no stat strip, no decorative bento above the table
+- No hero, no decorative bento above the table
 
 ## Toolbar
 
@@ -25,14 +26,22 @@
 
 ## Density
 
-- Table-first: compact row height, checkbox column, Host | Status  
+- Table-first: compact row height, checkbox column, Host | Status | Country | Usage | Mesh  
 - Web row hover (`bgSecondary`) and selected tint (`bgActive`)  
 - Hostname subtext (monospace) when distinct from display name  
 - Alternating row tint (`bgInset`) for scanability  
 - OS logo beside name (density-aware PNGs) — no UUID in the primary column  
-- Online badge: accent dot + label + optional flag (no expand disclosure on this page)  
+- Online badge: accent dot + label (country lives in its own column)  
 - Offline badge: hollow dot + muted label  
+- **Country:** flag emoji + English country name from geo (or em dash)  
+- **Usage:** compact CPU / Mem / Swap bars (`ServerUsageBars`) from one fleet metrics snapshot — never per-row metrics polling; percent label beside each bar (not color-only)  
 - Checkbox stops propagation — row press does not toggle selection
+
+## Inventory strip
+
+- Shows as soon as the fleet list is known (including zero)  
+- Avg CPU / avg memory average only servers with a recent usage sample; otherwise `—`  
+- Refresh cadence follows fleet usage query (~60 s), not the 30 s servers list
 
 ## Add server wizard
 
@@ -48,16 +57,18 @@
 
 ## Components
 
-- Reuse `orgPanelStyles` toolbar buttons, `SectionPanel`, `AddServerWizard`  
-- Commands, delete, per-host update detail, time/network, and metrics live on the **server detail** page
+- Reuse `orgPanelStyles` toolbar buttons, `SectionPanel`, `AddServerWizard`, `ServerUsageBars`  
+- Commands, delete, per-host update detail, time/network, and metrics charts live on the **server detail** page
 
 ## Charts
 
-- Not on this page — use the **Metrics** tab on server detail (or legacy `/servers/[id]/metrics` deep link)
+- Not on this page — use the **Metrics** tab on server detail (or legacy `/servers/[id]/metrics` deep link)  
+- Fleet usage bars are progress indicators, not charts
 
 ## Anti-patterns (page-specific)
 
 - ❌ Calling `fetchServerCell` / DO reads  
-- ❌ Per-server status polling loops  
+- ❌ Per-server status or metrics polling loops (use `GET /servers/metrics/latest` once)  
 - ❌ Showing registration keys after the wizard is dismissed  
-- ❌ Expand rows for commands on the fleet table
+- ❌ Expand rows for commands on the fleet table  
+- ❌ Status conveyed by color alone (bars always show a percent or em dash)
