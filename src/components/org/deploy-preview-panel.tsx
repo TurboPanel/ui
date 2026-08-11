@@ -1,8 +1,13 @@
-import { Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useDeployPreview } from '@/lib/queries'
-import type { DeployPreviewResponse } from '@/lib/instance-api'
+import type {
+  ComposeFileRole,
+  DeployPreviewComposeFile,
+  DeployPreviewResponse,
+} from '@/lib/instance-api'
+import { colors, spacing } from '@/lib/theme'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
   if (warning.code === 'health_check_missing') {
@@ -38,6 +43,52 @@ export function PreviewWarnings({
   )
 }
 
+function composeFileRoleLabel(role: ComposeFileRole): string {
+  if (role === 'project') return 'Project'
+  if (role === 'environment') return 'Environment'
+  if (role === 'platform') return 'TurboPanel'
+  return 'TurboPanel'
+}
+
+function ComposeLayerSection({
+  file,
+}: Readonly<{ file: DeployPreviewComposeFile }>) {
+  return (
+    <View style={styles.layerSection}>
+      <View style={styles.layerHeader}>
+        <Text style={styles.layerFilename}>{file.filename}</Text>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleBadgeText}>{composeFileRoleLabel(file.role)}</Text>
+        </View>
+      </View>
+      <ReadOnlyYamlBlock value={file.content} />
+    </View>
+  )
+}
+
+function PreparedComposeLayers({
+  preview,
+}: Readonly<{ preview: DeployPreviewResponse }>) {
+  const layers = preview.composeFiles ?? []
+  if (layers.length === 0) {
+    return <ReadOnlyYamlBlock value={preview.composeYaml} />
+  }
+
+  return (
+    <View style={styles.layersList}>
+      <Text style={orgPanelStyles.muted}>
+        The daemon runs docker compose -f … -f … in this exact order.
+      </Text>
+      {layers.map((file, index) => (
+        <ComposeLayerSection
+          key={`${file.role}:${file.filename}:${index}`}
+          file={file}
+        />
+      ))}
+    </View>
+  )
+}
+
 export function DeployPreviewBody({
   loading,
   error,
@@ -57,7 +108,7 @@ export function DeployPreviewBody({
       {preview ? (
         <>
           <PreviewWarnings warnings={preview.warnings} />
-          <ReadOnlyYamlBlock value={preview.composeYaml} />
+          <PreparedComposeLayers preview={preview} />
         </>
       ) : null}
 
@@ -105,3 +156,38 @@ export function usePreparedComposePreview(
 
   return { loading, error, preview }
 }
+
+const styles = StyleSheet.create({
+  layersList: {
+    gap: spacing.sm,
+  },
+  layerSection: {
+    gap: spacing.xs,
+  },
+  layerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  layerFilename: {
+    color: colors.textChip,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  roleBadge: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  roleBadgeText: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+})

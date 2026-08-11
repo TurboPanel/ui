@@ -1,4 +1,8 @@
-import type { ComposeDocument, ProjectRecord } from '@/lib/instance-api'
+import type {
+  ComposeDocument,
+  EnvironmentRecord,
+  ProjectRecord,
+} from '@/lib/instance-api'
 
 export type ProjectOptionsPatch = {
   compose?: ComposeDocument
@@ -59,4 +63,25 @@ export function resolveEffectiveServerId(
 ): string | null {
   if (environmentServerId) return environmentServerId
   return projectDefaultServerId ?? null
+}
+
+/**
+ * Distinct servers actually placing this project's environments — each
+ * environment's pin, falling back to the project default when unset.
+ * Used for the project-level "x servers" inventory count (no server fetch
+ * required; derived entirely from already-loaded project + environments).
+ */
+export function countDistinctProjectServers(
+  project: ProjectRecord,
+  environments: readonly EnvironmentRecord[],
+): number {
+  const ids = new Set<string>()
+  for (const environment of environments) {
+    const effective = resolveEffectiveServerId(
+      environment.serverId,
+      project.options?.defaultServerId,
+    )
+    if (effective) ids.add(effective)
+  }
+  return ids.size
 }

@@ -3,6 +3,7 @@ import {
   applyNewlineAutoIndent,
   applyTabIndent,
   applyTabOutdent,
+  canFixComposeYamlIndentation,
   fixComposeYamlIndentation,
   formatComposeYamlOnLineChange,
   indentAfterNewline,
@@ -270,6 +271,49 @@ another:
     image: nginx
   another:
     image: redis`)
+  })
+
+  it('does not pull a second service under a nested service networks list', () => {
+    // Service-level `networks:` shares a name with the top-level section. The
+    // nearest block-opener heuristic must treat indent 2 as having already
+    // closed that nest — otherwise nginx2 is deepened under networks.
+    const source = `services:
+  nginx:
+    image: nginx
+    networks:
+      - derp
+      - ass
+  nginx2:
+    image: nginx
+    networks:
+      - derp`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+    expect(canFixComposeYamlIndentation(source)).toBe(false)
+  })
+
+  it('does not pull a later service property under nested volumes/networks maps', () => {
+    const source = `services:
+  web:
+    image: nginx
+    volumes:
+      - data:/data
+    environment:
+      FOO: bar
+    ports:
+      - "80:80"`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+  })
+
+  it('does not re-indent list items after a service networks mapping', () => {
+    const source = `services:
+  nginx:
+    image: nginx
+    networks:
+      derp:
+      ass:
+  nginx2:
+    image: nginx`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
   })
 })
 

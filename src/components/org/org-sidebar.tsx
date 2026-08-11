@@ -173,6 +173,7 @@ export function OrgSidebar({
 const styles = StyleSheet.create({
   sidebar: {
     width: layout.sidebarWidth,
+    flexGrow: 1,
     flexShrink: 0,
     alignSelf: 'stretch',
     borderRadius: 0,

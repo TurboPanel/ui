@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   isProjectOverviewBasePath,
+  parseComposeEditView,
+  parseComposeProjectTab,
   parseProjectEnvironmentId,
+  projectComposeEditHref,
+  projectComposeHref,
+  projectComposeSectionHref,
+  projectEnvironmentComposeHref,
   projectEnvironmentHref,
+  projectEnvironmentServicesHref,
   projectNeedsSetup,
   projectOverviewHref,
+  projectServicesEditHref,
   projectTabHref,
   resolveBaseComposeSelected,
   resolveEnvironmentScopeActive,
@@ -77,9 +85,86 @@ describe('path-based environment selection', () => {
     )
   })
 
+  it('builds compose edit hrefs for project and environment scope', () => {
+    expect(projectComposeHref('org', 'proj')).toBe('/org/projects/proj/compose')
+    expect(projectServicesEditHref('org', 'proj')).toBe(
+      '/org/projects/proj/services',
+    )
+    expect(projectEnvironmentComposeHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/compose',
+    )
+    expect(projectEnvironmentServicesHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/services',
+    )
+    expect(
+      projectComposeEditHref('org', 'proj', { view: 'visual' }),
+    ).toBe('/org/projects/proj/services')
+    expect(
+      projectComposeEditHref('org', 'proj', {
+        environmentId: 'env1',
+        view: 'editor',
+      }),
+    ).toBe('/org/projects/proj/environments/env1/compose')
+  })
+
+  it('parses compose edit view from the path', () => {
+    expect(parseComposeEditView('/org/projects/proj/compose', 'proj')).toBe(
+      'editor',
+    )
+    expect(parseComposeEditView('/org/projects/proj/services', 'proj')).toBe(
+      'visual',
+    )
+    expect(
+      parseComposeEditView('/org/projects/proj/services/svc1', 'proj'),
+    ).toBeNull()
+    expect(parseComposeEditView('/org/projects/proj/overview', 'proj')).toBeNull()
+    expect(
+      parseComposeEditView(
+        '/org/projects/proj/environments/env1/compose',
+        'proj',
+      ),
+    ).toBe('editor')
+    expect(
+      parseComposeEditView(
+        '/org/projects/proj/environments/env1/services',
+        'proj',
+      ),
+    ).toBe('visual')
+    expect(
+      parseComposeEditView('/org/projects/proj/environments/env1', 'proj'),
+    ).toBeNull()
+  })
+
+  it('parses compose section tab from the path', () => {
+    expect(parseComposeProjectTab('/org/projects/proj/overview', 'proj')).toBe(
+      'overview',
+    )
+    expect(parseComposeProjectTab('/org/projects/proj/compose', 'proj')).toBe(
+      'compose',
+    )
+    expect(parseComposeProjectTab('/org/projects/proj/services', 'proj')).toBe(
+      'services',
+    )
+    expect(
+      parseComposeProjectTab(
+        '/org/projects/proj/environments/env1/services',
+        'proj',
+      ),
+    ).toBe('services')
+    expect(
+      projectComposeSectionHref('org', 'proj', 'compose', 'env1'),
+    ).toBe('/org/projects/proj/environments/env1/compose')
+  })
+
   it('parses environment id from the environments path', () => {
     expect(
       parseProjectEnvironmentId('/org/projects/proj/environments/env1', 'proj'),
+    ).toBe('env1')
+    expect(
+      parseProjectEnvironmentId(
+        '/org/projects/proj/environments/env1/compose',
+        'proj',
+      ),
     ).toBe('env1')
     expect(
       parseProjectEnvironmentId('/org/projects/proj/environments', 'proj'),
@@ -93,12 +178,24 @@ describe('path-based environment selection', () => {
     expect(
       isProjectOverviewBasePath('/org/projects/proj/overview', 'proj'),
     ).toBe(true)
+    expect(isProjectOverviewBasePath('/org/projects/proj/compose', 'proj')).toBe(
+      true,
+    )
+    expect(
+      isProjectOverviewBasePath('/org/projects/proj/services', 'proj'),
+    ).toBe(true)
     expect(resolveBaseComposeSelected('/org/projects/proj/overview', 'proj')).toBe(
       true,
     )
     expect(
       resolveBaseComposeSelected(
         '/org/projects/proj/environments/env1',
+        'proj',
+      ),
+    ).toBe(false)
+    expect(
+      resolveBaseComposeSelected(
+        '/org/projects/proj/environments/env1/compose',
         'proj',
       ),
     ).toBe(false)

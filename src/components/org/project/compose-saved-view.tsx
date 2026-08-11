@@ -1,15 +1,20 @@
+import { useMemo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Link, type Href } from 'expo-router'
-import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import {
-  composeDocumentToYaml,
-  formatComposeSummaryChips,
-  hideComposeTurbopanelExtensions,
+  ComposeEditorChrome,
+  ComposeSurfaceSectionTabs,
+} from '@/components/org/compose-editor-section'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
+import {
+  ComposeInventoryStrip,
+  type InventoryStripItem,
+} from '@/components/org/project/compose-inventory-strip'
+import {
+  buildComposeGraph,
   isBlankComposeData,
   normalizeCompose,
-  summarizeComposeDocument,
 } from '@/lib/compose'
 import { serviceStatusTone } from '@/lib/container-status'
 import type {
@@ -17,44 +22,9 @@ import type {
   ServiceRecord,
 } from '@/lib/instance-api'
 import { projectServiceHref } from '@/lib/project-navigation'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
-function QuietButton({
-  label,
-  accessibilityLabel,
-  onPress,
-  disabled,
-  tone = 'neutral',
-}: Readonly<{
-  label: string
-  accessibilityLabel?: string
-  onPress: () => void
-  disabled?: boolean
-  tone?: 'neutral' | 'primary'
-}>) {
-  return (
-    <Pressable
-      style={[
-        styles.quietBtn,
-        tone === 'primary' && styles.quietBtnPrimary,
-        disabled && styles.buttonDisabled,
-        webPointer,
-      ]}
-      disabled={disabled}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-    >
-      <Text
-        style={
-          tone === 'primary' ? styles.quietBtnTextPrimary : styles.quietBtnText
-        }
-      >
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
+export type OverviewComposeSource = 'proposed' | 'saved'
 
 export function ServicesStatusList({
   orgId,
@@ -110,110 +80,140 @@ export function ServicesStatusList({
   )
 }
 
-function SummaryChips({
-  document,
-  hasServer,
-}: Readonly<{
-  document: unknown
-  hasServer: boolean
-}>) {
-  const chips = formatComposeSummaryChips(summarizeComposeDocument(document))
-  return (
-    <View style={styles.chipRow}>
-      {chips.map((chip) => (
-        <View key={chip.key} style={styles.serviceChip}>
-          <Text style={styles.serviceChipText}>{chip.label}</Text>
-        </View>
-      ))}
-      <View
-        style={[
-          styles.serviceChip,
-          !hasServer && styles.serviceChipMuted,
-        ]}
-      >
-        <Text
-          style={[
-            styles.serviceChipText,
-            !hasServer && styles.serviceChipTextMuted,
-          ]}
-        >
-          {hasServer ? '1 server' : 'No server'}
-        </Text>
-      </View>
-    </View>
-  )
-}
-
 /**
- * Read-only saved-compose card for Overview: summary chips + YAML (and
- * optional running-service status). Edit mounts the Compose/Services editor.
+ * Overview tab: inventory strip + compose topology diagram.
+ * YAML editing is the Compose tab; form cards are Services.
+ * Surface tabs (Overview · Compose · Services) live in the editor chrome.
  */
 export function ComposeSavedView({
-  title,
   document,
   summaryDocument,
-  hasServer,
-  canEdit,
+  inventory,
   inheritedCaption,
-  onEdit,
   orgId,
   projectId,
   services,
   containersByService,
   showServiceStatus,
+  draftSource,
+  onDraftSourceChange,
+  toolbarTrailing,
 }: Readonly<{
-  title: string
-  /** YAML body (environment overlay when overriding; merged when inheriting). */
+  /** Compose used when building inventory edges (may be overlay-only). */
   document: unknown
   /**
-   * Optional document for chip counts. Defaults to `document`. Pass the
-   * merged compose when showing an environment overlay so chips reflect
-   * what actually deploys.
+   * Optional document for the diagram. Defaults to `document`. Pass the
+   * merged compose when showing an environment overlay so the diagram
+   * reflects what actually deploys.
    */
   summaryDocument?: unknown
-  hasServer: boolean
-  canEdit: boolean
+  /** Quantitative rollup (environments / servers / services / storage / bindings, …). */
+  inventory: InventoryStripItem[]
   inheritedCaption?: string | null
-  onEdit: () => void
   orgId: string
   projectId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   showServiceStatus: boolean
+  /**
+   * When unsaved edits exist, Overview can toggle Proposed vs last Saved.
+   * Omit when there is no draft to preview.
+   */
+  draftSource?: OverviewComposeSource
+  onDraftSourceChange?: (source: OverviewComposeSource) => void
+  /** Surface header trailing actions (e.g. Save when dirty). */
+  toolbarTrailing?: ReactNode
 }>) {
   const normalized = normalizeCompose(document)
   const blank = isBlankComposeData(normalized.data)
-  const yaml = blank
-    ? ''
-    : composeDocumentToYaml(
-        hideComposeTurbopanelExtensions(normalized).document,
-      )
+  const diagramSource = summaryDocument ?? normalized
+  const graph = useMemo(() => buildComposeGraph(diagramSource), [diagramSource])
+  const hasDiagram = graph.nodes.length > 0
+  const showSourceToggle =
+    draftSource != null && onDraftSourceChange != null
+
+  let overviewBody: ReactNode
+  if (blank) {
+    overviewBody = (
+      <Text style={orgPanelStyles.muted}>No compose defined yet.</Text>
+    )
+  } else if (hasDiagram) {
+    overviewBody = (
+      <ComposeGraphView
+        graph={graph}
+        orgId={orgId}
+        projectId={projectId}
+        services={services}
+        containersByService={containersByService}
+        showServiceStatus={showServiceStatus}
+      />
+    )
+  } else {
+    overviewBody = (
+      <Text style={orgPanelStyles.muted}>
+        No services, networks, or volumes to diagram.
+      </Text>
+    )
+  }
 
   return (
     <ComposeEditorChrome
-      tabs={
-        <Text style={styles.scopeTitle} numberOfLines={1}>
-          {title}
-        </Text>
-      }
+      tabs={<ComposeSurfaceSectionTabs />}
       trailing={
-        canEdit ? (
-          <QuietButton
-            label="Edit"
-            accessibilityLabel="Edit compose"
-            tone="primary"
-            onPress={onEdit}
-          />
+        showSourceToggle || toolbarTrailing ? (
+          <View style={styles.headerTrailing}>
+            {showSourceToggle ? (
+              <View
+                style={styles.sourceToggle}
+                accessibilityRole="tablist"
+                accessibilityLabel="Compose overview source"
+              >
+                {(
+                  [
+                    ['proposed', 'Proposed'],
+                    ['saved', 'Saved'],
+                  ] as const
+                ).map(([id, label]) => {
+                  const active = draftSource === id
+                  return (
+                    <Pressable
+                      key={id}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: active }}
+                      style={[
+                        styles.sourceChip,
+                        active && styles.sourceChipActive,
+                        webPointer,
+                      ]}
+                      onPress={() => onDraftSourceChange(id)}
+                    >
+                      <Text
+                        style={[
+                          styles.sourceChipText,
+                          active && styles.sourceChipTextActive,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ) : null}
+            {toolbarTrailing}
+          </View>
         ) : undefined
       }
     >
       <View style={styles.body}>
-        <SummaryChips
-          document={summaryDocument ?? normalized}
-          hasServer={hasServer}
-        />
+        <ComposeInventoryStrip items={inventory} />
         {inheritedCaption ? (
           <Text style={orgPanelStyles.muted}>{inheritedCaption}</Text>
+        ) : null}
+        {showSourceToggle && draftSource === 'proposed' ? (
+          <Text style={orgPanelStyles.muted}>
+            Unsaved changes — switch to Saved to compare with the last save.
+          </Text>
         ) : null}
         {showServiceStatus ? (
           <ServicesStatusList
@@ -223,14 +223,7 @@ export function ComposeSavedView({
             containersByService={containersByService}
           />
         ) : null}
-        {blank ? (
-          <Text style={orgPanelStyles.muted}>No compose defined yet.</Text>
-        ) : (
-          <ReadOnlyYamlBlock
-            value={yaml}
-            emptyLabel="No compose YAML to preview."
-          />
-        )}
+        {overviewBody}
       </View>
     </ComposeEditorChrome>
   )
@@ -240,40 +233,39 @@ const styles = StyleSheet.create({
   body: {
     gap: spacing.md,
   },
-  scopeTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    flexShrink: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignSelf: 'center',
-  },
-  chipRow: {
+  headerTrailing: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
-  serviceChip: {
-    borderRadius: 999,
+  sourceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
     borderWidth: 1,
     borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
+    borderRadius: 6,
+    padding: 2,
+    backgroundColor: colors.bgInput,
+  },
+  sourceChip: {
+    borderRadius: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
+    minHeight: 24,
+    justifyContent: 'center',
   },
-  serviceChipMuted: {
-    borderColor: colors.borderMuted,
-    backgroundColor: 'transparent',
+  sourceChipActive: {
+    backgroundColor: colors.bgSecondary,
   },
-  serviceChipText: {
-    color: colors.textFaint,
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  serviceChipTextMuted: {
+  sourceChipText: {
     color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sourceChipTextActive: {
+    color: colors.text,
   },
   list: { gap: spacing.xs },
   row: {
@@ -304,32 +296,4 @@ const styles = StyleSheet.create({
   },
   rowTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   rowMeta: { color: colors.textMuted, fontSize: 13 },
-  quietBtn: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quietBtnPrimary: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  quietBtnText: {
-    color: colors.textChip,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  quietBtnTextPrimary: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.45,
-  },
 })

@@ -95,33 +95,6 @@ function AddChip({
   )
 }
 
-function SettingsChip({
-  open,
-  onPress,
-}: Readonly<{
-  open: boolean
-  onPress: () => void
-}>) {
-  return (
-    <Pressable
-      style={[styles.addChip, open && styles.settingsChipOpen, webPointer]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open }}
-      accessibilityLabel={open ? 'Hide settings' : 'Settings'}
-    >
-      <Text style={[styles.addLabel, open && styles.settingsChipLabelOpen]}>
-        Settings
-      </Text>
-      <HeaderChevron
-        size={11}
-        color={open ? chrome.accent : colors.textMuted}
-        open={open}
-      />
-    </Pressable>
-  )
-}
-
 function ResourceSection({
   title,
   hint,
@@ -302,7 +275,39 @@ function WorkspaceMoveBody({
   )
 }
 
-function ProjectSettingsSections() {
+function AddToolbarRow<K extends string>({
+  canEdit,
+  pendingAdds,
+  onOpen,
+}: Readonly<{
+  canEdit: boolean
+  pendingAdds: readonly { kind: K; label: string }[]
+  onOpen: (kind: K) => void
+}>) {
+  if (!canEdit || pendingAdds.length === 0) return null
+  return (
+    <View style={styles.addRow}>
+      {pendingAdds.map((item) => (
+        <AddChip
+          key={item.kind}
+          label={item.label}
+          onPress={() => onOpen(item.kind)}
+        />
+      ))}
+    </View>
+  )
+}
+
+/**
+ * Project-scope settings body for the scope-chip settings dropdown.
+ * Add chips reveal resource sections; workspace, naming, and delete are always
+ * available in the panel.
+ */
+export function ProjectSettingsPanel({
+  onDeleted,
+}: Readonly<{
+  onDeleted?: () => void
+}>) {
   const {
     orgId,
     projectId,
@@ -323,11 +328,14 @@ function ProjectSettingsSections() {
   const [addSeed, setAddSeed] = useState<Partial<Record<ProjectAddKind, number>>>(
     {},
   )
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [dangerExpanded, setDangerExpanded] = useState(false)
   const scopeHint = 'Applies to every environment'
 
   if (!project) return null
+
+  if (!projectAllowsMutations) {
+    return <Text style={orgPanelStyles.muted}>View only</Text>
+  }
 
   const canEdit = canManage && projectAllowsMutations
   const canMove = canOwn && projectAllowsMutations
@@ -353,13 +361,11 @@ function ProjectSettingsSections() {
   }
 
   return (
-    <>
-      <SettingsToolbarRow
+    <View style={styles.panelBody}>
+      <AddToolbarRow
         canEdit={canEdit}
         pendingAdds={pendingAdds}
         onOpen={openKind}
-        settingsOpen={settingsOpen}
-        onToggleSettings={() => setSettingsOpen((current) => !current)}
       />
 
       {showServer ? (
@@ -396,78 +402,77 @@ function ProjectSettingsSections() {
         </ResourceSection>
       ) : null}
 
-      {settingsOpen ? (
-        <>
-          <SectionPanel
-            title="Workspace"
-            hint="Which workspace this project belongs to — not per service"
-          >
-            <WorkspaceMoveBody
-              project={project}
-              workspaces={userWorkspaces(workspaces)}
-              canMove={canMove}
-              saving={updateProjectMutation.isPending}
-              onMove={(workspaceId) => {
-                void (async () => {
-                  setError(null)
-                  const result = await updateProjectMutation.run({ workspaceId })
-                  if (!result.ok && updateProjectMutation.actionError) {
-                    setError(updateProjectMutation.actionError)
-                  }
-                })()
-              }}
-            />
-          </SectionPanel>
+      <SectionPanel
+        title="Workspace"
+        hint="Which workspace this project belongs to — not per service"
+      >
+        <WorkspaceMoveBody
+          project={project}
+          workspaces={userWorkspaces(workspaces)}
+          canMove={canMove}
+          saving={updateProjectMutation.isPending}
+          onMove={(workspaceId) => {
+            void (async () => {
+              setError(null)
+              const result = await updateProjectMutation.run({ workspaceId })
+              if (!result.ok && updateProjectMutation.actionError) {
+                setError(updateProjectMutation.actionError)
+              }
+            })()
+          }}
+        />
+      </SectionPanel>
 
-          <SectionPanel title="Container naming" hint={scopeHint}>
-            <ContainerNamingBody
-              project={project}
-              canEdit={canEdit}
-              saving={updateProjectMutation.isPending}
-              onSave={(containerNaming) => {
-                void (async () => {
-                  setError(null)
-                  const options = buildProjectOptionsPatch(project, {
-                    containerNaming,
-                  })
-                  const result = await updateProjectMutation.run({ options })
-                  if (!result.ok && updateProjectMutation.actionError) {
-                    setError(updateProjectMutation.actionError)
-                  }
-                })()
-              }}
-            />
-          </SectionPanel>
+      <SectionPanel title="Container naming" hint={scopeHint}>
+        <ContainerNamingBody
+          project={project}
+          canEdit={canEdit}
+          saving={updateProjectMutation.isPending}
+          onSave={(containerNaming) => {
+            void (async () => {
+              setError(null)
+              const options = buildProjectOptionsPatch(project, {
+                containerNaming,
+              })
+              const result = await updateProjectMutation.run({ options })
+              if (!result.ok && updateProjectMutation.actionError) {
+                setError(updateProjectMutation.actionError)
+              }
+            })()
+          }}
+        />
+      </SectionPanel>
 
-          <DangerSection
-            title="Danger → Delete project"
-            hint={scopeHint}
-            expanded={dangerExpanded}
-            onExpandedChange={setDangerExpanded}
-          >
-            {canOwn && projectAllowsMutations ? (
-              <ProjectDeletePanel
-                orgId={orgId}
-                project={project}
-                onCancel={() => setDangerExpanded(false)}
-                onDeleted={() => {
-                  router.replace(`/${orgId}/projects` as Href)
-                }}
-              />
-            ) : (
-              <Text style={orgPanelStyles.muted}>View only</Text>
-            )}
-          </DangerSection>
-        </>
-      ) : null}
-    </>
+      <DangerSection
+        title="Danger → Delete project"
+        hint={scopeHint}
+        expanded={dangerExpanded}
+        onExpandedChange={setDangerExpanded}
+      >
+        {canOwn && projectAllowsMutations ? (
+          <ProjectDeletePanel
+            orgId={orgId}
+            project={project}
+            onCancel={() => setDangerExpanded(false)}
+            onDeleted={() => {
+              onDeleted?.()
+              router.replace(`/${orgId}/projects` as Href)
+            }}
+          />
+        ) : (
+          <Text style={orgPanelStyles.muted}>View only</Text>
+        )}
+      </DangerSection>
+    </View>
   )
 }
 
 function EnvironmentDeleteControl({
   selectedEnvironment,
+  onOpenProjectSettings,
 }: Readonly<{
   selectedEnvironment: EnvironmentRecord
+  onOpenProjectSettings?: () => void
 }>) {
   const router = useRouter()
   const pathname = usePathname()
@@ -478,7 +483,6 @@ function EnvironmentDeleteControl({
     canOwn,
     setError,
     invalidateEnvironments,
-    selectBaseCompose,
   } = useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
   const [armed, setArmed] = useState(false)
@@ -511,12 +515,13 @@ function EnvironmentDeleteControl({
         </Pressable>
         <Pressable
           style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={selectBaseCompose}
-          accessibilityRole="link"
+          onPress={onOpenProjectSettings}
+          disabled={!onOpenProjectSettings}
+          accessibilityRole="button"
           accessibilityLabel="Open Project settings to delete the project"
         >
           <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Only environment — delete the project under Project → Settings
+            Only environment — delete the project under Project settings (gear)
           </Text>
         </Pressable>
       </View>
@@ -603,35 +608,6 @@ function resolveInheritServerLabel(
   return 'No project server set — pick a server for this environment'
 }
 
-function SettingsToolbarRow<K extends string>({
-  canEdit,
-  pendingAdds,
-  onOpen,
-  settingsOpen,
-  onToggleSettings,
-}: Readonly<{
-  canEdit: boolean
-  pendingAdds: readonly { kind: K; label: string }[]
-  onOpen: (kind: K) => void
-  settingsOpen: boolean
-  onToggleSettings: () => void
-}>) {
-  return (
-    <View style={styles.addRow}>
-      {canEdit
-        ? pendingAdds.map((item) => (
-            <AddChip
-              key={item.kind}
-              label={item.label}
-              onPress={() => onOpen(item.kind)}
-            />
-          ))
-        : null}
-      <SettingsChip open={settingsOpen} onPress={onToggleSettings} />
-    </View>
-  )
-}
-
 function EnvironmentServerPinBody({
   selectedEnvironment,
   canEdit,
@@ -682,10 +658,16 @@ function readFocusHostingId(
   return null
 }
 
-function EnvironmentSettingsSections({
+/**
+ * Environment-scope settings body for the scope-chip settings dropdown.
+ * Add chips reveal resource sections; delete is always available.
+ */
+export function EnvironmentSettingsPanel({
   selectedEnvironment,
+  onOpenProjectSettings,
 }: Readonly<{
   selectedEnvironment: EnvironmentRecord
+  onOpenProjectSettings?: () => void
 }>) {
   const {
     orgId,
@@ -705,7 +687,6 @@ function EnvironmentSettingsSections({
   const [addSeed, setAddSeed] = useState<Partial<Record<EnvironmentAddKind, number>>>(
     {},
   )
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [dangerExpanded, setDangerExpanded] = useState(false)
   const serversQuery = useOrgServers(orgId)
   const servicesQuery = useServices(orgId, selectedEnvironment.id)
@@ -752,6 +733,10 @@ function EnvironmentSettingsSections({
     })
   }, [focusHostingId])
 
+  if (!projectAllowsMutations) {
+    return <Text style={orgPanelStyles.muted}>View only</Text>
+  }
+
   const showServer = hasServer || opened.has('server')
   const showNetworking =
     hasNetworking || Boolean(focusHostingId) || opened.has('networking')
@@ -771,13 +756,11 @@ function EnvironmentSettingsSections({
   }
 
   return (
-    <>
-      <SettingsToolbarRow
+    <View style={styles.panelBody}>
+      <AddToolbarRow
         canEdit={canEdit}
         pendingAdds={pendingAdds}
         onOpen={openKind}
-        settingsOpen={settingsOpen}
-        onToggleSettings={() => setSettingsOpen((current) => !current)}
       />
 
       {showServer ? (
@@ -844,83 +827,32 @@ function EnvironmentSettingsSections({
         </ResourceSection>
       ) : null}
 
-      {settingsOpen ? (
-        <DangerSection
-          title="Danger → Delete environment"
-          hint={scopeHint}
-          expanded={dangerExpanded}
-          onExpandedChange={setDangerExpanded}
-        >
-          <EnvironmentDeleteControl selectedEnvironment={selectedEnvironment} />
-        </DangerSection>
-      ) : null}
-    </>
-  )
-}
-
-/**
- * Scope-aware project / environment settings on the compose Overview.
- * Addable resources start as quiet chips; sections appear once opened or when
- * data already exists. Workspace, container naming, and delete live behind
- * the Settings chip.
- */
-export function ProjectSettingsArea() {
-  const {
-    project,
-    baseSelected,
-    selectedEnvironment,
-    isSystemProject,
-    projectAllowsMutations,
-  } = useProjectContext()
-
-  if (!project || isSystemProject) return null
-
-  if (!projectAllowsMutations) {
-    return (
-      <View style={styles.root}>
-        <Text style={styles.header}>Settings</Text>
-        <Text style={orgPanelStyles.muted}>View only</Text>
-      </View>
-    )
-  }
-
-  const header = baseSelected
-    ? 'Project settings — applies to every environment'
-    : `${selectedEnvironment?.displayName?.trim() || 'Environment'} settings — this environment only`
-
-  let body: ReactNode
-  if (baseSelected) {
-    body = <ProjectSettingsSections />
-  } else if (selectedEnvironment) {
-    body = (
-      <EnvironmentSettingsSections
-        key={selectedEnvironment.id}
-        selectedEnvironment={selectedEnvironment}
-      />
-    )
-  } else {
-    body = <Text style={orgPanelStyles.muted}>Select an environment.</Text>
-  }
-
-  return (
-    <View style={styles.root}>
-      <Text style={styles.header} accessibilityRole="header">
-        {header}
-      </Text>
-      {body}
+      <DangerSection
+        title="Danger → Delete environment"
+        hint={scopeHint}
+        expanded={dangerExpanded}
+        onExpandedChange={setDangerExpanded}
+      >
+        <EnvironmentDeleteControl
+          selectedEnvironment={selectedEnvironment}
+          onOpenProjectSettings={onOpenProjectSettings}
+        />
+      </DangerSection>
     </View>
   )
 }
 
+/** Parse `?hostingId=` for auto-opening environment settings. */
+export function readHostingIdParam(
+  value: string | string[] | undefined,
+): string | null {
+  return readFocusHostingId(value)
+}
+
 const styles = StyleSheet.create({
-  root: {
+  panelBody: {
     width: '100%',
     gap: spacing.md,
-  },
-  header: {
-    color: colors.textTitle,
-    fontSize: 15,
-    fontWeight: '600',
   },
   addRow: {
     flexDirection: 'row',
@@ -951,14 +883,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: '500',
-  },
-  settingsChipOpen: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  settingsChipLabelOpen: {
-    color: chrome.accent,
-    fontWeight: '600',
   },
   namingBlock: {
     gap: spacing.sm,

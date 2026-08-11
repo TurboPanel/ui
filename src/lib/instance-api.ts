@@ -240,6 +240,13 @@ export type ServerOsMetadata = {
   arch?: string
 }
 
+/** Static host capacity from daemon hello — inventory totals + load bars. */
+export type ServerHostInventory = {
+  cpuCores?: number
+  memoryTotalBytes?: number
+  swapTotalBytes?: number
+}
+
 export type ServerOsLogoKey = 'debian' | 'raspberry-pi-os'
 
 export type ServerAddresses = {
@@ -281,6 +288,8 @@ export type OrgServerRecord = {
   osDisplay: string | null;
   /** Logo key for the OS column (`debian` / `raspberry-pi-os`). */
   osLogo: ServerOsLogoKey | null;
+  /** Capacity totals from daemon hello (`server.metadata.inventory`). */
+  inventory: ServerHostInventory | null;
   colocatedWithInstance?: boolean;
   addresses: ServerAddresses | null;
   timeSync: ServerTimeSync | null;
@@ -2433,9 +2442,43 @@ export type DeployPreviewWarning = {
   details?: Record<string, unknown>
 }
 
+/** Role of a prepared compose layer in `docker compose -f` order. */
+export type ComposeFileRole = 'project' | 'environment' | 'platform'
+
+/**
+ * Where a prepared compose layer was produced. Mirrors
+ * `EnvironmentDeployComposeFileSource` on the instance command contract.
+ * Only `inline` is emitted today; `repository` is reserved for later.
+ */
+export type ComposeFileSource = 'inline' | 'repository'
+
+/**
+ * One file in the ordered prepared `composeFiles[]` chain returned by
+ * deploy-preview (same wire shape as `environment.deploy` →
+ * `EnvironmentDeployComposeFile`).
+ */
+export type DeployPreviewComposeFile = {
+  filename: string
+  role: ComposeFileRole
+  /** Provenance; omit/`inline` today. */
+  source?: ComposeFileSource
+  /**
+   * Repo-relative original path when `source: 'repository'`.
+   * Populated once repository-pinned layers are supported; unused today.
+   */
+  path?: string
+  content: string
+}
+
 export type DeployPreviewResponse = {
   ok: true
+  /** Fully merged prepared YAML (legacy / fallback). */
   composeYaml: string
+  /**
+   * Ordered layers the daemon runs with `docker compose -f … -f …`.
+   * May be empty/absent on older responses — prefer per-file view when present.
+   */
+  composeFiles?: DeployPreviewComposeFile[]
   projectName: string
   containers: {
     serviceId: string
@@ -2839,7 +2882,7 @@ export async function fetchServerMetricsSummary(
 }
 
 /**
- * One fleet usage snapshot for the servers overview (CPU / memory / swap %).
+ * One fleet usage snapshot for the servers overview (CPU stack / load / memory / swap).
  * Authz is server-side via listVisible — never pass client serverIds.
  */
 export async function fetchFleetMetricsLatest(

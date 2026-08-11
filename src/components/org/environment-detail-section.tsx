@@ -8,10 +8,23 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
-import { PreviewDeploymentModal } from '@/components/org/project/preview-deployment-modal'
+import {
+  PreviewDeploymentModal,
+  type ComposePreviewMode,
+  type PreviewDeploymentPurpose,
+} from '@/components/org/project/preview-deployment-modal'
 import {
   ContainerRoleBadge,
   ContainerStatusBadge,
@@ -19,7 +32,7 @@ import {
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { VariablesSection } from '@/components/org/variables-section'
 import {
   DeployHealthCheckMissingError,
@@ -58,7 +71,6 @@ import { useIps } from '@/lib/queries/topology'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
   composeDocumentToRuntimeYaml,
-  hideComposeTurbopanelExtensions,
   hostingDockerBridgeHint,
   hostingPathPrefixHint,
   hostingPhpSectionCopy,
@@ -71,7 +83,7 @@ import {
   stripComposePlacement,
   type HostingServiceContext,
 } from '@/lib/compose'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
@@ -1082,6 +1094,8 @@ function EnvironmentDeployChromePanels({
   mergedCompose,
   deploying,
   deployBlocked,
+  onPreviewMerged,
+  onPreviewPrepared,
   onDeploy,
   deployStatus,
 }: Readonly<{
@@ -1093,9 +1107,30 @@ function EnvironmentDeployChromePanels({
   mergedCompose: ComposeDocument
   deploying: boolean
   deployBlocked: boolean
+  onPreviewMerged: () => void
+  onPreviewPrepared: () => void
   onDeploy: () => void
   deployStatus: string | null
 }>) {
+  const { width } = useWindowDimensions()
+  const isCompact = width < layout.desktopBreakpoint
+  const [previewMenuOpen, setPreviewMenuOpen] = useState(false)
+  const previewBtnRef = useRef<View>(null)
+  const [previewMenuPosition, setPreviewMenuPosition] = useState({
+    top: 56,
+    left: 16,
+  })
+
+  useEffect(() => {
+    if (!previewMenuOpen || isCompact) return
+    previewBtnRef.current?.measureInWindow((x, y, w, h) => {
+      setPreviewMenuPosition({
+        top: y + h + 6,
+        left: Math.max(12, x + w - 280),
+      })
+    })
+  }, [previewMenuOpen, isCompact])
+
   return (
     <>
       <EnvironmentPlacementPanel
@@ -1108,13 +1143,13 @@ function EnvironmentDeployChromePanels({
 
       <SectionPanel
         title="Merged runtime compose"
-        hint="Project base + overlay as deployed (comments stripped; hosting labels added on the server)"
+        hint="Project base + environment overrides, including TurboPanel service metadata (x-turbopanel). Placement is pinned on the environment, not in YAML."
       >
         <TextInput
           editable={false}
           multiline
           value={composeDocumentToRuntimeYaml(
-            hideComposeTurbopanelExtensions(mergedCompose).document,
+            stripComposePlacement(mergedCompose),
           )}
           style={styles.preview}
           textAlignVertical="top"
@@ -1123,24 +1158,133 @@ function EnvironmentDeployChromePanels({
 
       <SectionPanel
         title="Deploy"
-        hint="Deploy this environment to its selected server"
+        hint="Preview compose, then deploy this environment to its selected server"
       >
-        <Pressable
-          style={[
-            styles.deployButton,
-            (deploying || deployBlocked) && styles.buttonDisabled,
-          ]}
-          disabled={deploying || deployBlocked}
-          onPress={onDeploy}
-        >
-          <Text style={styles.deployButtonText}>
-            {deploying ? 'Deploying…' : 'Deploy'}
-          </Text>
-        </Pressable>
+        <View style={styles.deployActions}>
+          <View ref={previewBtnRef} collapsable={false} style={styles.splitGroup}>
+            <Pressable
+              style={[
+                orgPanelStyles.toolbarBtnSecondary,
+                styles.splitPrimary,
+                deploying && styles.buttonDisabled,
+                webPointer,
+              ]}
+              disabled={deploying}
+              onPress={onPreviewMerged}
+              accessibilityRole="button"
+              accessibilityLabel="Preview merged compose"
+            >
+              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Preview</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                orgPanelStyles.toolbarBtnSecondary,
+                styles.splitCaret,
+                deploying && styles.buttonDisabled,
+                webPointer,
+              ]}
+              disabled={deploying}
+              onPress={() => setPreviewMenuOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityLabel="Preview options"
+              accessibilityState={{ expanded: previewMenuOpen }}
+            >
+              <Text style={styles.splitCaretText}>▾</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            style={[
+              styles.deployButton,
+              (deploying || deployBlocked) && styles.buttonDisabled,
+              webPointer,
+            ]}
+            disabled={deploying || deployBlocked}
+            onPress={onDeploy}
+            accessibilityRole="button"
+            accessibilityLabel="Deploy environment"
+          >
+            <Text style={styles.deployButtonText}>
+              {deploying ? 'Deploying…' : 'Deploy'}
+            </Text>
+          </Pressable>
+        </View>
         {deployStatus ? (
           <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text>
         ) : null}
       </SectionPanel>
+
+      <Modal
+        visible={previewMenuOpen}
+        transparent
+        animationType={isCompact ? 'slide' : 'fade'}
+        onRequestClose={() => setPreviewMenuOpen(false)}
+      >
+        <View
+          style={[
+            styles.menuBackdrop,
+            isCompact && styles.menuBackdropCompact,
+          ]}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setPreviewMenuOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss menu"
+          />
+          <View
+            style={[
+              styles.menuCard,
+              isCompact
+                ? styles.menuCardCompact
+                : {
+                    position: 'absolute',
+                    top: previewMenuPosition.top,
+                    left: previewMenuPosition.left,
+                    width: 280,
+                  },
+            ]}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed && styles.menuItemPressed,
+                webPointer,
+              ]}
+              onPress={() => {
+                setPreviewMenuOpen(false)
+                onPreviewMerged()
+              }}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Preview merged compose"
+            >
+              <Text style={styles.menuItemTitle}>Merged compose</Text>
+              <Text style={styles.menuItemSub}>
+                Project base combined with this environment’s overrides,
+                including x-turbopanel metadata
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed && styles.menuItemPressed,
+                webPointer,
+              ]}
+              onPress={() => {
+                setPreviewMenuOpen(false)
+                onPreviewPrepared()
+              }}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Preview prepared compose"
+            >
+              <Text style={styles.menuItemTitle}>Prepared compose</Text>
+              <Text style={styles.menuItemSub}>
+                Deploy-ready document after variables, naming, and
+                traditional-web split
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </>
   )
 }
@@ -1337,6 +1481,8 @@ function EnvironmentLoadedPanels({
   deployBlocked,
   deploying,
   deployStatus,
+  onPreviewMerged,
+  onPreviewPrepared,
   onDeploy,
   onSaveCompose,
   savingCompose,
@@ -1372,6 +1518,8 @@ function EnvironmentLoadedPanels({
   deployBlocked: boolean
   deploying: boolean
   deployStatus: string | null
+  onPreviewMerged: () => void
+  onPreviewPrepared: () => void
   onDeploy: () => void
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
@@ -1423,6 +1571,8 @@ function EnvironmentLoadedPanels({
           mergedCompose={mergedCompose}
           deploying={deploying}
           deployBlocked={deployBlocked}
+          onPreviewMerged={onPreviewMerged}
+          onPreviewPrepared={onPreviewPrepared}
           onDeploy={onDeploy}
           deployStatus={deployStatus}
         />
@@ -1472,6 +1622,200 @@ function EnvironmentLoadedPanels({
       ) : null}
     </>
   )
+}
+
+/** Combined loading state for every query `EnvironmentDetailBody` depends on. */
+function computeEnvironmentDetailLoading(queries: {
+  environmentLoading: boolean
+  hasEnvironment: boolean
+  projectLoading: boolean
+  serversLoading: boolean
+  servicesLoading: boolean
+  tlsLoading: boolean
+  ipsLoading: boolean
+  hasServiceIds: boolean
+  hostingsLoading: boolean
+  containersLoading: boolean
+}): boolean {
+  if (queries.environmentLoading && !queries.hasEnvironment) return true
+  if (
+    queries.projectLoading ||
+    queries.serversLoading ||
+    queries.servicesLoading ||
+    queries.tlsLoading ||
+    queries.ipsLoading
+  ) {
+    return true
+  }
+  return (
+    queries.hasServiceIds &&
+    (queries.hostingsLoading || queries.containersLoading)
+  )
+}
+
+/**
+ * Seed `hostingEditors` for any service id not yet present. Returns the same
+ * object when nothing is missing so a new `hostingsByService` identity does
+ * not loop the seeding effect.
+ */
+function seedHostingEditors(
+  current: Record<string, HostingEditorState>,
+  serviceIds: string[],
+  hostingsByService: Record<string, HostingRecord[]>,
+): Record<string, HostingEditorState> {
+  const missingIds = serviceIds.filter((serviceId) => !(serviceId in current))
+  if (missingIds.length === 0) return current
+  const next = { ...current }
+  for (const serviceId of missingIds) {
+    next[serviceId] = readHostingEditor(hostingsByService[serviceId] ?? [])
+  }
+  return next
+}
+
+/**
+ * First tracked entry (in `trackedEntries` order) whose command matches the
+ * active deploy command and has reached a terminal status.
+ */
+function findTerminalDeployEntry(
+  data: readonly CommandRecord[],
+  entries: readonly TrackedCommandEntry[],
+  activeDeployCommandId: string | null,
+): { entry: TrackedCommandEntry; record: CommandRecord } | null {
+  if (!activeDeployCommandId) return null
+  const index = entries.findIndex(
+    (entry) => entry.commandId === activeDeployCommandId,
+  )
+  const record = index === -1 ? undefined : data[index]
+  if (!record || !isTerminalCommandStatus(record.status)) return null
+  return { entry: entries[index], record }
+}
+
+type PostDeployRefreshOptions = Readonly<{
+  isCurrentAttempt: () => boolean
+  refetchServices: () => Promise<{ data?: { services: ServiceRecord[] } }>
+  refetchContainers: () => Promise<unknown>
+  refetchHostings: () => Promise<unknown>
+  getCachedServices: () => ServiceRecord[]
+  hasContainersForService: (serviceId: string) => boolean
+}>
+
+/**
+ * Deploy-preview modal + health-check-ack modal + variables panel — the
+ * environment-chrome extras rendered once (non-embedded) per environment.
+ * Pulled into its own component so the presence checks for `environment` /
+ * `healthCheckPrompt` (and the nested preview-confirm ternary) are scored
+ * against this component's own complexity budget, not the parent's.
+ */
+function EnvironmentDetailChromeExtras({
+  orgId,
+  environmentId,
+  environment,
+  canManage,
+  placementServerId,
+  pinnedServer,
+  projectCompose,
+  deploying,
+  deployPending,
+  previewOpen,
+  onCancelPreview,
+  deploy,
+  healthCheckPrompt,
+  onCancelHealthCheck,
+  runDeploy,
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  environment: EnvironmentRecord | null
+  canManage: boolean
+  placementServerId: string | null
+  pinnedServer: OrgServerRecord | null
+  projectCompose: ComposeDocument | null
+  deploying: boolean
+  deployPending: boolean
+  previewOpen: {
+    purpose: PreviewDeploymentPurpose
+    mode: ComposePreviewMode
+  } | null
+  onCancelPreview: () => void
+  deploy: () => Promise<void>
+  healthCheckPrompt: { services: string[]; required: boolean } | null
+  onCancelHealthCheck: () => void
+  runDeploy: (acknowledgeHealthCheckWarnings?: boolean) => Promise<void>
+}>) {
+  return (
+    <>
+      {environment ? (
+        <PreviewDeploymentModal
+          visible={previewOpen != null}
+          orgId={orgId}
+          environmentId={environment.id}
+          environmentLabel={
+            environment.displayName?.trim() || 'this environment'
+          }
+          canManage={canManage}
+          placementServerId={placementServerId}
+          placementServerLabel={
+            pinnedServer ? serverLabel(pinnedServer) : placementServerId
+          }
+          projectCompose={projectCompose}
+          environmentCompose={environment.options?.compose}
+          deploying={deployPending}
+          purpose={previewOpen?.purpose ?? 'inspect'}
+          initialMode={previewOpen?.mode ?? 'merged'}
+          confirmLabel="Deploy"
+          onCancel={onCancelPreview}
+          onConfirm={
+            previewOpen?.purpose === 'confirm'
+              ? () => {
+                  deploy().catch(() => {
+                    // Errors are surfaced via deployStatus.
+                  })
+                }
+              : undefined
+          }
+        />
+      ) : null}
+
+      {healthCheckPrompt ? (
+        <HealthCheckAckModal
+          services={healthCheckPrompt.services}
+          required={healthCheckPrompt.required}
+          deploying={deploying}
+          onCancel={onCancelHealthCheck}
+          onConfirm={() => {
+            runDeploy(true).catch(() => {
+              // Errors are surfaced via deployStatus.
+            })
+          }}
+        />
+      ) : null}
+
+      <VariablesSection orgId={orgId} parentField={{ environmentId }} />
+    </>
+  )
+}
+
+/** Poll (up to 5 attempts, 400ms apart) until containers show up post-deploy. */
+async function refreshEnvironmentAfterDeploy(
+  options: PostDeployRefreshOptions,
+): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (!options.isCurrentAttempt()) return
+    if (attempt > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 400))
+    }
+    const [servicesResult] = await Promise.all([
+      options.refetchServices(),
+      options.refetchContainers(),
+      options.refetchHostings(),
+    ])
+    const refreshedServices =
+      servicesResult.data?.services ?? options.getCachedServices()
+    const hasContainers = refreshedServices.some((service) =>
+      options.hasContainersForService(service.id),
+    )
+    if (attempt > 0 && hasContainers) break
+  }
 }
 
 export function EnvironmentDetailBody({
@@ -1541,7 +1885,10 @@ export function EnvironmentDetailBody({
     required: boolean
   } | null>(null)
   const [deployStatus, setDeployStatus] = useState<string | null>(null)
-  const [previewDeployOpen, setPreviewDeployOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState<{
+    purpose: PreviewDeploymentPurpose
+    mode: ComposePreviewMode
+  } | null>(null)
   const [trackedEntries, setTrackedEntries] = useState<
     readonly TrackedCommandEntry[]
   >([])
@@ -1563,15 +1910,18 @@ export function EnvironmentDetailBody({
   const containersByService = containersQuery.containersByService
   const resolvedServices = services ?? []
 
-  const loading =
-    (environmentQuery.isLoading && !environment) ||
-    projectQuery.isLoading ||
-    serversQuery.isLoading ||
-    servicesQuery.isLoading ||
-    tlsQuery.isLoading ||
-    ipsQuery.isLoading ||
-    (serviceIds.length > 0 &&
-      (hostingsQuery.isLoading || containersQuery.isLoading))
+  const loading = computeEnvironmentDetailLoading({
+    environmentLoading: environmentQuery.isLoading,
+    hasEnvironment: environment != null,
+    projectLoading: projectQuery.isLoading,
+    serversLoading: serversQuery.isLoading,
+    servicesLoading: servicesQuery.isLoading,
+    tlsLoading: tlsQuery.isLoading,
+    ipsLoading: ipsQuery.isLoading,
+    hasServiceIds: serviceIds.length > 0,
+    hostingsLoading: hostingsQuery.isLoading,
+    containersLoading: containersQuery.isLoading,
+  })
 
   const queryError =
     environmentQuery.error ??
@@ -1595,57 +1945,43 @@ export function EnvironmentDetailBody({
   // nothing is missing so a new hostingsByService identity cannot loop.
   useEffect(() => {
     if (loading) return
-    setHostingEditors((current) => {
-      let changed = false
-      const next = { ...current }
-      for (const serviceId of serviceIds) {
-        if (serviceId in next) continue
-        next[serviceId] = readHostingEditor(hostingsByService[serviceId] ?? [])
-        changed = true
-      }
-      return changed ? next : current
-    })
+    setHostingEditors((current) =>
+      seedHostingEditors(current, serviceIds, hostingsByService),
+    )
   }, [loading, serviceIds, hostingsByService])
 
   useEffect(() => {
     if (!commandsQuery.data || trackedEntries.length === 0) return
-    for (const [index, record] of commandsQuery.data.entries()) {
-      const entry = trackedEntries[index]
-      if (entry?.commandId !== activeDeployCommandId) continue
-      if (!isTerminalCommandStatus(record.status)) continue
+    const terminal = findTerminalDeployEntry(
+      commandsQuery.data,
+      trackedEntries,
+      activeDeployCommandId,
+    )
+    if (!terminal) return
+    const { entry, record } = terminal
 
-      setDeployStatus(deployStatusMessage(record))
-      setActiveDeployCommandId(null)
-      setTrackedEntries((current) =>
-        current.filter((row) => row.commandId !== entry.commandId),
-      )
+    setDeployStatus(deployStatusMessage(record))
+    setActiveDeployCommandId(null)
+    setTrackedEntries((current) =>
+      current.filter((row) => row.commandId !== entry.commandId),
+    )
 
-      if (record.status !== 'succeeded') continue
+    if (record.status !== 'succeeded') return
 
-      const refreshAttempt = ++postDeployRefreshRef.current
-      void (async () => {
-        for (let attempt = 0; attempt < 5; attempt++) {
-          if (postDeployRefreshRef.current !== refreshAttempt) return
-          if (attempt > 0) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 400))
-          }
-          const [servicesResult] = await Promise.all([
-            servicesQuery.refetch(),
-            containersQuery.refetchAll(),
-            hostingsQuery.refetchAll(),
-          ])
-          const refreshedServices =
-            servicesResult.data?.services ?? servicesQuery.data?.services ?? []
-          const hasContainers = refreshedServices.some((service) => {
-            const rows = queryClient.getQueryData<{ containers: ContainerRecord[] }>(
-              queryKeys.org(orgId).containers.list({ serviceId: service.id }),
-            )?.containers
-            return (rows?.length ?? 0) > 0
-          })
-          if (attempt > 0 && hasContainers) break
-        }
-      })()
-    }
+    const refreshAttempt = ++postDeployRefreshRef.current
+    void refreshEnvironmentAfterDeploy({
+      isCurrentAttempt: () => postDeployRefreshRef.current === refreshAttempt,
+      refetchServices: () => servicesQuery.refetch(),
+      refetchContainers: () => containersQuery.refetchAll(),
+      refetchHostings: () => hostingsQuery.refetchAll(),
+      getCachedServices: () => servicesQuery.data?.services ?? [],
+      hasContainersForService: (serviceId) => {
+        const rows = queryClient.getQueryData<{ containers: ContainerRecord[] }>(
+          queryKeys.org(orgId).containers.list({ serviceId }),
+        )?.containers
+        return (rows?.length ?? 0) > 0
+      },
+    })
   }, [
     activeDeployCommandId,
     commandsQuery.data,
@@ -1747,7 +2083,7 @@ export function EnvironmentDetailBody({
         blockedReason ??
           'Select a server for this environment before deploying.',
       )
-      setPreviewDeployOpen(false)
+      setPreviewOpen(null)
       return
     }
     setDeployStatus('Queueing deployment…')
@@ -1759,7 +2095,7 @@ export function EnvironmentDetailBody({
           : {}),
       })
       setHealthCheckPrompt(null)
-      setPreviewDeployOpen(false)
+      setPreviewOpen(null)
       setActiveDeployCommandId(result.commandId)
       setTrackedEntries([
         {
@@ -1770,7 +2106,7 @@ export function EnvironmentDetailBody({
       setDeployStatus('Deploying…')
     } catch (err) {
       if (err instanceof DeployHealthCheckMissingError) {
-        setPreviewDeployOpen(false)
+        setPreviewOpen(null)
         setHealthCheckPrompt({
           services: err.services,
           required: err.required,
@@ -1790,9 +2126,14 @@ export function EnvironmentDetailBody({
     await runDeploy(false)
   }
 
-  const openPreviewDeploy = () => {
+  const openComposeInspect = (mode: ComposePreviewMode) => {
     setError(null)
-    setPreviewDeployOpen(true)
+    setPreviewOpen({ purpose: 'inspect', mode })
+  }
+
+  const openDeployConfirm = () => {
+    setError(null)
+    setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
   }
 
   const saveHosting = async (composeServiceName: string) => {
@@ -1877,7 +2218,9 @@ export function EnvironmentDetailBody({
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
-          onDeploy={openPreviewDeploy}
+          onPreviewMerged={() => openComposeInspect('merged')}
+          onPreviewPrepared={() => openComposeInspect('prepared')}
+          onDeploy={openDeployConfirm}
           onSaveCompose={saveCompose}
           savingCompose={savingCompose}
           savingPlacement={savingPlacement}
@@ -1908,53 +2251,27 @@ export function EnvironmentDetailBody({
         />
       ) : null}
 
-      {showEnvironmentChrome && environment ? (
-        <PreviewDeploymentModal
-          visible={previewDeployOpen}
+      {showEnvironmentChrome ? (
+        <EnvironmentDetailChromeExtras
           orgId={orgId}
-          environmentId={environment.id}
-          environmentLabel={
-            environment.displayName?.trim() || 'this environment'
-          }
+          environmentId={environmentId}
+          environment={environment}
           canManage={canManage}
           placementServerId={placementServerId}
-          placementServerLabel={
-            pinnedServer
-              ? serverLabel(pinnedServer)
-              : placementServerId
-          }
+          pinnedServer={pinnedServer}
           projectCompose={projectCompose}
-          environmentCompose={environment.options?.compose}
-          deploying={deployEnvironmentMutation.isPending}
-          confirmLabel="Deploy"
-          onCancel={() => {
-            if (deployEnvironmentMutation.isPending) return
-            setPreviewDeployOpen(false)
-          }}
-          onConfirm={() => {
-            deploy().catch(() => {
-              // Errors are surfaced via deployStatus.
-            })
-          }}
-        />
-      ) : null}
-
-      {showEnvironmentChrome && healthCheckPrompt ? (
-        <HealthCheckAckModal
-          services={healthCheckPrompt.services}
-          required={healthCheckPrompt.required}
           deploying={deploying}
-          onCancel={() => setHealthCheckPrompt(null)}
-          onConfirm={() => {
-            runDeploy(true).catch(() => {
-              // Errors are surfaced via deployStatus.
-            })
+          deployPending={deployEnvironmentMutation.isPending}
+          previewOpen={previewOpen}
+          onCancelPreview={() => {
+            if (deployEnvironmentMutation.isPending) return
+            setPreviewOpen(null)
           }}
+          deploy={deploy}
+          healthCheckPrompt={healthCheckPrompt}
+          onCancelHealthCheck={() => setHealthCheckPrompt(null)}
+          runDeploy={runDeploy}
         />
-      ) : null}
-
-      {showEnvironmentChrome ? (
-        <VariablesSection orgId={orgId} parentField={{ environmentId }} />
       ) : null}
     </View>
   )
@@ -2022,11 +2339,74 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: chrome.accent,
     borderRadius: 8,
-    marginTop: spacing.sm,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   deployButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
+  deployActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  splitGroup: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  splitPrimary: {
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    borderRightWidth: 0,
+  },
+  splitCaret: {
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+    paddingHorizontal: 10,
+    minWidth: 32,
+  },
+  splitCaretText: {
+    color: colors.textChip,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+  },
+  menuBackdropCompact: {
+    justifyContent: 'flex-end',
+  },
+  menuCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgPanel,
+    overflow: 'hidden',
+    zIndex: 2,
+  },
+  menuCardCompact: {
+    margin: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  menuItem: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: 4,
+  },
+  menuItemPressed: {
+    backgroundColor: colors.bgSecondary,
+  },
+  menuItemTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  menuItemSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+  },
   hostingList: { gap: spacing.sm },
   hostingRowFocused: {
     borderColor: chrome.accent,

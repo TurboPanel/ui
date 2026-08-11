@@ -29,9 +29,14 @@ export function projectTypeLabel(project: ProjectRecord): string {
 }
 
 /**
- * Compose project routes. Overview is Project / environment compose (chips).
+ * Compose project section tabs: Overview (saved view), Compose (YAML), Services
+ * (visual forms). Project · environment scope chips stay in the header.
  */
-export const COMPOSE_PROJECT_TAB_IDS = ['overview'] as const
+export const COMPOSE_PROJECT_TAB_IDS = [
+  'overview',
+  'compose',
+  'services',
+] as const
 
 export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
 
@@ -42,6 +47,8 @@ export function systemProjectAllowsMutations(): boolean {
 
 export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
   overview: 'Overview',
+  compose: 'Compose',
+  services: 'Services',
 }
 
 export const MANAGED_PROJECT_TAB_IDS = [
@@ -92,6 +99,25 @@ export function projectOverviewHref(orgId: string, projectId: string): string {
 }
 
 /**
+ * Compose YAML editor for Project scope.
+ * Path: `/projects/:projectId/compose`
+ */
+export function projectComposeHref(orgId: string, projectId: string): string {
+  return `${projectHref(orgId, projectId)}/compose`
+}
+
+/**
+ * Services (visual) editor for Project scope.
+ * Path: `/projects/:projectId/services` (bare — not `/services/:serviceId`).
+ */
+export function projectServicesEditHref(
+  orgId: string,
+  projectId: string,
+): string {
+  return `${projectHref(orgId, projectId)}/services`
+}
+
+/**
  * Selected environment on Overview (compose overlay / lifecycle).
  * Path: `/projects/:projectId/environments/:environmentId`
  */
@@ -103,12 +129,128 @@ export function projectEnvironmentHref(
   return `${projectHref(orgId, projectId)}/environments/${encodeURIComponent(environmentId)}`
 }
 
+/**
+ * Compose YAML editor for an environment overlay.
+ * Path: `/projects/:projectId/environments/:environmentId/compose`
+ */
+export function projectEnvironmentComposeHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/compose`
+}
+
+/**
+ * Services (visual) editor for an environment overlay.
+ * Path: `/projects/:projectId/environments/:environmentId/services`
+ */
+export function projectEnvironmentServicesHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/services`
+}
+
 export function projectServiceHref(
   orgId: string,
   projectId: string,
   serviceId: string,
 ): string {
   return `${projectHref(orgId, projectId)}/services/${serviceId}`
+}
+
+/** Editor view encoded in the path (`compose` = YAML, `services` = visual forms). */
+export type ComposeEditView = 'editor' | 'visual'
+
+/**
+ * Resolve the Compose / Services section from the pathname.
+ * Returns null on Overview / environment index / service detail paths.
+ */
+export function parseComposeEditView(
+  pathname: string,
+  projectId: string,
+): ComposeEditView | null {
+  const base = `/projects/${projectId}`
+  const envId = parseProjectEnvironmentId(pathname, projectId)
+  if (envId) {
+    const envMarker = `${base}/environments/`
+    const envIdx = pathname.indexOf(envMarker)
+    if (envIdx < 0) return null
+    const afterEnv = pathname.slice(envIdx + envMarker.length)
+    const parts = afterEnv.split(/[/?#]/).filter(Boolean)
+    // parts[0] = environmentId, parts[1] = compose | services
+    const suffix = parts[1] ?? ''
+    if (suffix === 'compose') return 'editor'
+    if (suffix === 'services') return 'visual'
+    return null
+  }
+  if (pathname.includes(`${base}/compose`)) return 'editor'
+  // Bare `/services` only — `/services/:id` is service detail.
+  const servicesMarker = `${base}/services`
+  const servicesIdx = pathname.indexOf(servicesMarker)
+  if (servicesIdx < 0) return null
+  const after = pathname.slice(servicesIdx + servicesMarker.length)
+  if (after === '' || after.startsWith('?') || after.startsWith('#')) {
+    return 'visual'
+  }
+  return null
+}
+
+/** Active compose section tab for the path (Overview when not Compose/Services). */
+export function parseComposeProjectTab(
+  pathname: string,
+  projectId: string,
+): ComposeProjectTabId {
+  const view = parseComposeEditView(pathname, projectId)
+  if (view === 'editor') return 'compose'
+  if (view === 'visual') return 'services'
+  return 'overview'
+}
+
+/**
+ * Href for a compose section tab on the current Project / environment scope.
+ * Scope chips keep the active tab when switching Project ↔ environment.
+ */
+export function projectComposeSectionHref(
+  orgId: string,
+  projectId: string,
+  tab: ComposeProjectTabId,
+  environmentId?: string | null,
+): string {
+  if (tab === 'compose') {
+    return environmentId
+      ? projectEnvironmentComposeHref(orgId, projectId, environmentId)
+      : projectComposeHref(orgId, projectId)
+  }
+  if (tab === 'services') {
+    return environmentId
+      ? projectEnvironmentServicesHref(orgId, projectId, environmentId)
+      : projectServicesEditHref(orgId, projectId)
+  }
+  return environmentId
+    ? projectEnvironmentHref(orgId, projectId, environmentId)
+    : projectOverviewHref(orgId, projectId)
+}
+
+/** Compose or Services path for the active scope (view → section tab). */
+export function projectComposeEditHref(
+  orgId: string,
+  projectId: string,
+  options: Readonly<{
+    environmentId?: string | null
+    view?: ComposeEditView
+  }> = {},
+): string {
+  const view = options.view ?? 'editor'
+  const tab: ComposeProjectTabId = view === 'visual' ? 'services' : 'compose'
+  return projectComposeSectionHref(
+    orgId,
+    projectId,
+    tab,
+    options.environmentId,
+  )
 }
 
 
@@ -167,7 +309,7 @@ export function parseProjectEnvironmentId(
   }
 }
 
-/** True on Overview Base (`…/overview` or bare project index). */
+/** True on Overview Base (`…/overview`, `/compose`, `/services`, or bare index). */
 export function isProjectOverviewBasePath(
   pathname: string,
   projectId: string,
@@ -175,7 +317,8 @@ export function isProjectOverviewBasePath(
   if (parseProjectEnvironmentId(pathname, projectId)) return false
   if (pathname.endsWith(`/projects/${projectId}`)) return true
   if (pathname.includes(`/projects/${projectId}/overview`)) return true
-  // Service detail lives under Overview.
+  if (pathname.includes(`/projects/${projectId}/compose`)) return true
+  // Bare `/services` (edit) and `/services/:id` (detail) live under Project scope.
   if (pathname.includes(`/projects/${projectId}/services`)) return true
   return false
 }

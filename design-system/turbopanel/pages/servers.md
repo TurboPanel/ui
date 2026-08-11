@@ -10,7 +10,7 @@
 ## Layout
 
 - One job: **fleet table**, not a dashboard of widgets  
-- Lean **inventory strip** above the table (count · avg CPU · avg memory) — monospace values, no cards  
+- Lean **inventory strip** above the table (count · cores · RAM · swap · avg CPU · avg memory) — monospace values, no cards  
 - Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar inside `SectionPanel` (no title/hint bar): **+ Server** (own-gated) + batch Update for selected updatable hosts  
 - **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
@@ -34,12 +34,13 @@
 - Online badge: accent dot + label (country lives in its own column)  
 - Offline badge: hollow dot + muted label  
 - **Country:** flag emoji + English country name from geo (or em dash)  
-- **Usage:** compact CPU / Mem / Swap bars (`ServerUsageBars`) from one fleet metrics snapshot — never per-row metrics polling; percent label beside each bar (not color-only)  
+- **Usage:** compact pro bars (`ServerUsageBars`) from one fleet metrics snapshot — **stacked CPU** (user / system / other / iowait), **load 1/5/15** numbers with capacity-scaled bar (`load1 / cpuCores`), memory + swap % — never per-row metrics polling; values always labeled (not color-only)  
 - Checkbox stops propagation — row press does not toggle selection
 
 ## Inventory strip
 
 - Shows as soon as the fleet list is known (including zero)  
+- **Capacity:** total cores + total RAM + total swap from `server.inventory` (daemon hello); RAM falls back to metrics `memoryUsed + memoryAvailable` when inventory is absent  
 - Avg CPU / avg memory average only servers with a recent usage sample; otherwise `—`  
 - Refresh cadence follows fleet usage query (~60 s), not the 30 s servers list
 
@@ -63,7 +64,7 @@
 ## Charts
 
 - Not on this page — use the **Metrics** tab on server detail (or legacy `/servers/[id]/metrics` deep link)  
-- Fleet usage bars are progress indicators, not charts
+- Fleet usage bars are progress indicators, not charts (CPU stack segments are proportional fills)
 
 ## Anti-patterns (page-specific)
 
@@ -71,4 +72,5 @@
 - ❌ Per-server status or metrics polling loops (use `GET /servers/metrics/latest` once)  
 - ❌ Showing registration keys after the wizard is dismissed  
 - ❌ Expand rows for commands on the fleet table  
-- ❌ Status conveyed by color alone (bars always show a percent or em dash)
+- ❌ Status conveyed by color alone (bars always show a percent, load triplet, or em dash)  
+- ❌ Inventing core counts client-side — load bar fill needs daemon-reported `inventory.cpuCores`

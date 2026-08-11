@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Modal,
   Pressable,
@@ -16,17 +16,203 @@ import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   composeDocumentToYaml,
-  hideComposeTurbopanelExtensions,
   mergeComposeOverlay,
+  stripComposePlacement,
 } from '@/lib/compose'
 import { colors, layout, spacing } from '@/lib/theme'
 
-type PreviewMode = 'merged' | 'prepared'
+export type ComposePreviewMode = 'merged' | 'prepared'
+
+/** Review-only open vs review-and-enqueue (Deploy / Redeploy). */
+export type PreviewDeploymentPurpose = 'inspect' | 'confirm'
+
+const MODE_OPTIONS: ReadonlyArray<{
+  id: ComposePreviewMode
+  label: string
+  hint: string
+}> = [
+  {
+    id: 'merged',
+    label: 'Merged',
+    hint: 'Project base and environment overrides together, including TurboPanel service metadata.',
+  },
+  {
+    id: 'prepared',
+    label: 'Prepared',
+    hint: 'Deploy-ready document after variables, naming, and traditional-web split — what the host receives.',
+  },
+]
+
+function mergedComposeYaml(
+  projectCompose: unknown,
+  environmentCompose: unknown,
+): string {
+  // Keep per-service `x-turbopanel` in preview so operators can audit
+  // serviceKind / engine / description before deploy. Placement is never
+  // stored in compose — strip it if a stale client still embeds it.
+  return composeDocumentToYaml(
+    stripComposePlacement(
+      mergeComposeOverlay(projectCompose, environmentCompose),
+    ),
+  )
+}
+
+function resolvePreviewSubtitle(
+  isConfirm: boolean,
+  environmentLabel?: string,
+): string {
+  if (isConfirm) {
+    return environmentLabel
+      ? `Review the compose for ${environmentLabel}, then confirm to enqueue.`
+      : 'Review the compose, then confirm to enqueue.'
+  }
+  return environmentLabel
+    ? `Inspect the compose that applies to ${environmentLabel}.`
+    : 'Inspect merged and deploy-ready compose for this environment.'
+}
+
+function TargetServerLine({
+  placementServerId,
+  targetServerDisplay,
+}: Readonly<{
+  placementServerId: string | null
+  targetServerDisplay: string | null
+}>) {
+  if (placementServerId && targetServerDisplay) {
+    return (
+      <Text style={styles.targetServer}>
+        Target server · {targetServerDisplay}
+      </Text>
+    )
+  }
+  return (
+    <Text style={styles.targetServer}>
+      Target server · not set — pin a server before prepare or deploy
+    </Text>
+  )
+}
+
+function ModePicker({
+  mode,
+  onSelect,
+}: Readonly<{
+  mode: ComposePreviewMode
+  onSelect: (mode: ComposePreviewMode) => void
+}>) {
+  return (
+    <View style={orgPanelStyles.segmentGroup}>
+      {MODE_OPTIONS.map((option) => {
+        const active = mode === option.id
+        return (
+          <Pressable
+            key={option.id}
+            style={[
+              orgPanelStyles.segmentChip,
+              active && orgPanelStyles.segmentChipActive,
+              webPointer,
+            ]}
+            onPress={() => {
+              onSelect(option.id)
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={option.label}
+          >
+            <Text
+              style={[
+                orgPanelStyles.segmentChipText,
+                active && orgPanelStyles.segmentChipTextActive,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+function ComposePreviewBody({
+  mode,
+  mergedYaml,
+  prepared,
+}: Readonly<{
+  mode: ComposePreviewMode
+  mergedYaml: string
+  prepared: ReturnType<typeof usePreparedComposePreview>
+}>) {
+  if (mode === 'merged') {
+    return <ReadOnlyYamlBlock value={mergedYaml} maxHeight={360} />
+  }
+  return (
+    <DeployPreviewBody
+      loading={prepared.loading}
+      error={prepared.error}
+      preview={prepared.preview}
+    />
+  )
+}
+
+function ModalFooterActions({
+  isConfirm,
+  deploying,
+  placementServerId,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  isConfirm: boolean
+  deploying: boolean
+  placementServerId: string | null
+  confirmLabel: string
+  onCancel: () => void
+  onConfirm?: () => void
+}>) {
+  return (
+    <View style={styles.actions}>
+      <Pressable
+        style={({ pressed }) => [
+          orgPanelStyles.toolbarBtnSecondary,
+          pressed && styles.itemPressed,
+          webPointer,
+          deploying && styles.disabled,
+        ]}
+        onPress={onCancel}
+        disabled={deploying}
+        accessibilityRole="button"
+        accessibilityLabel={isConfirm ? 'Cancel deployment' : 'Close preview'}
+      >
+        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+          {isConfirm ? 'Cancel' : 'Close'}
+        </Text>
+      </Pressable>
+      {isConfirm && onConfirm ? (
+        <Pressable
+          style={({ pressed }) => [
+            orgPanelStyles.toolbarBtnPrimary,
+            pressed && styles.itemPressed,
+            (deploying || !placementServerId) && styles.disabled,
+            webPointer,
+          ]}
+          onPress={onConfirm}
+          disabled={deploying || !placementServerId}
+          accessibilityRole="button"
+          accessibilityLabel={confirmLabel}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+            {deploying ? 'Deploying…' : confirmLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+}
 
 /**
- * Deploy-time confirmation: Merged (authored) + Prepared (server) compose
- * preview before enqueueing deploy / redeploy. Environment scope only —
- * not shown for project-level compose editing or lifecycle start/stop.
+ * Environment-scope compose review. Opens from the lifecycle **Preview ▾**
+ * control (inspect) or **Deploy / Redeploy** (confirm). Not used for
+ * project-level compose editing or lifecycle Start/Stop.
  */
 export function PreviewDeploymentModal({
   visible,
@@ -39,6 +225,8 @@ export function PreviewDeploymentModal({
   projectCompose,
   environmentCompose,
   deploying = false,
+  purpose = 'confirm',
+  initialMode = 'prepared',
   confirmLabel = 'Deploy',
   onCancel,
   onConfirm,
@@ -54,38 +242,43 @@ export function PreviewDeploymentModal({
   projectCompose: unknown
   environmentCompose?: unknown
   deploying?: boolean
+  purpose?: PreviewDeploymentPurpose
+  initialMode?: ComposePreviewMode
   confirmLabel?: string
   onCancel: () => void
-  onConfirm: () => void
+  onConfirm?: () => void
 }>) {
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
-  const [mode, setMode] = useState<PreviewMode>('prepared')
+  const [mode, setMode] = useState<ComposePreviewMode>(initialMode)
+
+  useEffect(() => {
+    if (!visible) return
+    setMode(initialMode)
+  }, [visible, initialMode])
 
   const prepared = usePreparedComposePreview(
     orgId,
     environmentId,
     canManage,
     placementServerId,
-    visible,
+    visible && mode === 'prepared',
   )
 
-  const mergedYaml = composeDocumentToYaml(
-    hideComposeTurbopanelExtensions(
-      mergeComposeOverlay(projectCompose, environmentCompose),
-    ).document,
-  )
+  const mergedYaml = mergedComposeYaml(projectCompose, environmentCompose)
 
   const handleClose = () => {
     if (deploying) return
     onCancel()
   }
 
-  const subtitle = environmentLabel
-    ? `Review what will run on ${environmentLabel}, then deploy.`
-    : 'Review what will run, then deploy.'
+  const isConfirm = purpose === 'confirm'
+  const title = isConfirm ? 'Confirm Deployment' : 'Compose Preview'
+  const subtitle = resolvePreviewSubtitle(isConfirm, environmentLabel)
   const targetServerDisplay =
     placementServerLabel?.trim() || placementServerId
+  const activeHint =
+    MODE_OPTIONS.find((option) => option.id === mode)?.hint ?? ''
 
   return (
     <Modal
@@ -99,107 +292,40 @@ export function PreviewDeploymentModal({
           style={StyleSheet.absoluteFill}
           onPress={handleClose}
           accessibilityRole="button"
-          accessibilityLabel="Close preview deployment"
+          accessibilityLabel="Close compose preview"
         />
         <View style={[styles.panel, isCompact && styles.panelSheet]}>
-          <Text style={styles.title}>Preview Deployment</Text>
+          <Text style={styles.title}>{title}</Text>
           <Text style={styles.copy}>{subtitle}</Text>
-          {placementServerId && targetServerDisplay ? (
-            <Text style={styles.targetServer}>
-              Target server: {targetServerDisplay}
-            </Text>
-          ) : null}
+          <TargetServerLine
+            placementServerId={placementServerId}
+            targetServerDisplay={targetServerDisplay}
+          />
 
-          <View style={orgPanelStyles.segmentGroup}>
-            {(
-              [
-                { id: 'merged' as const, label: 'Merged' },
-                { id: 'prepared' as const, label: 'Prepared' },
-              ] as const
-            ).map((option) => {
-              const active = mode === option.id
-              return (
-                <Pressable
-                  key={option.id}
-                  style={[
-                    orgPanelStyles.segmentChip,
-                    active && orgPanelStyles.segmentChipActive,
-                    webPointer,
-                  ]}
-                  onPress={() => {
-                    setMode(option.id)
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={option.label}
-                >
-                  <Text
-                    style={[
-                      orgPanelStyles.segmentChipText,
-                      active && orgPanelStyles.segmentChipTextActive,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
+          <ModePicker mode={mode} onSelect={setMode} />
 
-          <Text style={orgPanelStyles.muted}>
-            Merged = project base + this environment&apos;s overrides as
-            authored; Prepared = after TurboPanel resolves variables,
-            container/volume names, and splits traditional-web sites.
-          </Text>
+          <Text style={orgPanelStyles.muted}>{activeHint}</Text>
 
           <ScrollView
             style={styles.previewScroll}
             contentContainerStyle={styles.previewScrollContent}
             nestedScrollEnabled
           >
-            {mode === 'merged' ? (
-              <ReadOnlyYamlBlock value={mergedYaml} maxHeight={360} />
-            ) : (
-              <DeployPreviewBody
-                loading={prepared.loading}
-                error={prepared.error}
-                preview={prepared.preview}
-              />
-            )}
+            <ComposePreviewBody
+              mode={mode}
+              mergedYaml={mergedYaml}
+              prepared={prepared}
+            />
           </ScrollView>
 
-          <View style={styles.actions}>
-            <Pressable
-              style={({ pressed }) => [
-                orgPanelStyles.toolbarBtnSecondary,
-                pressed && styles.itemPressed,
-                webPointer,
-                deploying && styles.disabled,
-              ]}
-              onPress={handleClose}
-              disabled={deploying}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel deployment"
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                orgPanelStyles.toolbarBtnPrimary,
-                pressed && styles.itemPressed,
-                (deploying || !placementServerId) && styles.disabled,
-                webPointer,
-              ]}
-              onPress={onConfirm}
-              disabled={deploying || !placementServerId}
-              accessibilityRole="button"
-              accessibilityLabel={confirmLabel}
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-                {deploying ? 'Deploying…' : confirmLabel}
-              </Text>
-            </Pressable>
-          </View>
+          <ModalFooterActions
+            isConfirm={isConfirm}
+            deploying={deploying}
+            placementServerId={placementServerId}
+            confirmLabel={confirmLabel}
+            onCancel={handleClose}
+            onConfirm={onConfirm}
+          />
         </View>
       </View>
     </Modal>

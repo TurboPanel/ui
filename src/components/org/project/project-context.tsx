@@ -18,6 +18,7 @@ import {
   type WorkspaceKind,
   type WorkspaceRecord,
 } from '@/lib/instance-api'
+import { ComposeDraftProvider } from '@/components/org/project/compose-draft-context'
 import {
   parseProjectEnvironmentId,
   projectEnvironmentHref,
@@ -29,7 +30,7 @@ import {
 } from '@/lib/project-navigation'
 import { queryKeys, useCan } from '@/lib/query-client'
 import {
-  isSystemProject,
+  isTurbopanelProject,
   systemComponentKey,
 } from '@/lib/system-inventory'
 
@@ -213,7 +214,7 @@ export function ProjectProvider({
     owningWorkspace != null ||
     (workspacesQuery.isFetched && !workspacesQuery.isLoading)
   const projectIsSystem = project
-    ? isSystemProject(project, workspaceKind ?? workspaces)
+    ? isTurbopanelProject(project, workspaceKind ?? workspaces)
     : false
   const projectAllowsMutations =
     isWorkspaceKindResolved && workspaceKind === 'user'
@@ -276,7 +277,9 @@ export function ProjectProvider({
   )
 
   return (
-    <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>
+    <ProjectContext.Provider value={value}>
+      <ComposeDraftProvider>{children}</ComposeDraftProvider>
+    </ProjectContext.Provider>
   )
 }
 

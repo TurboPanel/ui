@@ -1,13 +1,35 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { usePathname } from 'expo-router'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  composeDraftScopeKey,
+  composeFullYaml,
+  isComposeDraftDirty,
+  reconcileComposeDraft,
+  resolveComposeDraftSnapshot,
+  seedComposeDraftFromDocument,
+  useComposeDraftStore,
+} from '@/components/org/project/compose-draft-context'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
-import { ComposeSavedView } from '@/components/org/project/compose-saved-view'
+import {
+  ComposeSavedView,
+  type OverviewComposeSource,
+} from '@/components/org/project/compose-saved-view'
+import type { InventoryStripItem } from '@/components/org/project/compose-inventory-strip'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
-import { ProjectSettingsArea } from '@/components/org/project-settings-area'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
-import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
+import {
+  ComposeEditorChrome,
+  ComposeSurfaceSectionTabs,
+} from '@/components/org/compose-editor-section'
 import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
@@ -16,11 +38,18 @@ import { EnvironmentDetailBody } from '@/components/org/environment-detail-secti
 import { StorageSection } from '@/components/org/storage-section'
 import { SystemProjectOverviewPanel } from '@/components/org/project/system-project-overview-panel'
 import {
+  blockingComposeLintIssues,
+  composeDocumentToYaml,
   isBlankComposeData,
+  lintComposeYaml,
   mergeComposeOverlay,
   normalizeCompose,
   resolveComposeOverlayState,
+  setComposeEditorView,
+  stripComposePlacement,
+  summarizeComposeDocument,
   type ComposeDocument,
+  type ComposeEditorView,
 } from '@/lib/compose'
 import {
   type ContainerRecord,
@@ -28,33 +57,248 @@ import {
   type ProjectRecord,
   type ServiceRecord,
 } from '@/lib/instance-api'
+import { parseComposeEditView } from '@/lib/project-navigation'
 import { useContainersByServices, useServices } from '@/lib/queries'
+import { useEnvironmentBindings } from '@/lib/queries/bindings'
+import { useStorage } from '@/lib/queries/storage'
 import { isActiveContainerStatus } from '@/lib/container-status'
-import { resolveEffectiveServerId } from '@/lib/project-options'
-import { colors, spacing } from '@/lib/theme'
+import {
+  countDistinctProjectServers,
+  resolveEffectiveServerId,
+} from '@/lib/project-options'
+import { chrome, spacing } from '@/lib/theme'
 
-function QuietButton({
-  label,
-  onPress,
+function inventoryItem(
+  key: string,
+  value: number,
+  noun: string,
+  pluralNoun?: string,
+): InventoryStripItem {
+  return pluralNoun ? { key, value, noun, pluralNoun } : { key, value, noun }
+}
+
+/** Project scope counts project-wide storage; environment scope narrows to it. */
+function resolveStorageFilter(
+  baseSelected: boolean,
+  projectId: string,
+  selectedEnvironmentId: string | null,
+): { projectId: string } | { environmentId: string } | null {
+  if (baseSelected) return { projectId }
+  if (selectedEnvironmentId) return { environmentId: selectedEnvironmentId }
+  return null
+}
+
+function OverviewSaveButton({
+  saving,
+  disabled,
+  onSave,
 }: Readonly<{
-  label: string
-  onPress: () => void
+  saving: boolean
+  disabled: boolean
+  onSave: () => void
 }>) {
   return (
     <Pressable
-      style={[styles.quietBtn, webPointer]}
-      onPress={onPress}
+      style={[
+        styles.saveButton,
+        webPointer,
+        disabled && styles.buttonDisabled,
+      ]}
+      onPress={onSave}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={saving ? 'Saving…' : 'Save'}
     >
-      <Text style={styles.quietBtnText}>{label}</Text>
+      <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
     </Pressable>
   )
 }
 
-/** True when project compose has nothing to preview yet (fresh create / cleared). */
-function isBlankComposeDocument(document: unknown): boolean {
-  return isBlankComposeData(normalizeCompose(document).data)
+/** Prefer reconciled draft when Overview is showing Proposed unsaved changes. */
+function overviewComposeDocument(
+  isDirty: boolean,
+  source: OverviewComposeSource,
+  snapshot: ReturnType<typeof resolveComposeDraftSnapshot>,
+  saved: unknown,
+): unknown {
+  if (!isDirty || source !== 'proposed') return saved
+  return reconcileComposeDraft(snapshot) ?? snapshot.draft
+}
+
+function overviewSaveTrailing(
+  isDirty: boolean,
+  saving: boolean,
+  onSave: () => void,
+): ReactNode {
+  if (!isDirty && !saving) return undefined
+  return (
+    <OverviewSaveButton
+      saving={saving}
+      disabled={saving || !isDirty}
+      onSave={onSave}
+    />
+  )
+}
+
+function ComposeEditorPanel({
+  document,
+  onSave,
+  saving,
+  editView,
+  sessionKey,
+}: Readonly<{
+  document: unknown
+  onSave: (compose: ComposeDocument) => Promise<void>
+  saving: boolean
+  editView: ComposeEditorView
+  sessionKey: string
+}>) {
+  return (
+    <ComposeBasePanel
+      document={document}
+      onSave={onSave}
+      saving={saving}
+      defaultEditorView={editView}
+      view={editView}
+      sessionKey={sessionKey}
+      hideHeader
+      showSectionTabs
+    />
+  )
+}
+
+function ProjectOverviewCompose({
+  projectId,
+  orgId,
+  environmentsCount,
+  projectServerCount,
+  storageCount,
+  services,
+  containersByService,
+  isDirty,
+  overviewSource,
+  onOverviewSourceChange,
+  proposedDoc,
+  saving,
+  onSave,
+}: Readonly<{
+  projectId: string
+  orgId: string
+  environmentsCount: number
+  projectServerCount: number
+  storageCount: number
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+  isDirty: boolean
+  overviewSource: OverviewComposeSource
+  onOverviewSourceChange: (source: OverviewComposeSource) => void
+  proposedDoc: unknown
+  saving: boolean
+  onSave: () => void
+}>) {
+  const projectSummary = summarizeComposeDocument(proposedDoc)
+  const inventory: InventoryStripItem[] = [
+    inventoryItem('environments', environmentsCount, 'environment'),
+    inventoryItem('servers', projectServerCount, 'server'),
+    inventoryItem('services', projectSummary.services, 'service'),
+    inventoryItem('networks', projectSummary.networks, 'network'),
+    inventoryItem('volumes', projectSummary.volumes, 'volume'),
+    inventoryItem('storage', storageCount, 'storage volume', 'storage volumes'),
+  ]
+  return (
+    <ComposeSavedView
+      document={proposedDoc}
+      inventory={inventory}
+      orgId={orgId}
+      projectId={projectId}
+      services={services}
+      containersByService={containersByService}
+      showServiceStatus={false}
+      draftSource={isDirty ? overviewSource : undefined}
+      onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
+      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave)}
+    />
+  )
+}
+
+function EnvironmentOverviewCompose({
+  project,
+  selectedEnvironment,
+  projectId,
+  orgId,
+  storageCount,
+  bindingsCount,
+  services,
+  containersByService,
+  isStarted,
+  isDirty,
+  overviewSource,
+  onOverviewSourceChange,
+  liveSnapshot,
+  saving,
+  onSave,
+}: Readonly<{
+  project: ProjectRecord
+  selectedEnvironment: EnvironmentRecord
+  projectId: string
+  orgId: string
+  storageCount: number
+  bindingsCount: number
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+  isStarted: boolean
+  isDirty: boolean
+  overviewSource: OverviewComposeSource
+  onOverviewSourceChange: (source: OverviewComposeSource) => void
+  liveSnapshot: ReturnType<typeof resolveComposeDraftSnapshot>
+  saving: boolean
+  onSave: () => void
+}>) {
+  const overlayState = resolveComposeOverlayState(
+    selectedEnvironment.options?.compose,
+  )
+  const proposedOverlay = overviewComposeDocument(
+    isDirty,
+    overviewSource,
+    liveSnapshot,
+    selectedEnvironment.options?.compose,
+  )
+  const merged = mergeComposeOverlay(project.options?.compose, proposedOverlay)
+  const effectiveServerId = resolveEffectiveServerId(
+    selectedEnvironment.serverId,
+    project.options?.defaultServerId,
+  )
+  const showSavedOrClean = overviewSource === 'saved' || !isDirty
+  const inheriting = showSavedOrClean
+    ? overlayState.blank
+    : isBlankComposeData(normalizeCompose(proposedOverlay).data)
+  const envSummary = summarizeComposeDocument(merged)
+  const inventory: InventoryStripItem[] = [
+    inventoryItem('servers', effectiveServerId ? 1 : 0, 'server'),
+    inventoryItem('services', envSummary.services, 'service'),
+    inventoryItem('networks', envSummary.networks, 'network'),
+    inventoryItem('volumes', envSummary.volumes, 'volume'),
+    inventoryItem('storage', storageCount, 'storage volume', 'storage volumes'),
+    inventoryItem('bindings', bindingsCount, 'binding'),
+  ]
+  return (
+    <ComposeSavedView
+      document={inheriting ? merged : proposedOverlay}
+      summaryDocument={merged}
+      inventory={inventory}
+      inheritedCaption={
+        inheriting ? 'Inherited from project compose' : null
+      }
+      orgId={orgId}
+      projectId={projectId}
+      services={services}
+      containersByService={containersByService}
+      showServiceStatus={isStarted}
+      draftSource={isDirty ? overviewSource : undefined}
+      onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
+      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave)}
+    />
+  )
 }
 
 function ServicesPanelBody({
@@ -63,15 +307,16 @@ function ServicesPanelBody({
   projectId,
   orgId,
   selectedEnvironment,
+  environmentsCount,
+  projectServerCount,
+  storageCount,
+  bindingsCount,
   services,
   containersByService,
   loading,
   saving,
   isStarted,
-  editing,
-  canEdit,
-  onEdit,
-  onCancelEdit,
+  sectionView,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
 }: Readonly<{
@@ -80,55 +325,128 @@ function ServicesPanelBody({
   projectId: string
   orgId: string
   selectedEnvironment: EnvironmentRecord | null
+  /** Project's environment count — Overview Base inventory only. */
+  environmentsCount: number
+  /** Distinct servers placing this project's environments — Overview Base inventory only. */
+  projectServerCount: number
+  storageCount: number
+  bindingsCount: number
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   loading: boolean
   saving: boolean
   isStarted: boolean
-  editing: boolean
-  canEdit: boolean
-  onEdit: () => void
-  onCancelEdit: () => void
+  /** null = Overview (saved view); editor/visual = Compose/Services tabs. */
+  sectionView: ComposeEditorView | null
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
-  const editTrailing = (
-    <QuietButton label="Discard Changes" onPress={onCancelEdit} />
+  const draftStore = useComposeDraftStore()
+  const editing = sectionView != null
+  const editView = sectionView ?? 'editor'
+  const scopeKey = composeDraftScopeKey(
+    projectId,
+    baseSelected ? null : selectedEnvironment?.id ?? null,
   )
+  const savedDocument = baseSelected
+    ? project.options?.compose
+    : selectedEnvironment?.options?.compose
+  const liveSnapshot = resolveComposeDraftSnapshot(
+    draftStore,
+    scopeKey,
+    savedDocument,
+  )
+  const isDirty = isComposeDraftDirty(liveSnapshot)
+  const [overviewSource, setOverviewSource] =
+    useState<OverviewComposeSource>('proposed')
+
+  useEffect(() => {
+    if (isDirty) {
+      setOverviewSource('proposed')
+    }
+  }, [isDirty, scopeKey])
+
+  const saveOverviewDraft = useCallback(async () => {
+    const snapshot = resolveComposeDraftSnapshot(
+      draftStore,
+      scopeKey,
+      savedDocument,
+    )
+    const reconciled = reconcileComposeDraft(snapshot)
+    if (reconciled == null) return
+    const viewForSave: ComposeEditorView =
+      editView === 'visual' ? 'visual' : 'editor'
+    const next = stripComposePlacement(
+      setComposeEditorView(reconciled, viewForSave),
+    )
+    const blocking = blockingComposeLintIssues(
+      lintComposeYaml(composeDocumentToYaml(next)),
+    )
+    if (blocking.length > 0) return
+    if (baseSelected) {
+      await onSaveProjectCompose(next)
+    } else {
+      await onSaveEnvironmentCompose(next)
+    }
+    const seeded = seedComposeDraftFromDocument(next)
+    draftStore.setSnapshot(scopeKey, {
+      draft: next,
+      yaml: seeded.yaml,
+      baselineYaml: composeFullYaml(next),
+    })
+  }, [
+    draftStore,
+    scopeKey,
+    savedDocument,
+    editView,
+    baseSelected,
+    onSaveProjectCompose,
+    onSaveEnvironmentCompose,
+  ])
+
+  const runOverviewSave = useCallback(() => {
+    void saveOverviewDraft()
+  }, [saveOverviewDraft])
 
   if (baseSelected) {
     if (editing) {
       return (
-        <ComposeBasePanel
+        <ComposeEditorPanel
           document={project.options?.compose}
           onSave={onSaveProjectCompose}
           saving={saving}
-          defaultEditorView="editor"
-          hideHeader
-          toolbarTrailing={editTrailing}
+          editView={editView}
+          sessionKey={scopeKey}
         />
       )
     }
-    const hasServer = Boolean(project.options?.defaultServerId)
     return (
-      <ComposeSavedView
-        title="Compose - Project"
-        document={project.options?.compose}
-        hasServer={hasServer}
-        canEdit={canEdit}
-        onEdit={onEdit}
-        orgId={orgId}
+      <ProjectOverviewCompose
         projectId={projectId}
+        orgId={orgId}
+        environmentsCount={environmentsCount}
+        projectServerCount={projectServerCount}
+        storageCount={storageCount}
         services={services}
         containersByService={containersByService}
-        showServiceStatus={false}
+        isDirty={isDirty}
+        overviewSource={overviewSource}
+        onOverviewSourceChange={setOverviewSource}
+        proposedDoc={overviewComposeDocument(
+          isDirty,
+          overviewSource,
+          liveSnapshot,
+          project.options?.compose,
+        )}
+        saving={saving}
+        onSave={runOverviewSave}
       />
     )
   }
 
   if (!selectedEnvironment) {
     return (
-      <ComposeEditorChrome>
+      <ComposeEditorChrome tabs={<ComposeSurfaceSectionTabs />}>
         <Text style={orgPanelStyles.muted}>Select an environment.</Text>
       </ComposeEditorChrome>
     )
@@ -136,7 +454,7 @@ function ServicesPanelBody({
 
   if (loading) {
     return (
-      <ComposeEditorChrome>
+      <ComposeEditorChrome tabs={<ComposeSurfaceSectionTabs />}>
         <Text style={orgPanelStyles.muted}>Loading…</Text>
       </ComposeEditorChrome>
     )
@@ -144,59 +462,44 @@ function ServicesPanelBody({
 
   if (editing) {
     return (
-      <ComposeBasePanel
+      <ComposeEditorPanel
         document={selectedEnvironment.options?.compose}
         onSave={onSaveEnvironmentCompose}
         saving={saving}
-        defaultEditorView="editor"
-        hideHeader
-        toolbarTrailing={editTrailing}
+        editView={editView}
+        sessionKey={scopeKey}
       />
     )
   }
 
-  const overlayState = resolveComposeOverlayState(
-    selectedEnvironment.options?.compose,
-  )
-  const merged = mergeComposeOverlay(
-    project.options?.compose,
-    selectedEnvironment.options?.compose,
-  )
-  const effectiveServerId = resolveEffectiveServerId(
-    selectedEnvironment.serverId,
-    project.options?.defaultServerId,
-  )
-  const envLabel =
-    selectedEnvironment.displayName?.trim() || 'Environment'
-  const inheriting = overlayState.blank
-
   return (
-    <ComposeSavedView
-      title={`${envLabel} compose`}
-      document={
-        inheriting ? merged : selectedEnvironment.options?.compose
-      }
-      summaryDocument={merged}
-      hasServer={Boolean(effectiveServerId)}
-      canEdit={canEdit}
-      inheritedCaption={
-        inheriting ? 'Inherited from project compose' : null
-      }
-      onEdit={onEdit}
-      orgId={orgId}
+    <EnvironmentOverviewCompose
+      project={project}
+      selectedEnvironment={selectedEnvironment}
       projectId={projectId}
+      orgId={orgId}
+      storageCount={storageCount}
+      bindingsCount={bindingsCount}
       services={services}
       containersByService={containersByService}
-      showServiceStatus={isStarted}
+      isStarted={isStarted}
+      isDirty={isDirty}
+      overviewSource={overviewSource}
+      onOverviewSourceChange={setOverviewSource}
+      liveSnapshot={liveSnapshot}
+      saving={saving}
+      onSave={runOverviewSave}
     />
   )
 }
 
 export function ComposeServicesTab() {
+  const pathname = usePathname()
   const {
     orgId,
     projectId,
     project,
+    environments,
     selectedEnvironment,
     selectedEnvironmentId,
     baseSelected,
@@ -207,44 +510,30 @@ export function ComposeServicesTab() {
     isWorkspaceKindResolved,
     projectAllowsMutations,
   } = useProjectContext()
+  const projectServerCount = project
+    ? countDistinctProjectServers(project, environments)
+    : 0
+  const storageFilter = resolveStorageFilter(
+    baseSelected,
+    projectId,
+    selectedEnvironmentId,
+  )
+  const storageQuery = useStorage(orgId, storageFilter ?? { projectId }, {
+    enabled: storageFilter != null,
+  })
+  const storageCount = storageQuery.data?.storage.length ?? 0
+  const bindingsQuery = useEnvironmentBindings(
+    orgId,
+    selectedEnvironmentId ?? '',
+    { enabled: !baseSelected && Boolean(selectedEnvironmentId) },
+  )
+  const bindingsCount = bindingsQuery.data?.bindings.length ?? 0
   const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
   const persistEnvironmentCompose = usePersistEnvironmentCompose(
     orgId,
     selectedEnvironmentId ?? '',
   )
-  const [editing, setEditing] = useState(false)
-  const canEdit = canManage && projectAllowsMutations
-  const projectComposeBlank = isBlankComposeDocument(
-    project?.options?.compose,
-  )
-  // After save/cancel of a blank draft, stay in view — blank is a valid
-  // saved state (deploy gates on merged compose, not on save).
-  const blankEditDismissedRef = useRef(false)
-
-  useEffect(() => {
-    blankEditDismissedRef.current = false
-  }, [baseSelected, selectedEnvironmentId])
-
-  useEffect(() => {
-    // Fresh project compose has nothing to preview — open the editor once.
-    if (
-      baseSelected &&
-      canEdit &&
-      projectComposeBlank &&
-      !blankEditDismissedRef.current
-    ) {
-      setEditing(true)
-      return
-    }
-    if (!baseSelected || !projectComposeBlank) {
-      setEditing(false)
-    }
-  }, [baseSelected, selectedEnvironmentId, canEdit, projectComposeBlank])
-
-  const leaveComposeEdit = useCallback(() => {
-    blankEditDismissedRef.current = true
-    setEditing(false)
-  }, [])
+  const sectionView = parseComposeEditView(pathname, projectId)
 
   const servicesEnabled =
     Boolean(selectedEnvironmentId) && !baseSelected && projectAllowsMutations
@@ -273,11 +562,9 @@ export function ComposeServicesTab() {
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
         setError(persistProjectCompose.actionError)
-        return
       }
-      if (result.ok) leaveComposeEdit()
     },
-    [persistProjectCompose, setError, leaveComposeEdit],
+    [persistProjectCompose, setError],
   )
 
   const handleSaveEnvironmentCompose = useCallback(
@@ -289,7 +576,6 @@ export function ComposeServicesTab() {
         setError(persistEnvironmentCompose.actionError)
         return
       }
-      if (result.ok) leaveComposeEdit()
       await invalidateEnvironments()
       await Promise.all([
         servicesQuery.refetch(),
@@ -300,7 +586,6 @@ export function ComposeServicesTab() {
       selectedEnvironmentId,
       persistEnvironmentCompose,
       setError,
-      leaveComposeEdit,
       invalidateEnvironments,
       servicesQuery,
       containersQuery,
@@ -335,29 +620,28 @@ export function ComposeServicesTab() {
       ) : null}
 
       <View style={styles.overviewCompose}>
-        <ComposeScopeBanner onCreateOverride={() => setEditing(true)} />
+        <ComposeScopeBanner />
         <ServicesPanelBody
           baseSelected={baseSelected}
           project={project}
           projectId={projectId}
           orgId={orgId}
           selectedEnvironment={selectedEnvironment}
+          environmentsCount={environments.length}
+          projectServerCount={projectServerCount}
+          storageCount={storageCount}
+          bindingsCount={bindingsCount}
           services={services}
           containersByService={containersByService}
           loading={loading}
           saving={composeSaving}
           isStarted={isStarted}
-          editing={editing}
-          canEdit={canEdit}
-          onEdit={() => setEditing(true)}
-          onCancelEdit={leaveComposeEdit}
+          sectionView={sectionView}
           onSaveProjectCompose={handleSaveProjectCompose}
           onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
         />
         <OverviewEnvironmentsPanel />
       </View>
-
-      <ProjectSettingsArea />
     </View>
   )
 }
@@ -401,20 +685,19 @@ export function ComposeStorageTab() {
 const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
   overviewCompose: { width: '100%', gap: spacing.md },
-  quietBtn: {
+  saveButton: {
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 32,
+    backgroundColor: chrome.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+    minHeight: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  quietBtnText: {
-    color: colors.textChip,
+  saveButtonText: {
+    color: chrome.onAccent,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
+  buttonDisabled: { opacity: 0.6 },
 })

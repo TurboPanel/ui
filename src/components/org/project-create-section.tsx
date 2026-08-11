@@ -13,7 +13,6 @@ import {
 } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
-import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   displayNameConflictMessage,
@@ -305,8 +304,6 @@ function NewWorkspaceFields({
       <TextInput
         value={value}
         onChangeText={onChange}
-        placeholder="Same as project"
-        placeholderTextColor={colors.textDim}
         autoCapitalize="words"
         accessibilityLabel="Workspace name"
         style={inputStyle(Boolean(workspaceNameError))}
@@ -553,10 +550,6 @@ export function ProjectCreateSection({
           </Text>
         </View>
 
-        <View style={styles.steps}>
-          <WizardStepIndicator labels={['Details', 'Type']} activeIndex={0} />
-        </View>
-
         <GlassSurface style={styles.panel} intensity="regular">
           <View style={styles.panelBody}>
             {apiError ?? loadError ? (
@@ -697,9 +690,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-  },
-  steps: {
-    alignItems: 'center',
   },
   panel: {
     borderRadius: 12,

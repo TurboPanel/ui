@@ -229,4 +229,47 @@ services:
     const issues = lintComposeYaml(source)
     expect(issues.some((issue) => issue.message.includes('no "services"'))).toBe(true)
   })
+
+  it('tolerates !override sequence tags without unresolved-tag errors', () => {
+    const source = `services:
+  nginx:
+    image: nginx:alpine
+    ports: !override
+      - "443:443"
+`
+    const issues = lintComposeYaml(source)
+    expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
+    expect(
+      issues.some((issue) => issue.message.toLowerCase().includes('unresolved')),
+    ).toBe(false)
+  })
+
+  it('tolerates !reset scalar tags without unresolved-tag errors', () => {
+    const source = `services:
+  nginx:
+    image: nginx:alpine
+    environment: !reset null
+`
+    const issues = lintComposeYaml(source)
+    expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
+    expect(
+      issues.some((issue) => /tag|unresolved/i.test(issue.message)),
+    ).toBe(false)
+  })
+
+  it('skips mapping checks when a service value is fully tagged', () => {
+    const source = `services:
+  nginx: !reset null
+`
+    const issues = lintComposeYaml(source)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.path === 'services.nginx' && issue.message.includes('must be a mapping'),
+      ),
+    ).toBe(false)
+    expect(
+      issues.some((issue) => issue.message.toLowerCase().includes('unresolved')),
+    ).toBe(false)
+  })
 })

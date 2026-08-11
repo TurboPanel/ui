@@ -72,8 +72,9 @@ function isBlankLine(line: string): boolean {
 }
 
 /**
- * Resolve the expected indent for a line given the nearest preceding block
- * opener above it. Extracted from {@link expectedIndentForLine} to keep its
+ * Resolve the expected indent for a line given a preceding block opener that
+ * is a YAML ancestor of the current line (opener indent strictly less than
+ * the current indent). Extracted from {@link expectedIndentForLine} to keep
  * cognitive complexity in check.
  */
 function resolveIndentAgainstOpener(
@@ -115,9 +116,70 @@ function resolveIndentAgainstOpener(
 }
 
 /**
+ * Column-0 recovery when every prior block opener has already been closed by
+ * the current line's indentation. Fixes common under-indent mistakes (service
+ * names left at the root) without reopening nested maps such as a service's
+ * `networks:` list. Service-body keys are handled earlier via
+ * {@link expectedServicePropertyIndent}.
+ */
+function expectedIndentForUnderIndentedRoot(
+  lines: readonly string[],
+  lineIndex: number,
+  currentIndent: number,
+  currentKey: string,
+): number | null {
+  if (currentIndent > 0) {
+    // Already nested relative to the document root, but no shallower ancestor
+    // opener exists — structure is ambiguous; leave alone.
+    return null
+  }
+
+  // User-defined names left at column 0: deepen under the open top-level
+  // section (usually `services:`), or align with a preceding service-name
+  // sibling. Dual top-level/service keys (`networks`, `volumes`) at column 0
+  // after a service stay put so a new top-level section is not swallowed.
+  for (let index = lineIndex - 1; index >= 0; index -= 1) {
+    const previous = lines[index] ?? ''
+    if (isBlankOrCommentLine(previous) || !lineOpensBlock(previous)) {
+      continue
+    }
+    const previousIndent = leadingWhitespace(previous).length
+    const previousKey = parseYamlMappingKey(previous)
+    if (!previousKey) {
+      continue
+    }
+
+    // Align a second service/network/volume name with the previous one.
+    if (
+      isComposeUserDefinedNameKey(previousKey) &&
+      isComposeUserDefinedNameKey(currentKey) &&
+      previousIndent > 0
+    ) {
+      return previousIndent
+    }
+
+    // Nest under a top-level section (`services:`, `networks:`, …).
+    if (previousIndent === 0 && isComposeTopLevelKey(previousKey)) {
+      if (isComposeTopLevelKey(currentKey)) {
+        return null
+      }
+      return YAML_INDENT.length
+    }
+  }
+
+  return null
+}
+
+/**
  * Expected leading spaces for an under-indented line nested under a preceding
  * block opener. Returns null when the line is already indented enough or when
  * the expected depth cannot be inferred safely.
+ *
+ * Important: only openers whose indent is **strictly less** than the current
+ * line are considered parents. YAML closes a mapping once a later line is
+ * indented at or left of that key — so a service-level `  nginx2:` after a
+ * nested `    networks:` list must not re-open `networks` as its parent
+ * (that wrongly turns the next service into a network name).
  */
 export function expectedIndentForLine(
   lines: readonly string[],
@@ -138,15 +200,39 @@ export function expectedIndentForLine(
     return null
   }
 
+  // Known service-body keys must nest under a service name even when their
+  // current indent would also be a valid YAML sibling of that service
+  // (`  image:` next to `  nginx:`). Check before the ancestor walk so a
+  // shallow service property is not treated as a second service.
+  if (isComposeServicePropertyKey(currentKey)) {
+    const expected = expectedServicePropertyIndent(lines, lineIndex)
+    if (expected !== null && currentIndent < expected) {
+      return expected
+    }
+    if (expected !== null) {
+      return null
+    }
+  }
+
   for (let index = lineIndex - 1; index >= 0; index -= 1) {
     const previous = lines[index] ?? ''
     if (isBlankOrCommentLine(previous) || !lineOpensBlock(previous)) {
       continue
     }
+    const previousIndent = leadingWhitespace(previous).length
+    // Sibling or already-closed deeper nest — not a parent of this line.
+    if (previousIndent >= currentIndent) {
+      continue
+    }
     return resolveIndentAgainstOpener(currentIndent, currentKey, previous)
   }
 
-  return null
+  return expectedIndentForUnderIndentedRoot(
+    lines,
+    lineIndex,
+    currentIndent,
+    currentKey,
+  )
 }
 
 /**

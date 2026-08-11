@@ -92,7 +92,8 @@ function EnvironmentSelector() {
 
 /**
  * Managed projects still delete from the header trash; compose projects use
- * Danger sections in {@link ProjectSettingsArea}.
+ * Danger sections in scope-chip settings
+ * (ProjectSettingsPanel / EnvironmentSettingsPanel).
  */
 function ManagedProjectTrashButton({
   deletingProject,

@@ -156,11 +156,77 @@ function formatAvgPercent(value: number | null): string {
   return `${Math.round(value)}%`
 }
 
+function formatSiBytes(value: number | null): string {
+  if (value == null || !Number.isFinite(value) || value < 0) return '—'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let n = value
+  let unit = 0
+  while (n >= 1024 && unit < units.length - 1) {
+    n /= 1024
+    unit += 1
+  }
+  if (unit === 0) return `${Math.round(n)} ${units[unit]}`
+  let digits = 2
+  if (n >= 100) digits = 0
+  else if (n >= 10) digits = 1
+  return `${n.toFixed(digits)} ${units[unit]}`
+}
+
+function formatCoresTotal(value: number | null): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return '—'
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
 function pushFinitePercent(
   target: number[],
   value: number | null | undefined,
 ): void {
   if (value != null && Number.isFinite(value)) target.push(value)
+}
+
+function memoryTotalFromUsage(
+  usage: FleetServerUsageRecord | undefined,
+): number | null {
+  if (!usage || usage.sampleCount <= 0) return null
+  const used = usage.values.memoryUsedBytes
+  const available = usage.values.memoryAvailableBytes
+  if (
+    used == null ||
+    available == null ||
+    !Number.isFinite(used) ||
+    !Number.isFinite(available)
+  ) {
+    return null
+  }
+  const total = used + available
+  return total > 0 ? total : null
+}
+
+function serverCpuCores(server: OrgServerRecord): number | null {
+  const cores = server.inventory?.cpuCores
+  if (cores != null && Number.isFinite(cores) && cores > 0) return cores
+  return null
+}
+
+function serverMemoryTotal(
+  server: OrgServerRecord,
+  usage: FleetServerUsageRecord | undefined,
+): number | null {
+  const fromInventory = server.inventory?.memoryTotalBytes
+  if (
+    fromInventory != null &&
+    Number.isFinite(fromInventory) &&
+    fromInventory > 0
+  ) {
+    return fromInventory
+  }
+  return memoryTotalFromUsage(usage)
+}
+
+function serverSwapTotal(server: OrgServerRecord): number | null {
+  const swap = server.inventory?.swapTotalBytes
+  if (swap == null || !Number.isFinite(swap) || swap < 0) return null
+  return swap
 }
 
 function computeFleetAverages(
@@ -178,6 +244,46 @@ function computeFleetAverages(
   return {
     avgCpu: averageFinite(cpu),
     avgMemory: averageFinite(memory),
+  }
+}
+
+function computeFleetCapacityTotals(
+  servers: readonly OrgServerRecord[],
+  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>,
+): {
+  totalCores: number | null
+  totalMemoryBytes: number | null
+  totalSwapBytes: number | null
+} {
+  let cores = 0
+  let coresKnown = false
+  let memory = 0
+  let memoryKnown = false
+  let swap = 0
+  let swapKnown = false
+
+  for (const server of servers) {
+    const c = serverCpuCores(server)
+    if (c != null) {
+      cores += c
+      coresKnown = true
+    }
+    const mem = serverMemoryTotal(server, usageByServerId.get(server.id))
+    if (mem != null) {
+      memory += mem
+      memoryKnown = true
+    }
+    const sw = serverSwapTotal(server)
+    if (sw != null) {
+      swap += sw
+      swapKnown = true
+    }
+  }
+
+  return {
+    totalCores: coresKnown ? cores : null,
+    totalMemoryBytes: memoryKnown ? memory : null,
+    totalSwapBytes: swapKnown ? swap : null,
   }
 }
 
@@ -201,22 +307,51 @@ function serversListRefetchMs(
 
 function FleetInventoryTotals({
   inventoryCount,
+  totalCores,
+  totalMemoryBytes,
+  totalSwapBytes,
   avgCpu,
   avgMemory,
 }: Readonly<{
   inventoryCount: number
+  totalCores: number | null
+  totalMemoryBytes: number | null
+  totalSwapBytes: number | null
   avgCpu: number | null
   avgMemory: number | null
 }>) {
   const serverLabel = inventoryCount === 1 ? 'server' : 'servers'
+  const a11y = [
+    `${inventoryCount} ${serverLabel}`,
+    `total ${formatCoresTotal(totalCores)} cores`,
+    `total ${formatSiBytes(totalMemoryBytes)} RAM`,
+    `total ${formatSiBytes(totalSwapBytes)} swap`,
+    `average CPU ${formatAvgPercent(avgCpu)}`,
+    `average memory ${formatAvgPercent(avgMemory)}`,
+  ].join(', ')
+
   return (
-    <View
-      style={styles.totalsStrip}
-      accessibilityLabel={`${inventoryCount} ${serverLabel} in inventory, average CPU ${formatAvgPercent(avgCpu)}, average memory ${formatAvgPercent(avgMemory)}`}
-    >
+    <View style={styles.totalsStrip} accessibilityLabel={a11y}>
       <Text style={styles.totalsItem}>
         <Text style={styles.totalsValue}>{inventoryCount}</Text>
         <Text style={styles.totalsLabel}> in inventory</Text>
+      </Text>
+      <Text style={styles.totalsSep}>·</Text>
+      <Text style={styles.totalsItem}>
+        <Text style={styles.totalsLabel}>Cores </Text>
+        <Text style={styles.totalsValue}>{formatCoresTotal(totalCores)}</Text>
+      </Text>
+      <Text style={styles.totalsSep}>·</Text>
+      <Text style={styles.totalsItem}>
+        <Text style={styles.totalsLabel}>RAM </Text>
+        <Text style={styles.totalsValue}>
+          {formatSiBytes(totalMemoryBytes)}
+        </Text>
+      </Text>
+      <Text style={styles.totalsSep}>·</Text>
+      <Text style={styles.totalsItem}>
+        <Text style={styles.totalsLabel}>Swap </Text>
+        <Text style={styles.totalsValue}>{formatSiBytes(totalSwapBytes)}</Text>
       </Text>
       <Text style={styles.totalsSep}>·</Text>
       <Text style={styles.totalsItem}>
@@ -440,11 +575,22 @@ function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
 
 function ServerUsageCell({
   usage,
-}: Readonly<{ usage: FleetServerUsageRecord | null }>) {
+  cpuCores,
+}: Readonly<{
+  usage: FleetServerUsageRecord | null
+  cpuCores: number | null
+}>) {
   return (
     <View style={[styles.tableCell, styles.colUsage]}>
       <ServerUsageBars
-        cpuPercent={usage?.values.cpuUsagePercent}
+        cpuUsagePercent={usage?.values.cpuUsagePercent}
+        cpuUserPercent={usage?.values.cpuUserPercent}
+        cpuSystemPercent={usage?.values.cpuSystemPercent}
+        cpuIowaitPercent={usage?.values.cpuIowaitPercent}
+        load1={usage?.values.load1}
+        load5={usage?.values.load5}
+        load15={usage?.values.load15}
+        cpuCores={cpuCores}
         memoryPercent={usage?.values.memoryUsedPercent}
         swapPercent={usage?.values.swapUsedPercent}
       />
@@ -503,7 +649,10 @@ function OrgServerTableRow({
       <ServerNameCell server={server} />
       <ServerStatusCell server={server} />
       <ServerLocationCell server={server} />
-      <ServerUsageCell usage={usage} />
+      <ServerUsageCell
+        usage={usage}
+        cpuCores={serverCpuCores(server)}
+      />
       <ServerMeshCell overlayAddress={overlayAddress} />
       <Pressable
         onPress={(event) => {
@@ -671,6 +820,11 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     [servers, usageByServerId],
   )
 
+  const fleetCapacity = useMemo(
+    () => computeFleetCapacityTotals(servers, usageByServerId),
+    [servers, usageByServerId],
+  )
+
   const addServerEligibility = useMemo(
     () =>
       resolveServerAddEligibility(
@@ -767,6 +921,9 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       {!loading || servers.length > 0 ? (
         <FleetInventoryTotals
           inventoryCount={servers.length}
+          totalCores={fleetCapacity.totalCores}
+          totalMemoryBytes={fleetCapacity.totalMemoryBytes}
+          totalSwapBytes={fleetCapacity.totalSwapBytes}
           avgCpu={fleetAverages.avgCpu}
           avgMemory={fleetAverages.avgMemory}
         />
@@ -895,7 +1052,7 @@ const styles = StyleSheet.create({
   table: {
     flexGrow: 1,
     width: '100%',
-    minWidth: 920,
+    minWidth: 980,
     borderWidth: 1,
     borderColor: colors.borderMuted,
     borderRadius: 10,
@@ -986,8 +1143,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   colUsage: {
-    flex: 1.8,
-    minWidth: 170,
+    flex: 2.2,
+    minWidth: 210,
     alignItems: 'stretch',
   },
   colMesh: {

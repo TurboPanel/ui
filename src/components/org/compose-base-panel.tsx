@@ -1,7 +1,10 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { ComposeEditorSection } from '@/components/org/compose-editor-section'
-import type { ComposeDocument } from '@/lib/compose'
+import {
+  ComposeEditorSection,
+  ComposeSurfaceSectionTabs,
+} from '@/components/org/compose-editor-section'
+import type { ComposeDocument, ComposeEditorView } from '@/lib/compose'
 import { spacing } from '@/lib/theme'
 
 export function ComposeBasePanel({
@@ -9,17 +12,30 @@ export function ComposeBasePanel({
   onSave,
   saving = false,
   defaultEditorView = 'visual',
+  view,
+  onViewChange,
   onDraftChange,
+  sessionKey,
   hideHeader = false,
+  hideViewTabs = false,
+  showSectionTabs = false,
   toolbarLeading,
   toolbarTrailing,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
   saving?: boolean
-  defaultEditorView?: 'visual' | 'editor'
+  defaultEditorView?: ComposeEditorView
+  view?: ComposeEditorView
+  onViewChange?: (view: ComposeEditorView) => void
   onDraftChange?: (document: ComposeDocument | null) => void
+  /** Survives Overview/Compose/Services remounts when a draft store is present. */
+  sessionKey?: string
   hideHeader?: boolean
+  /** When section tabs own Compose/Services, hide the in-editor Compose/Services strip. */
+  hideViewTabs?: boolean
+  /** Overview · Compose · Services inside the editor chrome. */
+  showSectionTabs?: boolean
   toolbarLeading?: ReactNode
   toolbarTrailing?: ReactNode
 }>) {
@@ -31,8 +47,13 @@ export function ComposeBasePanel({
         saving={saving}
         title="Services"
         defaultView={defaultEditorView}
+        view={view}
+        onViewChange={onViewChange}
         onDraftChange={onDraftChange}
+        sessionKey={sessionKey}
         hideHeader={hideHeader}
+        hideViewTabs={hideViewTabs || showSectionTabs}
+        surfaceTabs={showSectionTabs ? <ComposeSurfaceSectionTabs /> : undefined}
         toolbarLeading={toolbarLeading}
         toolbarTrailing={toolbarTrailing}
       />

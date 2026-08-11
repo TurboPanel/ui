@@ -6,6 +6,7 @@ import {
   type Scalar,
   type YAMLMap,
 } from 'yaml'
+import { COMPOSE_CUSTOM_TAGS, isComposeTaggedValue } from './tags'
 import { TURBOPANEL_SERVICE_EXTENSION_KEY } from './service-kind'
 
 export type ComposeLintLevel = 'error' | 'warning'
@@ -232,6 +233,20 @@ function isEmptyImageValue(node: Node | null | undefined): boolean {
   return typeof value === 'string' && value.trim().length === 0
 }
 
+/**
+ * True when a YAML node is a Compose `!reset` / `!override` tag (or the
+ * JS sentinel left after custom-tag resolve). Tagged values are lint-transparent.
+ */
+function isComposeTagNode(node: Node | null | undefined): boolean {
+  if (!node || typeof node !== 'object') return false
+  const tag = (node as { tag?: string }).tag
+  if (tag === '!reset' || tag === '!override') return true
+  if ('value' in node && isComposeTaggedValue((node as Scalar).value)) {
+    return true
+  }
+  return isComposeTaggedValue(node)
+}
+
 function serviceIsTraditionalWeb(valueNode: YAMLMap): boolean {
   for (const item of valueNode.items) {
     if (stringKey(item.key) !== TURBOPANEL_SERVICE_EXTENSION_KEY) continue
@@ -259,6 +274,54 @@ function isTraditionalWebForLint(
   return serviceIsTraditionalWeb(valueNode)
 }
 
+function lintServicePropertyKey(
+  path: string,
+  key: string,
+  valueNode: Node | null | undefined,
+  keyLine: number | undefined,
+  issues: ComposeLintIssue[],
+  options?: ComposeLintOptions,
+): { hasImage: boolean; hasBuild: boolean } {
+  let hasImage = false
+  let hasBuild = false
+
+  if (isComposeTagNode(valueNode)) {
+    // Tags replace content at merge time — count image/build as present.
+    if (key === 'image') hasImage = true
+    if (key === 'build') hasBuild = true
+    return { hasImage, hasBuild }
+  }
+
+  if (key === 'image' && !isEmptyImageValue(valueNode)) {
+    hasImage = true
+  }
+  if (key === 'build') hasBuild = true
+
+  if (
+    options?.managedExtensionHidden &&
+    key === TURBOPANEL_SERVICE_EXTENSION_KEY
+  ) {
+    issues.push({
+      level: 'warning',
+      message: MANAGED_EXTENSION_WARNING,
+      path: `${path}.${key}`,
+      line: keyLine,
+    })
+    return { hasImage, hasBuild }
+  }
+
+  if (!SERVICE_KEYS.has(key) && !isExtensionKey(key)) {
+    issues.push({
+      level: 'warning',
+      message: unknownKeyMessage(key, 'service', SERVICE_KEYS),
+      path: `${path}.${key}`,
+      line: keyLine,
+    })
+  }
+
+  return { hasImage, hasBuild }
+}
+
 function lintServiceKeys(
   path: string,
   valueNode: YAMLMap,
@@ -271,30 +334,16 @@ function lintServiceKeys(
   for (const item of valueNode.items) {
     const key = stringKey(item.key)
     if (key === null) continue
-    if (key === 'image' && !isEmptyImageValue(item.value as Node)) {
-      hasImage = true
-    }
-    if (key === 'build') hasBuild = true
-    if (
-      options?.managedExtensionHidden &&
-      key === TURBOPANEL_SERVICE_EXTENSION_KEY
-    ) {
-      issues.push({
-        level: 'warning',
-        message: MANAGED_EXTENSION_WARNING,
-        path: `${path}.${key}`,
-        line: nodeLine(item.key as Node, lineCounter),
-      })
-      continue
-    }
-    if (!SERVICE_KEYS.has(key) && !isExtensionKey(key)) {
-      issues.push({
-        level: 'warning',
-        message: unknownKeyMessage(key, 'service', SERVICE_KEYS),
-        path: `${path}.${key}`,
-        line: nodeLine(item.key as Node, lineCounter),
-      })
-    }
+    const result = lintServicePropertyKey(
+      path,
+      key,
+      item.value as Node | null | undefined,
+      nodeLine(item.key as Node, lineCounter),
+      issues,
+      options,
+    )
+    if (result.hasImage) hasImage = true
+    if (result.hasBuild) hasBuild = true
   }
   return { hasImage, hasBuild }
 }
@@ -308,6 +357,8 @@ function lintService(
   options?: ComposeLintOptions,
 ): void {
   const path = `services.${name}`
+  // `!reset` / `!override` on a service value is intentional; shape may be null.
+  if (isComposeTagNode(valueNode)) return
   if (!isMap(valueNode)) {
     issues.push({
       level: 'error',
@@ -343,6 +394,7 @@ function lintServices(
   issues: ComposeLintIssue[],
   options?: ComposeLintOptions,
 ): void {
+  if (isComposeTagNode(servicesNode)) return
   if (!isMap(servicesNode)) {
     issues.push({
       level: 'error',
@@ -467,7 +519,11 @@ export function lintComposeYaml(
   if (!trimmed) return []
 
   const lineCounter = new LineCounter()
-  const doc = parseDocument(source, { prettyErrors: true, lineCounter })
+  const doc = parseDocument(source, {
+    prettyErrors: true,
+    lineCounter,
+    customTags: COMPOSE_CUSTOM_TAGS,
+  })
 
   if (doc.errors.length > 0) {
     return doc.errors

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildProjectOptionsPatch,
+  countDistinctProjectServers,
   resolveEffectiveServerId,
 } from './project-options'
-import type { ProjectRecord } from './instance-api'
+import type { EnvironmentRecord, ProjectRecord } from './instance-api'
 
 function project(
   options: ProjectRecord['options'],
@@ -45,5 +46,49 @@ describe('resolveEffectiveServerId', () => {
     expect(resolveEffectiveServerId('env-srv', 'proj-srv')).toBe('env-srv')
     expect(resolveEffectiveServerId(null, 'proj-srv')).toBe('proj-srv')
     expect(resolveEffectiveServerId(null, null)).toBeNull()
+  })
+})
+
+function environment(
+  overrides: Partial<EnvironmentRecord> = {},
+): EnvironmentRecord {
+  return {
+    id: 'e1',
+    displayName: 'Production',
+    description: null,
+    projectId: 'p1',
+    serverId: null,
+    metadata: null,
+    options: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('countDistinctProjectServers', () => {
+  it('counts distinct environment pins', () => {
+    const current = project({})
+    const environments = [
+      environment({ id: 'e1', serverId: 'srv-1' }),
+      environment({ id: 'e2', serverId: 'srv-2' }),
+      environment({ id: 'e3', serverId: 'srv-1' }),
+    ]
+    expect(countDistinctProjectServers(current, environments)).toBe(2)
+  })
+
+  it('falls back to the project default for unpinned environments', () => {
+    const current = project({ defaultServerId: 'srv-default' })
+    const environments = [
+      environment({ id: 'e1', serverId: null }),
+      environment({ id: 'e2', serverId: 'srv-2' }),
+    ]
+    expect(countDistinctProjectServers(current, environments)).toBe(2)
+  })
+
+  it('is zero when nothing is placed', () => {
+    const current = project({})
+    expect(countDistinctProjectServers(current, [environment()])).toBe(0)
+    expect(countDistinctProjectServers(current, [])).toBe(0)
   })
 })

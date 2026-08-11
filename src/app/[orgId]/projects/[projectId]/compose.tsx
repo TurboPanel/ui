@@ -7,11 +7,10 @@ import {
 } from '@/lib/project-navigation'
 
 /**
- * Project-scope Services (visual) editor
- * (`/projects/:projectId/services`). Service detail remains at
- * `/services/:serviceId`.
+ * Project-scope Compose YAML editor
+ * (`/projects/:projectId/compose`).
  */
-export default function ProjectServicesEditScreen() {
+export default function ProjectComposeScreen() {
   const { orgId, projectId, project } = useProjectContext()
 
   if (project && isManagedProject(project)) {

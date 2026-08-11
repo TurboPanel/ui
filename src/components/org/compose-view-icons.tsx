@@ -5,6 +5,49 @@ type ComposeViewIconProps = Readonly<{
   color: string
 }>
 
+/** Outline network graph — Overview (diagram) mode. */
+export function ComposeOverviewIcon({ size = 16, color }: ComposeViewIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7.5 7.5h2.25v2.25H7.5V7.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M14.25 14.25H16.5V16.5h-2.25v-2.25Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M14.25 7.5H16.5v2.25h-2.25V7.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9.75 9.75 14.25 15"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9.75 9 14.25 9"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 /** Outline pen — Compose (YAML) mode. */
 export function ComposeEditorIcon({ size = 16, color }: ComposeViewIconProps) {
   return (

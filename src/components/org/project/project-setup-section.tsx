@@ -9,7 +9,6 @@ import {
 } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { SectionPanel } from '@/components/org/section-panel'
-import { WizardStepIndicator } from '@/components/org/wizard-step-indicator'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
@@ -146,15 +145,6 @@ export function ProjectSetupSection() {
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <WizardStepIndicator
-        labels={
-          selectedType === 'docker-compose' || selectedType === null
-            ? ['Type']
-            : ['Type', 'Catalog']
-        }
-        activeIndex={step === 'type' ? 0 : 1}
-      />
-
       <SectionPanel
         title="Finish project setup"
         hint={`${scaffoldedEnvironmentName} already exists. Choose how this project runs — you can leave and resume anytime.`}

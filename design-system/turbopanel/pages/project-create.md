@@ -13,7 +13,7 @@
 2. **Type** (`/projects/:id/setup`) — Docker Compose / Template / Managed
 3. **Catalog** — template or managed engine only; Compose configures immediately
 
-Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
+Progress: separate screens (create → setup type → optional catalog) — no numbered step chips.
 
 ## Layout (Details step)
 
@@ -48,5 +48,5 @@ Progress: `WizardStepIndicator` (Details on create; Type → Catalog on setup).
 - ❌ Full-bleed / max-width content form on desktop  
 - ❌ Long explanatory paragraphs in the create header  
 - ❌ Single-line description that hides multi-line intent  
-- ❌ Same as project / Custom workspace-name segment  
+- ❌ Numbered wizard step chips (1 / 2) on create or setup  
 - ❌ Separate draft/runtime status field  
