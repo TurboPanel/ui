@@ -83,12 +83,15 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 | `pnpm lint` | Expo ESLint |
 | `pnpm test` | Vitest once |
 
-**Pre-commit** (`.githooks/pre-commit`): secret scan → `pnpm lint` → `pnpm typecheck` → `pnpm test`. Requires `core.hooksPath=.githooks` (otherwise Git never runs the hook and type errors only fail in CI/deploy).
+**Pre-commit** (`.githooks/pre-commit`): secret scan only (never skippable).
+Lint/typecheck/tests are **temporarily disabled** in the hook until the
+toolchain can run inside the Vagrant guest. Requires `core.hooksPath=.githooks`
+(otherwise Git never runs the hook).
 
 - **`pnpm install`** runs `prepare` → `scripts/ensure-git-hooks.sh`, which sets `core.hooksPath=.githooks` locally.
 - Dev console `./console` / `ensureAllGitHooksPaths` also wires every co-located checkout.
-- Do **not** set `TURBOPANEL_SKIP_HOOK_TESTS` for normal commits — that skips lint/typecheck/tests after the secret scan.
 - After a fresh clone, run `pnpm install` (or `sh scripts/ensure-git-hooks.sh`) before committing; confirm with `git config --local --get core.hooksPath` → `.githooks`.
+- Lint/typecheck/tests still belong in CI/deploy and can be run manually with `pnpm lint` / `pnpm typecheck` / `pnpm test`.
 
 ## Server state (React Query)
 
