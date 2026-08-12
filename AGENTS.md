@@ -445,8 +445,8 @@ Authorization helpers:
 
 #### Servers overview table
 
-- `servers-overview-section.tsx` renders a lean selectable table: Host (display name / hostname; OS logo — no UUID), Status (Online / Offline), **Country** (flag + English name from geo), **Usage** (CPU / Mem / Swap bars from one `GET /servers/metrics/latest` fleet snapshot), Mesh, checkbox column (header = select all). Row press navigates to `/<orgId>/servers/[serverId]`; checkbox uses `stopPropagation` so selection does not navigate.
-- Lean inventory strip above the table: server count · avg CPU · avg memory (averages only servers with a recent sample).
+- `servers-overview-section.tsx` renders a lean selectable table: Host (display name / hostname; OS logo — no UUID), Status (Online / Initializing / Offline — `resolveServerConnectionStatus` treats never-connected `statusChangedAt: null` as Initializing so post-install colocated hosts are not shown Offline while the daemon connects), **Country** (flag + English name from geo), **Usage** (CPU / Mem / Swap bars from one `GET /servers/metrics/latest` fleet snapshot), Mesh, checkbox column (header = select all). Row press navigates to `/<orgId>/servers/[serverId]`; checkbox uses `stopPropagation` so selection does not navigate.
+- Lean inventory strip above the table: server count · cores (`inventory.cpuCores`) · RAM · swap · avg CPU · avg memory (averages only servers with a recent sample). Load bars use `inventory.cpuThreads`.
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`.
 - Batch **Update** targets **selected** updatable hosts only; per-host commands, delete, time/network, and metrics live on the server detail page.
 - `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `addresses`, `timeSync`, `timezone`, `timezoneSource`, `datacenterId`, and `datacenterDisplayName` (Postgres projection).

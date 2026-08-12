@@ -64,6 +64,11 @@ import {
 import { useCan, queryKeys } from '@/lib/query-client'
 import { osLogoSource } from '@/lib/os-logos'
 import {
+  resolveServerConnectionStatus,
+  serverConnectionStatusLabel,
+  type ServerConnectionStatus,
+} from '@/lib/server-connection-status'
+import {
   countryCodeToFlagEmoji,
   formatServerGeoAsn,
   formatServerGeoCountryCode,
@@ -129,6 +134,17 @@ function isColocatedServer(
     updateData?.colocatedWithInstance === true ||
     updateData?.updateBlocked === true
   )
+}
+
+function connectionStatusDotStyle(status: ServerConnectionStatus) {
+  switch (status) {
+    case 'online':
+      return styles.statusDotOnline
+    case 'initializing':
+      return styles.statusDotInitializing
+    case 'offline':
+      return styles.statusDotOffline
+  }
 }
 
 function resolveUpdateBadgeVariant(input: {
@@ -690,6 +706,7 @@ export function ServerDetailSection({
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
   const connectedVia = resolveConnectedViaLabel(server)
+  const connectionStatus = resolveServerConnectionStatus(server)
 
   const onPing = () => {
     patchCommand({ pingError: null, pingRunning: true, commandRecord: null })
@@ -805,11 +822,11 @@ export function ServerDetailSection({
             <View
               style={[
                 styles.statusDot,
-                server.connected ? styles.statusDotOnline : styles.statusDotOffline,
+                connectionStatusDotStyle(connectionStatus),
               ]}
             />
             <Text style={styles.statusLabel}>
-              {server.connected ? 'Online' : 'Offline'}
+              {serverConnectionStatusLabel(connectionStatus)}
             </Text>
             {flag ? <Text style={styles.flag}>{flag}</Text> : null}
             {updateVm.colocated ? (
@@ -1240,6 +1257,9 @@ const styles = StyleSheet.create({
   },
   statusDotOnline: {
     backgroundColor: colors.accent,
+  },
+  statusDotInitializing: {
+    backgroundColor: colors.pending,
   },
   statusDotOffline: {
     backgroundColor: colors.textFaint,

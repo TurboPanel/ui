@@ -242,7 +242,10 @@ export type ServerOsMetadata = {
 
 /** Static host capacity from daemon hello — inventory totals + load bars. */
 export type ServerHostInventory = {
+  /** Physical cores (fleet strip). */
   cpuCores?: number
+  /** Logical CPUs / threads (load bars). */
+  cpuThreads?: number
   memoryTotalBytes?: number
   swapTotalBytes?: number
 }

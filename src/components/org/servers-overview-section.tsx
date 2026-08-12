@@ -39,6 +39,11 @@ import {
 import { useCan, queryKeys } from '@/lib/query-client'
 import { useAuth } from '@/lib/auth-context'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
+import {
+  resolveServerConnectionStatus,
+  serverConnectionStatusLabel,
+  type ServerConnectionStatus,
+} from '@/lib/server-connection-status'
 import { osLogoSource } from '@/lib/os-logos'
 import { formatServerOsProductName } from '@/lib/server-os-display'
 import {
@@ -202,7 +207,17 @@ function memoryTotalFromUsage(
   return total > 0 ? total : null
 }
 
-function serverCpuCores(server: OrgServerRecord): number | null {
+/** Physical cores for inventory totals; falls back to threads when unknown. */
+function serverInventoryCpuCores(server: OrgServerRecord): number | null {
+  const cores = server.inventory?.cpuCores
+  if (cores != null && Number.isFinite(cores) && cores > 0) return cores
+  return serverCpuThreads(server)
+}
+
+/** Logical CPUs for load-average bars (`load / threads`). */
+function serverCpuThreads(server: OrgServerRecord): number | null {
+  const threads = server.inventory?.cpuThreads
+  if (threads != null && Number.isFinite(threads) && threads > 0) return threads
   const cores = server.inventory?.cpuCores
   if (cores != null && Number.isFinite(cores) && cores > 0) return cores
   return null
@@ -263,7 +278,7 @@ function computeFleetCapacityTotals(
   let swapKnown = false
 
   for (const server of servers) {
-    const c = serverCpuCores(server)
+    const c = serverInventoryCpuCores(server)
     if (c != null) {
       cores += c
       coresKnown = true
@@ -525,25 +540,39 @@ function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   )
 }
 
-function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
-  if (!server.connected) {
-    return (
-      <View style={[styles.tableCell, styles.colStatus]}>
-        <View style={[styles.statusBadge, styles.statusOffline]}>
-          <View style={[styles.statusDot, styles.statusDotOffline]} />
-          <Text style={[styles.statusText, styles.statusTextOffline]}>
-            Offline
-          </Text>
-        </View>
-      </View>
-    )
+function serverStatusBadgeStyles(status: ServerConnectionStatus) {
+  switch (status) {
+    case 'online':
+      return {
+        badge: styles.statusOnline,
+        dot: styles.statusDotOnline,
+        text: styles.statusTextOnline,
+      }
+    case 'initializing':
+      return {
+        badge: styles.statusInitializing,
+        dot: styles.statusDotInitializing,
+        text: styles.statusTextInitializing,
+      }
+    case 'offline':
+      return {
+        badge: styles.statusOffline,
+        dot: styles.statusDotOffline,
+        text: styles.statusTextOffline,
+      }
   }
+}
+
+function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const status = resolveServerConnectionStatus(server)
+  const label = serverConnectionStatusLabel(status)
+  const tone = serverStatusBadgeStyles(status)
 
   return (
     <View style={[styles.tableCell, styles.colStatus]}>
-      <View style={[styles.statusBadge, styles.statusOnline]}>
-        <View style={[styles.statusDot, styles.statusDotOnline]} />
-        <Text style={[styles.statusText, styles.statusTextOnline]}>Online</Text>
+      <View style={[styles.statusBadge, tone.badge]}>
+        <View style={[styles.statusDot, tone.dot]} />
+        <Text style={[styles.statusText, tone.text]}>{label}</Text>
       </View>
     </View>
   )
@@ -651,7 +680,7 @@ function OrgServerTableRow({
       <ServerLocationCell server={server} />
       <ServerUsageCell
         usage={usage}
-        cpuCores={serverCpuCores(server)}
+        cpuCores={serverCpuThreads(server)}
       />
       <ServerMeshCell overlayAddress={overlayAddress} />
       <Pressable
@@ -1233,6 +1262,9 @@ const styles = StyleSheet.create({
   statusDotOnline: {
     backgroundColor: colors.accent,
   },
+  statusDotInitializing: {
+    backgroundColor: colors.pending,
+  },
   statusDotOffline: {
     backgroundColor: colors.textFaint,
     borderWidth: 1,
@@ -1241,6 +1273,10 @@ const styles = StyleSheet.create({
   statusOnline: {
     borderColor: colors.accent,
     backgroundColor: colors.bgActive,
+  },
+  statusInitializing: {
+    borderColor: colors.pending,
+    backgroundColor: colors.bgSecondary,
   },
   statusOffline: {
     borderColor: colors.borderChip,
@@ -1254,6 +1290,9 @@ const styles = StyleSheet.create({
   },
   statusTextOnline: {
     color: colors.accent,
+  },
+  statusTextInitializing: {
+    color: colors.pending,
   },
   statusTextOffline: {
     color: colors.textDim,

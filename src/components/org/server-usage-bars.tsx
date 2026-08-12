@@ -117,7 +117,7 @@ export function ServerUsageBars({
   const loadA11y =
     loadBar == null
       ? `Load ${loadLabel}`
-      : `Load ${loadLabel}, ${Math.round(loadBar)} percent of ${cpuCores} cores`
+      : `Load ${loadLabel}, ${Math.round(loadBar)} percent of ${cpuCores} CPUs`
 
   return (
     <View style={styles.root}>

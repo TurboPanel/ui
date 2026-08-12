@@ -38,6 +38,7 @@ import {
 import { useOrgServers, usePatchServer, useTimezones } from '@/lib/queries/servers'
 import { networkLinkHref } from '@/lib/org-navigation'
 import { useCan } from '@/lib/query-client'
+import { serverConnectionStatusLabel, resolveServerConnectionStatus } from '@/lib/server-connection-status'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   formatSiteLinkLabel,
@@ -233,7 +234,9 @@ function MemberServersPanel({
                 </Text>
                 <Text style={orgPanelStyles.detailLine}>
                   <Text style={orgPanelStyles.detailLabel}>Status: </Text>
-                  {server.connected ? 'Online' : 'Offline'}
+                  {serverConnectionStatusLabel(
+                    resolveServerConnectionStatus(server),
+                  )}
                 </Text>
                 {privateAddress ? (
                   <Text style={orgPanelStyles.detailLine}>

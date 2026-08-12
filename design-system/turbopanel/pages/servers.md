@@ -32,15 +32,16 @@
 - Alternating row tint (`bgInset`) for scanability  
 - OS logo beside name (density-aware PNGs) — no UUID in the primary column  
 - Online badge: accent dot + label (country lives in its own column)  
+- Initializing badge: pending (amber) dot + label when `connected` is false and `statusChangedAt` is null — just-registered hosts (including the colocated “this server” after `/install`) while the daemon is still connecting; not Offline  
 - Offline badge: hollow dot + muted label  
 - **Country:** flag emoji + English country name from geo (or em dash)  
-- **Usage:** compact pro bars (`ServerUsageBars`) from one fleet metrics snapshot — **stacked CPU** (user / system / other / iowait), **load 1/5/15** numbers with capacity-scaled bar (`load1 / cpuCores`), memory + swap % — never per-row metrics polling; values always labeled (not color-only)  
+- **Usage:** compact pro bars (`ServerUsageBars`) from one fleet metrics snapshot — **stacked CPU** (user / system / other / iowait), **load 1/5/15** numbers with capacity-scaled bar (`load1 / cpuThreads`), memory + swap % — never per-row metrics polling; values always labeled (not color-only)  
 - Checkbox stops propagation — row press does not toggle selection
 
 ## Inventory strip
 
 - Shows as soon as the fleet list is known (including zero)  
-- **Capacity:** total cores + total RAM + total swap from `server.inventory` (daemon hello); RAM falls back to metrics `memoryUsed + memoryAvailable` when inventory is absent  
+- **Capacity:** total cores (`inventory.cpuCores`) + total RAM + total swap from `server.inventory` (daemon hello); RAM falls back to metrics `memoryUsed + memoryAvailable` when inventory is absent. Load bars use logical `cpuThreads`.  
 - Avg CPU / avg memory average only servers with a recent usage sample; otherwise `—`  
 - Refresh cadence follows fleet usage query (~60 s), not the 30 s servers list
 
@@ -73,4 +74,4 @@
 - ❌ Showing registration keys after the wizard is dismissed  
 - ❌ Expand rows for commands on the fleet table  
 - ❌ Status conveyed by color alone (bars always show a percent, load triplet, or em dash)  
-- ❌ Inventing core counts client-side — load bar fill needs daemon-reported `inventory.cpuCores`
+- ❌ Inventing core counts client-side — load bar fill needs daemon-reported `inventory.cpuThreads`
