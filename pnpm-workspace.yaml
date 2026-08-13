@@ -22,5 +22,5 @@ minimumReleaseAgeExclude:
   - expo-server@56.0.5
   - expo-symbols@56.0.6
   - expo@56.0.9
-  - miniflare@4.20260708.0
-  - wrangler@4.109.0
+  - miniflare@5.20260811.0-alpha
+  - wrangler@4.122.0
