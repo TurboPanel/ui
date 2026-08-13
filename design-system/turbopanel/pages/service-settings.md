@@ -24,7 +24,7 @@ HTTP hostings may set `hosting.options.web.env` (static `KEY=VALUE`) and optiona
 
 Variables support `isLiteral`, `forBuild`, `forRuntime` flags; deploy injects via `apply-variables.ts` (secrets re-sealed as `variableMaterial[]` for daemon).
 
-Storage registry: `storage` table + `/api/client/v1/storage`; daemon materializes under `<stateDir>/storage/<orgId>/<storageId>/`.
+Storage registry: logical `storage` + physical `location` + service `mount` (`/api/client/v1/storage`); daemon materializes under `<stateDir>/storage/<orgId>/<storageId>/<locationId>/data`. Combined Add Storage is on the environment gear — see `pages/storage.md`. YAML remains the authoring surface for named volumes this slice.
 
 Project principals: `principal.project_id` + `/api/client/v1/projects/:id/principals`; list/create return `serviceIds[]` from `steward`; `PATCH …/principals/:id` replaces bindings. UID/GID from org `options.nextPrincipalUid` starting at 10001. Deploy includes assigned principals in `principalMaterial[]` (`ensureSystemPrincipals` on the daemon).
 

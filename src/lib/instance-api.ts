@@ -2599,38 +2599,97 @@ export async function fetchDeployPreview(
   )
 }
 
-export type StorageKind = 'docker_volume' | 'bind_mount' | 'file' | 'directory'
+export type StorageKind = 'volume' | 'directory' | 'file'
+export type StorageAccessMode = 'single_writer' | 'multi_reader' | 'multi_writer'
+export type StorageRetention = 'retain' | 'delete'
+export type LocationProvider = 'docker' | 'path'
+export type LocationRole = 'primary' | 'replica' | 'scratch' | 'archive'
+export type LocationState =
+  | 'pending'
+  | 'materializing'
+  | 'ready'
+  | 'syncing'
+  | 'stale'
+  | 'failed'
+  | 'retiring'
 
-export type StorageRecord = {
+export type StorageLocationRecord = {
   id: string
-  organizationId: string
-  projectId: string | null
-  environmentId: string | null
-  serviceId: string | null
-  serverId: string
-  kind: StorageKind
-  name: string
-  sourcePath: string | null
-  destinationPath: string | null
-  principalId: string | null
+  storageId: string
+  serverId: string | null
+  credentialId: string | null
+  provider: string
+  role: string
+  state: string
+  path: string | null
+  endpoint: string | null
+  generation: number
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+  resolvedSourcePath: string | null
+}
+
+export type StorageMountRecord = {
+  id: string
+  storageId: string
+  serviceId: string
+  destinationPath: string
+  subpath: string | null
+  readOnly: boolean
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
 }
 
+export type StorageRecord = {
+  id: string
+  organizationId: string
+  workspaceId: string | null
+  projectId: string | null
+  environmentId: string | null
+  serviceId: string | null
+  kind: StorageKind
+  name: string
+  accessMode: StorageAccessMode
+  retention: StorageRetention
+  generation: number
+  principalId: string | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+  locations: StorageLocationRecord[]
+  mounts: StorageMountRecord[]
+}
+
 export type CreateStorageBody = {
   environmentId?: string
   projectId?: string
+  workspaceId?: string
   serviceId?: string
-  serverId: string
   kind: StorageKind
   name: string
-  sourcePath?: string
-  destinationPath?: string
+  accessMode?: StorageAccessMode
+  retention?: StorageRetention
   principalId?: string | null
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
+  location?: {
+    provider: LocationProvider
+    serverId: string
+    path?: string
+    role?: LocationRole
+    state?: LocationState
+  }
+  mount?: {
+    serviceId: string
+    destinationPath: string
+    subpath?: string
+    readOnly?: boolean
+  }
 }
 
 export async function fetchStorage(
@@ -2658,15 +2717,29 @@ export async function updateStorage(
   id: string,
   body: {
     name?: string
-    sourcePath?: string
-    destinationPath?: string
-    serverId?: string
+    accessMode?: StorageAccessMode
+    retention?: StorageRetention
     principalId?: string | null
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/storage/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateStorageMount(
+  storageId: string,
+  mountId: string,
+  body: {
+    destinationPath?: string
+    subpath?: string | null
+    readOnly?: boolean
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/storage/${storageId}/mounts/${mountId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   })

@@ -159,7 +159,7 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | Liquid glass | `src/lib/glass.ts` + `src/components/glass/glass-surface.tsx` (frosted chrome; iOS 26+ `expo-glass-effect`) |
 | Shared panel patterns | `src/components/org/org-panel-styles.ts` |
 
-**Page overrides that exist today** (do not invent others): `sign-in.md`, `servers.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
+**Page overrides that exist today** (do not invent others): `sign-in.md`, `servers.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
 
 ### Mandatory first steps
 

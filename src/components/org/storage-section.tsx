@@ -2,23 +2,32 @@ import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import type { OrgServerRecord, StorageKind, StorageRecord } from '@/lib/instance-api'
+import type {
+  OrgServerRecord,
+  ServiceRecord,
+  StorageKind,
+  StorageLocationRecord,
+  StorageMountRecord,
+  StorageRecord,
+} from '@/lib/instance-api'
 import {
   useCreateStorage,
   useDeleteStorage,
   useStorage,
-  useUpdateStorage,
+  useUpdateStorageMount,
 } from '@/lib/queries/storage'
+import { useServices } from '@/lib/queries/services'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-const STORAGE_KINDS: StorageKind[] = [
-  'docker_volume',
-  'bind_mount',
-  'file',
-  'directory',
-]
+const STORAGE_KINDS: StorageKind[] = ['volume', 'directory', 'file']
+
+const KIND_LABELS: Record<StorageKind, string> = {
+  volume: 'Volume',
+  directory: 'Directory',
+  file: 'File',
+}
 
 const webInputStyle = {
   borderWidth: 1,
@@ -36,8 +45,20 @@ function serverLabel(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname || server.id.slice(0, 8)
 }
 
+function serviceLabel(service: ServiceRecord): string {
+  return service.displayName?.trim() || service.composeServiceName
+}
+
 function inputStyle() {
   return Platform.OS === 'web' ? webInputStyle : styles.input
+}
+
+function locationProviderForKind(kind: StorageKind): 'docker' | 'path' {
+  return kind === 'volume' ? 'docker' : 'path'
+}
+
+function primaryLocation(row: StorageRecord): StorageLocationRecord | undefined {
+  return row.locations.find((loc) => loc.role === 'primary') ?? row.locations[0]
 }
 
 function useStorageSection({
@@ -54,17 +75,19 @@ function useStorageSection({
   const filter = { environmentId }
   const storageQuery = useStorage(orgId, filter)
   const serversQuery = useOrgServers(orgId)
+  const servicesQuery = useServices(orgId, environmentId)
   const createMutation = useCreateStorage(orgId, filter)
-  const updateMutation = useUpdateStorage(orgId, filter)
+  const updateMountMutation = useUpdateStorageMount(orgId, filter)
   const deleteMutation = useDeleteStorage(orgId, filter)
 
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(initialShowAdd)
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<StorageKind>('docker_volume')
+  const [kind, setKind] = useState<StorageKind>('volume')
   const [serverId, setServerId] = useState(defaultServerId ?? '')
   const [sourcePath, setSourcePath] = useState('')
   const [destinationPath, setDestinationPath] = useState('')
+  const [mountServiceId, setMountServiceId] = useState('')
 
   useEffect(() => {
     if (defaultServerId) {
@@ -74,6 +97,7 @@ function useStorageSection({
 
   const rows = storageQuery.data?.storage ?? []
   const servers = serversQuery.data?.servers ?? []
+  const services = servicesQuery.data?.services ?? []
   const loading = storageQuery.isLoading || serversQuery.isLoading
 
   let queryError: string | null = null
@@ -86,7 +110,7 @@ function useStorageSection({
   const displayError =
     error ??
     createMutation.actionError ??
-    updateMutation.actionError ??
+    updateMountMutation.actionError ??
     deleteMutation.actionError ??
     queryError
 
@@ -100,16 +124,27 @@ function useStorageSection({
       setError('Select a server.')
       return
     }
+    const trimmedDest = destinationPath.trim()
+    if (trimmedDest && !mountServiceId) {
+      setError('Select a service to mount into.')
+      return
+    }
     setError(null)
+    const provider = locationProviderForKind(kind)
     createMutation.mutate(
       {
         environmentId,
-        serverId,
         kind,
         name: trimmedName,
-        ...(sourcePath.trim() ? { sourcePath: sourcePath.trim() } : {}),
-        ...(destinationPath.trim()
-          ? { destinationPath: destinationPath.trim() }
+        location: {
+          provider,
+          serverId,
+          ...(provider === 'path' && sourcePath.trim()
+            ? { path: sourcePath.trim() }
+            : {}),
+        },
+        ...(trimmedDest && mountServiceId
+          ? { mount: { serviceId: mountServiceId, destinationPath: trimmedDest } }
           : {}),
       },
       {
@@ -117,6 +152,7 @@ function useStorageSection({
           setName('')
           setSourcePath('')
           setDestinationPath('')
+          setMountServiceId('')
           setShowAdd(false)
         },
         onError: () => {
@@ -126,10 +162,15 @@ function useStorageSection({
     )
   }
 
-  const handleDestinationPathSave = async (id: string, nextDestinationPath: string) => {
+  const handleDestinationPathSave = async (
+    storageId: string,
+    mountId: string,
+    nextDestinationPath: string,
+  ) => {
     setError(null)
-    const result = await updateMutation.run({
-      storageId: id,
+    const result = await updateMountMutation.run({
+      storageId,
+      mountId,
       body: { destinationPath: nextDestinationPath },
     })
     if (!result.ok && result.error) {
@@ -155,6 +196,7 @@ function useStorageSection({
   return {
     rows,
     servers,
+    services,
     loading,
     error: displayError,
     deletingId,
@@ -170,6 +212,8 @@ function useStorageSection({
     setSourcePath,
     destinationPath,
     setDestinationPath,
+    mountServiceId,
+    setMountServiceId,
     adding: createMutation.isPending,
     handleAdd,
     handleDelete,
@@ -197,12 +241,15 @@ function StorageAddForm({
   serverId,
   sourcePath,
   destinationPath,
+  mountServiceId,
   servers,
+  services,
   onNameChange,
   onKindChange,
   onServerIdChange,
   onSourcePathChange,
   onDestinationPathChange,
+  onMountServiceIdChange,
   onSubmit,
 }: Readonly<{
   adding: boolean
@@ -211,14 +258,18 @@ function StorageAddForm({
   serverId: string
   sourcePath: string
   destinationPath: string
+  mountServiceId: string
   servers: OrgServerRecord[]
+  services: ServiceRecord[]
   onNameChange: (value: string) => void
   onKindChange: (value: StorageKind) => void
   onServerIdChange: (value: string) => void
   onSourcePathChange: (value: string) => void
   onDestinationPathChange: (value: string) => void
+  onMountServiceIdChange: (value: string) => void
   onSubmit: () => void
 }>) {
+  const showSourcePath = kind !== 'volume'
   return (
     <View style={styles.form}>
       <View style={styles.field}>
@@ -242,7 +293,7 @@ function StorageAddForm({
               disabled={adding}
               onPress={() => onKindChange(option)}
             >
-              <Text style={styles.kindChipText}>{option.replaceAll('_', ' ')}</Text>
+              <Text style={styles.kindChipText}>{KIND_LABELS[option]}</Text>
             </Pressable>
           ))}
         </View>
@@ -265,18 +316,40 @@ function StorageAddForm({
           ))}
         </View>
       </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>Source path</Text>
-        <TextInput
-          style={inputStyle()}
-          value={sourcePath}
-          onChangeText={onSourcePathChange}
-          placeholder="/host/path or volume source"
-          placeholderTextColor={colors.textDim}
-          editable={!adding}
-          autoCapitalize="none"
-        />
-      </View>
+      {showSourcePath ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>Host path</Text>
+          <TextInput
+            style={inputStyle()}
+            value={sourcePath}
+            onChangeText={onSourcePathChange}
+            placeholder="/host/path"
+            placeholderTextColor={colors.textDim}
+            editable={!adding}
+            autoCapitalize="none"
+          />
+        </View>
+      ) : null}
+      {services.length > 0 ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>Mount service</Text>
+          <View style={styles.serverList}>
+            {services.map((service) => (
+              <Pressable
+                key={service.id}
+                style={[
+                  styles.serverOption,
+                  mountServiceId === service.id && styles.serverOptionSelected,
+                ]}
+                disabled={adding}
+                onPress={() => onMountServiceIdChange(service.id)}
+              >
+                <Text style={styles.serverOptionText}>{serviceLabel(service)}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
       <View style={styles.field}>
         <Text style={styles.label}>Destination path</Text>
         <TextInput
@@ -302,124 +375,178 @@ function StorageAddForm({
   )
 }
 
+function locationServerText(
+  location: StorageLocationRecord,
+  servers: OrgServerRecord[],
+): string {
+  if (!location.serverId) return 'shared'
+  const server = servers.find((row) => row.id === location.serverId)
+  if (server) return serverLabel(server)
+  return `${location.serverId.slice(0, 8)}…`
+}
+
+function LocationSummary({
+  location,
+  servers,
+}: Readonly<{
+  location: StorageLocationRecord | undefined
+  servers: OrgServerRecord[]
+}>) {
+  if (!location) {
+    return (
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Location: </Text>
+        none
+      </Text>
+    )
+  }
+  const pathText = location.resolvedSourcePath ?? location.path
+  return (
+    <>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Location: </Text>
+        {location.provider} · {locationServerText(location, servers)}
+      </Text>
+      {pathText ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Path: </Text>
+          {pathText}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+function MountDestination({
+  storageId,
+  mount,
+  canManage,
+  onSave,
+}: Readonly<{
+  storageId: string
+  mount: StorageMountRecord
+  canManage: boolean
+  onSave: (storageId: string, mountId: string, destinationPath: string) => Promise<void>
+}>) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(mount.destinationPath)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setDraft(mount.destinationPath)
+  }, [mount.destinationPath])
+
+  const save = async () => {
+    const trimmed = draft.trim()
+    if (!trimmed || trimmed === mount.destinationPath) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave(storageId, mount.id, trimmed)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (canManage && editing) {
+    return (
+      <View style={styles.field}>
+        <Text style={styles.label}>Destination path</Text>
+        <TextInput
+          style={inputStyle()}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="/container/path"
+          placeholderTextColor={colors.textDim}
+          editable={!saving}
+          autoCapitalize="none"
+        />
+        <View style={styles.editActions}>
+          <Pressable
+            style={[styles.submitButton, saving && styles.buttonDisabled]}
+            disabled={saving}
+            onPress={() => {
+              void save()
+            }}
+          >
+            <Text style={styles.submitButtonText}>
+              {saving ? 'Saving…' : 'Save'}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={styles.cancelButton}
+            disabled={saving}
+            onPress={() => {
+              setDraft(mount.destinationPath)
+              setEditing(false)
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <Pressable
+      disabled={!canManage}
+      onPress={() => {
+        if (canManage) setEditing(true)
+      }}
+    >
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Mount: </Text>
+        {mount.destinationPath}
+        {mount.readOnly ? ' (read-only)' : ''}
+      </Text>
+    </Pressable>
+  )
+}
+
 function StorageRow({
   row,
+  servers,
   canManage,
   deleting,
   onDelete,
   onDestinationPathSave,
 }: Readonly<{
   row: StorageRecord
+  servers: OrgServerRecord[]
   canManage: boolean
   deleting: boolean
   onDelete: (id: string) => void
-  onDestinationPathSave: (id: string, destinationPath: string) => Promise<void>
+  onDestinationPathSave: (
+    storageId: string,
+    mountId: string,
+    destinationPath: string,
+  ) => Promise<void>
 }>) {
-  const [editingDestination, setEditingDestination] = useState(false)
-  const [destinationDraft, setDestinationDraft] = useState(row.destinationPath ?? '')
-  const [savingDestination, setSavingDestination] = useState(false)
-
-  useEffect(() => {
-    setDestinationDraft(row.destinationPath ?? '')
-  }, [row.destinationPath])
-
-  const saveDestination = async () => {
-    const trimmed = destinationDraft.trim()
-    if (!trimmed || trimmed === row.destinationPath) {
-      setEditingDestination(false)
-      return
-    }
-    setSavingDestination(true)
-    try {
-      await onDestinationPathSave(row.id, trimmed)
-      setEditingDestination(false)
-    } finally {
-      setSavingDestination(false)
-    }
-  }
-
-  const renderDestinationSection = () => {
-    if (canManage && editingDestination) {
-      return (
-        <View style={styles.field}>
-          <Text style={styles.label}>Destination path</Text>
-          <TextInput
-            style={inputStyle()}
-            value={destinationDraft}
-            onChangeText={setDestinationDraft}
-            placeholder="/container/path"
-            placeholderTextColor={colors.textDim}
-            editable={!savingDestination}
-            autoCapitalize="none"
-          />
-          <View style={styles.editActions}>
-            <Pressable
-              style={[styles.submitButton, savingDestination && styles.buttonDisabled]}
-              disabled={savingDestination}
-              onPress={() => {
-                void saveDestination()
-              }}
-            >
-              <Text style={styles.submitButtonText}>
-                {savingDestination ? 'Saving…' : 'Save'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.cancelButton}
-              disabled={savingDestination}
-              onPress={() => {
-                setDestinationDraft(row.destinationPath ?? '')
-                setEditingDestination(false)
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      )
-    }
-    if (row.destinationPath) {
-      return (
-        <Pressable
-          disabled={!canManage}
-          onPress={() => {
-            if (canManage) setEditingDestination(true)
-          }}
-        >
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Destination: </Text>
-            {row.destinationPath}
-          </Text>
-        </Pressable>
-      )
-    }
-    if (canManage) {
-      return (
-        <Pressable onPress={() => setEditingDestination(true)}>
-          <Text style={orgPanelStyles.muted}>Add destination path</Text>
-        </Pressable>
-      )
-    }
-    return null
-  }
-
+  const location = primaryLocation(row)
   return (
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.rowHeader}>
         <Text style={orgPanelStyles.detailTitle}>{row.name}</Text>
-        <Text style={styles.kindBadge}>{row.kind.replaceAll('_', ' ')}</Text>
+        <Text style={styles.kindBadge}>{KIND_LABELS[row.kind]}</Text>
       </View>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Server: </Text>
-        {row.serverId.slice(0, 8)}…
-      </Text>
-      {row.sourcePath ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Source: </Text>
-          {row.sourcePath}
-        </Text>
-      ) : null}
-      {renderDestinationSection()}
+      <LocationSummary location={location} servers={servers} />
+      {row.mounts.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>No service mounts</Text>
+      ) : (
+        row.mounts.map((mount) => (
+          <MountDestination
+            key={mount.id}
+            storageId={row.id}
+            mount={mount}
+            canManage={canManage}
+            onSave={onDestinationPathSave}
+          />
+        ))
+      )}
       {canManage ? (
         <Pressable
           style={[styles.deleteButton, deleting && styles.buttonDisabled]}
@@ -481,12 +608,15 @@ export function StorageSection({
           serverId={storage.serverId}
           sourcePath={storage.sourcePath}
           destinationPath={storage.destinationPath}
+          mountServiceId={storage.mountServiceId}
           servers={storage.servers}
+          services={storage.services}
           onNameChange={storage.setName}
           onKindChange={storage.setKind}
           onServerIdChange={storage.setServerId}
           onSourcePathChange={storage.setSourcePath}
           onDestinationPathChange={storage.setDestinationPath}
+          onMountServiceIdChange={storage.setMountServiceId}
           onSubmit={storage.handleAdd}
         />
       ) : null}
@@ -497,6 +627,7 @@ export function StorageSection({
           <StorageRow
             key={row.id}
             row={row}
+            servers={storage.servers}
             canManage={canManage}
             deleting={storage.deletingId === row.id}
             onDelete={storage.handleDelete}
@@ -512,7 +643,7 @@ export function StorageSection({
   }
 
   return (
-    <SectionPanel title="Storage" hint="Volumes and bind mounts for this environment">
+    <SectionPanel title="Storage" hint="Volumes, directories, and files for this environment">
       {body}
     </SectionPanel>
   )

@@ -4,6 +4,7 @@ import {
   deleteStorage,
   fetchStorage,
   updateStorage,
+  updateStorageMount,
   type CreateStorageBody,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -55,6 +56,26 @@ export function useDeleteStorage(orgId: string, filter: StorageParentFilter) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: deleteStorage,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).storage.list(filter),
+      })
+    },
+  })
+}
+
+export function useUpdateStorageMount(orgId: string, filter: StorageParentFilter) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({
+      storageId,
+      mountId,
+      body,
+    }: {
+      storageId: string
+      mountId: string
+      body: Parameters<typeof updateStorageMount>[2]
+    }) => updateStorageMount(storageId, mountId, body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).storage.list(filter),
