@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native'
 import { TurboPanelLogoMark } from '@/components/brand/turbopanel-logo'
+import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { SectionPanel } from '@/components/org/section-panel'
 import {
   defaultServerCommandState,
@@ -67,7 +68,6 @@ import { osLogoSource } from '@/lib/os-logos'
 import {
   resolveServerConnectionStatus,
   serverConnectionStatusLabel,
-  type ServerConnectionStatus,
 } from '@/lib/server-connection-status'
 import {
   countryCodeToFlagEmoji,
@@ -135,17 +135,6 @@ function isColocatedServer(
     updateData?.colocatedWithInstance === true ||
     updateData?.updateBlocked === true
   )
-}
-
-function connectionStatusDotStyle(status: ServerConnectionStatus) {
-  switch (status) {
-    case 'online':
-      return styles.statusDotOnline
-    case 'initializing':
-      return styles.statusDotInitializing
-    case 'offline':
-      return styles.statusDotOffline
-  }
 }
 
 function resolveUpdateBadgeVariant(input: {
@@ -832,12 +821,7 @@ export function ServerDetailSection({
             <Text style={styles.hostname}>{hostname}</Text>
           ) : null}
           <View style={styles.headerMeta}>
-            <View
-              style={[
-                styles.statusDot,
-                connectionStatusDotStyle(connectionStatus),
-              ]}
-            />
+            <ConnectionStatusDot status={connectionStatus} size={8} />
             <Text style={styles.statusLabel}>
               {serverConnectionStatusLabel(connectionStatus)}
             </Text>
@@ -1275,22 +1259,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusDotOnline: {
-    backgroundColor: colors.accent,
-  },
-  statusDotInitializing: {
-    backgroundColor: colors.pending,
-  },
-  statusDotOffline: {
-    backgroundColor: colors.textFaint,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
   },
   statusLabel: {
     color: colors.text,

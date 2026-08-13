@@ -32,7 +32,7 @@
 - Alternating row tint (`bgInset`) for scanability  
 - OS logo beside name (density-aware PNGs) — no UUID in the primary column  
 - Online badge: accent dot + label (country lives in its own column)  
-- Initializing badge: pending (amber) dot + label when `connected` is false and `statusChangedAt` is null — just-registered hosts (including the colocated “this server” after `/install`) while the daemon is still connecting; not Offline  
+- Initializing badge: pending (amber) **pulsing** LED + label when `connected` is false and `statusChangedAt` is null — just-registered hosts (including the colocated “this server” after `/install`) while the daemon is still connecting; not Offline. Fleet list refetches every **2 s** until Initializing clears, then returns to 30 s. Honor reduced motion (static amber).  
 - Offline badge: hollow dot + muted label  
 - **Country:** flag emoji + English country name from geo (or em dash)  
 - **Usage:** compact pro bars (`ServerUsageBars`) from one fleet metrics snapshot — **stacked CPU** (user / system / other / iowait), **load 1/5/15** numbers with capacity-scaled bar (`load1 / cpuThreads`), memory + swap % — never per-row metrics polling; values always labeled (not color-only)  
@@ -55,6 +55,7 @@
 
 - Row press opacity ~0.88; no expand animation on this page  
 - Status dot is geometric — no perpetual pulse on historical/offline rows  
+- Initializing uses a short amber LED pulse (core opacity + soft halo) until presence is known  
 - Batch update uses shared in-progress poll only — no modal spam
 
 ## Components

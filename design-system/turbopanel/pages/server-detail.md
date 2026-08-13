@@ -9,7 +9,7 @@
 
 ## Layout
 
-- Sticky detail header: back link, OS logo, title, hostname (mono), status dot + Online/Offline + flag, optional **Platform Server** pill (TurboPanel T mark + label) when colocated, then a muted `via Local Unix Socket` / `via <IP>` line — no Connection panel on Overview; version lives on Control → Daemon update  
+- Sticky detail header: back link, OS logo, title, hostname (mono), status dot + Online/Initializing/Offline + flag, optional **Platform Server** pill (TurboPanel T mark + label) when colocated, then a muted `via Local Unix Socket` / `via <IP>` line — no Connection panel on Overview; version lives on Control → Daemon update. Initializing reuses the fleet LED pulse.  
 - Segmented tab rail (`orgPanelStyles.segmentGroup` / `segmentChip`) — active tab in `?tab=` query param  
 - Hairline borders between sections; panels only where they group an interaction — no nested decorative cards  
 - Tab body swaps instantly (no page transition animation)

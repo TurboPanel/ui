@@ -111,7 +111,7 @@ All instance/server state goes through React Query. Do **not** add new `useEffec
 - Screens use `useQuery` / `useQueries` / mutation hooks; invalidate the narrowest correct key prefix in `onSuccess` — never thread a caller `refresh()` callback for server data.
 - Sign-out calls `queryClient.clear()` so a second account never sees the previous cache.
 - Show-once secrets (managed root/user passwords, generated variable secrets) stay in component state from the mutation result — **never** `setQueryData` them.
-- Polling uses query `refetchInterval` (function form when conditional): servers list 30 s; update-status while `status === 'updating'`; commands via `useCommandsBatch` (`COMMAND_POLL_MS` in `src/lib/queries/commands.ts`); managed status only while `provisioning` / `applying`; metrics cadence 1 h/6 h → 60 s, 24 h → 300 s, longer → `false`.
+- Polling uses query `refetchInterval` (function form when conditional): servers list 30 s, **2 s while any host is Initializing** (or the Deno fleet is still empty after install); update-status while `status === 'updating'`; commands via `useCommandsBatch` (`COMMAND_POLL_MS` in `src/lib/queries/commands.ts`); managed status only while `provisioning` / `applying`; metrics cadence 1 h/6 h → 60 s, 24 h → 300 s, longer → `false`.
 - Containers on Project Overview: `refetchInterval: false` — refresh only on explicit **Refresh** or after a tracked command reaches terminal status.
 - O(1) fleet reads: one `useOrgServers` / one batch update-status query — never per-server queries or `fetchServerCell` with an interval on overview.
 - `useCan` remains a display hint; server 403s remain authoritative via the global forbidden seam.
@@ -457,7 +457,7 @@ Authorization helpers:
 
 #### Server control panel (`/<orgId>/servers/[serverId]`)
 
-- `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`). Overview includes a replace-all **labels editor** (`GET`/`PUT /servers/:id/labels`; Docker engine-label charset; `organization:manage` display hint).
+- `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s, **2 s while Initializing**); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`). Overview includes a replace-all **labels editor** (`GET`/`PUT /servers/:id/labels`; Docker engine-label charset; `organization:manage` display hint).
 - Overview header shows how the daemon reaches the control plane under Online/Offline: `via Local Unix Socket` when colocated / `__direct__`, otherwise `via <IP>` from observed `remoteAddress`. No Connection panel, Online/Offline since, last sample, or 24h reporting on Overview (metrics live on the Metrics tab).
 - Single command poll timer (`COMMAND_POLL_MS`) for ping, hostname, reboot, timezone, and NTP on this page; terminal hostname/reboot/timezone/NTP success invalidates `['server', serverId]`.
 - Legacy deep link `/<orgId>/servers/[serverId]/metrics` unchanged; Metrics tab embeds `ServerMetricsSection` with `embedded`.

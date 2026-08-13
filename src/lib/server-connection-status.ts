@@ -33,3 +33,27 @@ export function serverConnectionStatusLabel(
       return 'Initializing'
   }
 }
+
+/** Presence poll while a host is still connecting (or the colocated fleet is empty). */
+export const SERVER_INITIALIZING_POLL_MS = 2_000
+
+export function serversPresenceRefetchMs(
+  input: Readonly<{
+    controlPlaneRuntime?: string | null
+    servers?: readonly ServerConnectionPresence[]
+    idleMs: number
+  }>,
+): number {
+  const servers = input.servers ?? []
+  if (input.controlPlaneRuntime === 'deno' && servers.length === 0) {
+    return SERVER_INITIALIZING_POLL_MS
+  }
+  if (
+    servers.some(
+      (server) => resolveServerConnectionStatus(server) === 'initializing',
+    )
+  ) {
+    return SERVER_INITIALIZING_POLL_MS
+  }
+  return input.idleMs
+}

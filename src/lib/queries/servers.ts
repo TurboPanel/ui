@@ -24,8 +24,11 @@ import {
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
   type MetricsSeriesResponse,
+  type OrgServerRecord,
+  type ServerDetailRecord,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { serversPresenceRefetchMs } from '@/lib/server-connection-status'
 
 export const SERVERS_REFRESH_MS = 30_000
 export const UPDATE_PROGRESS_POLL_MS = 5000
@@ -38,12 +41,15 @@ export function useOrgServers(
   orgId: string,
   options?: Readonly<{
     enabled?: boolean
+    staleTime?: number
     refetchInterval?:
       | number
       | false
       | ((
           query: Readonly<{
-            state: { data?: { servers?: readonly unknown[] } | undefined }
+            state: {
+              data?: { servers?: readonly OrgServerRecord[] }
+            }
           }>,
         ) => number | false | undefined)
     retry?: boolean | number
@@ -53,6 +59,7 @@ export function useOrgServers(
     queryKey: queryKeys.org(orgId).servers.list,
     queryFn: fetchOrgServers,
     enabled: (options?.enabled ?? true) && orgId.length > 0,
+    staleTime: options?.staleTime,
     refetchInterval: options?.refetchInterval,
     retry: options?.retry,
   })
@@ -61,7 +68,17 @@ export function useOrgServers(
 export function useServerDetail(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean; refetchInterval?: number | false }>,
+  options?: Readonly<{
+    enabled?: boolean
+    refetchInterval?:
+      | number
+      | false
+      | ((
+          query: Readonly<{
+            state: { data?: ServerDetailRecord }
+          }>,
+        ) => number | false | undefined)
+  }>,
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.detail(serverId),
@@ -70,7 +87,13 @@ export function useServerDetail(
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
       serverId.length > 0,
-    refetchInterval: options?.refetchInterval ?? SERVERS_REFRESH_MS,
+    refetchInterval:
+      options?.refetchInterval ??
+      ((query) =>
+        serversPresenceRefetchMs({
+          servers: query.state.data ? [query.state.data] : [],
+          idleMs: SERVERS_REFRESH_MS,
+        })),
   })
 }
 

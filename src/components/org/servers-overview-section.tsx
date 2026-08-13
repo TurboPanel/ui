@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { SectionPanel } from '@/components/org/section-panel'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -42,6 +43,7 @@ import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import {
   resolveServerConnectionStatus,
   serverConnectionStatusLabel,
+  serversPresenceRefetchMs,
   type ServerConnectionStatus,
 } from '@/lib/server-connection-status'
 import { osLogoSource } from '@/lib/os-logos'
@@ -312,14 +314,6 @@ function usageByServerIdMap(
   return map
 }
 
-function serversListRefetchMs(
-  controlPlaneRuntime: string | null | undefined,
-  serverCount: number,
-): number {
-  if (controlPlaneRuntime === 'deno' && serverCount === 0) return 2_000
-  return SERVERS_REFRESH_MS
-}
-
 function FleetInventoryTotals({
   inventoryCount,
   totalCores,
@@ -545,19 +539,16 @@ function serverStatusBadgeStyles(status: ServerConnectionStatus) {
     case 'online':
       return {
         badge: styles.statusOnline,
-        dot: styles.statusDotOnline,
         text: styles.statusTextOnline,
       }
     case 'initializing':
       return {
         badge: styles.statusInitializing,
-        dot: styles.statusDotInitializing,
         text: styles.statusTextInitializing,
       }
     case 'offline':
       return {
         badge: styles.statusOffline,
-        dot: styles.statusDotOffline,
         text: styles.statusTextOffline,
       }
   }
@@ -570,8 +561,14 @@ function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
 
   return (
     <View style={[styles.tableCell, styles.colStatus]}>
-      <View style={[styles.statusBadge, tone.badge]}>
-        <View style={[styles.statusDot, tone.dot]} />
+      <View
+        style={[styles.statusBadge, tone.badge]}
+        accessibilityRole="text"
+        accessibilityLabel={label}
+        accessibilityState={{ busy: status === 'initializing' }}
+        accessibilityLiveRegion="polite"
+      >
+        <ConnectionStatusDot status={status} />
         <Text style={[styles.statusText, tone.text]}>{label}</Text>
       </View>
     </View>
@@ -814,11 +811,13 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   )
 
   const serversQuery = useOrgServers(orgId, {
+    staleTime: 0,
     refetchInterval: (query) =>
-      serversListRefetchMs(
+      serversPresenceRefetchMs({
         controlPlaneRuntime,
-        query.state.data?.servers?.length ?? 0,
-      ),
+        servers: query.state.data?.servers,
+        idleMs: SERVERS_REFRESH_MS,
+      }),
   })
   const updatesQuery = useServersUpdateStatus(orgId, { pollWhileUpdating: true })
   const capacityQuery = useOrgServerCapacity(orgId, { enabled: canOwn })
@@ -1253,22 +1252,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusDotOnline: {
-    backgroundColor: colors.accent,
-  },
-  statusDotInitializing: {
-    backgroundColor: colors.pending,
-  },
-  statusDotOffline: {
-    backgroundColor: colors.textFaint,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
+    overflow: 'visible',
   },
   statusOnline: {
     borderColor: colors.accent,
