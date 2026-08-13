@@ -26,7 +26,7 @@ Variables support `isLiteral`, `forBuild`, `forRuntime` flags; deploy injects vi
 
 Storage registry: `storage` table + `/api/client/v1/storage`; daemon materializes under `<stateDir>/storage/<orgId>/<storageId>/`.
 
-Project principals: `principal.project_id` + `/api/client/v1/projects/:id/principals`; list/create return `serviceIds[]` from `assignment`; `PATCH …/principals/:id` replaces bindings. UID/GID from org `options.nextPrincipalUid` starting at 10001. Deploy includes assigned principals in `principalMaterial[]` (`ensureSystemPrincipals` on the daemon).
+Project principals: `principal.project_id` + `/api/client/v1/projects/:id/principals`; list/create return `serviceIds[]` from `steward`; `PATCH …/principals/:id` replaces bindings. UID/GID from org `options.nextPrincipalUid` starting at 10001. Deploy includes assigned principals in `principalMaterial[]` (`ensureSystemPrincipals` on the daemon).
 
 Resource limits: `organization.options.resourceLimits` and `server.options.resourceLimits`; validated at deploy in `deploy-prepare.ts`.
 
