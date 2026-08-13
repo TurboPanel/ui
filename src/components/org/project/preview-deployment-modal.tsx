@@ -261,7 +261,6 @@ export function PreviewDeploymentModal({
     orgId,
     environmentId,
     canManage,
-    placementServerId,
     visible && mode === 'prepared',
   )
 

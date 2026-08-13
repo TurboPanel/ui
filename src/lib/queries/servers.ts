@@ -6,6 +6,7 @@ import {
   fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServer,
+  fetchServerLabels,
   fetchServerMetricsSeries,
   fetchServersUpdateStatus,
   fetchServerUpdate,
@@ -14,6 +15,7 @@ import {
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
+  saveServerLabels,
   setServerHostname,
   setServerNtp,
   setServerTimezone,
@@ -69,6 +71,21 @@ export function useServerDetail(
       orgId.length > 0 &&
       serverId.length > 0,
     refetchInterval: options?.refetchInterval ?? SERVERS_REFRESH_MS,
+  })
+}
+
+export function useServerLabels(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.labels(serverId),
+    queryFn: () => fetchServerLabels(serverId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      serverId.length > 0,
   })
 }
 
@@ -353,6 +370,25 @@ export function useUpdateServer(orgId: string, serverId: string) {
     onSuccess: async () => {
       await invalidateServerQueries(queryClient, orgId, serverId)
     },
+  })
+}
+
+export function useSaveServerLabels(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (labels: Record<string, string>) =>
+      saveServerLabels(serverId, labels),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.detail(serverId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.labels(serverId),
+        }),
+      ])
+    },
+    fallbackError: 'Failed to save server labels',
   })
 }
 

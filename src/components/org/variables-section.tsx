@@ -898,7 +898,8 @@ function VariablesTable({
   if (variables.length === 0 && !showAddForm) {
     return (
       <Text style={orgPanelStyles.muted}>
-        No variables yet — add keys your compose references with {'${KEY}'}.
+        No variables yet — add keys your compose references with {'{$KEY}'} or{' '}
+        {'{$project.KEY}'}. Secrets become /run/secrets/ plus KEY_FILE.
       </Text>
     )
   }
@@ -1004,7 +1005,8 @@ function VariablesEnvView({
   if (variables.length === 0) {
     return (
       <Text style={orgPanelStyles.muted}>
-        No variables yet — add keys your compose references with {'${KEY}'}.
+        No variables yet — add keys your compose references with {'{$KEY}'} or{' '}
+        {'{$project.KEY}'}. Secrets become /run/secrets/ plus KEY_FILE.
       </Text>
     )
   }
@@ -1082,7 +1084,7 @@ export function VariablesSection({
   orgId,
   parentField,
   title = 'Variables',
-  hint = 'Injected into compose at deploy — lower scopes override',
+  hint = 'Injected into compose at deploy — lower scopes override. Reference with {$KEY} or {$project.KEY}.',
   embedded = false,
   showPresets = true,
   initialShowAdd = false,

@@ -15,7 +15,11 @@ import type {
   ManagedSettings,
   ManagedUserRecord,
 } from '@/lib/managed-services'
-export { isForbiddenError } from '@/lib/fetch-error-detail'
+export {
+  isForbiddenError,
+  isHttpStatusError,
+  isServerPlacementRequiredError,
+} from '@/lib/fetch-error-detail'
 
 export type { ComposeDocument } from '@/lib/compose'
 export type {
@@ -306,6 +310,7 @@ export type ServerDetailRecord = OrgServerRecord & {
   orgDefaultTimezone: string | null
   enforceServerTimezone: boolean
   colocatedWithInstance: boolean
+  labels?: Array<{ key: string; value: string }>
 }
 
 export type NtpSetInput = {
@@ -328,6 +333,32 @@ export async function fetchServer(serverId: string): Promise<ServerDetailRecord>
     `${CLIENT_API}/servers/${serverId}`,
   )
   return body.server
+}
+
+export type ServerLabelPair = { key: string; value: string }
+
+export async function fetchServerLabels(
+  serverId: string,
+): Promise<ServerLabelPair[]> {
+  const body = await apiFetch<{ ok: true; labels: ServerLabelPair[] }>(
+    `${CLIENT_API}/servers/${serverId}/labels`,
+  )
+  return body.labels
+}
+
+/** Replace-all. Pass `{}` to clear every label. */
+export async function saveServerLabels(
+  serverId: string,
+  labels: Record<string, string>,
+): Promise<ServerLabelPair[]> {
+  const body = await apiFetch<{ ok: true; labels: ServerLabelPair[] }>(
+    `${CLIENT_API}/servers/${serverId}/labels`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ labels }),
+    },
+  )
+  return body.labels
 }
 
 export async function updateServer(
@@ -444,6 +475,31 @@ export async function saveOrgDefaultEnvironment(
       body: JSON.stringify({ defaultEnvironmentName }),
     },
   )
+}
+
+export type OrgFabricRecord = {
+  id: string
+  cidr: string
+  status?: string
+}
+
+export type OrgFabricSettings = {
+  enabled: boolean
+  fabric?: OrgFabricRecord
+}
+
+export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric`)
+}
+
+export async function saveOrgFabric(
+  orgId: string,
+  enabled: boolean,
+): Promise<OrgFabricSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric`, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  })
 }
 
 export type ServerDeleteBlocker = {
@@ -2445,8 +2501,12 @@ export type DeployPreviewWarning = {
   details?: Record<string, unknown>
 }
 
-/** Role of a prepared compose layer in `docker compose -f` order. */
-export type ComposeFileRole = 'project' | 'environment' | 'platform'
+/**
+ * Role of a compiled compose file. New responses use `'runtime'`
+ * (`compose.yaml`). Older project/environment/platform roles may still appear
+ * and must not be shown as what the daemon runs.
+ */
+export type ComposeFileRole = 'project' | 'environment' | 'platform' | 'runtime'
 
 /**
  * Where a prepared compose layer was produced. Mirrors
@@ -2456,9 +2516,9 @@ export type ComposeFileRole = 'project' | 'environment' | 'platform'
 export type ComposeFileSource = 'inline' | 'repository'
 
 /**
- * One file in the ordered prepared `composeFiles[]` chain returned by
- * deploy-preview (same wire shape as `environment.deploy` →
- * `EnvironmentDeployComposeFile`).
+ * One file in deploy-preview `composeFiles[]` (same wire shape as
+ * `environment.deploy` → `EnvironmentDeployComposeFile`). Prefer `role:
+ * 'runtime'` as the compiled snapshot the daemon writes as `compose.yaml`.
  */
 export type DeployPreviewComposeFile = {
   filename: string
@@ -2473,15 +2533,40 @@ export type DeployPreviewComposeFile = {
   content: string
 }
 
+/** Per-server compiled compose when an environment is scheduled across hosts. */
+export type DeployPreviewServer = {
+  serverId: string
+  displayName: string
+  composeYaml: string
+  services: string[]
+}
+
+/** Compiled Compose standalone secret (paths only — never values). */
+export type DeployPreviewSecretPlanEntry = {
+  key: string
+  composeServiceName: string
+  source: string
+  target: string
+  relativePath: string
+  forBuild: boolean
+  forRuntime: boolean
+}
+
 export type DeployPreviewResponse = {
   ok: true
-  /** Fully merged prepared YAML (legacy / fallback). */
+  /**
+   * Compiled runtime YAML (legacy / fallback when `composeFiles` has no
+   * `role: 'runtime'` entry).
+   */
   composeYaml: string
   /**
-   * Ordered layers the daemon runs with `docker compose -f … -f …`.
-   * May be empty/absent on older responses — prefer per-file view when present.
+   * Compiled snapshot. New responses send a single `role: 'runtime'`
+   * `compose.yaml`. Older layer chains may still appear — do not present
+   * project/environment/platform files as what the daemon runs.
    */
   composeFiles?: DeployPreviewComposeFile[]
+  /** Per-host compiled compose when the scheduler splits services. */
+  servers?: DeployPreviewServer[]
   projectName: string
   containers: {
     serviceId: string
@@ -2496,10 +2581,14 @@ export type DeployPreviewResponse = {
     volumeName: string
   }[]
   warnings: DeployPreviewWarning[]
+  /** Non-secret Compose project `.env` (real values; secrets are omitted). */
+  envFile?: string
+  /** Host/container secret file plan — no envelopes or plaintext. */
+  secretPlan?: DeployPreviewSecretPlanEntry[]
 }
 
 /**
- * Exact compose document deploy would send (same prepare path), with secret
+ * Compiled runtime compose deploy would write (same prepare path), with secret
  * values redacted. May allocate containers / register volumes idempotently.
  */
 export async function fetchDeployPreview(

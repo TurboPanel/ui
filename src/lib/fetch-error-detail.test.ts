@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   formatFetchFailureDetail,
   isForbiddenError,
+  isHttpStatusError,
+  isServerPlacementRequiredError,
 } from './fetch-error-detail'
 
 const METRICS_PATH =
@@ -23,5 +25,25 @@ describe('isForbiddenError', () => {
   it('ignores errors without HTTP status prefix', () => {
     const error = new Error(`${METRICS_PATH} failed: Forbidden`)
     expect(isForbiddenError(error)).toBe(false)
+  })
+})
+
+describe('isHttpStatusError', () => {
+  it('matches the status token in fetch error messages', () => {
+    const error = new Error('path failed: HTTP 503: Database unavailable')
+    expect(isHttpStatusError(error, 503)).toBe(true)
+    expect(isHttpStatusError(error, 404)).toBe(false)
+  })
+})
+
+describe('isServerPlacementRequiredError', () => {
+  it('recognizes 409 server_placement_required', () => {
+    const error = new Error(
+      '/api/client/v1/environments/x/deploy-preview failed: HTTP 409: server_placement_required',
+    )
+    expect(isServerPlacementRequiredError(error)).toBe(true)
+    expect(
+      isServerPlacementRequiredError(new Error('path failed: HTTP 409: other')),
+    ).toBe(false)
   })
 })

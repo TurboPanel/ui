@@ -2,10 +2,13 @@ import { StyleSheet, Text, View } from 'react-native'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useDeployPreview } from '@/lib/queries'
-import type {
-  ComposeFileRole,
-  DeployPreviewComposeFile,
-  DeployPreviewResponse,
+import {
+  isServerPlacementRequiredError,
+  type ComposeFileRole,
+  type DeployPreviewComposeFile,
+  type DeployPreviewResponse,
+  type DeployPreviewSecretPlanEntry,
+  type DeployPreviewServer,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
 
@@ -44,10 +47,16 @@ export function PreviewWarnings({
 }
 
 function composeFileRoleLabel(role: ComposeFileRole): string {
+  if (role === 'runtime') return 'Runtime'
   if (role === 'project') return 'Project'
   if (role === 'environment') return 'Environment'
-  if (role === 'platform') return 'TurboPanel'
   return 'TurboPanel'
+}
+
+function runtimeComposeFile(
+  preview: DeployPreviewResponse,
+): DeployPreviewComposeFile | undefined {
+  return preview.composeFiles?.find((file) => file.role === 'runtime')
 }
 
 function ComposeLayerSection({
@@ -66,24 +75,88 @@ function ComposeLayerSection({
   )
 }
 
-function PreparedComposeLayers({
+function ServerComposeSection({
+  server,
+}: Readonly<{ server: DeployPreviewServer }>) {
+  const services = [...server.services].sort((a, b) => a.localeCompare(b))
+  const serviceLine = services.join(', ')
+  const title = server.displayName.trim() || server.serverId
+
+  return (
+    <View style={styles.layerSection}>
+      <View style={styles.layerHeader}>
+        <Text style={styles.layerFilename}>{title}</Text>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleBadgeText}>Server</Text>
+        </View>
+      </View>
+      {serviceLine.length > 0 ? (
+        <Text style={orgPanelStyles.muted}>{serviceLine}</Text>
+      ) : null}
+      <ReadOnlyYamlBlock value={server.composeYaml} />
+    </View>
+  )
+}
+
+function secretPlanLine(entry: DeployPreviewSecretPlanEntry): string {
+  const flags = [
+    entry.forRuntime ? 'runtime' : null,
+    entry.forBuild ? 'build' : null,
+  ].filter((flag): flag is string => flag !== null)
+  const flagSuffix = flags.length > 0 ? ` (${flags.join(', ')})` : ''
+  return `${entry.composeServiceName} ${entry.key} → /run/secrets/${entry.target}${flagSuffix}`
+}
+
+function PreparedComposeSnapshot({
   preview,
 }: Readonly<{ preview: DeployPreviewResponse }>) {
-  const layers = preview.composeFiles ?? []
-  if (layers.length === 0) {
-    return <ReadOnlyYamlBlock value={preview.composeYaml} />
-  }
+  const runtimeFile = runtimeComposeFile(preview)
+  const servers = preview.servers ?? []
+  const envFile = preview.envFile?.trim() ?? ''
+  const secretPlan = preview.secretPlan ?? []
 
   return (
     <View style={styles.layersList}>
       <Text style={orgPanelStyles.muted}>
-        The daemon runs docker compose -f … -f … in this exact order.
+        Compiled runtime compose the daemon writes as compose.yaml. Non-secrets
+        interpolate from .env; secrets are file mounts under /run/secrets/.
       </Text>
-      {layers.map((file, index) => (
-        <ComposeLayerSection
-          key={`${file.role}:${file.filename}:${index}`}
-          file={file}
-        />
+      {runtimeFile ? (
+        <ComposeLayerSection file={runtimeFile} />
+      ) : (
+        <ReadOnlyYamlBlock value={preview.composeYaml} />
+      )}
+      {envFile.length > 0 ? (
+        <View style={styles.layerSection}>
+          <View style={styles.layerHeader}>
+            <Text style={styles.layerFilename}>.env</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>Non-secret</Text>
+            </View>
+          </View>
+          <ReadOnlyYamlBlock value={envFile} />
+        </View>
+      ) : null}
+      {secretPlan.length > 0 ? (
+        <View style={styles.layerSection}>
+          <View style={styles.layerHeader}>
+            <Text style={styles.layerFilename}>secrets</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>Files</Text>
+            </View>
+          </View>
+          {secretPlan.map((entry) => (
+            <Text
+              key={`${entry.composeServiceName}:${entry.source}:${entry.key}`}
+              style={orgPanelStyles.muted}
+            >
+              {secretPlanLine(entry)}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      {servers.map((server) => (
+        <ServerComposeSection key={server.serverId} server={server} />
       ))}
     </View>
   )
@@ -108,7 +181,7 @@ export function DeployPreviewBody({
       {preview ? (
         <>
           <PreviewWarnings warnings={preview.warnings} />
-          <PreparedComposeLayers preview={preview} />
+          <PreparedComposeSnapshot preview={preview} />
         </>
       ) : null}
 
@@ -119,16 +192,34 @@ export function DeployPreviewBody({
   )
 }
 
+function preparedPreviewError(
+  open: boolean,
+  canManage: boolean,
+  queryError: unknown,
+): string | null {
+  if (!open) return null
+  if (!canManage) {
+    return 'Organization manage permission is required to preview deploy.'
+  }
+  if (isServerPlacementRequiredError(queryError)) {
+    return 'Select a server for this environment before previewing deploy.'
+  }
+  if (queryError instanceof Error) return queryError.message
+  return null
+}
+
 /**
  * Fetch + gate the server-prepared deploy preview (variables resolved,
  * container/volume names, traditional-web split). Callers control `enabled`
  * so only the active UI mode hits the network (`refetchInterval: false`).
+ * Placement is not required to fetch — Phase 2 may succeed without an env pin
+ * when a default server or fleet exists. A 409 `server_placement_required`
+ * is the only client-side “select a server” gate.
  */
 export function usePreparedComposePreview(
   orgId: string,
   environmentId: string | null,
   canManage: boolean,
-  placementServerId: string | null,
   enabled: boolean,
 ): {
   loading: boolean
@@ -136,25 +227,16 @@ export function usePreparedComposePreview(
   preview: DeployPreviewResponse | null
 } {
   const open = enabled
-  const canFetch =
-    open && canManage && Boolean(placementServerId) && Boolean(environmentId)
+  const canFetch = open && canManage && Boolean(environmentId)
   const previewQuery = useDeployPreview(orgId, environmentId ?? '', {
     enabled: canFetch,
   })
 
-  const preview = previewQuery.data ?? null
-  const loading = previewQuery.isFetching
-  const queryError =
-    previewQuery.error instanceof Error ? previewQuery.error.message : null
-
-  let error = queryError
-  if (open && canManage && !placementServerId) {
-    error = 'Select a server for this environment before previewing deploy.'
-  } else if (open && !canManage) {
-    error = 'Organization manage permission is required to preview deploy.'
+  return {
+    loading: previewQuery.isFetching,
+    error: preparedPreviewError(open, canManage, previewQuery.error),
+    preview: previewQuery.data ?? null,
   }
-
-  return { loading, error, preview }
 }
 
 const styles = StyleSheet.create({

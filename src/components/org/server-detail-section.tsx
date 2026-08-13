@@ -30,6 +30,7 @@ import {
 } from '@/components/org/server-commands-panel'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
+import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -284,7 +285,13 @@ function DetailTabBody({
 }>): ReactNode {
   switch (tab) {
     case 'overview':
-      return <ServerOverviewTab server={server} />
+      return (
+        <ServerOverviewTab
+          orgId={orgId}
+          server={server}
+          canManage={canManage}
+        />
+      )
     case 'control':
       return (
         <ServerControlTab
@@ -327,7 +334,13 @@ function DetailTabBody({
         <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
       )
     default:
-      return <ServerOverviewTab server={server} />
+      return (
+        <ServerOverviewTab
+          orgId={orgId}
+          server={server}
+          canManage={canManage}
+        />
+      )
   }
 }
 
@@ -833,14 +846,14 @@ export function ServerDetailSection({
               <View
                 style={styles.instanceDaemonBadge}
                 accessibilityRole="text"
-                accessibilityLabel="Instance Daemon"
+                accessibilityLabel="Platform Server"
               >
                 <TurboPanelLogoMark
                   size={12}
                   square
                   accessibilityLabel=""
                 />
-                <Text style={styles.instanceDaemonBadgeText}>Instance Daemon</Text>
+                <Text style={styles.instanceDaemonBadgeText}>Platform Server</Text>
               </View>
             ) : null}
           </View>
@@ -936,8 +949,14 @@ function resolveConnectedViaLabel(server: ServerDetailRecord): string | null {
 }
 
 function ServerOverviewTab({
+  orgId,
   server,
-}: Readonly<{ server: ServerDetailRecord }>) {
+  canManage,
+}: Readonly<{
+  orgId: string
+  server: ServerDetailRecord
+  canManage: boolean
+}>) {
   const geoLine = formatServerGeoLocation(server.geo)
   const country = formatServerGeoCountryCode(server.geo)
   const asn = formatServerGeoAsn(server.geo)
@@ -1002,6 +1021,13 @@ function ServerOverviewTab({
           </Text>
         ) : null}
       </SectionPanel>
+
+      <ServerLabelsEditor
+        orgId={orgId}
+        serverId={server.id}
+        labels={server.labels}
+        canManage={canManage}
+      />
     </View>
   )
 }

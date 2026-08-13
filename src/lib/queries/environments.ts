@@ -6,6 +6,7 @@ import {
   fetchDeployPreview,
   fetchEnvironment,
   fetchVisibleEnvironments,
+  isServerPlacementRequiredError,
   runEnvironmentLifecycle,
   stopEnvironment,
   updateEnvironment,
@@ -53,6 +54,10 @@ export function useDeployPreview(
       orgId.length > 0 &&
       environmentId.length > 0,
     refetchInterval: false,
+    retry: (failureCount, error) => {
+      if (isServerPlacementRequiredError(error)) return false
+      return failureCount < 2
+    },
   })
 }
 

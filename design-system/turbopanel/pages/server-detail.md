@@ -9,14 +9,14 @@
 
 ## Layout
 
-- Sticky detail header: back link, OS logo, title, hostname (mono), status dot + Online/Offline + flag, optional **Instance Daemon** pill (TurboPanel T mark + label) when colocated, then a muted `via Local Unix Socket` / `via <IP>` line — no Connection panel on Overview; version lives on Control → Daemon update  
+- Sticky detail header: back link, OS logo, title, hostname (mono), status dot + Online/Offline + flag, optional **Platform Server** pill (TurboPanel T mark + label) when colocated, then a muted `via Local Unix Socket` / `via <IP>` line — no Connection panel on Overview; version lives on Control → Daemon update  
 - Segmented tab rail (`orgPanelStyles.segmentGroup` / `segmentChip`) — active tab in `?tab=` query param  
 - Hairline borders between sections; panels only where they group an interaction — no nested decorative cards  
 - Tab body swaps instantly (no page transition animation)
 
 ## Density
 
-- Label/value rows in Overview; monospace for IDs, IPs, timezone, NTP host lists  
+- Label/value rows in Overview; monospace for IDs, IPs, timezone, NTP host lists, label keys/values  
 - Status: geometric dots with text labels — never color-only  
 - Flag emoji beside Online when geo is known (fleet consistency)
 
@@ -24,11 +24,18 @@
 
 | Tab | Content |
 |-----|---------|
-| Overview | Identity, OS, geo when reported, timezone |
+| Overview | Identity, OS, geo when reported, timezone, labels editor |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
 | Time | NTP status, timezone picker, NTP apply form |
 | Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
+
+## Labels (Overview)
+
+- Replace-all key/value editor on Overview — **not** a new tab.
+- Docker engine-label charset: keys `[A-Za-z0-9][A-Za-z0-9._-]*`, max 64 labels, key/value length 255.
+- Manage-gated (`organization:manage` display hint). Non-managers see a read-only list.
+- Visible labels, errors adjacent to the editor, `toolbarBtn*` for Add/Save/Remove. Monospace keys/values.
 
 ## Server proxy (Control tab)
 

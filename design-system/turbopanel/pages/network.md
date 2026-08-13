@@ -8,6 +8,7 @@
 - Links → `network-links-section.tsx` / `network-link-detail-section.tsx`
 - Addresses → `network-addresses-section.tsx`
 - Docker networks → `network-docker-section.tsx`
+- TurboFabric → `network-fabric-section.tsx` at `/network/fabric`
 
 **Job:** Operator topology for private connectivity — site → private CIDR → member servers → addresses → site-to-site links. Docker networks are a quiet deploy registry, not topology.
 
@@ -21,7 +22,7 @@
 4. **Addresses** — org free-pool / public / vpn-scoped rows (vpn rows read-only here)
 5. **Links** — WireGuard meshes rendered as **site-to-site** connections
 
-Sites is the **area root** (not a sub-route). Links, Addresses, and Docker networks sit in the sidebar as quiet sub-routes.
+Sites is the **area root** (not a sub-route). TurboFabric, Links, Addresses, and Docker networks sit in the sidebar as quiet sub-routes.
 
 ## Sites list
 
@@ -57,6 +58,14 @@ Sites is the **area root** (not a sub-route). Links, Addresses, and Docker netwo
 - Scopes: `public | datacenter | vpn` (no `loopback`)
 - Scope / allocation filters use `segmentGroup` / `segmentChip`; site filter remains chips
 - `scope === 'vpn'` rows read-only with pointer to link detail; **409** `ip_in_use` copy retained
+
+## TurboFabric
+
+- Org **opt-in** mesh (`GET`/`PUT /organizations/:id/fabric`). Default **off**. Never auto-enable.
+- Copy: enabling TurboFabric lets environments run across servers; it is **not** required for single-engine Docker.
+- Product name from `TURBOFABRIC_PRODUCT_NAME`. Never “tp0 fabric”, “which WireGuard network should this container join?”, or “the WireGuard mesh” in UI copy.
+- 404/503: muted “not available on this control plane yet” — do not treat as a form error.
+- Manage-gated enable toggle (`organization:manage` display hint). Status + CIDR when the API returns `fabric`.
 
 ## Docker networks
 

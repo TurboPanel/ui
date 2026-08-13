@@ -109,6 +109,8 @@ export const queryKeys = {
          */
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
+        labels: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'labels'] as const,
       },
 
       settings: {
@@ -116,6 +118,7 @@ export const queryKeys = {
         defaultTimezone: ['org', orgId, 'default-timezone'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
+        fabric: ['org', orgId, 'fabric'] as const,
       },
 
       topology: {

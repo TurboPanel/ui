@@ -25,10 +25,11 @@
 
 ## Copy
 
-- Environment/project hint: “Injected into compose at deploy — lower scopes override”  
+- Environment/project hint: “Injected into compose at deploy — lower scopes override. Reference with {$KEY} or {$project.KEY}.”  
 - Hosting hint: “Hostname-scoped overrides for this service. Applied at deploy after service scope…”  
 - Empty hosting state: “Save hosting first to add hostname-scoped variables.”  
-- Empty state mentions `${KEY}` compose references
+- Empty state mentions `{$KEY}` / `{$project.KEY}` (TurboPanel interpolation, parsed before Compose `${VAR}`)
+- Secrets compile to `/run/secrets/<target>` plus a courtesy `KEY_FILE` path — not `$KEY` / `${KEY}`
 - Developer view hint: “Read-only preview of how these keys sit in a .env file — secret values are masked and can never be revealed here.”
 
 ## Anti-patterns

@@ -1,3 +1,5 @@
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+
 export const ORG_AREAS = [
   {
     id: 'projects',
@@ -44,8 +46,14 @@ export const ORG_AREAS = [
     id: 'network',
     label: 'Network',
     pathSegment: 'network',
-    hint: 'Sites, private networks, addresses, and links',
+    hint: 'Sites, private networks, addresses, links, and TurboFabric',
     subRoutes: [
+      {
+        id: 'fabric',
+        label: TURBOFABRIC_PRODUCT_NAME,
+        pathSegment: 'fabric',
+        hint: 'Opt-in mesh for environments that run across servers',
+      },
       {
         id: 'links',
         label: 'Links',

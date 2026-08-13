@@ -272,4 +272,25 @@ services:
       issues.some((issue) => issue.message.toLowerCase().includes('unresolved')),
     ).toBe(false)
   })
+
+  it('errors on invalid TurboPanel variable refs in environment', () => {
+    const source = `services:
+  web:
+    image: nginx
+    environment:
+      BAD: prefix-{$PORT}
+      SCOPE: "{$galaxy.KEY}"
+      OK: "{$NODE_ENV}"
+`
+    const issues = lintComposeYaml(source)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment.BAD'),
+    ).toBe(true)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment.SCOPE'),
+    ).toBe(true)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment.OK'),
+    ).toBe(false)
+  })
 })

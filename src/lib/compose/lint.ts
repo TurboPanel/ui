@@ -1,5 +1,6 @@
 import {
   isMap,
+  isSeq,
   LineCounter,
   parseDocument,
   type Node,
@@ -8,6 +9,7 @@ import {
 } from 'yaml'
 import { COMPOSE_CUSTOM_TAGS, isComposeTaggedValue } from './tags'
 import { TURBOPANEL_SERVICE_EXTENSION_KEY } from './service-kind'
+import { parseExactVariableRef } from './variable-refs'
 
 export type ComposeLintLevel = 'error' | 'warning'
 
@@ -274,11 +276,90 @@ function isTraditionalWebForLint(
   return serviceIsTraditionalWeb(valueNode)
 }
 
+function lintVariableRefScalar(
+  raw: string,
+  path: string,
+  node: Node | null | undefined,
+  lineCounter: LineCounter,
+  issues: ComposeLintIssue[],
+): void {
+  const parsed = parseExactVariableRef(raw)
+  if (parsed.ok || parsed.error === 'not_a_ref') return
+  issues.push({
+    level: 'error',
+    message: parsed.message,
+    path,
+    line: nodeLine(node, lineCounter),
+  })
+}
+
+function lintEnvOrArgsCollection(
+  fieldPath: string,
+  valueNode: Node | null | undefined,
+  lineCounter: LineCounter,
+  issues: ComposeLintIssue[],
+): void {
+  if (!valueNode || typeof valueNode !== 'object') return
+  if (isMap(valueNode)) {
+    for (const item of valueNode.items) {
+      const key = stringKey(item.key)
+      const raw = scalarString(item.value as Node)
+      if (key === null || raw === null) continue
+      lintVariableRefScalar(
+        raw,
+        `${fieldPath}.${key}`,
+        item.value as Node,
+        lineCounter,
+        issues,
+      )
+    }
+    return
+  }
+  if (!isSeq(valueNode)) return
+  for (const [index, item] of valueNode.items.entries()) {
+    const raw = scalarString(item as Node)
+    if (raw === null) continue
+    const eq = raw.indexOf('=')
+    const colon = raw.indexOf(':')
+    let sep = -1
+    if (eq >= 0 && colon >= 0) sep = Math.min(eq, colon)
+    else if (eq >= 0) sep = eq
+    else if (colon >= 0) sep = colon
+    const value = sep < 0 ? '' : raw.slice(sep + 1)
+    lintVariableRefScalar(
+      value,
+      `${fieldPath}[${index}]`,
+      item as Node,
+      lineCounter,
+      issues,
+    )
+  }
+}
+
+function lintBuildArgs(
+  fieldPath: string,
+  valueNode: Node | null | undefined,
+  lineCounter: LineCounter,
+  issues: ComposeLintIssue[],
+): void {
+  if (!isMap(valueNode)) return
+  for (const item of valueNode.items) {
+    if (stringKey(item.key) !== 'args') continue
+    lintEnvOrArgsCollection(
+      `${fieldPath}.args`,
+      item.value as Node | null | undefined,
+      lineCounter,
+      issues,
+    )
+  }
+}
+
 function lintServicePropertyKey(
   path: string,
   key: string,
   valueNode: Node | null | undefined,
   keyLine: number | undefined,
+  lineCounter: LineCounter,
   issues: ComposeLintIssue[],
   options?: ComposeLintOptions,
 ): { hasImage: boolean; hasBuild: boolean } {
@@ -319,6 +400,12 @@ function lintServicePropertyKey(
     })
   }
 
+  if (key === 'environment') {
+    lintEnvOrArgsCollection(`${path}.${key}`, valueNode, lineCounter, issues)
+  } else if (key === 'build') {
+    lintBuildArgs(`${path}.${key}`, valueNode, lineCounter, issues)
+  }
+
   return { hasImage, hasBuild }
 }
 
@@ -339,6 +426,7 @@ function lintServiceKeys(
       key,
       item.value as Node | null | undefined,
       nodeLine(item.key as Node, lineCounter),
+      lineCounter,
       issues,
       options,
     )
