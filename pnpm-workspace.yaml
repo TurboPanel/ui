@@ -24,3 +24,6 @@ minimumReleaseAgeExclude:
   - expo@57.0.13
   - miniflare@5.20260811.0-alpha
   - wrangler@4.122.0
+  - expo-dev-client@57.0.12
+  - expo-dev-launcher@57.0.12
+  - expo-dev-menu@57.0.12

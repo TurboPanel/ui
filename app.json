@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "TurboPanel UI",
-    "slug": "turbopanel",
+    "name": "TurboPanel",
+    "slug": "ui",
     "version": "0.1.0",
     "web": {
       "output": "static"
@@ -17,6 +17,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2f9d64b9-bb2c-425b-9129-606410578108"
+      }
+    },
+    "owner": "turbopanel"
   }
 }
