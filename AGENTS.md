@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
+Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
 ## Project metadata / public naming
 
@@ -71,6 +71,7 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 
 ## Stack
 
+- **Expo SDK 57** (React Native 0.86, React 19.2) — keep Expo module versions aligned with `pnpm expo install --fix`. Native `ios/` / `android/` are not checked in (CNG).
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
 - **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
 - **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.

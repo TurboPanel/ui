@@ -5,22 +5,22 @@ allowBuilds:
   unrs-resolver: true
   workerd: true
 minimumReleaseAgeExclude:
-  - '@expo/cli@56.1.14'
-  - '@expo/fingerprint@0.19.4'
-  - '@expo/inline-modules@0.0.11'
-  - '@expo/metro-runtime@56.0.14'
-  - '@expo/prebuild-config@56.0.15'
-  - '@expo/router-server@56.0.13'
-  - '@expo/ui@56.0.16'
-  - expo-asset@56.0.16
-  - expo-constants@56.0.17
-  - expo-image@56.0.10
-  - expo-modules-autolinking@56.0.15
-  - expo-modules-core@56.0.15
-  - expo-modules-jsi@56.0.8
-  - expo-router@56.2.9
-  - expo-server@56.0.5
-  - expo-symbols@56.0.6
-  - expo@56.0.9
+  - '@expo/cli@57.0.15'
+  - '@expo/config-plugins@57.0.8'
+  - '@expo/metro-runtime@57.0.10'
+  - '@expo/prebuild-config@57.0.12'
+  - '@expo/router-server@57.0.6'
+  - '@expo/ui@57.0.11'
+  - babel-preset-expo@57.0.7
+  - expo-asset@57.0.11
+  - expo-constants@57.0.11
+  - expo-file-system@57.0.3
+  - expo-image@57.0.3
+  - expo-linking@57.0.6
+  - expo-modules-autolinking@57.0.10
+  - expo-modules-core@57.0.11
+  - expo-router@57.0.13
+  - expo-server@57.0.3
+  - expo@57.0.13
   - miniflare@5.20260811.0-alpha
   - wrangler@4.122.0

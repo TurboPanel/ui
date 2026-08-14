@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +12,6 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { useSaveServerLabels } from '@/lib/queries/servers'
 import {
   MAX_SERVER_LABELS,
-  labelRecordSignature,
   parseServerLabelRows,
   pairsToLabelRecord,
   serverLabelsEqual,
@@ -120,26 +119,22 @@ export function ServerLabelsEditor({
   canManage: boolean
 }>) {
   const saved = useMemo(() => pairsToLabelRecord(labels), [labels])
-  const savedSignature = labelRecordSignature(saved)
-  const savedRef = useRef(saved)
-  savedRef.current = saved
   const [rows, setRows] = useState(() => rowsFromPairs(labels))
   const [error, setError] = useState<string | null>(null)
   const saveMutation = useSaveServerLabels(orgId, serverId)
 
   useEffect(() => {
-    const next = savedRef.current
     setRows((current) => {
       const parsedRows = parseServerLabelRows(current)
-      if (parsedRows.ok && !serverLabelsEqual(parsedRows.labels, next)) {
+      if (parsedRows.ok && !serverLabelsEqual(parsedRows.labels, saved)) {
         return current
       }
       return rowsFromPairs(
-        Object.entries(next).map(([key, value]) => ({ key, value })),
+        Object.entries(saved).map(([key, value]) => ({ key, value })),
       )
     })
     setError(null)
-  }, [savedSignature])
+  }, [saved])
 
   const parsed = parseServerLabelRows(rows)
   const dirty =
