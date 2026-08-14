@@ -10,9 +10,11 @@ import {
   finiteMetric,
   formatLoadPrimary,
   formatPercent,
+  hasUsageMetrics,
   LOAD_FILL,
   loadPercentOfCores,
   type CpuStackSegments,
+  type UsageMetricInput,
 } from '@/lib/server-usage'
 
 function StackedCpuBar({
@@ -65,33 +67,47 @@ function SimpleBar({
   )
 }
 
+function UsagePendingPlaceholder() {
+  return (
+    <View
+      style={styles.pending}
+      accessibilityRole="text"
+      accessibilityLabel="Awaiting usage stats. Check back shortly."
+    >
+      <View style={styles.pendingDot} />
+      <View style={styles.pendingCopy}>
+        <Text style={styles.pendingTitle}>Awaiting stats</Text>
+        <Text style={styles.pendingBody}>Check back shortly</Text>
+      </View>
+    </View>
+  )
+}
+
 /**
  * Compact pro usage cell: stacked CPU, load 1/5/15 (capacity-scaled bar),
- * memory and swap %.
+ * memory and swap %. Hosts with no sample yet show a quiet placeholder
+ * instead of empty tracks.
  */
 export function ServerUsageBars({
-  cpuUsagePercent,
-  cpuUserPercent,
-  cpuSystemPercent,
-  cpuIowaitPercent,
-  load1,
-  load5,
-  load15,
   cpuCores,
-  memoryPercent,
-  swapPercent,
-}: Readonly<{
-  cpuUsagePercent?: number | null
-  cpuUserPercent?: number | null
-  cpuSystemPercent?: number | null
-  cpuIowaitPercent?: number | null
-  load1?: number | null
-  load5?: number | null
-  load15?: number | null
-  cpuCores?: number | null
-  memoryPercent?: number | null
-  swapPercent?: number | null
-}>) {
+  ...metrics
+}: Readonly<UsageMetricInput & { cpuCores?: number | null }>) {
+  if (!hasUsageMetrics(metrics)) {
+    return <UsagePendingPlaceholder />
+  }
+
+  const {
+    cpuUsagePercent,
+    cpuUserPercent,
+    cpuSystemPercent,
+    cpuIowaitPercent,
+    load1,
+    load5,
+    load15,
+    memoryPercent,
+    swapPercent,
+  } = metrics
+
   const stack = buildCpuStackSegments({
     usage: cpuUsagePercent,
     user: cpuUserPercent,
@@ -245,5 +261,42 @@ const styles = StyleSheet.create({
     width: 78,
     fontSize: 9,
     letterSpacing: -0.2,
+  },
+  pending: {
+    alignSelf: 'stretch',
+    minWidth: 168,
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgInset,
+  },
+  pendingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textFaint,
+    flexShrink: 0,
+  },
+  pendingCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  pendingTitle: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  pendingBody: {
+    color: colors.textFaint,
+    fontSize: 10,
+    lineHeight: 13,
   },
 })

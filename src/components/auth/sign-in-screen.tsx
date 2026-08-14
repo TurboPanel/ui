@@ -13,12 +13,13 @@ import {
   resolveControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
+import { isRemoteCookieClient } from '@/lib/control-plane'
 import { useSignIn } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 
 export function SignInScreenContent() {
   const router = useRouter()
-  const { resolveDashboardHref } = useAuth()
+  const { resolveDashboardHref, bootstrapError } = useAuth()
   const signInMutation = useSignIn()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
@@ -58,10 +59,14 @@ export function SignInScreenContent() {
 
   useEffect(() => {
     if (instanceInfoLoading) return
-    if (isInstallMode) router.replace('/install')
+    if (isInstallMode && !isRemoteCookieClient()) {
+      router.replace('/install')
+    }
   }, [instanceInfoLoading, isInstallMode, router])
 
-  if (instanceInfoLoading || isInstallMode) return null
+  if (instanceInfoLoading || (isInstallMode && !isRemoteCookieClient())) {
+    return null
+  }
 
   const signupFooter =
     instanceInfo?.isSignupEnabled === true ? (
@@ -121,10 +126,22 @@ export function SignInScreenContent() {
         />
       </View>
 
-      {error ? (
+      {error || bootstrapError ? (
         <Text style={authFormStyles.error} accessibilityRole="alert">
-          {error}
+          {error || bootstrapError}
         </Text>
+      ) : null}
+
+      {isRemoteCookieClient() ? (
+        <Link href="/connect" asChild>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Change control plane"
+            style={webPointer}
+          >
+            <Text style={authFormStyles.footerLink}>Change control plane</Text>
+          </Pressable>
+        </Link>
       ) : null}
 
       <Pressable

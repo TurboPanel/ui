@@ -7,6 +7,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import { useRouter } from 'expo-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
@@ -15,6 +17,17 @@ import {
 } from '@/components/header-menu-group-styles'
 import { UserIcon } from '@/components/icons/nav-icons'
 import { webPointer } from '@/components/org/org-panel-styles'
+import {
+  formatControlPlaneHostLabel,
+  isRemoteCookieClient,
+} from '@/lib/control-plane'
+import {
+  switchControlPlaneAccount,
+  useControlPlaneStore,
+  type ControlPlaneAccount,
+} from '@/lib/control-plane-accounts'
+import { setActiveOrganizationId } from '@/lib/org-context'
+import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, layout } from '@/lib/theme'
 
 type UserAccountMenuSegmentProps = Readonly<{
@@ -28,6 +41,13 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<View>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
+  const router = useRouter()
+  const queryClient = useQueryClient()
+  const store = useControlPlaneStore()
+  const showSwitcher = isRemoteCookieClient()
+  const otherAccounts = store.accounts.filter(
+    (account) => account.origin !== store.activeOrigin && account.email,
+  )
 
   useEffect(() => {
     if (!open || isCompact) {
@@ -50,6 +70,18 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
     })
   }
 
+  const handleSwitch = (account: ControlPlaneAccount) => {
+    close()
+    if (!switchControlPlaneAccount(account.origin)) return
+    setActiveOrganizationId(account.lastOrgId)
+    queryClient.clear()
+  }
+
+  const handleAddControlPlane = () => {
+    close()
+    router.push('/connect')
+  }
+
   const menuBody = (
     <GlassSurface
       style={[headerMenuGroupStyles.menu, isCompact && styles.menuSheet]}
@@ -60,7 +92,64 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
         <Text style={styles.accountEmail} selectable numberOfLines={2}>
           {email}
         </Text>
+        {showSwitcher && store.activeOrigin ? (
+          <Text style={styles.accountOrigin} numberOfLines={1}>
+            {store.accounts.find((account) => account.origin === store.activeOrigin)
+              ?.kind === 'ha'
+              ? HA_PRODUCT_NAME
+              : formatControlPlaneHostLabel(store.activeOrigin)}
+          </Text>
+        ) : null}
       </View>
+
+      {showSwitcher && otherAccounts.length > 0 ? (
+        <>
+          <View style={headerMenuGroupStyles.menuDivider} />
+          <Text style={headerMenuGroupStyles.menuHeading}>Switch control plane</Text>
+          {otherAccounts.map((account) => (
+            <Pressable
+              key={account.origin}
+              style={({ pressed }) => [
+                headerMenuGroupStyles.menuAction,
+                pressed && headerMenuGroupStyles.itemPressed,
+                webPointer,
+              ]}
+              onPress={() => handleSwitch(account)}
+              accessibilityRole="menuitem"
+              accessibilityLabel={`Switch to ${account.email ?? account.origin}`}
+            >
+              <Text style={headerMenuGroupStyles.menuActionLabel} numberOfLines={1}>
+                {account.email ?? 'Signed in'}
+              </Text>
+              <Text style={styles.accountOrigin} numberOfLines={1}>
+                {account.kind === 'ha'
+                  ? HA_PRODUCT_NAME
+                  : formatControlPlaneHostLabel(account.origin)}
+              </Text>
+            </Pressable>
+          ))}
+        </>
+      ) : null}
+
+      {showSwitcher ? (
+        <>
+          <View style={headerMenuGroupStyles.menuDivider} />
+          <Pressable
+            style={({ pressed }) => [
+              headerMenuGroupStyles.menuAction,
+              pressed && headerMenuGroupStyles.itemPressed,
+              webPointer,
+            ]}
+            onPress={handleAddControlPlane}
+            accessibilityRole="menuitem"
+            accessibilityLabel="Add control plane"
+          >
+            <Text style={headerMenuGroupStyles.menuActionLabel}>
+              Add control plane…
+            </Text>
+          </Pressable>
+        </>
+      ) : null}
 
       <View style={headerMenuGroupStyles.menuDivider} />
 
@@ -153,7 +242,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   menuSheet: {
-    maxHeight: '40%',
+    maxHeight: '55%',
   },
   accountBlock: {
     paddingBottom: 2,
@@ -164,6 +253,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  accountOrigin: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
     paddingHorizontal: 8,
   },
   signOutLabel: {

@@ -14,6 +14,14 @@ import {
   type ControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import {
+  isRemoteCookieClient,
+  isStandaloneExpoWeb,
+} from '@/lib/control-plane'
+import {
+  canQueryControlPlane,
+  useControlPlaneStore,
+} from '@/lib/control-plane-accounts'
+import {
   fetchOrganizations,
   type SessionInfo,
 } from '@/lib/instance-api'
@@ -43,6 +51,8 @@ type AuthContextValue = {
   controlPlaneRuntime: ControlPlaneRuntime | undefined
   isLoading: boolean
   bootstrapError: string | null
+  /** Metro web, or native with no control-plane origin yet. */
+  needsControlPlane: boolean
   signIn: (email: string, password: string) => Promise<SessionInfo>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -51,7 +61,7 @@ type AuthContextValue = {
   refreshInstallStatus: () => Promise<boolean>
   handleUnauthorized: () => Promise<void>
   resolveDashboardHref: () => Promise<
-    '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
+    '/connect' | '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
   >
 }
 
@@ -59,9 +69,11 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const queryClient = useQueryClient()
-  const statusQuery = useInstallStatusQuery()
+  useControlPlaneStore()
+  const bootstrapEnabled = canQueryControlPlane()
+  const statusQuery = useInstallStatusQuery({ enabled: bootstrapEnabled })
   const sessionQuery = useSessionQuery({
-    enabled: statusQuery.isSuccess || statusQuery.isError,
+    enabled: bootstrapEnabled && (statusQuery.isSuccess || statusQuery.isError),
   })
   const signInMutation = useSignInMutation()
   const signUpMutation = useSignUpMutation()
@@ -89,9 +101,14 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
   }, [statusQuery.data])
 
+  const needsControlPlane =
+    isStandaloneExpoWeb() ||
+    (isRemoteCookieClient() && !canQueryControlPlane())
+
   const isLoading =
-    statusQuery.isLoading ||
-    (statusQuery.isSuccess && sessionQuery.isLoading)
+    bootstrapEnabled &&
+    (statusQuery.isLoading ||
+      (statusQuery.isSuccess && sessionQuery.isLoading))
 
   let bootstrapError: string | null = null
   if (statusQuery.error instanceof Error) {
@@ -141,10 +158,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [handleUnauthorized])
 
   const resolveDashboardHref = useCallback(async (): Promise<
-    '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
+    '/connect' | '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
   > => {
     if (needsInstall) {
-      return '/install'
+      return isRemoteCookieClient() ? '/connect' : '/install'
     }
     if (!session) {
       return '/sign-in'
@@ -193,6 +210,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       controlPlaneRuntime,
       isLoading,
       bootstrapError,
+      needsControlPlane,
       signIn,
       signUp,
       signOut,
@@ -209,6 +227,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       controlPlaneRuntime,
       isLoading,
       bootstrapError,
+      needsControlPlane,
       signIn,
       signUp,
       signOut,

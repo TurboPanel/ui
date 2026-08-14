@@ -9,6 +9,10 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query'
 import {
+  canQueryControlPlane,
+  useControlPlaneStore,
+} from '@/lib/control-plane-accounts'
+import {
   checkPermission,
   fetchInstallStatus,
   isForbiddenError,
@@ -134,10 +138,13 @@ export function useApiMutation<TData, TVariables = void, TContext = unknown>(
 }
 
 export function useAuthStatus() {
+  useControlPlaneStore()
   return useQuery({
     queryKey: queryKeys.auth.status,
     queryFn: fetchInstallStatus,
     staleTime: 30_000,
+    retry: false,
+    enabled: canQueryControlPlane(),
   })
 }
 

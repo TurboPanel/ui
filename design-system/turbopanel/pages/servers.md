@@ -35,7 +35,7 @@
 - Initializing badge: pending (amber) **pulsing** LED + label when `connected` is false and `statusChangedAt` is null — just-registered hosts (including the colocated “this server” after `/install`) while the daemon is still connecting; not Offline. Fleet list refetches every **2 s** until Initializing clears, then returns to 30 s. Honor reduced motion (static amber).  
 - Offline badge: hollow dot + muted label  
 - **Country:** flag emoji + English country name from geo (or em dash)  
-- **Usage:** compact pro bars (`ServerUsageBars`) from one fleet metrics snapshot — **stacked CPU** (user / system / other / iowait), **load 1/5/15** numbers with capacity-scaled bar (`load1 / cpuThreads`), memory + swap % — never per-row metrics polling; values always labeled (not color-only)  
+- **Usage:** compact pro bars (`ServerUsageBars`) from one fleet metrics snapshot — **stacked CPU** (user / system / other / iowait), **load 1/5/15** numbers with capacity-scaled bar (`load1 / cpuThreads`), memory + swap % — never per-row metrics polling; values always labeled (not color-only). **No sample yet:** compact inset **Awaiting stats / Check back shortly** (faint geometric marker + muted copy) — never empty tracks or em-dash bars  
 - Checkbox stops propagation — row press does not toggle selection
 
 ## Inventory strip
@@ -75,4 +75,5 @@
 - ❌ Showing registration keys after the wizard is dismissed  
 - ❌ Expand rows for commands on the fleet table  
 - ❌ Status conveyed by color alone (bars always show a percent, load triplet, or em dash)  
+- ❌ Empty usage tracks when a host has no sample yet (use the awaiting-stats placeholder)  
 - ❌ Inventing core counts client-side — load bar fill needs daemon-reported `inventory.cpuThreads`

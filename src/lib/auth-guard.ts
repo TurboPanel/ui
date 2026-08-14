@@ -11,6 +11,12 @@ export type AuthGuardContext = Readonly<{
   needsInstall: boolean
   topSegment: string | undefined
   developerDevBypass: boolean
+  /** Metro web, or native with no origin — send to /connect. */
+  needsControlPlane?: boolean
+  /** Native must not open the host PAM install wizard. */
+  blockNativeInstall?: boolean
+  /** Metro web and native may remain on /connect (including add-another). */
+  allowConnect?: boolean
 }>
 
 /** Returns a redirect target, or `null` to stay on the current route. */
@@ -19,6 +25,18 @@ export function resolveAuthGuardHref(ctx: AuthGuardContext): Href | null {
 
   if (topSegment === 'recovering') {
     return null
+  }
+
+  if (topSegment === 'connect') {
+    return resolveConnectHref(ctx)
+  }
+
+  if (ctx.needsControlPlane) {
+    return '/connect' as Href
+  }
+
+  if (needsInstall && ctx.blockNativeInstall) {
+    return '/connect' as Href
   }
 
   if (needsInstall) {
@@ -31,6 +49,14 @@ export function resolveAuthGuardHref(ctx: AuthGuardContext): Href | null {
   }
 
   return resolveSessionRouteHref(ctx)
+}
+
+function resolveConnectHref(ctx: AuthGuardContext): Href | null {
+  if (ctx.allowConnect || ctx.needsControlPlane || ctx.blockNativeInstall) {
+    return null
+  }
+  // Same-origin web should never sit on /connect.
+  return dashboardHref(ctx.session, ctx.needsInstall) as Href
 }
 
 function resolveNeedsInstallHref(
@@ -100,6 +126,7 @@ const PUBLIC_ROUTE_SEGMENTS = new Set([
   'admin',
   'recovering',
   'developer',
+  'connect',
 ])
 
 function isOrgRoute(topSegment: string | undefined): boolean {

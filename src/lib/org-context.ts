@@ -1,3 +1,6 @@
+import { isRemoteCookieClient } from '@/lib/control-plane'
+import { rememberSignedInAccount } from '@/lib/control-plane-accounts'
+
 const STORAGE_KEY = 'turbopanel.lastOrganizationId'
 
 /** Must match instance `src/client/org-context.ts`. */
@@ -35,6 +38,9 @@ export function setActiveOrganizationId(orgId: string | null): void {
   activeOrganizationId = orgId
   if (orgId) {
     setStoredOrganizationId(orgId)
+    if (isRemoteCookieClient()) {
+      rememberSignedInAccount({ lastOrgId: orgId })
+    }
   } else {
     clearStoredOrganizationId()
   }

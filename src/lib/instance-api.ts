@@ -1,3 +1,5 @@
+import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
+import { resolveApiUrl } from '@/lib/control-plane'
 import { formatFetchFailureDetail } from '@/lib/fetch-error-detail'
 import {
   getActiveOrganizationId,
@@ -74,6 +76,10 @@ const CLIENT_API = "/api/client/v1";
 const INSTALL_API = "/api/install/v1";
 const ADMIN_API = '/api/admin/v1';
 
+function controlPlaneUrl(path: string): string {
+  return resolveApiUrl(path, getActiveControlPlaneOrigin())
+}
+
 /**
  * Dev-sync (`POST /api/developer/v1/daemon/sync-dev`) is Deno-only, superadmin /
  * local-console authenticated, and exposed through the turbopanel-dev terminal
@@ -111,10 +117,13 @@ export type InstallStatus = {
 };
 
 export async function fetchSession(): Promise<SessionInfo | null> {
-  const response = await fetch(`${CLIENT_API}/authn/session`, {
-    credentials: 'include',
-    headers: { "content-type": "application/json" },
-  });
+  const response = await fetch(
+    controlPlaneUrl(`${CLIENT_API}/authn/session`),
+    {
+      credentials: 'include',
+      headers: { "content-type": "application/json" },
+    },
+  );
 
   if (response.status === 401) {
     return null;
@@ -712,7 +721,7 @@ export async function deleteServer(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}`
-  const response = await fetch(path, {
+  const response = await fetch(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
@@ -797,11 +806,14 @@ async function apiFetch<T>(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(path, {
-    ...init,
-    credentials: 'include',
-    headers,
-  });
+  const response = await fetch(
+    controlPlaneUrl(path),
+    {
+      ...init,
+      credentials: 'include',
+      headers,
+    },
+  );
 
   if (!response.ok) {
     let detail = formatFetchFailureDetail(response.status);
@@ -891,7 +903,7 @@ export async function createLicense(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(`${CLIENT_API}/licenses`, {
+  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/licenses`), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -2453,7 +2465,7 @@ export async function deployEnvironment(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -2947,7 +2959,7 @@ async function fetchServerMetricsJson<T>(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/${pathSuffix}?${query.toString()}`
-  const response = await fetch(path, {
+  const response = await fetch(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -3043,7 +3055,7 @@ export async function fetchFleetMetricsLatest(
   }
 
   const path = `${CLIENT_API}/servers/metrics/latest`
-  const response = await fetch(path, {
+  const response = await fetch(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -3526,7 +3538,7 @@ export async function downloadOrganizationCaPem(): Promise<string> {
   if (resolvedOrgId) {
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
-  const response = await fetch(`${CLIENT_API}/tls/ca/download`, {
+  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/tls/ca/download`), {
     credentials: 'include',
     headers,
   })

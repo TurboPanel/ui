@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCpuStackSegments,
+  hasUsageMetrics,
   loadPercentOfCores,
 } from './server-usage'
 
@@ -52,5 +53,34 @@ describe('buildCpuStackSegments', () => {
       (stack?.other ?? 0) +
       (stack?.iowait ?? 0)
     expect(sum).toBeCloseTo(100, 5)
+  })
+})
+
+describe('hasUsageMetrics', () => {
+  it('is false when every metric is missing', () => {
+    expect(hasUsageMetrics({})).toBe(false)
+    expect(
+      hasUsageMetrics({
+        cpuUsagePercent: null,
+        load1: undefined,
+        memoryPercent: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('treats zero as a real sample', () => {
+    expect(hasUsageMetrics({ cpuUsagePercent: 0 })).toBe(true)
+    expect(hasUsageMetrics({ memoryPercent: 0 })).toBe(true)
+    expect(hasUsageMetrics({ load1: 0 })).toBe(true)
+  })
+
+  it('is true when any displayed metric is finite', () => {
+    expect(hasUsageMetrics({ swapPercent: 12.4 })).toBe(true)
+    expect(hasUsageMetrics({ load15: 0.08 })).toBe(true)
+  })
+
+  it('ignores non-finite numbers', () => {
+    expect(hasUsageMetrics({ cpuUsagePercent: Number.NaN })).toBe(false)
+    expect(hasUsageMetrics({ load1: Number.POSITIVE_INFINITY })).toBe(false)
   })
 })

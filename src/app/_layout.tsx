@@ -15,6 +15,7 @@ import { SafeAreaRoot } from '@/components/safe-area-root'
 import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { resolveAuthGuardHref } from '@/lib/auth-guard'
+import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
 import { colors } from '@/lib/theme'
 
 const STACK_SCREEN_OPTIONS = { headerShown: false } as const
@@ -53,7 +54,13 @@ export default function RootLayout() {
 }
 
 function AuthGuard() {
-  const { session, needsInstall, isLoading, controlPlaneRuntime } = useAuth()
+  const {
+    session,
+    needsInstall,
+    isLoading,
+    controlPlaneRuntime,
+    needsControlPlane,
+  } = useAuth()
   const segments = useSegments()
   const topSegment = (segments as readonly string[])[0]
 
@@ -73,6 +80,9 @@ function AuthGuard() {
     needsInstall,
     topSegment,
     developerDevBypass: __DEV__ && topSegment === 'developer',
+    needsControlPlane,
+    blockNativeInstall: isRemoteCookieClient() && needsInstall,
+    allowConnect: !usesSameOriginApi(),
   })
 
   // Keep Stack mounted while redirecting. Swapping Stack out for <Redirect />

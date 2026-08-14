@@ -96,4 +96,51 @@ describe('resolveAuthGuardHref', () => {
       }),
     ).toBe('/welcome')
   })
+
+  it('sends Metro web and native-without-origin to connect', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'sign-in',
+        developerDevBypass: false,
+        needsControlPlane: true,
+      }),
+    ).toBe('/connect')
+  })
+
+  it('keeps native clients on connect even when already signed in', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'connect',
+        developerDevBypass: false,
+        allowConnect: true,
+      }),
+    ).toBeNull()
+  })
+
+  it('blocks the PAM install wizard on native', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'sign-in',
+        developerDevBypass: false,
+        blockNativeInstall: true,
+      }),
+    ).toBe('/connect')
+  })
+
+  it('sends same-origin web away from connect', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'connect',
+        developerDevBypass: false,
+      }),
+    ).toBe('/sign-in')
+  })
 })

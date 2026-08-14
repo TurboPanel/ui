@@ -14,6 +14,12 @@ import {
   type InstallStatus,
   type SessionInfo,
 } from '@/lib/instance-api'
+import {
+  getActiveControlPlaneAccount,
+  rememberSignedInAccount,
+  removeActiveControlPlaneAccount,
+} from '@/lib/control-plane-accounts'
+import { isRemoteCookieClient } from '@/lib/control-plane'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
@@ -22,6 +28,7 @@ export function useSessionQuery(options?: Readonly<{ enabled?: boolean }>) {
     queryKey: queryKeys.auth.session,
     queryFn: fetchSession,
     enabled: options?.enabled ?? true,
+    retry: false,
   })
 }
 
@@ -31,6 +38,7 @@ export function useInstallStatusQuery(options?: Readonly<{ enabled?: boolean }>)
     queryFn: fetchInstallStatus,
     enabled: options?.enabled ?? true,
     staleTime: 30_000,
+    retry: false,
   })
 }
 
@@ -69,6 +77,15 @@ export function useSignIn() {
         queryKeys.auth.session,
         session,
       )
+      if (isRemoteCookieClient()) {
+        const status = queryClient.getQueryData<InstallStatus>(
+          queryKeys.auth.status,
+        )
+        rememberSignedInAccount({
+          email: session.email,
+          runtime: status?.runtime ?? null,
+        })
+      }
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.status,
       })
@@ -91,9 +108,18 @@ export function useSignUp() {
 export function useSignOut() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: signOut,
+    mutationFn: async () => {
+      const result = await signOut()
+      if (isRemoteCookieClient()) {
+        removeActiveControlPlaneAccount()
+      }
+      return result
+    },
     onSuccess: () => {
-      setActiveOrganizationId(null)
+      const next = isRemoteCookieClient()
+        ? getActiveControlPlaneAccount()
+        : null
+      setActiveOrganizationId(next?.lastOrgId ?? null)
       // Drop every cached row so a second sign-in never renders another account.
       queryClient.clear()
     },

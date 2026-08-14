@@ -101,3 +101,30 @@ export function formatLoadPrimary(
 export function finiteMetric(value: number | null | undefined): number | null {
   return finiteOrNull(value)
 }
+
+export type UsageMetricInput = Readonly<{
+  cpuUsagePercent?: number | null
+  cpuUserPercent?: number | null
+  cpuSystemPercent?: number | null
+  cpuIowaitPercent?: number | null
+  load1?: number | null
+  load5?: number | null
+  load15?: number | null
+  memoryPercent?: number | null
+  swapPercent?: number | null
+}>
+
+/** True when any displayed usage metric has arrived (zero counts as a sample). */
+export function hasUsageMetrics(input: UsageMetricInput): boolean {
+  return [
+    input.cpuUsagePercent,
+    input.cpuUserPercent,
+    input.cpuSystemPercent,
+    input.cpuIowaitPercent,
+    input.load1,
+    input.load5,
+    input.load15,
+    input.memoryPercent,
+    input.swapPercent,
+  ].some((value) => finiteOrNull(value) != null)
+}
