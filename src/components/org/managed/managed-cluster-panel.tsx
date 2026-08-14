@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useQueries } from '@tanstack/react-query'
 import { useRouter, type Href } from 'expo-router'
 import {
   Platform,
@@ -26,7 +25,7 @@ import {
   type ReplicaIneligibleReason,
   type ReplicaServerEligibility,
 } from '@/lib/managed-replica-eligibility'
-import { networkLinkHref, networkSiteHref } from '@/lib/org-navigation'
+import { networkFabricHref, networkSiteHref } from '@/lib/org-navigation'
 import {
   MANAGED_PRIMARY_FENCE_FAILED_ERROR,
   MANAGED_REPLICA_HEALTH_STALE_ERROR,
@@ -41,11 +40,9 @@ import {
   useUpdateManagedMemberReadEligible,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
-import {
-  peersQueryOptions,
-  useDatacenters,
-  useVpns,
-} from '@/lib/queries/topology'
+import { useDatacenters } from '@/lib/queries/topology'
+import { useOrgFabric } from '@/lib/queries/fabric'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const webInputStyle = {
@@ -120,7 +117,7 @@ export function ManagedClusterPanel({
   const router = useRouter()
   const serversQuery = useOrgServers(orgId)
   const datacentersQuery = useDatacenters(orgId)
-  const vpnsQuery = useVpns(orgId)
+  const fabricQuery = useOrgFabric(orgId)
   const addReplica = useAddManagedReplica(orgId, environmentId)
   const updateRead = useUpdateManagedMemberReadEligible(orgId, environmentId)
   const removeMember = useRemoveManagedMember(orgId, environmentId)
@@ -139,22 +136,13 @@ export function ManagedClusterPanel({
 
   const servers = serversQuery.data?.servers ?? []
   const datacenters = datacentersQuery.data?.datacenters ?? []
-  const vpns = vpnsQuery.data?.vpns ?? []
-  const peerQueries = useQueries({
-    queries: vpns.map((vpn) => ({
-      ...peersQueryOptions(orgId, vpn.id),
-      enabled: showAdd && vpns.length > 0,
-    })),
-  })
-  const vpnPeers = useMemo(() => {
-    const peers: { vpnId: string; serverId: string }[] = []
-    for (const q of peerQueries) {
-      for (const peer of q.data?.peers ?? []) {
-        peers.push({ vpnId: peer.vpnId, serverId: peer.serverId })
-      }
-    }
-    return peers
-  }, [peerQueries])
+  const fabricRelays = useMemo(
+    () =>
+      (fabricQuery.data?.relays ?? []).map((relay) => ({
+        serverId: relay.serverId,
+      })),
+    [fabricQuery.data?.relays],
+  )
 
   const serverById = useMemo(() => {
     const map = new Map(servers.map((s) => [s.id, s]))
@@ -179,9 +167,9 @@ export function ManagedClusterPanel({
         })),
         members,
         primaryServerId: primary?.serverId ?? null,
-        vpnPeers,
+        fabricRelays,
       }),
-    [servers, datacenters, members, primary?.serverId, vpnPeers],
+    [servers, datacenters, members, primary?.serverId, fabricRelays],
   )
 
   const eligibilityById = useMemo(() => {
@@ -313,12 +301,7 @@ export function ManagedClusterPanel({
       return
     }
     if (reason === 'no-private-path') {
-      const firstVpnId = vpns[0]?.id
-      if (firstVpnId) {
-        router.push(networkLinkHref(orgId, firstVpnId) as Href)
-        return
-      }
-      router.push(`/${orgId}/network/links` as Href)
+      router.push(networkFabricHref(orgId) as Href)
     }
   }
 
@@ -693,7 +676,7 @@ function ServerOptionRow({
             >
               <Text style={styles.linkText}>
                 {reason === 'no-private-path'
-                  ? 'Open Network links'
+                  ? `Open ${TURBOFABRIC_PRODUCT_NAME}`
                   : 'Set up private network'}
               </Text>
             </Pressable>

@@ -46,11 +46,11 @@ export type ReplicaEligibilityInput = {
    */
   primaryServerId: string | null
   /**
-   * WireGuard mesh peers across all org links. Two servers share a private
-   * VPN path when they appear together on the same `vpnId` (mirrors instance
-   * `resolvePrivateEndpoint` transport order: local → same site → shared VPN).
+   * TurboFabric relays. Two servers share a private fabric path when both
+   * appear in this list (one org mesh). Mirrors instance
+   * `resolvePrivateEndpoint` transport order: local → same site → fabric.
    */
-  vpnPeers?: ReadonlyArray<{ vpnId: string; serverId: string }>
+  fabricRelays?: ReadonlyArray<{ serverId: string }>
 }
 
 export type ReplicaEligibilityResult = {
@@ -65,7 +65,7 @@ function replicaCount(
 }
 
 /**
- * True when `from` can reach `to` over local / same-site / shared VPN path.
+ * True when `from` can reach `to` over local / same-site / shared fabric path.
  * Does not require datacenter IPs (those fail as datacenter_ip_required on
  * the server) — site readiness is already gated by `no-private-cidr`.
  */
@@ -74,7 +74,7 @@ export function hasPrivatePathToPrimary(params: Readonly<{
   candidateDatacenterId: string | null
   primaryServerId: string
   primaryDatacenterId: string | null
-  vpnPeers: ReadonlyArray<{ vpnId: string; serverId: string }>
+  fabricRelays: ReadonlyArray<{ serverId: string }>
 }>): boolean {
   if (params.candidateServerId === params.primaryServerId) {
     return true
@@ -87,16 +87,12 @@ export function hasPrivatePathToPrimary(params: Readonly<{
     return true
   }
 
-  const primaryVpnIds = new Set(
-    params.vpnPeers
-      .filter((row) => row.serverId === params.primaryServerId)
-      .map((row) => row.vpnId),
+  const relayServerIds = new Set(
+    params.fabricRelays.map((row) => row.serverId),
   )
-  if (primaryVpnIds.size === 0) return false
-  return params.vpnPeers.some(
-    (row) =>
-      row.serverId === params.candidateServerId &&
-      primaryVpnIds.has(row.vpnId),
+  return (
+    relayServerIds.has(params.primaryServerId) &&
+    relayServerIds.has(params.candidateServerId)
   )
 }
 
@@ -118,7 +114,7 @@ export function resolveReplicaEligibility(
   const primary = input.primaryServerId
     ? serverById.get(input.primaryServerId)
     : undefined
-  const vpnPeers = input.vpnPeers ?? []
+  const fabricRelays = input.fabricRelays ?? []
 
   const servers: ReplicaServerEligibility[] = input.servers.map((server) => {
     if (memberServerIds.has(server.id)) {
@@ -153,7 +149,7 @@ export function resolveReplicaEligibility(
         candidateDatacenterId: server.datacenterId,
         primaryServerId: input.primaryServerId,
         primaryDatacenterId: primary?.datacenterId ?? null,
-        vpnPeers,
+        fabricRelays,
       })
     ) {
       return {

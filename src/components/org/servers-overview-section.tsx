@@ -13,18 +13,16 @@ import {
   type ImageStyle,
   type ViewStyle,
 } from 'react-native'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { SectionPanel } from '@/components/org/section-panel'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
-  fetchIps,
-  fetchVpns,
   isForbiddenError,
   type FleetServerUsageRecord,
-  type IpRecord,
   type OrgServerRecord,
+  type RelayRecord,
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
@@ -37,6 +35,7 @@ import {
   useServersUpdateStatus,
   SERVERS_REFRESH_MS,
 } from '@/lib/queries/servers'
+import { useOrgFabric } from '@/lib/queries/fabric'
 import { useCan, queryKeys } from '@/lib/query-client'
 import { useAuth } from '@/lib/auth-context'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
@@ -55,22 +54,13 @@ import {
 import { chrome, colors, spacing } from '@/lib/theme'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
 
-/** Group VPN-scope overlay addresses by server — O(1) page-level fan-in. */
+/** Group TurboFabric tp0 addresses by server — O(1) page-level fan-in. */
 function overlayByServerId(
-  ips: readonly IpRecord[],
-  vpnIds: ReadonlySet<string>,
+  relays: readonly Pick<RelayRecord, 'serverId' | 'address'>[],
 ): Map<string, string> {
-  const grouped = new Map<string, string[]>()
-  for (const ip of ips) {
-    if (!ip.serverId || !ip.vpnId || !vpnIds.has(ip.vpnId)) continue
-    const list = grouped.get(ip.serverId) ?? []
-    list.push(ip.address)
-    grouped.set(ip.serverId, list)
-  }
   const result = new Map<string, string>()
-  for (const [serverId, addresses] of grouped) {
-    addresses.sort((a, b) => a.localeCompare(b))
-    result.set(serverId, addresses.join(', '))
+  for (const relay of relays) {
+    result.set(relay.serverId, relay.address)
   }
   return result
 }
@@ -796,19 +786,8 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
 
-  const vpnIpsQuery = useQuery({
-    queryKey: queryKeys.org(orgId).topology.ips({ scope: 'vpn' }),
-    queryFn: () => fetchIps({ scope: 'vpn' }),
-  })
-  const vpnsQuery = useQuery({
-    queryKey: queryKeys.org(orgId).topology.vpns,
-    queryFn: fetchVpns,
-  })
-
-  const meshOverlayByServer = overlayByServerId(
-    vpnIpsQuery.data?.ips ?? [],
-    new Set((vpnsQuery.data?.vpns ?? []).map((vpn) => vpn.id)),
-  )
+  const fabricQuery = useOrgFabric(orgId)
+  const meshOverlayByServer = overlayByServerId(fabricQuery.data?.relays ?? [])
 
   const serversQuery = useOrgServers(orgId, {
     staleTime: 0,

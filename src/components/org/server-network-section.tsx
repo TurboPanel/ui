@@ -8,13 +8,13 @@ import {
   fetchDatacenters,
   fetchIps,
   fetchNetworks,
-  fetchVpns,
-  type IpRecord,
+  type RelayRecord,
   type ServerDetailRecord,
-  type VpnRecord,
 } from '@/lib/instance-api'
-import { networkLinkHref, networkSiteHref } from '@/lib/org-navigation'
-import { queryKeys } from '@/lib/query-client'
+import { networkFabricHref, networkSiteHref } from '@/lib/org-navigation'
+import { useOrgFabric } from '@/lib/queries/fabric'
+import { queryKeys, useCan } from '@/lib/query-client'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, spacing } from '@/lib/theme'
 
 // Docker/veth/bridge interfaces are filtered daemon-side before addresses reach the API.
@@ -58,71 +58,62 @@ function DatacenterPrivateAddress({
   )
 }
 
-function vpnTitle(vpn: VpnRecord): string {
-  return vpn.displayName?.trim() || 'Unnamed mesh'
-}
-
 function ServerMeshMembershipPanel({
   orgId,
-  rows,
+  relay,
   loading,
+  canManage,
 }: Readonly<{
   orgId: string
-  rows: { vpn: VpnRecord; address: string }[]
+  relay: RelayRecord | null
   loading: boolean
+  canManage: boolean
 }>) {
   const router = useRouter()
 
   return (
-    <SectionPanel title="Mesh" hint="Link overlay membership for this host">
-      {loading && rows.length === 0 ? (
+    <SectionPanel
+      title="Mesh"
+      hint={`${TURBOFABRIC_PRODUCT_NAME} membership for this host`}
+    >
+      {!canManage ? (
+        <Text style={orgPanelStyles.muted}>
+          Organization manage permission is required to view{' '}
+          {TURBOFABRIC_PRODUCT_NAME} membership.
+        </Text>
+      ) : null}
+      {canManage && loading && !relay ? (
         <Text style={orgPanelStyles.muted}>Loading mesh membership…</Text>
       ) : null}
-      {!loading && rows.length === 0 ? (
+      {canManage && !loading && !relay ? (
         <View style={orgPanelStyles.statePanel}>
-          <Text style={orgPanelStyles.muted}>Not a peer on any mesh.</Text>
+          <Text style={orgPanelStyles.muted}>
+            Not a {TURBOFABRIC_PRODUCT_NAME} relay.
+          </Text>
         </View>
       ) : null}
-      <View style={styles.list}>
-        {rows.map(({ vpn, address }) => (
-          <View key={vpn.id} style={orgPanelStyles.detailCard}>
-            <Pressable
-              style={webPointer}
-              onPress={() =>
-                router.push(networkLinkHref(orgId, vpn.id) as Href)
-              }
-              accessibilityRole="link"
-              accessibilityLabel={`Open ${vpnTitle(vpn)}`}
-            >
-              <Text style={orgPanelStyles.detailTitle}>{vpnTitle(vpn)}</Text>
-            </Pressable>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Overlay: </Text>
-              <Text style={styles.mono} selectable>
-                {address}
-              </Text>
+      {canManage && relay ? (
+        <View style={orgPanelStyles.detailCard}>
+          <Pressable
+            style={webPointer}
+            onPress={() => router.push(networkFabricHref(orgId) as Href)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${TURBOFABRIC_PRODUCT_NAME}`}
+          >
+            <Text style={orgPanelStyles.detailTitle}>
+              {TURBOFABRIC_PRODUCT_NAME}
             </Text>
-          </View>
-        ))}
-      </View>
+          </Pressable>
+          <Text style={orgPanelStyles.detailLine}>
+            <Text style={orgPanelStyles.detailLabel}>tp0: </Text>
+            <Text style={styles.mono} selectable>
+              {relay.address}
+            </Text>
+          </Text>
+        </View>
+      ) : null}
     </SectionPanel>
   )
-}
-
-function buildMeshRows(
-  ips: readonly IpRecord[],
-  vpns: readonly VpnRecord[],
-): { vpn: VpnRecord; address: string }[] {
-  const vpnById = new Map(vpns.map((vpn) => [vpn.id, vpn]))
-  const rows: { vpn: VpnRecord; address: string }[] = []
-  for (const ip of ips) {
-    if (!ip.vpnId) continue
-    const vpn = vpnById.get(ip.vpnId)
-    if (!vpn) continue
-    rows.push({ vpn, address: ip.address })
-  }
-  rows.sort((a, b) => vpnTitle(a.vpn).localeCompare(vpnTitle(b.vpn)))
-  return rows
 }
 
 export function ServerNetworkSection({
@@ -130,6 +121,7 @@ export function ServerNetworkSection({
   server,
 }: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
   const router = useRouter()
+  const canManage = useCan('organization', orgId, 'organization:manage')
   const addresses = server.addresses
   const hasLists =
     addresses != null &&
@@ -145,15 +137,7 @@ export function ServerNetworkSection({
     queryFn: () => fetchIps({ serverId: server.id, scope: 'datacenter' }),
   })
 
-  const vpnIpsQuery = useQuery({
-    queryKey: queryKeys.org(orgId).servers.ips(server.id, { scope: 'vpn' }),
-    queryFn: () => fetchIps({ serverId: server.id, scope: 'vpn' }),
-  })
-
-  const vpnsQuery = useQuery({
-    queryKey: queryKeys.org(orgId).topology.vpns,
-    queryFn: fetchVpns,
-  })
+  const fabricQuery = useOrgFabric(orgId, { enabled: canManage })
 
   const serverManagedIpsQuery = useQuery({
     queryKey: queryKeys.org(orgId).servers.networkPanel(server.id),
@@ -185,14 +169,10 @@ export function ServerNetworkSection({
   const datacenterById = new Map(
     (serverManagedIpsQuery.data?.datacenters ?? []).map((row) => [row.id, row]),
   )
-  const managedIps = (serverManagedIpsQuery.data?.ips ?? []).filter(
-    (ip) => ip.scope !== 'vpn',
-  )
-  const meshRows = buildMeshRows(
-    vpnIpsQuery.data?.ips ?? [],
-    vpnsQuery.data?.vpns ?? [],
-  )
-  const meshLoading = vpnIpsQuery.isLoading || vpnsQuery.isLoading
+  const managedIps = serverManagedIpsQuery.data?.ips ?? []
+  const relay =
+    fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
+  const meshLoading = fabricQuery.isLoading
 
   const siteName = server.datacenterDisplayName?.trim() || null
   const siteId = server.datacenterId
@@ -231,8 +211,9 @@ export function ServerNetworkSection({
 
       <ServerMeshMembershipPanel
         orgId={orgId}
-        rows={meshRows}
+        relay={relay}
         loading={meshLoading}
+        canManage={canManage}
       />
 
       <SectionPanel

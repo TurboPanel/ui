@@ -37,6 +37,36 @@ export function anyCommandInFlight(
   return hasInFlightCommands(commands)
 }
 
+function trackedEntryKey(entry: TrackedCommandEntry): string {
+  return `${entry.serverId}:${entry.commandId}`
+}
+
+/** True while a tracked Apply/reconcile batch is still loading or non-terminal. */
+export function hasPendingTrackedCommands(
+  entries: readonly TrackedCommandEntry[],
+  commands: readonly CommandRecord[] | undefined,
+): boolean {
+  if (entries.length === 0) return false
+  if (!commands || commands.length === 0) return true
+  return hasInFlightCommands(commands)
+}
+
+/** Keep earlier command ids when a later Apply returns more queued rows. */
+export function mergeTrackedCommandEntries(
+  current: readonly TrackedCommandEntry[],
+  next: readonly TrackedCommandEntry[],
+): TrackedCommandEntry[] {
+  const seen = new Set(current.map((entry) => trackedEntryKey(entry)))
+  const merged = [...current]
+  for (const entry of next) {
+    const key = trackedEntryKey(entry)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(entry)
+  }
+  return merged
+}
+
 export function useCommandsBatch(
   orgId: string,
   entries: readonly TrackedCommandEntry[],

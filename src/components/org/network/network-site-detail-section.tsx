@@ -8,7 +8,6 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useQueries } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import {
   IpListRow,
@@ -21,11 +20,10 @@ import type {
   IpRecord,
   NetworkRecord,
   OrgServerRecord,
-  PeerRecord,
-  VpnRecord,
+  RelayRecord,
+  RelayRole,
 } from '@/lib/instance-api'
 import {
-  peersQueryOptions,
   useCreateNetwork,
   useDatacenter,
   useDatacenters,
@@ -33,20 +31,20 @@ import {
   useIps,
   useNetworks,
   useUpdateDatacenter,
-  useVpns,
 } from '@/lib/queries/topology'
+import { useOrgFabric } from '@/lib/queries/fabric'
 import { useOrgServers, usePatchServer, useTimezones } from '@/lib/queries/servers'
-import { networkLinkHref } from '@/lib/org-navigation'
+import { networkFabricHref } from '@/lib/org-navigation'
 import { useCan } from '@/lib/query-client'
 import { serverConnectionStatusLabel, resolveServerConnectionStatus } from '@/lib/server-connection-status'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   formatSiteLinkLabel,
-  overlayAddressForPeer,
+  relayRoleLabel,
   resolvePrimaryGatewayByDatacenter,
   resolveSiteLinks,
-  type SiteLinkSites,
-} from '@/lib/vpn-mesh'
+} from '@/lib/fabric-mesh'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -321,13 +319,13 @@ function MemberServersPanel({
   )
 }
 
-type LinkFromSiteRow = {
-  peer: PeerRecord
-  vpn: VpnRecord
-  otherSiteLabel: string
+type MeshFromSiteRow = {
+  serverId: string
   serverLabel: string
-  overlayAddress: string | null
+  role: RelayRole
+  address: string
   isPrimary: boolean
+  otherSiteLabel: string
 }
 
 function collectSiteCidrs(networks: readonly NetworkRecord[]): string[] {
@@ -339,37 +337,6 @@ function collectSiteCidrs(networks: readonly NetworkRecord[]): string[] {
   }
   siteCidrs.sort((a, b) => a.localeCompare(b))
   return siteCidrs
-}
-
-function groupPeersByVpnId(
-  peers: readonly PeerRecord[],
-): Map<string, PeerRecord[]> {
-  const byVpn = new Map<string, PeerRecord[]>()
-  for (const peer of peers) {
-    const list = byVpn.get(peer.vpnId) ?? []
-    list.push(peer)
-    byVpn.set(peer.vpnId, list)
-  }
-  return byVpn
-}
-
-function collectPrimaryPeerIds(
-  peers: readonly PeerRecord[],
-  serverById: ReadonlyMap<
-    string,
-    { connected: boolean; datacenterId: string | null }
-  >,
-): Set<string> {
-  const primaryPeerIds = new Set<string>()
-  for (const group of groupPeersByVpnId(peers).values()) {
-    for (const peerId of resolvePrimaryGatewayByDatacenter(
-      group,
-      serverById,
-    ).values()) {
-      primaryPeerIds.add(peerId)
-    }
-  }
-  return primaryPeerIds
 }
 
 function resolveSiteCidrs(
@@ -384,86 +351,57 @@ function resolveSiteCidrs(
 }
 
 function resolveOtherSiteLabel(
-  sites: SiteLinkSites | undefined,
+  mesh: ReturnType<typeof resolveSiteLinks>,
   datacenterId: string,
   siteNameById: ReadonlyMap<string, string>,
 ): string {
-  if (!sites) return '—'
-  const otherIds = sites.datacenterIds.filter((id) => id !== datacenterId)
-  if (otherIds.length === 0 && sites.hasUnassignedPeers) {
+  const otherIds = mesh.datacenterIds.filter((id) => id !== datacenterId)
+  if (otherIds.length === 0 && mesh.hasUnassignedPeers) {
     return 'Unassigned hosts'
   }
   if (otherIds.length === 0) return '—'
   return formatSiteLinkLabel(
     {
       datacenterIds: otherIds,
-      hasUnassignedPeers: sites.hasUnassignedPeers,
+      hasUnassignedPeers: mesh.hasUnassignedPeers,
     },
     siteNameById,
   )
 }
 
-function collectPeersFromQueries(
-  peerQueries: ReadonlyArray<{ data?: { peers?: PeerRecord[] } }>,
-): PeerRecord[] {
-  const allPeers: PeerRecord[] = []
-  for (const peerQuery of peerQueries) {
-    const peers = peerQuery.data?.peers
-    if (peers) allPeers.push(...peers)
-  }
-  return allPeers
-}
-
-function buildLinkRowsFromSite({
-  allPeers,
+function buildMeshRowsFromSite({
+  relays,
   servers,
-  vpns,
   datacenterId,
-  siteLinks,
+  mesh,
   siteNameById,
-  ipById,
-  primaryPeerIds,
+  primaryGatewayByDatacenter,
 }: Readonly<{
-  allPeers: readonly PeerRecord[]
+  relays: readonly RelayRecord[]
   servers: readonly OrgServerRecord[]
-  vpns: readonly VpnRecord[]
   datacenterId: string
-  siteLinks: ReadonlyMap<string, SiteLinkSites>
+  mesh: ReturnType<typeof resolveSiteLinks>
   siteNameById: ReadonlyMap<string, string>
-  ipById: ReadonlyMap<string, IpRecord>
-  primaryPeerIds: ReadonlySet<string>
-}>): LinkFromSiteRow[] {
-  const linkRows: LinkFromSiteRow[] = []
-  for (const peer of allPeers) {
-    if (peer.role !== 'gateway') continue
+  primaryGatewayByDatacenter: ReadonlyMap<string, string>
+}>): MeshFromSiteRow[] {
+  const rows: MeshFromSiteRow[] = []
+  for (const relay of relays) {
     const server = servers.find(
       (row) =>
-        row.id === peer.serverId && row.datacenterId === datacenterId,
+        row.id === relay.serverId && row.datacenterId === datacenterId,
     )
     if (!server) continue
-    const vpn = vpns.find((v) => v.id === peer.vpnId)
-    if (!vpn) continue
-    linkRows.push({
-      peer,
-      vpn,
-      otherSiteLabel: resolveOtherSiteLabel(
-        siteLinks.get(vpn.id),
-        datacenterId,
-        siteNameById,
-      ),
+    rows.push({
+      serverId: relay.serverId,
       serverLabel: serverTitle(server),
-      overlayAddress: overlayAddressForPeer(peer, ipById),
-      isPrimary: primaryPeerIds.has(peer.id),
+      role: relay.role,
+      address: relay.address,
+      isPrimary: primaryGatewayByDatacenter.get(datacenterId) === relay.serverId,
+      otherSiteLabel: resolveOtherSiteLabel(mesh, datacenterId, siteNameById),
     })
   }
-  linkRows.sort((a, b) => {
-    const nameCmp = (a.vpn.displayName ?? a.vpn.id).localeCompare(
-      b.vpn.displayName ?? b.vpn.id,
-    )
-    if (nameCmp !== 0) return nameCmp
-    return a.serverLabel.localeCompare(b.serverLabel)
-  })
-  return linkRows
+  rows.sort((a, b) => a.serverLabel.localeCompare(b.serverLabel))
+  return rows
 }
 
 function datacenterLoadError(
@@ -480,79 +418,87 @@ function mutationErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-function LinksFromSitePanel({
+function MeshFromSitePanel({
   orgId,
   rows,
   siteCidrs,
   loading,
+  canManage,
 }: Readonly<{
   orgId: string
-  rows: LinkFromSiteRow[]
+  rows: MeshFromSiteRow[]
   siteCidrs: string[]
   loading: boolean
+  canManage: boolean
 }>) {
   const router = useRouter()
-  const missingSiteCidr = rows.length > 0 && siteCidrs.length === 0
+  const hasGateway = rows.some((row) => row.role === 'gateway')
+  const missingSiteCidr = hasGateway && siteCidrs.length === 0
 
   return (
     <SectionPanel
-      title="Links from this site"
-      hint={`${rows.length} gateway(s)`}
+      title={TURBOFABRIC_PRODUCT_NAME}
+      hint={`${rows.length} relay(s)`}
     >
       <Text style={orgPanelStyles.muted}>
-        Path cross-site replication takes when peers use this site as a gateway.
+        Relays at this site. Cross-site replication uses a gateway here.
       </Text>
-      {loading && rows.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading links…</Text>
+      {!canManage ? (
+        <Text style={orgPanelStyles.muted}>
+          Organization manage permission is required to view{' '}
+          {TURBOFABRIC_PRODUCT_NAME} membership.
+        </Text>
       ) : null}
-      {!loading && rows.length === 0 ? (
+      {canManage && loading && rows.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>Loading mesh…</Text>
+      ) : null}
+      {canManage && !loading && rows.length === 0 ? (
         <View style={orgPanelStyles.statePanel}>
           <Text style={orgPanelStyles.muted}>
-            No link from this site — it is not reachable from other sites.
+            No {TURBOFABRIC_PRODUCT_NAME} relays at this site.
           </Text>
         </View>
       ) : null}
 
-      {missingSiteCidr ? (
+      {canManage && missingSiteCidr ? (
         <View style={orgPanelStyles.calloutWarning}>
           <Text style={orgPanelStyles.calloutWarningText}>
             This site has a mesh gateway but no private network CIDR. Apply will
-            fail until a private network advertises the site prefix
-            (gateway_datacenter_cidr_required).
+            fail until a private network advertises the site prefix.
           </Text>
         </View>
       ) : null}
 
-      <View style={styles.list}>
-        {rows.map((row) => (
+      {canManage ? (
+        <View style={styles.list}>
+          {rows.map((row) => (
           <Pressable
-            key={row.peer.id}
+            key={row.serverId}
             style={[orgPanelStyles.detailCard, webPointer]}
-            onPress={() => router.push(networkLinkHref(orgId, row.vpn.id))}
+            onPress={() => router.push(networkFabricHref(orgId))}
           >
             <View style={styles.gatewayTitleRow}>
-              <Text style={orgPanelStyles.detailTitle}>
-                {row.vpn.displayName?.trim() || 'Unnamed mesh'}
-              </Text>
+              <Text style={orgPanelStyles.detailTitle}>{row.serverLabel}</Text>
               {row.isPrimary ? (
                 <Text style={styles.primaryBadge}>Primary</Text>
               ) : null}
             </View>
             <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Other end: </Text>
+              <Text style={orgPanelStyles.detailLabel}>Role: </Text>
+              {relayRoleLabel(row.role)}
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Other sites: </Text>
               {row.otherSiteLabel}
             </Text>
             <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Gateway: </Text>
-              {row.serverLabel}
-            </Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Overlay: </Text>
-              {row.overlayAddress ?? '—'}
+              <Text style={orgPanelStyles.detailLabel}>tp0: </Text>
+              {row.address}
             </Text>
           </Pressable>
         ))}
-      </View>
+        </View>
+      ) : null}
     </SectionPanel>
   )
 }
@@ -716,18 +662,11 @@ export function NetworkSiteDetailSection({
     { enabled: Boolean(datacenterId) },
   )
   const timezonesQuery = useTimezones()
-  const vpnsQuery = useVpns(orgId)
-  const vpnIpsQuery = useIps(orgId, { scope: 'vpn' })
+  const fabricQuery = useOrgFabric(orgId, { enabled: canManage })
   const datacentersQuery = useDatacenters(orgId)
 
-  const vpns = vpnsQuery.data?.vpns ?? []
+  const relays = fabricQuery.data?.relays ?? []
   const allDatacenters = datacentersQuery.data?.datacenters ?? []
-  const peerQueries = useQueries({
-    queries: vpns.map((vpn) => ({
-      ...peersQueryOptions(orgId, vpn.id),
-      enabled: vpnsQuery.isSuccess,
-    })),
-  })
 
   const patchServerMutation = usePatchServer(orgId)
   const timezoneMutation = useUpdateDatacenter(orgId, datacenterId)
@@ -779,27 +718,21 @@ export function NetworkSiteDetailSection({
     return map
   }, [allDatacenters, datacenter, datacenterId])
 
-  const ipById = new Map(
-    (vpnIpsQuery.data?.ips ?? []).map((ip) => [ip.id, ip]),
+  const mesh = resolveSiteLinks(relays, serverById)
+  const primaryGatewayByDatacenter = resolvePrimaryGatewayByDatacenter(
+    relays,
+    serverById,
   )
-  const allPeers = collectPeersFromQueries(peerQueries)
-  const primaryPeerIds = collectPrimaryPeerIds(allPeers, serverById)
-  const siteLinks = resolveSiteLinks(allPeers, serverById, vpns)
-  const linkRows = buildLinkRowsFromSite({
-    allPeers,
+  const meshRows = buildMeshRowsFromSite({
+    relays,
     servers,
-    vpns,
     datacenterId,
-    siteLinks,
+    mesh,
     siteNameById,
-    ipById,
-    primaryPeerIds,
+    primaryGatewayByDatacenter,
   })
 
-  const linksLoading =
-    vpnsQuery.isLoading ||
-    vpnIpsQuery.isLoading ||
-    peerQueries.some((query) => query.isLoading)
+  const meshLoading = fabricQuery.isLoading
 
   let effectiveTimezone = datacenter?.options?.defaultServerTimezone ?? null
   if (draftTimezone !== undefined) {
@@ -830,7 +763,7 @@ export function NetworkSiteDetailSection({
       <Text style={orgPanelStyles.pageTitle}>{title}</Text>
       <Text style={orgPanelStyles.pageCopy}>
         {datacenter?.description?.trim() ||
-          'Private network, member servers, links, IP pool, and timezone for this site.'}
+          'Private network, member servers, mesh, IP pool, and timezone for this site.'}
       </Text>
 
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
@@ -878,11 +811,12 @@ export function NetworkSiteDetailSection({
         }}
       />
 
-      <LinksFromSitePanel
+      <MeshFromSitePanel
         orgId={orgId}
-        rows={linkRows}
+        rows={meshRows}
         siteCidrs={siteCidrs}
-        loading={linksLoading}
+        loading={meshLoading}
+        canManage={canManage}
       />
 
       <SiteIpPoolPanel

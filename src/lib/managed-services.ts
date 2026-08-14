@@ -3,6 +3,8 @@
  * `environment_id` for engine projects created from the catalog.
  */
 
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+
 export type ManagedServiceEngine =
   | 'postgres'
   | 'mysql'
@@ -27,7 +29,7 @@ export type ManagedBindScope = 'public' | 'datacenter' | 'local'
 export type ManagedMemberRole = 'primary' | 'replica'
 
 /** Private path used for replication (mirrors `PrivateEndpointTransport`). */
-export type ManagedMemberTransport = 'local' | 'datacenter' | 'vpn'
+export type ManagedMemberTransport = 'local' | 'datacenter' | 'fabric'
 
 /** Max replica members per cluster — mirrors instance `MANAGED_MAX_REPLICAS`. */
 export const MANAGED_MAX_REPLICAS = 2
@@ -293,7 +295,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   datacenter_ip_required: 'That server has no private address on its site.',
   private_path_unavailable: 'No private path between that server and the primary.',
   peer_tunnel_address_required:
-    'The VPN link between those sites has no overlay address yet.',
+    `The ${TURBOFABRIC_PRODUCT_NAME} path between those sites has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',
   managed_replica_not_streaming:
     'That replica is not streaming from the primary yet. Wait for it to catch up, or promote anyway if the primary is dead.',
@@ -366,8 +368,8 @@ export function memberTransportLabel(
       return 'Same server'
     case 'datacenter':
       return 'Same site'
-    case 'vpn':
-      return 'Over VPN'
+    case 'fabric':
+      return TURBOFABRIC_PRODUCT_NAME
     default:
       return '—'
   }

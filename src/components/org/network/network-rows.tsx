@@ -79,26 +79,21 @@ export function IpListRow({
   serverLabel,
   networkLabel,
   datacenterLabel,
-  vpnLabel,
   isDeleting,
   onDelete,
   showDelete = true,
   onEdit,
   showEdit = false,
-  meshManagedHint = true,
 }: Readonly<{
   ip: IpRecord
   serverLabel?: string | null
   networkLabel?: string | null
   datacenterLabel?: string | null
-  vpnLabel?: string | null
   isDeleting?: boolean
   onDelete?: (ipId: string) => void
   showDelete?: boolean
   onEdit?: (ipId: string) => void
   showEdit?: boolean
-  /** When true, scope=vpn rows show a pointer to the link detail page. */
-  meshManagedHint?: boolean
 }>) {
   return (
     <View style={orgPanelStyles.detailCard}>
@@ -148,18 +143,6 @@ export function IpListRow({
         <Text style={orgPanelStyles.detailLabel}>Site: </Text>
         {datacenterLabel ?? '—'}
       </Text>
-      {ip.vpnId ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Link: </Text>
-          {vpnLabel ?? '—'}
-        </Text>
-      ) : null}
-      {meshManagedHint && ip.scope === 'vpn' ? (
-        <Text style={orgPanelStyles.muted}>
-          Mesh-managed address — override or remove the peer on the link detail
-          page. Released when the peer is removed.
-        </Text>
-      ) : null}
     </View>
   )
 }

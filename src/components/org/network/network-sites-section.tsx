@@ -8,7 +8,6 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useQueries } from '@tanstack/react-query'
 import { FirstRunWizard } from '@/components/org/first-run-wizard'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -16,11 +15,8 @@ import type {
   DatacenterNameSuggestion,
   DatacenterRecord,
   OrgServerRecord,
-  PeerRecord,
-  VpnRecord,
 } from '@/lib/instance-api'
 import {
-  peersQueryOptions,
   useCreateDatacenter,
   useCreateNetwork,
   useDatacenters,
@@ -28,8 +24,8 @@ import {
   useDeleteDatacenter,
   useIps,
   useUpdateDatacenter,
-  useVpns,
 } from '@/lib/queries/topology'
+import { useOrgFabric } from '@/lib/queries/fabric'
 import { useOrgServers } from '@/lib/queries/servers'
 import { networkSiteHref } from '@/lib/org-navigation'
 import {
@@ -39,10 +35,8 @@ import {
 import { useCan } from '@/lib/query-client'
 import { serverConnectionStatusLabel, resolveServerConnectionStatus } from '@/lib/server-connection-status'
 import { chrome, colors, spacing } from '@/lib/theme'
-import {
-  formatSiteLinkLabel,
-  resolveSiteLinks,
-} from '@/lib/vpn-mesh'
+import { meshLabelForSite, resolveSiteLinks } from '@/lib/fabric-mesh'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
@@ -201,7 +195,7 @@ function SiteCard({
   datacenter,
   memberServers,
   datacenterIps,
-  linksLabel,
+  meshLabel,
   canManage,
   renaming,
   confirmDelete,
@@ -216,7 +210,7 @@ function SiteCard({
   datacenter: DatacenterRecord
   memberServers: OrgServerRecord[]
   datacenterIps: { serverId: string | null; scope?: string }[]
-  linksLabel: string | null
+  meshLabel: string | null
   canManage: boolean
   renaming: boolean
   confirmDelete: boolean
@@ -276,10 +270,12 @@ function SiteCard({
         onAddPrivateNetwork={onAddPrivateNetwork}
       />
 
-      {linksLabel ? (
+      {meshLabel ? (
         <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Links: </Text>
-          {linksLabel}
+          <Text style={orgPanelStyles.detailLabel}>
+            {TURBOFABRIC_PRODUCT_NAME}:{' '}
+          </Text>
+          {meshLabel}
         </Text>
       ) : null}
 
@@ -452,6 +448,24 @@ function CreateSitePanel({
   )
 }
 
+function siteCardMeshLabel({
+  canManage,
+  loading,
+  siteId,
+  mesh,
+  siteNameById,
+}: Readonly<{
+  canManage: boolean
+  loading: boolean
+  siteId: string
+  mesh: ReturnType<typeof resolveSiteLinks>
+  siteNameById: ReadonlyMap<string, string>
+}>): string | null {
+  if (!canManage) return null
+  if (loading) return '—'
+  return meshLabelForSite(siteId, mesh, siteNameById)
+}
+
 function datacentersErrorMessage(
   datacentersQuery: Pick<
     ReturnType<typeof useDatacenters>,
@@ -464,28 +478,6 @@ function datacentersErrorMessage(
     : 'Failed to load sites'
 }
 
-function linksLabelForSite(
-  siteId: string,
-  vpns: VpnRecord[],
-  siteLinks: Map<
-    string,
-    { datacenterIds: string[]; hasUnassignedPeers: boolean }
-  >,
-  siteNameById: Map<string, string>,
-  peersLoading: boolean,
-): string | null {
-  if (peersLoading) return '—'
-  const touching: string[] = []
-  for (const vpn of vpns) {
-    const sites = siteLinks.get(vpn.id)
-    if (!sites?.datacenterIds.includes(siteId)) continue
-    const label = formatSiteLinkLabel(sites, siteNameById)
-    const name = vpn.displayName?.trim() || label
-    touching.push(name)
-  }
-  if (touching.length === 0) return null
-  return touching.join(' · ')
-}
 
 export function NetworkSitesSection({
   orgId,
@@ -502,7 +494,7 @@ export function NetworkSitesSection({
   const datacentersQuery = useDatacenters(orgId)
   const serversQuery = useOrgServers(orgId)
   const ipsQuery = useIps(orgId, { scope: 'datacenter' })
-  const vpnsQuery = useVpns(orgId)
+  const fabricQuery = useOrgFabric(orgId, { enabled: canManage })
   const deleteMutation = useDeleteDatacenter(orgId)
   const renameMutation = useUpdateDatacenter(orgId, renameTargetId ?? '')
   const createNetworkMutation = useCreateNetwork(orgId)
@@ -511,26 +503,7 @@ export function NetworkSitesSection({
   const datacenters = datacentersQuery.data?.datacenters ?? []
   const servers = serversQuery.data?.servers ?? []
   const ips = ipsQuery.data?.ips ?? []
-  const vpns = vpnsQuery.data?.vpns ?? []
-
-  const peerQueries = useQueries({
-    queries: vpns.map((vpn) => ({
-      ...peersQueryOptions(orgId, vpn.id),
-      enabled: vpns.length > 0,
-    })),
-  })
-
-  const allPeers = useMemo(() => {
-    const peers: PeerRecord[] = []
-    for (const q of peerQueries) {
-      if (q.data?.peers) peers.push(...q.data.peers)
-    }
-    return peers
-  }, [peerQueries])
-
-  const peersLoading = peerQueries.some(
-    (q) => q.isLoading || q.isPending,
-  )
+  const relays = fabricQuery.data?.relays ?? []
 
   const serversBySite = useMemo(() => {
     const map = new Map<string, OrgServerRecord[]>()
@@ -564,9 +537,9 @@ export function NetworkSitesSection({
     [datacenters],
   )
 
-  const siteLinks = useMemo(
-    () => resolveSiteLinks(allPeers, serverById, vpns),
-    [allPeers, serverById, vpns],
+  const siteMesh = useMemo(
+    () => resolveSiteLinks(relays, serverById),
+    [relays, serverById],
   )
 
   const loading = datacentersQuery.isLoading || serversQuery.isLoading
@@ -584,8 +557,8 @@ export function NetworkSitesSection({
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Network</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Sites group servers on a private network. Links connect sites for
-        private traffic, including database replication.
+        Sites group servers on a private network. {TURBOFABRIC_PRODUCT_NAME}{' '}
+        connects sites for private traffic, including database replication.
       </Text>
 
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
@@ -593,7 +566,7 @@ export function NetworkSitesSection({
       {isColdOrg && canManage ? (
         <FirstRunWizard
           title="Create your first site"
-          description="Group servers that share a private network. You can add private CIDRs and links next."
+          description="Group servers that share a private network. You can add private CIDRs next."
           notes={[
             'A site without a private CIDR cannot host database replicas.',
             'Unassigned servers appear below after you create sites.',
@@ -632,6 +605,12 @@ export function NetworkSitesSection({
         title="Sites"
         hint={loading ? 'Loading…' : `${datacenters.length} site(s)`}
       >
+        {!canManage ? (
+          <Text style={orgPanelStyles.muted}>
+            Organization manage permission is required to view{' '}
+            {TURBOFABRIC_PRODUCT_NAME} membership.
+          </Text>
+        ) : null}
         {loading && datacenters.length === 0 ? (
           <Text style={orgPanelStyles.muted}>Loading sites…</Text>
         ) : null}
@@ -655,13 +634,13 @@ export function NetworkSitesSection({
                 datacenter={datacenter}
                 memberServers={members}
                 datacenterIps={memberPrivateIps}
-                linksLabel={linksLabelForSite(
-                  datacenter.id,
-                  vpns,
-                  siteLinks,
+                meshLabel={siteCardMeshLabel({
+                  canManage,
+                  loading: fabricQuery.isLoading,
+                  siteId: datacenter.id,
+                  mesh: siteMesh,
                   siteNameById,
-                  peersLoading,
-                )}
+                })}
                 canManage={canManage}
                 renaming={renamingId === datacenter.id}
                 confirmDelete={confirmDeleteId === datacenter.id}

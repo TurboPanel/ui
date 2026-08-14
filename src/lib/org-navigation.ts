@@ -46,19 +46,13 @@ export const ORG_AREAS = [
     id: 'network',
     label: 'Network',
     pathSegment: 'network',
-    hint: 'Sites, private networks, addresses, links, and TurboFabric',
+    hint: 'Sites, private networks, addresses, and TurboFabric',
     subRoutes: [
       {
         id: 'fabric',
         label: TURBOFABRIC_PRODUCT_NAME,
         pathSegment: 'fabric',
         hint: 'Opt-in mesh for environments that run across servers',
-      },
-      {
-        id: 'links',
-        label: 'Links',
-        pathSegment: 'links',
-        hint: 'Site-to-site WireGuard meshes',
       },
       {
         id: 'addresses',
@@ -127,11 +121,10 @@ export function networkSiteHref(
   return `/${orgId}/network/sites/${datacenterId}`
 }
 
-export function networkLinkHref(
+export function networkFabricHref(
   orgId: string,
-  vpnId: string,
-): `/${string}/network/links/${string}` {
-  return `/${orgId}/network/links/${vpnId}`
+): `/${string}/network/fabric` {
+  return `/${orgId}/network/fabric`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [
@@ -213,13 +206,6 @@ export function orgAreaFromPathname(pathname: string) {
 
   if (areaSegment === 'network' && parts.length >= 4 && parts[2] === 'sites') {
     return { area, subRoute: SITE_DETAIL_SUB_ROUTE }
-  }
-
-  if (areaSegment === 'network' && parts.length >= 4 && parts[2] === 'links') {
-    const linksSub = area.subRoutes.find(
-      (entry) => entry.pathSegment === 'links',
-    )
-    return { area, subRoute: linksSub ?? null }
   }
 
   const subRouteSegment = parts[2]

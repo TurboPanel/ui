@@ -84,6 +84,7 @@ import {
   type HostingServiceContext,
 } from '@/lib/compose'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
@@ -386,6 +387,12 @@ function deployErrorMessage(err: unknown): string {
   const message = errorMessage(err, 'Failed to deploy environment')
   if (message.includes('server_placement_mismatch')) {
     return "Deploy target does not match the project's pinned server placement."
+  }
+  if (message.includes('fabric_reconcile_failed')) {
+    return `${TURBOFABRIC_PRODUCT_NAME} could not be configured on one of the servers…`
+  }
+  if (message.includes('fabric_reconcile_pending')) {
+    return `${TURBOFABRIC_PRODUCT_NAME} is still converging on the target servers — try the deploy again in a moment.`
   }
   return message
 }

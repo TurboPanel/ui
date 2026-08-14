@@ -91,7 +91,23 @@ describe('resolveDisplayedInstallCommand', () => {
     )
     expect(command).toContain(`TURBOPANEL_LICENSE=${licenseArg}`)
     expect(command).toContain('TURBOPANEL_INSECURE_TLS=1')
+    expect(command).toContain(
+      'TURBOPANEL_DL_BASE=https://panel.example.com:8443/downloads/daemon',
+    )
     expect(command).not.toContain("'")
+  })
+
+  it('omits insecure TLS for publicly trusted HTTPS on 443', () => {
+    const command = resolveDisplayedInstallCommand(
+      revealed,
+      'https://turbopanel.dev',
+    )
+    expect(command).toContain('curl -fsSL https://turbopanel.dev/run.sh')
+    expect(command).not.toContain('curl -fsSLk')
+    expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
+    expect(command).toContain(
+      'TURBOPANEL_DL_BASE=https://turbopanel.dev/downloads/daemon',
+    )
   })
 
   it('emits unquoted validated HTTP origins without insecure TLS flags', () => {
@@ -102,6 +118,9 @@ describe('resolveDisplayedInstallCommand', () => {
     expect(command).toContain('curl -fsSL http://dev.example.com:8880/run.sh')
     expect(command).not.toContain('curl -fsSLk')
     expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
+    expect(command).toContain(
+      'TURBOPANEL_DL_BASE=http://dev.example.com:8880/downloads/daemon',
+    )
     expect(command).not.toContain("'")
   })
 })

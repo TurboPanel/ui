@@ -1,3 +1,8 @@
+import {
+  formatInstanceDlBase,
+  installOriginNeedsInsecureTls,
+} from '@/lib/install-tls'
+
 const DEV_HTTPS_PORT = 8443
 const DEV_HTTP_PORT = 8880
 
@@ -40,17 +45,61 @@ function httpDevOriginFromHost(host: string): string {
   return `http://${host}:${DEV_HTTP_PORT}`
 }
 
+function browserOrigin(): string | null {
+  if (typeof globalThis === 'undefined' || !('location' in globalThis)) {
+    return null
+  }
+  const origin = (globalThis.location as Location).origin?.trim()
+  if (!origin || origin === 'null') return null
+  return origin
+}
+
+function originMatchesManagedUrl(origin: string, managed: string): boolean {
+  const parsedManaged = parseInstallBaseUrl(managed, { allowHttp: true })
+  const parsedOrigin = parseInstallBaseUrl(origin, { allowHttp: true })
+  if (!parsedManaged || !parsedOrigin) return false
+  return parsedManaged === parsedOrigin
+}
+
+function findManagedUrlMatchingBrowser(managedUrls: string[]): string | null {
+  const origin = browserOrigin()
+  if (!origin) return null
+  for (const raw of managedUrls) {
+    if (originMatchesManagedUrl(origin, raw)) {
+      return parseInstallBaseUrl(raw, { allowHttp: true }) ?? origin
+    }
+  }
+  return null
+}
+
 export function defaultDevInstallBaseUrl(managedUrls?: string[]): string {
   if (managedUrls && managedUrls.length > 0) {
+    const fromBrowser = findManagedUrlMatchingBrowser(managedUrls)
+    if (fromBrowser) return fromBrowser
     const httpsUrl = findManagedUrlByScheme(managedUrls, 'https')
     if (httpsUrl) return httpsUrl
     const host = parseManagedUrlHost(managedUrls)
     if (host) return httpsDevOriginFromHost(host)
   }
-  if (typeof globalThis !== 'undefined' && 'location' in globalThis) {
-    const location = globalThis.location as Location
-    const origin = location.origin?.trim()
-    if (origin && origin !== 'null') return origin
+  const origin = browserOrigin()
+  if (origin) {
+    const parsed = parseInstallBaseUrl(origin, { allowHttp: true })
+    if (parsed) return parsed
+  }
+  return `https://localhost:${DEV_HTTPS_PORT}`
+}
+
+export function defaultDevCaddyHttpsBaseUrl(managedUrls?: string[]): string {
+  const host = parseManagedUrlHost(managedUrls ?? [])
+  if (host) return httpsDevOriginFromHost(host)
+  const origin = browserOrigin()
+  if (origin) {
+    try {
+      const hostname = new URL(origin).hostname?.trim()
+      if (hostname && hostname !== 'null') return httpsDevOriginFromHost(hostname)
+    } catch {
+      // fall through
+    }
   }
   return `https://localhost:${DEV_HTTPS_PORT}`
 }
@@ -154,6 +203,7 @@ function buildInstallPipeline(opts: {
   host: string
   insecureTls?: boolean
   curlInsecure?: boolean
+  dlBase?: string
 }): string {
   const curl = opts.curlInsecure ? 'curl -fsSLk' : 'curl -fsSL'
   const envParts = [
@@ -161,6 +211,7 @@ function buildInstallPipeline(opts: {
     `TURBOPANEL_HOST=${opts.host}`,
   ]
   if (opts.insecureTls) envParts.push('TURBOPANEL_INSECURE_TLS=1')
+  if (opts.dlBase) envParts.push(`TURBOPANEL_DL_BASE=${opts.dlBase}`)
   return `${curl} ${opts.curlUrl} | ${envParts.join(' ')} sh`
 }
 
@@ -178,20 +229,23 @@ export function buildInstallCommandWithBaseUrl(opts: {
   const base = trimTrailingSlash(opts.baseUrl.trim())
   const licenseArg = encodeLicenseArg(opts.licenseId, opts.licenseToken)
   const curlUrl = formatInstallScriptCurlUrl(base)
+  const dlBase = formatInstanceDlBase(base)
   if (base.startsWith('http://')) {
     return buildInstallPipeline({
       curlUrl,
       licenseArg,
       host: base,
+      dlBase,
     })
   }
-  const insecureTls = opts.insecureTls ?? true
+  const insecureTls = opts.insecureTls ?? installOriginNeedsInsecureTls(base)
   return buildInstallPipeline({
     curlUrl,
     licenseArg,
     host: base,
     insecureTls,
     curlInsecure: insecureTls,
+    dlBase,
   })
 }
 

@@ -62,6 +62,8 @@ export const BINDING_KEY_PREFIX_IN_USE_ERROR = 'binding_key_prefix_in_use'
 export const BINDING_ENGINE_DEFAULTS_IN_USE_ERROR = 'binding_engine_defaults_in_use'
 export const BINDING_KEY_CONFLICT_ERROR = 'binding_key_conflict'
 export const BINDING_ENDPOINT_UNAVAILABLE_ERROR = 'binding_endpoint_unavailable'
+export const FABRIC_RECONCILE_FAILED_ERROR = 'fabric_reconcile_failed'
+export const FABRIC_RECONCILE_PENDING_ERROR = 'fabric_reconcile_pending'
 export const BINDING_PASSWORD_UNAVAILABLE_ERROR =
   'binding_password_unavailable' // NOSONAR typescript:S2068 — API error code, not a credential
 export const BINDING_ENGINE_UNSUPPORTED_ERROR = 'binding_engine_unsupported'
@@ -483,22 +485,169 @@ export type OrgFabricRecord = {
   status?: string
 }
 
+export type RelayRole = 'gateway' | 'member'
+
+/** Host Docker bridge for a spanning compose network on this relay. */
+export type FabricRelaySegment = {
+  name: string
+  subnet: string
+  mtu?: number
+  gateway?: string
+}
+
+/** Public relay surface — never includes `presharedKey`. */
+export type RelayRecord = {
+  serverId: string
+  address: string
+  role: RelayRole
+  advertisedCidrs: string[]
+  keepalive: number | null
+  endpointAddress: string | null
+  resolvedEndpoint: string | null
+  publicKey: string | null
+  prefix: string
+  hasPresharedKey: boolean
+  segments: FabricRelaySegment[]
+  lastHandshakeAt: string | null
+  transferRxBytes?: number
+  transferTxBytes?: number
+}
+
 export type OrgFabricSettings = {
   enabled: boolean
   fabric?: OrgFabricRecord
+  relays: RelayRecord[]
+}
+
+export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
+export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR =
+  'gateway_datacenter_cidr_required'
+
+type FabricRelayWireRow = {
+  serverId: string
+  address: string
+  role: RelayRole
+  advertisedCidrs?: string[]
+  keepalive: number | null
+  endpointAddress: string | null
+  resolvedEndpoint?: string | null
+  publicKey: string | null
+  prefix: string
+  hasPresharedKey?: boolean
+  segments?: FabricRelaySegment[]
+  lastHandshakeAt?: string | null
+  transferRxBytes?: number
+  transferTxBytes?: number
+  observed?: {
+    lastHandshakeAt?: string
+    transferRx?: number
+    transferTx?: number
+  } | null
+}
+
+function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
+  const observed = row.observed
+  const lastHandshakeAt =
+    row.lastHandshakeAt ?? observed?.lastHandshakeAt ?? null
+  const transferRx = row.transferRxBytes ?? observed?.transferRx
+  const transferTx = row.transferTxBytes ?? observed?.transferTx
+  return {
+    serverId: row.serverId,
+    address: row.address,
+    role: row.role,
+    advertisedCidrs: row.advertisedCidrs ?? [],
+    keepalive: row.keepalive,
+    endpointAddress: row.endpointAddress,
+    resolvedEndpoint: row.resolvedEndpoint ?? null,
+    publicKey: row.publicKey,
+    prefix: row.prefix,
+    hasPresharedKey: row.hasPresharedKey === true,
+    segments: row.segments ?? [],
+    lastHandshakeAt,
+    ...(transferRx !== undefined ? { transferRxBytes: transferRx } : {}),
+    ...(transferTx !== undefined ? { transferTxBytes: transferTx } : {}),
+  }
+}
+
+function toOrgFabricSettings(body: {
+  enabled: boolean
+  fabric?: OrgFabricRecord
+  relays?: FabricRelayWireRow[]
+}): OrgFabricSettings {
+  return {
+    enabled: body.enabled,
+    ...(body.fabric ? { fabric: body.fabric } : {}),
+    relays: (body.relays ?? []).map(toRelayRecord),
+  }
 }
 
 export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> {
-  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric`)
+  const body = await apiFetch<{
+    enabled: boolean
+    fabric?: OrgFabricRecord
+    relays?: FabricRelayWireRow[]
+  }>(`${CLIENT_API}/organizations/${orgId}/fabric`)
+  return toOrgFabricSettings(body)
 }
 
 export async function saveOrgFabric(
   orgId: string,
   enabled: boolean,
 ): Promise<OrgFabricSettings> {
-  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric`, {
+  const body = await apiFetch<{
+    enabled: boolean
+    fabric?: OrgFabricRecord
+    relays?: FabricRelayWireRow[]
+  }>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
     method: 'PUT',
     body: JSON.stringify({ enabled }),
+  })
+  return toOrgFabricSettings(body)
+}
+
+export type PatchOrgFabricRelayBody = {
+  role?: RelayRole
+  advertisedCidrs?: string[]
+  keepalive?: number | null
+  endpointAddress?: string | null
+  /** Write-only — never returned on RelayRecord. */
+  presharedKey?: string
+}
+
+export async function patchOrgFabricRelay(
+  orgId: string,
+  serverId: string,
+  body: PatchOrgFabricRelayBody,
+): Promise<{ ok: true; relay: RelayRecord }> {
+  const result = await apiFetch<{ ok: true; relay: FabricRelayWireRow }>(
+    `${CLIENT_API}/organizations/${orgId}/fabric/relays/${serverId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
+  return { ok: true, relay: toRelayRecord(result.relay) }
+}
+
+export type FabricApplyRelayResult = {
+  serverId: string
+  commandId?: string
+  status: 'queued' | 'failed' | 'skipped' | 'converged'
+  error?: string
+}
+
+export type FabricApplyResponse = {
+  ok: true
+  fabricId: string
+  interfaceName: string
+  results: FabricApplyRelayResult[]
+}
+
+export async function applyOrgFabric(
+  orgId: string,
+): Promise<FabricApplyResponse> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric/apply`, {
+    method: 'POST',
   })
 }
 
@@ -1204,7 +1353,7 @@ export type DatacenterRecord = {
 
 export type IpVersion = 4 | 6
 export type IpAllocation = 'dedicated' | 'shared'
-export type IpScope = 'public' | 'datacenter' | 'vpn'
+export type IpScope = 'public' | 'datacenter'
 
 export type IpRecord = {
   id: string
@@ -1212,7 +1361,6 @@ export type IpRecord = {
   datacenterId: string | null
   networkId: string | null
   serverId: string | null
-  vpnId: string | null
   address: string
   /** Server-derived from `address`, read-only — never send on create. */
   version: IpVersion
@@ -1225,46 +1373,7 @@ export type IpRecord = {
   updatedAt: string
 }
 
-export type VpnRecord = {
-  id: string
-  organizationId: string
-  cidr: string
-  displayName: string | null
-  metadata: Record<string, unknown> | null
-  options: Record<string, unknown> | null
-  createdAt: string
-  updatedAt: string
-}
-
-export type PeerRole = 'gateway' | 'member'
-
-/** Peer public surface — never includes `presharedKey`. */
-export type PeerRecord = {
-  id: string
-  vpnId: string
-  serverId: string
-  endpointIpId: string | null
-  tunnelIpId: string | null
-  role: PeerRole
-  /** Null until the daemon reports a key after Apply. */
-  publicKey: string | null
-  listenPort: number | null
-  endpoint: string | null
-  metadata: Record<string, unknown> | null
-  options: Record<string, unknown> | null
-  createdAt: string
-  updatedAt: string
-}
-
 export const IP_IN_USE_ERROR = 'ip_in_use'
-export const VPN_ADDRESS_POOL_EXHAUSTED_ERROR = 'vpn_address_pool_exhausted'
-export const VPN_ADDRESS_CONFLICT_ERROR = 'vpn_address_conflict'
-export const PEER_TUNNEL_IP_CONFLICT_ERROR = 'peer_tunnel_ip_conflict'
-export const VPN_CIDR_IN_USE_ERROR = 'vpn_cidr_in_use'
-export const VPN_CIDR_EXCLUDES_ADDRESSES_ERROR = 'vpn_cidr_excludes_addresses'
-export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
-export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR =
-  'gateway_datacenter_cidr_required'
 
 export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceRecord[] }> {
   return await apiFetch(`${CLIENT_API}/workspaces`);
@@ -1725,7 +1834,6 @@ export async function fetchIps(filters?: {
   datacenterId?: string
   serverId?: string
   networkId?: string
-  vpnId?: string
   scope?: IpScope
   allocation?: IpAllocation
 }): Promise<{ ips: IpRecord[] }> {
@@ -1733,7 +1841,6 @@ export async function fetchIps(filters?: {
   if (filters?.datacenterId) params.set('datacenterId', filters.datacenterId)
   if (filters?.serverId) params.set('serverId', filters.serverId)
   if (filters?.networkId) params.set('networkId', filters.networkId)
-  if (filters?.vpnId) params.set('vpnId', filters.vpnId)
   if (filters?.scope) params.set('scope', filters.scope)
   if (filters?.allocation) params.set('allocation', filters.allocation)
   const query = params.toString()
@@ -1753,7 +1860,6 @@ export async function createIp(body: {
   datacenterId?: string | null
   networkId?: string | null
   serverId?: string | null
-  vpnId?: string | null
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
 }): Promise<{ ok: true; id: string }> {
@@ -1770,7 +1876,6 @@ export async function updateIp(
     datacenterId: string | null
     networkId: string | null
     serverId: string | null
-    vpnId: string | null
     metadata: Record<string, unknown> | null
     options: Record<string, unknown> | null
   }>,
@@ -1854,136 +1959,6 @@ export async function deleteNetwork(
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/networks/${networkId}`, {
     method: 'DELETE',
-  })
-}
-
-export async function fetchVpns(): Promise<{ vpns: VpnRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/vpns`)
-}
-
-export async function fetchVpn(id: string): Promise<{ vpn: VpnRecord }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${id}`)
-}
-
-export async function createVpn(body: {
-  displayName?: string
-  cidr: string
-  metadata?: Record<string, unknown>
-  options?: Record<string, unknown>
-}): Promise<{ ok: true; id: string }> {
-  return await apiFetch(`${CLIENT_API}/vpns`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function updateVpn(
-  id: string,
-  body: Partial<{
-    displayName: string | null
-    cidr: string
-    metadata: Record<string, unknown> | null
-    options: Record<string, unknown> | null
-  }>,
-): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function deleteVpn(id: string): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${id}`, {
-    method: 'DELETE',
-  })
-}
-
-export async function fetchPeers(
-  vpnId: string,
-): Promise<{ peers: PeerRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers`)
-}
-
-export async function createPeer(
-  vpnId: string,
-  body: {
-    serverId: string
-    /** Optional — omit so the daemon generates the keypair on Apply. */
-    publicKey?: string
-    role?: PeerRole
-    endpointIpId?: string | null
-    /**
-     * Optional overlay row — omit to auto-allocate from vpn.cidr.
-     * Do not send `null` (clearing is rejected).
-     */
-    tunnelIpId?: string
-    tunnelAddress?: string
-    listenPort?: number | null
-    endpoint?: string | null
-    /** Write-only — never returned on PeerRecord. */
-    presharedKey?: string
-    metadata?: Record<string, unknown>
-    options?: Record<string, unknown>
-  },
-): Promise<{ ok: true; id: string }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function updatePeer(
-  vpnId: string,
-  peerId: string,
-  body: Partial<{
-    serverId: string
-    publicKey: string
-    role: PeerRole
-    endpointIpId: string | null
-    /** Replacement overlay row — clearing with `null` is rejected. */
-    tunnelIpId: string
-    listenPort: number | null
-    endpoint: string | null
-    /** Write-only — never returned on PeerRecord. */
-    presharedKey: string | null
-    metadata: Record<string, unknown> | null
-    options: Record<string, unknown> | null
-  }>,
-): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers/${peerId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
-}
-
-export async function deletePeer(
-  vpnId: string,
-  peerId: string,
-): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/peers/${peerId}`, {
-    method: 'DELETE',
-  })
-}
-
-export type VpnApplyPeerResult = {
-  peerId: string
-  serverId: string
-  commandId?: string
-  status: 'queued' | 'failed'
-  error?: string
-}
-
-export type VpnApplyResponse = {
-  ok: true
-  vpnId: string
-  interfaceName: string
-  results: VpnApplyPeerResult[]
-}
-
-/** Enqueue `server.wireguard.apply` on each peer host for this VPN mesh. */
-export async function applyVpn(vpnId: string): Promise<VpnApplyResponse> {
-  return await apiFetch(`${CLIENT_API}/vpns/${vpnId}/apply`, {
-    method: 'POST',
   })
 }
 
@@ -2437,10 +2412,14 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
         Array.isArray(errorBody.violations) ? errorBody.violations : [],
       )
     }
+    if (errorBody.error === 'fabric_reconcile_pending') {
+      throw new Error(formatFetchFailureDetail(409, 'fabric_reconcile_pending'))
+    }
   } catch (err) {
     if (
       err instanceof DeployHealthCheckMissingError ||
-      err instanceof DeployResourceLimitExceededError
+      err instanceof DeployResourceLimitExceededError ||
+      (err instanceof Error && err.message.includes('fabric_reconcile_pending'))
     ) {
       throw err
     }
@@ -2496,6 +2475,8 @@ export type DeployPreviewWarning = {
     | 'resource_limit_exceeded'
     | 'health_check_missing'
     | 'docker_external_network_unregistered'
+    | 'fabric_reconcile_failed'
+    | 'fabric_reconcile_pending'
     | 'traditional_web_principal_ambiguous'
   message: string
   details?: Record<string, unknown>

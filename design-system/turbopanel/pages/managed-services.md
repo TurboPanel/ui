@@ -70,10 +70,10 @@ Topology rows ordered primary first then `ordinal`:
 ```
 ● Primary   web-01 · Frankfurt · Same server        Running
 ● Replica   web-04 · Frankfurt · Same site   Reads  Streaming · 1.4 MB behind
-○ Replica   edge-02 · Ashburn  · Over VPN           Catching up · 22s behind
+○ Replica   edge-02 · Ashburn  · TurboFabric        Catching up · 22s behind
 ```
 
-- Transport vocabulary: **Same server** / **Same site** / **Over VPN**
+- Transport vocabulary: **Same server** / **Same site** / **TurboFabric**
 - Max **2 replicas** (`MANAGED_MAX_REPLICAS`)
 - **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `no-private-cidr`) with **Set up private network** links for network reasons — never silent disable
 - **Reads** chip toggles `readEligible` (manage-gated)

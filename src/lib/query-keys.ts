@@ -27,7 +27,6 @@ export type IpListFilters = Readonly<{
   organizationId?: string
   datacenterId?: string
   serverId?: string
-  vpnId?: string
   scope?: IpScope
   allocation?: IpAllocation
 }>
@@ -138,11 +137,6 @@ export const queryKeys = {
           ['org', orgId, 'topology', 'ip', ipId] as const,
         networks: (filters?: NetworkListFilters) =>
           ['org', orgId, 'topology', 'networks', filters ?? {}] as const,
-        vpns: ['org', orgId, 'topology', 'vpns'] as const,
-        vpn: (vpnId: string) =>
-          ['org', orgId, 'topology', 'vpns', vpnId] as const,
-        peers: (vpnId: string) =>
-          ['org', orgId, 'topology', 'vpns', vpnId, 'peers'] as const,
       },
 
       tls: ['org', orgId, 'tls'] as const,

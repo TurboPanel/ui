@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { orgAreaFromPathname } from './org-navigation'
 
 describe('orgAreaFromPathname', () => {
-  it('resolves link detail deep links to Network with Links active', () => {
+  it('does not treat retired Links paths as a Network sub-route', () => {
     const resolved = orgAreaFromPathname('/org/network/links/vpn-id')
     expect(resolved).not.toBeNull()
     expect(resolved?.area.id).toBe('network')
-    expect(resolved?.subRoute?.id).toBe('links')
-    expect(resolved?.subRoute?.pathSegment).toBe('links')
+    expect(resolved?.subRoute).toBeNull()
   })
 
   it('resolves TurboFabric under Network', () => {

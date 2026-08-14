@@ -17,7 +17,6 @@ import type {
   IpScope,
   NetworkRecord,
   OrgServerRecord,
-  VpnRecord,
 } from '@/lib/instance-api'
 import {
   useCreateIp,
@@ -26,13 +25,12 @@ import {
   useIps,
   useNetworks,
   useUpdateIp,
-  useVpns,
 } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-const SCOPES: IpScope[] = ['public', 'datacenter', 'vpn']
+const SCOPES: IpScope[] = ['public', 'datacenter']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
 /** Simple client pre-check; server `ip-address.ts` is authoritative. */
@@ -86,21 +84,12 @@ function SegmentFilterChip({
 }
 
 
-function isCreateIpDisabled(
-  creating: boolean,
-  scope: IpScope,
-  vpnId: string,
-): boolean {
-  if (creating) return true
-  return scope === 'vpn' && !vpnId
+function isCreateIpDisabled(creating: boolean): boolean {
+  return creating
 }
 
 function mutationErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
-}
-
-function vpnTitle(vpn: VpnRecord): string {
-  return vpn.displayName?.trim() || 'Unnamed VPN'
 }
 
 function buildIpListFilters(
@@ -138,14 +127,12 @@ function isIpsOverviewLoading(queries: Readonly<{
   serversLoading: boolean
   networksLoading: boolean
   datacentersLoading: boolean
-  vpnsLoading: boolean
 }>): boolean {
   if (queries.ipsLoading && !queries.ipsPlaceholder) return true
   return (
     queries.serversLoading ||
     queries.networksLoading ||
-    queries.datacentersLoading ||
-    queries.vpnsLoading
+    queries.datacentersLoading
   )
 }
 
@@ -162,7 +149,6 @@ type CreateIpInput = {
   allocation: IpAllocation
   scope: IpScope
   displayName?: string
-  vpnId?: string
   datacenterId?: string
   networkId?: string
   serverId?: string
@@ -173,7 +159,6 @@ function buildCreateIpBody(input: Readonly<{
   allocation: IpAllocation
   scope: IpScope
   displayName: string
-  createVpnId: string
   createDatacenterId: string
   createNetworkId: string
   createServerId: string
@@ -184,10 +169,6 @@ function buildCreateIpBody(input: Readonly<{
     scope: input.scope,
     displayName: input.displayName.trim() || undefined,
   }
-  if (input.scope === 'vpn') {
-    body.vpnId = input.createVpnId
-    return body
-  }
   if (input.createDatacenterId) body.datacenterId = input.createDatacenterId
   if (input.createNetworkId) body.networkId = input.createNetworkId
   if (input.createServerId) body.serverId = input.createServerId
@@ -195,57 +176,26 @@ function buildCreateIpBody(input: Readonly<{
 }
 
 function CreateIpScopeFields({
-  scope,
-  vpns,
   datacenters,
   networks,
   servers,
-  createVpnId,
   createDatacenterId,
   createNetworkId,
   createServerId,
-  onVpnIdChange,
   onDatacenterIdChange,
   onNetworkIdChange,
   onServerIdChange,
 }: Readonly<{
-  scope: IpScope
-  vpns: VpnRecord[]
   datacenters: DatacenterRecord[]
   networks: NetworkRecord[]
   servers: OrgServerRecord[]
-  createVpnId: string
   createDatacenterId: string
   createNetworkId: string
   createServerId: string
-  onVpnIdChange: (id: string) => void
   onDatacenterIdChange: (id: string) => void
   onNetworkIdChange: (id: string) => void
   onServerIdChange: (id: string) => void
 }>) {
-  if (scope === 'vpn') {
-    return (
-      <>
-        <Text style={styles.fieldLabel}>VPN</Text>
-        <View style={styles.chipRow}>
-          {vpns.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>
-              Create a mesh first on the Links page.
-            </Text>
-          ) : (
-            vpns.map((vpn) => (
-              <FilterChip
-                key={vpn.id}
-                label={vpnTitle(vpn)}
-                active={createVpnId === vpn.id}
-                onPress={() => onVpnIdChange(vpn.id)}
-              />
-            ))
-          )}
-        </View>
-      </>
-    )
-  }
   return (
     <>
       <Text style={styles.fieldLabel}>Datacenter (optional)</Text>
@@ -506,11 +456,9 @@ function AddAddressPanel({
   displayName,
   allocation,
   scope,
-  vpns,
   datacenters,
   networks,
   servers,
-  createVpnId,
   createDatacenterId,
   createNetworkId,
   createServerId,
@@ -520,7 +468,6 @@ function AddAddressPanel({
   onDisplayNameChange,
   onAllocationChange,
   onScopeChange,
-  onVpnIdChange,
   onDatacenterIdChange,
   onNetworkIdChange,
   onServerIdChange,
@@ -530,11 +477,9 @@ function AddAddressPanel({
   displayName: string
   allocation: IpAllocation
   scope: IpScope
-  vpns: VpnRecord[]
   datacenters: DatacenterRecord[]
   networks: NetworkRecord[]
   servers: OrgServerRecord[]
-  createVpnId: string
   createDatacenterId: string
   createNetworkId: string
   createServerId: string
@@ -544,7 +489,6 @@ function AddAddressPanel({
   onDisplayNameChange: (value: string) => void
   onAllocationChange: (value: IpAllocation) => void
   onScopeChange: (value: IpScope) => void
-  onVpnIdChange: (id: string) => void
   onDatacenterIdChange: (id: string) => void
   onNetworkIdChange: (id: string) => void
   onServerIdChange: (id: string) => void
@@ -593,16 +537,12 @@ function AddAddressPanel({
         ))}
       </View>
       <CreateIpScopeFields
-        scope={scope}
-        vpns={vpns}
         datacenters={datacenters}
         networks={networks}
         servers={servers}
-        createVpnId={createVpnId}
         createDatacenterId={createDatacenterId}
         createNetworkId={createNetworkId}
         createServerId={createServerId}
-        onVpnIdChange={onVpnIdChange}
         onDatacenterIdChange={onDatacenterIdChange}
         onNetworkIdChange={onNetworkIdChange}
         onServerIdChange={onServerIdChange}
@@ -632,25 +572,21 @@ function addressRowLabels(
     serverById: Map<string, OrgServerRecord>
     networkById: Map<string, NetworkRecord>
     datacenterById: Map<string, DatacenterRecord>
-    vpnById: Map<string, VpnRecord>
   }>,
 ): {
   serverLabel: string | null
   networkLabel: string | null
   datacenterLabel: string | null
-  vpnLabel: string | null
 } {
   const server = ip.serverId ? lookups.serverById.get(ip.serverId) : null
   const network = ip.networkId ? lookups.networkById.get(ip.networkId) : null
   const datacenter = ip.datacenterId
     ? lookups.datacenterById.get(ip.datacenterId)
     : null
-  const vpn = ip.vpnId ? lookups.vpnById.get(ip.vpnId) : null
   return {
     serverLabel: server ? serverTitle(server) : null,
     networkLabel: network?.displayName?.trim() || network?.cidr || null,
     datacenterLabel: datacenter?.displayName?.trim() || null,
-    vpnLabel: vpn ? vpnTitle(vpn) : null,
   }
 }
 
@@ -674,7 +610,6 @@ function AddressPoolPanel({
   serverById,
   networkById,
   datacenterById,
-  vpnById,
   onDisplayNameChange,
   onDatacenterIdChange,
   onNetworkIdChange,
@@ -703,7 +638,6 @@ function AddressPoolPanel({
   serverById: Map<string, OrgServerRecord>
   networkById: Map<string, NetworkRecord>
   datacenterById: Map<string, DatacenterRecord>
-  vpnById: Map<string, VpnRecord>
   onDisplayNameChange: (value: string) => void
   onDatacenterIdChange: (value: string) => void
   onNetworkIdChange: (value: string) => void
@@ -753,14 +687,10 @@ function AddressPoolPanel({
               />
             )
           }
-          // Mesh overlay rows are managed via VPN peer override/remove —
-          // not the flat IP edit/delete actions.
-          const isMeshManaged = ip.scope === 'vpn'
           const labels = addressRowLabels(ip, {
             serverById,
             networkById,
             datacenterById,
-            vpnById,
           })
           return (
             <IpListRow
@@ -769,10 +699,9 @@ function AddressPoolPanel({
               serverLabel={labels.serverLabel}
               networkLabel={labels.networkLabel}
               datacenterLabel={labels.datacenterLabel}
-              vpnLabel={labels.vpnLabel}
               isDeleting={deletingId === ip.id}
-              showDelete={canManage && !isMeshManaged}
-              showEdit={canManage && !isMeshManaged}
+              showDelete={canManage}
+              showEdit={canManage}
               onEdit={() => onBeginEdit(ip)}
               onDelete={onDelete}
             />
@@ -802,7 +731,6 @@ export function NetworkAddressesSection({
   const [createDatacenterId, setCreateDatacenterId] = useState('')
   const [createNetworkId, setCreateNetworkId] = useState('')
   const [createServerId, setCreateServerId] = useState('')
-  const [createVpnId, setCreateVpnId] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAddress, setEditAddress] = useState('')
   const [editDisplayName, setEditDisplayName] = useState('')
@@ -822,7 +750,6 @@ export function NetworkAddressesSection({
   const serversQuery = useOrgServers(orgId)
   const networksQuery = useNetworks(orgId)
   const datacentersQuery = useDatacenters(orgId)
-  const vpnsQuery = useVpns(orgId)
   const createMutation = useCreateIp(orgId)
   const updateMutation = useUpdateIp(orgId)
   const deleteMutation = useDeleteIp(orgId)
@@ -831,7 +758,6 @@ export function NetworkAddressesSection({
   const servers = serversQuery.data?.servers ?? []
   const networks = networksQuery.data?.networks ?? []
   const datacenters = datacentersQuery.data?.datacenters ?? []
-  const vpns = vpnsQuery.data?.vpns ?? []
 
   const loading = isIpsOverviewLoading({
     ipsLoading: ipsQuery.isLoading,
@@ -839,7 +765,6 @@ export function NetworkAddressesSection({
     serversLoading: serversQuery.isLoading,
     networksLoading: networksQuery.isLoading,
     datacentersLoading: datacentersQuery.isLoading,
-    vpnsLoading: vpnsQuery.isLoading,
   })
 
   const queryError = resolveIpsQueryError(ipsQuery.isError, ipsQuery.error)
@@ -854,23 +779,15 @@ export function NetworkAddressesSection({
     ? deleteMutation.variables
     : undefined
   const creating = createMutation.isPending
-  const createDisabled = isCreateIpDisabled(creating, scope, createVpnId)
+  const createDisabled = isCreateIpDisabled(creating)
   const savingEdit = updateMutation.isPending
 
   const serverById = useMemo(() => indexById(servers), [servers])
   const networkById = useMemo(() => indexById(networks), [networks])
   const datacenterById = useMemo(() => indexById(datacenters), [datacenters])
-  const vpnById = useMemo(() => indexById(vpns), [vpns])
 
   const handleCreateScopeChange = (next: IpScope) => {
     setScope(next)
-    if (next === 'vpn') {
-      setCreateDatacenterId('')
-      setCreateNetworkId('')
-      setCreateServerId('')
-      return
-    }
-    setCreateVpnId('')
   }
 
   const resetCreateForm = () => {
@@ -879,7 +796,6 @@ export function NetworkAddressesSection({
     setCreateDatacenterId('')
     setCreateNetworkId('')
     setCreateServerId('')
-    setCreateVpnId('')
   }
 
   const handleCreate = () => {
@@ -889,10 +805,6 @@ export function NetworkAddressesSection({
       setError('Enter a valid IPv4/IPv6 address or CIDR.')
       return
     }
-    if (scope === 'vpn' && !createVpnId) {
-      setError('Select a VPN for vpn-scoped addresses.')
-      return
-    }
     setError(null)
     createMutation.mutate(
       buildCreateIpBody({
@@ -900,7 +812,6 @@ export function NetworkAddressesSection({
         allocation,
         scope,
         displayName,
-        createVpnId,
         createDatacenterId,
         createNetworkId,
         createServerId,
@@ -916,8 +827,6 @@ export function NetworkAddressesSection({
 
   const handleDelete = (ipId: string) => {
     if (!canManage) return
-    const target = ips.find((row) => row.id === ipId)
-    if (target?.scope === 'vpn') return
     setError(null)
     deleteMutation.mutate(ipId, {
       onSuccess: () => {
@@ -930,7 +839,6 @@ export function NetworkAddressesSection({
   }
 
   const beginEdit = (ip: IpRecord) => {
-    if (ip.scope === 'vpn') return
     setEditingId(ip.id)
     setEditAddress(ip.address)
     setEditDisplayName(ip.displayName ?? '')
@@ -973,7 +881,6 @@ export function NetworkAddressesSection({
       <Text style={orgPanelStyles.pageTitle}>Addresses</Text>
       <Text style={orgPanelStyles.pageCopy}>
         Organization address pool for ingress and internal routing.
-        Mesh overlay addresses are managed on the link detail page.
       </Text>
 
       {displayError ? (
@@ -996,11 +903,9 @@ export function NetworkAddressesSection({
           displayName={displayName}
           allocation={allocation}
           scope={scope}
-          vpns={vpns}
           datacenters={datacenters}
           networks={networks}
           servers={servers}
-          createVpnId={createVpnId}
           createDatacenterId={createDatacenterId}
           createNetworkId={createNetworkId}
           createServerId={createServerId}
@@ -1010,7 +915,6 @@ export function NetworkAddressesSection({
           onDisplayNameChange={setDisplayName}
           onAllocationChange={setAllocation}
           onScopeChange={handleCreateScopeChange}
-          onVpnIdChange={setCreateVpnId}
           onDatacenterIdChange={setCreateDatacenterId}
           onNetworkIdChange={setCreateNetworkId}
           onServerIdChange={setCreateServerId}
@@ -1038,7 +942,6 @@ export function NetworkAddressesSection({
         serverById={serverById}
         networkById={networkById}
         datacenterById={datacenterById}
-        vpnById={vpnById}
         onDisplayNameChange={setEditDisplayName}
         onDatacenterIdChange={setEditDatacenterId}
         onNetworkIdChange={setEditNetworkId}

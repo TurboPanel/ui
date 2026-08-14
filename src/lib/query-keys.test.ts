@@ -87,11 +87,6 @@ describe('queryKeys.org(…).topology', () => {
     expect(topology.ips().slice(0, prefix.length)).toEqual([...prefix])
     expect(topology.ip('ip-1').slice(0, prefix.length)).toEqual([...prefix])
     expect(topology.networks().slice(0, prefix.length)).toEqual([...prefix])
-    expect(topology.vpns.slice(0, prefix.length)).toEqual([...prefix])
-    expect(topology.vpn('vpn-1').slice(0, prefix.length)).toEqual([...prefix])
-    expect(topology.peers('vpn-1').slice(0, prefix.length)).toEqual([
-      ...prefix,
-    ])
   })
 })
 

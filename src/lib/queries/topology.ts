@@ -1,30 +1,20 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  applyVpn,
   createDatacenter,
   createIp,
   createNetwork,
-  createPeer,
-  createVpn,
   deleteDatacenter,
   deleteIp,
   deleteNetwork,
-  deletePeer,
-  deleteVpn,
   fetchDatacenter,
   fetchDatacenterNameSuggestions,
   fetchDatacenters,
   fetchIp,
   fetchIps,
   fetchNetworks,
-  fetchPeers,
-  fetchVpn,
-  fetchVpns,
   updateDatacenter,
   updateIp,
   updateNetwork,
-  updatePeer,
-  updateVpn,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import { type IpListFilters, type NetworkListFilters } from '@/lib/query-keys'
@@ -137,67 +127,6 @@ export function useNetworks(
     queryFn: () => fetchNetworks(toFetchNetworkFilters(filters)),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     ...(useKeepPrevious ? { placeholderData: keepPreviousData } : {}),
-  })
-}
-
-export function useVpns(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
-  return useQuery({
-    queryKey: queryKeys.org(orgId).topology.vpns,
-    queryFn: fetchVpns,
-    enabled: (options?.enabled ?? true) && orgId.length > 0,
-  })
-}
-
-export function useVpn(
-  orgId: string,
-  vpnId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
-  return useQuery({
-    queryKey: queryKeys.org(orgId).topology.vpn(vpnId),
-    queryFn: () => fetchVpn(vpnId),
-    enabled:
-      (options?.enabled ?? true) && orgId.length > 0 && vpnId.length > 0,
-  })
-}
-
-export function usePeers(
-  orgId: string,
-  vpnId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
-  return useQuery({
-    queryKey: queryKeys.org(orgId).topology.peers(vpnId),
-    queryFn: () => fetchPeers(vpnId),
-    enabled:
-      (options?.enabled ?? true) && orgId.length > 0 && vpnId.length > 0,
-  })
-}
-
-export function peersQueryOptions(orgId: string, vpnId: string) {
-  return {
-    queryKey: queryKeys.org(orgId).topology.peers(vpnId),
-    queryFn: () => fetchPeers(vpnId),
-  } as const
-}
-
-export function useRenameVpn(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: ({ vpnId, name }: { vpnId: string; name: string }) =>
-      updateVpn(vpnId, { displayName: name || null }),
-    onSuccess: (_data, { vpnId }) =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).topology.vpn(vpnId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).topology.vpns,
-        }),
-      ]),
   })
 }
 
@@ -324,164 +253,6 @@ export function useDeleteNetwork(orgId: string) {
         queryKey: queryKeys.org(orgId).topology.all,
       }),
   })
-}
-
-export function useCreateVpn(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: createVpn,
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.vpns,
-      }),
-  })
-}
-
-export function useUpdateVpn(orgId: string, vpnId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (body: Parameters<typeof updateVpn>[1]) =>
-      updateVpn(vpnId, body),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).topology.vpn(vpnId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).topology.vpns,
-        }),
-      ]),
-  })
-}
-
-export function useDeleteVpn(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: deleteVpn,
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.all,
-      }),
-  })
-}
-
-export function useCreatePeer(orgId: string, vpnId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (body: Parameters<typeof createPeer>[1]) =>
-      createPeer(vpnId, body),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.peers(vpnId),
-      }),
-  })
-}
-
-export function useUpdatePeer(orgId: string, vpnId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: ({
-      peerId,
-      body,
-    }: {
-      peerId: string
-      body: Parameters<typeof updatePeer>[2]
-    }) => updatePeer(vpnId, peerId, body),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.peers(vpnId),
-      }),
-  })
-}
-
-export function useDeletePeer(orgId: string, vpnId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (peerId: string) => deletePeer(vpnId, peerId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.peers(vpnId),
-      }),
-  })
-}
-
-export function useApplyVpn(orgId: string, vpnId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: () => applyVpn(vpnId),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).topology.vpn(vpnId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).topology.peers(vpnId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).commands.all,
-        }),
-      ]),
-  })
-}
-
-export function useOverridePeerTunnelIp(orgId: string, vpnId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: async ({
-      peerId,
-      address,
-      serverId,
-    }: {
-      peerId: string
-      address: string
-      serverId: string
-    }) => {
-      const created = await createIp({
-        address,
-        scope: 'vpn',
-        vpnId,
-        allocation: 'dedicated',
-        serverId,
-      })
-      try {
-        await updatePeer(vpnId, peerId, { tunnelIpId: created.id })
-      } catch (updateErr) {
-        let released = true
-        try {
-          await deleteIp(created.id)
-        } catch {
-          released = false
-        }
-        if (!released) {
-          const message =
-            updateErr instanceof Error
-              ? updateErr.message
-              : 'Failed to override overlay address'
-          throw new OverridePeerTunnelIpCleanupError(message, {
-            cause: updateErr,
-          })
-        }
-        throw updateErr
-      }
-    },
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.all,
-      }),
-  })
-}
-
-/** Override createIp succeeded but peer attach + deleteIp cleanup both failed. */
-export class OverridePeerTunnelIpCleanupError extends Error {
-  readonly cleanupFailed = true as const
-
-  constructor(originalMessage: string, options?: ErrorOptions) {
-    super(
-      `${originalMessage} The reserved overlay IP could not be released.`,
-      options,
-    )
-    this.name = 'OverridePeerTunnelIpCleanupError'
-  }
 }
 
 export type { IpListFilters, NetworkListFilters }

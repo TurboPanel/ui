@@ -272,7 +272,10 @@ function ApplyAvailabilityNote({
 
   return (
     <Text style={orgPanelStyles.muted}>
-      Apply regenerates the TLS cert and reloads Caddy.
+      Apply regenerates the platform-CA leaf for LAN / :8443 listeners and reloads
+      Caddy. Public HTTPS on port 443 (Cloudflare tunnel, Let’s Encrypt, or an
+      uploaded certificate) is trusted by clients via the system store. Let’s
+      Encrypt is never issued automatically — it stays opt-in.
     </Text>
   )
 }

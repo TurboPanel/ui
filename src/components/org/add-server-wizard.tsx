@@ -16,10 +16,13 @@ import {
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
+  defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
   defaultDevInstallHttpBaseUrl,
+  parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
+import { installTlsHint } from '@/lib/install-tls'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -102,12 +105,28 @@ type DevInstallUrlFieldsProps = Readonly<{
   editable?: boolean
 }>
 
+function managedInstallOrigins(managedUrls: string[]): string[] {
+  const seen = new Set<string>()
+  const origins: string[] = []
+  for (const raw of managedUrls) {
+    const origin = parseInstallBaseUrl(raw, { allowHttp: true })
+    if (!origin || seen.has(origin)) continue
+    seen.add(origin)
+    origins.push(origin)
+  }
+  return origins.sort((a, b) => a.localeCompare(b))
+}
+
 function DevInstallUrlFields({
   installBaseUrl,
   managedUrls,
   onChange,
   editable = true,
 }: DevInstallUrlFieldsProps) {
+  const origins = managedInstallOrigins(managedUrls)
+  const selected = parseInstallBaseUrl(installBaseUrl, { allowHttp: true })
+  const tlsHint = installTlsHint(selected ?? installBaseUrl)
+
   return (
     <>
       <Text style={styles.label}>Public install URL (dev)</Text>
@@ -121,10 +140,39 @@ function DevInstallUrlFields({
         editable={editable}
         style={styles.input}
       />
+      {origins.length > 0 ? (
+        <View style={styles.devUrlQuickPicks}>
+          {origins.map((origin) => {
+            const active = selected === origin
+            return (
+              <Pressable
+                key={origin}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                disabled={!editable}
+                style={[
+                  styles.secondaryButton,
+                  active && styles.devUrlChipActive,
+                ]}
+                onPress={() => onChange(origin)}
+              >
+                <Text
+                  style={[
+                    styles.secondaryButtonText,
+                    active && styles.devUrlChipTextActive,
+                  ]}
+                >
+                  {origin}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : null}
       <View style={styles.devUrlQuickPicks}>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => onChange(defaultDevInstallBaseUrl(managedUrls))}
+          onPress={() => onChange(defaultDevCaddyHttpsBaseUrl(managedUrls))}
         >
           <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
         </Pressable>
@@ -135,6 +183,9 @@ function DevInstallUrlFields({
           <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
         </Pressable>
       </View>
+      {tlsHint ? (
+        <Text style={orgPanelStyles.muted}>{tlsHint}</Text>
+      ) : null}
     </>
   )
 }
@@ -619,7 +670,15 @@ const styles = StyleSheet.create({
   },
   devUrlQuickPicks: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  devUrlChipActive: {
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
+  },
+  devUrlChipTextActive: {
+    color: chrome.accent,
   },
   label: {
     color: colors.textBody,

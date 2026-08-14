@@ -55,7 +55,7 @@ function eligibility(
       { serverId: 'srv-primary', role: 'primary' },
     ],
     primaryServerId: 'srv-primary',
-    vpnPeers: [],
+    fabricRelays: [],
     ...partial,
   })
 }
@@ -111,7 +111,7 @@ describe('resolveReplicaEligibility', () => {
     expect(row).toEqual({ serverId: 'srv-ok', eligible: true })
   })
 
-  it('marks linked-site servers eligible when they share a VPN with primary', () => {
+  it('marks linked-site servers eligible when they share TurboFabric with primary', () => {
     const result = eligibility({
       servers: [
         {
@@ -126,9 +126,9 @@ describe('resolveReplicaEligibility', () => {
           displayName: 'Linked remote',
         },
       ],
-      vpnPeers: [
-        { vpnId: 'vpn-1', serverId: 'srv-primary' },
-        { vpnId: 'vpn-1', serverId: 'srv-remote' },
+      fabricRelays: [
+        { serverId: 'srv-primary' },
+        { serverId: 'srv-remote' },
       ],
     })
     const remote = result.servers.find((s) => s.serverId === 'srv-remote')
@@ -150,10 +150,9 @@ describe('resolveReplicaEligibility', () => {
           displayName: 'Unlinked remote',
         },
       ],
-      vpnPeers: [
-        { vpnId: 'vpn-1', serverId: 'srv-primary' },
-        // Peer on another host in dc-2 only — no shared path for srv-unlinked
-        { vpnId: 'vpn-1', serverId: 'srv-other' },
+      fabricRelays: [
+        { serverId: 'srv-primary' },
+        { serverId: 'srv-other' },
       ],
     })
     const unlinked = result.servers.find((s) => s.serverId === 'srv-unlinked')
@@ -185,41 +184,41 @@ describe('resolveReplicaEligibility', () => {
 })
 
 describe('hasPrivatePathToPrimary', () => {
-  it('allows same-site candidates without VPN peers', () => {
+  it('allows same-site candidates without fabric relays', () => {
     expect(
       hasPrivatePathToPrimary({
         candidateServerId: 'srv-a',
         candidateDatacenterId: 'dc-1',
         primaryServerId: 'srv-p',
         primaryDatacenterId: 'dc-1',
-        vpnPeers: [],
+        fabricRelays: [],
       }),
     ).toBe(true)
   })
 
-  it('allows cross-site candidates that share a VPN', () => {
+  it('allows cross-site candidates that share TurboFabric', () => {
     expect(
       hasPrivatePathToPrimary({
         candidateServerId: 'srv-a',
         candidateDatacenterId: 'dc-2',
         primaryServerId: 'srv-p',
         primaryDatacenterId: 'dc-1',
-        vpnPeers: [
-          { vpnId: 'v1', serverId: 'srv-p' },
-          { vpnId: 'v1', serverId: 'srv-a' },
+        fabricRelays: [
+          { serverId: 'srv-p' },
+          { serverId: 'srv-a' },
         ],
       }),
     ).toBe(true)
   })
 
-  it('rejects cross-site candidates with no shared VPN', () => {
+  it('rejects cross-site candidates with no shared fabric path', () => {
     expect(
       hasPrivatePathToPrimary({
         candidateServerId: 'srv-a',
         candidateDatacenterId: 'dc-2',
         primaryServerId: 'srv-p',
         primaryDatacenterId: 'dc-1',
-        vpnPeers: [{ vpnId: 'v1', serverId: 'srv-p' }],
+        fabricRelays: [{ serverId: 'srv-p' }],
       }),
     ).toBe(false)
   })

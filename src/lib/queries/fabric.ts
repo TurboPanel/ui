@@ -1,8 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  applyOrgFabric,
   fetchOrgFabric,
   isHttpStatusError,
+  patchOrgFabricRelay,
   saveOrgFabric,
+  type PatchOrgFabricRelayBody,
 } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -38,5 +41,35 @@ export function useSaveOrgFabric(orgId: string) {
       queryClient.setQueryData(queryKeys.org(orgId).settings.fabric, data)
     },
     fallbackError: `Failed to update ${TURBOFABRIC_PRODUCT_NAME}`,
+  })
+}
+
+export function usePatchOrgFabricRelay(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: PatchOrgFabricRelayBody) =>
+      patchOrgFabricRelay(orgId, serverId, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).settings.fabric,
+      }),
+    fallbackError: `Failed to update ${TURBOFABRIC_PRODUCT_NAME} relay`,
+  })
+}
+
+export function useApplyOrgFabric(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => applyOrgFabric(orgId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).settings.fabric,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+    fallbackError: `Failed to apply ${TURBOFABRIC_PRODUCT_NAME}`,
   })
 }
