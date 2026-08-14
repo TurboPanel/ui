@@ -69,9 +69,9 @@ export type ManagedServiceCatalogEntry = {
    * Every image reference this engine's settings parser will accept
    * (`settings.image`), in display order — mirrors the instance allowlists
    * (`POSTGRES_ALLOWED_IMAGES` / `MYSQL_ALLOWED_IMAGES` /
-   * `MARIADB_ALLOWED_IMAGES` in `instance/src/lib/managed/settings.ts`) and
+   * `MARIADB_ALLOWED_IMAGES` in `turbopanel/src/lib/managed/settings.ts`) and
    * the daemon command-payload mirror
-   * (`daemon/src/instance/commands/contracts.ts`). Engines without a curated
+   * (`turbopaneld/src/instance/commands/contracts.ts`). Engines without a curated
    * allowlist yet (`redis` / `clickhouse`) list only their default.
    */
   allowedImages: readonly string[]

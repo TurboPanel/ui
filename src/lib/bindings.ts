@@ -1,6 +1,6 @@
 /**
  * Pure binding key helpers — mirrors instance `bindingPrefixedKeys` /
- * `assertSafeBindingKeyPrefix` in `instance/src/lib/naming.ts`.
+ * `assertSafeBindingKeyPrefix` in `turbopanel/src/lib/naming.ts`.
  *
  * Create-form previews use {@link previewBindingKeys}. Once a binding exists,
  * the server-returned `keys[]` is authoritative and must be what the UI renders.
@@ -44,7 +44,7 @@ export function bindingPrefixedKeys(prefix: string): BindingPrefixedKeys {
 
 /**
  * Engine default (unprefixed) keys — source of truth is
- * `spec.binding.unprefixed` in `instance/src/lib/managed/postgres.ts`,
+ * `spec.binding.unprefixed` in `turbopanel/src/lib/managed/postgres.ts`,
  * `mysql.ts`, and `mariadb.ts`.
  */
 export const BINDING_ENGINE_DEFAULT_KEYS: Record<

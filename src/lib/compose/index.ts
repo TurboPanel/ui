@@ -2,7 +2,7 @@
  * Compose helpers for the product console.
  *
  * Merge semantics below MUST stay in parity with
- * `instance/src/lib/compose/merge.ts` (Compose Spec append / dedup / `!reset`
+ * `turbopanel/src/lib/compose/merge.ts` (Compose Spec append / dedup / `!reset`
  * / `!override`). That file is the source of truth for what Docker Compose
  * does when multiple `-f` files are merged — never reintroduce naive
  * deep-merge here.

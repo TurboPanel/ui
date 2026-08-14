@@ -12,7 +12,7 @@ describe('MANAGED_SERVICE_CATALOG image allowlists', () => {
     )
     // MySQL/MariaDB defaults must stay on the approved LTS majors — never an
     // old major like `mysql:8` / `mariadb:11` (mirrors the instance
-    // allowlists in `instance/src/lib/managed/settings.ts`).
+    // allowlists in `turbopanel/src/lib/managed/settings.ts`).
     expect(managedCatalogEntryForCode('mysql')?.defaultImage).toBe(
       'docker.io/library/mysql:9.7',
     )
