@@ -18,6 +18,13 @@
     "experiments": {
       "typedRoutes": true
     },
+    "scheme": "turbopanel",
+    "ios": {
+      "bundleIdentifier": "app.turbopanel"
+    },
+    "android": {
+      "package": "app.turbopanel"
+    },
     "extra": {
       "router": {},
       "eas": {
