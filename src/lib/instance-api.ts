@@ -51,6 +51,8 @@ export const MANAGED_MEMBER_IS_PRIMARY_ERROR = 'managed_member_is_primary'
 export const DATACENTER_REQUIRED_ERROR = 'datacenter_required'
 export const DATACENTER_CIDR_REQUIRED_ERROR = 'datacenter_cidr_required'
 export const DATACENTER_IP_REQUIRED_ERROR = 'datacenter_ip_required'
+export const DATACENTER_HAS_MEMBERS_ERROR = 'datacenter_has_members'
+export const DATACENTER_HAS_NETWORKS_ERROR = 'datacenter_has_networks'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
 export const PEER_TUNNEL_ADDRESS_REQUIRED_ERROR = 'peer_tunnel_address_required'
 export const MANAGED_PRIVATE_PORT_EXHAUSTED_ERROR = 'managed_private_port_exhausted'
@@ -250,28 +252,37 @@ export type ServerOsMetadata = {
   id?: string
   variant?: ServerOsVariant
   version?: string
-  versionCodename?: string
+  codename?: string
   prettyName?: string
-  arch?: string
+  architecture?: string
+}
+
+export type ServerCpuResources = {
+  name?: string
+  architecture?: string
+  socketCount?: number
+  /** Physical cores (fleet strip). */
+  coreCount?: number
+  /** Logical CPUs / threads (load bars). */
+  threadCount?: number
 }
 
 /** Static host capacity from daemon hello — inventory totals + load bars. */
-export type ServerHostInventory = {
-  /** Physical cores (fleet strip). */
-  cpuCores?: number
-  /** Logical CPUs / threads (load bars). */
-  cpuThreads?: number
-  memoryTotalBytes?: number
-  swapTotalBytes?: number
+export type ServerHostResources = {
+  cpu?: ServerCpuResources
+  memory?: { totalBytes?: number }
+  swap?: { totalBytes?: number }
 }
 
 export type ServerOsLogoKey = 'debian' | 'raspberry-pi-os'
 
-export type ServerAddresses = {
-  privateIpv4: string[]
-  privateIpv6: string[]
-  publicIpv4: string[]
-  publicIpv6: string[]
+export type ServerReportedIpScope = 'private' | 'public'
+
+export type ServerReportedIp = {
+  address: string
+  version: 4 | 6
+  scope: ServerReportedIpScope
+  cidr?: string
 }
 
 export type ServerTimeSync = {
@@ -284,6 +295,11 @@ export type ServerTimeSync = {
 }
 
 export type ServerTimezoneSource = 'server' | 'organization' | null
+
+export type ServerDatacenterRef = {
+  id: string
+  displayName: string | null
+}
 
 export type OrgServerRecord = {
   id: string;
@@ -306,15 +322,15 @@ export type OrgServerRecord = {
   osDisplay: string | null;
   /** Logo key for the OS column (`debian` / `raspberry-pi-os`). */
   osLogo: ServerOsLogoKey | null;
-  /** Capacity totals from daemon hello (`server.metadata.inventory`). */
-  inventory: ServerHostInventory | null;
+  /** Capacity totals from daemon hello (`server.metadata.resources`). */
+  resources: ServerHostResources | null;
   colocatedWithInstance?: boolean;
-  addresses: ServerAddresses | null;
+  ips: ServerReportedIp[] | null;
   timeSync: ServerTimeSync | null;
   timezone: string | null;
   timezoneSource: ServerTimezoneSource;
-  datacenterId: string | null;
-  datacenterDisplayName: string | null;
+  /** Datacenter memberships (IP pins); a server may belong to many. */
+  datacenters: ServerDatacenterRef[];
 };
 
 export type ServerDetailRecord = OrgServerRecord & {
@@ -335,15 +351,26 @@ export type OrgDefaultTimezoneSettings = {
   enforceServerTimezone: boolean
 }
 
+/** Ensure memberships are always an array (stale cache / older instance). */
+function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
+  return {
+    ...server,
+    datacenters: server.datacenters ?? [],
+  }
+}
+
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/servers`);
+  const body = await apiFetch<{ servers: OrgServerRecord[] }>(
+    `${CLIENT_API}/servers`,
+  )
+  return { servers: body.servers.map((server) => normalizeOrgServer(server)) }
 }
 
 export async function fetchServer(serverId: string): Promise<ServerDetailRecord> {
   const body = await apiFetch<{ ok: true; server: ServerDetailRecord }>(
     `${CLIENT_API}/servers/${serverId}`,
   )
-  return body.server
+  return normalizeOrgServer(body.server)
 }
 
 export type ServerLabelPair = { key: string; value: string }
@@ -376,7 +403,6 @@ export async function updateServer(
   serverId: string,
   body: {
     displayName?: string | null
-    datacenterId?: string | null
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}`, {
@@ -1812,13 +1838,36 @@ export async function createDatacenter(body: {
   description?: string
   metadata?: Record<string, unknown>
   options?: DatacenterOptions
+  /** Ignored — site CIDR is derived from the seed member's reported prefix. */
+  cidr?: string
+  /** At least one membership pin (daemon-reported private address). */
+  members: Array<{ serverId: string; address: string }>
   sourceServerId?: string
-  assignServerIds?: string[]
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/datacenters`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+export async function addDatacenterMembers(
+  datacenterId: string,
+  members: Array<{ serverId: string; address: string }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ members }),
+  })
+}
+
+export async function removeDatacenterMember(
+  datacenterId: string,
+  serverId: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/datacenters/${datacenterId}/members/${serverId}`,
+    { method: 'DELETE' },
+  )
 }
 
 export async function updateDatacenter(
@@ -2056,24 +2105,6 @@ export async function applyReencryptSecrets(
   })
 }
 
-export type ServerCpuCores = {
-  p?: number
-  e?: number
-}
-
-export type ServerCpuMetadata = {
-  sockets?: number
-  cores?: ServerCpuCores
-  threads?: number
-}
-
-export type ServerMetadata = {
-  os?: ServerOsMetadata
-  cpu?: ServerCpuMetadata
-  machineKey?: string
-  hostname?: string
-}
-
 export type DaemonCellSnapshot = {
   serverId: string
   version: number
@@ -2087,8 +2118,19 @@ export type DaemonCellSnapshot = {
   lastInboundAt?: string
   lastOutboundAt?: string
   lastSeenAt?: string
-  addresses?: ServerAddresses
-  metadata?: ServerMetadata
+  ips?: ServerReportedIp[]
+  metadata?: {
+    os?: ServerOsMetadata
+    resources?: ServerHostResources
+    ips?: ServerReportedIp[]
+    timeSync?: ServerTimeSync
+    geo?: ServerGeo
+    cell?: {
+      locationHint?: string
+      generation?: number
+      snapshotVersion?: number
+    }
+  }
 }
 
 export type FetchServerCellResponse = {

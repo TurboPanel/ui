@@ -3,51 +3,25 @@
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/network` and its sub-routes.
 
 **Routes:**
-- Sites (area root) → `network-sites-section.tsx` at `/network`
-- Site detail → `network-site-detail-section.tsx` at `/network/sites/:datacenterId`
+- Hub (area root) → `network-overview-section.tsx` at `/network`
 - TurboFabric → `network-fabric-section.tsx` at `/network/fabric`
 - Addresses → `network-addresses-section.tsx`
 - Docker networks → `network-docker-section.tsx`
 
-**Job:** Operator topology for private connectivity — site → private CIDR → member servers → addresses → TurboFabric. Docker networks are a quiet deploy registry, not topology.
+**Job:** Mesh, address pool, and Docker registry. **Private CIDRs are Datacenters** (`/servers/datacenters`) — do not duplicate that CRUD here.
 
 ---
 
-## Hierarchy (spine)
+## Hub
 
-1. **Sites** — physical/logical locations that group servers on a private network
-2. **Private CIDR** — `kind: 'datacenter'` networks; prerequisite for replicas and mesh gateway site routes
-3. **Member servers** — assignment + each host’s private (`scope: 'datacenter'`) address
-4. **Addresses** — org free-pool / public / datacenter-scoped rows
-5. **TurboFabric** — org-level opt-in mesh (enable + relay table + Apply)
-
-Sites is the **area root** (not a sub-route). TurboFabric, Addresses, and Docker networks sit in the sidebar as quiet sub-routes.
-
-## Sites list
-
-- One job: **site cards** (`orgPanelStyles.detailCard`), not a dashboard of widgets
-- Title **Network** + one line of model copy (sites group servers; TurboFabric connects sites)
-- Card shows name, description, member-server count (from one `useOrgServers` group-by — **never** one query per site), private CIDRs monospace from `datacenter.privateCidrs`
-- **Missing CIDR is the headline:** inline `calloutWarning` + **Add private network** (creates `kind: 'datacenter'` scoped to the site). Consequence in one line: site can’t host database replicas without a private network
-- Secondary gap, quieter: “N servers here have no private address”
-- Mesh strip per card from `resolveSiteLinks` / `meshLabelForSite` over one **manage-gated** `useOrgFabric` (`relays[]`) — never a per-relay fan-out. Non-managers see permission-aware copy, never “no relays” from an empty 403 fallback
-- Unassigned servers group at the bottom when any server has `datacenterId === null`
-- Cold org (zero sites): lead with `FirstRunWizard` instead of an empty table
-- Geo/ASN name suggestions on create (`fetchDatacenterNameSuggestions`, `sourceServerId` / `assignServerIds`) when not cold-wizard-only
-- Delete confirm: servers and IPs are unpinned, not destroyed; **409** `datacenter_has_networks` copy when networks remain
-
-## Site detail (panel order)
-
-1. **Private network** — CIDR editor first; same actionable empty callout as the card
-2. **Member servers** — assign/unassign + private address inline (or muted “No private address”)
-3. **TurboFabric** — relays at this site (role, tp0, other sites, **Primary** badge); empty: no relays at this site (**manage-gated** — non-managers get permission copy, not the empty state); `gateway_datacenter_cidr_required` pre-flight via `calloutWarning`; rows deep-link to `/network/fabric`
-4. **IP pool** — site-scoped free-pool rows
-5. **Timezone** — unchanged picker + enforce toggle
+- Title **Network** + one line: private CIDRs live on Datacenters; this area is mesh / addresses / Docker
+- Four `detailCard` links (Datacenters, TurboFabric, Addresses, Docker networks) — not a second sites inventory
+- Legacy `/network/sites/:id` redirects to `/servers/datacenters/:id`
 
 ## Addresses
 
 - Scopes: `public | datacenter` (no `loopback`, no `vpn`)
-- Scope / allocation filters use `segmentGroup` / `segmentChip`; site filter remains chips
+- Scope / allocation filters use `segmentGroup` / `segmentChip`
 - **409** `ip_in_use` copy retained
 
 ## TurboFabric
@@ -70,17 +44,13 @@ Sites is the **area root** (not a sub-route). TurboFabric, Addresses, and Docker
 
 ## Server detail Network tab
 
-Display-only: site name links to site detail; mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
+Display-only: each membership links to datacenter detail; mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
 
 ## Anti-patterns
 
-- ❌ N+1 server/IP fetches per site card
+- ❌ A second Sites inventory or CIDR editor on `/network`
+- ❌ N+1 server/IP fetches per card
 - ❌ Unbounded per-server queries for mesh membership
 - ❌ Rendering `presharedKey` on relays
 - ❌ DO polling for Apply status — use `useCommandsBatch`
 - ❌ Duplicate datacenter-assignment controls on the server Network tab
-- ❌ Late CIDR validation only — gaps are first-class on site cards
-
-## Tokens
-
-Use `src/lib/theme.ts` + `org-panel-styles.ts` only (`pageTitle`, `pageCopy`, `detailCard`, `detailTitle`, `detailLine`, `statePanel`, `calloutWarning`, `segmentGroup`/`segmentChip`, `toolbarBtn*`, `webPointer`).

@@ -290,12 +290,12 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_member_exists: 'That server already hosts a member of this cluster.',
   managed_member_is_primary:
     'Promote another member first — the primary cannot be removed.',
-  datacenter_required: 'That server is not assigned to a site.',
-  datacenter_cidr_required: 'That site has no private network yet.',
-  datacenter_ip_required: 'That server has no private address on its site.',
+  datacenter_required: 'That server is not assigned to a datacenter.',
+  datacenter_cidr_required: 'That datacenter has no private network yet.',
+  datacenter_ip_required: 'That server has no private address in its datacenter.',
   private_path_unavailable: 'No private path between that server and the primary.',
   peer_tunnel_address_required:
-    `The ${TURBOFABRIC_PRODUCT_NAME} path between those sites has no overlay address yet.`,
+    `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',
   managed_replica_not_streaming:
     'That replica is not streaming from the primary yet. Wait for it to catch up, or promote anyway if the primary is dead.',

@@ -1,14 +1,14 @@
-import type { RelayRecord, RelayRole } from './instance-api.ts'
+import type { RelayRecord, RelayRole, ServerDatacenterRef } from './instance-api.ts'
 
 /** Minimal server facts needed for primary-gateway resolution. */
 export type MeshServerRef = {
   connected: boolean
-  datacenterId: string | null
+  datacenters: readonly ServerDatacenterRef[]
 }
 
 /** Site facts needed for site mesh labels. */
 export type SiteLinkServerRef = {
-  datacenterId: string | null
+  datacenters: readonly ServerDatacenterRef[]
 }
 
 /**
@@ -22,7 +22,7 @@ export type SiteLinkSites = {
 
 /**
  * Collect the datacenters touched by TurboFabric relays. Relays without a
- * server (or with `datacenterId === null`) set `hasUnassignedPeers` rather
+ * server (or with an empty `datacenters[]`) set `hasUnassignedPeers` rather
  * than inventing a site id.
  */
 export function resolveSiteLinks(
@@ -33,12 +33,14 @@ export function resolveSiteLinks(
   let hasUnassignedPeers = false
   for (const relay of relays) {
     const server = serverById.get(relay.serverId)
-    const datacenterId = server?.datacenterId ?? null
-    if (!datacenterId) {
+    const memberships = server?.datacenters ?? []
+    if (memberships.length === 0) {
       hasUnassignedPeers = true
       continue
     }
-    ids.add(datacenterId)
+    for (const membership of memberships) {
+      ids.add(membership.id)
+    }
   }
   return {
     datacenterIds: [...ids].sort((a, b) => a.localeCompare(b)),
@@ -84,7 +86,8 @@ export function meshLabelForSite(
 
 /**
  * One deterministic primary gateway per datacenter: first online gateway
- * (`server.connected`) by `serverId`, else first gateway overall.
+ * (`server.connected`) by `serverId`, else first gateway overall. A gateway
+ * belonging to N datacenters is a candidate in each.
  */
 export function resolvePrimaryGatewayByDatacenter(
   relays: readonly Pick<RelayRecord, 'serverId' | 'role'>[],
@@ -96,13 +99,16 @@ export function resolvePrimaryGatewayByDatacenter(
   for (const relay of relays) {
     if (relay.role !== 'gateway') continue
     const server = serverById.get(relay.serverId)
-    if (!server?.datacenterId) continue
-    const list = byDc.get(server.datacenterId) ?? []
-    list.push({
-      serverId: relay.serverId,
-      online: server.connected === true,
-    })
-    byDc.set(server.datacenterId, list)
+    const memberships = server?.datacenters ?? []
+    if (!server || memberships.length === 0) continue
+    for (const membership of memberships) {
+      const list = byDc.get(membership.id) ?? []
+      list.push({
+        serverId: relay.serverId,
+        online: server.connected === true,
+      })
+      byDc.set(membership.id, list)
+    }
   }
 
   const primary = new Map<string, string>()

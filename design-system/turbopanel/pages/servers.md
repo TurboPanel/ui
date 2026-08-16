@@ -13,9 +13,10 @@
 - Lean **inventory strip** above the table (count · cores · RAM · swap · avg CPU · avg memory) — monospace values, no cards  
 - Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar inside `SectionPanel` (no title/hint bar): **+ Server** (own-gated) + batch Update for selected updatable hosts  
+- **Datacenters** sub-route (`/servers/datacenters`) for org location inventory (member counts, private CIDRs) — see `pages/datacenters.md`  
 - **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
-- Networking topology (**Sites**, **Links**, **Addresses**, **Docker networks**) lives under the **Network** area — see `pages/network.md`  
+- Networking topology: **Datacenters** under Servers (private CIDR + members); **Addresses**, **Docker networks**, and TurboFabric under the **Network** area — see `pages/datacenters.md` and `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle` / `pageCopy`; route context lives in `OrgHeader` eyebrow  
 - No hero, no decorative bento above the table
 

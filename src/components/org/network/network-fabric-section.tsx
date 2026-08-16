@@ -64,10 +64,10 @@ function fabricMutationError(err: unknown): string {
   }
   const raw = err.message
   if (raw.includes(GATEWAY_DATACENTER_REQUIRED_ERROR)) {
-    return 'Assign this server to a site before promoting it to gateway.'
+    return 'Assign this server to a datacenter before promoting it to gateway.'
   }
   if (raw.includes(GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR)) {
-    return 'Add a private network CIDR to this site before promoting a gateway.'
+    return 'This datacenter has no private CIDR. Recreate it from a server IP before promoting a gateway.'
   }
   return raw
 }

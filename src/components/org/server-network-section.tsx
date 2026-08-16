@@ -11,7 +11,7 @@ import {
   type RelayRecord,
   type ServerDetailRecord,
 } from '@/lib/instance-api'
-import { networkFabricHref, networkSiteHref } from '@/lib/org-navigation'
+import { datacenterHref, networkFabricHref } from '@/lib/org-navigation'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -122,13 +122,24 @@ export function ServerNetworkSection({
 }: Readonly<{ orgId: string; server: ServerDetailRecord }>) {
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const addresses = server.addresses
+  const ips = server.ips ?? []
+  const publicIpv4 = ips
+    .filter((row) => row.scope === 'public' && row.version === 4)
+    .map((row) => row.address)
+  const publicIpv6 = ips
+    .filter((row) => row.scope === 'public' && row.version === 6)
+    .map((row) => row.address)
+  const privateIpv4 = ips
+    .filter((row) => row.scope === 'private' && row.version === 4)
+    .map((row) => row.address)
+  const privateIpv6 = ips
+    .filter((row) => row.scope === 'private' && row.version === 6)
+    .map((row) => row.address)
   const hasLists =
-    addresses != null &&
-    (addresses.publicIpv4.length > 0 ||
-      addresses.publicIpv6.length > 0 ||
-      addresses.privateIpv4.length > 0 ||
-      addresses.privateIpv6.length > 0)
+    publicIpv4.length > 0 ||
+    publicIpv6.length > 0 ||
+    privateIpv4.length > 0 ||
+    privateIpv6.length > 0
 
   const datacenterIpsQuery = useQuery({
     queryKey: queryKeys.org(orgId).servers.ips(server.id, {
@@ -174,34 +185,39 @@ export function ServerNetworkSection({
     fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
   const meshLoading = fabricQuery.isLoading
 
-  const siteName = server.datacenterDisplayName?.trim() || null
-  const siteId = server.datacenterId
+  const memberships = server.datacenters ?? []
 
   return (
     <View style={styles.root}>
       <SectionPanel
-        title="Site"
-        hint="Assignment and private address for this host"
+        title="Datacenters"
+        hint="Membership pins for this host"
       >
-        {siteId ? (
-          <Pressable
-            style={webPointer}
-            onPress={() =>
-              router.push(networkSiteHref(orgId, siteId) as Href)
-            }
-            accessibilityRole="link"
-            accessibilityLabel={`Open site ${siteName ?? siteId}`}
-          >
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Site: </Text>
-              {siteName || siteId}
-            </Text>
-          </Pressable>
-        ) : (
+        {memberships.length === 0 ? (
           <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Site: </Text>
+            <Text style={orgPanelStyles.detailLabel}>Datacenters: </Text>
             Not assigned
           </Text>
+        ) : (
+          memberships.map((membership) => {
+            const label = membership.displayName?.trim() || membership.id
+            return (
+              <Pressable
+                key={membership.id}
+                style={webPointer}
+                onPress={() =>
+                  router.push(datacenterHref(orgId, membership.id) as Href)
+                }
+                accessibilityRole="link"
+                accessibilityLabel={`Open datacenter ${label}`}
+              >
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>Datacenter: </Text>
+                  {label}
+                </Text>
+              </Pressable>
+            )
+          })
         )}
         <DatacenterPrivateAddress
           loading={datacenterIpsQuery.isLoading}
@@ -257,10 +273,10 @@ export function ServerNetworkSection({
           </Text>
         ) : (
           <>
-            <AddressGroup label="Public IPv4" addresses={addresses!.publicIpv4} />
-            <AddressGroup label="Public IPv6" addresses={addresses!.publicIpv6} />
-            <AddressGroup label="Private IPv4" addresses={addresses!.privateIpv4} />
-            <AddressGroup label="Private IPv6" addresses={addresses!.privateIpv6} />
+            <AddressGroup label="Public IPv4" addresses={publicIpv4} />
+            <AddressGroup label="Public IPv6" addresses={publicIpv6} />
+            <AddressGroup label="Private IPv4" addresses={privateIpv4} />
+            <AddressGroup label="Private IPv6" addresses={privateIpv6} />
           </>
         )}
       </SectionPanel>

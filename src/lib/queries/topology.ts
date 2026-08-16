@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  addDatacenterMembers,
   createDatacenter,
   createIp,
   createNetwork,
@@ -12,6 +13,7 @@ import {
   fetchIp,
   fetchIps,
   fetchNetworks,
+  removeDatacenterMember,
   updateDatacenter,
   updateIp,
   updateNetwork,
@@ -174,6 +176,52 @@ export function useDeleteDatacenter(orgId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).topology.all,
       }),
+  })
+}
+
+export function useAddDatacenterMembers(orgId: string, datacenterId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (members: Array<{ serverId: string; address: string }>) =>
+      addDatacenterMembers(datacenterId, members),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.datacenters,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.list,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.all,
+        }),
+      ]),
+  })
+}
+
+export function useRemoveDatacenterMember(orgId: string, datacenterId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (serverId: string) =>
+      removeDatacenterMember(datacenterId, serverId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.datacenters,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.list,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.all,
+        }),
+      ]),
   })
 }
 

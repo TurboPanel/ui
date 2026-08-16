@@ -201,16 +201,16 @@ function memoryTotalFromUsage(
 
 /** Physical cores for inventory totals; falls back to threads when unknown. */
 function serverInventoryCpuCores(server: OrgServerRecord): number | null {
-  const cores = server.inventory?.cpuCores
+  const cores = server.resources?.cpu?.coreCount
   if (cores != null && Number.isFinite(cores) && cores > 0) return cores
   return serverCpuThreads(server)
 }
 
 /** Logical CPUs for load-average bars (`load / threads`). */
 function serverCpuThreads(server: OrgServerRecord): number | null {
-  const threads = server.inventory?.cpuThreads
+  const threads = server.resources?.cpu?.threadCount
   if (threads != null && Number.isFinite(threads) && threads > 0) return threads
-  const cores = server.inventory?.cpuCores
+  const cores = server.resources?.cpu?.coreCount
   if (cores != null && Number.isFinite(cores) && cores > 0) return cores
   return null
 }
@@ -219,19 +219,19 @@ function serverMemoryTotal(
   server: OrgServerRecord,
   usage: FleetServerUsageRecord | undefined,
 ): number | null {
-  const fromInventory = server.inventory?.memoryTotalBytes
+  const fromResources = server.resources?.memory?.totalBytes
   if (
-    fromInventory != null &&
-    Number.isFinite(fromInventory) &&
-    fromInventory > 0
+    fromResources != null &&
+    Number.isFinite(fromResources) &&
+    fromResources > 0
   ) {
-    return fromInventory
+    return fromResources
   }
   return memoryTotalFromUsage(usage)
 }
 
 function serverSwapTotal(server: OrgServerRecord): number | null {
-  const swap = server.inventory?.swapTotalBytes
+  const swap = server.resources?.swap?.totalBytes
   if (swap == null || !Number.isFinite(swap) || swap < 0) return null
   return swap
 }

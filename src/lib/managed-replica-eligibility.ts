@@ -13,6 +13,7 @@ import {
   MANAGED_MAX_REPLICAS,
   type ManagedMemberRecord,
 } from '@/lib/managed-services'
+import type { ServerDatacenterRef } from '@/lib/instance-api'
 
 export type ReplicaIneligibleReason =
   | 'already-member'
@@ -25,6 +26,8 @@ export type ReplicaServerEligibility = {
   serverId: string
   eligible: boolean
   reason?: ReplicaIneligibleReason
+  /** Preferred site for deep links when ineligible for CIDR reasons. */
+  candidateDatacenterId?: string | null
 }
 
 export type ReplicaEligibilityInput = {
@@ -33,7 +36,7 @@ export type ReplicaEligibilityInput = {
     displayName?: string | null
     hostname?: string | null
     connected: boolean
-    datacenterId: string | null
+    datacenters: readonly ServerDatacenterRef[]
   }>
   datacenters: ReadonlyArray<{
     id: string
@@ -64,6 +67,21 @@ function replicaCount(
   return members.filter((m) => m.role === 'replica').length
 }
 
+function datacenterIds(
+  server: Readonly<{ datacenters: readonly ServerDatacenterRef[] }> | undefined,
+): string[] {
+  return (server?.datacenters ?? []).map((row) => row.id)
+}
+
+function shareDatacenter(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  if (left.length === 0 || right.length === 0) return false
+  const rightSet = new Set(right)
+  return left.some((id) => rightSet.has(id))
+}
+
 /**
  * True when `from` can reach `to` over local / same-site / shared fabric path.
  * Does not require datacenter IPs (those fail as datacenter_ip_required on
@@ -71,18 +89,19 @@ function replicaCount(
  */
 export function hasPrivatePathToPrimary(params: Readonly<{
   candidateServerId: string
-  candidateDatacenterId: string | null
+  candidateDatacenterIds: readonly string[]
   primaryServerId: string
-  primaryDatacenterId: string | null
+  primaryDatacenterIds: readonly string[]
   fabricRelays: ReadonlyArray<{ serverId: string }>
 }>): boolean {
   if (params.candidateServerId === params.primaryServerId) {
     return true
   }
   if (
-    params.candidateDatacenterId != null &&
-    params.primaryDatacenterId != null &&
-    params.candidateDatacenterId === params.primaryDatacenterId
+    shareDatacenter(
+      params.candidateDatacenterIds,
+      params.primaryDatacenterIds,
+    )
   ) {
     return true
   }
@@ -94,6 +113,17 @@ export function hasPrivatePathToPrimary(params: Readonly<{
     relayServerIds.has(params.primaryServerId) &&
     relayServerIds.has(params.candidateServerId)
   )
+}
+
+function firstDatacenterWithCidr(
+  membershipIds: readonly string[],
+  cidrsByDatacenter: ReadonlyMap<string, readonly string[]>,
+): string | null {
+  for (const id of membershipIds) {
+    const cidrs = cidrsByDatacenter.get(id) ?? []
+    if (cidrs.length > 0) return id
+  }
+  return null
 }
 
 /**
@@ -114,6 +144,7 @@ export function resolveReplicaEligibility(
   const primary = input.primaryServerId
     ? serverById.get(input.primaryServerId)
     : undefined
+  const primaryDatacenterIds = datacenterIds(primary)
   const fabricRelays = input.fabricRelays ?? []
 
   const servers: ReplicaServerEligibility[] = input.servers.map((server) => {
@@ -127,28 +158,33 @@ export function resolveReplicaEligibility(
     if (!server.connected) {
       return { serverId: server.id, eligible: false, reason: 'offline' }
     }
-    if (!server.datacenterId) {
+    const membershipIds = datacenterIds(server)
+    if (membershipIds.length === 0) {
       return {
         serverId: server.id,
         eligible: false,
         reason: 'no-datacenter',
       }
     }
-    const cidrs = cidrsByDatacenter.get(server.datacenterId) ?? []
-    if (cidrs.length === 0) {
+    const readyDatacenterId = firstDatacenterWithCidr(
+      membershipIds,
+      cidrsByDatacenter,
+    )
+    if (!readyDatacenterId) {
       return {
         serverId: server.id,
         eligible: false,
         reason: 'no-private-cidr',
+        candidateDatacenterId: membershipIds[0] ?? null,
       }
     }
     if (
       input.primaryServerId &&
       !hasPrivatePathToPrimary({
         candidateServerId: server.id,
-        candidateDatacenterId: server.datacenterId,
+        candidateDatacenterIds: membershipIds,
         primaryServerId: input.primaryServerId,
-        primaryDatacenterId: primary?.datacenterId ?? null,
+        primaryDatacenterIds,
         fabricRelays,
       })
     ) {
@@ -156,9 +192,14 @@ export function resolveReplicaEligibility(
         serverId: server.id,
         eligible: false,
         reason: 'no-private-path',
+        candidateDatacenterId: readyDatacenterId,
       }
     }
-    return { serverId: server.id, eligible: true }
+    return {
+      serverId: server.id,
+      eligible: true,
+      candidateDatacenterId: readyDatacenterId,
+    }
   })
 
   return {
@@ -177,9 +218,9 @@ export function replicaIneligibleReasonLabel(
     case 'offline':
       return 'Offline'
     case 'no-datacenter':
-      return 'Not assigned to a site'
+      return 'Not assigned to a datacenter'
     case 'no-private-cidr':
-      return 'Site has no private network'
+      return 'Datacenter has no private network'
     case 'no-private-path':
       return 'No private path to primary'
   }

@@ -9,31 +9,31 @@ const BASE_SERVERS = [
   {
     id: 'srv-primary',
     connected: true,
-    datacenterId: 'dc-1',
+    datacenters: [{ id: 'dc-1', displayName: 'One' }],
     displayName: 'Primary host',
   },
   {
     id: 'srv-ok',
     connected: true,
-    datacenterId: 'dc-1',
+    datacenters: [{ id: 'dc-1', displayName: 'One' }],
     displayName: 'Ready host',
   },
   {
     id: 'srv-offline',
     connected: false,
-    datacenterId: 'dc-1',
+    datacenters: [{ id: 'dc-1', displayName: 'One' }],
     displayName: 'Offline host',
   },
   {
     id: 'srv-no-dc',
     connected: true,
-    datacenterId: null,
+    datacenters: [],
     displayName: 'No site',
   },
   {
     id: 'srv-no-cidr',
     connected: true,
-    datacenterId: 'dc-empty',
+    datacenters: [{ id: 'dc-empty', displayName: 'Empty' }],
     displayName: 'Empty site',
   },
 ] as const
@@ -67,7 +67,7 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: false,
-          datacenterId: null,
+          datacenters: [],
           displayName: 'Primary',
         },
       ],
@@ -103,12 +103,17 @@ describe('resolveReplicaEligibility', () => {
       serverId: 'srv-no-cidr',
       eligible: false,
       reason: 'no-private-cidr',
+      candidateDatacenterId: 'dc-empty',
     })
   })
 
   it('marks same-site servers eligible', () => {
     const row = eligibility().servers.find((s) => s.serverId === 'srv-ok')
-    expect(row).toEqual({ serverId: 'srv-ok', eligible: true })
+    expect(row).toEqual({
+      serverId: 'srv-ok',
+      eligible: true,
+      candidateDatacenterId: 'dc-1',
+    })
   })
 
   it('marks linked-site servers eligible when they share TurboFabric with primary', () => {
@@ -117,12 +122,12 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: true,
-          datacenterId: 'dc-1',
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
         },
         {
           id: 'srv-remote',
           connected: true,
-          datacenterId: 'dc-2',
+          datacenters: [{ id: 'dc-2', displayName: 'Two' }],
           displayName: 'Linked remote',
         },
       ],
@@ -132,7 +137,11 @@ describe('resolveReplicaEligibility', () => {
       ],
     })
     const remote = result.servers.find((s) => s.serverId === 'srv-remote')
-    expect(remote).toEqual({ serverId: 'srv-remote', eligible: true })
+    expect(remote).toEqual({
+      serverId: 'srv-remote',
+      eligible: true,
+      candidateDatacenterId: 'dc-2',
+    })
   })
 
   it('flags unlinked-site servers with no-private-path', () => {
@@ -141,12 +150,12 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: true,
-          datacenterId: 'dc-1',
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
         },
         {
           id: 'srv-unlinked',
           connected: true,
-          datacenterId: 'dc-3',
+          datacenters: [{ id: 'dc-3', displayName: 'Three' }],
           displayName: 'Unlinked remote',
         },
       ],
@@ -160,6 +169,7 @@ describe('resolveReplicaEligibility', () => {
       serverId: 'srv-unlinked',
       eligible: false,
       reason: 'no-private-path',
+      candidateDatacenterId: 'dc-3',
     })
   })
 
@@ -188,9 +198,9 @@ describe('hasPrivatePathToPrimary', () => {
     expect(
       hasPrivatePathToPrimary({
         candidateServerId: 'srv-a',
-        candidateDatacenterId: 'dc-1',
+        candidateDatacenterIds: ['dc-1'],
         primaryServerId: 'srv-p',
-        primaryDatacenterId: 'dc-1',
+        primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
       }),
     ).toBe(true)
@@ -200,9 +210,9 @@ describe('hasPrivatePathToPrimary', () => {
     expect(
       hasPrivatePathToPrimary({
         candidateServerId: 'srv-a',
-        candidateDatacenterId: 'dc-2',
+        candidateDatacenterIds: ['dc-2'],
         primaryServerId: 'srv-p',
-        primaryDatacenterId: 'dc-1',
+        primaryDatacenterIds: ['dc-1'],
         fabricRelays: [
           { serverId: 'srv-p' },
           { serverId: 'srv-a' },
@@ -215,9 +225,9 @@ describe('hasPrivatePathToPrimary', () => {
     expect(
       hasPrivatePathToPrimary({
         candidateServerId: 'srv-a',
-        candidateDatacenterId: 'dc-2',
+        candidateDatacenterIds: ['dc-2'],
         primaryServerId: 'srv-p',
-        primaryDatacenterId: 'dc-1',
+        primaryDatacenterIds: ['dc-1'],
         fabricRelays: [{ serverId: 'srv-p' }],
       }),
     ).toBe(false)

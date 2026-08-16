@@ -29,6 +29,12 @@ export const ORG_AREAS = [
     hint: 'Managed hosts and fleet status',
     subRoutes: [
       {
+        id: 'datacenters',
+        label: 'Datacenters',
+        pathSegment: 'datacenters',
+        hint: 'Private CIDR locations that group servers',
+      },
+      {
         id: 'settings',
         label: 'Settings',
         pathSegment: 'settings',
@@ -46,7 +52,7 @@ export const ORG_AREAS = [
     id: 'network',
     label: 'Network',
     pathSegment: 'network',
-    hint: 'Sites, private networks, addresses, and TurboFabric',
+    hint: 'TurboFabric, addresses, and Docker networks',
     subRoutes: [
       {
         id: 'fabric',
@@ -114,17 +120,49 @@ export function serverDetailHref(
   return `/${orgId}/servers/${serverId}`
 }
 
+export function serversDatacentersHref(
+  orgId: string,
+): `/${string}/servers/datacenters` {
+  return `/${orgId}/servers/datacenters`
+}
+
+export function datacenterHref(
+  orgId: string,
+  datacenterId: string,
+): `/${string}/servers/datacenters/${string}` {
+  return `/${orgId}/servers/datacenters/${datacenterId}`
+}
+
+export function datacenterNewHref(
+  orgId: string,
+): `/${string}/servers/datacenters/new` {
+  return `/${orgId}/servers/datacenters/new`
+}
+
+/** @deprecated Use {@link datacenterHref} — datacenter and site are the same entity. */
 export function networkSiteHref(
   orgId: string,
   datacenterId: string,
-): `/${string}/network/sites/${string}` {
-  return `/${orgId}/network/sites/${datacenterId}`
+): `/${string}/servers/datacenters/${string}` {
+  return datacenterHref(orgId, datacenterId)
 }
 
 export function networkFabricHref(
   orgId: string,
 ): `/${string}/network/fabric` {
   return `/${orgId}/network/fabric`
+}
+
+export function networkAddressesHref(
+  orgId: string,
+): `/${string}/network/addresses` {
+  return `/${orgId}/network/addresses`
+}
+
+export function networkDockerHref(
+  orgId: string,
+): `/${string}/network/docker` {
+  return `/${orgId}/network/docker`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [
@@ -169,10 +207,32 @@ const SERVER_METRICS_SUB_ROUTE = {
 
 const SITE_DETAIL_SUB_ROUTE = {
   id: 'site-detail',
-  label: 'Site',
+  label: 'Datacenter',
   pathSegment: 'sites',
-  hint: 'Site private network and members',
+  hint: 'Redirects to the Datacenters detail page',
 } as const
+
+const DATACENTER_DETAIL_SUB_ROUTE = {
+  id: 'datacenter-detail',
+  label: 'Datacenter',
+  pathSegment: 'datacenters',
+  hint: 'Private CIDR, members, and timezone',
+} as const
+
+const DATACENTER_NEW_SUB_ROUTE = {
+  id: 'datacenter-new',
+  label: 'New datacenter',
+  pathSegment: 'datacenters',
+  hint: 'Create a datacenter from a server IP',
+} as const
+
+function resolveServersExtraSubRoute(parts: readonly string[]) {
+  if (parts.length < 4) return null
+  if (parts[3] === 'metrics') return SERVER_METRICS_SUB_ROUTE
+  if (parts[2] !== 'datacenters') return null
+  if (parts[3] === 'new') return DATACENTER_NEW_SUB_ROUTE
+  return DATACENTER_DETAIL_SUB_ROUTE
+}
 
 export function orgAreaFromPathname(pathname: string) {
   const parts = pathname.split('/').filter(Boolean)
@@ -186,21 +246,17 @@ export function orgAreaFromPathname(pathname: string) {
     return null
   }
 
-  if (
-    areaSegment === 'servers' &&
-    parts.length >= 4 &&
-    parts[3] === 'metrics'
-  ) {
-    return { area, subRoute: SERVER_METRICS_SUB_ROUTE }
-  }
-
-  if (areaSegment === 'servers' && parts.length >= 3) {
-    const maybeSub = parts[2]
-    const knownSub = area.subRoutes.some(
-      (entry) => entry.pathSegment === maybeSub,
-    )
-    if (!knownSub && maybeSub !== 'metrics') {
-      return { area, subRoute: SERVER_DETAIL_SUB_ROUTE }
+  if (areaSegment === 'servers') {
+    const extra = resolveServersExtraSubRoute(parts)
+    if (extra) return { area, subRoute: extra }
+    if (parts.length >= 3) {
+      const maybeSub = parts[2]
+      const knownSub = area.subRoutes.some(
+        (entry) => entry.pathSegment === maybeSub,
+      )
+      if (!knownSub && maybeSub !== 'metrics') {
+        return { area, subRoute: SERVER_DETAIL_SUB_ROUTE }
+      }
     }
   }
 

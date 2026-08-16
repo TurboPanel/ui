@@ -25,7 +25,12 @@ import {
   type ReplicaIneligibleReason,
   type ReplicaServerEligibility,
 } from '@/lib/managed-replica-eligibility'
-import { networkFabricHref, networkSiteHref } from '@/lib/org-navigation'
+import { formatServerDatacenterNames } from '@/lib/datacenter-list'
+import {
+  datacenterHref,
+  networkFabricHref,
+  serversDatacentersHref,
+} from '@/lib/org-navigation'
 import {
   MANAGED_PRIMARY_FENCE_FAILED_ERROR,
   MANAGED_REPLICA_HEALTH_STALE_ERROR,
@@ -159,7 +164,7 @@ export function ManagedClusterPanel({
           displayName: s.displayName,
           hostname: s.hostname,
           connected: s.connected,
-          datacenterId: s.datacenterId,
+          datacenters: s.datacenters ?? [],
         })),
         datacenters: datacenters.map((dc) => ({
           id: dc.id,
@@ -184,7 +189,7 @@ export function ManagedClusterPanel({
 
   const siteLabel = (serverId: string): string => {
     const server = serverById.get(serverId)
-    return server?.datacenterDisplayName?.trim() || '—'
+    return formatServerDatacenterNames(server?.datacenters ?? []) || '—'
   }
 
   const serverLabel = (member: ManagedMemberRecord): string => {
@@ -291,13 +296,18 @@ export function ManagedClusterPanel({
     reason: ReplicaIneligibleReason,
     serverId: string,
   ) => {
-    const server = serverById.get(serverId)
+    const eligibilityRow = eligibilityById.get(serverId)
     if (reason === 'no-datacenter') {
-      router.push(`/${orgId}/network` as Href)
+      router.push(serversDatacentersHref(orgId) as Href)
       return
     }
-    if (reason === 'no-private-cidr' && server?.datacenterId) {
-      router.push(networkSiteHref(orgId, server.datacenterId) as Href)
+    if (
+      reason === 'no-private-cidr' &&
+      eligibilityRow?.candidateDatacenterId
+    ) {
+      router.push(
+        datacenterHref(orgId, eligibilityRow.candidateDatacenterId) as Href,
+      )
       return
     }
     if (reason === 'no-private-path') {

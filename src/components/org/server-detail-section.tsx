@@ -322,14 +322,6 @@ function DetailTabBody({
       return (
         <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
       )
-    default:
-      return (
-        <ServerOverviewTab
-          orgId={orgId}
-          server={server}
-          canManage={canManage}
-        />
-      )
   }
 }
 
@@ -971,12 +963,14 @@ function ServerOverviewTab({
         <Text style={orgPanelStyles.detailLine}>
           {server.osDisplay ?? 'Not reported yet'}
         </Text>
-        {server.os?.arch ? (
-          <Text style={orgPanelStyles.muted}>Arch: {server.os.arch}</Text>
-        ) : null}
-        {server.os?.versionCodename ? (
+        {server.os?.architecture ? (
           <Text style={orgPanelStyles.muted}>
-            Codename: {server.os.versionCodename}
+            Arch: {server.os.architecture}
+          </Text>
+        ) : null}
+        {server.os?.codename ? (
+          <Text style={orgPanelStyles.muted}>
+            Codename: {server.os.codename}
           </Text>
         ) : null}
       </SectionPanel>

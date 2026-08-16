@@ -30,9 +30,9 @@ function relay(
 describe('resolveSiteLinks', () => {
   it('collects datacenters from relays and flags unassigned hosts', () => {
     const serverById = new Map([
-      ['srv-a', { datacenterId: 'dc-ams' }],
-      ['srv-b', { datacenterId: 'dc-fra' }],
-      ['srv-c', { datacenterId: null }],
+      ['srv-a', { datacenters: [{ id: 'dc-ams', displayName: 'AMS' }] }],
+      ['srv-b', { datacenters: [{ id: 'dc-fra', displayName: 'FRA' }] }],
+      ['srv-c', { datacenters: [] }],
     ])
     const mesh = resolveSiteLinks(
       [
@@ -53,6 +53,24 @@ describe('resolveSiteLinks', () => {
     )
     expect(mesh.datacenterIds).toEqual([])
     expect(mesh.hasUnassignedPeers).toBe(true)
+  })
+
+  it('includes every membership when a relay server is in multiple sites', () => {
+    const mesh = resolveSiteLinks(
+      [relay({ serverId: 'srv-a', role: 'gateway' })],
+      new Map([
+        [
+          'srv-a',
+          {
+            datacenters: [
+              { id: 'dc-ams', displayName: 'AMS' },
+              { id: 'dc-fra', displayName: 'FRA' },
+            ],
+          },
+        ],
+      ]),
+    )
+    expect(mesh.datacenterIds).toEqual(['dc-ams', 'dc-fra'])
   })
 })
 
@@ -109,8 +127,20 @@ describe('meshLabelForSite', () => {
 describe('resolvePrimaryGatewayByDatacenter', () => {
   it('prefers the first online gateway by serverId', () => {
     const serverById = new Map([
-      ['srv-b', { connected: true, datacenterId: 'dc-1' }],
-      ['srv-a', { connected: false, datacenterId: 'dc-1' }],
+      [
+        'srv-b',
+        {
+          connected: true,
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+        },
+      ],
+      [
+        'srv-a',
+        {
+          connected: false,
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+        },
+      ],
     ])
     const primary = resolvePrimaryGatewayByDatacenter(
       [
@@ -125,8 +155,20 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
 
   it('falls back to the first gateway when none are online', () => {
     const serverById = new Map([
-      ['srv-z', { connected: false, datacenterId: 'dc-1' }],
-      ['srv-m', { connected: false, datacenterId: 'dc-1' }],
+      [
+        'srv-z',
+        {
+          connected: false,
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+        },
+      ],
+      [
+        'srv-m',
+        {
+          connected: false,
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+        },
+      ],
     ])
     const primary = resolvePrimaryGatewayByDatacenter(
       [

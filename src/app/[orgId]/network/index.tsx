@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
-import { NetworkSitesSection } from '@/components/org/network/network-sites-section'
+import { NetworkOverviewSection } from '@/components/org/network/network-overview-section'
 
-export default function NetworkSitesScreen() {
+export default function NetworkOverviewScreen() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-  return <NetworkSitesSection orgId={orgId ?? ''} />
+  return <NetworkOverviewSection orgId={orgId ?? ''} />
 }

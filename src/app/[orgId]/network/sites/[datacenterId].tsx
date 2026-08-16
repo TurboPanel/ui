@@ -1,7 +1,7 @@
-import { useLocalSearchParams } from 'expo-router'
-import { NetworkSiteDetailSection } from '@/components/org/network/network-site-detail-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { datacenterHref } from '@/lib/org-navigation'
 
-export default function NetworkSiteDetailScreen() {
+export default function LegacyNetworkSiteRedirect() {
   const { orgId, datacenterId } = useLocalSearchParams<{
     orgId: string
     datacenterId: string | string[]
@@ -11,10 +11,9 @@ export default function NetworkSiteDetailScreen() {
     ? (datacenterId[0] ?? '')
     : (datacenterId ?? '')
 
-  return (
-    <NetworkSiteDetailSection
-      orgId={orgId ?? ''}
-      datacenterId={resolvedDatacenterId}
-    />
-  )
+  if (!orgId || !resolvedDatacenterId) {
+    return null
+  }
+
+  return <Redirect href={datacenterHref(orgId, resolvedDatacenterId) as Href} />
 }
