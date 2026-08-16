@@ -1,4 +1,12 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const {
+  installMetroPollWatch,
+} = require('./scripts/metro-virtfs-poll-watch.cjs');
+
+// Vagrant VirtioFS / UTM 9p do not deliver host inotify events into the guest.
+// Metro's Linux FallbackWatcher is fs.watch-only, so Fast Refresh never fires
+// until a full reload. Poll watch no-ops on a local disk.
+installMetroPollWatch(__dirname);
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);

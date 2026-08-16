@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { FormSelect } from '@/components/org/form-select'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
@@ -80,7 +81,7 @@ function DatacenterIdentityPanel({
   if (!canManage) return null
 
   return (
-    <SectionPanel title="Datacenter" hint="Name and description">
+    <SectionPanel title="Datacenter">
       <View style={styles.identityField}>
         <Text style={styles.fieldLabel}>Display name</Text>
         <TextInput
@@ -117,7 +118,7 @@ function DatacenterIdentityPanel({
         accessibilityLabel="Save datacenter"
         accessibilityState={{ disabled: pending, busy: pending }}
       >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save datacenter</Text>
+        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
       </Pressable>
     </SectionPanel>
   )
@@ -133,31 +134,38 @@ function PrivateNetworkPanel({
   const cidr = cidrs[0]?.trim() || null
 
   return (
-    <SectionPanel title="Private network" hint={cidr ?? '—'}>
+    <SectionPanel title="Private network">
       {loading && !cidr ? (
-        <Text style={orgPanelStyles.muted}>Loading private network…</Text>
+        <Text style={orgPanelStyles.muted}>Loading…</Text>
       ) : null}
       {!loading && !cidr ? (
         <View style={orgPanelStyles.calloutWarning}>
           <Text style={orgPanelStyles.calloutWarningText}>
-            This datacenter has no private CIDR yet. Recreate it from a server
-            IP so the network prefix can be detected.
+            No CIDR detected. Recreate from a server IP.
           </Text>
         </View>
       ) : null}
       {cidr ? (
-        <>
-          <Text style={styles.mono} selectable>
-            {cidr}
-          </Text>
-          <Text style={orgPanelStyles.muted}>
-            Detected from the first member&apos;s reported interface. Additional
-            servers need an IP in this range.
-          </Text>
-        </>
+        <Text style={styles.mono} selectable>
+          {cidr}
+        </Text>
       ) : null}
     </SectionPanel>
   )
+}
+
+function uniqueAddressesInCidrs(
+  server: OrgServerRecord | undefined,
+  siteCidrs: readonly string[],
+): string[] {
+  if (!server) return []
+  return [
+    ...new Set(
+      siteCidrs.flatMap((cidr) =>
+        addressesInCidr(reportedPrivateAddresses(server), cidr),
+      ),
+    ),
+  ]
 }
 
 function MemberServersPanel({
@@ -190,12 +198,27 @@ function MemberServersPanel({
   const selectedCandidate = candidateServers.find(
     (server) => server.id === assignServerId,
   )
-  const candidateAddresses = selectedCandidate
-    ? siteCidrs.flatMap((cidr) =>
-        addressesInCidr(reportedPrivateAddresses(selectedCandidate), cidr),
-      )
-    : []
-  const uniqueCandidateAddresses = [...new Set(candidateAddresses)]
+  const uniqueCandidateAddresses = uniqueAddressesInCidrs(
+    selectedCandidate,
+    siteCidrs,
+  )
+  const serverOptions = candidateServers.map((server) => ({
+    value: server.id,
+    label: serverTitle(server),
+  }))
+  const addressOptions = uniqueCandidateAddresses.map((address) => ({
+    value: address,
+    label: address,
+  }))
+
+  const selectAssignServer = (serverId: string) => {
+    onSelectAssign(serverId)
+    const next = candidateServers.find((server) => server.id === serverId)
+    const addresses = uniqueAddressesInCidrs(next, siteCidrs)
+    if (addresses.length === 1 && addresses[0]) {
+      onSelectAddress(addresses[0])
+    }
+  }
 
   return (
     <SectionPanel
@@ -203,9 +226,7 @@ function MemberServersPanel({
       hint={`${memberServers.length} pinned`}
     >
       {memberServers.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>
-          No servers pinned to this datacenter yet.
-        </Text>
+        <Text style={orgPanelStyles.muted}>None yet.</Text>
       ) : (
         <View style={styles.list}>
           {memberServers.map((server) => {
@@ -256,85 +277,57 @@ function MemberServersPanel({
 
       {canManage ? (
         <View style={styles.assignBlock}>
-          <Text style={styles.fieldLabel}>
-            Add a server with an IP in this CIDR
-          </Text>
           {siteCidrs.length === 0 ? (
             <Text style={orgPanelStyles.muted}>
-              A detected private CIDR is required before pinning more servers.
+              Detect a CIDR before adding servers.
             </Text>
           ) : null}
           {siteCidrs.length > 0 && candidateServers.length === 0 ? (
             <Text style={orgPanelStyles.muted}>
-              No other servers report a private IP inside{' '}
-              {siteCidrs.join(', ')}.
+              No other servers in {siteCidrs.join(', ')}.
             </Text>
           ) : null}
           {siteCidrs.length > 0 && candidateServers.length > 0 ? (
             <>
-              <View style={styles.chipRow}>
-                {candidateServers.map((server) => (
-                  <Pressable
-                    key={server.id}
-                    style={[
-                      styles.chip,
-                      assignServerId === server.id && styles.chipActive,
-                      webPointer,
-                    ]}
-                    onPress={() => onSelectAssign(server.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        assignServerId === server.id && styles.chipTextActive,
-                      ]}
-                    >
-                      {serverTitle(server)}
-                    </Text>
-                  </Pressable>
-                ))}
+              <View style={styles.identityField}>
+                <Text style={styles.fieldLabel}>Server</Text>
+                <FormSelect
+                  value={assignServerId}
+                  options={serverOptions}
+                  placeholder="Select a server…"
+                  disabled={pending}
+                  accessibilityLabel="Add server"
+                  onChange={selectAssignServer}
+                />
               </View>
               {assignServerId ? (
-                <View style={styles.chipRow}>
-                  {uniqueCandidateAddresses.map((address) => (
-                    <Pressable
-                      key={address}
-                      style={[
-                        styles.chip,
-                        assignAddress === address && styles.chipActive,
-                        webPointer,
-                      ]}
-                      onPress={() => onSelectAddress(address)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          styles.mono,
-                          assignAddress === address && styles.chipTextActive,
-                        ]}
-                      >
-                        {address}
-                      </Text>
-                    </Pressable>
-                  ))}
+                <View style={styles.identityField}>
+                  <Text style={styles.fieldLabel}>Private IP</Text>
+                  <FormSelect
+                    value={assignAddress}
+                    options={addressOptions}
+                    placeholder="Select an IP…"
+                    disabled={pending}
+                    accessibilityLabel="Private IP"
+                    mono
+                    onChange={onSelectAddress}
+                  />
                 </View>
               ) : null}
+              <Pressable
+                style={[
+                  orgPanelStyles.toolbarBtnPrimary,
+                  (!assignServerId || !assignAddress || pending) &&
+                    styles.buttonDisabled,
+                  webPointer,
+                ]}
+                disabled={!assignServerId || !assignAddress || pending}
+                onPress={onAssign}
+              >
+                <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add</Text>
+              </Pressable>
             </>
           ) : null}
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              (!assignServerId || !assignAddress || pending) &&
-                styles.buttonDisabled,
-              webPointer,
-            ]}
-            disabled={!assignServerId || !assignAddress || pending}
-            onPress={onAssign}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-              Assign to datacenter
-            </Text>
-          </Pressable>
         </View>
       ) : null}
     </SectionPanel>
@@ -466,39 +459,29 @@ function MeshFromDatacenterPanel({
   return (
     <SectionPanel
       title={TURBOFABRIC_PRODUCT_NAME}
-      hint={`${rows.length} relay(s)`}
+      hint={`${rows.length} relays`}
     >
-      <Text style={orgPanelStyles.muted}>
-        Relays in this datacenter. Cross-datacenter replication uses a gateway
-        here.
-      </Text>
       {!canManage ? (
         <Text style={orgPanelStyles.muted}>
-          Organization manage permission is required to view{' '}
-          {TURBOFABRIC_PRODUCT_NAME} membership.
+          Manage permission required.
         </Text>
       ) : null}
       {canManage && loading && rows.length === 0 ? (
         <Text style={orgPanelStyles.muted}>Loading mesh…</Text>
       ) : null}
       {canManage && !loading && rows.length === 0 ? (
-        <View style={orgPanelStyles.statePanel}>
-          <Text style={orgPanelStyles.muted}>
-            No {TURBOFABRIC_PRODUCT_NAME} relays in this datacenter.
-          </Text>
-        </View>
+        <Text style={orgPanelStyles.muted}>No relays here.</Text>
       ) : null}
 
       {canManage && missingCidr ? (
         <View style={orgPanelStyles.calloutWarning}>
           <Text style={orgPanelStyles.calloutWarningText}>
-            This datacenter has a mesh gateway but no private CIDR. Apply will
-            fail until the prefix is detected.
+            Gateway has no CIDR — apply will fail until a prefix is detected.
           </Text>
         </View>
       ) : null}
 
-      {canManage ? (
+      {canManage && rows.length > 0 ? (
         <View style={styles.list}>
           {rows.map((row) => (
             <Pressable
@@ -556,27 +539,18 @@ function DatacenterTimezonePanel({
   onSave: () => void
 }>) {
   return (
-    <SectionPanel title="Timezone" hint="Datacenter default · manage-gated">
-      <Text style={orgPanelStyles.muted}>
-        When enforcement is on, this datacenter&apos;s default beats the org
-        fleet default for its member servers.
-      </Text>
+    <SectionPanel title="Timezone">
       <ServerTimezonePicker
         value={effectiveTimezone}
         options={timezoneOptions}
         disabled={readOnly || pending || !datacenter}
-        placeholder="Select datacenter timezone…"
-        noneLabel="None (inherit org default)"
+        placeholder="Select timezone…"
+        noneLabel="Inherit org default"
         onChange={onTimezoneChange}
       />
       <View style={styles.switchRow}>
         <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>
-            Enforce datacenter default on member servers
-          </Text>
-          <Text style={orgPanelStyles.muted}>
-            When on, member hosts use this timezone over the org default.
-          </Text>
+          <Text style={styles.switchLabel}>Enforce on members</Text>
         </View>
         <Pressable
           accessibilityRole="switch"
@@ -596,9 +570,7 @@ function DatacenterTimezonePanel({
         </Pressable>
       </View>
       {readOnly ? (
-        <Text style={orgPanelStyles.muted}>
-          Organization manage permission is required to edit these settings.
-        </Text>
+        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
       ) : (
         <Pressable
           disabled={pending || !datacenter}
@@ -610,7 +582,7 @@ function DatacenterTimezonePanel({
           ]}
         >
           <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            Save timezone
+            Save
           </Text>
         </Pressable>
       )}
@@ -640,15 +612,14 @@ function DatacenterDeletePanel({
   const blocked = memberCount > 0
 
   return (
-    <SectionPanel title="Delete" hint="Requires zero member servers">
+    <SectionPanel title="Delete">
       {blocked ? (
         <Text style={orgPanelStyles.muted}>
-          Unassign every server from this datacenter before you can delete it.
+          Unassign every server first.
         </Text>
       ) : (
         <Text style={orgPanelStyles.muted}>
-          Permanently remove this empty datacenter. The private network goes
-          with it.
+          Permanently remove this empty datacenter.
         </Text>
       )}
       {deleting ? (
@@ -830,10 +801,11 @@ export function DatacenterDetailSection({
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>{title}</Text>
-      <Text style={orgPanelStyles.pageCopy}>
-        {datacenter?.description?.trim() ||
-          'Private CIDR, member servers, mesh, and timezone for this datacenter.'}
-      </Text>
+      {datacenter?.description?.trim() ? (
+        <Text style={orgPanelStyles.pageCopy}>
+          {datacenter.description.trim()}
+        </Text>
+      ) : null}
 
       {displayError ? (
         <Text style={orgPanelStyles.error}>{displayError}</Text>
@@ -1026,33 +998,6 @@ const styles = StyleSheet.create({
   mono: {
     fontFamily: 'monospace',
     color: colors.textBody,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  chip: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  chipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  chipText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: chrome.accent,
   },
   switchRow: {
     flexDirection: 'row',

@@ -1,5 +1,6 @@
 module.exports = function babelConfig(api) {
-  api.cache(true)
+  const isDev = api.env('development')
+  api.cache.using(() => isDev)
   return {
     presets: ['babel-preset-expo'],
     plugins: [
@@ -9,6 +10,8 @@ module.exports = function babelConfig(api) {
           components: ['tamagui'],
           config: './src/lib/tamagui.config.ts',
           logTimings: true,
+          // Extraction inlines styles at compile time and breaks Fast Refresh.
+          disableExtraction: isDev,
         },
       ],
     ],

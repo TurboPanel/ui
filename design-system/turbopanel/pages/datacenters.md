@@ -16,10 +16,10 @@
 
 - One job: **dense table**, not site cards or a dashboard of widgets
 - Row press navigates to `/[orgId]/servers/datacenters/[datacenterId]`
-- Page title **Datacenters** + one line of copy via `orgPanelStyles.pageTitle` / `pageCopy`
+- Page title **Datacenters** + a short `pageCopy` line (not a how-to paragraph)
 - **+ Datacenter** (manage-gated) in the table toolbar; disabled unless ≥1 server reports a private IP; navigates to `/servers/datacenters/new`
 - Empty list: table panel with **+ Datacenter** and `statePanel` — **do not** auto-open the create form
-- Empty org with no reported private IPs: same empty list plus the eligibility hint (wait for daemon addresses / add a server first)
+- Empty org with no reported private IPs: same empty list plus the eligibility hint
 - No hero, no decorative bento above the table
 
 ## Density
@@ -33,27 +33,29 @@
 
 ## Create
 
-- Route: `/[orgId]/servers/datacenters/new` → `datacenter-form-section.tsx` (same labeled-field `SectionPanel` pattern as workspace new/edit)
+- Route: `/[orgId]/servers/datacenters/new` → `datacenter-form-section.tsx`
+- Compact labeled form (`maxWidth` ~520) — page title only, no how-to copy
 - Requires `organization:manage` (display hint; server 403 is authoritative)
 - Requires ≥1 server with a daemon-reported private IP
-- Fields start empty — do not pre-fill name suggestions or expand seed chips
-- Flow: optional display name / description → pick a **server** → pick a **reported private IP** (chips only — never a text field) → show the **CIDR read-only** (daemon-reported prefix when present, otherwise a typical LAN `/24` or `/64`)
+- Fields start empty — do not pre-fill name or auto-select a server
+- Flow: optional name / description → **server dropdown** (`FormSelect`) → **private IP dropdown** (never a text field) → read-only **CIDR** (daemon-reported prefix when present, otherwise a typical LAN `/24` or `/64` with a quiet “typical LAN” cue)
+- If the chosen server has exactly one private IP, select it automatically
+- Geo name suggestions are optional chips under the name field (no helper sentence)
 - Create stays disabled until a server and a reported private IP are selected
-- After create, navigate to datacenter detail so more hosts can be pinned
+- After create, navigate to datacenter detail
 - Cancel returns to the list
-- Body: `{ displayName?, description?, members: [{ serverId, address }], sourceServerId? }` — **no operator `cidr`**. Instance derives the site network from the seed member’s reported prefix when present, otherwise a typical LAN (`/24` IPv4, `/64` IPv6)
-- Optional geo name suggestions only fill the display name when chosen
-- A server may belong to multiple datacenters (different NICs / ranges)
-- Empty create is rejected (API and UI)
+- Body: `{ displayName?, description?, members: [{ serverId, address }], sourceServerId? }` — **no operator `cidr`**
 
 ## Detail (panel order)
 
-1. **Datacenter** — display name + description (manage-gated save; same fields as create)
+1. **Datacenter** — display name + description (manage-gated save)
 2. **Private network** — read-only detected CIDR; never an editor
-3. **Member servers** — pin/unpin via `addDatacenterMembers` / `removeDatacenterMember` (select a server that reports a private IP **inside the datacenter CIDR**, then pick that IP from chips). Unassign all members before delete is allowed
-4. **TurboFabric** — relays in this datacenter (role, tp0, other datacenters, **Primary** badge); empty: no relays here (**manage-gated** — non-managers get permission copy, not the empty state); rows deep-link to `/network/fabric`
+3. **Member servers** — pin/unpin via `addDatacenterMembers` / `removeDatacenterMember` (server + IP **dropdowns**, not chips). Unassign all members before delete is allowed
+4. **TurboFabric** — relays in this datacenter (role, tp0, other datacenters, **Primary** badge); empty: no relays here (**manage-gated**); rows deep-link to `/network/fabric`
 5. **Timezone** — picker + enforce toggle
-6. **Delete** — two-press confirm when member count is 0; disabled with copy while any server is pinned. **409** `datacenter_has_members` copy if the API still sees pins
+6. **Delete** — two-press confirm when member count is 0; disabled while any server is pinned
+
+Keep labels and empty states short. Do not add how-it-works paragraphs on these panels.
 
 ## Anti-patterns (page-specific)
 
@@ -61,6 +63,7 @@
 - ❌ N+1 server or IP fetches per row
 - ❌ Recreating Network site cards, CIDR editors, IP pool, or “Add private network”
 - ❌ Allowing create with no member pins or typed CIDR / typed IP
+- ❌ Server/IP selection as chip buttons (use `FormSelect`)
 - ❌ Status conveyed by color alone
 - ❌ Using singular `server.datacenterId` / `assignServerIds` (retired)
 

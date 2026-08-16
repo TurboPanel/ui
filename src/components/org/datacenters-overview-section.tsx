@@ -1,17 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useRouter } from 'expo-router'
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
-} from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import type { DatacenterRecord } from '@/lib/instance-api'
+import { SectionPanel } from '@/components/org/section-panel'
 import {
   countServersByDatacenterId,
   datacenterDisplayName,
@@ -23,15 +11,24 @@ import {
   resolveDatacenterAddEligibility,
   sortDatacentersByName,
 } from '@/lib/datacenter-list'
+import type { DatacenterRecord } from '@/lib/instance-api'
 import { datacenterHref, datacenterNewHref } from '@/lib/org-navigation'
-import { useDatacenters } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
+import { useDatacenters } from '@/lib/queries/topology'
 import { useCan } from '@/lib/query-client'
-import {
-  countryCodeToFlagEmoji,
-  formatServerGeoCountryName,
-} from '@/lib/server-geo'
+import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
+import { useRouter } from 'expo-router'
+import { useMemo, useState } from 'react'
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native'
 
 function datacentersListHint(loading: boolean, count: number): string {
   if (loading) return 'Loading…'
@@ -45,9 +42,7 @@ function datacentersErrorMessage(error: unknown): string | null {
   return 'Failed to load datacenters'
 }
 
-function DatacenterCountryCell({
-  datacenter,
-}: Readonly<{ datacenter: DatacenterRecord }>) {
+function DatacenterCountryCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
   const geo = datacenterGeoFromMetadata(datacenter.metadata)
   const flag = countryCodeToFlagEmoji(geo?.country)
   const country = formatServerGeoCountryName(geo)
@@ -115,9 +110,7 @@ function DatacenterTableRow({
       </View>
       <DatacenterCountryCell datacenter={datacenter} />
       <View style={[styles.tableCell, styles.colServers]}>
-        <Text style={styles.countText}>
-          {formatDatacenterServerCount(serverCount)}
-        </Text>
+        <Text style={styles.countText}>{formatDatacenterServerCount(serverCount)}</Text>
       </View>
       <View style={[styles.tableCell, styles.colCidrs]}>
         <Text style={styles.monoText} numberOfLines={1}>
@@ -209,16 +202,11 @@ function DatacentersListBody({
   )
 }
 
-function DatacentersEmptyState({
-  reason,
-}: Readonly<{ reason: string | null }>) {
+function DatacentersEmptyState({ reason }: Readonly<{ reason: string | null }>) {
   return (
     <View style={orgPanelStyles.statePanel}>
       <Text style={orgPanelStyles.statePanelTitle}>No datacenters yet</Text>
-      <Text style={orgPanelStyles.muted}>
-        {reason ??
-          'A datacenter groups servers that share a private CIDR. Create from one host IP, then add others in that range.'}
-      </Text>
+      <Text style={orgPanelStyles.muted}>{reason ?? 'Create one from a server IP.'}</Text>
     </View>
   )
 }
@@ -254,9 +242,7 @@ function DatacentersToolbar({
   )
 }
 
-export function DatacentersOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const datacentersQuery = useDatacenters(orgId)
@@ -264,41 +250,29 @@ export function DatacentersOverviewSection({
 
   const datacenters = useMemo(
     () => sortDatacentersByName(datacentersQuery.data?.datacenters ?? []),
-    [datacentersQuery.data?.datacenters],
+    [datacentersQuery.data?.datacenters]
   )
   const servers = serversQuery.data?.servers ?? []
   const eligibleCount = listServersWithReportedPrivateNetworks(servers).length
-  const serverCounts = useMemo(
-    () => countServersByDatacenterId(servers),
-    [servers],
-  )
+  const serverCounts = useMemo(() => countServersByDatacenterId(servers), [servers])
   const eligibility = resolveDatacenterAddEligibility({
     serversWithPrivateAddress: eligibleCount,
     serverCount: servers.length,
   })
   const canAdd = canManage && eligibility.canAdd
 
-  const loading =
-    (datacentersQuery.isLoading || serversQuery.isLoading) &&
-    datacenters.length === 0
+  const loading = (datacentersQuery.isLoading || serversQuery.isLoading) && datacenters.length === 0
   const error =
-    datacentersErrorMessage(datacentersQuery.error) ??
-    datacentersErrorMessage(serversQuery.error)
+    datacentersErrorMessage(datacentersQuery.error) ?? datacentersErrorMessage(serversQuery.error)
 
   const listHint = datacentersListHint(loading, datacenters.length)
 
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Datacenters</Text>
-      <Text style={orgPanelStyles.pageCopy}>
-        Locations that group servers on one private network. Create from a
-        server and one of its private IPs — the CIDR comes from that
-        interface when reported, otherwise a typical LAN prefix.
-      </Text>
+      <Text style={orgPanelStyles.pageCopy}>Private networks by CIDR.</Text>
 
-      {error && datacenters.length === 0 ? (
-        <Text style={orgPanelStyles.error}>{error}</Text>
-      ) : null}
+      {error && datacenters.length === 0 ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       <SectionPanel title="Datacenters" hint={listHint}>
         <DatacentersToolbar
@@ -309,9 +283,7 @@ export function DatacentersOverviewSection({
         {canManage && !eligibility.canAdd && eligibility.reason ? (
           <Text style={styles.capacityHint}>{eligibility.reason}</Text>
         ) : null}
-        {error && datacenters.length > 0 ? (
-          <Text style={orgPanelStyles.error}>{error}</Text>
-        ) : null}
+        {error && datacenters.length > 0 ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
         <DatacentersListBody
           orgId={orgId}
           loading={loading}

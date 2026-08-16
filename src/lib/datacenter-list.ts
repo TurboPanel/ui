@@ -164,13 +164,12 @@ export function resolveDatacenterAddEligibility(
   if (input.serverCount === 0) {
     return {
       canAdd: false,
-      reason: 'Add a server first, then create a datacenter for it.',
+      reason: 'Add a server first.',
     }
   }
   return {
     canAdd: false,
-    reason:
-      'No server has reported a private IP yet. Wait for the daemon to report addresses, then create a datacenter.',
+    reason: 'No private IPs reported yet.',
   }
 }
 

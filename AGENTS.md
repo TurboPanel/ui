@@ -263,6 +263,7 @@ Identifiers for Cloudflare and Expo deployments:
 The UI is never installed as a standalone service tree — the **instance** repo's Caddy serves it, and the **daemon** installs its build output. Two modes (`TURBOPANEL_UI_MODE` on the instance):
 
 - **Development** (`dev`) — `turbopanel-ui.service` runs the Expo web dev server on `:8081` (installed by the daemon `instance-launch` role, running as the **dev user**). Caddy reverse-proxies non-`/api`/`/ws` traffic to it. Dev logs go to **`/var/log/turbopanel/ui`** (dev-user-owned).
+  **Fast Refresh on Vagrant:** host saves on VirtioFS / 9p do not notify guest inotify, so Metro’s Linux `FallbackWatcher` never sees them (a full browser reload still works because Metro re-reads files). `metro.config.js` installs a poll watcher (`scripts/metro-virtfs-poll-watch.cjs`) when `/proc/mounts` shows those types. Override with `TURBOPANEL_METRO_POLL=1` (force) or `=0` (disable). Tamagui style extraction is off in development so Fast Refresh can apply. After changing Metro config, restart `turbopanel-ui`. Open the console via Caddy (`:8443` / `:8880`), not Metro `:8081` (that port is not forwarded; HMR is `/hot` on the Caddy origin).
 - **Production** (`static`) — `pnpm export` produces the static web bundle; the daemon `ui-build` role publishes it to the FHS path **`/opt/turbopanel/share/ui`** (instance `TURBOPANEL_UI_ROOT` default). Caddy serves those files directly with SPA fallback and `turbopanel-ui.service` is stopped/disabled. Production runs as `tpctrl:tp`.
 
 Both modes route through the single instance Caddy entrypoint; there is no separate `turbopaneld.service` or FHS tree owned by this repo. Canonical paths/units live in `../turbopanel/AGENTS.md` (Caddy + UI env vars) and `../turbopaneld/AGENTS.md` (Filesystem layout & path model).
@@ -288,8 +289,8 @@ Main product shell for signed-in users. Web uses a left sidebar with area tabs a
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Lean fleet table — batch update, row opens control panel |
 | `/<orgId>/servers/[serverId]` | `server-detail-section.tsx` | Server control panel (Overview, Control, Time, Network, Metrics tabs) |
 | `/<orgId>/servers/datacenters` | `datacenters-overview-section.tsx` | Org datacenter inventory (private CIDRs). A datacenter **is** one private CIDR. Empty list + **+ Datacenter** (no auto-opened create form). **+ Datacenter** when ≥1 server reports a private IP; opens `/servers/datacenters/new` |
-| `/<orgId>/servers/datacenters/new` | `datacenter-form-section.tsx` | Create form (name, description, seed server + reported IP → site CIDR). After create, opens datacenter detail |
-| `/<orgId>/servers/datacenters/[datacenterId]` | `datacenter-detail-section.tsx` | Name/description edit, read-only CIDR, members (chip-pick reported IPs in-CIDR), TurboFabric relays, timezone; two-press delete when empty |
+| `/<orgId>/servers/datacenters/new` | `datacenter-form-section.tsx` | Create form (name, description, server + IP dropdowns → site CIDR). After create, opens datacenter detail |
+| `/<orgId>/servers/datacenters/[datacenterId]` | `datacenter-detail-section.tsx` | Name/description edit, read-only CIDR, members (server + IP dropdowns in-CIDR), TurboFabric relays, timezone; two-press delete when empty |
 | `/<orgId>/servers/settings` | `server-timezone-settings-section.tsx` + `server-capacity-settings-section.tsx` | Org default timezone + server seat capacity (`maxServers`) |
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
 | `/<orgId>/network` | `network/network-overview-section.tsx` | Hub linking Datacenters, TurboFabric, Addresses, and Docker networks (private CIDR CRUD lives on Datacenters) |
