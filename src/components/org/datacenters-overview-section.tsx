@@ -223,39 +223,6 @@ function DatacentersEmptyState({
   )
 }
 
-function DatacentersInventoryStrip({
-  datacenterCount,
-  membershipPins,
-  zeroMembershipCount,
-}: Readonly<{
-  datacenterCount: number
-  membershipPins: number
-  zeroMembershipCount: number
-}>) {
-  return (
-    <View style={styles.totalsStrip}>
-      <View style={styles.totalsItem}>
-        <Text style={styles.totalsValue}>{datacenterCount}</Text>
-        <Text style={styles.totalsLabel}>
-          {datacenterCount === 1 ? ' datacenter' : ' datacenters'}
-        </Text>
-      </View>
-      <Text style={styles.totalsSep}>·</Text>
-      <View style={styles.totalsItem}>
-        <Text style={styles.totalsValue}>{membershipPins}</Text>
-        <Text style={styles.totalsLabel}>
-          {membershipPins === 1 ? ' member pin' : ' member pins'}
-        </Text>
-      </View>
-      <Text style={styles.totalsSep}>·</Text>
-      <View style={styles.totalsItem}>
-        <Text style={styles.totalsValue}>{zeroMembershipCount}</Text>
-        <Text style={styles.totalsLabel}> with no membership</Text>
-      </View>
-    </View>
-  )
-}
-
 function DatacentersToolbar({
   canManage,
   canAdd,
@@ -333,14 +300,6 @@ export function DatacentersOverviewSection({
         <Text style={orgPanelStyles.error}>{error}</Text>
       ) : null}
 
-      {!loading ? (
-        <DatacentersInventoryStrip
-          datacenterCount={datacenters.length}
-          membershipPins={serverCounts.membershipPins}
-          zeroMembershipCount={serverCounts.unassigned}
-        />
-      ) : null}
-
       <SectionPanel title="Datacenters" hint={listHint}>
         <DatacentersToolbar
           canManage={canManage}
@@ -369,32 +328,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  totalsStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  totalsItem: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  totalsValue: {
-    color: colors.textTitle,
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-  totalsLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  totalsSep: {
-    color: colors.textFaint,
-    fontSize: 13,
   },
   toolbarRow: {
     flexDirection: 'row',

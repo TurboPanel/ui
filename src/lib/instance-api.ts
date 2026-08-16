@@ -1404,7 +1404,7 @@ export type IpRecord = {
   version: IpVersion
   allocation: IpAllocation
   scope: IpScope
-  displayName: string | null
+  description: string | null
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -1917,7 +1917,7 @@ export async function createIp(body: {
   address: string
   allocation: IpAllocation
   scope: IpScope
-  displayName?: string
+  description?: string
   datacenterId?: string | null
   networkId?: string | null
   serverId?: string | null
@@ -1933,7 +1933,7 @@ export async function createIp(body: {
 export async function updateIp(
   id: string,
   body: Partial<{
-    displayName: string | null
+    description: string | null
     datacenterId: string | null
     networkId: string | null
     serverId: string | null

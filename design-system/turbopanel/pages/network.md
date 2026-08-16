@@ -21,6 +21,7 @@
 ## Addresses
 
 - Scopes: `public | datacenter` (no `loopback`, no `vpn`)
+- Identity is the address — optional **Description** (`varchar(255)`), never a display name
 - Scope / allocation filters use `segmentGroup` / `segmentChip`
 - **409** `ip_in_use` copy retained
 

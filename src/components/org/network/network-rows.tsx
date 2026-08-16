@@ -123,8 +123,11 @@ export function IpListRow({
           ) : null}
         </View>
       </View>
-      {ip.displayName?.trim() ? (
-        <Text style={orgPanelStyles.detailTitle}>{ip.displayName}</Text>
+      {ip.description?.trim() ? (
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Description: </Text>
+          {ip.description.trim()}
+        </Text>
       ) : null}
       <View style={styles.badgeRow}>
         <Text style={styles.badge}>v{ip.version}</Text>

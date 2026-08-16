@@ -148,7 +148,7 @@ type CreateIpInput = {
   address: string
   allocation: IpAllocation
   scope: IpScope
-  displayName?: string
+  description?: string
   datacenterId?: string
   networkId?: string
   serverId?: string
@@ -158,7 +158,7 @@ function buildCreateIpBody(input: Readonly<{
   address: string
   allocation: IpAllocation
   scope: IpScope
-  displayName: string
+  description: string
   createDatacenterId: string
   createNetworkId: string
   createServerId: string
@@ -167,7 +167,7 @@ function buildCreateIpBody(input: Readonly<{
     address: input.address,
     allocation: input.allocation,
     scope: input.scope,
-    displayName: input.displayName.trim() || undefined,
+    description: input.description.trim() || undefined,
   }
   if (input.createDatacenterId) body.datacenterId = input.createDatacenterId
   if (input.createNetworkId) body.networkId = input.createNetworkId
@@ -252,7 +252,7 @@ function CreateIpScopeFields({
 
 function IpEditPanel({
   address,
-  displayName,
+  description,
   allocation,
   scope,
   datacenterId,
@@ -262,7 +262,7 @@ function IpEditPanel({
   networks,
   servers,
   saving,
-  onDisplayNameChange,
+  onDescriptionChange,
   onDatacenterIdChange,
   onNetworkIdChange,
   onServerIdChange,
@@ -270,7 +270,7 @@ function IpEditPanel({
   onSave,
 }: Readonly<{
   address: string
-  displayName: string
+  description: string
   allocation: IpAllocation
   scope: IpScope
   datacenterId: string
@@ -280,7 +280,7 @@ function IpEditPanel({
   networks: NetworkRecord[]
   servers: OrgServerRecord[]
   saving: boolean
-  onDisplayNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
   onDatacenterIdChange: (value: string) => void
   onNetworkIdChange: (value: string) => void
   onServerIdChange: (value: string) => void
@@ -296,13 +296,15 @@ function IpEditPanel({
       <Text style={orgPanelStyles.detailLine}>{allocation}</Text>
       <Text style={styles.fieldLabel}>Scope</Text>
       <Text style={orgPanelStyles.detailLine}>{scope}</Text>
-      <Text style={styles.fieldLabel}>Display name</Text>
+      <Text style={styles.fieldLabel}>Description</Text>
       <TextInput
-        value={displayName}
-        onChangeText={onDisplayNameChange}
-        placeholder="Optional label"
+        value={description}
+        onChangeText={onDescriptionChange}
+        placeholder="Optional note"
         placeholderTextColor={colors.textDim}
         style={styles.input}
+        maxLength={255}
+        accessibilityLabel="Description"
       />
       <Text style={styles.fieldLabel}>Datacenter (optional)</Text>
       <View style={styles.chipRow}>
@@ -453,7 +455,7 @@ function AddressFiltersPanel({
 
 function AddAddressPanel({
   address,
-  displayName,
+  description,
   allocation,
   scope,
   datacenters,
@@ -465,7 +467,7 @@ function AddAddressPanel({
   createDisabled,
   creating,
   onAddressChange,
-  onDisplayNameChange,
+  onDescriptionChange,
   onAllocationChange,
   onScopeChange,
   onDatacenterIdChange,
@@ -474,7 +476,7 @@ function AddAddressPanel({
   onCreate,
 }: Readonly<{
   address: string
-  displayName: string
+  description: string
   allocation: IpAllocation
   scope: IpScope
   datacenters: DatacenterRecord[]
@@ -486,7 +488,7 @@ function AddAddressPanel({
   createDisabled: boolean
   creating: boolean
   onAddressChange: (value: string) => void
-  onDisplayNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
   onAllocationChange: (value: IpAllocation) => void
   onScopeChange: (value: IpScope) => void
   onDatacenterIdChange: (id: string) => void
@@ -506,13 +508,15 @@ function AddAddressPanel({
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <Text style={styles.fieldLabel}>Display name</Text>
+      <Text style={styles.fieldLabel}>Description</Text>
       <TextInput
-        value={displayName}
-        onChangeText={onDisplayNameChange}
-        placeholder="Optional label"
+        value={description}
+        onChangeText={onDescriptionChange}
+        placeholder="Optional note"
         placeholderTextColor={colors.textDim}
         style={styles.input}
+        maxLength={255}
+        accessibilityLabel="Description"
       />
       <Text style={styles.fieldLabel}>Allocation</Text>
       <View style={styles.chipRow}>
@@ -595,7 +599,7 @@ function AddressPoolPanel({
   ips,
   editingId,
   editAddress,
-  editDisplayName,
+  editDescription,
   editAllocation,
   editScope,
   editDatacenterId,
@@ -610,7 +614,7 @@ function AddressPoolPanel({
   serverById,
   networkById,
   datacenterById,
-  onDisplayNameChange,
+  onDescriptionChange,
   onDatacenterIdChange,
   onNetworkIdChange,
   onServerIdChange,
@@ -623,7 +627,7 @@ function AddressPoolPanel({
   ips: IpRecord[]
   editingId: string | null
   editAddress: string
-  editDisplayName: string
+  editDescription: string
   editAllocation: IpAllocation
   editScope: IpScope
   editDatacenterId: string
@@ -638,7 +642,7 @@ function AddressPoolPanel({
   serverById: Map<string, OrgServerRecord>
   networkById: Map<string, NetworkRecord>
   datacenterById: Map<string, DatacenterRecord>
-  onDisplayNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
   onDatacenterIdChange: (value: string) => void
   onNetworkIdChange: (value: string) => void
   onServerIdChange: (value: string) => void
@@ -668,7 +672,7 @@ function AddressPoolPanel({
               <IpEditPanel
                 key={ip.id}
                 address={editAddress}
-                displayName={editDisplayName}
+                description={editDescription}
                 allocation={editAllocation}
                 scope={editScope}
                 datacenterId={editDatacenterId}
@@ -678,7 +682,7 @@ function AddressPoolPanel({
                 networks={networks}
                 servers={servers}
                 saving={savingEdit}
-                onDisplayNameChange={onDisplayNameChange}
+                onDescriptionChange={onDescriptionChange}
                 onDatacenterIdChange={onDatacenterIdChange}
                 onNetworkIdChange={onNetworkIdChange}
                 onServerIdChange={onServerIdChange}
@@ -725,7 +729,7 @@ export function NetworkAddressesSection({
   )
   const [datacenterFilter, setDatacenterFilter] = useState('')
   const [address, setAddress] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  const [description, setDescription] = useState('')
   const [allocation, setAllocation] = useState<IpAllocation>('dedicated')
   const [scope, setScope] = useState<IpScope>('public')
   const [createDatacenterId, setCreateDatacenterId] = useState('')
@@ -733,7 +737,7 @@ export function NetworkAddressesSection({
   const [createServerId, setCreateServerId] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAddress, setEditAddress] = useState('')
-  const [editDisplayName, setEditDisplayName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
   const [editAllocation, setEditAllocation] = useState<IpAllocation>('dedicated')
   const [editScope, setEditScope] = useState<IpScope>('public')
   const [editDatacenterId, setEditDatacenterId] = useState('')
@@ -792,7 +796,7 @@ export function NetworkAddressesSection({
 
   const resetCreateForm = () => {
     setAddress('')
-    setDisplayName('')
+    setDescription('')
     setCreateDatacenterId('')
     setCreateNetworkId('')
     setCreateServerId('')
@@ -811,7 +815,7 @@ export function NetworkAddressesSection({
         address: trimmed,
         allocation,
         scope,
-        displayName,
+        description,
         createDatacenterId,
         createNetworkId,
         createServerId,
@@ -841,7 +845,7 @@ export function NetworkAddressesSection({
   const beginEdit = (ip: IpRecord) => {
     setEditingId(ip.id)
     setEditAddress(ip.address)
-    setEditDisplayName(ip.displayName ?? '')
+    setEditDescription(ip.description ?? '')
     setEditAllocation(ip.allocation)
     setEditScope(ip.scope)
     setEditDatacenterId(ip.datacenterId ?? '')
@@ -861,7 +865,7 @@ export function NetworkAddressesSection({
       {
         ipId: editingId,
         body: {
-          displayName: editDisplayName.trim() || null,
+          description: editDescription.trim() || null,
           datacenterId: editDatacenterId || null,
           networkId: editNetworkId || null,
           serverId: editServerId || null,
@@ -900,7 +904,7 @@ export function NetworkAddressesSection({
       {canManage ? (
         <AddAddressPanel
           address={address}
-          displayName={displayName}
+          description={description}
           allocation={allocation}
           scope={scope}
           datacenters={datacenters}
@@ -912,7 +916,7 @@ export function NetworkAddressesSection({
           createDisabled={createDisabled}
           creating={creating}
           onAddressChange={setAddress}
-          onDisplayNameChange={setDisplayName}
+          onDescriptionChange={setDescription}
           onAllocationChange={setAllocation}
           onScopeChange={handleCreateScopeChange}
           onDatacenterIdChange={setCreateDatacenterId}
@@ -927,7 +931,7 @@ export function NetworkAddressesSection({
         ips={ips}
         editingId={editingId}
         editAddress={editAddress}
-        editDisplayName={editDisplayName}
+        editDescription={editDescription}
         editAllocation={editAllocation}
         editScope={editScope}
         editDatacenterId={editDatacenterId}
@@ -942,7 +946,7 @@ export function NetworkAddressesSection({
         serverById={serverById}
         networkById={networkById}
         datacenterById={datacenterById}
-        onDisplayNameChange={setEditDisplayName}
+        onDescriptionChange={setEditDescription}
         onDatacenterIdChange={setEditDatacenterId}
         onNetworkIdChange={setEditNetworkId}
         onServerIdChange={setEditServerId}

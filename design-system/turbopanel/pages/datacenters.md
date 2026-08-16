@@ -15,7 +15,6 @@
 ## Layout (list)
 
 - One job: **dense table**, not site cards or a dashboard of widgets
-- Lean **inventory strip** above the table (datacenter count · member pins · servers with zero memberships) — monospace values, no cards
 - Row press navigates to `/[orgId]/servers/datacenters/[datacenterId]`
 - Page title **Datacenters** + one line of copy via `orgPanelStyles.pageTitle` / `pageCopy`
 - **+ Datacenter** (manage-gated) in the table toolbar; disabled unless ≥1 server reports a private IP; navigates to `/servers/datacenters/new`

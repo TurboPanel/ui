@@ -758,7 +758,7 @@ function HostingPanelRow({
                 onPress={() => onChange({ ipId: ip.id })}
               >
                 <Text style={styles.tlsChipText}>
-                  {ip.displayName?.trim() || ip.address}
+                  {ip.address}
                 </Text>
               </Pressable>
             ))}
