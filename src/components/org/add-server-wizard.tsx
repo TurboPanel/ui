@@ -611,12 +611,8 @@ export function AddServerWizard({
       setCreateError(null)
     }
 
-  return (
-    <SectionPanel
-      title="Add server"
-      hint="Install the TurboPanel daemon on a new host"
-      accent
-    >
+  const body = (
+    <>
       <WizardStepIndicator step={step} />
       {step === 'create' ? (
         <CreateStep
@@ -654,6 +650,16 @@ export function AddServerWizard({
           onFinish={onFinish}
         />
       ) : null}
+    </>
+  )
+
+  return (
+    <SectionPanel
+      title="Add server"
+      hint="Install the TurboPanel daemon on a new host"
+      accent
+    >
+      {body}
     </SectionPanel>
   )
 }

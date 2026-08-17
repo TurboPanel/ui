@@ -15,8 +15,8 @@ import {
 } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
-import { SectionPanel } from '@/components/org/section-panel'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
+import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   isForbiddenError,
@@ -141,18 +141,6 @@ function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
   return 'Failed to load servers'
 }
 
-function averageFinite(values: readonly number[]): number | null {
-  if (values.length === 0) return null
-  let sum = 0
-  for (const value of values) sum += value
-  return sum / values.length
-}
-
-function formatAvgPercent(value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return '—'
-  return `${Math.round(value)}%`
-}
-
 function formatSiBytes(value: number | null): string {
   if (value == null || !Number.isFinite(value) || value < 0) return '—'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -172,13 +160,6 @@ function formatSiBytes(value: number | null): string {
 function formatCoresTotal(value: number | null): string {
   if (value == null || !Number.isFinite(value) || value <= 0) return '—'
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
-}
-
-function pushFinitePercent(
-  target: number[],
-  value: number | null | undefined,
-): void {
-  if (value != null && Number.isFinite(value)) target.push(value)
 }
 
 function memoryTotalFromUsage(
@@ -230,44 +211,17 @@ function serverMemoryTotal(
   return memoryTotalFromUsage(usage)
 }
 
-function serverSwapTotal(server: OrgServerRecord): number | null {
-  const swap = server.resources?.swap?.totalBytes
-  if (swap == null || !Number.isFinite(swap) || swap < 0) return null
-  return swap
-}
-
-function computeFleetAverages(
-  servers: readonly OrgServerRecord[],
-  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>,
-): { avgCpu: number | null; avgMemory: number | null } {
-  const cpu: number[] = []
-  const memory: number[] = []
-  for (const server of servers) {
-    const usage = usageByServerId.get(server.id)
-    if (!usage || usage.sampleCount <= 0) continue
-    pushFinitePercent(cpu, usage.values.cpuUsagePercent)
-    pushFinitePercent(memory, usage.values.memoryUsedPercent)
-  }
-  return {
-    avgCpu: averageFinite(cpu),
-    avgMemory: averageFinite(memory),
-  }
-}
-
 function computeFleetCapacityTotals(
   servers: readonly OrgServerRecord[],
   usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>,
 ): {
   totalCores: number | null
   totalMemoryBytes: number | null
-  totalSwapBytes: number | null
 } {
   let cores = 0
   let coresKnown = false
   let memory = 0
   let memoryKnown = false
-  let swap = 0
-  let swapKnown = false
 
   for (const server of servers) {
     const c = serverInventoryCpuCores(server)
@@ -280,17 +234,11 @@ function computeFleetCapacityTotals(
       memory += mem
       memoryKnown = true
     }
-    const sw = serverSwapTotal(server)
-    if (sw != null) {
-      swap += sw
-      swapKnown = true
-    }
   }
 
   return {
     totalCores: coresKnown ? cores : null,
     totalMemoryBytes: memoryKnown ? memory : null,
-    totalSwapBytes: swapKnown ? swap : null,
   }
 }
 
@@ -305,63 +253,31 @@ function usageByServerIdMap(
 }
 
 function FleetInventoryTotals({
-  inventoryCount,
   totalCores,
   totalMemoryBytes,
-  totalSwapBytes,
-  avgCpu,
-  avgMemory,
 }: Readonly<{
-  inventoryCount: number
   totalCores: number | null
   totalMemoryBytes: number | null
-  totalSwapBytes: number | null
-  avgCpu: number | null
-  avgMemory: number | null
 }>) {
-  const serverLabel = inventoryCount === 1 ? 'server' : 'servers'
   const a11y = [
-    `${inventoryCount} ${serverLabel}`,
     `total ${formatCoresTotal(totalCores)} cores`,
     `total ${formatSiBytes(totalMemoryBytes)} RAM`,
-    `total ${formatSiBytes(totalSwapBytes)} swap`,
-    `average CPU ${formatAvgPercent(avgCpu)}`,
-    `average memory ${formatAvgPercent(avgMemory)}`,
   ].join(', ')
+  const stats = [
+    { key: 'cores', label: 'Cores', value: formatCoresTotal(totalCores) },
+    { key: 'ram', label: 'RAM', value: formatSiBytes(totalMemoryBytes) },
+  ]
 
   return (
     <View style={styles.totalsStrip} accessibilityLabel={a11y}>
-      <Text style={styles.totalsItem}>
-        <Text style={styles.totalsValue}>{inventoryCount}</Text>
-        <Text style={styles.totalsLabel}> in inventory</Text>
-      </Text>
-      <Text style={styles.totalsSep}>·</Text>
-      <Text style={styles.totalsItem}>
-        <Text style={styles.totalsLabel}>Cores </Text>
-        <Text style={styles.totalsValue}>{formatCoresTotal(totalCores)}</Text>
-      </Text>
-      <Text style={styles.totalsSep}>·</Text>
-      <Text style={styles.totalsItem}>
-        <Text style={styles.totalsLabel}>RAM </Text>
-        <Text style={styles.totalsValue}>
-          {formatSiBytes(totalMemoryBytes)}
-        </Text>
-      </Text>
-      <Text style={styles.totalsSep}>·</Text>
-      <Text style={styles.totalsItem}>
-        <Text style={styles.totalsLabel}>Swap </Text>
-        <Text style={styles.totalsValue}>{formatSiBytes(totalSwapBytes)}</Text>
-      </Text>
-      <Text style={styles.totalsSep}>·</Text>
-      <Text style={styles.totalsItem}>
-        <Text style={styles.totalsLabel}>Avg CPU </Text>
-        <Text style={styles.totalsValue}>{formatAvgPercent(avgCpu)}</Text>
-      </Text>
-      <Text style={styles.totalsSep}>·</Text>
-      <Text style={styles.totalsItem}>
-        <Text style={styles.totalsLabel}>Avg memory </Text>
-        <Text style={styles.totalsValue}>{formatAvgPercent(avgMemory)}</Text>
-      </Text>
+      {stats.map((stat) => (
+        <View key={stat.key} style={styles.totalsBox}>
+          <Text style={styles.totalsLabel}>{stat.label}</Text>
+          <Text style={styles.totalsValue} numberOfLines={1}>
+            {stat.value}
+          </Text>
+        </View>
+      ))}
     </View>
   )
 }
@@ -405,6 +321,41 @@ function SelectionCheckbox({
   )
 }
 
+function AddServerToolbarButton({
+  open,
+  disabled,
+  onPress,
+}: Readonly<{
+  open: boolean
+  disabled: boolean
+  onPress: () => void
+}>) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        open
+          ? orgPanelStyles.toolbarBtnSecondary
+          : orgPanelStyles.toolbarBtnPrimary,
+        disabled && styles.buttonDisabled,
+        pressed && !disabled && styles.buttonPressed,
+        webPointer,
+      ]}
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <Text
+        style={
+          open
+            ? orgPanelStyles.toolbarBtnTextSecondary
+            : orgPanelStyles.toolbarBtnTextPrimary
+        }
+      >
+        {open ? 'Close' : '+ Server'}
+      </Text>
+    </Pressable>
+  )
+}
+
 function ServersOverviewToolbar({
   canOwn,
   canManage,
@@ -430,7 +381,7 @@ function ServersOverviewToolbar({
 }>) {
   if (!canOwn && !canManage) return null
 
-  const addDisabled = !addServerEligibility.canAdd || showAddServerWizard
+  const addDisabled = !addServerEligibility.canAdd
   const updateDisabled =
     anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
 
@@ -443,18 +394,11 @@ function ServersOverviewToolbar({
     >
       <View style={styles.toolbarRow}>
         {canOwn ? (
-          <Pressable
-            style={({ pressed }) => [
-              orgPanelStyles.toolbarBtnPrimary,
-              addDisabled && styles.buttonDisabled,
-              pressed && !addDisabled && styles.buttonPressed,
-              webPointer,
-            ]}
+          <AddServerToolbarButton
+            open={showAddServerWizard}
             disabled={addDisabled}
             onPress={onAddServer}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>+ Server</Text>
-          </Pressable>
+          />
         ) : null}
         {canManage ? (
           <TouchableOpacity
@@ -630,6 +574,7 @@ function OrgServerTableRow({
   orgId,
   server,
   rowIndex,
+  isLast,
   selected,
   overlayAddress,
   usage,
@@ -638,6 +583,7 @@ function OrgServerTableRow({
   orgId: string
   server: OrgServerRecord
   rowIndex: number
+  isLast: boolean
   selected: boolean
   overlayAddress: string | null
   usage: FleetServerUsageRecord | null
@@ -653,6 +599,7 @@ function OrgServerTableRow({
       onPointerLeave={() => setRowHovered(false)}
       style={({ pressed }) => [
         styles.tableRow,
+        isLast ? styles.tableRowLast : null,
         rowIndex % 2 === 1 ? styles.tableRowEven : null,
         selected ? styles.tableRowSelected : null,
         rowHovered ? styles.tableRowHovered : null,
@@ -769,6 +716,7 @@ function ServersFleetTable({
             orgId={orgId}
             server={server}
             rowIndex={index}
+            isLast={index === servers.length - 1}
             selected={selectedIds.has(server.id)}
             overlayAddress={meshOverlayByServer.get(server.id) ?? null}
             usage={usageByServerId.get(server.id) ?? null}
@@ -820,11 +768,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const usageByServerId = useMemo(
     () => usageByServerIdMap(fleetUsageQuery.data?.servers),
     [fleetUsageQuery.data],
-  )
-
-  const fleetAverages = useMemo(
-    () => computeFleetAverages(servers, usageByServerId),
-    [servers, usageByServerId],
   )
 
   const fleetCapacity = useMemo(
@@ -927,31 +870,39 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
       {!loading || servers.length > 0 ? (
         <FleetInventoryTotals
-          inventoryCount={servers.length}
           totalCores={fleetCapacity.totalCores}
           totalMemoryBytes={fleetCapacity.totalMemoryBytes}
-          totalSwapBytes={fleetCapacity.totalSwapBytes}
-          avgCpu={fleetAverages.avgCpu}
-          avgMemory={fleetAverages.avgMemory}
+        />
+      ) : null}
+
+      <ServersOverviewToolbar
+        canOwn={canOwn}
+        canManage={canManage}
+        addServerEligibility={addServerEligibility}
+        showAddServerWizard={showAddServerWizard}
+        onAddServer={() => setShowAddServerWizard((open) => !open)}
+        anyUpdateInProgress={anyUpdateInProgress}
+        batchUpdating={batchUpdating}
+        selectedCount={selectedIds.size}
+        selectedUpdatableCount={selectedUpdatableCount}
+        onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
+      />
+      {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
+        <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
+      ) : null}
+
+      {canOwn && showAddServerWizard ? (
+        <AddServerWizard
+          orgId={orgId}
+          onComplete={() => {
+            setShowAddServerWizard(false)
+            refreshServersList()
+          }}
+          onDismiss={() => setShowAddServerWizard(false)}
         />
       ) : null}
 
       <SectionPanel>
-        <ServersOverviewToolbar
-          canOwn={canOwn}
-          canManage={canManage}
-          addServerEligibility={addServerEligibility}
-          showAddServerWizard={showAddServerWizard}
-          onAddServer={() => setShowAddServerWizard(true)}
-          anyUpdateInProgress={anyUpdateInProgress}
-          batchUpdating={batchUpdating}
-          selectedCount={selectedIds.size}
-          selectedUpdatableCount={selectedUpdatableCount}
-          onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
-        />
-        {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
-          <Text style={orgPanelStyles.muted}>{addServerEligibility.reason}</Text>
-        ) : null}
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
         {loading && servers.length === 0 ? (
@@ -979,17 +930,6 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           />
         ) : null}
       </SectionPanel>
-
-      {canOwn && showAddServerWizard ? (
-        <AddServerWizard
-          orgId={orgId}
-          onComplete={() => {
-            setShowAddServerWizard(false)
-            refreshServersList()
-          }}
-          onDismiss={() => setShowAddServerWizard(false)}
-        />
-      ) : null}
     </View>
   )
 }
@@ -1007,10 +947,6 @@ const styles = StyleSheet.create({
   },
   toolbarWrap: {
     gap: spacing.xs,
-    marginBottom: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderArea,
   },
   toolbarWrapPinned: {
     ...(Platform.OS === 'web'
@@ -1018,16 +954,16 @@ const styles = StyleSheet.create({
           position: 'sticky',
           top: 0,
           zIndex: 3,
-          backgroundColor: colors.bgArea,
-          paddingTop: spacing.xs,
+          backgroundColor: colors.bg,
+          paddingVertical: spacing.xs,
         } as unknown as ViewStyle)
       : null),
-    borderBottomColor: chrome.accent,
   },
   toolbarRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: spacing.sm,
     alignSelf: 'stretch',
   },
@@ -1036,11 +972,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     fontFamily: 'monospace',
+    textAlign: 'right',
   },
   capacityHint: {
     color: colors.pending,
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'right',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -1060,36 +998,47 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     width: '100%',
     minWidth: 980,
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    borderRadius: 10,
-    overflow: 'hidden',
   },
   totalsStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    alignItems: 'baseline',
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
+    width: '100%',
     gap: spacing.sm,
-    paddingVertical: spacing.xs,
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))',
+        } as unknown as ViewStyle)
+      : null),
   },
-  totalsItem: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+  totalsBox: {
+    flex: 1,
+    minWidth: 112,
+    minHeight: 56,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgArea,
+    gap: 2,
+    justifyContent: 'center',
   },
   totalsValue: {
-    color: colors.textTitle,
-    fontSize: 14,
+    color: colors.text,
+    fontSize: 16,
     fontWeight: '700',
     fontFamily: 'monospace',
+    letterSpacing: -0.2,
   },
   totalsLabel: {
     color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  totalsSep: {
-    color: colors.textFaint,
-    fontSize: 13,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   tableRow: {
     flexDirection: 'row',
@@ -1101,6 +1050,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     gap: spacing.sm,
+  },
+  tableRowLast: {
+    borderBottomWidth: 0,
   },
   tableRowEven: {
     backgroundColor: colors.bgInset,

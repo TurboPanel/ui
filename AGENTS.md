@@ -234,7 +234,7 @@ These are non-negotiable for the console (detail lives in Master):
 
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, optional health-check policy (`disabled` default — compose/`image` HEALTHCHECK is enough when present; `warn`/`required` are opt-in gates), storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
 
-**Shell polish (Phase 1):** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org/admin sidebar brand via `TurboPanelLogo` (T mark only; full wordmark is website-only) + sub-nav rail; header eyebrow + user chip. Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
+**Shell polish (Phase 1):** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org/admin sidebar brand via `TurboPanelLogo` (T mark only; full wordmark is website-only) + sub-nav rail; header eyebrow + borderless hover-tile account controls (`HeaderMenuTrigger`: org, user, notifications — leading icons sit in a 16px `triggerGlyph` slot matching the label line-height). Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
 
 ## End-user auth & first-run install (self-hosted)
 
@@ -453,11 +453,11 @@ Authorization helpers:
 #### Servers overview table
 
 - `servers-overview-section.tsx` renders a lean selectable table: Host (display name / hostname; OS logo — no UUID), Status (Online / Initializing / Offline — `resolveServerConnectionStatus` treats never-connected `statusChangedAt: null` as Initializing so post-install colocated hosts are not shown Offline while the daemon connects), **Country** (flag + English name from geo), **Usage** (CPU / Mem / Swap bars from one `GET /servers/metrics/latest` fleet snapshot; hosts with no sample yet keep the same four tracks as ghost rows with ellipsis values), Mesh, checkbox column (header = select all). Row press navigates to `/<orgId>/servers/[serverId]`; checkbox uses `stopPropagation` so selection does not navigate.
-- Lean inventory strip above the table: server count · cores (`resources.cpu.coreCount`) · RAM · swap · avg CPU · avg memory (averages only servers with a recent sample). Load bars use `resources.cpu.threadCount`.
+- Full-width inventory boxes above the toolbar: Cores · RAM. Load bars use `resources.cpu.threadCount`.
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`.
 - Batch **Update** targets **selected** updatable hosts only; per-host commands, delete, time/network, and metrics live on the server detail page.
-- `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `resources`, `ips`, `timeSync`, `timezone`, `timezoneSource`, and `datacenters: { id, displayName }[]` (multi-membership pins).
-- Fleet usage: `useFleetServerUsage` → `fetchFleetMetricsLatest` — **one** O(1) call, never per-server metrics series on this page. Bars show stacked CPU (user/system/other/iowait), load 1/5/15 (fill = load1/cores), memory and swap. Inventory strip sums cores/RAM/swap from `server.resources` (+ metrics-derived RAM fallback).
+- `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `resources`, `ips`, `timeSync`, `docker` (null when Docker is not installed), `timezone`, `timezoneSource`, and `datacenters: { id, displayName }[]` (multi-membership pins).
+- Fleet usage: `useFleetServerUsage` → `fetchFleetMetricsLatest` — **one** O(1) call, never per-server metrics series on this page. Bars show stacked CPU (user/system/other/iowait), load 1/5/15 (fill = load1/cores), memory and swap. Inventory strip sums cores/RAM from `server.resources` (+ metrics-derived RAM fallback).
 
 #### Server control panel (`/<orgId>/servers/[serverId]`)
 
@@ -468,7 +468,7 @@ Authorization helpers:
 
 #### Servers overview — add server
 
-- **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) opens `AddServerWizard` inline on the servers page.
+- **+ Server** on `servers-overview-section.tsx` (gated by `organization:own`) sits with batch **Update** above the fleet glass; toggles `AddServerWizard` as its own glass panel between toolbar and table.
 - `resolveServerAddEligibility(capacity?)` in `src/lib/server-add-eligibility.ts` gates **+ Server** from org seat capacity (`maxServers`); unlimited when omitted/null. `POST /licenses` still enforces **409** `server_capacity_exceeded` server-side.
 - Wizard shows the install command only (key embedded, one-shot); avoid "create license" / license-management copy. Production shape: `curl -fsSL turbopanel.sh | TURBOPANEL_LICENSE=… sh`. Dev rebuild via `resolveDisplayedInstallCommand` / `buildInstallCommandWithBaseUrl` validates the edited origin, emits values unquoted, adds `TURBOPANEL_HOST`, `TURBOPANEL_DL_BASE=<origin>/downloads/daemon`, and `TURBOPANEL_INSECURE_TLS=1` **only** when `installOriginNeedsInsecureTls` is true (LAN / `:8443` platform CA). Public HTTPS on 443 (Cloudflare tunnel) must not set insecure TLS. Quick-pick chips list each managed public URL plus Use HTTPS (`:8443`) / Use HTTP (`:8880`).
 

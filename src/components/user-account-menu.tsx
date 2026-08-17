@@ -13,8 +13,10 @@ import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
   HEADER_MENU_WIDTH,
+  HEADER_TRIGGER_ICON_SIZE,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
+import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { UserIcon } from '@/components/icons/nav-icons'
 import { webPointer } from '@/components/org/org-panel-styles'
 import {
@@ -171,19 +173,16 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
   return (
     <>
       <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
-        <Pressable
-          style={({ pressed }) => [
-            headerMenuGroupStyles.trigger,
-            open && headerMenuGroupStyles.triggerOpen,
-            pressed && headerMenuGroupStyles.triggerPressed,
-            webPointer,
-          ]}
+        <HeaderMenuTrigger
+          open={open}
           onPress={() => setOpen((current) => !current)}
           accessibilityRole="button"
           accessibilityLabel={`Account menu for ${email}`}
           accessibilityState={{ expanded: open }}
         >
-          <UserIcon size={15} color={colors.textDim} />
+          <View style={headerMenuGroupStyles.triggerGlyph}>
+            <UserIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
+          </View>
           <View style={headerMenuGroupStyles.triggerCopy}>
             <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
               {email}
@@ -193,7 +192,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
             color={open ? colors.text : colors.textDim}
             open={open}
           />
-        </Pressable>
+        </HeaderMenuTrigger>
       </View>
 
       <Modal

@@ -10,9 +10,12 @@
 ## Layout
 
 - One job: **fleet table**, not a dashboard of widgets  
-- Lean **inventory strip** above the table (count · cores · RAM · swap · avg CPU · avg memory) — monospace values, no cards  
+- Full-width **inventory stat boxes** above the toolbar (Cores · RAM) — equal-width hairline tiles, uppercase labels, monospace values; wrap on narrow viewports. Not a decorative bento / widget dashboard.  
 - Row press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
-- Toolbar inside `SectionPanel` (no title/hint bar): **+ Server** (own-gated) + batch Update for selected updatable hosts  
+- Toolbar (**+ Server** / **Update**) sits **above** the glass — no toolbar hairline / HR separators  
+- **+ Server** opens a separate glass `SectionPanel` (Add server) between the toolbar and the fleet table glass  
+- Fleet hosts sit in their own glass `SectionPanel` (no nested second glass / bordered table card inside it)  
+- Table itself has **no outer border/radius box** — header + zebra rows only inside the panel  
 - **Datacenters** sub-route (`/servers/datacenters`) for org location inventory (member counts, private CIDRs) — see `pages/datacenters.md`  
 - **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
@@ -22,8 +25,10 @@
 
 ## Toolbar
 
-- **+ Server** (own-gated) + batch **Update (N)** for selected updatable hosts  
-- Selection hint: `{N} selected · {M} updatable` in monospace when any rows checked
+- **+ Server** (own-gated) + batch **Update (N)** for selected updatable hosts — right-aligned, above the glass panels  
+- **+ Server** toggles a dedicated Add server glass panel between the toolbar and the fleet glass; open state shows **Close**  
+- Selection hint: `{N} selected · {M} updatable` in monospace when any rows checked (right-aligned under the actions)  
+- No horizontal rules under the toolbar
 
 ## Density
 
@@ -42,13 +47,15 @@
 ## Inventory strip
 
 - Shows as soon as the fleet list is known (including zero)  
-- **Capacity:** total cores (`inventory.cpuCores`) + total RAM + total swap from `server.inventory` (daemon hello); RAM falls back to metrics `memoryUsed + memoryAvailable` when inventory is absent. Load bars use logical `cpuThreads`.  
-- Avg CPU / avg memory average only servers with a recent usage sample; otherwise `—`  
+- One equal-width row of compact boxes spanning the content width (web: `repeat(auto-fit, minmax(128px, 1fr))`; native: `flex: 1` + wrap)  
+- Hairline border (`borderSubtle`) + `bgArea` fill + 8px radius — no glass, no accent stripe, no shadows  
+- Label above value (11px uppercase muted / 16px mono)  
+- **Capacity:** total cores (`inventory.cpuCores`) + total RAM from `server.inventory` (daemon hello); RAM falls back to metrics `memoryUsed + memoryAvailable` when inventory is absent. Load bars use logical `cpuThreads`. Swap stays on per-row usage bars, not the inventory strip.  
 - Refresh cadence follows fleet usage query (~60 s), not the 30 s servers list
 
 ## Add server wizard
 
-- Accent `SectionPanel` with **3-step indicator** (Name → Install → Connect)  
+- Own glass `SectionPanel` between the toolbar and the fleet table (title + hint + accent stripe) with **3-step indicator** (Name → Install → Connect)  
 - Install command in `commandCodeBlock` (monospace, inset panel) + copy button  
 - Success state: accent dot + hostname — no emoji checkmark
 
@@ -61,7 +68,7 @@
 
 ## Components
 
-- Reuse `orgPanelStyles` toolbar buttons, `SectionPanel`, `AddServerWizard`, `ServerUsageBars`  
+- Reuse `orgPanelStyles` toolbar buttons, fleet `SectionPanel`, `AddServerWizard` (own glass), `ServerUsageBars`  
 - Commands, delete, per-host update detail, time/network, and metrics charts live on the **server detail** page
 
 ## Charts
@@ -77,4 +84,6 @@
 - ❌ Expand rows for commands on the fleet table  
 - ❌ Status conveyed by color alone (bars always show a percent, load triplet, or em dash)  
 - ❌ Boxed “Awaiting stats” card or `0%` / em-dash usage bars when a host has no sample yet (use ghost tracks + ellipsis)  
-- ❌ Inventing core counts client-side — load bar fill needs daemon-reported `inventory.cpuThreads`
+- ❌ Inventing core counts client-side — load bar fill needs daemon-reported `inventory.cpuThreads`  
+- ❌ Nested glass / bordered table card inside the fleet panel, or rendering Add Server as a second panel below the list
+- ❌ Glass / accent-stripe / shadow KPI cards, or a decorative bento of widgets above the fleet table (inventory boxes stay hairline tiles)

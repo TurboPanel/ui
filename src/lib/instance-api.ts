@@ -294,6 +294,13 @@ export type ServerTimeSync = {
   capturedAt?: string
 }
 
+export type ServerDockerMetadata = {
+  /** Docker CLI version (`docker --version`). */
+  version?: string
+  /** Compose plugin version (`docker compose version`). */
+  composeVersion?: string
+}
+
 export type ServerTimezoneSource = 'server' | 'organization' | null
 
 export type ServerDatacenterRef = {
@@ -327,6 +334,11 @@ export type OrgServerRecord = {
   colocatedWithInstance?: boolean;
   ips: ServerReportedIp[] | null;
   timeSync: ServerTimeSync | null;
+  /**
+   * Docker CLI / Compose plugin versions (`server.metadata.docker`).
+   * Null when Docker is not installed or has not been reported.
+   */
+  docker: ServerDockerMetadata | null;
   timezone: string | null;
   timezoneSource: ServerTimezoneSource;
   /** Datacenter memberships (IP pins); a server may belong to many. */

@@ -115,22 +115,20 @@ export function AdminNavIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
-/** Buildings — organization switcher. */
+/**
+ * Office building — organization switcher.
+ * Cropped viewBox so the glyph fills the 16px header slot and shares the
+ * label’s cap-height → baseline (the old peaked house sat high).
+ */
 export function OrganizationIcon({ size = 16, color }: NavIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Svg width={size} height={size} viewBox="2 2 20 20" fill="none">
       <Path
-        d="M3.75 21h16.5M5.25 21V8.25l6-3 6 3V21M9 21v-4.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 16.5V21"
+        d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"
         stroke={color}
         strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-      <Path
-        d="M9 9.75h.008M12 9.75h.008M15 9.75h.008M9 13.5h.008M12 13.5h.008M15 13.5h.008"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
       />
     </Svg>
   )

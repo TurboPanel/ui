@@ -1,9 +1,12 @@
 import { useRouter, type Href } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import {
+  HEADER_TRIGGER_ICON_SIZE,
+  headerMenuGroupStyles,
+} from '@/components/header-menu-group-styles'
+import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { ReturnToInstanceIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
 import { colors } from '@/lib/theme'
 
@@ -32,25 +35,22 @@ export function ReturnToInstanceSegment() {
 
   return (
     <View style={styles.triggerWrap}>
-      <Pressable
-        style={({ pressed }) => [
-          headerMenuGroupStyles.trigger,
-          pressed && headerMenuGroupStyles.triggerPressed,
-          webPointer,
-        ]}
+      <HeaderMenuTrigger
         onPress={handlePress}
         disabled={busy}
         accessibilityRole="button"
         accessibilityLabel="Return to instance"
         accessibilityState={{ busy }}
       >
-        <ReturnToInstanceIcon size={15} color={colors.textDim} />
+        <View style={headerMenuGroupStyles.triggerGlyph}>
+          <ReturnToInstanceIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
+        </View>
         <View style={headerMenuGroupStyles.triggerCopy}>
           <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
             Return to instance
           </Text>
         </View>
-      </Pressable>
+      </HeaderMenuTrigger>
     </View>
   )
 }

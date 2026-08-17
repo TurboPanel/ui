@@ -116,7 +116,8 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 - **Secondary:** transparent + `borderMuted`, text body color  
 - **Danger:** `error` border/text; confirm destructive in two-step (existing reboot/delete pattern)  
 - Transitions 150–200ms; press scale ≤ 0.98 (Reanimated), no layout-shifting scale on hover  
-- Web: `cursor: pointer` on all clickable elements
+- Web: `cursor: pointer` on all clickable elements  
+- **Header account controls** (org switcher, user menu, notifications, admin Return to instance): **not** bordered buttons. Rest transparent; hover/press fill `bgSecondary` as a rounded tile; open menu uses `chrome.bgActive`. Keep a keyboard focus ring.
 
 ### Panels / "cards"
 

@@ -1,8 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native'
-import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
+import { StyleSheet, View } from 'react-native'
+import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { NotificationsBellIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
-import { glass } from '@/lib/glass'
 import { colors } from '@/lib/theme'
 
 /**
@@ -17,12 +15,8 @@ export function HeaderNotificationsSegment() {
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       />
-      <Pressable
-        style={({ pressed }) => [
-          styles.trigger,
-          pressed && headerMenuGroupStyles.triggerPressed,
-          webPointer,
-        ]}
+      <HeaderMenuTrigger
+        icon
         onPress={() => {
           // Future: open notifications panel.
         }}
@@ -30,7 +24,7 @@ export function HeaderNotificationsSegment() {
         accessibilityLabel="Notifications"
       >
         <NotificationsBellIcon size={16} color={colors.textDim} />
-      </Pressable>
+      </HeaderMenuTrigger>
     </View>
   )
 }
@@ -46,15 +40,5 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: colors.borderChip,
-  },
-  trigger: {
-    width: 40,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: glass.border,
-    backgroundColor: glass.fillSoft,
   },
 })

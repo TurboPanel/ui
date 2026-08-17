@@ -14,8 +14,10 @@ import { HeaderCheck } from '@/components/header-check'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
   HEADER_MENU_WIDTH,
+  HEADER_TRIGGER_ICON_SIZE,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
+import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { OrganizationIcon } from '@/components/icons/nav-icons'
 import { webPointer } from '@/components/org/org-panel-styles'
 import type { OrganizationRecord } from '@/lib/instance-api'
@@ -161,19 +163,16 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   return (
     <>
       <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
-        <Pressable
-          style={({ pressed }) => [
-            headerMenuGroupStyles.trigger,
-            menuOpen && headerMenuGroupStyles.triggerOpen,
-            pressed && headerMenuGroupStyles.triggerPressed,
-            webPointer,
-          ]}
+        <HeaderMenuTrigger
+          open={menuOpen}
           onPress={() => setMenuOpen((current) => !current)}
           accessibilityRole="button"
           accessibilityLabel={`Organization: ${label}`}
           accessibilityState={{ expanded: menuOpen }}
         >
-          <OrganizationIcon size={15} color={colors.textDim} />
+          <View style={headerMenuGroupStyles.triggerGlyph}>
+            <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
+          </View>
           <View style={headerMenuGroupStyles.triggerCopy}>
             <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
               {label}
@@ -183,7 +182,7 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
             color={menuOpen ? colors.text : colors.textDim}
             open={menuOpen}
           />
-        </Pressable>
+        </HeaderMenuTrigger>
       </View>
 
       <Modal

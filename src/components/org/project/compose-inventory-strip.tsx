@@ -17,8 +17,8 @@ function pluralize(item: InventoryStripItem): string {
 }
 
 /**
- * "x servers · x storage · x bindings" quantitative rollup — same
- * value·label visual language as the servers overview fleet totals strip.
+ * "x servers · x storage · x bindings" quantitative rollup for compose
+ * Overview (inline value·label, not the servers overview stat boxes).
  */
 export function ComposeInventoryStrip({
   items,
