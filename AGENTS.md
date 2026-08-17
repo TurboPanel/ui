@@ -263,24 +263,26 @@ Identifiers for Cloudflare and Expo deployments:
 The UI is never installed as a standalone service tree — the **instance** repo's Caddy serves it, and the **daemon** installs its build output. Two modes (`TURBOPANEL_UI_MODE` on the instance):
 
 - **Development** (`dev`) — `turbopanel-ui.service` runs the Expo web dev server on `:8081` (installed by the daemon `instance-launch` role, running as the **dev user**). Caddy reverse-proxies non-`/api`/`/ws` traffic to it. Dev logs go to **`/var/log/turbopanel/ui`** (dev-user-owned).
-  **Fast Refresh on Vagrant:** host saves on VirtioFS / 9p do not notify guest inotify, so Metro’s Linux `FallbackWatcher` never sees them (a full browser reload still works because Metro re-reads files). `metro.config.js` installs a poll watcher (`scripts/metro-virtfs-poll-watch.cjs`) when `/proc/mounts` shows those types. Override with `TURBOPANEL_METRO_POLL=1` (force) or `=0` (disable). Tamagui style extraction is off in development so Fast Refresh can apply. After changing Metro config, restart `turbopanel-ui`. Open the console via Caddy (`:8443` / `:8880`), not Metro `:8081` (that port is not forwarded; HMR is `/hot` on the Caddy origin).
+  **Fast Refresh on Vagrant:** host saves on VirtioFS / 9p do not notify guest inotify, so Metro’s Linux `FallbackWatcher` never sees them (a full browser reload still works because Metro re-reads files). `metro.config.js` installs a poll watcher (`scripts/metro-virtfs-poll-watch.cjs`) when `/proc/mounts` shows those types. Override with `TURBOPANEL_METRO_POLL=1` (force) or `=0` (disable). Tamagui style extraction is off in development so Fast Refresh can apply. After changing Metro config, restart `turbopanel-ui`. Open the signed-in console via Caddy (`:8443` / `:8880`); Metro `:8081` is forwarded for native / Expo Go (same-origin cookies still will not work on the Metro origin). Web HMR is `/hot` on the Caddy origin.
 - **Production** (`static`) — `pnpm export` produces the static web bundle; the daemon `ui-build` role publishes it to the FHS path **`/opt/turbopanel/share/ui`** (instance `TURBOPANEL_UI_ROOT` default). Caddy serves those files directly with SPA fallback and `turbopanel-ui.service` is stopped/disabled. Production runs as `tpctrl:tp`.
 
 Both modes route through the single instance Caddy entrypoint; there is no separate `turbopaneld.service` or FHS tree owned by this repo. Canonical paths/units live in `../turbopanel/AGENTS.md` (Caddy + UI env vars) and `../turbopaneld/AGENTS.md` (Filesystem layout & path model).
 
 ## Organization console (`/<organizationId>/*`)
 
-Main product shell for signed-in users. Web uses a left sidebar with area tabs and per-area sub-menus; native will likely move the top-level areas to bottom tabs later.
+Main product shell for signed-in users. Web keeps the sidebar + narrow-viewport drawer (`org-shell.tsx`); iOS/Android use `org-shell.native.tsx` with `OrgTabBar` (Projects, Servers). `ORG_TAB_AREA_IDS` is the native tab set; Managed / Network / Access / Workspaces / Admin remain deep-link-only on native for now.
 
 ### Layout
 
 - `src/app/[orgId]/_layout.tsx` — auth guard + `OrgShell`
-- `src/components/org/org-shell.tsx` — responsive shell (sidebar on web, drawer on narrow viewports)
-- `src/components/org/org-sidebar.tsx` — area nav + sub-routes for the active area
+- `src/components/org/org-shell.tsx` — web shell (sidebar + narrow-viewport drawer); iOS/Android override is `org-shell.native.tsx` (header + bottom `OrgTabBar`)
+- `src/components/org/org-shell-content.tsx` — shared scroll + `<Slot />` used by both shells
+- `src/components/org/org-tab-bar.tsx` — native Projects · Servers tabs (derived from `ORG_TAB_AREA_IDS`)
+- `src/components/org/org-sidebar.tsx` — area nav + sub-routes for the active area (web)
 - `src/components/org/org-header.tsx` — page title, user label, sign out
 - `src/components/org/workspace-switcher.tsx` — on the Projects screen; compact **Filter** control (defaults to **All workspaces**), links to Manage / Create workspace
 - `src/lib/workspace-scope.ts` / `src/lib/workspace-scope-context.tsx` — project filter scope (`?workspaceId=` + remembered selection); not a top-level nav area. Defaults to **All workspaces** (even with a single user workspace); last choice may be restored from localStorage.
-- `src/lib/org-navigation.ts` — area registry (`ORG_AREAS`); add entries + routes together
+- `src/lib/org-navigation.ts` — area registry (`ORG_AREAS`); add entries + routes together; `ORG_TAB_AREA_IDS` is the native bottom-tab set
 
 ### Areas (routes)
 

@@ -10,6 +10,7 @@ import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import {
   ORG_AREAS,
+  isOrgAreaActive,
   orgAreaFromPathname,
   orgAreaHref,
   orgRouteHref,
@@ -36,7 +37,6 @@ export function OrgSidebar({
   const adminActive =
     pathname === adminHref || pathname.startsWith('/admin/')
   const resolved = orgAreaFromPathname(pathname)
-  const activeAreaId = resolved?.area.id ?? null
   const activeSubRouteId = resolved?.subRoute?.id ?? null
 
   return (
@@ -51,14 +51,7 @@ export function OrgSidebar({
             area.id === 'projects'
               ? projectsHrefForScope(orgId, scopeId)
               : orgAreaHref(orgId, area.pathSegment)
-          const projectsBase = orgAreaHref(orgId, 'projects')
-          const areaActive =
-            area.id === 'projects'
-              ? pathname === projectsBase ||
-                pathname.startsWith(`${projectsBase}/`)
-              : activeAreaId === area.id ||
-                pathname === areaHref ||
-                pathname.startsWith(`${areaHref}/`)
+          const areaActive = isOrgAreaActive(pathname, orgId, area.pathSegment)
           const iconColor = areaActive ? chrome.accent : colors.textMuted
 
           return (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isOrgAreaActive,
   orgAreaFromPathname,
   datacenterHref,
   datacenterNewHref,
@@ -49,6 +50,28 @@ describe('orgAreaFromPathname', () => {
     expect(resolved?.area.id).toBe('servers')
     expect(resolved?.subRoute?.id).toBe('datacenters')
     expect(resolved?.subRoute?.pathSegment).toBe('datacenters')
+  })
+})
+
+describe('isOrgAreaActive', () => {
+  it('matches the exact area path', () => {
+    expect(isOrgAreaActive('/org/servers', 'org', 'servers')).toBe(true)
+  })
+
+  it('matches a nested child path', () => {
+    expect(isOrgAreaActive('/org/servers/dc-1', 'org', 'servers')).toBe(true)
+  })
+
+  it('does not match a sibling area', () => {
+    expect(isOrgAreaActive('/org/servers', 'org', 'projects')).toBe(false)
+    expect(isOrgAreaActive('/org/projects', 'org', 'servers')).toBe(false)
+  })
+
+  it('matches projects base paths that carry a workspace query', () => {
+    // Helper strips `?…`; Expo `usePathname()` already omits the query.
+    expect(
+      isOrgAreaActive('/org/projects?workspaceId=ws-1', 'org', 'projects'),
+    ).toBe(true)
   })
 })
 

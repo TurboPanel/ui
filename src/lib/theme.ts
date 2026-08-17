@@ -83,6 +83,8 @@ export const chrome = {
 export const layout = {
   desktopBreakpoint: 768,
   sidebarWidth: 220,
+  /** Native bottom tab bar row (excluding the home-indicator inset). */
+  bottomTabHeight: 56,
   contentMaxWidth: 1400,
   contentGutter: 32,
 } as const

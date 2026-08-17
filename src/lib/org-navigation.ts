@@ -87,11 +87,34 @@ export type OrgAreaId = (typeof ORG_AREAS)[number]['id']
 export type OrgSubRouteId =
   (typeof ORG_AREAS)[number]['subRoutes'][number]['id']
 
+/** Native bottom-tab set. Other org areas stay reachable by deep link only on native. */
+export const ORG_TAB_AREA_IDS = [
+  'projects',
+  'servers',
+] as const satisfies readonly OrgAreaId[]
+
 export function orgAreaHref(
   orgId: string,
   areaPathSegment: string,
 ): `/${string}/${string}` {
   return `/${orgId}/${areaPathSegment}`
+}
+
+/**
+ * Whether `pathname` is the given org area or a nested child of it.
+ *
+ * Strips a query string when present. Expo `usePathname()` already omits the
+ * query, so `/org/projects?workspaceId=…` and `/org/projects` both match.
+ */
+export function isOrgAreaActive(
+  pathname: string,
+  orgId: string,
+  areaPathSegment: string,
+): boolean {
+  const queryIndex = pathname.indexOf('?')
+  const path = queryIndex === -1 ? pathname : pathname.slice(0, queryIndex)
+  const href = orgAreaHref(orgId, areaPathSegment)
+  return path === href || path.startsWith(`${href}/`)
 }
 
 export function orgRouteHref(

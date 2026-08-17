@@ -1,18 +1,17 @@
-import { Slot } from 'expo-router'
 import { useState } from 'react'
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrgHeader } from '@/components/org/org-header'
+import { OrgShellContent } from '@/components/org/org-shell-content'
 import { OrgSidebar } from '@/components/org/org-sidebar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
 import { glass } from '@/lib/glass'
-import { colors, layout, spacing } from '@/lib/theme'
+import { colors, layout } from '@/lib/theme'
 
 export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
   const { width } = useWindowDimensions()
@@ -56,17 +55,7 @@ export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
               orgId={orgId}
               onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
             />
-            <ScrollView
-              style={styles.contentScroll}
-              contentContainerStyle={[
-                styles.content,
-                { maxWidth: contentMaxWidth },
-              ]}
-              contentInsetAdjustmentBehavior="automatic"
-              keyboardShouldPersistTaps="handled"
-            >
-              <Slot />
-            </ScrollView>
+            <OrgShellContent maxWidth={contentMaxWidth} />
           </View>
         </View>
       </SafeAreaView>
@@ -92,16 +81,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     backgroundColor: colors.bg,
-  },
-  contentScroll: {
-    flex: 1,
-  },
-  content: {
-    width: '100%',
-    alignSelf: 'center',
-    paddingHorizontal: layout.contentGutter,
-    paddingVertical: spacing.xl,
-    gap: spacing.md,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,

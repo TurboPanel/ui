@@ -1,6 +1,43 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'expo-router'
+import { AddServerWizard } from '@/components/org/add-server-wizard'
+import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
+import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { SectionPanel } from '@/components/org/section-panel'
+import { ServerUsageBars } from '@/components/org/server-usage-bars'
+import { useAuth } from '@/lib/auth-context'
+import {
+  isForbiddenError,
+  type FleetServerUsageRecord,
+  type OrgServerRecord,
+  type RelayRecord,
+  type ServerOsLogoKey,
+  type ServerUpdateStatus,
+} from '@/lib/instance-api'
+import { serverDetailHref } from '@/lib/org-navigation'
+import { osLogoSource } from '@/lib/os-logos'
+import { useOrgFabric } from '@/lib/queries/fabric'
+import {
+  SERVERS_REFRESH_MS,
+  useBatchTriggerServerUpdates,
+  useFleetServerUsage,
+  useOrgServerCapacity,
+  useOrgServers,
+  useServersUpdateStatus,
+} from '@/lib/queries/servers'
+import { queryKeys, useCan } from '@/lib/query-client'
+import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
+import {
+  resolveServerConnectionStatus,
+  serverConnectionStatusLabel,
+  serversPresenceRefetchMs,
+  type ServerConnectionStatus,
+} from '@/lib/server-connection-status'
+import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
+import { formatServerOsProductName } from '@/lib/server-os-display'
+import { chrome, colors, spacing } from '@/lib/theme'
+import { useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
+import { useRouter } from 'expo-router'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -13,50 +50,10 @@ import {
   type ImageStyle,
   type ViewStyle,
 } from 'react-native'
-import { useQueryClient } from '@tanstack/react-query'
-import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
-import { AddServerWizard } from '@/components/org/add-server-wizard'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import {
-  isForbiddenError,
-  type FleetServerUsageRecord,
-  type OrgServerRecord,
-  type RelayRecord,
-  type ServerOsLogoKey,
-  type ServerUpdateStatus,
-} from '@/lib/instance-api'
-import { serverDetailHref } from '@/lib/org-navigation'
-import {
-  useBatchTriggerServerUpdates,
-  useFleetServerUsage,
-  useOrgServerCapacity,
-  useOrgServers,
-  useServersUpdateStatus,
-  SERVERS_REFRESH_MS,
-} from '@/lib/queries/servers'
-import { useOrgFabric } from '@/lib/queries/fabric'
-import { useCan, queryKeys } from '@/lib/query-client'
-import { useAuth } from '@/lib/auth-context'
-import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
-import {
-  resolveServerConnectionStatus,
-  serverConnectionStatusLabel,
-  serversPresenceRefetchMs,
-  type ServerConnectionStatus,
-} from '@/lib/server-connection-status'
-import { osLogoSource } from '@/lib/os-logos'
-import { formatServerOsProductName } from '@/lib/server-os-display'
-import {
-  countryCodeToFlagEmoji,
-  formatServerGeoCountryName,
-} from '@/lib/server-geo'
-import { chrome, colors, spacing } from '@/lib/theme'
-import { ServerUsageBars } from '@/components/org/server-usage-bars'
 
 /** Group TurboFabric tp0 addresses by server — O(1) page-level fan-in. */
 function overlayByServerId(
-  relays: readonly Pick<RelayRecord, 'serverId' | 'address'>[],
+  relays: readonly Pick<RelayRecord, 'serverId' | 'address'>[]
 ): Map<string, string> {
   const result = new Map<string, string>()
   for (const relay of relays) {
@@ -89,7 +86,7 @@ function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
 
 function isColocatedServer(
   server: OrgServerRecord,
-  updateData?: ServerUpdateStatus | null,
+  updateData?: ServerUpdateStatus | null
 ): boolean {
   return (
     server.colocatedWithInstance === true ||
@@ -101,7 +98,7 @@ function isColocatedServer(
 function isServerUpdatable(
   server: OrgServerRecord,
   updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>,
+  triggeringServerIds: ReadonlySet<string>
 ): boolean {
   const data = updateByServerId.get(server.id)
   return (
@@ -114,10 +111,7 @@ function isServerUpdatable(
   )
 }
 
-function selectedUpdateButtonLabel(
-  batchUpdating: boolean,
-  selectedUpdatableCount: number,
-): string {
+function selectedUpdateButtonLabel(batchUpdating: boolean, selectedUpdatableCount: number): string {
   if (batchUpdating) return 'Updating…'
   if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
   return 'Update'
@@ -125,7 +119,7 @@ function selectedUpdateButtonLabel(
 
 function pruneSelectedServerIds(
   prev: Set<string>,
-  servers: readonly OrgServerRecord[],
+  servers: readonly OrgServerRecord[]
 ): Set<string> {
   if (prev.size === 0) return prev
   const next = new Set<string>()
@@ -162,18 +156,11 @@ function formatCoresTotal(value: number | null): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
-function memoryTotalFromUsage(
-  usage: FleetServerUsageRecord | undefined,
-): number | null {
+function memoryTotalFromUsage(usage: FleetServerUsageRecord | undefined): number | null {
   if (!usage || usage.sampleCount <= 0) return null
   const used = usage.values.memoryUsedBytes
   const available = usage.values.memoryAvailableBytes
-  if (
-    used == null ||
-    available == null ||
-    !Number.isFinite(used) ||
-    !Number.isFinite(available)
-  ) {
+  if (used == null || available == null || !Number.isFinite(used) || !Number.isFinite(available)) {
     return null
   }
   const total = used + available
@@ -198,14 +185,10 @@ function serverCpuThreads(server: OrgServerRecord): number | null {
 
 function serverMemoryTotal(
   server: OrgServerRecord,
-  usage: FleetServerUsageRecord | undefined,
+  usage: FleetServerUsageRecord | undefined
 ): number | null {
   const fromResources = server.resources?.memory?.totalBytes
-  if (
-    fromResources != null &&
-    Number.isFinite(fromResources) &&
-    fromResources > 0
-  ) {
+  if (fromResources != null && Number.isFinite(fromResources) && fromResources > 0) {
     return fromResources
   }
   return memoryTotalFromUsage(usage)
@@ -213,7 +196,7 @@ function serverMemoryTotal(
 
 function computeFleetCapacityTotals(
   servers: readonly OrgServerRecord[],
-  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>,
+  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
 ): {
   totalCores: number | null
   totalMemoryBytes: number | null
@@ -243,7 +226,7 @@ function computeFleetCapacityTotals(
 }
 
 function usageByServerIdMap(
-  rows: readonly FleetServerUsageRecord[] | undefined,
+  rows: readonly FleetServerUsageRecord[] | undefined
 ): Map<string, FleetServerUsageRecord> {
   const map = new Map<string, FleetServerUsageRecord>()
   for (const entry of rows ?? []) {
@@ -309,12 +292,7 @@ function SelectionCheckbox({
       hitSlop={8}
       style={styles.checkboxHit}
     >
-      <View
-        style={[
-          styles.checkbox,
-          (checked || indeterminate) && styles.checkboxChecked,
-        ]}
-      >
+      <View style={[styles.checkbox, (checked || indeterminate) && styles.checkboxChecked]}>
         {checkboxMark(checked, indeterminate)}
       </View>
     </Pressable>
@@ -333,9 +311,7 @@ function AddServerToolbarButton({
   return (
     <Pressable
       style={({ pressed }) => [
-        open
-          ? orgPanelStyles.toolbarBtnSecondary
-          : orgPanelStyles.toolbarBtnPrimary,
+        open ? orgPanelStyles.toolbarBtnSecondary : orgPanelStyles.toolbarBtnPrimary,
         disabled && styles.buttonDisabled,
         pressed && !disabled && styles.buttonPressed,
         webPointer,
@@ -344,11 +320,7 @@ function AddServerToolbarButton({
       onPress={onPress}
     >
       <Text
-        style={
-          open
-            ? orgPanelStyles.toolbarBtnTextSecondary
-            : orgPanelStyles.toolbarBtnTextPrimary
-        }
+        style={open ? orgPanelStyles.toolbarBtnTextSecondary : orgPanelStyles.toolbarBtnTextPrimary}
       >
         {open ? 'Close' : '+ Server'}
       </Text>
@@ -382,16 +354,10 @@ function ServersOverviewToolbar({
   if (!canOwn && !canManage) return null
 
   const addDisabled = !addServerEligibility.canAdd
-  const updateDisabled =
-    anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
+  const updateDisabled = anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
 
   return (
-    <View
-      style={[
-        styles.toolbarWrap,
-        selectedCount > 0 && styles.toolbarWrapPinned,
-      ]}
-    >
+    <View style={[styles.toolbarWrap, selectedCount > 0 && styles.toolbarWrapPinned]}>
       <View style={styles.toolbarRow}>
         {canOwn ? (
           <AddServerToolbarButton
@@ -402,16 +368,11 @@ function ServersOverviewToolbar({
         ) : null}
         {canManage ? (
           <TouchableOpacity
-            style={[
-              orgPanelStyles.toolbarBtnSecondary,
-              updateDisabled && styles.buttonDisabled,
-            ]}
+            style={[orgPanelStyles.toolbarBtnSecondary, updateDisabled && styles.buttonDisabled]}
             onPress={onTriggerSelectedUpdates}
             disabled={updateDisabled}
           >
-            {batchUpdating ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            ) : null}
+            {batchUpdating ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
             <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
               {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
             </Text>
@@ -424,9 +385,7 @@ function ServersOverviewToolbar({
       {selectedCount > 0 ? (
         <Text style={styles.selectionHint}>
           {selectedCount} selected
-          {selectedUpdatableCount > 0
-            ? ` · ${selectedUpdatableCount} updatable`
-            : ''}
+          {selectedUpdatableCount > 0 ? ` · ${selectedUpdatableCount} updatable` : ''}
         </Text>
       ) : null}
     </View>
@@ -434,13 +393,11 @@ function ServersOverviewToolbar({
 }
 
 function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
-  const osProduct =
-    formatServerOsProductName(server.os, server.osDisplay) ?? '—'
+  const osProduct = formatServerOsProductName(server.os, server.osDisplay) ?? '—'
   const logo = osLogoSource(resolveOsLogoKey(server))
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
-  const showHostname =
-    hostname != null && hostname.length > 0 && hostname !== title
+  const showHostname = hostname != null && hostname.length > 0 && hostname !== title
 
   return (
     <View style={[styles.tableCell, styles.colName]}>
@@ -558,9 +515,7 @@ function ServerUsageCell({
   )
 }
 
-function ServerMeshCell({
-  overlayAddress,
-}: Readonly<{ overlayAddress: string | null }>) {
+function ServerMeshCell({ overlayAddress }: Readonly<{ overlayAddress: string | null }>) {
   return (
     <View style={[styles.tableCell, styles.colMesh]}>
       <Text style={styles.meshText} numberOfLines={1}>
@@ -612,10 +567,7 @@ function OrgServerTableRow({
       <ServerNameCell server={server} />
       <ServerStatusCell server={server} />
       <ServerLocationCell server={server} />
-      <ServerUsageCell
-        usage={usage}
-        cpuCores={serverCpuThreads(server)}
-      />
+      <ServerUsageCell usage={usage} cpuCores={serverCpuThreads(server)} />
       <ServerMeshCell overlayAddress={overlayAddress} />
       <Pressable
         onPress={(event) => {
@@ -628,9 +580,7 @@ function OrgServerTableRow({
         accessibilityLabel={`Select ${serverTitle(server)}`}
         hitSlop={8}
       >
-        <View
-          style={[styles.checkbox, selected && styles.checkboxChecked]}
-        >
+        <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
           {checkboxMark(selected, false)}
         </View>
       </Pressable>
@@ -759,28 +709,22 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const servers = serversQuery.data?.servers ?? []
   const loading = serversQuery.isLoading
   const error = serversQuery.isError
-    ? serversRefreshErrorMessage(
-        serversQuery.error,
-        isForbiddenError(serversQuery.error),
-      )
+    ? serversRefreshErrorMessage(serversQuery.error, isForbiddenError(serversQuery.error))
     : null
 
   const usageByServerId = useMemo(
     () => usageByServerIdMap(fleetUsageQuery.data?.servers),
-    [fleetUsageQuery.data],
+    [fleetUsageQuery.data]
   )
 
   const fleetCapacity = useMemo(
     () => computeFleetCapacityTotals(servers, usageByServerId),
-    [servers, usageByServerId],
+    [servers, usageByServerId]
   )
 
   const addServerEligibility = useMemo(
-    () =>
-      resolveServerAddEligibility(
-        capacityQuery.isError ? undefined : capacityQuery.data,
-      ),
-    [capacityQuery.data, capacityQuery.isError],
+    () => resolveServerAddEligibility(capacityQuery.isError ? undefined : capacityQuery.data),
+    [capacityQuery.data, capacityQuery.isError]
   )
 
   const updateByServerId = useMemo(() => {
@@ -804,11 +748,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       }
     }
     return ids
-  }, [
-    batchUpdateMutation.isPending,
-    batchUpdateMutation.variables,
-    updatesQuery.data,
-  ])
+  }, [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data])
 
   useEffect(() => {
     setSelectedIds((prev) => pruneSelectedServerIds(prev, servers))
@@ -818,7 +758,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     const targets = servers.filter(
       (server) =>
         selectedIds.has(server.id) &&
-        isServerUpdatable(server, updateByServerId, triggeringServerIds),
+        isServerUpdatable(server, updateByServerId, triggeringServerIds)
     )
     if (targets.length === 0) return
     batchUpdateMutation.mutate(targets.map((server) => server.id))
@@ -826,12 +766,10 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const selectedUpdatableCount = servers.filter(
     (server) =>
-      selectedIds.has(server.id) &&
-      isServerUpdatable(server, updateByServerId, triggeringServerIds),
+      selectedIds.has(server.id) && isServerUpdatable(server, updateByServerId, triggeringServerIds)
   ).length
 
-  const allSelected =
-    servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
+  const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
   const someSelected = selectedIds.size > 0 && !allSelected
 
   const toggleSelectAll = (): void => {
@@ -852,8 +790,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const batchUpdating = batchUpdateMutation.isPending
-  const anyUpdateInProgress =
-    batchUpdating || triggeringServerIds.size > 0
+  const anyUpdateInProgress = batchUpdating || triggeringServerIds.size > 0
 
   const refreshServersList = (): void => {
     queryClient.invalidateQueries({
@@ -865,7 +802,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Servers overview</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Select hosts to update, or open a server for its control panel.
+        Select hosts pdate, or open a server for its control panel.
       </Text>
 
       {!loading || servers.length > 0 ? (

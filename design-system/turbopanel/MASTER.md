@@ -157,6 +157,13 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 - SVG only (Lucide / Expo Symbols / Simple Icons for OS logos) — **never emoji as icons**  
 - Consistent stroke weight; status dots are geometric, not emoji
 
+### Bottom tab bar (native)
+
+- Glass chrome (`GlassSurface` intensity strong) with a hairline top border
+- ≥44px touch targets (`layout.bottomTabHeight`); icon + label per tab (never icon-only)
+- Active: `chrome.accent` plus a thin top indicator bar — never colour-only
+- Bottom safe-area inset is owned by the bar (shell SafeAreaView omits the bottom edge)
+
 ---
 
 ## Style Guidelines
