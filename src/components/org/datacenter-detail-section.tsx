@@ -822,8 +822,8 @@ export function DatacenterDetailSection({
           setError(null)
           updateMutation.mutate(
             {
-              displayName: identityName.trim() || null,
-              description: identityDescription.trim() || null,
+              displayName: identityName.trim(),
+              description: identityDescription.trim(),
             },
             {
               onSuccess: () => {
