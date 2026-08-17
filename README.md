@@ -42,11 +42,16 @@ Read [AGENTS.md](./AGENTS.md) before visual work — the **ui-ux-pro-max** skill
 
 Use the [TurboPanel Development Environment](https://github.com/turbopanel/dev) to run the full co-located stack:
 
+Clone the six sibling repos (including this one), then from the `dev` checkout:
+
 ```sh
-curl -fsSL dev.turbopanel.sh | sh
+vagrant up
+vagrant ssh
+# inside guest:
+cd ~/dev && ./console
 ```
 
-Then edit this repo under `~/ui`. See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
+Then edit this repo on the host (mounted into the guest at `~/ui`). See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
 
 Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trunk/CONTRIBUTING.md)
 
