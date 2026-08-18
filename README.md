@@ -48,7 +48,7 @@ Clone the six sibling repos (including this one), then from the `dev` checkout:
 vagrant up
 vagrant ssh
 # inside guest:
-cd ~/dev && ./console
+dev/console
 ```
 
 Then edit this repo on the host (mounted into the guest at `~/ui`). See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
