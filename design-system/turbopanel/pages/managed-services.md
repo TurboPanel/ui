@@ -68,17 +68,19 @@ Submit: `POST /projects` (`type: 'managed'`) → Production env → `POST …/ma
 Topology rows ordered primary first then `ordinal`:
 
 ```
-● Primary   web-01 · Frankfurt · Same server        Running
-● Replica   web-04 · Frankfurt · Same site   Reads  Streaming · 1.4 MB behind
-○ Replica   edge-02 · Ashburn  · TurboFabric        Catching up · 22s behind
+● Primary            web-01 · Frankfurt · Local                 Running
+● Replica · Failover web-04 · Frankfurt · Datacenter LAN Reads  Streaming · 1.4 MB behind
+○ Replica · Read-only edge-02 · Ashburn · TurboFabric direct     Catching up · 22s behind
 ```
 
-- Transport vocabulary: **Same server** / **Same site** / **TurboFabric**
-- Max **2 replicas** (`MANAGED_MAX_REPLICAS`)
-- **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `no-private-cidr`) with **Set up private network** links for network reasons — never silent disable
+- `[ Failover ] [ Read-only ]` selector on add (default Failover)
+- Transport vocabulary: **Local** / **Datacenter LAN** / **TurboFabric direct** / **Public Internet + TLS**
+- Unbounded replicas (no max-2 cap)
+- Failover: only servers sharing the primary's datacenter with a usable subnet; Read-only: any org server
+- **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `no-private-cidr` / `no-private-path`) with **Set up private network** links for network reasons — never silent disable
 - **Reads** chip toggles `readEligible` (manage-gated)
 - Remove replica = two-press (destroys replica data volume)
-- **Promote** = typed confirmation (managed/project display name); writes pause during switch. On lag-gate `409` codes, show lag/state then separate **Promote anyway** (`force: true`). On `managed_primary_fence_failed`, surface fence failure — do not auto-retry.
+- **Promote** is failover-only; Read-only rows show **Convert to failover** (two-press) first. On lag-gate `409` codes, show lag/state then separate **Promote anyway** (`force: true`). On `managed_primary_fence_failed`, surface fence failure — do not auto-retry.
 
 ### Connection (Connect)
 

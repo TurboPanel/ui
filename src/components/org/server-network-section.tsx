@@ -136,7 +136,9 @@ function ServerMeshMembershipPanel({
             </Text>
           </Pressable>
           <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>tp0: </Text>
+            <Text style={orgPanelStyles.detailLabel}>
+              TurboFabric address:{' '}
+            </Text>
             <Text style={styles.mono} selectable>
               {relay.address}
             </Text>

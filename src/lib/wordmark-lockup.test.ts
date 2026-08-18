@@ -41,4 +41,11 @@ describe('computeTurboPanelWordmarkLockup', () => {
 
     expect(lockup.lockupWidth).toBe(lockup.markWidth)
   })
+
+  it('scales console lockup geometry for smaller sizes', () => {
+    const large = consoleWordmarkLockup(TURBOPANEL_WORDMARK_CHROME_SIZE.console.default)
+    const small = consoleWordmarkLockup(24)
+    expect(small.lockupHeight).toBeLessThan(large.lockupHeight)
+    expect(small.wordSize).toBeGreaterThan(0)
+  })
 })

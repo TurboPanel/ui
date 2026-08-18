@@ -61,6 +61,9 @@ certs/
 # typescript
 *.tsbuildinfo
 
+# Vitest coverage (`pnpm test:coverage` → coverage/lcov.info)
+coverage/
+
 example
 
 # generated native folders

@@ -1,25 +1,39 @@
 name: Verify
 
 on:
-  pull_request:
-    branches:
-      - trunk
   push:
     branches:
       - trunk
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
 
 jobs:
+  # Lint + typecheck + Vitest LCOV, then Sonar quality gate. If Sonar fails,
+  # the workflow stops. Automatic Analysis must stay off
+  # (Administration → Analysis Method).
   verify:
     runs-on: ubuntu-latest
     concurrency:
-      group: ui-verify-${{ github.event_name }}-${{ github.ref }}
+      group: ui-sonar-${{ github.event_name }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          # Full history for SonarCloud new-code / blame (shallow clones skew the gate).
+          fetch-depth: 0
+
+      - name: Require SONAR_TOKEN
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::error::SONAR_TOKEN is missing — add the secret on turbopanel/ui (or org)."
+            exit 1
+          fi
 
       - name: Install pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -39,5 +53,21 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
+      - name: Test with coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage LCOV
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true

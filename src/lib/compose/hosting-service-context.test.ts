@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { yamlToComposeDocument } from './convert'
 import {
   hostingDockerBridgeHint,
+  hostingPathPrefixHint,
   hostingPhpSectionCopy,
   hostingServiceKindLabel,
   hostingWebEnvSectionCopy,
+  readComposeServiceMap,
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
   traditionalWebEnvKeyForService,
 } from './hosting-service-context'
+import type { ComposeDocument } from './types'
 
 describe('traditionalWebEnvKeyForService', () => {
   it('sanitizes compose service names like the daemon', () => {
@@ -88,5 +91,99 @@ describe('shouldRevealOptionalHostingFields', () => {
     expect(shouldRevealOptionalHostingFields(false, false)).toBe(false)
     expect(shouldRevealOptionalHostingFields(false, true)).toBe(true)
     expect(shouldRevealOptionalHostingFields(true, false)).toBe(true)
+  })
+})
+
+describe('readComposeServiceMap', () => {
+  it('skips non-object service entries', () => {
+    const document: ComposeDocument = {
+      version: 1,
+      data: {
+        services: {
+          valid: { image: 'nginx' },
+          invalid: 'not-a-map',
+        },
+      },
+      presentation: { keyOrder: [], comments: {} },
+    }
+    expect(readComposeServiceMap(document)).toEqual({
+      valid: { image: 'nginx' },
+    })
+    expect(readComposeServiceMap({ ...document, data: {} })).toEqual({})
+  })
+})
+
+describe('resolveHostingServiceContext edge cases', () => {
+  it('defaults missing services to container context', () => {
+    const document = yamlToComposeDocument(`services:
+  web:
+    image: nginx
+`)
+    const missing = resolveHostingServiceContext(document, 'missing')
+    expect(missing.kind).toBe('container')
+    expect(missing.engine).toBeUndefined()
+    expect(missing.traditionalSiblingNames).toEqual([])
+    expect(hostingServiceKindLabel(missing)).toBe('Container')
+    expect(hostingPhpSectionCopy(missing).showFields).toBe(false)
+    expect(hostingWebEnvSectionCopy(missing).showFields).toBe(false)
+    expect(hostingDockerBridgeHint(missing)).toBeNull()
+  })
+
+  it('uses nginx defaults for traditional-web without an explicit engine', () => {
+    const document = yamlToComposeDocument(`services:
+  site:
+    x-turbopanel:
+      serviceKind: traditional-web
+      root: public
+`)
+    const nginx = resolveHostingServiceContext(document, 'site')
+    expect(nginx.engine).toBe('nginx')
+    expect(nginx.webEnvMode).toBe('file_only')
+    expect(hostingServiceKindLabel(nginx)).toBe('Traditional web · nginx')
+    expect(hostingPhpSectionCopy(nginx).showFields).toBe(false)
+    expect(hostingWebEnvSectionCopy(nginx).showFields).toBe(true)
+  })
+})
+
+describe('hosting copy helpers', () => {
+  it('lists siblings in the path-prefix hint when present', () => {
+    const withSiblings = resolveHostingServiceContext(
+      yamlToComposeDocument(`services:
+  api:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: apache
+  static:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: nginx
+`),
+      'api',
+    )
+    expect(hostingPathPrefixHint(withSiblings)).toContain('static')
+
+    const alone = resolveHostingServiceContext(
+      yamlToComposeDocument(`services:
+  api:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: apache
+`),
+      'api',
+    )
+    expect(hostingPathPrefixHint(alone)).not.toContain('Other traditional-web')
+  })
+
+  it('covers container PHP and web-env copy branches', () => {
+    const container = resolveHostingServiceContext(
+      yamlToComposeDocument(`services:
+  app:
+    image: node:22
+`),
+      'app',
+    )
+    expect(hostingPhpSectionCopy(container).title).toBe('PHP settings')
+    expect(hostingPhpSectionCopy(container).hint).toContain('Containers use their image runtime')
+    expect(hostingWebEnvSectionCopy(container).hint).toContain('Hosting variables')
   })
 })

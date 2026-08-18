@@ -527,8 +527,11 @@ function invalidateManagedMembers(
 export function useAddManagedReplica(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { serverId: string; readEligible?: boolean }) =>
-      addManagedReplica(environmentId, body),
+    mutationFn: (body: {
+      serverId: string
+      replicaClass?: 'failover' | 'read'
+      readEligible?: boolean
+    }) => addManagedReplica(environmentId, body),
     onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
   })
 }
@@ -542,6 +545,23 @@ export function useUpdateManagedMemberReadEligible(
     mutationFn: (input: { memberId: string; readEligible: boolean }) =>
       updateManagedMember(environmentId, input.memberId, {
         readEligible: input.readEligible,
+      }),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function useUpdateManagedMemberReplicaClass(
+  orgId: string,
+  environmentId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (input: {
+      memberId: string
+      replicaClass: 'failover' | 'read'
+    }) =>
+      updateManagedMember(environmentId, input.memberId, {
+        replicaClass: input.replicaClass,
       }),
     onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
   })

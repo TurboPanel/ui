@@ -3,11 +3,14 @@ import type { EnvironmentRecord, ProjectRecord, WorkspaceRecord } from './instan
 import {
   findServerIngressEnvironment,
   findTurbopanelWorkspace,
+  isSystemOperateComponent,
   isTurbopanelProject,
   isTurbopanelWorkspace,
   SYSTEM_HOSTING_INGRESS_COMPONENT,
+  SYSTEM_MANAGED_INGRESS_COMPONENT,
   TURBOPANEL_WORKSPACE_BADGE_LABEL,
   systemComponentKey,
+  systemComponentLabel,
   userWorkspaces,
 } from './system-inventory'
 
@@ -81,6 +84,8 @@ describe('system-inventory', () => {
     expect(isTurbopanelProject(platformProject, workspaces)).toBe(true)
     expect(isTurbopanelProject(platformProject, 'turbopanel')).toBe(true)
     expect(isTurbopanelProject(userProject, 'user')).toBe(false)
+    expect(isTurbopanelProject(platformProject, null)).toBe(false)
+    expect(isTurbopanelProject(platformProject, undefined)).toBe(false)
   })
 
   it('systemComponentKey reads metadata.component', () => {
@@ -94,6 +99,24 @@ describe('system-inventory', () => {
         }),
       ),
     ).toBe('hosting-ingress')
+    expect(
+      systemComponentKey(
+        project({
+          id: 'p3',
+          workspaceId: 'w',
+          metadata: { component: '   ' },
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      systemComponentKey(
+        project({
+          id: 'p4',
+          workspaceId: 'w',
+          metadata: { component: 42 as unknown as string },
+        }),
+      ),
+    ).toBeNull()
   })
 
   it('findServerIngressEnvironment matches on serverId', () => {
@@ -123,5 +146,27 @@ describe('system-inventory', () => {
     ]
     expect(findServerIngressEnvironment(environments, 'srv-b')?.id).toBe('env-b')
     expect(findServerIngressEnvironment(environments, 'missing')).toBeNull()
+    expect(findServerIngressEnvironment(environments, '')).toBeNull()
+  })
+
+  it('systemComponentLabel maps known keys and falls back for unknowns', () => {
+    expect(systemComponentLabel(SYSTEM_HOSTING_INGRESS_COMPONENT)).toBe(
+      'Hosting ingress',
+    )
+    expect(systemComponentLabel(SYSTEM_MANAGED_INGRESS_COMPONENT)).toBe(
+      'Database ingress',
+    )
+    expect(systemComponentLabel('turbopanel')).toBe('TurboPanel')
+    expect(systemComponentLabel('custom-component')).toBe('custom-component')
+    expect(systemComponentLabel('  ')).toBe('—')
+    expect(systemComponentLabel(null)).toBe('—')
+    expect(systemComponentLabel(undefined)).toBe('—')
+  })
+
+  it('isSystemOperateComponent allowlists restartable components', () => {
+    expect(isSystemOperateComponent(SYSTEM_HOSTING_INGRESS_COMPONENT)).toBe(true)
+    expect(isSystemOperateComponent(SYSTEM_MANAGED_INGRESS_COMPONENT)).toBe(true)
+    expect(isSystemOperateComponent('turbopanel')).toBe(false)
+    expect(isSystemOperateComponent('redis')).toBe(false)
   })
 })

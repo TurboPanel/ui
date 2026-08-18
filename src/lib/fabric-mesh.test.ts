@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { RelayRecord } from './instance-api'
 import {
+  buildFabricPathMatrix,
+  fabricPathIsDegraded,
+  fabricPathKindLabel,
+  fabricRoutedViaLabels,
   formatResolvedAdvertisedCidrs,
   formatSiteLinkLabel,
   meshLabelForSite,
@@ -25,6 +29,11 @@ function relay(
     segments: [],
     prefix: 'tp',
     lastHandshakeAt: null,
+    paths: [],
+    allowRelay: null,
+    effectiveAllowRelay: false,
+    preferredGatewayIds: [],
+    gatewayEligible: partial.role === 'gateway',
     ...partial,
   }
 }
@@ -199,5 +208,164 @@ describe('formatResolvedAdvertisedCidrs', () => {
 
   it('labels an empty derived list', () => {
     expect(formatResolvedAdvertisedCidrs([])).toBe('none')
+  })
+})
+
+describe('fabricPathKindLabel', () => {
+  it('maps the six path states', () => {
+    expect(fabricPathKindLabel('direct_lan')).toBe('Direct')
+    expect(fabricPathKindLabel('direct_public')).toBe('Direct')
+    expect(fabricPathKindLabel('direct_nat')).toBe('NAT direct')
+    expect(fabricPathKindLabel('gateway')).toBe('Gateway')
+    expect(fabricPathKindLabel('relay')).toBe('Relayed')
+    expect(fabricPathKindLabel('unreachable')).toBe('Unreachable')
+  })
+})
+
+describe('fabricPathIsDegraded', () => {
+  it('treats relay as always degraded', () => {
+    expect(fabricPathIsDegraded({ kind: 'relay', degraded: false })).toBe(true)
+  })
+
+  it('honors the stamped degraded flag for other kinds', () => {
+    expect(fabricPathIsDegraded({ kind: 'direct_lan', degraded: true })).toBe(
+      true,
+    )
+    expect(fabricPathIsDegraded({ kind: 'gateway' })).toBe(false)
+  })
+})
+
+describe('buildFabricPathMatrix', () => {
+  const names = new Map([
+    ['srv-a', 'Server A'],
+    ['srv-b', 'Server B'],
+    ['srv-c', 'Server C'],
+    ['srv-d', 'Server D'],
+    ['srv-e', 'Server E'],
+    ['srv-f', 'Server F'],
+    ['srv-gw', 'dc-gw-1'],
+  ])
+
+  it('flattens direct, gateway, relay, and unreachable rows with via labels', () => {
+    const rows = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-a',
+          role: 'member',
+          paths: [
+            {
+              peerServerId: 'srv-e',
+              selected: 'relay',
+              latencyMs: 93,
+              degraded: false,
+            },
+            {
+              peerServerId: 'srv-c',
+              selected: 'direct_nat',
+              latencyMs: 31,
+              degraded: false,
+            },
+            {
+              peerServerId: 'srv-f',
+              selected: 'unreachable',
+              degraded: true,
+            },
+            {
+              peerServerId: 'srv-d',
+              selected: 'gateway',
+              viaServerId: 'srv-gw',
+              latencyMs: 44,
+              degraded: false,
+            },
+            {
+              peerServerId: 'srv-b',
+              selected: 'direct_lan',
+              endpoint: '10.0.0.2:51821',
+              latencyMs: 18,
+              degraded: false,
+            },
+          ],
+        }),
+      ],
+      names,
+    )
+    expect(rows.map((row) => `${row.fromLabel}→${row.toLabel}`)).toEqual([
+      'Server A→Server B',
+      'Server A→Server C',
+      'Server A→Server D',
+      'Server A→Server E',
+      'Server A→Server F',
+    ])
+    expect(rows[0]).toMatchObject({
+      kind: 'direct_lan',
+      endpoint: '10.0.0.2:51821',
+      latencyMs: 18,
+      degraded: false,
+    })
+    expect(rows[1]?.kind).toBe('direct_nat')
+    expect(rows[2]).toMatchObject({
+      kind: 'gateway',
+      viaServerId: 'srv-gw',
+      viaLabel: 'dc-gw-1',
+      latencyMs: 44,
+    })
+    expect(rows[3]).toMatchObject({ kind: 'relay', degraded: true })
+    expect(rows[4]).toMatchObject({
+      kind: 'unreachable',
+      degraded: true,
+    })
+    expect(rows[4]?.latencyMs).toBeUndefined()
+  })
+
+  it('falls back to the server id when a name is missing', () => {
+    const rows = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-unknown',
+          role: 'member',
+          paths: [
+            {
+              peerServerId: 'srv-b',
+              selected: 'direct_public',
+              degraded: false,
+            },
+          ],
+        }),
+      ],
+      names,
+    )
+    expect(rows[0]?.fromLabel).toBe('srv-unknown')
+    expect(rows[0]?.toLabel).toBe('Server B')
+  })
+})
+
+describe('fabricRoutedViaLabels', () => {
+  it('collects unique gateway via labels', () => {
+    expect(
+      fabricRoutedViaLabels(
+        {
+          paths: [
+            {
+              peerServerId: 'srv-b',
+              selected: 'gateway',
+              viaServerId: 'srv-gw',
+              degraded: false,
+            },
+            {
+              peerServerId: 'srv-c',
+              selected: 'direct_lan',
+              degraded: false,
+            },
+            {
+              peerServerId: 'srv-d',
+              selected: 'gateway',
+              viaServerId: 'srv-gw',
+              degraded: false,
+            },
+          ],
+        },
+        new Map([['srv-gw', 'dc-gw-1']]),
+      ),
+    ).toEqual(['dc-gw-1'])
   })
 })

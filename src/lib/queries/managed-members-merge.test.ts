@@ -13,6 +13,9 @@ function member(
     serverId: overrides.serverId ?? 'server-1',
     serverDisplayName: overrides.serverDisplayName ?? 'host',
     role: overrides.role ?? 'primary',
+    replicaClass:
+      overrides.replicaClass ??
+      (overrides.role === 'replica' ? 'failover' : null),
     readEligible: overrides.readEligible ?? true,
     ordinal: overrides.ordinal ?? 1,
     status: overrides.status ?? 'provisioning',
@@ -38,6 +41,7 @@ describe('mergeManagedMembers', () => {
         memberId: 'm1',
         serverId: 'server-1',
         role: 'primary',
+        replicaClass: null,
         status: 'failed',
         replicationTransport: null,
         privatePort: null,

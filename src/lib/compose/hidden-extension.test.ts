@@ -112,6 +112,61 @@ x-turbopanel:
     expect(hiddenTraditionalWebServiceNames(hidden)).toEqual(['site'])
   })
 
+  it('stashes presentation comments and blank lines on extension paths', () => {
+    const full = yamlToComposeDocument(`services:
+  site:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: nginx
+  web:
+    image: nginx
+`)
+    full.presentation.comments = {
+      ...full.presentation.comments,
+      'x-turbopanel': { before: 'root ext' },
+      'services.site.x-turbopanel': { keyBefore: 'service ext' },
+      'services.web.image': { inline: 'keep' },
+    }
+    full.presentation.blankLines = {
+      'x-turbopanel#key': 1,
+      'services.site.x-turbopanel#key': 1,
+      'services.web.image#key': 1,
+    }
+
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+    expect(hidden.comments['x-turbopanel']).toEqual({ before: 'root ext' })
+    expect(hidden.comments['services.site.x-turbopanel']).toEqual({
+      keyBefore: 'service ext',
+    })
+    expect(hidden.blankLines['x-turbopanel#key']).toBe(1)
+    expect(visible.presentation.comments['x-turbopanel']).toBeUndefined()
+    expect(visible.presentation.comments['services.web.image']?.inline).toBe('keep')
+    expect(visible.presentation.blankLines?.['services.web.image#key']).toBe(1)
+
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(restored.presentation.comments['x-turbopanel']).toEqual(
+      hidden.comments['x-turbopanel'],
+    )
+    expect(restored.presentation.comments['services.site.x-turbopanel']).toEqual(
+      hidden.comments['services.site.x-turbopanel'],
+    )
+    expect(restored.presentation.blankLines?.['x-turbopanel#key']).toBe(1)
+  })
+
+  it('skips non-record service values and clears root when hidden has none', () => {
+    const full = yamlToComposeDocument(`services:
+  broken: not-a-map
+  web:
+    image: nginx
+`)
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+    expect(composeDocumentToYaml(visible)).toContain('broken: not-a-map')
+
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(restored.data['x-turbopanel']).toBeUndefined()
+    expect(restored.presentation.keyOrder).not.toContain('x-turbopanel')
+  })
+
   it('platform shadow wins over author-typed x-turbopanel', () => {
     const full = yamlToComposeDocument(`services:
   app:
@@ -135,5 +190,18 @@ x-turbopanel:
       serviceKind: 'container',
       description: 'Original',
     })
+  })
+
+  it('filters non-traditional-web services from hiddenTraditionalWebServiceNames', () => {
+    const hidden = {
+      services: {
+        site: { serviceKind: 'traditional-web', engine: 'nginx' },
+        api: { serviceKind: 'container' },
+        broken: 'not-an-object',
+      },
+      comments: {},
+      blankLines: {},
+    }
+    expect(hiddenTraditionalWebServiceNames(hidden)).toEqual(['site'])
   })
 })

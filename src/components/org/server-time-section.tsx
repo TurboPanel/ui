@@ -17,7 +17,11 @@ import {
   type ServerDetailRecord,
 } from '@/lib/instance-api'
 import { formatLocalDateTime } from '@/lib/format-datetime'
-import { orgRouteHref } from '@/lib/org-navigation'
+import {
+  configuredSourceLabel,
+  formatNtpHostList,
+} from '@/lib/host-defaults'
+import { datacenterHref, orgRouteHref } from '@/lib/org-navigation'
 import {
   useSetServerNtp,
   useSetServerTimezone,
@@ -34,10 +38,21 @@ function parseHostList(raw: string): string[] {
     .filter((part) => part.length > 0)
 }
 
-function timezoneSourceLabel(source: ServerDetailRecord['timezoneSource']): string {
-  if (source === 'server') return 'Server override'
-  if (source === 'organization') return 'Organization default'
-  return 'Not set'
+function timezoneDisabledReason(
+  canManage: boolean,
+  connected: boolean,
+  enforceServerTimezone: boolean,
+  datacenterEnforceServerTimezone: boolean,
+): string | null {
+  if (!canManage) return 'Organization manage permission required.'
+  if (!connected) return 'Daemon must be online to change timezone.'
+  if (datacenterEnforceServerTimezone) {
+    return 'Datacenter enforces its default timezone for member servers.'
+  }
+  if (enforceServerTimezone) {
+    return 'Organization enforces its default timezone for all servers.'
+  }
+  return null
 }
 
 function ntpSyncLabel(synced: boolean | undefined): string {
@@ -46,17 +61,17 @@ function ntpSyncLabel(synced: boolean | undefined): string {
   return 'Unknown'
 }
 
-function timezoneDisabledReason(
-  canManage: boolean,
-  connected: boolean,
-  enforceServerTimezone: boolean,
-): string | null {
-  if (!canManage) return 'Organization manage permission required.'
-  if (!connected) return 'Daemon must be online to change timezone.'
-  if (enforceServerTimezone) {
-    return 'Organization enforces its default timezone for all servers.'
-  }
-  return null
+function initialNtpEnabled(server: ServerDetailRecord): boolean {
+  if (server.timeSync?.ntpEnabled != null) return server.timeSync.ntpEnabled
+  return server.ntpDefaults?.enabled === true
+}
+
+function initialNtpHosts(
+  observed: string[] | undefined,
+  inherited: string[] | undefined,
+): string {
+  if (observed && observed.length > 0) return observed.join(', ')
+  return formatNtpHostList(inherited)
 }
 
 function ntpDisabledReason(canManage: boolean, connected: boolean): string | null {
@@ -190,6 +205,7 @@ function TimezoneSettingsPanel({
 }>) {
   const router = useRouter()
   const applyDisabled = formsDisabled || !pickedTimezone || Boolean(disabledReason)
+  const datacenterId = server.datacenters[0]?.id
 
   return (
     <SectionPanel title="Timezone" hint="Effective timezone on this host">
@@ -198,13 +214,24 @@ function TimezoneSettingsPanel({
         <Text style={styles.mono}>{server.timezone ?? 'Not set'}</Text>
       </Text>
       <Text style={orgPanelStyles.muted}>
-        Source: {timezoneSourceLabel(server.timezoneSource)}
+        Source: {configuredSourceLabel(server.timezoneSource)}
       </Text>
 
       {disabledReason ? (
         <Text style={orgPanelStyles.muted}>{disabledReason}</Text>
       ) : null}
-      {server.enforceServerTimezone ? (
+      {server.datacenterEnforceServerTimezone && datacenterId ? (
+        <Pressable
+          onPress={() =>
+            router.push(datacenterHref(orgId, datacenterId))
+          }
+          style={webPointer}
+        >
+          <Text style={styles.linkText}>Open datacenter timezone settings</Text>
+        </Pressable>
+      ) : null}
+      {!server.datacenterEnforceServerTimezone &&
+      server.enforceServerTimezone ? (
         <Pressable
           onPress={() =>
             router.push(orgRouteHref(orgId, 'servers', 'settings') as `/${string}/servers/settings`)
@@ -252,6 +279,7 @@ function NtpSettingsPanel({
   ntpEnabled,
   ntpServersText,
   fallbackText,
+  defaultsHint,
   formsDisabled,
   disabledReason,
   submitting,
@@ -266,6 +294,7 @@ function NtpSettingsPanel({
   ntpEnabled: boolean
   ntpServersText: string
   fallbackText: string
+  defaultsHint: string
   formsDisabled: boolean
   disabledReason: string | null
   submitting: boolean
@@ -279,6 +308,7 @@ function NtpSettingsPanel({
 }>) {
   return (
     <SectionPanel title="NTP configuration" hint="Pushed to the daemon via command">
+      <Text style={orgPanelStyles.muted}>{defaultsHint}</Text>
       {disabledReason ? (
         <Text style={orgPanelStyles.muted}>{disabledReason}</Text>
       ) : null}
@@ -377,12 +407,15 @@ export function ServerTimeSection({
   const [timezoneError, setTimezoneError] = useState<string | null>(null)
   const [timezoneSubmitting, setTimezoneSubmitting] = useState(false)
 
-  const [ntpEnabled, setNtpEnabled] = useState(timeSync?.ntpEnabled === true)
-  const [ntpServersText, setNtpServersText] = useState(
-    (timeSync?.ntpServers ?? []).join(', '),
+  const [ntpEnabled, setNtpEnabled] = useState(() => initialNtpEnabled(server))
+  const [ntpServersText, setNtpServersText] = useState(() =>
+    initialNtpHosts(timeSync?.ntpServers, server.ntpDefaults?.servers),
   )
-  const [fallbackText, setFallbackText] = useState(
-    (timeSync?.fallbackNtpServers ?? []).join(', '),
+  const [fallbackText, setFallbackText] = useState(() =>
+    initialNtpHosts(
+      timeSync?.fallbackNtpServers,
+      server.ntpDefaults?.fallbackServers,
+    ),
   )
   const [ntpError, setNtpError] = useState<string | null>(null)
   const [ntpSubmitting, setNtpSubmitting] = useState(false)
@@ -393,8 +426,14 @@ export function ServerTimeSection({
         canManage,
         server.connected,
         Boolean(server.enforceServerTimezone),
+        Boolean(server.datacenterEnforceServerTimezone),
       ),
-    [canManage, server.connected, server.enforceServerTimezone],
+    [
+      canManage,
+      server.connected,
+      server.enforceServerTimezone,
+      server.datacenterEnforceServerTimezone,
+    ],
   )
 
   const timezoneFormsDisabled =
@@ -407,6 +446,10 @@ export function ServerTimeSection({
     () => ntpDisabledReason(canManage, server.connected),
     [canManage, server.connected],
   )
+
+  const ntpDefaultsHint = server.ntpDefaultsSource
+    ? `Desired default from ${configuredSourceLabel(server.ntpDefaultsSource).toLowerCase()}.`
+    : 'No inherited NTP default.'
 
   const ntpFormsDisabled =
     ntpCommandInFlight ||
@@ -483,6 +526,7 @@ export function ServerTimeSection({
         ntpEnabled={ntpEnabled}
         ntpServersText={ntpServersText}
         fallbackText={fallbackText}
+        defaultsHint={ntpDefaultsHint}
         formsDisabled={ntpFormsDisabled}
         disabledReason={ntpReason}
         submitting={ntpSubmitting}

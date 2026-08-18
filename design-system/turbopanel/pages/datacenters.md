@@ -56,9 +56,11 @@
    - **Delete subnet**: two-press confirm; disabled while `memberCount > 0` (“Unassign the pinned servers first.”); **409** `subnet_has_members` uses the same copy
 3. **Routing / address preference** — `segmentGroup` **Prefer IPv6** / **Prefer IPv4** (default IPv6 when `options.addressPreference` is absent). One muted note: “Only applies when both servers have an address in the same datacenter in both families.” Save via `PATCH /datacenters/:id` with `mergeDatacenterOptions` so timezone is not clobbered
 4. **Member servers** — rows from detail `members[]` joined to `useOrgServers` (a server may appear multiple times). Each pin: selectable monospace address, IPv4/IPv6 badge, owning subnet CIDR (`networkId`, fallback `subnetForAddress`). Hint `{pins} pins · {servers} servers`. Picker: `listServersWithCandidateAddresses` / `candidateMemberNetworks` — both families, no CIDR gate, `FormSelect` only. Quiet note when the chosen address matches no subnet: “Adds a new subnet {cidr} to this datacenter.” Unassign removes **all** pins for that server in this datacenter (announce when the server holds more than one). **409** `address_in_use` → “That address is already pinned.”
-5. **TurboFabric** — relays in this datacenter (role, tp0, other datacenters, **Primary** badge); empty: no relays here (**manage-gated**); rows deep-link to `/network/fabric`. Missing-subnet warning when the datacenter has no subnets
+5. **TurboFabric** — relays in this datacenter (role, tp0, other datacenters, **Primary** badge, **Via** when a `gateway`-kind path is selected); empty: no relays here (**manage-gated**); rows deep-link to `/network/fabric`. Missing-subnet warning when the datacenter has no subnets
 6. **Timezone** — picker + enforce toggle; save through `mergeDatacenterOptions` so address preference survives
-7. **Delete** — two-press confirm when pin count (`members.length`) is 0; disabled while any pin remains
+7. **SSH port** — optional override (empty inherits org, then 22); save through `mergeDatacenterOptions`. Desired config only — does not rewrite sshd
+8. **NTP defaults** — enabled + servers + fallback; empty+off inherits org; **Clear (inherit)** sends `ntp: null`. Apply still happens on each server Time tab
+9. **Delete** — two-press confirm when pin count (`members.length`) is 0; disabled while any pin remains
 
 Keep labels and empty states short. Do not add how-it-works paragraphs on these panels.
 
@@ -74,7 +76,7 @@ Keep labels and empty states short. Do not add how-it-works paragraphs on these 
 - ❌ Server/IP selection as chip buttons (use `FormSelect`)
 - ❌ Status conveyed by color alone
 - ❌ Using singular `server.datacenterId` / `assignServerIds` (retired)
-- ❌ Saving timezone or address preference without merging `options` (`PATCH` replaces the blob)
+- ❌ Saving timezone, address preference, SSH port, or NTP without merging `options` (`PATCH` replaces the blob)
 
 ## Tokens
 

@@ -11,6 +11,7 @@ import {
 } from '@/lib/instance-api'
 import { useTimezones } from '@/lib/queries/servers'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -71,7 +72,8 @@ export function ServerTimezoneSettingsSection({
       <Text style={styles.heading}>Server fleet settings</Text>
       <Text style={styles.copy}>
         Default timezone applied to new hosts and optionally enforced across the
-        fleet. Per-server overrides live on each host&apos;s Time tab unless
+        fleet. SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference sit in
+        Host defaults below. Per-server overrides live on each host unless
         enforcement is on.
       </Text>
 

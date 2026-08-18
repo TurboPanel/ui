@@ -35,4 +35,45 @@ describe('toRelayRecord', () => {
     const record = toRelayRecord(wireRow())
     expect(record.resolvedAdvertisedCidrs).toEqual([])
   })
+
+  it('defaults omitted paths and relay policy fields', () => {
+    const record = toRelayRecord(wireRow())
+    expect(record.paths).toEqual([])
+    expect(record.allowRelay).toBeNull()
+    expect(record.effectiveAllowRelay).toBe(false)
+    expect(record.preferredGatewayIds).toEqual([])
+    expect(record.gatewayEligible).toBe(false)
+  })
+
+  it('preserves stamped paths and policy fields', () => {
+    const record = toRelayRecord(
+      wireRow({
+        paths: [
+          {
+            peerServerId: 'srv-2',
+            selected: 'gateway',
+            viaServerId: 'srv-gw',
+            latencyMs: 44,
+            degraded: false,
+          },
+        ],
+        allowRelay: false,
+        effectiveAllowRelay: false,
+        preferredGatewayIds: ['srv-gw'],
+        gatewayEligible: true,
+      }),
+    )
+    expect(record.paths).toEqual([
+      {
+        peerServerId: 'srv-2',
+        selected: 'gateway',
+        viaServerId: 'srv-gw',
+        latencyMs: 44,
+        degraded: false,
+      },
+    ])
+    expect(record.allowRelay).toBe(false)
+    expect(record.preferredGatewayIds).toEqual(['srv-gw'])
+    expect(record.gatewayEligible).toBe(true)
+  })
 })

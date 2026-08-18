@@ -25,14 +25,40 @@ export type ManagedStatus =
 
 export type ManagedBindScope = 'public' | 'datacenter' | 'local'
 
+/** Client listener ports on the shared ProxySQL frontend (not engine-native). */
+export const MANAGED_INGRESS_PGSQL_PORT = 15432
+export const MANAGED_INGRESS_MYSQL_PORT = 16306
+
+/**
+ * Client listener port for an engine. Catalog `defaultPort` stays engine
+ * metadata; apps dial these ingress ports instead.
+ */
+export function managedIngressPortForEngine(
+  engine: ManagedServiceEngine | null | undefined,
+  defaultPort?: number,
+): number {
+  if (
+    defaultPort === 3306 ||
+    engine === 'mysql' ||
+    engine === 'mariadb'
+  ) {
+    return MANAGED_INGRESS_MYSQL_PORT
+  }
+  return MANAGED_INGRESS_PGSQL_PORT
+}
+
 /** Cluster member role (mirrors instance `ManagedMemberRole`). */
 export type ManagedMemberRole = 'primary' | 'replica'
 
-/** Private path used for replication (mirrors `PrivateEndpointTransport`). */
-export type ManagedMemberTransport = 'local' | 'datacenter' | 'fabric'
+/** Replica class (mirrors instance `ManagedReplicaClass`). Null on primary. */
+export type ManagedReplicaClass = 'failover' | 'read'
 
-/** Max replica members per cluster — mirrors instance `MANAGED_MAX_REPLICAS`. */
-export const MANAGED_MAX_REPLICAS = 2
+/** Private path used for replication (mirrors `PrivateEndpointTransport`). */
+export type ManagedMemberTransport =
+  | 'local'
+  | 'datacenter'
+  | 'fabric'
+  | 'public'
 
 export type ManagedReplicationHealth = {
   state: string
@@ -50,6 +76,7 @@ export type ManagedMemberRecord = {
   serverId: string
   serverDisplayName: string | null
   role: ManagedMemberRole
+  replicaClass: ManagedReplicaClass | null
   readEligible: boolean
   ordinal: number
   status: string | null
@@ -286,8 +313,11 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'The stored backup failed integrity verification and cannot be restored.',
   username_in_use:
     "That username is already taken on this server's organization. Pick another name.",
-  managed_replica_limit: 'This cluster already has the maximum of 2 replicas.',
   managed_member_exists: 'That server already hosts a member of this cluster.',
+  managed_replica_not_promotable:
+    'Only failover replicas can be promoted. Convert this replica to failover first, or promote anyway if the primary is dead.',
+  failover_replica_requires_datacenter_transport:
+    'Failover replicas must share a datacenter LAN with the primary — TurboFabric and public paths are not allowed.',
   managed_member_is_primary:
     'Promote another member first — the primary cannot be removed.',
   datacenter_required: 'That server is not assigned to a datacenter.',
@@ -299,6 +329,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   peer_tunnel_address_required:
     `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',
+  managed_listener_bind_conflict:
+    'This cluster mixes members that need different network paths to the same host, so one private listener cannot serve them all. Put the failover replicas and read replicas on a single path (datacenter, ' +
+    `${TURBOFABRIC_PRODUCT_NAME}, or public).`,
   managed_replica_not_streaming:
     'That replica is not streaming from the primary yet. Wait for it to catch up, or promote anyway if the primary is dead.',
   managed_replica_lagging:
@@ -362,16 +395,26 @@ export function memberRoleLabel(role: ManagedMemberRole): string {
   return role === 'primary' ? 'Primary' : 'Replica'
 }
 
+export function memberReplicaClassLabel(
+  replicaClass: ManagedReplicaClass | null | undefined,
+): string | null {
+  if (replicaClass === 'failover') return 'Failover'
+  if (replicaClass === 'read') return 'Read-only'
+  return null
+}
+
 export function memberTransportLabel(
   transport: ManagedMemberTransport | null | undefined,
 ): string {
   switch (transport) {
     case 'local':
-      return 'Same server'
+      return 'Local'
     case 'datacenter':
-      return 'Same site'
+      return 'Datacenter LAN'
     case 'fabric':
-      return TURBOFABRIC_PRODUCT_NAME
+      return `${TURBOFABRIC_PRODUCT_NAME} direct`
+    case 'public':
+      return 'Public Internet + TLS'
     default:
       return '—'
   }

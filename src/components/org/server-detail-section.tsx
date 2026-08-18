@@ -32,10 +32,12 @@ import {
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
+import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { configuredSourceLabel } from '@/lib/host-defaults'
 import {
   defaultOrgDashboardHref,
   SERVER_DETAIL_TAB_IDS,
@@ -937,10 +939,7 @@ function ServerOverviewTab({
   const country = formatServerGeoCountryCode(server.geo)
   const asn = formatServerGeoAsn(server.geo)
   const hasGeo = Boolean(geoLine || country || asn)
-
-  let timezoneSource = 'Not set'
-  if (server.timezoneSource === 'server') timezoneSource = 'Server override'
-  if (server.timezoneSource === 'organization') timezoneSource = 'Organization default'
+  const timezoneSource = configuredSourceLabel(server.timezoneSource)
 
   return (
     <View style={styles.tabBody}>
@@ -993,12 +992,24 @@ function ServerOverviewTab({
           <Text style={styles.mono}>{server.timezone ?? 'Not set'}</Text>
         </Text>
         <Text style={orgPanelStyles.muted}>Source: {timezoneSource}</Text>
-        {server.enforceServerTimezone ? (
+        {server.datacenterEnforceServerTimezone ? (
+          <Text style={orgPanelStyles.muted}>
+            Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
+          </Text>
+        ) : null}
+        {!server.datacenterEnforceServerTimezone &&
+        server.enforceServerTimezone ? (
           <Text style={orgPanelStyles.muted}>
             Organization enforces {server.orgDefaultTimezone ?? 'its default'}.
           </Text>
         ) : null}
       </SectionPanel>
+
+      <ServerSshPortPanel
+        orgId={orgId}
+        server={server}
+        canManage={canManage}
+      />
 
       <ServerLabelsEditor
         orgId={orgId}

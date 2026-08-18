@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +13,8 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
   GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR,
   GATEWAY_DATACENTER_REQUIRED_ERROR,
+  PREFERRED_GATEWAY_INVALID_ERROR,
+  fetchOrgHostDefaults,
   type CommandStatus,
   type FabricRelaySegment,
   type OrgServerRecord,
@@ -19,8 +22,12 @@ import {
   type RelayRole,
 } from '@/lib/instance-api'
 import {
+  buildFabricPathMatrix,
+  fabricPathIsDegraded,
+  fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
   relayRoleLabel,
+  type FabricPathMatrixRow,
 } from '@/lib/fabric-mesh'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
 import {
@@ -39,7 +46,7 @@ import {
 } from '@/lib/queries/commands'
 import { useOrgServers } from '@/lib/queries/servers'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { useCan } from '@/lib/query-client'
+import { useCan, queryKeys } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const HANDSHAKE_STALE_MS = 3 * 60 * 1000
@@ -71,6 +78,9 @@ function fabricMutationError(err: unknown): string {
   }
   if (raw.includes(GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR)) {
     return 'This datacenter has no private CIDR. Recreate it from a server IP before promoting a gateway.'
+  }
+  if (raw.includes(PREFERRED_GATEWAY_INVALID_ERROR)) {
+    return 'Preferred gateways must be gateway-role relays in this mesh.'
   }
   return raw
 }
@@ -289,6 +299,244 @@ function FabricEnableToggle({
   )
 }
 
+function FabricAllowRelayToggle({
+  enabled,
+  disabled,
+  pending,
+  onToggle,
+}: Readonly<{
+  enabled: boolean
+  disabled: boolean
+  pending: boolean
+  onToggle: () => void
+}>) {
+  return (
+    <View style={styles.toggleBlock}>
+      <View style={styles.toggleRow}>
+        <Text style={styles.toggleLabel}>Allow relay path</Text>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityLabel="Allow relay path"
+          accessibilityState={{ checked: enabled, disabled }}
+          disabled={disabled}
+          onPress={onToggle}
+          style={[
+            styles.toggle,
+            enabled ? styles.toggleOn : styles.toggleOff,
+            disabled && styles.toggleDisabled,
+            webPointer,
+          ]}
+        >
+          {pending ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : (
+            <Text
+              style={[
+                styles.toggleText,
+                enabled ? styles.toggleTextOn : styles.toggleTextOff,
+              ]}
+            >
+              {enabled ? 'On' : 'Off'}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+      <Text style={orgPanelStyles.muted}>
+        Relay is a degraded fallback path and must be explicitly enabled. A
+        datacenter gateway is not the same as an unrelated relay.
+      </Text>
+    </View>
+  )
+}
+
+type AllowRelayOverride = 'inherit' | 'on' | 'off'
+
+function allowRelayOverride(value: boolean | null): AllowRelayOverride {
+  if (value === true) return 'on'
+  if (value === false) return 'off'
+  return 'inherit'
+}
+
+function AllowRelayOverridePicker({
+  value,
+  disabled,
+  effective,
+  onChange,
+}: Readonly<{
+  value: boolean | null
+  disabled: boolean
+  effective: boolean
+  onChange: (next: boolean | null) => void
+}>) {
+  const selected = allowRelayOverride(value)
+  return (
+    <>
+      <Text style={styles.fieldLabel}>Allow relay</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        {(
+          [
+            { id: 'inherit', label: 'Inherit', next: null },
+            { id: 'on', label: 'On', next: true },
+            { id: 'off', label: 'Off', next: false },
+          ] as const
+        ).map((option) => {
+          const active = selected === option.id
+          return (
+            <Pressable
+              key={option.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Allow relay ${option.label}`}
+              accessibilityState={{ selected: active, disabled }}
+              disabled={disabled}
+              onPress={() => {
+                if (!disabled && option.id !== selected) onChange(option.next)
+              }}
+              style={[
+                orgPanelStyles.segmentChip,
+                active && orgPanelStyles.segmentChipActive,
+                disabled && styles.toggleDisabled,
+                webPointer,
+              ]}
+            >
+              <Text
+                style={[
+                  orgPanelStyles.segmentChipText,
+                  active && orgPanelStyles.segmentChipTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      <Text style={orgPanelStyles.muted}>
+        Effective: {effective ? 'On' : 'Off'}
+      </Text>
+    </>
+  )
+}
+
+function PreferredGatewayPicker({
+  selectedIds,
+  gateways,
+  disabled,
+  onToggle,
+}: Readonly<{
+  selectedIds: readonly string[]
+  gateways: readonly { serverId: string; label: string }[]
+  disabled: boolean
+  onToggle: (serverId: string) => void
+}>) {
+  if (gateways.length === 0) {
+    return (
+      <>
+        <Text style={styles.fieldLabel}>Preferred gateways</Text>
+        <Text style={orgPanelStyles.muted}>
+          Promote a gateway-role relay before preferring one.
+        </Text>
+      </>
+    )
+  }
+  return (
+    <>
+      <Text style={styles.fieldLabel}>Preferred gateways</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        {gateways.map((gateway) => {
+          const active = selectedIds.includes(gateway.serverId)
+          return (
+            <Pressable
+              key={gateway.serverId}
+              accessibilityRole="button"
+              accessibilityLabel={`Prefer gateway ${gateway.label}`}
+              accessibilityState={{ selected: active, disabled }}
+              disabled={disabled}
+              onPress={() => {
+                if (!disabled) onToggle(gateway.serverId)
+              }}
+              style={[
+                orgPanelStyles.segmentChip,
+                active && orgPanelStyles.segmentChipActive,
+                disabled && styles.toggleDisabled,
+                webPointer,
+              ]}
+            >
+              <Text
+                style={[
+                  orgPanelStyles.segmentChipText,
+                  active && orgPanelStyles.segmentChipTextActive,
+                ]}
+              >
+                {gateway.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </>
+  )
+}
+
+function pathRowWarning(row: FabricPathMatrixRow): string | null {
+  if (row.kind === 'unreachable') return 'Unreachable'
+  if (fabricPathIsDegraded(row)) return 'DEGRADED'
+  return null
+}
+
+function pathRowLatency(row: FabricPathMatrixRow): string | null {
+  if (row.kind === 'unreachable' || row.latencyMs === undefined) return null
+  return `${String(row.latencyMs)} ms`
+}
+
+function FabricPathMatrixPanel({
+  rows,
+}: Readonly<{ rows: readonly FabricPathMatrixRow[] }>) {
+  return (
+    <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
+      {rows.length === 0 ? (
+        <Text style={orgPanelStyles.muted}>
+          No peer paths observed yet. Apply to probe.
+        </Text>
+      ) : (
+        <View style={styles.list}>
+          {rows.map((row) => {
+            const warning = pathRowWarning(row)
+            const latency = pathRowLatency(row)
+            return (
+              <View
+                key={`${row.fromServerId}:${row.toServerId}`}
+                style={orgPanelStyles.detailCard}
+              >
+                <Text style={orgPanelStyles.detailTitle}>
+                  {row.fromLabel} → {row.toLabel}
+                </Text>
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>Path: </Text>
+                  {fabricPathKindLabel(row.kind)}
+                  {latency ? `  ${latency}` : ''}
+                </Text>
+                {row.viaLabel ? (
+                  <Text style={orgPanelStyles.detailLine}>
+                    <Text style={orgPanelStyles.detailLabel}>Via: </Text>
+                    {row.viaLabel}
+                  </Text>
+                ) : null}
+                {warning ? (
+                  <View style={orgPanelStyles.calloutWarning}>
+                    <Text style={orgPanelStyles.calloutWarningText}>
+                      {warning}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            )
+          })}
+        </View>
+      )}
+    </SectionPanel>
+  )
+}
+
 function RolePicker({
   role,
   disabled,
@@ -478,11 +726,14 @@ function RelayConfiguredFields({
   endpointDraft,
   keepaliveDraft,
   pskDraft,
+  eligibleGateways,
   onAdvertisedChange,
   onEndpointChange,
   onKeepaliveChange,
   onPskChange,
   onRoleChange,
+  onAllowRelayChange,
+  onPreferredGatewayToggle,
   onSaveAdvertised,
   onSaveEndpoint,
   onSaveKeepalive,
@@ -495,20 +746,26 @@ function RelayConfiguredFields({
   endpointDraft: string
   keepaliveDraft: string
   pskDraft: string
+  eligibleGateways: readonly { serverId: string; label: string }[]
   onAdvertisedChange: (value: string) => void
   onEndpointChange: (value: string) => void
   onKeepaliveChange: (value: string) => void
   onPskChange: (value: string) => void
   onRoleChange: (role: RelayRole) => void
+  onAllowRelayChange: (next: boolean | null) => void
+  onPreferredGatewayToggle: (serverId: string) => void
   onSaveAdvertised: () => void
   onSaveEndpoint: () => void
   onSaveKeepalive: () => void
   onSavePresharedKey: () => void
 }>) {
+  const preferredGateways = eligibleGateways.filter(
+    (gateway) => gateway.serverId !== relay.serverId,
+  )
   return (
     <>
       <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>tp0: </Text>
+        <Text style={orgPanelStyles.detailLabel}>TurboFabric address: </Text>
         <Text style={styles.mono} selectable>
           {relay.address}
         </Text>
@@ -558,6 +815,18 @@ function RelayConfiguredFields({
         placeholderTextColor={colors.textFaint}
         style={styles.input}
       />
+      <AllowRelayOverridePicker
+        value={relay.allowRelay}
+        disabled={disabled}
+        effective={relay.effectiveAllowRelay}
+        onChange={onAllowRelayChange}
+      />
+      <PreferredGatewayPicker
+        selectedIds={relay.preferredGatewayIds}
+        gateways={preferredGateways}
+        disabled={disabled}
+        onToggle={onPreferredGatewayToggle}
+      />
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Public key: </Text>
         {relay.publicKey != null ? 'Present' : 'Pending'}
@@ -587,6 +856,7 @@ function RelayRow({
   applyPending,
   applyStatus,
   applyError,
+  eligibleGateways,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
@@ -595,6 +865,7 @@ function RelayRow({
   applyPending: boolean
   applyStatus: CommandStatus | null
   applyError: string | null
+  eligibleGateways: readonly { serverId: string; label: string }[]
 }>) {
   const patch = usePatchOrgFabricRelay(orgId, server.id)
   const [rowError, setRowError] = useState<string | null>(null)
@@ -664,6 +935,23 @@ function RelayRow({
     )
   }
 
+  function saveAllowRelay(next: boolean | null) {
+    if (!relay || disabled) return
+    if (next === relay.allowRelay) return
+    setRowError(null)
+    patch.mutate({ allowRelay: next }, { onError: handlePatchError })
+  }
+
+  function togglePreferredGateway(serverId: string) {
+    if (!relay || disabled) return
+    const current = relay.preferredGatewayIds
+    const next = current.includes(serverId)
+      ? current.filter((id) => id !== serverId)
+      : [...current, serverId]
+    setRowError(null)
+    patch.mutate({ preferredGatewayIds: next }, { onError: handlePatchError })
+  }
+
   const displayError = rowError ?? patch.actionError ?? applyError
   const applyHint = relayApplyHint(applyPending, applyStatus)
 
@@ -685,6 +973,7 @@ function RelayRow({
           endpointDraft={endpointDraft}
           keepaliveDraft={keepaliveDraft}
           pskDraft={pskDraft}
+          eligibleGateways={eligibleGateways}
           onAdvertisedChange={setAdvertisedDraft}
           onEndpointChange={setEndpointDraft}
           onKeepaliveChange={setKeepaliveDraft}
@@ -693,6 +982,8 @@ function RelayRow({
             setRowError(null)
             patch.mutate({ role }, { onError: handlePatchError })
           }}
+          onAllowRelayChange={saveAllowRelay}
+          onPreferredGatewayToggle={togglePreferredGateway}
           onSaveAdvertised={saveAdvertised}
           onSaveEndpoint={saveEndpoint}
           onSaveKeepalive={saveKeepalive}
@@ -752,6 +1043,7 @@ function FabricRelaysPanel({
   canManage,
   applyDisabled,
   applyBusy,
+  eligibleGateways,
   onApply,
 }: Readonly<{
   orgId: string
@@ -765,6 +1057,7 @@ function FabricRelaysPanel({
   canManage: boolean
   applyDisabled: boolean
   applyBusy: boolean
+  eligibleGateways: readonly { serverId: string; label: string }[]
   onApply: () => void
 }>) {
   return (
@@ -793,6 +1086,7 @@ function FabricRelaysPanel({
             applyPending={inFlightByServerId.has(server.id)}
             applyStatus={commandByServerId.get(server.id) ?? null}
             applyError={applyErrors[server.id] ?? null}
+            eligibleGateways={eligibleGateways}
           />
         ))}
       </View>
@@ -812,6 +1106,11 @@ export function NetworkFabricSection({
   const [tracked, setTracked] = useState<TrackedCommandEntry[]>([])
   const [applyErrors, setApplyErrors] = useState<Record<string, string>>({})
   const query = useOrgFabric(orgId)
+  const hostDefaultsQuery = useQuery({
+    queryKey: queryKeys.org(orgId).settings.hostDefaults,
+    queryFn: () => fetchOrgHostDefaults(orgId),
+    enabled: canManage && orgId.length > 0,
+  })
   const serversQuery = useOrgServers(orgId)
   const mutation = useSaveOrgFabric(orgId)
   const applyMutation = useApplyOrgFabric(orgId)
@@ -834,6 +1133,31 @@ export function NetworkFabricSection({
     for (const relay of relays) map.set(relay.serverId, relay)
     return map
   }, [relays])
+
+  const serverNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const server of servers) {
+      map.set(server.id, serverTitle(server))
+    }
+    return map
+  }, [servers])
+
+  const pathMatrix = useMemo(
+    () => buildFabricPathMatrix(relays, serverNameById),
+    [relays, serverNameById],
+  )
+
+  const eligibleGateways = useMemo(() => {
+    const rows: { serverId: string; label: string }[] = []
+    for (const relay of relays) {
+      if (!relay.gatewayEligible) continue
+      rows.push({
+        serverId: relay.serverId,
+        label: serverNameById.get(relay.serverId) ?? relay.serverId,
+      })
+    }
+    return rows.sort((a, b) => a.label.localeCompare(b.label))
+  }, [relays, serverNameById])
 
   const commandByServerId = useMemo(() => {
     const map = new Map<string, CommandStatus>()
@@ -864,11 +1188,27 @@ export function NetworkFabricSection({
   function handleToggle() {
     if (toggleDisabled) return
     setError(null)
-    mutation.mutate(!enabled, {
-      onError: (err) => {
-        setError(fabricMutationError(err))
+    mutation.mutate(
+      { enabled: !enabled },
+      {
+        onError: (err) => {
+          setError(fabricMutationError(err))
+        },
       },
-    })
+    )
+  }
+
+  function handleAllowRelayToggle() {
+    if (toggleDisabled || !enabled) return
+    setError(null)
+    mutation.mutate(
+      { enabled: true, allowRelay: fabric?.allowRelay !== true },
+      {
+        onError: (err) => {
+          setError(fabricMutationError(err))
+        },
+      },
+    )
   }
 
   function handleApply() {
@@ -925,24 +1265,46 @@ export function NetworkFabricSection({
           />
         ) : null}
 
+        {showToggle && enabled ? (
+          <FabricAllowRelayToggle
+            enabled={fabric?.allowRelay === true}
+            disabled={toggleDisabled}
+            pending={mutation.isPending}
+            onToggle={handleAllowRelayToggle}
+          />
+        ) : null}
+
+        {canManage &&
+        !enabled &&
+        hostDefaultsQuery.data?.defaultFabricEnabled === true ? (
+          <Text style={orgPanelStyles.muted}>
+            Host defaults prefer {TURBOFABRIC_PRODUCT_NAME} on. Enabling here
+            still creates the mesh.
+          </Text>
+        ) : null}
+
         {canManage ? null : <FabricManageHint />}
       </SectionPanel>
 
       {enabled && !unavailable ? (
-        <FabricRelaysPanel
-          orgId={orgId}
-          servers={servers}
-          serversLoading={serversQuery.isLoading}
-          relayCount={relays.length}
-          relayByServerId={relayByServerId}
-          commandByServerId={commandByServerId}
-          inFlightByServerId={inFlightByServerId}
-          applyErrors={applyErrors}
-          canManage={canManage}
-          applyDisabled={applyDisabled}
-          applyBusy={applyMutation.isPending || applyBusy}
-          onApply={handleApply}
-        />
+        <>
+          <FabricRelaysPanel
+            orgId={orgId}
+            servers={servers}
+            serversLoading={serversQuery.isLoading}
+            relayCount={relays.length}
+            relayByServerId={relayByServerId}
+            commandByServerId={commandByServerId}
+            inFlightByServerId={inFlightByServerId}
+            applyErrors={applyErrors}
+            canManage={canManage}
+            applyDisabled={applyDisabled}
+            applyBusy={applyMutation.isPending || applyBusy}
+            eligibleGateways={eligibleGateways}
+            onApply={handleApply}
+          />
+          <FabricPathMatrixPanel rows={pathMatrix} />
+        </>
       ) : null}
     </View>
   )
@@ -984,6 +1346,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
     minHeight: 44,
+  },
+  toggleBlock: {
+    gap: spacing.xs,
   },
   toggleLabel: {
     color: colors.textBody,

@@ -18,6 +18,7 @@ import type {
   DatacenterMemberPin,
   DatacenterRecord,
   DatacenterSubnetRecord,
+  NtpDefaults,
   OrgServerRecord,
   RelayRecord,
   RelayRole,
@@ -70,11 +71,19 @@ import {
   subnetForAddress,
 } from '@/lib/datacenter-list'
 import {
+  fabricRoutedViaLabels,
   formatSiteLinkLabel,
   relayRoleLabel,
   resolvePrimaryGatewayByDatacenter,
   resolveSiteLinks,
 } from '@/lib/fabric-mesh'
+import {
+  DEFAULT_SSH_PORT,
+  formatNtpHostList,
+  isEmptyNtpDraft,
+  ntpDefaultsFromDrafts,
+  parseSshPortDraft,
+} from '@/lib/host-defaults'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 function serverTitle(server: OrgServerRecord): string {
@@ -795,6 +804,7 @@ type MeshFromDatacenterRow = {
   address: string
   isPrimary: boolean
   otherDatacenterLabel: string
+  viaLabel: string | null
 }
 
 function resolveOtherDatacenterLabel(
@@ -822,6 +832,7 @@ function buildMeshRows({
   datacenterId,
   mesh,
   nameById,
+  serverNameById,
   primaryGatewayByDatacenter,
 }: Readonly<{
   relays: readonly RelayRecord[]
@@ -829,6 +840,7 @@ function buildMeshRows({
   datacenterId: string
   mesh: ReturnType<typeof resolveSiteLinks>
   nameById: ReadonlyMap<string, string>
+  serverNameById: ReadonlyMap<string, string>
   primaryGatewayByDatacenter: ReadonlyMap<string, string>
 }>): MeshFromDatacenterRow[] {
   const rows: MeshFromDatacenterRow[] = []
@@ -839,6 +851,7 @@ function buildMeshRows({
         serverIsDatacenterMember(row, datacenterId),
     )
     if (!server) continue
+    const viaLabels = fabricRoutedViaLabels(relay, serverNameById)
     rows.push({
       serverId: relay.serverId,
       serverLabel: serverTitle(server),
@@ -850,6 +863,7 @@ function buildMeshRows({
         datacenterId,
         nameById,
       ),
+      viaLabel: viaLabels.length > 0 ? viaLabels.join(', ') : null,
     })
   }
   rows.sort((a, b) => a.serverLabel.localeCompare(b.serverLabel))
@@ -942,14 +956,220 @@ function MeshFromDatacenterPanel({
                 </Text>
                 {row.otherDatacenterLabel}
               </Text>
+              {row.viaLabel ? (
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>Via: </Text>
+                  {row.viaLabel}
+                </Text>
+              ) : null}
               <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>tp0: </Text>
+                <Text style={orgPanelStyles.detailLabel}>
+                  TurboFabric address:{' '}
+                </Text>
                 {row.address}
               </Text>
             </Pressable>
           ))}
         </View>
       ) : null}
+    </SectionPanel>
+  )
+}
+
+function DatacenterSshPortPanel({
+  datacenter,
+  readOnly,
+  pending,
+  onSave,
+}: Readonly<{
+  datacenter: DatacenterRecord | undefined
+  readOnly: boolean
+  pending: boolean
+  onSave: (sshPort: number | null, onSuccess: () => void) => void
+}>) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const sshText =
+    draft ??
+    (datacenter?.options?.sshPort != null
+      ? String(datacenter.options.sshPort)
+      : '')
+
+  const save = () => {
+    if (sshText.trim().length === 0) {
+      setLocalError(null)
+      onSave(null, () => setDraft(null))
+      return
+    }
+    const parsed = parseSshPortDraft(sshText)
+    if (parsed == null) {
+      setLocalError(
+        'SSH port must be a whole number from 1 to 65535, or empty to inherit.',
+      )
+      return
+    }
+    setLocalError(null)
+    onSave(parsed, () => setDraft(null))
+  }
+
+  return (
+    <SectionPanel title="SSH port" hint="Inherited by member servers">
+      <TextInput
+        value={sshText}
+        onChangeText={setDraft}
+        editable={!readOnly && !pending && Boolean(datacenter)}
+        keyboardType="number-pad"
+        placeholder={String(DEFAULT_SSH_PORT)}
+        placeholderTextColor={colors.textMuted}
+        accessibilityLabel="Datacenter SSH port"
+        style={[
+          styles.identityInput,
+          (readOnly || pending) && styles.buttonDisabled,
+        ]}
+      />
+      <Text style={orgPanelStyles.muted}>
+        Empty inherits the organization default (then {String(DEFAULT_SSH_PORT)}
+        ). Saving does not change sshd.
+      </Text>
+      {localError ? <Text style={orgPanelStyles.error}>{localError}</Text> : null}
+      {readOnly ? (
+        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+      ) : (
+        <Pressable
+          disabled={pending || !datacenter}
+          onPress={save}
+          style={[
+            orgPanelStyles.toolbarBtnPrimary,
+            (pending || !datacenter) && styles.buttonDisabled,
+            webPointer,
+          ]}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
+        </Pressable>
+      )}
+    </SectionPanel>
+  )
+}
+
+function DatacenterNtpPanel({
+  datacenter,
+  readOnly,
+  pending,
+  onSave,
+}: Readonly<{
+  datacenter: DatacenterRecord | undefined
+  readOnly: boolean
+  pending: boolean
+  onSave: (ntp: NtpDefaults | null, onSuccess: () => void) => void
+}>) {
+  const [draftEnabled, setDraftEnabled] = useState<boolean | null>(null)
+  const [draftServers, setDraftServers] = useState<string | null>(null)
+  const [draftFallback, setDraftFallback] = useState<string | null>(null)
+  const ntp = datacenter?.options?.ntp
+  const enabled = draftEnabled ?? ntp?.enabled === true
+  const serversText = draftServers ?? formatNtpHostList(ntp?.servers)
+  const fallbackText = draftFallback ?? formatNtpHostList(ntp?.fallbackServers)
+
+  const resetDrafts = () => {
+    setDraftEnabled(null)
+    setDraftServers(null)
+    setDraftFallback(null)
+  }
+
+  return (
+    <SectionPanel title="NTP defaults" hint="Desired settings · apply per host">
+      <View style={styles.switchRow}>
+        <View style={styles.switchCopy}>
+          <Text style={styles.switchLabel}>NTP client enabled</Text>
+        </View>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{
+            checked: enabled,
+            disabled: readOnly || pending || !datacenter,
+          }}
+          disabled={readOnly || pending || !datacenter}
+          onPress={() => setDraftEnabled(!enabled)}
+          style={[
+            styles.toggle,
+            enabled ? styles.toggleOn : styles.toggleOff,
+            (readOnly || pending) && styles.buttonDisabled,
+          ]}
+        >
+          <Text style={styles.toggleText}>{enabled ? 'On' : 'Off'}</Text>
+        </Pressable>
+      </View>
+      <View style={styles.identityField}>
+        <Text style={styles.fieldLabel}>NTP servers</Text>
+        <TextInput
+          value={serversText}
+          onChangeText={setDraftServers}
+          editable={!readOnly && !pending && Boolean(datacenter)}
+          placeholder="time.cloudflare.com, pool.ntp.org"
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel="Datacenter NTP servers"
+          style={[
+            styles.identityInput,
+            (readOnly || pending) && styles.buttonDisabled,
+          ]}
+        />
+      </View>
+      <View style={styles.identityField}>
+        <Text style={styles.fieldLabel}>Fallback NTP servers</Text>
+        <TextInput
+          value={fallbackText}
+          onChangeText={setDraftFallback}
+          editable={!readOnly && !pending && Boolean(datacenter)}
+          placeholder="Optional fallback hosts"
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel="Datacenter fallback NTP servers"
+          style={[
+            styles.identityInput,
+            (readOnly || pending) && styles.buttonDisabled,
+          ]}
+        />
+      </View>
+      <Text style={orgPanelStyles.muted}>
+        Empty + off inherits the organization NTP default. Apply still happens
+        on each server Time tab.
+      </Text>
+      {readOnly ? (
+        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+      ) : (
+        <View style={styles.actionsRow}>
+          <Pressable
+            disabled={pending || !datacenter}
+            onPress={() => {
+              const next = isEmptyNtpDraft(enabled, serversText, fallbackText)
+                ? null
+                : ntpDefaultsFromDrafts(enabled, serversText, fallbackText)
+              onSave(next, resetDrafts)
+            }}
+            style={[
+              orgPanelStyles.toolbarBtnPrimary,
+              (pending || !datacenter) && styles.buttonDisabled,
+              webPointer,
+            ]}
+          >
+            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
+          </Pressable>
+          {ntp != null ? (
+            <Pressable
+              disabled={pending || !datacenter}
+              onPress={() => onSave(null, resetDrafts)}
+              style={[
+                orgPanelStyles.toolbarBtnSecondary,
+                (pending || !datacenter) && styles.buttonDisabled,
+                webPointer,
+              ]}
+            >
+              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                Clear (inherit)
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      )}
     </SectionPanel>
   )
 }
@@ -1206,12 +1426,20 @@ export function DatacenterDetailSection({
     relays,
     serverById,
   )
+  const serverNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const server of servers) {
+      map.set(server.id, serverTitle(server))
+    }
+    return map
+  }, [servers])
   const meshRows = buildMeshRows({
     relays,
     servers,
     datacenterId,
     mesh,
     nameById,
+    serverNameById,
     primaryGatewayByDatacenter,
   })
 
@@ -1484,6 +1712,28 @@ export function DatacenterDetailSection({
             },
             'Failed to save datacenter timezone',
           )
+        }
+      />
+
+      <DatacenterSshPortPanel
+        datacenter={datacenter}
+        readOnly={readOnly}
+        pending={pending}
+        onSave={(sshPort, onSuccess) =>
+          saveMergedOptions(
+            { sshPort },
+            onSuccess,
+            'Failed to save SSH port',
+          )
+        }
+      />
+
+      <DatacenterNtpPanel
+        datacenter={datacenter}
+        readOnly={readOnly}
+        pending={pending}
+        onSave={(ntp, onSuccess) =>
+          saveMergedOptions({ ntp }, onSuccess, 'Failed to save NTP defaults')
         }
       />
 

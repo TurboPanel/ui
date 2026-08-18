@@ -26,47 +26,53 @@ describe('orgAreaFromPathname', () => {
     expect(resolved?.subRoute).toBeNull()
   })
 
-  it('resolves TurboFabric under Network', () => {
-    const resolved = orgAreaFromPathname('/org/network/fabric')
-    expect(resolved).not.toBeNull()
-    expect(resolved?.area.id).toBe('network')
-    expect(resolved?.subRoute?.id).toBe('fabric')
-    expect(resolved?.subRoute?.pathSegment).toBe('fabric')
-  })
-
-  it('resolves new datacenter under Servers Datacenters', () => {
-    const resolved = orgAreaFromPathname('/org/servers/datacenters/new')
-    expect(resolved?.area.id).toBe('servers')
-    expect(resolved?.subRoute?.id).toBe('datacenter-new')
-    expect(resolved?.subRoute?.pathSegment).toBe('datacenters')
-  })
-
-  it('resolves datacenter detail under Servers Datacenters', () => {
-    const resolved = orgAreaFromPathname('/org/servers/datacenters/dc-1')
-    expect(resolved?.area.id).toBe('servers')
-    expect(resolved?.subRoute?.id).toBe('datacenter-detail')
-    expect(resolved?.subRoute?.pathSegment).toBe('datacenters')
-  })
-
-  it('resolves legacy site detail under Network', () => {
-    const resolved = orgAreaFromPathname('/org/network/sites/site-1')
-    expect(resolved?.area.id).toBe('network')
-    expect(resolved?.subRoute?.id).toBe('site-detail')
-  })
-
-  it('resolves Datacenters under Servers instead of server detail', () => {
-    const resolved = orgAreaFromPathname('/org/servers/datacenters')
-    expect(resolved?.area.id).toBe('servers')
-    expect(resolved?.subRoute?.id).toBe('datacenters')
-    expect(resolved?.subRoute?.pathSegment).toBe('datacenters')
-  })
-
-  it('resolves Pending keys under Servers instead of server detail', () => {
-    const resolved = orgAreaFromPathname('/org/servers/keys')
-    expect(resolved?.area.id).toBe('servers')
-    expect(resolved?.subRoute?.id).toBe('keys')
-    expect(resolved?.subRoute?.pathSegment).toBe('keys')
-  })
+  it.each([
+    {
+      pathname: '/org/network/fabric',
+      areaId: 'network',
+      subRouteId: 'fabric',
+      pathSegment: 'fabric',
+    },
+    {
+      pathname: '/org/servers/datacenters/new',
+      areaId: 'servers',
+      subRouteId: 'datacenter-new',
+      pathSegment: 'datacenters',
+    },
+    {
+      pathname: '/org/servers/datacenters/dc-1',
+      areaId: 'servers',
+      subRouteId: 'datacenter-detail',
+      pathSegment: 'datacenters',
+    },
+    {
+      pathname: '/org/network/sites/site-1',
+      areaId: 'network',
+      subRouteId: 'site-detail',
+      pathSegment: 'sites',
+    },
+    {
+      pathname: '/org/servers/datacenters',
+      areaId: 'servers',
+      subRouteId: 'datacenters',
+      pathSegment: 'datacenters',
+    },
+    {
+      pathname: '/org/servers/keys',
+      areaId: 'servers',
+      subRouteId: 'keys',
+      pathSegment: 'keys',
+    },
+  ] as const)(
+    'resolves $pathname as $areaId / $subRouteId',
+    ({ pathname, areaId, subRouteId, pathSegment }) => {
+      const resolved = orgAreaFromPathname(pathname)
+      expect(resolved).not.toBeNull()
+      expect(resolved?.area.id).toBe(areaId)
+      expect(resolved?.subRoute?.id).toBe(subRouteId)
+      expect(resolved?.subRoute?.pathSegment).toBe(pathSegment)
+    },
+  )
 
   it('does not treat Manage Organization as a sidebar area', () => {
     expect(orgAreaFromPathname('/org/manage')).toBeNull()
@@ -74,6 +80,14 @@ describe('orgAreaFromPathname', () => {
     const managed = orgAreaFromPathname('/org/managed')
     expect(managed?.area.id).toBe('managed')
     expect(managed?.subRoute).toBeNull()
+  })
+
+  it('resolves server detail and metrics server sub-routes', () => {
+    const detail = orgAreaFromPathname('/org/servers/srv-1')
+    expect(detail?.subRoute?.id).toBe('server-detail')
+
+    const metrics = orgAreaFromPathname('/org/servers/srv-1/metrics')
+    expect(metrics?.subRoute?.id).toBe('metrics')
   })
 })
 

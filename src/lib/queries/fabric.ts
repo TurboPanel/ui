@@ -36,7 +36,14 @@ export function isOrgFabricUnavailable(error: unknown): boolean {
 export function useSaveOrgFabric(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (enabled: boolean) => saveOrgFabric(orgId, enabled),
+    mutationFn: (input: { enabled: boolean; allowRelay?: boolean }) => {
+      if (input.allowRelay === undefined) {
+        return saveOrgFabric(orgId, input.enabled)
+      }
+      return saveOrgFabric(orgId, input.enabled, {
+        allowRelay: input.allowRelay,
+      })
+    },
     onSuccess: async (data) => {
       queryClient.setQueryData(queryKeys.org(orgId).settings.fabric, data)
     },

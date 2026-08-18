@@ -3,8 +3,10 @@ import { composeDocumentToYaml, yamlToComposeDocument } from './index'
 import {
   addableVisualFields,
   formatComposeRestart,
+  isComposeRestartPolicy,
   parseComposeRestart,
   serviceHasVisualField,
+  visualFieldById,
   VISUAL_SERVICE_FIELDS,
 } from './visual-fields'
 
@@ -38,7 +40,24 @@ describe('compose restart (Compose Spec)', () => {
     expect(formatComposeRestart('on-failure')).toBe('on-failure')
     expect(formatComposeRestart('on-failure', null)).toBe('on-failure')
     expect(formatComposeRestart('on-failure', 3)).toBe('on-failure:3')
+    expect(formatComposeRestart('on-failure', -1)).toBe('on-failure')
+    expect(formatComposeRestart('on-failure', Number.NaN)).toBe('on-failure')
     expect(formatComposeRestart('no')).toBe('no')
+  })
+
+  it('rejects invalid restart values', () => {
+    expect(parseComposeRestart(null)).toBeNull()
+    expect(parseComposeRestart('invalid')).toBeNull()
+    expect(parseComposeRestart('on-failure:-1')).toBeNull()
+    expect(parseComposeRestart('ON-FAILURE:2')).toEqual({
+      policy: 'on-failure',
+      maxRetries: 2,
+    })
+  })
+
+  it('recognizes compose restart policy literals', () => {
+    expect(isComposeRestartPolicy('always')).toBe(true)
+    expect(isComposeRestartPolicy('sometimes')).toBe(false)
   })
 
   it('round-trips restart: "no" through YAML without becoming boolean false', () => {
@@ -112,5 +131,12 @@ describe('visual field catalog', () => {
     expect(
       addableVisualFields({ image: 'nginx' }).some((f) => f.id === 'build'),
     ).toBe(true)
+  })
+
+  it('throws for unknown visual field ids', () => {
+    expect(() => visualFieldById('missing' as 'restart')).toThrow(TypeError)
+    expect(() => visualFieldById('missing' as 'restart')).toThrow(
+      /Unknown visual field/,
+    )
   })
 })

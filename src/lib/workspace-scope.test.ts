@@ -1,12 +1,17 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
 import { ORG_AREAS } from './org-navigation'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   ALL_WORKSPACES_SCOPE,
+  clearStoredWorkspaceScopeId,
+  getStoredWorkspaceScopeId,
   manageWorkspacesHref,
   newProjectHrefForScope,
+  newWorkspaceHref,
   parseWorkspaceIdParam,
   projectsHrefForScope,
   resolveWorkspaceScope,
+  setStoredWorkspaceScopeId,
   workspaceDisplayName,
   workspaceScopeStorageKey,
 } from './workspace-scope'
@@ -155,5 +160,23 @@ describe('workspaceDisplayName', () => {
     expect(workspaceScopeStorageKey('org-1')).toBe(
       'turbopanel.lastWorkspaceScope:org-1',
     )
+  })
+})
+
+describe('workspace scope persistence', () => {
+  afterEach(() => {
+    clearStoredWorkspaceScopeId('org-1')
+  })
+
+  it('stores, reads, and clears the remembered scope id', () => {
+    expect(getStoredWorkspaceScopeId('org-1')).toBeNull()
+    setStoredWorkspaceScopeId('org-1', 'ws-a')
+    expect(getStoredWorkspaceScopeId('org-1')).toBe('ws-a')
+    clearStoredWorkspaceScopeId('org-1')
+    expect(getStoredWorkspaceScopeId('org-1')).toBeNull()
+  })
+
+  it('builds the new workspace href', () => {
+    expect(newWorkspaceHref('org-1')).toBe('/org-1/workspaces/new')
   })
 })

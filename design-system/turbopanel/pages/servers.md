@@ -21,7 +21,7 @@
 - **Summary:** CSS `auto-fill` grid (native: wrapping tiles). Hairline `bgArea` tiles — not glass, not a decorative bento. Select-all lives in the title-row checkbox (not a lone control above the grid).  
 - **Datacenters** sub-route (`/servers/datacenters`) for org location inventory (member counts, private CIDRs) — see `pages/datacenters.md`  
 - **Pending keys** sub-route (`/servers/keys`) for unused registration keys (not yet bound to a host). Owner-only list + two-press delete. Copy says **keys**, never “license”.  
-- **Settings** sub-route (`/servers/settings`) for org default timezone fleet defaults  
+- **Settings** sub-route (`/servers/settings`) for org default timezone, host defaults (SSH port, NTP, TurboFabric preference), and seat capacity  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
 - Networking topology: **Datacenters** under Servers (private subnets + members); **Addresses**, **Docker networks**, and TurboFabric under the **Network** area — see `pages/datacenters.md` and `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle`; route context lives in `OrgHeader` eyebrow  

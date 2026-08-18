@@ -10,10 +10,11 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import type { ManagedMemberRecord } from '@/lib/managed-services'
+import type { ManagedMemberRecord, ManagedReplicaClass } from '@/lib/managed-services'
 import {
   formatReplicationLag,
   managedErrorMessage,
+  memberReplicaClassLabel,
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
@@ -28,7 +29,6 @@ import {
 import { formatServerDatacenterNames } from '@/lib/datacenter-list'
 import {
   datacenterHref,
-  networkFabricHref,
   serversDatacentersHref,
 } from '@/lib/org-navigation'
 import {
@@ -43,6 +43,7 @@ import {
   usePromoteManagedMember,
   useRemoveManagedMember,
   useUpdateManagedMemberReadEligible,
+  useUpdateManagedMemberReplicaClass,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useDatacenters } from '@/lib/queries/topology'
@@ -125,14 +126,20 @@ export function ManagedClusterPanel({
   const fabricQuery = useOrgFabric(orgId)
   const addReplica = useAddManagedReplica(orgId, environmentId)
   const updateRead = useUpdateManagedMemberReadEligible(orgId, environmentId)
+  const updateReplicaClass = useUpdateManagedMemberReplicaClass(
+    orgId,
+    environmentId,
+  )
   const removeMember = useRemoveManagedMember(orgId, environmentId)
   const promoteMember = usePromoteManagedMember(orgId, environmentId)
 
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
+  const [replicaClass, setReplicaClass] = useState<ManagedReplicaClass>('failover')
   const [readEligible, setReadEligible] = useState(true)
   const [removeArmedId, setRemoveArmedId] = useState<string | null>(null)
+  const [convertArmedId, setConvertArmedId] = useState<string | null>(null)
   const [promoteMemberId, setPromoteMemberId] = useState<string | null>(null)
   const [promoteConfirmName, setPromoteConfirmName] = useState('')
   const [forceEscalate, setForceEscalate] = useState(false)
@@ -173,8 +180,9 @@ export function ManagedClusterPanel({
         members,
         primaryServerId: primary?.serverId ?? null,
         fabricRelays,
+        replicaClass,
       }),
-    [servers, datacenters, members, primary?.serverId, fabricRelays],
+    [servers, datacenters, members, primary?.serverId, fabricRelays, replicaClass],
   )
 
   const eligibilityById = useMemo(() => {
@@ -211,11 +219,13 @@ export function ManagedClusterPanel({
     try {
       const result = await addReplica.mutateAsync({
         serverId: selectedServerId,
+        replicaClass,
         readEligible,
       })
       onRegisterCommand(result.commandId, 'Add replica', result.serverId)
       setShowAdd(false)
       setSelectedServerId(null)
+      setReplicaClass('failover')
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to add replica'))
     } finally {
@@ -239,6 +249,26 @@ export function ManagedClusterPanel({
       }
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to update read eligibility'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const handleConvertToFailover = async (memberId: string) => {
+    setWorking(true)
+    setError(null)
+    try {
+      const result = await updateReplicaClass.mutateAsync({
+        memberId,
+        replicaClass: 'failover',
+      })
+      if (result.commandId) {
+        onRegisterCommand(result.commandId, 'Convert to failover', result.serverId)
+      }
+      setConvertArmedId(null)
+    } catch (err) {
+      setError(managedErrorMessage(err, 'Failed to convert replica class'))
+      setConvertArmedId(null)
     } finally {
       setWorking(false)
     }
@@ -311,14 +341,14 @@ export function ManagedClusterPanel({
       return
     }
     if (reason === 'no-private-path') {
-      router.push(networkFabricHref(orgId) as Href)
+      router.push(serversDatacentersHref(orgId) as Href)
     }
   }
 
   return (
     <SectionPanel
       title="Cluster"
-      hint="Primary and replicas · private paths only"
+      hint={`Failover stays on the datacenter LAN · read-only replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS`}
       accent
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
@@ -333,6 +363,7 @@ export function ManagedClusterPanel({
             serverLabel={serverLabel(member)}
             siteLabel={siteLabel(member.serverId)}
             removeArmed={removeArmedId === member.id}
+            convertArmed={convertArmedId === member.id}
             onToggleReads={() => {
               void handleToggleReads(member, !member.readEligible)
             }}
@@ -340,6 +371,11 @@ export function ManagedClusterPanel({
             onCancelRemove={() => setRemoveArmedId(null)}
             onConfirmRemove={() => {
               void handleRemove(member.id)
+            }}
+            onArmConvert={() => setConvertArmedId(member.id)}
+            onCancelConvert={() => setConvertArmedId(null)}
+            onConfirmConvert={() => {
+              void handleConvertToFailover(member.id)
             }}
             onStartPromote={() => {
               setPromoteMemberId(member.id)
@@ -378,7 +414,6 @@ export function ManagedClusterPanel({
       {canManage ? (
         <View style={styles.addBlock}>
           <AddReplicaBlock
-            atReplicaLimit={eligibility.atReplicaLimit}
             showAdd={showAdd}
             disabled={disabled}
             servers={servers}
@@ -386,16 +421,25 @@ export function ManagedClusterPanel({
             eligibilityById={eligibilityById}
             selectedServerId={selectedServerId}
             onSelectServer={setSelectedServerId}
+            replicaClass={replicaClass}
+            onSelectReplicaClass={(next) => {
+              setReplicaClass(next)
+              setSelectedServerId(null)
+            }}
             readEligible={readEligible}
             onToggleReadEligible={() => setReadEligible((v) => !v)}
             onOpenNetworkReason={openNetworkReason}
             onAddReplica={() => {
               void handleAddReplica()
             }}
-            onShowAdd={() => setShowAdd(true)}
+            onShowAdd={() => {
+              setReplicaClass('failover')
+              setShowAdd(true)
+            }}
             onCancelAdd={() => {
               setShowAdd(false)
               setSelectedServerId(null)
+              setReplicaClass('failover')
             }}
           />
         </View>
@@ -411,10 +455,14 @@ function ClusterMemberRow({
   serverLabel,
   siteLabel,
   removeArmed,
+  convertArmed,
   onToggleReads,
   onArmRemove,
   onCancelRemove,
   onConfirmRemove,
+  onArmConvert,
+  onCancelConvert,
+  onConfirmConvert,
   onStartPromote,
 }: Readonly<{
   member: ManagedMemberRecord
@@ -423,14 +471,20 @@ function ClusterMemberRow({
   serverLabel: string
   siteLabel: string
   removeArmed: boolean
+  convertArmed: boolean
   onToggleReads: () => void
   onArmRemove: () => void
   onCancelRemove: () => void
   onConfirmRemove: () => void
+  onArmConvert: () => void
+  onCancelConvert: () => void
+  onConfirmConvert: () => void
   onStartPromote: () => void
 }>) {
   const healthy = isHealthyMemberStatus(member.status)
   const healthLine = resolveHealthLine(member)
+  const classLabel = memberReplicaClassLabel(member.replicaClass)
+  const isReadReplica = member.role === 'replica' && member.replicaClass === 'read'
 
   return (
     <View style={styles.row}>
@@ -443,6 +497,7 @@ function ClusterMemberRow({
           <Text style={styles.roleLine}>
             <Text style={styles.roleLabel}>
               {memberRoleLabel(member.role)}
+              {classLabel ? ` · ${classLabel}` : ''}
             </Text>
             <Text style={styles.metaText}>
               {'  '}
@@ -479,15 +534,25 @@ function ClusterMemberRow({
             onCancel={onCancelRemove}
             onConfirm={onConfirmRemove}
           />
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-            disabled={disabled}
-            onPress={onStartPromote}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              Promote
-            </Text>
-          </Pressable>
+          {isReadReplica ? (
+            <ConvertToFailoverControl
+              armed={convertArmed}
+              disabled={disabled}
+              onArm={onArmConvert}
+              onCancel={onCancelConvert}
+              onConfirm={onConfirmConvert}
+            />
+          ) : (
+            <Pressable
+              style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+              disabled={disabled}
+              onPress={onStartPromote}
+            >
+              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                Promote
+              </Text>
+            </Pressable>
+          )}
         </View>
       ) : null}
     </View>
@@ -541,6 +606,57 @@ function RemoveReplicaControl({
     >
       <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
         Remove replica
+      </Text>
+    </Pressable>
+  )
+}
+
+function ConvertToFailoverControl({
+  armed,
+  disabled,
+  onArm,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  armed: boolean
+  disabled: boolean
+  onArm: () => void
+  onCancel: () => void
+  onConfirm: () => void
+}>) {
+  if (armed) {
+    return (
+      <View style={styles.armedRow}>
+        <Text style={orgPanelStyles.calloutWarning}>
+          Converts this replica to failover. It must share the primary's
+          datacenter LAN.
+        </Text>
+        <Pressable
+          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+          disabled={disabled}
+          onPress={onConfirm}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+            Confirm convert
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+          onPress={onCancel}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
+        </Pressable>
+      </View>
+    )
+  }
+  return (
+    <Pressable
+      style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+      disabled={disabled}
+      onPress={onArm}
+    >
+      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+        Convert to failover
       </Text>
     </Pressable>
   )
@@ -653,6 +769,7 @@ function ServerOptionRow({
 }>) {
   const eligible = eligibilityRow?.eligible === true
   const reason = eligibilityRow?.reason
+  const predicted = eligibilityRow?.predictedTransport
   const label = server.displayName?.trim() || server.hostname?.trim() || server.id
   const showNetworkLink =
     reason === 'no-datacenter' ||
@@ -674,6 +791,11 @@ function ServerOptionRow({
       <Text style={[styles.pickerLabel, !eligible && styles.pickerDisabled]}>
         {label}
       </Text>
+      {eligible && predicted ? (
+        <Text style={styles.reasonText}>
+          {memberTransportLabel(predicted)}
+        </Text>
+      ) : null}
       {!eligible && reason ? (
         <View style={styles.reasonRow}>
           <Text style={styles.reasonText}>
@@ -685,9 +807,7 @@ function ServerOptionRow({
               style={webPointer}
             >
               <Text style={styles.linkText}>
-                {reason === 'no-private-path'
-                  ? `Open ${TURBOFABRIC_PRODUCT_NAME}`
-                  : 'Set up private network'}
+                Set up private network
               </Text>
             </Pressable>
           )}
@@ -705,6 +825,8 @@ function AddReplicaForm({
   disabled,
   onSelectServer,
   onOpenNetworkReason,
+  replicaClass,
+  onSelectReplicaClass,
   readEligible,
   onToggleReadEligible,
   onAddReplica,
@@ -717,6 +839,8 @@ function AddReplicaForm({
   disabled: boolean
   onSelectServer: (serverId: string) => void
   onOpenNetworkReason: (reason: ReplicaIneligibleReason, serverId: string) => void
+  replicaClass: ManagedReplicaClass
+  onSelectReplicaClass: (replicaClass: ManagedReplicaClass) => void
   readEligible: boolean
   onToggleReadEligible: () => void
   onAddReplica: () => void
@@ -724,6 +848,40 @@ function AddReplicaForm({
 }>) {
   return (
     <View style={styles.addForm}>
+      <Text style={orgPanelStyles.detailLabel}>Replica class</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        {([
+          { id: 'failover', label: 'Failover' },
+          { id: 'read', label: 'Read-only' },
+        ] as const).map((option) => {
+          const active = replicaClass === option.id
+          return (
+            <Pressable
+              key={option.id}
+              style={[
+                orgPanelStyles.segmentChip,
+                { minHeight: 44, justifyContent: 'center' },
+                active && orgPanelStyles.segmentChipActive,
+                webPointer,
+              ]}
+              disabled={disabled}
+              onPress={() => onSelectReplicaClass(option.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={option.label}
+            >
+              <Text
+                style={[
+                  orgPanelStyles.segmentChipText,
+                  active && orgPanelStyles.segmentChipTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
       <Text style={orgPanelStyles.detailLabel}>Server</Text>
       {servers
         .filter((s) => s.id !== primaryServerId)
@@ -780,7 +938,6 @@ function AddReplicaForm({
 }
 
 function AddReplicaBlock({
-  atReplicaLimit,
   showAdd,
   disabled,
   servers,
@@ -788,6 +945,8 @@ function AddReplicaBlock({
   eligibilityById,
   selectedServerId,
   onSelectServer,
+  replicaClass,
+  onSelectReplicaClass,
   readEligible,
   onToggleReadEligible,
   onOpenNetworkReason,
@@ -795,7 +954,6 @@ function AddReplicaBlock({
   onShowAdd,
   onCancelAdd,
 }: Readonly<{
-  atReplicaLimit: boolean
   showAdd: boolean
   disabled: boolean
   servers: readonly OrgServerRecord[]
@@ -803,6 +961,8 @@ function AddReplicaBlock({
   eligibilityById: ReadonlyMap<string, ReplicaServerEligibility>
   selectedServerId: string | null
   onSelectServer: (serverId: string) => void
+  replicaClass: ManagedReplicaClass
+  onSelectReplicaClass: (replicaClass: ManagedReplicaClass) => void
   readEligible: boolean
   onToggleReadEligible: () => void
   onOpenNetworkReason: (reason: ReplicaIneligibleReason, serverId: string) => void
@@ -810,14 +970,6 @@ function AddReplicaBlock({
   onShowAdd: () => void
   onCancelAdd: () => void
 }>) {
-  if (atReplicaLimit) {
-    return (
-      <Text style={orgPanelStyles.muted}>
-        This cluster already has the maximum of 2 replicas.
-      </Text>
-    )
-  }
-
   if (showAdd) {
     return (
       <AddReplicaForm
@@ -828,6 +980,8 @@ function AddReplicaBlock({
         disabled={disabled}
         onSelectServer={onSelectServer}
         onOpenNetworkReason={onOpenNetworkReason}
+        replicaClass={replicaClass}
+        onSelectReplicaClass={onSelectReplicaClass}
         readEligible={readEligible}
         onToggleReadEligible={onToggleReadEligible}
         onAddReplica={onAddReplica}

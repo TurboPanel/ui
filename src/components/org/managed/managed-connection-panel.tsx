@@ -11,7 +11,10 @@ import type {
   ManagedServerSummary,
   ManagedServiceEngine,
 } from '@/lib/managed-services'
-import { managedCatalogEntryForCode } from '@/lib/managed-services'
+import {
+  managedCatalogEntryForCode,
+  managedIngressPortForEngine,
+} from '@/lib/managed-services'
 import { hasReadEligibleReplica } from '@/lib/managed-read-endpoint'
 import { colors, spacing } from '@/lib/theme'
 
@@ -30,7 +33,8 @@ function endpointLabel(
 
 function protocolPort(engine: ManagedServiceEngine | null): number | null {
   if (!engine) return null
-  return managedCatalogEntryForCode(engine)?.defaultPort ?? null
+  const entry = managedCatalogEntryForCode(engine)
+  return managedIngressPortForEngine(engine, entry?.defaultPort)
 }
 
 function serverLabel(server: ManagedServerSummary | null): string {
@@ -107,7 +111,7 @@ export function ManagedConnectionPanel({
         {port != null ? (
           <Text style={orgPanelStyles.muted}>
             Protocol port {port} — every managed database on this server shares
-            this listener.
+            this listener. The endpoint stays the same across failover.
           </Text>
         ) : null}
         <Text style={orgPanelStyles.detailLine}>

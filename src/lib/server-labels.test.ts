@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import {
+  labelRecordSignature,
   MAX_SERVER_LABELS,
   MAX_SERVER_LABEL_VALUE_LENGTH,
   parseServerLabelRows,
@@ -92,5 +93,20 @@ describe('serverLabelsEqual', () => {
 describe('pairsToLabelRecord', () => {
   it('returns an empty map when pairs are missing', () => {
     expect(pairsToLabelRecord(undefined)).toEqual({})
+  })
+
+  it('maps pairs into a record', () => {
+    expect(
+      pairsToLabelRecord([
+        { key: 'env', value: 'prod' },
+        { key: 'region', value: 'us' },
+      ]),
+    ).toEqual({ env: 'prod', region: 'us' })
+  })
+})
+
+describe('labelRecordSignature', () => {
+  it('sorts keys for a stable signature', () => {
+    expect(labelRecordSignature({ b: '2', a: '1' })).toBe('a=1\nb=2')
   })
 })

@@ -2,9 +2,10 @@
 
 **Web-first signed-in product console** for TurboPanel — fleet management, deploy workflows, managed services, networking, and admin surfaces.
 
-[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](./LICENSE)
-[![Docs](https://img.shields.io/badge/docs-turbopanel.io-3366cc)](https://turbopanel.io/docs)
-[![Status: Private alpha](https://img.shields.io/badge/status-private%20alpha-3dd68c)](https://turbopanel.io/roadmap)
+[![Release](https://img.shields.io/github/v/release/turbopanel/ui?label=release)](https://github.com/turbopanel/ui/releases)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=turbopanel_ui)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=coverage)](https://sonarcloud.io/component_measures?id=turbopanel_ui&metric=coverage)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=code_smells)](https://sonarcloud.io/project/issues?id=turbopanel_ui&resolved=false&types=CODE_SMELL)
 
 GitHub: [turbopanel/ui](https://github.com/turbopanel/ui). Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel).
 

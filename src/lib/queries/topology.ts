@@ -167,6 +167,12 @@ export function useUpdateDatacenter(orgId: string, datacenterId: string) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).topology.datacenters,
         }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.list,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['org', orgId, 'server'],
+        }),
       ]),
   })
 }

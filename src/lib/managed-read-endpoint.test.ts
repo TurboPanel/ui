@@ -11,6 +11,8 @@ function member(
     serverId: partial.serverId ?? 'srv-1',
     serverDisplayName: partial.serverDisplayName ?? null,
     role: partial.role,
+    replicaClass:
+      partial.replicaClass ?? (partial.role === 'replica' ? 'failover' : null),
     readEligible: partial.readEligible,
     ordinal: partial.ordinal ?? 1,
     status: partial.status ?? 'ready',

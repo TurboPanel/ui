@@ -35,6 +35,7 @@ export type {
   ManagedMemberRecord,
   ManagedMemberRole,
   ManagedMemberTransport,
+  ManagedReplicaClass,
   ManagedReplicationHealth,
   ManagedServerSummary,
   ManagedServiceEngine,
@@ -45,8 +46,10 @@ export type {
 
 /** Exported so panels compare against symbols, not string literals. */
 export const USERNAME_IN_USE_ERROR = 'username_in_use'
-export const MANAGED_REPLICA_LIMIT_ERROR = 'managed_replica_limit'
 export const MANAGED_MEMBER_EXISTS_ERROR = 'managed_member_exists'
+export const MANAGED_REPLICA_NOT_PROMOTABLE_ERROR = 'managed_replica_not_promotable'
+export const FAILOVER_REPLICA_REQUIRES_DATACENTER_TRANSPORT_ERROR =
+  'failover_replica_requires_datacenter_transport'
 export const MANAGED_MEMBER_IS_PRIMARY_ERROR = 'managed_member_is_primary'
 export const DATACENTER_REQUIRED_ERROR = 'datacenter_required'
 export const DATACENTER_CIDR_REQUIRED_ERROR = 'datacenter_cidr_required'
@@ -62,6 +65,7 @@ export const PRIVATE_FAMILY_MISMATCH_ERROR = 'private_family_mismatch'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
 export const PEER_TUNNEL_ADDRESS_REQUIRED_ERROR = 'peer_tunnel_address_required'
 export const MANAGED_PRIVATE_PORT_EXHAUSTED_ERROR = 'managed_private_port_exhausted'
+export const MANAGED_LISTENER_BIND_CONFLICT_ERROR = 'managed_listener_bind_conflict'
 export const MANAGED_REPLICA_NOT_STREAMING_ERROR = 'managed_replica_not_streaming'
 export const MANAGED_REPLICA_LAGGING_ERROR = 'managed_replica_lagging'
 export const MANAGED_REPLICA_HEALTH_STALE_ERROR = 'managed_replica_health_stale'
@@ -347,7 +351,21 @@ export type ServerDockerMetadata = {
   composeVersion?: string
 }
 
-export type ServerTimezoneSource = 'server' | 'organization' | null
+export type ServerTimezoneSource = 'server' | 'organization' | 'datacenter' | null
+
+export type HostDefaultsSource = 'server' | 'organization' | 'datacenter'
+
+export type NtpDefaults = {
+  enabled?: boolean
+  servers?: string[]
+  fallbackServers?: string[]
+}
+
+export type OrgHostDefaults = {
+  sshPort: number | null
+  ntp: NtpDefaults | null
+  defaultFabricEnabled: boolean
+}
 
 export type ServerDatacenterRef = {
   id: string
@@ -387,6 +405,12 @@ export type OrgServerRecord = {
   docker: ServerDockerMetadata | null;
   timezone: string | null;
   timezoneSource: ServerTimezoneSource;
+  /** Effective SSH listen port (server → datacenter → org → 22). */
+  sshPort: number;
+  sshPortSource: HostDefaultsSource | null;
+  /** Effective desired NTP settings (not the observed timeSync facts). */
+  ntpDefaults: NtpDefaults | null;
+  ntpDefaultsSource: HostDefaultsSource | null;
   /** Datacenter memberships (IP pins); a server may belong to many. */
   datacenters: ServerDatacenterRef[];
 };
@@ -394,6 +418,8 @@ export type OrgServerRecord = {
 export type ServerDetailRecord = OrgServerRecord & {
   orgDefaultTimezone: string | null
   enforceServerTimezone: boolean
+  datacenterDefaultTimezone: string | null
+  datacenterEnforceServerTimezone: boolean
   colocatedWithInstance: boolean
   labels?: Array<{ key: string; value: string }>
 }
@@ -414,6 +440,10 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
   return {
     ...server,
     datacenters: server.datacenters ?? [],
+    sshPort: server.sshPort ?? 22,
+    sshPortSource: server.sshPortSource ?? null,
+    ntpDefaults: server.ntpDefaults ?? null,
+    ntpDefaultsSource: server.ntpDefaultsSource ?? null,
   }
 }
 
@@ -461,6 +491,11 @@ export async function updateServer(
   serverId: string,
   body: {
     displayName?: string | null
+    options?: {
+      sshPort?: number | null
+      ntp?: NtpDefaults | null
+      hosting?: { enabled: boolean }
+    }
   },
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}`, {
@@ -511,6 +546,27 @@ export async function saveOrgDefaultTimezone(
 ): Promise<OrgDefaultTimezoneSettings> {
   return await apiFetch(
     `${CLIENT_API}/organizations/${orgId}/default-timezone`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    },
+  )
+}
+
+export async function fetchOrgHostDefaults(
+  orgId: string,
+): Promise<OrgHostDefaults> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/host-defaults`,
+  )
+}
+
+export async function saveOrgHostDefaults(
+  orgId: string,
+  patch: Partial<OrgHostDefaults>,
+): Promise<OrgHostDefaults> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/host-defaults`,
     {
       method: 'PUT',
       body: JSON.stringify(patch),
@@ -576,9 +632,28 @@ export type OrgFabricRecord = {
   id: string
   cidr: string
   status?: string
+  allowRelay: boolean
 }
 
 export type RelayRole = 'gateway' | 'member'
+
+export type FabricRelayPathKind =
+  | 'direct_lan'
+  | 'direct_public'
+  | 'direct_nat'
+  | 'gateway'
+  | 'relay'
+  | 'unreachable'
+
+export type FabricRelayPathState = {
+  peerServerId: string
+  selected: FabricRelayPathKind
+  endpoint?: string
+  viaServerId?: string
+  lastHandshakeAt?: string
+  latencyMs?: number
+  degraded: boolean
+}
 
 /** Host Docker bridge for a spanning compose network on this relay. */
 export type FabricRelaySegment = {
@@ -606,6 +681,11 @@ export type RelayRecord = {
   lastHandshakeAt: string | null
   transferRxBytes?: number
   transferTxBytes?: number
+  paths: FabricRelayPathState[]
+  allowRelay: boolean | null
+  effectiveAllowRelay: boolean
+  preferredGatewayIds: string[]
+  gatewayEligible: boolean
 }
 
 export type OrgFabricSettings = {
@@ -617,6 +697,7 @@ export type OrgFabricSettings = {
 export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
 export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR =
   'gateway_datacenter_cidr_required'
+export const PREFERRED_GATEWAY_INVALID_ERROR = 'preferred_gateway_invalid'
 
 export type FabricRelayWireRow = {
   serverId: string
@@ -639,6 +720,11 @@ export type FabricRelayWireRow = {
     transferRx?: number
     transferTx?: number
   } | null
+  paths?: FabricRelayPathState[]
+  allowRelay?: boolean | null
+  effectiveAllowRelay?: boolean
+  preferredGatewayIds?: string[]
+  gatewayEligible?: boolean
 }
 
 export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
@@ -663,6 +749,11 @@ export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
     lastHandshakeAt,
     ...(transferRx !== undefined ? { transferRxBytes: transferRx } : {}),
     ...(transferTx !== undefined ? { transferTxBytes: transferTx } : {}),
+    paths: row.paths ?? [],
+    allowRelay: row.allowRelay ?? null,
+    effectiveAllowRelay: row.effectiveAllowRelay === true,
+    preferredGatewayIds: row.preferredGatewayIds ?? [],
+    gatewayEligible: row.gatewayEligible === true,
   }
 }
 
@@ -673,7 +764,14 @@ function toOrgFabricSettings(body: {
 }): OrgFabricSettings {
   return {
     enabled: body.enabled,
-    ...(body.fabric ? { fabric: body.fabric } : {}),
+    ...(body.fabric
+      ? {
+          fabric: {
+            ...body.fabric,
+            allowRelay: body.fabric.allowRelay === true,
+          },
+        }
+      : {}),
     relays: (body.relays ?? []).map(toRelayRecord),
   }
 }
@@ -690,14 +788,19 @@ export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> 
 export async function saveOrgFabric(
   orgId: string,
   enabled: boolean,
+  extras?: Readonly<{ allowRelay?: boolean }>,
 ): Promise<OrgFabricSettings> {
+  const payload: { enabled: boolean; allowRelay?: boolean } = { enabled }
+  if (extras?.allowRelay !== undefined) {
+    payload.allowRelay = extras.allowRelay
+  }
   const body = await apiFetch<{
     enabled: boolean
     fabric?: OrgFabricRecord
     relays?: FabricRelayWireRow[]
   }>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
     method: 'PUT',
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify(payload),
   })
   return toOrgFabricSettings(body)
 }
@@ -709,6 +812,8 @@ export type PatchOrgFabricRelayBody = {
   endpointAddress?: string | null
   /** Write-only — never returned on RelayRecord. */
   presharedKey?: string
+  allowRelay?: boolean | null
+  preferredGatewayIds?: string[] | null
 }
 
 export async function patchOrgFabricRelay(
@@ -1471,6 +1576,8 @@ export type DatacenterOptions = {
   defaultServerTimezone?: string | null
   enforceServerTimezone?: boolean
   addressPreference?: DatacenterAddressPreference
+  sshPort?: number | null
+  ntp?: NtpDefaults | null
 }
 
 export type DatacenterNameSuggestion = {
@@ -3649,7 +3756,11 @@ export async function fetchManagedMembers(
 
 export async function addManagedReplica(
   environmentId: string,
-  body: { serverId: string; readEligible?: boolean },
+  body: {
+    serverId: string
+    replicaClass?: 'failover' | 'read'
+    readEligible?: boolean
+  },
 ): Promise<ManagedCommandResponse & { member?: ManagedMemberRecord }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/members`,
@@ -3663,7 +3774,10 @@ export async function addManagedReplica(
 export async function updateManagedMember(
   environmentId: string,
   memberId: string,
-  body: { readEligible: boolean },
+  body: {
+    readEligible?: boolean
+    replicaClass?: 'failover' | 'read'
+  },
 ): Promise<ManagedCommandResponse & { member?: ManagedMemberRecord }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}`,

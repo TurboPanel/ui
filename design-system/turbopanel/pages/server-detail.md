@@ -24,11 +24,17 @@
 
 | Tab | Content |
 |-----|---------|
-| Overview | Identity, OS, geo when reported, timezone, labels editor |
+| Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), SSH port (effective + override), labels editor |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
-| Time | NTP status, timezone picker, NTP apply form |
+| Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
 | Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
+
+## SSH port (Overview)
+
+- Effective listen port + source (server / datacenter / organization / platform 22).
+- Manage-gated override; empty save inherits the parent layer (`PATCH options.sshPort: null`).
+- Desired configuration only — never presented as rewriting sshd.
 
 ## Labels (Overview)
 
@@ -55,3 +61,4 @@
 - ❌ Modal-per-action for ping, timezone, or NTP  
 - ❌ Emoji icons for actions  
 - ❌ Raw hex outside `theme.ts` tokens
+- ❌ Implying SSH port save rewrites sshd

@@ -20,6 +20,33 @@ Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) 
 - Do not record secrets or environment-specific URLs as if they were universal.
 - Remove or correct notes that prove wrong.
 
+### SonarQube (CI-based analysis)
+
+- Analysis runs in GitHub Actions (`.github/workflows/verify.yml`) with
+  `SONAR_TOKEN` and `sonar-project.properties`
+  (`sonar.projectKey=turbopanel_ui`, `sonar.organization=turbopanel`). The job
+  runs lint + typecheck + **`pnpm test:coverage`** (Vitest v8 LCOV at
+  `coverage/lcov.info`), then scans with
+  `sonar.javascript.lcov.reportPaths=coverage/lcov.info`. The scan waits on the
+  quality gate (`sonar.qualitygate.wait=true`); if the gate fails, the workflow
+  stops.
+- Vitest coverage `include` is `src/lib/**/*.ts` (`vitest.config.ts`).
+  `sonar.coverage.exclusions` must keep Expo routes (`src/app/**`), UI chrome
+  (`src/components/**`), and `**/*.tsx` out of the coverage denominator so
+  untested screens do not fail Sonar-way **Coverage on New Code ≥ 80%**.
+- **`sonar.sources` / `sonar.tests` / `sonar.test.inclusions`** must stay set in
+  `sonar-project.properties` (and mirrored in vestigial
+  `.sonarcloud.properties`). Tests are co-located (`**/*.test.ts` under `src`).
+- **Automatic Analysis must stay off** for `turbopanel_ui` (SonarCloud →
+  project **Administration → Analysis Method**). CI and Automatic Analysis
+  cannot run together — Automatic Analysis enabled makes the CI scanner fail.
+  There is no Sonar MCP `toggle_automatic_analysis` tool; change this only in
+  the SonarCloud UI.
+- Sonar-way **Coverage on New Code ≥ 80%** needs LCOV on CI. After switching
+  from Automatic Analysis, reset **New Code** (Administration → New Code) so the
+  baseline is not months of uncovered history, or the gate will fail even with
+  fresh coverage reports.
+
 ### TypeScript style (SonarQube)
 
 - Prefer **`String#replaceAll()`** over **`String#replace()` with a global regex** when replacing every occurrence of a substring (`typescript:S7781`).
@@ -83,6 +110,11 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 | `pnpm typecheck` | `tsc --noEmit` — same gate as CI `verify.yml` and deploy |
 | `pnpm lint` | Expo ESLint |
 | `pnpm test` | Vitest once |
+| `pnpm test:coverage` | Vitest + LCOV (`coverage/lcov.info`) — CI `verify.yml` runs this, then SonarCloud |
+
+**CI:** `.github/workflows/verify.yml` runs lint, typecheck, `pnpm test:coverage`,
+then a SonarCloud scan with `sonar.qualitygate.wait=true` (`SONAR_TOKEN` required).
+Automatic Analysis must stay **off** for `turbopanel_ui`.
 
 **Pre-commit** (`.githooks/pre-commit`): secret scan only (never skippable).
 Lint/typecheck/tests are **temporarily disabled** in the hook until the
@@ -92,7 +124,7 @@ toolchain can run inside the Vagrant guest. Requires `core.hooksPath=.githooks`
 - **`pnpm install`** runs `prepare` → `scripts/ensure-git-hooks.sh`, which sets `core.hooksPath=.githooks` locally.
 - Dev console `./console` / `ensureAllGitHooksPaths` also wires every co-located checkout.
 - After a fresh clone, run `pnpm install` (or `sh scripts/ensure-git-hooks.sh`) before committing; confirm with `git config --local --get core.hooksPath` → `.githooks`.
-- Lint/typecheck/tests still belong in CI/deploy and can be run manually with `pnpm lint` / `pnpm typecheck` / `pnpm test`.
+- Lint/typecheck/tests still belong in CI/deploy and can be run manually with `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm test:coverage`.
 
 ## Server state (React Query)
 
@@ -305,7 +337,7 @@ Main product shell for signed-in users. Web keeps the sidebar + narrow-viewport 
 | `/<orgId>/servers/datacenters/new` | `datacenter-form-section.tsx` | Create form (name, description, server + IP dropdowns → first subnet). After create, opens datacenter detail |
 | `/<orgId>/servers/datacenters/[datacenterId]` | `datacenter-detail-section.tsx` | Name/description; Subnets (rows + Add subnet); Routing (address preference); member pins (server + IP dropdowns, both families); TurboFabric relays; timezone; two-press delete when empty |
 | `/<orgId>/servers/keys` | `pending-keys-section.tsx` | Unused registration keys (not bound to a server). Owner-only; two-press delete. Reached from the Servers sidebar. |
-| `/<orgId>/servers/settings` | `server-timezone-settings-section.tsx` + `server-capacity-settings-section.tsx` | Org default timezone + server seat capacity (`maxServers`) |
+| `/<orgId>/servers/settings` | `server-timezone-settings-section.tsx` + `server-host-defaults-settings-section.tsx` + `server-capacity-settings-section.tsx` | Org default timezone, host defaults (SSH / NTP / TurboFabric preference), server seat capacity (`maxServers`) |
 | `/<orgId>/servers/tls` | `tls-overview-section.tsx` | Org TLS certificate library (upload / self-signed; LE seam pending) |
 | `/<orgId>/network` | `network/network-overview-section.tsx` | Hub linking Datacenters, TurboFabric, Addresses, and Docker networks (private subnet CRUD lives on Datacenters) |
 | `/<orgId>/network/sites/[datacenterId]` | redirect | Legacy bookmark → `/servers/datacenters/:id` |
@@ -413,7 +445,7 @@ Authorization helpers:
 - `rotateManagedUserPassword(environmentId, principalId)` → `POST …/managed/users/:principalId/password` — show-once `password` + optional `redeployRequired`
 - `fetchManagedUsers` / `createManagedUser` / `deleteManagedUser` → `…/managed/users` (create returns show-once `password`)
 - `fetchManagedDatabases` / `createManagedDatabase` / `deleteManagedDatabase` → `…/managed/databases` (name URL-encoded on delete)
-- `fetchManagedMembers` / `addManagedReplica` / `updateManagedMember` / `removeManagedMember` / `promoteManagedMember` → `…/managed/members` (+ `…/promote` with optional `{ force }`)
+- `fetchManagedMembers` / `addManagedReplica` (`replicaClass` default `failover`) / `updateManagedMember` (`readEligible` / `replicaClass`) / `removeManagedMember` / `promoteManagedMember` (`{ force }`; read class is 422 `managed_replica_not_promotable` unless force) → `…/managed/members`
 - `fetchManagedStatus(environmentId)` → `{ status, host, port, containers, members }` (Postgres-backed)
 - `fetchManagedLogs(environmentId, tail?)` → `{ logs }` (on-demand daemon round-trip; never timer-polled)
 - `fetchOrganizationManaged(orgId)` → `GET /organizations/:id/managed` — `{ managed: ManagedListRecord[] }` (includes `members[]`)
@@ -445,7 +477,7 @@ Authorization helpers:
 - `fetchDatacenters()` / `fetchDatacenter(id)` / `createDatacenter` / `updateDatacenter` / `deleteDatacenter` / `addDatacenterMembers` / `removeDatacenterMember` / `createDatacenterSubnet` / `updateDatacenterSubnet` / `deleteDatacenterSubnet` → `/api/client/v1/datacenters`; create body is `{ displayName?, description?, members: [{ serverId, address }], sourceServerId? }` (first subnet is derived from the seed member’s reported private `ips[].cidr` when present, otherwise a typical LAN `/24` or `/64` — never typed); list includes `DatacenterRecord.privateCidrs: string[]` (one entry per subnet, default `[]`); detail is `{ datacenter: DatacenterDetailRecord; members: DatacenterMemberPin[] }` with `subnets[]` and per-pin `members[]` (default `[]` on older payloads). `removeDatacenterMember` removes every pin for that server in the datacenter. `PATCH /datacenters/:id` **replaces** `options` — UI merges via `mergeDatacenterOptions` so timezone and `addressPreference` cannot clobber each other. `fetchDatacenterNameSuggestions()` derives editable names from server geo/ASN metadata; delete returns **409** `datacenter_has_members` until every pin is gone (`DATACENTER_HAS_MEMBERS_ERROR`), then **409** `datacenter_has_networks` only if leftover non-site networks remain. Subnet create **409** `subnet_overlaps` / **400** `invalid_cidr`; subnet delete **409** `subnet_has_members`.
 - `fetchIps(filters?)` / `fetchIp` / `createIp` (never send `version`) / `updateIp` / `deleteIp` → `/api/client/v1/ips`; `IpScope` is `'public' | 'datacenter'` (no `loopback`, no `vpn`); `version` is server-derived/read-only; optional `description` (`varchar(255)`, not a display name). Datacenter **free pool** is `datacenterId` only; a **membership pin** (`serverId`) requires `datacenterId` + `networkId` (site subnet of that datacenter). Delete surfaces **409** `ip_in_use` as "This address is pinned to a hosting — unassign it first."
 - `fetchNetworks(filters?)` / `createNetwork` / `updateNetwork` / `deleteNetwork` → `/api/client/v1/networks` (org-scoped; `NetworkKind` is `'datacenter' | 'docker'` — no `server`; optional `organizationId` / `datacenterId` / `serverId` (host pin on docker only) / `kind`)
-- Error constants: `IP_IN_USE_ERROR`, `GATEWAY_DATACENTER_REQUIRED_ERROR`, `GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR` (relay PATCH), `FABRIC_RECONCILE_FAILED_ERROR` / `FABRIC_RECONCILE_PENDING_ERROR` (deploy), `DATACENTER_HAS_MEMBERS_ERROR` / `DATACENTER_HAS_NETWORKS_ERROR` (datacenter delete), `SUBNET_OVERLAPS_ERROR` / `SUBNET_HAS_MEMBERS_ERROR` / `INVALID_CIDR_ERROR` / `ADDRESS_NOT_IN_ANY_SUBNET_ERROR` / `ADDRESS_IN_USE_ERROR` (subnets / pins), `DATACENTER_IP_REQUIRED_ERROR` / `PRIVATE_PATH_UNAVAILABLE_ERROR` / `PRIVATE_FAMILY_MISMATCH_ERROR` (managed replica overlay — live instance codes from `private-endpoint.ts`; `PEER_TUNNEL_ADDRESS_REQUIRED_ERROR` in `instance-api.ts` / `managed-services.ts` is a dead constant, code follow-up)
+- Error constants: `IP_IN_USE_ERROR`, `GATEWAY_DATACENTER_REQUIRED_ERROR`, `GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR` (relay PATCH), `FABRIC_RECONCILE_FAILED_ERROR` / `FABRIC_RECONCILE_PENDING_ERROR` (deploy), `DATACENTER_HAS_MEMBERS_ERROR` / `DATACENTER_HAS_NETWORKS_ERROR` (datacenter delete), `SUBNET_OVERLAPS_ERROR` / `SUBNET_HAS_MEMBERS_ERROR` / `INVALID_CIDR_ERROR` / `ADDRESS_NOT_IN_ANY_SUBNET_ERROR` / `ADDRESS_IN_USE_ERROR` (subnets / pins), `DATACENTER_IP_REQUIRED_ERROR` / `PRIVATE_PATH_UNAVAILABLE_ERROR` / `PRIVATE_FAMILY_MISMATCH_ERROR` (managed replica overlay — live instance codes from `private-endpoint.ts`; `PEER_TUNNEL_ADDRESS_REQUIRED_ERROR` in `instance-api.ts` / `managed-services.ts` is a dead constant, code follow-up), `MANAGED_REPLICA_NOT_PROMOTABLE_ERROR` / `FAILOVER_REPLICA_REQUIRES_DATACENTER_TRANSPORT_ERROR`
 - `updateServer(id, { displayName? })` → `PATCH /api/client/v1/servers/:id` (membership uses `addDatacenterMembers` / `removeDatacenterMember`, not `datacenterId`)
 - Types: `ProjectRecord` (`metadata.type`, `options.compose`), `EnvironmentRecord` (`metadata`, `options.compose`), `CatalogSummary`, `VariableRecord`, `CreateProjectBody`, `ServiceRecord` (`displayName`, `composeServiceName` — compose key is derived-only; never send on create/update), `ContainerRecord` (`serviceId`, `serverId`, top-level `containerId` / `containerName` / `status` / `composeServiceName` / `role` (`'service' | 'ingress' | 'turbopanel'`, allocator-owned — `service` is an ordinary workload container, `ingress` is the per-service Traefik at ordinal 1 named `<serviceId>-in`, `turbopanel` is a `turbopanel-system` platform component) — status/id from Postgres reconcile, never DO reads; residual `metadata` only), `DeployPreviewResponse.containers[]` also carries `role`, `TlsRecord` (`source`, `metadata`, `certificatePem` — no private key), `DatacenterRecord` (`privateCidrs: string[]` — one entry per subnet), `DatacenterDetailRecord` (`subnets[]`), `DatacenterMemberPin` (`serverId`, `address`, `ipId`, `networkId`), `DatacenterOptions.addressPreference` (`ipv6` default when absent), `IpRecord` (`scope` `'public' | 'datacenter'`, derived `version`, optional `description`), `NetworkRecord` (`kind` `'datacenter' | 'docker'`, `cidr`, …), `OrgFabricSettings` (`enabled`, `fabric?`, `relays[]`), `RelayRecord` (`serverId`, `address`, `role` `'gateway' | 'member'`, `advertisedCidrs` stored override, `resolvedAdvertisedCidrs` effective IPv4 list, `endpointAddress` pin, `resolvedEndpoint`, `hasPresharedKey`, `segments[]`, never `presharedKey`), `HostingRecord` (`tlsId?`, `ipId?`), `OrgServerRecord` / `ServerDetailRecord` (`datacenters: { id, displayName }[]` — multi-membership pins)
 - **Secret write-only rule:** `VariableRecord.value` is always `null` when `isSecret` is true — the UI must never display or pre-fill secret values; use masked placeholders and write-only update forms. Generated secrets may be shown once at create time, then never again.
@@ -456,13 +488,14 @@ Authorization helpers:
 - `triggerServerUpdate(serverId)` → `POST /api/client/v1/servers/:id/update` — triggers a trunk update on the connected daemon; requires `organization:manage`.
 - `fetchServer(serverId)` → `GET /api/client/v1/servers/:id` — unwraps `{ ok, server }` → `ServerDetailRecord` (Postgres-backed detail read; never `fetchServerCell`). Optional `labels[]` for Overview.
 - `fetchServerLabels(serverId)` / `saveServerLabels(serverId, labels)` → `GET`/`PUT /api/client/v1/servers/:id/labels` — PUT is replace-all `{ labels: { key: value } }`.
-- `fetchOrgFabric(orgId)` / `saveOrgFabric(orgId, enabled)` → `GET`/`PUT /api/client/v1/organizations/:id/fabric` — TurboFabric opt-in (`{ enabled, fabric?, relays[] }`). **GET is manage-gated**; datacenter/server Network views must pass `useOrgFabric(orgId, { enabled: canManage })` and show permission-aware copy instead of empty-relay messaging. Not required for standalone Docker; never auto-enable. UI copy uses `TURBOFABRIC_PRODUCT_NAME` (`TurboFabric`).
-- `patchOrgFabricRelay(orgId, serverId, body)` → `PATCH /organizations/:id/fabric/relays/:serverId` (`role?`, `advertisedCidrs?`, `keepalive?`, `endpointAddress?`, write-only `presharedKey?`). **422** `gateway_datacenter_required` / `gateway_datacenter_cidr_required` on gateway promote.
+- `fetchOrgFabric(orgId)` / `saveOrgFabric(orgId, enabled, extras?)` → `GET`/`PUT /api/client/v1/organizations/:id/fabric` — TurboFabric opt-in (`{ enabled, fabric?, relays[] }`). **GET is manage-gated**; datacenter/server Network views must pass `useOrgFabric(orgId, { enabled: canManage })` and show permission-aware copy instead of empty-relay messaging. Not required for standalone Docker; never auto-enable. UI copy uses `TURBOFABRIC_PRODUCT_NAME` (`TurboFabric`). Org PUT may include `allowRelay` (degraded opt-in; default off). `RelayRecord.paths[]` is diagnostics-only per-peer path state (`direct_lan` / `direct_public` / `direct_nat` / `gateway` / `relay` / `unreachable`). Relays also carry `allowRelay` / `effectiveAllowRelay` / `preferredGatewayIds` / `gatewayEligible`. `network-fabric-section.tsx` renders a peer-path matrix plus org/relay `allowRelay` controls (no Links route).
+- `patchOrgFabricRelay(orgId, serverId, body)` → `PATCH /organizations/:id/fabric/relays/:serverId` (`role?`, `advertisedCidrs?`, `keepalive?`, `endpointAddress?`, write-only `presharedKey?`, `allowRelay?` (`null` inherits org), `preferredGatewayIds?`). **422** `gateway_datacenter_required` / `gateway_datacenter_cidr_required` on gateway promote; **422** `preferred_gateway_invalid` (`PREFERRED_GATEWAY_INVALID_ERROR`) when a preferred id is not a gateway-role relay.
 - `applyOrgFabric(orgId)` → `POST /organizations/:id/fabric/apply` — `{ ok, fabricId, interfaceName: 'tp0', results[] }` (`queued` / `failed` / `skipped` / `converged` + `commandId?`). Feed queued `{serverId, commandId}` pairs into `useCommandsBatch`; **Apply stays disabled** while `hasPendingTrackedCommands` (tracked batch loading or any non-terminal). Merge later queued ids with `mergeTrackedCommandEntries` so an in-flight batch is not replaced. Hooks: `useOrgFabric` / `usePatchOrgFabricRelay` / `useApplyOrgFabric` in `src/lib/queries/fabric.ts`. There is no Links route — datacenter detail summarizes relays via `src/lib/fabric-mesh.ts`.
 - `setServerTimezone(serverId, timezone)` → `POST /api/client/v1/servers/:id/timezone` — `CommandEnqueueResponse`.
 - `setServerNtp(serverId, input)` → `POST /api/client/v1/servers/:id/ntp` — at least one of `enabled` / `servers` / `fallbackServers` required.
 - `fetchTimezones()` → `GET /api/client/v1/timezones` — `{ timezones: string[] }`.
 - `fetchOrgDefaultTimezone(orgId)` / `saveOrgDefaultTimezone(orgId, patch)` → `GET|PUT /api/client/v1/organizations/:orgId/default-timezone`.
+- `fetchOrgHostDefaults(orgId)` / `saveOrgHostDefaults(orgId, patch)` → `GET|PUT /api/client/v1/organizations/:orgId/host-defaults` — manage-gated `{ sshPort, ntp, defaultFabricEnabled }`. SSH/NTP cascade org → datacenter → server (`src/lib/host-defaults.ts`); `defaultFabricEnabled` is org-only preference (does not call `PUT …/fabric`). `null` clears a layer. Server list/detail expose effective `sshPort` / `sshPortSource` / `ntpDefaults` / `ntpDefaultsSource`; detail also has `datacenterDefaultTimezone` / `datacenterEnforceServerTimezone`. `updateServer` accepts `options.sshPort` / `options.ntp`. Datacenter `PATCH options` must `mergeDatacenterOptions` (replace-all). Saving does not rewrite sshd or apply NTP.
 - `fetchOrgDefaultEnvironment(orgId)` / `saveOrgDefaultEnvironment(orgId, defaultEnvironmentName)` → `GET|PUT /api/client/v1/organizations/:orgId/default-environment` — scaffold name (`null` = `Production`).
 - `fetchOrganizations()` → `GET /api/client/v1/organizations` — `{ organizations: OrganizationRecord[] }` (id, displayName, createdAt).
 - `fetchOrganization(id)` → `GET /api/client/v1/organizations/:id` — `{ organization }`; **404** if missing or inaccessible.
@@ -477,12 +510,12 @@ Authorization helpers:
 - Fleet capacity tiles (Servers · Cores · RAM) live on **Overview**, not this page. Load bars still use the sum of `resources.cpus[].threads.total` (leftover `resources.cpu.threadCount` is accepted).
 - OS logos: Debian / Raspberry Pi OS via `osLogo` (`debian` | `raspberry-pi-os`) from density-aware PNGs (`assets/os/<slug>.png` + `@2x` / `@3x`) in `src/lib/os-logos.ts`.
 - Batch **Update** targets **selected** updatable hosts only; per-host commands, delete, time/network, and metrics live on the server detail page.
-- `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `resources` (`cpus[]` / `gpus[]` / RAM / swap **and** `ips`), top-level `ips` (same list), `timeSync`, `docker` (null when Docker is not installed), `timezone`, `timezoneSource`, and `datacenters: { id, displayName }[]` (multi-membership pins). Each reported IP may include `interface`. CPU sockets are `resources.cpus[0]`, `cpus[1]`, … (`vendorId` like `GenuineIntel`, `cores` / `threads` with optional `p`/`e`, `cache`, `speedMhz` / `turboMhz`). GPUs are `resources.gpus[0]`, `gpus[1]`, … (name, PCI vendor id, memory, driver). Leftover `resources.cpu` (`coreCount` / `threadCount`) is still accepted for fleet totals.
+- `OrgServerRecord` from `GET /api/client/v1/servers` includes `os` / `osDisplay` / `osLogo`, plus `resources` (`cpus[]` / `gpus[]` / RAM / swap **and** `ips`), top-level `ips` (same list), `timeSync`, `docker` (null when Docker is not installed), `timezone`, `timezoneSource` (`server` / `organization` / `datacenter` / null), effective `sshPort` / `sshPortSource`, `ntpDefaults` / `ntpDefaultsSource`, and `datacenters: { id, displayName }[]` (multi-membership pins). Each reported IP may include `interface`. CPU sockets are `resources.cpus[0]`, `cpus[1]`, … (`vendorId` like `GenuineIntel`, `cores` / `threads` with optional `p`/`e`, `cache`, `speedMhz` / `turboMhz`). GPUs are `resources.gpus[0]`, `gpus[1]`, … (name, PCI vendor id, memory, driver). Leftover `resources.cpu` (`coreCount` / `threadCount`) is still accepted for fleet totals.
 - Fleet usage: `useFleetServerUsage` → `fetchFleetMetricsLatest` — **one** O(1) call, never per-server metrics series on this page. Vertical columns show stacked CPU (user/system/other/iowait, fill grows up), load (fill = load1/cores; visible value is load1), memory and swap. Overview status tiles sum cores/RAM from `server.resources` (+ metrics-derived RAM fallback) via `src/lib/fleet-capacity.ts`.
 
 #### Server control panel (`/<orgId>/servers/[serverId]`)
 
-- `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s, **2 s while Initializing**); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`). Overview includes a replace-all **labels editor** (`GET`/`PUT /servers/:id/labels`; Docker engine-label charset; value cap is `DESCRIPTION_MAX_LENGTH` by Unicode code point; `organization:manage` display hint).
+- `server-detail-section.tsx` — one `fetchServer` query (`refetchInterval` 30 s, **2 s while Initializing**); never `fetchServerCell`. Tabs: Overview, Control, Time, Network, Metrics — active tab in `?tab=` (`SERVER_DETAIL_TAB_IDS` in `org-navigation.ts`). Overview includes a replace-all **labels editor** (`GET`/`PUT /servers/:id/labels`; Docker engine-label charset; value cap is `DESCRIPTION_MAX_LENGTH` by Unicode code point; `organization:manage` display hint) plus **SSH port** (`ServerSshPortPanel` — effective port + source; managers `PATCH options.sshPort`, empty/`null` inherits). Time tab treats datacenter timezone enforce like org enforce, prefills NTP from `ntpDefaults` when `timeSync` is empty, and still applies via `POST /ntp`.
 - Overview header shows how the daemon reaches the control plane under Online/Offline: `via Local Unix Socket` when colocated / `__direct__`, otherwise `via <IP>` from observed `remoteAddress`. No Connection panel, Online/Offline since, last sample, or 24h reporting on Overview (metrics live on the Metrics tab).
 - Single command poll timer (`COMMAND_POLL_MS`) for ping, hostname, reboot, timezone, and NTP on this page; terminal hostname/reboot/timezone/NTP success invalidates `['server', serverId]`.
 - Legacy deep link `/<orgId>/servers/[serverId]/metrics` unchanged; Metrics tab embeds `ServerMetricsSection` with `embedded`.

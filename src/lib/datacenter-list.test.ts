@@ -409,6 +409,23 @@ describe('mergeDatacenterOptions', () => {
       enforceServerTimezone: true,
     })
   })
+
+  it('preserves sshPort and ntp across an address-preference patch', () => {
+    expect(
+      mergeDatacenterOptions(
+        {
+          sshPort: 22022,
+          ntp: { enabled: true, servers: ['time.cloudflare.com'] },
+          addressPreference: 'ipv6',
+        },
+        { addressPreference: 'ipv4' },
+      ),
+    ).toEqual({
+      sshPort: 22022,
+      ntp: { enabled: true, servers: ['time.cloudflare.com'] },
+      addressPreference: 'ipv4',
+    })
+  })
 })
 
 describe('listServersWithoutMembership', () => {

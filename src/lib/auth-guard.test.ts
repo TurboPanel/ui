@@ -154,4 +154,37 @@ describe('resolveAuthGuardHref', () => {
       }),
     ).toBe('/sign-in')
   })
+
+  it('allows admin routes for admin sessions', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: { ...session, role: 'admin' },
+        needsInstall: false,
+        topSegment: 'admin',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('redirects signed-in users away from developer without bypass', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'developer',
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+
+  it('honors developer bypass on unsigned routes', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'developer',
+        developerDevBypass: true,
+      }),
+    ).toBeNull()
+  })
 })

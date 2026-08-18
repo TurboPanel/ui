@@ -205,6 +205,10 @@ function BindingCard({
         <Text style={orgPanelStyles.detailLabel}>Endpoint: </Text>
         {endpoint}
       </Text>
+      <Text style={orgPanelStyles.muted}>
+        Points at this server's database ingress and does not move when the
+        primary changes.
+      </Text>
       <View style={styles.keyRow}>
         {binding.keys.map((key) => (
           <KeyChip key={key} label={key} />
@@ -624,7 +628,7 @@ export function ManagedBindingsPanel({
   return (
     <SectionPanel
       title="Connected services"
-      hint="Bindings deliver credentials on deploy — passwords are never shown here"
+      hint="Bindings deliver credentials on deploy — the host and port point at this server's database ingress and stay put when the primary changes. Passwords are never shown here"
       accent
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}

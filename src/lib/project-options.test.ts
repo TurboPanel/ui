@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildProjectOptionsPatch,
   countDistinctProjectServers,
+  mergeProjectOptionsLocal,
   resolveEffectiveServerId,
 } from './project-options'
 import type { EnvironmentRecord, ProjectRecord } from './instance-api'
@@ -46,6 +47,26 @@ describe('resolveEffectiveServerId', () => {
     expect(resolveEffectiveServerId('env-srv', 'proj-srv')).toBe('env-srv')
     expect(resolveEffectiveServerId(null, 'proj-srv')).toBe('proj-srv')
     expect(resolveEffectiveServerId(null, null)).toBeNull()
+  })
+})
+
+describe('mergeProjectOptionsLocal', () => {
+  it('merges patch onto empty options and clears defaultServerId on null', () => {
+    expect(
+      mergeProjectOptionsLocal(null, {
+        containerNaming: 'custom',
+        defaultServerId: 'srv-1',
+      }),
+    ).toEqual({
+      containerNaming: 'custom',
+      defaultServerId: 'srv-1',
+    })
+    expect(
+      mergeProjectOptionsLocal(
+        { containerNaming: 'uuid', defaultServerId: 'srv-1' },
+        { defaultServerId: null },
+      ),
+    ).toEqual({ containerNaming: 'uuid' })
   })
 })
 

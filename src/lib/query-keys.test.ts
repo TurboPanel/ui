@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isVisibilityQuery, queryKeys } from './query-keys'
+import {
+  getAccessManagementPermissionKey,
+  isVisibilityQuery,
+  queryKeys,
+} from './query-keys'
 
 describe('isVisibilityQuery', () => {
   it('matches org-scoped hierarchical keys', () => {
@@ -140,5 +144,75 @@ describe('queryKeys.org(…).managed.members / bindings / tlsCa', () => {
     const org = queryKeys.org('org-1')
     expect(org.tlsCa).toEqual(['org', 'org-1', 'tls', 'ca'])
     expect(org.tlsCa.slice(0, org.tls.length)).toEqual([...org.tls])
+  })
+})
+
+describe('queryKeys.org(…).variables / storage / containers / commands', () => {
+  it('discriminates variable and storage parent filters', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.variables.list({ projectId: 'p1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'projectId',
+      'p1',
+    ])
+    expect(org.variables.list({ hostingId: 'h1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'hostingId',
+      'h1',
+    ])
+    expect(org.variables.list({ serverId: 's1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'serverId',
+      's1',
+    ])
+    expect(org.storage.list({ environmentId: 'e1' })).toEqual([
+      'org',
+      'org-1',
+      'storage',
+      'environmentId',
+      'e1',
+    ])
+    expect(org.storage.list({ serviceId: 'svc-1' })).toEqual([
+      'org',
+      'org-1',
+      'storage',
+      'serviceId',
+      'svc-1',
+    ])
+  })
+
+  it('scopes containers and sorts command batch entries', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.containers.list({ environmentId: 'e1' })).toEqual([
+      'org',
+      'org-1',
+      'containers',
+      { environmentId: 'e1' },
+    ])
+    expect(
+      org.commands.batch([
+        { serverId: 'b', commandId: '2' },
+        { serverId: 'a', commandId: '1' },
+      ]),
+    ).toEqual([
+      'org',
+      'org-1',
+      'commands',
+      'batch',
+      ['a:1', 'b:2'],
+    ])
+  })
+
+  it('returns the fixed access-management permission key', () => {
+    expect(getAccessManagementPermissionKey('organization')).toBe(
+      'organization:own',
+    )
+    expect(getAccessManagementPermissionKey('team')).toBe('organization:own')
   })
 })

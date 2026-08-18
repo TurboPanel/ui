@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCpuStackSegments,
+  clampPercent,
+  finiteMetric,
   formatLoad,
+  formatLoadPrimary,
+  formatPercent,
   hasUsageMetrics,
   loadPercentOfCores,
 } from './server-usage'
@@ -62,6 +66,26 @@ describe('buildCpuStackSegments', () => {
       (stack?.other ?? 0) +
       (stack?.iowait ?? 0)
     expect(sum).toBeCloseTo(100, 5)
+  })
+})
+
+describe('clampPercent and formatPercent', () => {
+  it('clamps and formats percentages', () => {
+    expect(clampPercent(-5)).toBe(0)
+    expect(clampPercent(150)).toBe(100)
+    expect(clampPercent(42.6)).toBe(42.6)
+    expect(clampPercent(Number.NaN)).toBeNull()
+    expect(formatPercent(null)).toBe('—')
+    expect(formatPercent(42.6)).toBe('43%')
+  })
+})
+
+describe('formatLoadPrimary and finiteMetric', () => {
+  it('formats load triples and passes through finite metrics', () => {
+    expect(formatLoadPrimary(null, null, null)).toBe('—')
+    expect(formatLoadPrimary(0.42, 0.35, 0.28)).toBe('0.42/0.35/0.28')
+    expect(finiteMetric(12)).toBe(12)
+    expect(finiteMetric(Number.POSITIVE_INFINITY)).toBeNull()
   })
 })
 

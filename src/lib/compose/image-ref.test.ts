@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  emptyComposeImageRef,
   formatComposeImageRef,
   looksLikeRegistryHost,
   parseComposeImageRef,
+  patchComposeImageRef,
 } from './image-ref'
 
 describe('parseComposeImageRef', () => {
@@ -126,5 +128,102 @@ describe('looksLikeRegistryHost', () => {
     expect(looksLikeRegistryHost('localhost:5000')).toBe(true)
     expect(looksLikeRegistryHost('library')).toBe(false)
     expect(looksLikeRegistryHost('nginx')).toBe(false)
+    expect(looksLikeRegistryHost('')).toBe(false)
+  })
+})
+
+describe('emptyComposeImageRef', () => {
+  it('returns blank parts', () => {
+    expect(emptyComposeImageRef()).toEqual({
+      registry: '',
+      image: '',
+      tag: '',
+      digest: '',
+    })
+  })
+})
+
+describe('parseComposeImageRef edge cases', () => {
+  it('returns empty parts for non-string or blank input', () => {
+    expect(parseComposeImageRef(null)).toEqual(emptyComposeImageRef())
+    expect(parseComposeImageRef(42)).toEqual(emptyComposeImageRef())
+    expect(parseComposeImageRef('   ')).toEqual(emptyComposeImageRef())
+  })
+
+  it('parses image-only and digest-only forms', () => {
+    expect(parseComposeImageRef('nginx')).toEqual({
+      registry: '',
+      image: 'nginx',
+      tag: '',
+      digest: '',
+    })
+    expect(
+      parseComposeImageRef('@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'),
+    ).toEqual({
+      registry: '',
+      image: '',
+      tag: '',
+      digest:
+        'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+    })
+  })
+
+  it('treats library paths without a registry host as repository paths', () => {
+    expect(parseComposeImageRef('library/nginx')).toEqual({
+      registry: '',
+      image: 'library/nginx',
+      tag: '',
+      digest: '',
+    })
+    expect(parseComposeImageRef('org/app:stable')).toEqual({
+      registry: '',
+      image: 'org/app',
+      tag: 'stable',
+      digest: '',
+    })
+  })
+})
+
+describe('formatComposeImageRef edge cases', () => {
+  it('returns empty string when image is blank', () => {
+    expect(
+      formatComposeImageRef({
+        registry: 'ghcr.io',
+        image: '  ',
+        tag: 'latest',
+        digest: 'sha256:abc',
+      }),
+    ).toBe('')
+  })
+
+  it('includes digest without requiring a tag', () => {
+    expect(
+      formatComposeImageRef({
+        registry: '',
+        image: 'nginx',
+        tag: '',
+        digest: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+      }),
+    ).toBe(
+      'nginx@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+    )
+  })
+})
+
+describe('patchComposeImageRef', () => {
+  it('merges partial updates', () => {
+    const current = parseComposeImageRef('ghcr.io/org/app:1.0')
+    expect(patchComposeImageRef(current, { tag: '2.0' })).toEqual({
+      registry: 'ghcr.io',
+      image: 'org/app',
+      tag: '2.0',
+      digest: '',
+    })
+    expect(patchComposeImageRef(current, { registry: '', image: 'nginx' })).toEqual({
+      registry: '',
+      image: 'nginx',
+      tag: '1.0',
+      digest: '',
+    })
   })
 })

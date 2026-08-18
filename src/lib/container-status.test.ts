@@ -1,6 +1,20 @@
-import { describe, expect, it } from 'vitest'
-import { hasHostDeployedContainers } from './container-status-guards'
-import type { ContainerRecord } from './instance-api'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/theme', () => ({
+  colors: {
+    textMuted: '#888',
+    green: '#3dd68c',
+    pending: '#e0b341',
+    error: '#ff6b6b',
+  },
+}))
+
+import {
+  environmentStatusTone,
+  serviceStatusTone,
+} from '@/lib/container-status'
+import type { ContainerRecord } from '@/lib/instance-api'
+import { colors } from '@/lib/theme'
 
 function container(
   overrides: Partial<ContainerRecord> & Pick<ContainerRecord, 'status'>,
@@ -9,7 +23,7 @@ function container(
     id: 'c1',
     serviceId: 's1',
     serverId: 'srv1',
-    containerId: '',
+    containerId: 'abc123',
     containerName: 'name',
     role: 'service',
     composeServiceName: 'web',
@@ -19,27 +33,89 @@ function container(
   }
 }
 
-describe('hasHostDeployedContainers', () => {
-  it('is false for empty and pending allocator pins', () => {
-    expect(hasHostDeployedContainers([])).toBe(false)
-    expect(
-      hasHostDeployedContainers([
-        container({ status: 'pending', containerId: '' }),
-      ]),
-    ).toBe(false)
+describe('serviceStatusTone', () => {
+  it('returns Unknown for an empty list', () => {
+    expect(serviceStatusTone([])).toEqual({
+      color: colors.textMuted,
+      label: 'Unknown',
+    })
   })
 
-  it('is true when a Docker container id or host status exists', () => {
+  it('prefers Running when any container is running', () => {
     expect(
-      hasHostDeployedContainers([
-        container({ status: 'pending', containerId: 'abc123' }),
+      serviceStatusTone([
+        container({ status: 'exited' }),
+        container({ status: 'running' }),
       ]),
-    ).toBe(true)
+    ).toEqual({ color: colors.green, label: 'Running' })
+  })
+
+  it('maps restarting/created/paused to Pending', () => {
+    expect(serviceStatusTone([container({ status: 'restarting' })])).toEqual({
+      color: colors.pending,
+      label: 'Pending',
+    })
+    expect(serviceStatusTone([container({ status: 'created' })])).toEqual({
+      color: colors.pending,
+      label: 'Pending',
+    })
+    expect(serviceStatusTone([container({ status: 'paused' })])).toEqual({
+      color: colors.pending,
+      label: 'Pending',
+    })
+  })
+
+  it('maps exited/dead/removing to Stopped', () => {
+    expect(serviceStatusTone([container({ status: 'exited' })])).toEqual({
+      color: colors.error,
+      label: 'Stopped',
+    })
+    expect(serviceStatusTone([container({ status: 'dead' })])).toEqual({
+      color: colors.error,
+      label: 'Stopped',
+    })
+    expect(serviceStatusTone([container({ status: 'removing' })])).toEqual({
+      color: colors.error,
+      label: 'Stopped',
+    })
+  })
+
+  it('falls back to Unknown for unrecognized statuses', () => {
+    expect(serviceStatusTone([container({ status: 'pending' })])).toEqual({
+      color: colors.textMuted,
+      label: 'Unknown',
+    })
+  })
+})
+
+describe('environmentStatusTone', () => {
+  it('is Not started yet when empty or only allocator pins', () => {
+    expect(environmentStatusTone([])).toEqual({
+      color: colors.textMuted,
+      label: 'Not started yet',
+    })
     expect(
-      hasHostDeployedContainers([container({ status: 'exited' })]),
-    ).toBe(true)
+      environmentStatusTone([
+        container({ status: 'pending', containerId: '' }),
+      ]),
+    ).toEqual({
+      color: colors.textMuted,
+      label: 'Not started yet',
+    })
+  })
+
+  it('maps host-deployed containers like service tones with env labels', () => {
     expect(
-      hasHostDeployedContainers([container({ status: 'running' })]),
-    ).toBe(true)
+      environmentStatusTone([container({ status: 'running' })]),
+    ).toEqual({ color: colors.green, label: 'Running' })
+    expect(
+      environmentStatusTone([container({ status: 'created' })]),
+    ).toEqual({ color: colors.pending, label: 'Starting…' })
+    expect(
+      environmentStatusTone([container({ status: 'exited' })]),
+    ).toEqual({ color: colors.error, label: 'Stopped' })
+    expect(
+      environmentStatusTone([container({ status: 'pending' })]),
+    ).toEqual({ color: colors.textMuted, label: 'Unknown' })
   })
 })

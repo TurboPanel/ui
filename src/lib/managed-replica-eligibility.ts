@@ -9,9 +9,10 @@
  * rows.
  */
 
-import {
-  MANAGED_MAX_REPLICAS,
-  type ManagedMemberRecord,
+import type {
+  ManagedMemberRecord,
+  ManagedMemberTransport,
+  ManagedReplicaClass,
 } from '@/lib/managed-services'
 import type { ServerDatacenterRef } from '@/lib/instance-api'
 
@@ -28,6 +29,8 @@ export type ReplicaServerEligibility = {
   reason?: ReplicaIneligibleReason
   /** Preferred site for deep links when ineligible for CIDR reasons. */
   candidateDatacenterId?: string | null
+  /** Predicted path to primary when the row is eligible. */
+  predictedTransport?: ManagedMemberTransport
 }
 
 export type ReplicaEligibilityInput = {
@@ -54,17 +57,12 @@ export type ReplicaEligibilityInput = {
    * `resolvePrivateEndpoint` transport order: local → same site → fabric.
    */
   fabricRelays?: ReadonlyArray<{ serverId: string }>
+  /** Failover vs read-only placement rules. Defaults to failover. */
+  replicaClass: ManagedReplicaClass
 }
 
 export type ReplicaEligibilityResult = {
-  atReplicaLimit: boolean
   servers: ReplicaServerEligibility[]
-}
-
-function replicaCount(
-  members: ReadonlyArray<Pick<ManagedMemberRecord, 'role'>>,
-): number {
-  return members.filter((m) => m.role === 'replica').length
 }
 
 function datacenterIds(
@@ -80,6 +78,15 @@ function shareDatacenter(
   if (left.length === 0 || right.length === 0) return false
   const rightSet = new Set(right)
   return left.some((id) => rightSet.has(id))
+}
+
+function sharedDatacenterIds(
+  left: readonly string[],
+  right: readonly string[],
+): string[] {
+  if (left.length === 0 || right.length === 0) return []
+  const rightSet = new Set(right)
+  return left.filter((id) => rightSet.has(id))
 }
 
 /**
@@ -127,8 +134,127 @@ function firstDatacenterWithCidr(
 }
 
 /**
- * Per-server eligibility for the add-replica picker, plus a cluster-level
- * `atReplicaLimit` flag (max {@link MANAGED_MAX_REPLICAS} replicas).
+ * Display-only prediction of the instance transport that would be selected
+ * for a replica on this server (local → datacenter → fabric → public).
+ */
+export function predictReplicaTransport(params: Readonly<{
+  candidateServerId: string
+  candidateDatacenterIds: readonly string[]
+  primaryServerId: string | null
+  primaryDatacenterIds: readonly string[]
+  fabricRelays: ReadonlyArray<{ serverId: string }>
+}>): ManagedMemberTransport {
+  if (
+    params.primaryServerId &&
+    params.candidateServerId === params.primaryServerId
+  ) {
+    return 'local'
+  }
+  if (
+    params.primaryServerId &&
+    shareDatacenter(
+      params.candidateDatacenterIds,
+      params.primaryDatacenterIds,
+    )
+  ) {
+    return 'datacenter'
+  }
+  if (
+    params.primaryServerId &&
+    hasPrivatePathToPrimary({
+      candidateServerId: params.candidateServerId,
+      candidateDatacenterIds: params.candidateDatacenterIds,
+      primaryServerId: params.primaryServerId,
+      primaryDatacenterIds: params.primaryDatacenterIds,
+      fabricRelays: params.fabricRelays,
+    })
+  ) {
+    return 'fabric'
+  }
+  return 'public'
+}
+
+function failoverEligibility(params: Readonly<{
+  serverId: string
+  membershipIds: readonly string[]
+  primaryDatacenterIds: readonly string[]
+  cidrsByDatacenter: ReadonlyMap<string, readonly string[]>
+  primaryServerId: string | null
+}>): ReplicaServerEligibility {
+  const sharedIds = sharedDatacenterIds(
+    params.membershipIds,
+    params.primaryDatacenterIds,
+  )
+  if (sharedIds.length === 0) {
+    if (params.membershipIds.length === 0 || !params.primaryServerId) {
+      return {
+        serverId: params.serverId,
+        eligible: false,
+        reason: 'no-datacenter',
+      }
+    }
+    return {
+      serverId: params.serverId,
+      eligible: false,
+      reason: 'no-private-path',
+      candidateDatacenterId: params.membershipIds[0] ?? null,
+    }
+  }
+  const readyDatacenterId = firstDatacenterWithCidr(
+    sharedIds,
+    params.cidrsByDatacenter,
+  )
+  if (!readyDatacenterId) {
+    return {
+      serverId: params.serverId,
+      eligible: false,
+      reason: 'no-private-cidr',
+      candidateDatacenterId: sharedIds[0] ?? null,
+    }
+  }
+  return {
+    serverId: params.serverId,
+    eligible: true,
+    candidateDatacenterId: readyDatacenterId,
+    predictedTransport:
+      params.primaryServerId && params.serverId === params.primaryServerId
+        ? 'local'
+        : 'datacenter',
+  }
+}
+
+function readEligibility(params: Readonly<{
+  serverId: string
+  membershipIds: readonly string[]
+  primaryServerId: string | null
+  primaryDatacenterIds: readonly string[]
+  fabricRelays: ReadonlyArray<{ serverId: string }>
+  cidrsByDatacenter: ReadonlyMap<string, readonly string[]>
+}>): ReplicaServerEligibility {
+  const readyDatacenterId = firstDatacenterWithCidr(
+    params.membershipIds,
+    params.cidrsByDatacenter,
+  )
+  return {
+    serverId: params.serverId,
+    eligible: true,
+    candidateDatacenterId: readyDatacenterId,
+    predictedTransport: predictReplicaTransport({
+      candidateServerId: params.serverId,
+      candidateDatacenterIds: params.membershipIds,
+      primaryServerId: params.primaryServerId,
+      primaryDatacenterIds: params.primaryDatacenterIds,
+      fabricRelays: params.fabricRelays,
+    }),
+  }
+}
+
+/**
+ * Per-server eligibility for the add-replica picker.
+ *
+ * Failover: only servers that share the primary's datacenter with a usable
+ * subnet. Read-only: any org server that is not already a member and is
+ * online; predicted transport is shown for the picker.
  *
  * Precedence when multiple reasons apply: already-member → offline →
  * no-datacenter → no-private-cidr → no-private-path.
@@ -146,6 +272,7 @@ export function resolveReplicaEligibility(
     : undefined
   const primaryDatacenterIds = datacenterIds(primary)
   const fabricRelays = input.fabricRelays ?? []
+  const replicaClass = input.replicaClass
 
   const servers: ReplicaServerEligibility[] = input.servers.map((server) => {
     if (memberServerIds.has(server.id)) {
@@ -159,53 +286,26 @@ export function resolveReplicaEligibility(
       return { serverId: server.id, eligible: false, reason: 'offline' }
     }
     const membershipIds = datacenterIds(server)
-    if (membershipIds.length === 0) {
-      return {
+    if (replicaClass === 'read') {
+      return readEligibility({
         serverId: server.id,
-        eligible: false,
-        reason: 'no-datacenter',
-      }
-    }
-    const readyDatacenterId = firstDatacenterWithCidr(
-      membershipIds,
-      cidrsByDatacenter,
-    )
-    if (!readyDatacenterId) {
-      return {
-        serverId: server.id,
-        eligible: false,
-        reason: 'no-private-cidr',
-        candidateDatacenterId: membershipIds[0] ?? null,
-      }
-    }
-    if (
-      input.primaryServerId &&
-      !hasPrivatePathToPrimary({
-        candidateServerId: server.id,
-        candidateDatacenterIds: membershipIds,
+        membershipIds,
         primaryServerId: input.primaryServerId,
         primaryDatacenterIds,
         fabricRelays,
+        cidrsByDatacenter,
       })
-    ) {
-      return {
-        serverId: server.id,
-        eligible: false,
-        reason: 'no-private-path',
-        candidateDatacenterId: readyDatacenterId,
-      }
     }
-    return {
+    return failoverEligibility({
       serverId: server.id,
-      eligible: true,
-      candidateDatacenterId: readyDatacenterId,
-    }
+      membershipIds,
+      primaryDatacenterIds,
+      cidrsByDatacenter,
+      primaryServerId: input.primaryServerId,
+    })
   })
 
-  return {
-    atReplicaLimit: replicaCount(input.members) >= MANAGED_MAX_REPLICAS,
-    servers,
-  }
+  return { servers }
 }
 
 /** Operator-facing reason next to an ineligible server row. */
@@ -222,6 +322,6 @@ export function replicaIneligibleReasonLabel(
     case 'no-private-cidr':
       return 'Datacenter has no subnets yet'
     case 'no-private-path':
-      return 'No private path to primary'
+      return "Must share the primary's datacenter"
   }
 }
