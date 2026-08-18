@@ -53,6 +53,12 @@ export const DATACENTER_CIDR_REQUIRED_ERROR = 'datacenter_cidr_required'
 export const DATACENTER_IP_REQUIRED_ERROR = 'datacenter_ip_required'
 export const DATACENTER_HAS_MEMBERS_ERROR = 'datacenter_has_members'
 export const DATACENTER_HAS_NETWORKS_ERROR = 'datacenter_has_networks'
+export const SUBNET_OVERLAPS_ERROR = 'subnet_overlaps'
+export const SUBNET_HAS_MEMBERS_ERROR = 'subnet_has_members'
+export const INVALID_CIDR_ERROR = 'invalid_cidr'
+export const ADDRESS_NOT_IN_ANY_SUBNET_ERROR = 'address_not_in_any_subnet'
+export const ADDRESS_IN_USE_ERROR = 'address_in_use'
+export const PRIVATE_FAMILY_MISMATCH_ERROR = 'private_family_mismatch'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
 export const PEER_TUNNEL_ADDRESS_REQUIRED_ERROR = 'peer_tunnel_address_required'
 export const MANAGED_PRIVATE_PORT_EXHAUSTED_ERROR = 'managed_private_port_exhausted'
@@ -257,21 +263,59 @@ export type ServerOsMetadata = {
   architecture?: string
 }
 
+export type ServerCpuCoreSplit = {
+  total: number
+  p?: number
+  e?: number
+}
+
+export type ServerCpuCache = {
+  l1?: number
+  l1d?: number
+  l1i?: number
+  l2?: number
+  l3?: number
+  l4?: number
+}
+
+export type ServerCpuSocket = {
+  vendorId?: string
+  name?: string
+  architecture?: string
+  cores?: ServerCpuCoreSplit
+  threads?: ServerCpuCoreSplit
+  cache?: ServerCpuCache
+  speedMhz?: number
+  turboMhz?: number
+}
+
+export type ServerGpu = {
+  vendorId?: string
+  name?: string
+  memoryBytes?: number
+  driver?: string
+  pciId?: string
+  pciSlot?: string
+}
+
+/** Leftover hello CPU block; prefer {@link ServerHostResources.cpus}. */
 export type ServerCpuResources = {
   name?: string
   architecture?: string
   socketCount?: number
-  /** Physical cores (fleet strip). */
   coreCount?: number
-  /** Logical CPUs / threads (load bars). */
   threadCount?: number
 }
 
 /** Static host capacity from daemon hello — inventory totals + load bars. */
 export type ServerHostResources = {
+  cpus?: ServerCpuSocket[]
+  /** Leftover hello shape; prefer {@link cpus}. */
   cpu?: ServerCpuResources
+  gpus?: ServerGpu[]
   memory?: { totalBytes?: number }
   swap?: { totalBytes?: number }
+  ips?: ServerReportedIp[]
 }
 
 export type ServerOsLogoKey = 'debian' | 'raspberry-pi-os'
@@ -283,6 +327,7 @@ export type ServerReportedIp = {
   version: 4 | 6
   scope: ServerReportedIpScope
   cidr?: string
+  interface?: string
 }
 
 export type ServerTimeSync = {
@@ -291,6 +336,7 @@ export type ServerTimeSync = {
   ntpSynced?: boolean
   ntpServers?: string[]
   fallbackNtpServers?: string[]
+  lastSyncedAt?: string
   capturedAt?: string
 }
 
@@ -323,13 +369,13 @@ export type OrgServerRecord = {
   /** Last online/offline transition (`server.status_changed_at`). */
   statusChangedAt: string | null;
   geo: ServerGeo | null;
-  /** Host OS from server.metadata.os (daemon hello); null until reported. */
+  /** Host OS from server.os_* columns (daemon hello); null until reported. */
   os: ServerOsMetadata | null;
   /** Formatted label e.g. "Debian 13.5 (Trixie)". */
   osDisplay: string | null;
   /** Logo key for the OS column (`debian` / `raspberry-pi-os`). */
   osLogo: ServerOsLogoKey | null;
-  /** Capacity totals from daemon hello (`server.metadata.resources`). */
+  /** Capacity totals from daemon hello (`server.metadata.resources`, including ips). */
   resources: ServerHostResources | null;
   colocatedWithInstance?: boolean;
   ips: ServerReportedIp[] | null;
@@ -548,6 +594,8 @@ export type RelayRecord = {
   address: string
   role: RelayRole
   advertisedCidrs: string[]
+  /** Effective list the gateway will advertise (override or derived IPv4). */
+  resolvedAdvertisedCidrs: string[]
   keepalive: number | null
   endpointAddress: string | null
   resolvedEndpoint: string | null
@@ -570,11 +618,12 @@ export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
 export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR =
   'gateway_datacenter_cidr_required'
 
-type FabricRelayWireRow = {
+export type FabricRelayWireRow = {
   serverId: string
   address: string
   role: RelayRole
   advertisedCidrs?: string[]
+  resolvedAdvertisedCidrs?: string[]
   keepalive: number | null
   endpointAddress: string | null
   resolvedEndpoint?: string | null
@@ -592,7 +641,7 @@ type FabricRelayWireRow = {
   } | null
 }
 
-function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
+export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
   const observed = row.observed
   const lastHandshakeAt =
     row.lastHandshakeAt ?? observed?.lastHandshakeAt ?? null
@@ -603,6 +652,7 @@ function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
     address: row.address,
     role: row.role,
     advertisedCidrs: row.advertisedCidrs ?? [],
+    resolvedAdvertisedCidrs: row.resolvedAdvertisedCidrs ?? [],
     keepalive: row.keepalive,
     endpointAddress: row.endpointAddress,
     resolvedEndpoint: row.resolvedEndpoint ?? null,
@@ -795,11 +845,27 @@ export async function fetchOrganizations(): Promise<{ organizations: Organizatio
   return await apiFetch(`${CLIENT_API}/organizations`);
 }
 
+export async function fetchOrganization(
+  organizationId: string,
+): Promise<{ organization: OrganizationRecord }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`);
+}
+
 export async function createOrganization(body: {
   displayName: string;
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/organizations`, {
     method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateOrganization(
+  organizationId: string,
+  body: { displayName: string },
+): Promise<{ ok: true; organization: OrganizationRecord }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`, {
+    method: 'PATCH',
     body: JSON.stringify(body),
   });
 }
@@ -924,7 +990,7 @@ function throwIfLicenseCreateFailed(
   throw new Error(`${CLIENT_API}/licenses failed: ${detail}`)
 }
 
-/** Mint a one-shot registration key for the Add Server flow (not listed in the UI). */
+/** Mint a one-shot registration key for the Add Server flow. */
 export async function createLicense(
   displayName?: string,
   installBaseUrl?: string,
@@ -963,6 +1029,30 @@ export async function createLicense(
   }
 
   return await response.json() as CreatedLicense
+}
+
+export type LicenseBoundServer = {
+  id: string
+  displayName: string | null
+  connected: boolean
+}
+
+export type LicenseRecord = {
+  id: string
+  displayName: string | null
+  createdAt: string
+  revocable: boolean
+  boundServer: LicenseBoundServer | null
+}
+
+export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/licenses`)
+}
+
+export async function deleteLicense(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/licenses/${id}`, {
+    method: 'DELETE',
+  })
 }
 
 export type PermissionKey =
@@ -1375,9 +1465,12 @@ export type NetworkRecord = {
   updatedAt: string
 }
 
+export type DatacenterAddressPreference = 'ipv6' | 'ipv4'
+
 export type DatacenterOptions = {
   defaultServerTimezone?: string | null
   enforceServerTimezone?: boolean
+  addressPreference?: DatacenterAddressPreference
 }
 
 export type DatacenterNameSuggestion = {
@@ -1393,12 +1486,32 @@ export type DatacenterRecord = {
   displayName: string | null
   description: string | null
   organizationId: string
-  /** Private `kind: 'datacenter'` network CIDRs; always present (default `[]`). */
+  /** One CIDR per subnet; always present on list and detail (default `[]`). */
   privateCidrs: string[]
   metadata: Record<string, unknown> | null
   options: DatacenterOptions | null
   createdAt: string
   updatedAt: string
+}
+
+export type DatacenterSubnetRecord = {
+  id: string
+  cidr: string
+  version: IpVersion
+  displayName: string | null
+  description: string | null
+  memberCount: number
+}
+
+export type DatacenterMemberPin = {
+  serverId: string
+  address: string
+  ipId: string
+  networkId: string | null
+}
+
+export type DatacenterDetailRecord = DatacenterRecord & {
+  subnets: DatacenterSubnetRecord[]
 }
 
 export type IpVersion = 4 | 6
@@ -1839,10 +1952,37 @@ export async function fetchDatacenters(): Promise<{
   return await apiFetch(`${CLIENT_API}/datacenters`)
 }
 
-export async function fetchDatacenter(
-  id: string,
-): Promise<{ datacenter: DatacenterRecord }> {
-  return await apiFetch(`${CLIENT_API}/datacenters/${id}`)
+function normalizeDatacenterMemberPin(pin: DatacenterMemberPin): DatacenterMemberPin {
+  return {
+    serverId: pin.serverId,
+    address: pin.address,
+    ipId: pin.ipId ?? `${pin.serverId}:${pin.address}`,
+    networkId: pin.networkId ?? null,
+  }
+}
+
+function normalizeDatacenterDetail(
+  datacenter: DatacenterDetailRecord,
+): DatacenterDetailRecord {
+  return {
+    ...datacenter,
+    privateCidrs: datacenter.privateCidrs ?? [],
+    subnets: datacenter.subnets ?? [],
+  }
+}
+
+export async function fetchDatacenter(id: string): Promise<{
+  datacenter: DatacenterDetailRecord
+  members: DatacenterMemberPin[]
+}> {
+  const body = await apiFetch<{
+    datacenter: DatacenterDetailRecord
+    members?: DatacenterMemberPin[]
+  }>(`${CLIENT_API}/datacenters/${id}`)
+  return {
+    datacenter: normalizeDatacenterDetail(body.datacenter),
+    members: (body.members ?? []).map(normalizeDatacenterMemberPin),
+  }
 }
 
 export async function createDatacenter(body: {
@@ -1872,12 +2012,54 @@ export async function addDatacenterMembers(
   })
 }
 
+/** Removes every pin for this server in the datacenter. */
 export async function removeDatacenterMember(
   datacenterId: string,
   serverId: string,
 ): Promise<{ ok: true }> {
   return await apiFetch(
     `${CLIENT_API}/datacenters/${datacenterId}/members/${serverId}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function createDatacenterSubnet(
+  datacenterId: string,
+  body: {
+    cidr: string
+    displayName?: string
+    description?: string
+  },
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/subnets`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateDatacenterSubnet(
+  datacenterId: string,
+  networkId: string,
+  body: {
+    displayName?: string
+    description?: string
+  },
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/datacenters/${datacenterId}/subnets/${networkId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function deleteDatacenterSubnet(
+  datacenterId: string,
+  networkId: string,
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/datacenters/${datacenterId}/subnets/${networkId}`,
     { method: 'DELETE' },
   )
 }

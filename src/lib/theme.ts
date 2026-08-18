@@ -83,8 +83,11 @@ export const chrome = {
 export const layout = {
   desktopBreakpoint: 768,
   sidebarWidth: 220,
-  /** Native bottom tab bar row (excluding the home-indicator inset). */
-  bottomTabHeight: 56,
+  /**
+   * Native bottom tab icon+label row (excluding home-indicator inset).
+   * iOS UITabBar is 49pt; Android Material bottom nav is 56dp.
+   */
+  bottomTabHeight: Platform.OS === 'android' ? 56 : 49,
   contentMaxWidth: 1400,
   contentGutter: 32,
 } as const

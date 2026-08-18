@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import {
   MAX_SERVER_LABELS,
+  MAX_SERVER_LABEL_VALUE_LENGTH,
   parseServerLabelRows,
   pairsToLabelRecord,
   serverLabelsEqual,
@@ -44,6 +46,31 @@ describe('parseServerLabelRows', () => {
     expect(parsed.ok).toBe(false)
     if (parsed.ok) throw new TypeError('expected duplicate-key failure')
     expect(parsed.error).toContain('Duplicate')
+  })
+
+  it('accepts Unicode label values within the length cap', () => {
+    const parsed = parseServerLabelRows([row('1', 'env', '東京')])
+    expect(parsed).toEqual({ ok: true, labels: { env: '東京' } })
+  })
+
+  it('rejects values over the shared description length cap', () => {
+    const parsed = parseServerLabelRows([
+      row('1', 'env', 'v'.repeat(MAX_SERVER_LABEL_VALUE_LENGTH + 1)),
+    ])
+    expect(parsed.ok).toBe(false)
+  })
+
+  it('accepts DESCRIPTION_MAX_LENGTH emoji code points', () => {
+    const value = '😀'.repeat(DESCRIPTION_MAX_LENGTH)
+    const parsed = parseServerLabelRows([row('1', 'env', value)])
+    expect(parsed).toEqual({ ok: true, labels: { env: value } })
+  })
+
+  it('rejects DESCRIPTION_MAX_LENGTH + 1 emoji code points', () => {
+    const parsed = parseServerLabelRows([
+      row('1', 'env', '😀'.repeat(DESCRIPTION_MAX_LENGTH + 1)),
+    ])
+    expect(parsed.ok).toBe(false)
   })
 
   it('rejects more than 64 labels', () => {

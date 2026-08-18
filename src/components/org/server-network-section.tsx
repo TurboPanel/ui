@@ -16,6 +16,7 @@ import { useOrgFabric } from '@/lib/queries/fabric'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, spacing } from '@/lib/theme'
+import { addressFamilyLabel } from '@/lib/cidr'
 
 // Docker/veth/bridge interfaces are filtered daemon-side before addresses reach the API.
 
@@ -36,25 +37,55 @@ function AddressGroup({
   )
 }
 
-function DatacenterPrivateAddress({
+function DatacenterPrivatePins({
   loading,
-  address,
-}: Readonly<{ loading: boolean; address: string | null }>) {
+  ips,
+  datacenterNameById,
+}: Readonly<{
+  loading: boolean
+  ips: readonly {
+    id: string
+    address: string
+    datacenterId: string | null
+  }[]
+  datacenterNameById: ReadonlyMap<string, string>
+}>) {
   if (loading) {
     return <Text style={orgPanelStyles.muted}>Loading private address…</Text>
   }
-  if (address) {
+  if (ips.length === 0) {
     return (
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Private address: </Text>
-        <Text style={styles.mono} selectable>
-          {address}
-        </Text>
-      </Text>
+      <Text style={orgPanelStyles.muted}>No private address assigned</Text>
     )
   }
   return (
-    <Text style={orgPanelStyles.muted}>No private address assigned</Text>
+    <View style={styles.pinList}>
+      {ips.map((ip) => {
+        const family = addressFamilyLabel(ip.address)
+        const datacenterLabel = ip.datacenterId
+          ? datacenterNameById.get(ip.datacenterId)
+          : null
+        return (
+          <View key={ip.id} style={styles.pinRow}>
+            <Text style={styles.mono} selectable>
+              {ip.address}
+            </Text>
+            {family ? (
+              <View
+                style={orgPanelStyles.segmentChip}
+                accessibilityRole="text"
+                accessibilityLabel={family}
+              >
+                <Text style={orgPanelStyles.segmentChipText}>{family}</Text>
+              </View>
+            ) : null}
+            {datacenterLabel ? (
+              <Text style={orgPanelStyles.muted}>{datacenterLabel}</Text>
+            ) : null}
+          </View>
+        )
+      })}
+    </View>
   )
 }
 
@@ -166,9 +197,15 @@ export function ServerNetworkSection({
     },
   })
 
-  const privateAddress =
-    datacenterIpsQuery.data?.ips[0]?.address ?? null
+  const managedIps = serverManagedIpsQuery.data?.ips ?? []
+  const relay =
+    fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
+  const meshLoading = fabricQuery.isLoading
 
+  const memberships = server.datacenters ?? []
+  const datacenterNameById = new Map(
+    memberships.map((row) => [row.id, row.displayName?.trim() || row.id]),
+  )
   const serverTitle =
     server.displayName?.trim() || server.hostname?.trim() || server.id
   const networkById = new Map(
@@ -180,12 +217,6 @@ export function ServerNetworkSection({
   const datacenterById = new Map(
     (serverManagedIpsQuery.data?.datacenters ?? []).map((row) => [row.id, row]),
   )
-  const managedIps = serverManagedIpsQuery.data?.ips ?? []
-  const relay =
-    fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
-  const meshLoading = fabricQuery.isLoading
-
-  const memberships = server.datacenters ?? []
 
   return (
     <View style={styles.root}>
@@ -219,9 +250,10 @@ export function ServerNetworkSection({
             )
           })
         )}
-        <DatacenterPrivateAddress
+        <DatacenterPrivatePins
           loading={datacenterIpsQuery.isLoading}
-          address={privateAddress}
+          ips={datacenterIpsQuery.data?.ips ?? []}
+          datacenterNameById={datacenterNameById}
         />
       </SectionPanel>
 
@@ -290,6 +322,16 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 8,
+  },
+  pinList: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  pinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   group: {
     gap: spacing.xs,

@@ -1,8 +1,13 @@
+import {
+  DESCRIPTION_MAX_LENGTH,
+  displayNameCodePointLength,
+} from '@/lib/display-name'
+
 /** Docker engine-label charset for `node.labels.*` / `placement.constraints`. */
 export const SERVER_LABEL_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 export const MAX_SERVER_LABELS = 64
 export const MAX_SERVER_LABEL_KEY_LENGTH = 255
-export const MAX_SERVER_LABEL_VALUE_LENGTH = 255
+export const MAX_SERVER_LABEL_VALUE_LENGTH = DESCRIPTION_MAX_LENGTH
 
 export type ServerLabelDraftRow = {
   id: string
@@ -43,7 +48,7 @@ export function parseServerLabelRows(
     }
     const keyError = labelKeyError(key)
     if (keyError) return { ok: false, error: keyError }
-    if (value.length > MAX_SERVER_LABEL_VALUE_LENGTH) {
+    if (displayNameCodePointLength(value) > MAX_SERVER_LABEL_VALUE_LENGTH) {
       return {
         ok: false,
         error: `Label value for "${key}" exceeds ${String(MAX_SERVER_LABEL_VALUE_LENGTH)} characters.`,

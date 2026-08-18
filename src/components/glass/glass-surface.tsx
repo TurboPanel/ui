@@ -1,5 +1,11 @@
 import { type ReactNode } from 'react'
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 import {
   GlassView,
   isGlassEffectAPIAvailable,
@@ -11,6 +17,9 @@ import {
   type GlassIntensity,
 } from '@/lib/glass'
 
+/** Which edges get the default glass hairline rim. */
+export type GlassRim = 'all' | 'none' | 'top' | 'bottom'
+
 type GlassSurfaceProps = Readonly<{
   children: ReactNode
   style?: StyleProp<ViewStyle>
@@ -18,6 +27,11 @@ type GlassSurfaceProps = Readonly<{
   intensity?: GlassIntensity
   /** Native iOS glass style when Liquid Glass API is available */
   nativeStyle?: 'clear' | 'regular'
+  /**
+   * Hairline rim edges. Shell chrome on rounded devices should use `top` /
+   * `bottom` so left/right borders don’t fight the screen curve.
+   */
+  rim?: GlassRim
 }>
 
 function useNativeLiquidGlass(): boolean {
@@ -26,6 +40,25 @@ function useNativeLiquidGlass(): boolean {
     return isLiquidGlassAvailable() && isGlassEffectAPIAvailable()
   } catch {
     return false
+  }
+}
+
+function rimStyle(rim: GlassRim): ViewStyle {
+  switch (rim) {
+    case 'none':
+      return { borderWidth: 0 }
+    case 'top':
+      return {
+        borderWidth: 0,
+        borderTopWidth: 1,
+      }
+    case 'bottom':
+      return {
+        borderWidth: 0,
+        borderBottomWidth: 1,
+      }
+    default:
+      return { borderWidth: 1 }
   }
 }
 
@@ -41,8 +74,14 @@ export function GlassSurface({
   style,
   intensity = 'regular',
   nativeStyle = 'regular',
+  rim = 'all',
 }: GlassSurfaceProps) {
-  const fallback = [styles.base, glassSurfaceStyle(intensity), style]
+  const fallback = [
+    styles.base,
+    glassSurfaceStyle(intensity),
+    rimStyle(rim),
+    style,
+  ]
   const native = useNativeLiquidGlass()
 
   if (native) {
@@ -63,7 +102,6 @@ export function GlassSurface({
 
 const styles = StyleSheet.create({
   base: {
-    borderWidth: 1,
     overflow: 'hidden',
   },
 })

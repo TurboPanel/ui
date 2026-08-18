@@ -28,6 +28,7 @@ import {
 } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
+import { DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const SCOPES: IpScope[] = ['public', 'datacenter']
@@ -83,9 +84,59 @@ function SegmentFilterChip({
   )
 }
 
+function siteSubnetsForDatacenter(
+  networks: readonly NetworkRecord[],
+  datacenterId: string,
+): NetworkRecord[] {
+  if (!datacenterId) return []
+  return networks.filter(
+    (row) => row.kind === 'datacenter' && row.datacenterId === datacenterId,
+  )
+}
 
-function isCreateIpDisabled(creating: boolean): boolean {
-  return creating
+function isDatacenterMembershipPin(scope: IpScope, serverId: string): boolean {
+  return scope === 'datacenter' && serverId.length > 0
+}
+
+function isMembershipPinIncomplete(
+  scope: IpScope,
+  datacenterId: string,
+  networkId: string,
+  serverId: string,
+): boolean {
+  if (!isDatacenterMembershipPin(scope, serverId)) return false
+  return datacenterId.length === 0 || networkId.length === 0
+}
+
+function isCreateIpDisabled(
+  creating: boolean,
+  membershipIncomplete: boolean,
+): boolean {
+  return creating || membershipIncomplete
+}
+
+function retainedNetworkId(
+  networks: readonly NetworkRecord[],
+  datacenterId: string,
+  networkId: string,
+  requireSiteSubnet: boolean,
+): string {
+  if (!networkId) return ''
+  if (!requireSiteSubnet) return networkId
+  const stillValid = siteSubnetsForDatacenter(networks, datacenterId).some(
+    (row) => row.id === networkId,
+  )
+  return stillValid ? networkId : ''
+}
+
+function resolveSubmittedNetworkId(
+  scope: IpScope,
+  serverId: string,
+  networkId: string,
+): string | null {
+  if (serverId && networkId) return networkId
+  if (scope !== 'datacenter' && networkId) return networkId
+  return null
 }
 
 function mutationErrorMessage(err: unknown, fallback: string): string {
@@ -170,12 +221,42 @@ function buildCreateIpBody(input: Readonly<{
     description: input.description.trim() || undefined,
   }
   if (input.createDatacenterId) body.datacenterId = input.createDatacenterId
-  if (input.createNetworkId) body.networkId = input.createNetworkId
   if (input.createServerId) body.serverId = input.createServerId
+  const networkId = resolveSubmittedNetworkId(
+    input.scope,
+    input.createServerId,
+    input.createNetworkId,
+  )
+  if (networkId) body.networkId = networkId
   return body
 }
 
+function buildUpdateIpBody(input: Readonly<{
+  description: string
+  scope: IpScope
+  datacenterId: string
+  networkId: string
+  serverId: string
+}>): {
+  description: string | null
+  datacenterId: string | null
+  networkId: string | null
+  serverId: string | null
+} {
+  return {
+    description: input.description.trim() || null,
+    datacenterId: input.datacenterId || null,
+    serverId: input.serverId || null,
+    networkId: resolveSubmittedNetworkId(
+      input.scope,
+      input.serverId,
+      input.networkId,
+    ),
+  }
+}
+
 function CreateIpScopeFields({
+  scope,
   datacenters,
   networks,
   servers,
@@ -186,6 +267,7 @@ function CreateIpScopeFields({
   onNetworkIdChange,
   onServerIdChange,
 }: Readonly<{
+  scope: IpScope
   datacenters: DatacenterRecord[]
   networks: NetworkRecord[]
   servers: OrgServerRecord[]
@@ -196,9 +278,18 @@ function CreateIpScopeFields({
   onNetworkIdChange: (id: string) => void
   onServerIdChange: (id: string) => void
 }>) {
+  const requireSiteSubnet = isDatacenterMembershipPin(scope, createServerId)
+  const networkRows = requireSiteSubnet
+    ? siteSubnetsForDatacenter(networks, createDatacenterId)
+    : networks
+  let datacenterLabel = 'Datacenter (optional)'
+  let networkLabel = 'Network (optional)'
+  if (scope === 'datacenter') datacenterLabel = 'Datacenter'
+  if (requireSiteSubnet) networkLabel = 'Site subnet'
+
   return (
     <>
-      <Text style={styles.fieldLabel}>Datacenter (optional)</Text>
+      <Text style={styles.fieldLabel}>{datacenterLabel}</Text>
       <View style={styles.chipRow}>
         <FilterChip
           label="None"
@@ -214,22 +305,28 @@ function CreateIpScopeFields({
           />
         ))}
       </View>
-      <Text style={styles.fieldLabel}>Network (optional)</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="None"
-          active={createNetworkId === ''}
-          onPress={() => onNetworkIdChange('')}
-        />
-        {networks.map((row) => (
-          <FilterChip
-            key={row.id}
-            label={row.displayName?.trim() || row.cidr || row.id}
-            active={createNetworkId === row.id}
-            onPress={() => onNetworkIdChange(row.id)}
-          />
-        ))}
-      </View>
+      {scope === 'public' || requireSiteSubnet ? (
+        <>
+          <Text style={styles.fieldLabel}>{networkLabel}</Text>
+          <View style={styles.chipRow}>
+            {requireSiteSubnet ? null : (
+              <FilterChip
+                label="None"
+                active={createNetworkId === ''}
+                onPress={() => onNetworkIdChange('')}
+              />
+            )}
+            {networkRows.map((row) => (
+              <FilterChip
+                key={row.id}
+                label={row.displayName?.trim() || row.cidr || row.id}
+                active={createNetworkId === row.id}
+                onPress={() => onNetworkIdChange(row.id)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
       <Text style={styles.fieldLabel}>Server (optional)</Text>
       <View style={styles.chipRow}>
         <FilterChip
@@ -287,6 +384,8 @@ function IpEditPanel({
   onCancel: () => void
   onSave: () => void
 }>) {
+  const saveDisabled = saving ||
+    isMembershipPinIncomplete(scope, datacenterId, networkId, serverId)
   return (
     <View style={[orgPanelStyles.detailCard, styles.editCard]}>
       <Text style={orgPanelStyles.detailTitle}>Edit address</Text>
@@ -303,57 +402,21 @@ function IpEditPanel({
         placeholder="Optional note"
         placeholderTextColor={colors.textDim}
         style={styles.input}
-        maxLength={255}
+        maxLength={DESCRIPTION_MAX_LENGTH}
         accessibilityLabel="Description"
       />
-      <Text style={styles.fieldLabel}>Datacenter (optional)</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="None"
-          active={datacenterId === ''}
-          onPress={() => onDatacenterIdChange('')}
-        />
-        {datacenters.map((row) => (
-          <FilterChip
-            key={row.id}
-            label={row.displayName?.trim() || row.id}
-            active={datacenterId === row.id}
-            onPress={() => onDatacenterIdChange(row.id)}
-          />
-        ))}
-      </View>
-      <Text style={styles.fieldLabel}>Network (optional)</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="None"
-          active={networkId === ''}
-          onPress={() => onNetworkIdChange('')}
-        />
-        {networks.map((row) => (
-          <FilterChip
-            key={row.id}
-            label={row.displayName?.trim() || row.cidr || row.id}
-            active={networkId === row.id}
-            onPress={() => onNetworkIdChange(row.id)}
-          />
-        ))}
-      </View>
-      <Text style={styles.fieldLabel}>Server (optional)</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="None"
-          active={serverId === ''}
-          onPress={() => onServerIdChange('')}
-        />
-        {servers.map((server) => (
-          <FilterChip
-            key={server.id}
-            label={serverTitle(server)}
-            active={serverId === server.id}
-            onPress={() => onServerIdChange(server.id)}
-          />
-        ))}
-      </View>
+      <CreateIpScopeFields
+        scope={scope}
+        datacenters={datacenters}
+        networks={networks}
+        servers={servers}
+        createDatacenterId={datacenterId}
+        createNetworkId={networkId}
+        createServerId={serverId}
+        onDatacenterIdChange={onDatacenterIdChange}
+        onNetworkIdChange={onNetworkIdChange}
+        onServerIdChange={onServerIdChange}
+      />
       <View style={styles.editActions}>
         <Pressable
           style={[styles.secondaryButton, webPointer]}
@@ -365,10 +428,10 @@ function IpEditPanel({
         <Pressable
           style={[
             orgPanelStyles.toolbarBtnPrimary,
-            saving && styles.buttonDisabled,
+            saveDisabled && styles.buttonDisabled,
             webPointer,
           ]}
-          disabled={saving}
+          disabled={saveDisabled}
           onPress={onSave}
         >
           {saving ? (
@@ -515,7 +578,7 @@ function AddAddressPanel({
         placeholder="Optional note"
         placeholderTextColor={colors.textDim}
         style={styles.input}
-        maxLength={255}
+        maxLength={DESCRIPTION_MAX_LENGTH}
         accessibilityLabel="Description"
       />
       <Text style={styles.fieldLabel}>Allocation</Text>
@@ -541,6 +604,7 @@ function AddAddressPanel({
         ))}
       </View>
       <CreateIpScopeFields
+        scope={scope}
         datacenters={datacenters}
         networks={networks}
         servers={servers}
@@ -783,7 +847,15 @@ export function NetworkAddressesSection({
     ? deleteMutation.variables
     : undefined
   const creating = createMutation.isPending
-  const createDisabled = isCreateIpDisabled(creating)
+  const createDisabled = isCreateIpDisabled(
+    creating,
+    isMembershipPinIncomplete(
+      scope,
+      createDatacenterId,
+      createNetworkId,
+      createServerId,
+    ),
+  )
   const savingEdit = updateMutation.isPending
 
   const serverById = useMemo(() => indexById(servers), [servers])
@@ -792,6 +864,65 @@ export function NetworkAddressesSection({
 
   const handleCreateScopeChange = (next: IpScope) => {
     setScope(next)
+    setCreateNetworkId((current) => {
+      if (next === 'datacenter' && !createServerId) return ''
+      return retainedNetworkId(
+        networks,
+        createDatacenterId,
+        current,
+        isDatacenterMembershipPin(next, createServerId),
+      )
+    })
+  }
+
+  const handleCreateDatacenterIdChange = (id: string) => {
+    setCreateDatacenterId(id)
+    setCreateNetworkId((current) =>
+      retainedNetworkId(
+        networks,
+        id,
+        current,
+        isDatacenterMembershipPin(scope, createServerId),
+      ),
+    )
+  }
+
+  const handleCreateServerIdChange = (id: string) => {
+    setCreateServerId(id)
+    setCreateNetworkId((current) => {
+      if (scope === 'datacenter' && !id) return ''
+      return retainedNetworkId(
+        networks,
+        createDatacenterId,
+        current,
+        isDatacenterMembershipPin(scope, id),
+      )
+    })
+  }
+
+  const handleEditDatacenterIdChange = (id: string) => {
+    setEditDatacenterId(id)
+    setEditNetworkId((current) =>
+      retainedNetworkId(
+        networks,
+        id,
+        current,
+        isDatacenterMembershipPin(editScope, editServerId),
+      ),
+    )
+  }
+
+  const handleEditServerIdChange = (id: string) => {
+    setEditServerId(id)
+    setEditNetworkId((current) => {
+      if (editScope === 'datacenter' && !id) return ''
+      return retainedNetworkId(
+        networks,
+        editDatacenterId,
+        current,
+        isDatacenterMembershipPin(editScope, id),
+      )
+    })
   }
 
   const resetCreateForm = () => {
@@ -804,6 +935,16 @@ export function NetworkAddressesSection({
 
   const handleCreate = () => {
     if (!canManage) return
+    if (
+      isMembershipPinIncomplete(
+        scope,
+        createDatacenterId,
+        createNetworkId,
+        createServerId,
+      )
+    ) {
+      return
+    }
     const trimmed = address.trim()
     if (!IP_LITERAL_OR_CIDR.test(trimmed)) {
       setError('Enter a valid IPv4/IPv6 address or CIDR.')
@@ -860,16 +1001,27 @@ export function NetworkAddressesSection({
 
   const handleSaveEdit = () => {
     if (!canManage || !editingId) return
+    if (
+      isMembershipPinIncomplete(
+        editScope,
+        editDatacenterId,
+        editNetworkId,
+        editServerId,
+      )
+    ) {
+      return
+    }
     setError(null)
     updateMutation.mutate(
       {
         ipId: editingId,
-        body: {
-          description: editDescription.trim() || null,
-          datacenterId: editDatacenterId || null,
-          networkId: editNetworkId || null,
-          serverId: editServerId || null,
-        },
+        body: buildUpdateIpBody({
+          description: editDescription,
+          scope: editScope,
+          datacenterId: editDatacenterId,
+          networkId: editNetworkId,
+          serverId: editServerId,
+        }),
       },
       {
         onSuccess: () => setEditingId(null),
@@ -919,9 +1071,9 @@ export function NetworkAddressesSection({
           onDescriptionChange={setDescription}
           onAllocationChange={setAllocation}
           onScopeChange={handleCreateScopeChange}
-          onDatacenterIdChange={setCreateDatacenterId}
+          onDatacenterIdChange={handleCreateDatacenterIdChange}
           onNetworkIdChange={setCreateNetworkId}
-          onServerIdChange={setCreateServerId}
+          onServerIdChange={handleCreateServerIdChange}
           onCreate={handleCreate}
         />
       ) : null}
@@ -947,9 +1099,9 @@ export function NetworkAddressesSection({
         networkById={networkById}
         datacenterById={datacenterById}
         onDescriptionChange={setEditDescription}
-        onDatacenterIdChange={setEditDatacenterId}
+        onDatacenterIdChange={handleEditDatacenterIdChange}
         onNetworkIdChange={setEditNetworkId}
-        onServerIdChange={setEditServerId}
+        onServerIdChange={handleEditServerIdChange}
         onCancelEdit={cancelEdit}
         onSaveEdit={handleSaveEdit}
         onBeginEdit={beginEdit}

@@ -1,7 +1,5 @@
 import { validateDescription, validateDisplayName } from '@/lib/display-name'
 
-export { DISPLAY_NAME_PATTERN } from '@/lib/display-name'
-
 /**
  * Validate a workspace display name.
  * @returns An error message, or `null` when valid.

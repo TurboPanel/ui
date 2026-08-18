@@ -18,7 +18,10 @@ import {
   type RelayRecord,
   type RelayRole,
 } from '@/lib/instance-api'
-import { relayRoleLabel } from '@/lib/fabric-mesh'
+import {
+  formatResolvedAdvertisedCidrs,
+  relayRoleLabel,
+} from '@/lib/fabric-mesh'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
 import {
   isOrgFabricUnavailable,
@@ -357,15 +360,40 @@ function HandshakeLine({
   )
 }
 
+function RelayResolvedAdvertisedCidrs({
+  cidrs,
+}: Readonly<{ cidrs: readonly string[] }>) {
+  const formatted = formatResolvedAdvertisedCidrs(cidrs)
+  if (cidrs.length === 0) {
+    return (
+      <Text style={orgPanelStyles.muted}>
+        Resolved advertised CIDRs: {formatted}
+      </Text>
+    )
+  }
+  return (
+    <Text style={orgPanelStyles.detailLine}>
+      <Text style={orgPanelStyles.detailLabel}>Resolved advertised CIDRs: </Text>
+      <Text style={styles.mono} selectable>
+        {formatted}
+      </Text>
+    </Text>
+  )
+}
+
 function AdvertisedCidrsField({
   role,
   draft,
+  storedEmpty,
+  resolvedCidrs,
   disabled,
   onChange,
   onSave,
 }: Readonly<{
   role: RelayRole
   draft: string
+  storedEmpty: boolean
+  resolvedCidrs: readonly string[]
   disabled: boolean
   onChange: (value: string) => void
   onSave: () => void
@@ -385,12 +413,19 @@ function AdvertisedCidrsField({
         onChangeText={onChange}
         onBlur={onSave}
         editable={!disabled}
-        placeholder="10.0.0.0/24, 10.1.0.0/24"
+        placeholder="(derived IPv4 datacenter subnets)"
         placeholderTextColor={colors.textFaint}
         style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
+        accessibilityLabel="Advertised LAN CIDRs override"
       />
+      {storedEmpty ? (
+        <Text style={orgPanelStyles.muted}>
+          Empty override uses derived IPv4 datacenter subnets.
+        </Text>
+      ) : null}
+      <RelayResolvedAdvertisedCidrs cidrs={resolvedCidrs} />
     </>
   )
 }
@@ -487,6 +522,8 @@ function RelayConfiguredFields({
       <AdvertisedCidrsField
         role={relay.role}
         draft={advertisedDraft}
+        storedEmpty={relay.advertisedCidrs.length === 0}
+        resolvedCidrs={relay.resolvedAdvertisedCidrs}
         disabled={disabled}
         onChange={onAdvertisedChange}
         onSave={onSaveAdvertised}

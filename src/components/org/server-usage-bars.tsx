@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import type { ReactNode } from 'react'
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import { colors, spacing } from '@/lib/theme'
 import {
   buildCpuStackSegments,
@@ -8,6 +9,7 @@ import {
   CPU_SYSTEM,
   CPU_USER,
   finiteMetric,
+  formatLoad,
   formatLoadPrimary,
   formatPercent,
   hasUsageMetrics,
@@ -17,31 +19,34 @@ import {
   type UsageMetricInput,
 } from '@/lib/server-usage'
 
-function StackedCpuBar({
+export type ServerUsageDensity = 'list' | 'tile'
+
+function StackedCpuColumn({
   segments,
-}: Readonly<{ segments: CpuStackSegments }>) {
-  const parts: { key: string; width: number; color: string }[] = []
+  trackStyle,
+}: Readonly<{ segments: CpuStackSegments; trackStyle: ViewStyle }>) {
+  const parts: { key: string; size: number; color: string }[] = []
   if (segments.user > 0.05) {
-    parts.push({ key: 'user', width: segments.user, color: CPU_USER })
+    parts.push({ key: 'user', size: segments.user, color: CPU_USER })
   }
   if (segments.system > 0.05) {
-    parts.push({ key: 'system', width: segments.system, color: CPU_SYSTEM })
+    parts.push({ key: 'system', size: segments.system, color: CPU_SYSTEM })
   }
   if (segments.other > 0.05) {
-    parts.push({ key: 'other', width: segments.other, color: CPU_OTHER })
+    parts.push({ key: 'other', size: segments.other, color: CPU_OTHER })
   }
   if (segments.iowait > 0.05) {
-    parts.push({ key: 'iowait', width: segments.iowait, color: CPU_IOWAIT })
+    parts.push({ key: 'iowait', size: segments.iowait, color: CPU_IOWAIT })
   }
 
   return (
-    <View style={styles.track}>
+    <View style={[styles.track, trackStyle]}>
       {parts.map((part) => (
         <View
           key={part.key}
           style={[
             styles.stackSeg,
-            { width: `${part.width}%`, backgroundColor: part.color },
+            { height: `${part.size}%`, backgroundColor: part.color },
           ]}
         />
       ))}
@@ -49,18 +54,23 @@ function StackedCpuBar({
   )
 }
 
-function SimpleBar({
+function SimpleColumn({
   percent,
   color,
-}: Readonly<{ percent: number | null; color: string }>) {
-  const widthPct = percent ?? 0
+  trackStyle,
+}: Readonly<{
+  percent: number | null
+  color: string
+  trackStyle: ViewStyle
+}>) {
+  const heightPct = percent ?? 0
   return (
-    <View style={styles.track}>
+    <View style={[styles.track, trackStyle]}>
       <View
         style={[
           styles.fill,
           percent == null ? styles.fillEmpty : { backgroundColor: color },
-          { width: `${widthPct}%` },
+          { height: `${heightPct}%` },
         ]}
       />
     </View>
@@ -69,54 +79,92 @@ function SimpleBar({
 
 const PENDING_VALUE = '…'
 
-function PendingUsageRow({
+function UsageMetricColumn({
   label,
-  wideValue,
-}: Readonly<{ label: string; wideValue?: boolean }>) {
+  value,
+  pending,
+  density,
+  accessibilityLabel,
+  accessibilityValue,
+  children,
+}: Readonly<{
+  label: string
+  value: string
+  pending?: boolean
+  density: ServerUsageDensity
+  accessibilityLabel: string
+  accessibilityValue?: { text: string } | { min: number; max: number; now: number }
+  children: ReactNode
+}>) {
+  const tile = density === 'tile'
   return (
-    <View style={styles.row} accessibilityElementsHidden>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.track} />
+    <View
+      style={[styles.column, tile ? styles.columnTile : styles.columnList]}
+      accessibilityRole={pending ? 'text' : 'progressbar'}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityValue={pending ? { text: PENDING_VALUE } : accessibilityValue}
+      accessibilityElementsHidden={pending === true}
+    >
+      <Text style={[styles.label, tile && styles.labelTile]}>{label}</Text>
+      {children}
       <Text
         style={[
           styles.value,
-          styles.pendingValue,
-          wideValue ? styles.loadValue : null,
+          tile && styles.valueTile,
+          pending && styles.pendingValue,
         ]}
+        numberOfLines={1}
       >
-        {PENDING_VALUE}
+        {value}
       </Text>
     </View>
   )
 }
 
-function UsagePendingPlaceholder() {
+function UsagePendingPlaceholder({
+  density,
+}: Readonly<{ density: ServerUsageDensity }>) {
+  const trackStyle = density === 'tile' ? styles.trackTile : styles.trackList
   return (
     <View
-      style={styles.root}
+      style={[styles.root, density === 'tile' ? styles.rootTile : styles.rootList]}
       accessibilityRole="text"
       accessibilityLabel="Awaiting usage stats. First sample incoming."
     >
-      <PendingUsageRow label="CPU" />
-      <PendingUsageRow label="Load" wideValue />
-      <PendingUsageRow label="Mem" />
-      <PendingUsageRow label="Swap" />
+      {(['CPU', 'Load', 'Mem', 'Swap'] as const).map((label) => (
+        <UsageMetricColumn
+          key={label}
+          label={label}
+          value={PENDING_VALUE}
+          pending
+          density={density}
+          accessibilityLabel={label}
+        >
+          <View style={[styles.track, trackStyle]} />
+        </UsageMetricColumn>
+      ))}
     </View>
   )
 }
 
 /**
- * Compact pro usage cell: stacked CPU, load 1/5/15 (capacity-scaled bar),
- * memory and swap %. Hosts with no sample yet keep the same four tracks
- * as ghost rows (ellipsis values) so the cell does not become a boxed
- * empty-state card.
+ * Compact usage cluster: four vertical columns (CPU / Load / Mem / Swap).
+ * List density stays short for table rows; tile density uses taller columns.
+ * Hosts with no sample yet keep the same four tracks as ghost columns
+ * (ellipsis values) so the cell does not become a boxed empty-state card.
  */
 export function ServerUsageBars({
   cpuCores,
+  density = 'list',
   ...metrics
-}: Readonly<UsageMetricInput & { cpuCores?: number | null }>) {
+}: Readonly<
+  UsageMetricInput & {
+    cpuCores?: number | null
+    density?: ServerUsageDensity
+  }
+>) {
   if (!hasUsageMetrics(metrics)) {
-    return <UsagePendingPlaceholder />
+    return <UsagePendingPlaceholder density={density} />
   }
 
   const {
@@ -143,26 +191,29 @@ export function ServerUsageBars({
   const load1n = finiteMetric(load1)
   const load5n = finiteMetric(load5)
   const load15n = finiteMetric(load15)
-  // Bar height uses 1-minute load vs cores (when known).
   const loadBar = loadPercentOfCores(load1n, cpuCores)
-  const loadLabel = formatLoadPrimary(load1n, load5n, load15n)
+  const loadTriplet = formatLoadPrimary(load1n, load5n, load15n)
+  const loadValue = formatLoad(load1n)
 
   const memory = clampPercent(memoryPercent)
   const swap = clampPercent(swapPercent)
+  const trackStyle = density === 'tile' ? styles.trackTile : styles.trackList
+  const tile = density === 'tile'
 
   const cpuA11y = stack
     ? `CPU ${cpuLabel}: user ${formatPercent(stack.user)}, system ${formatPercent(stack.system)}, other ${formatPercent(stack.other)}, iowait ${formatPercent(stack.iowait)}`
     : `CPU ${cpuLabel}`
   const loadA11y =
     loadBar == null
-      ? `Load ${loadLabel}`
-      : `Load ${loadLabel}, ${Math.round(loadBar)} percent of ${cpuCores} CPUs`
+      ? `Load ${loadTriplet}`
+      : `Load ${loadTriplet}, ${Math.round(loadBar)} percent of ${cpuCores} CPUs`
 
   return (
-    <View style={styles.root}>
-      <View
-        style={styles.row}
-        accessibilityRole="progressbar"
+    <View style={[styles.root, tile ? styles.rootTile : styles.rootList]}>
+      <UsageMetricColumn
+        label="CPU"
+        value={cpuLabel}
+        density={density}
         accessibilityLabel={cpuA11y}
         accessibilityValue={
           usage == null
@@ -170,38 +221,35 @@ export function ServerUsageBars({
             : { min: 0, max: 100, now: Math.round(usage) }
         }
       >
-        <Text style={styles.label}>CPU</Text>
         {stack ? (
-          <StackedCpuBar segments={stack} />
+          <StackedCpuColumn segments={stack} trackStyle={trackStyle} />
         ) : (
-          <SimpleBar percent={usage} color={colors.accent} />
+          <SimpleColumn percent={usage} color={colors.accent} trackStyle={trackStyle} />
         )}
-        <Text style={styles.value}>{cpuLabel}</Text>
-      </View>
+      </UsageMetricColumn>
 
-      <View
-        style={styles.row}
-        accessibilityRole="progressbar"
+      <UsageMetricColumn
+        label="Load"
+        value={loadValue}
+        density={density}
         accessibilityLabel={loadA11y}
         accessibilityValue={
           loadBar == null
-            ? { text: loadLabel }
+            ? { text: loadTriplet }
             : { min: 0, max: 100, now: Math.round(loadBar) }
         }
       >
-        <Text style={styles.label}>Load</Text>
-        <SimpleBar
+        <SimpleColumn
           percent={loadBar ?? (load1n == null ? null : 0)}
           color={LOAD_FILL}
+          trackStyle={trackStyle}
         />
-        <Text style={[styles.value, styles.loadValue]} numberOfLines={1}>
-          {loadLabel}
-        </Text>
-      </View>
+      </UsageMetricColumn>
 
-      <View
-        style={styles.row}
-        accessibilityRole="progressbar"
+      <UsageMetricColumn
+        label="Mem"
+        value={formatPercent(memory)}
+        density={density}
         accessibilityLabel={`Memory ${formatPercent(memory)}`}
         accessibilityValue={
           memory == null
@@ -209,14 +257,13 @@ export function ServerUsageBars({
             : { min: 0, max: 100, now: Math.round(memory) }
         }
       >
-        <Text style={styles.label}>Mem</Text>
-        <SimpleBar percent={memory} color={colors.command} />
-        <Text style={styles.value}>{formatPercent(memory)}</Text>
-      </View>
+        <SimpleColumn percent={memory} color={colors.command} trackStyle={trackStyle} />
+      </UsageMetricColumn>
 
-      <View
-        style={styles.row}
-        accessibilityRole="progressbar"
+      <UsageMetricColumn
+        label="Swap"
+        value={formatPercent(swap)}
+        density={density}
         accessibilityLabel={`Swap ${formatPercent(swap)}`}
         accessibilityValue={
           swap == null
@@ -224,66 +271,88 @@ export function ServerUsageBars({
             : { min: 0, max: 100, now: Math.round(swap) }
         }
       >
-        <Text style={styles.label}>Swap</Text>
-        <SimpleBar percent={swap} color={colors.textChip} />
-        <Text style={styles.value}>{formatPercent(swap)}</Text>
-      </View>
+        <SimpleColumn percent={swap} color={colors.textChip} trackStyle={trackStyle} />
+      </UsageMetricColumn>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   root: {
-    alignSelf: 'stretch',
-    gap: 3,
-    minWidth: 168,
-  },
-  row: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  rootList: {
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  rootTile: {
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+  },
+  column: {
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 2,
+    minWidth: 0,
+  },
+  columnList: {
+    width: 32,
+  },
+  columnTile: {
+    flex: 1,
   },
   label: {
-    width: 32,
     color: colors.textDim,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
+    lineHeight: 11,
+  },
+  labelTile: {
+    fontSize: 10,
+    lineHeight: 12,
   },
   track: {
-    flex: 1,
-    height: 6,
-    borderRadius: 999,
+    borderRadius: 3,
     backgroundColor: colors.bgSecondary,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     overflow: 'hidden',
-    flexDirection: 'row',
+    flexDirection: 'column-reverse',
+    justifyContent: 'flex-start',
+  },
+  trackList: {
+    width: 12,
+    height: 22,
+  },
+  trackTile: {
+    width: 18,
+    height: 64,
+    borderRadius: 4,
   },
   stackSeg: {
-    height: '100%',
+    width: '100%',
   },
   fill: {
-    height: '100%',
-    borderRadius: 999,
+    width: '100%',
     backgroundColor: colors.accent,
   },
   fillEmpty: {
     backgroundColor: colors.borderMuted,
   },
   value: {
-    width: 36,
     color: colors.stdout,
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'monospace',
     fontWeight: '600',
-    textAlign: 'right',
+    textAlign: 'center',
+    lineHeight: 12,
+    alignSelf: 'stretch',
   },
-  loadValue: {
-    width: 78,
-    fontSize: 9,
-    letterSpacing: -0.2,
+  valueTile: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   pendingValue: {
     color: colors.textMuted,

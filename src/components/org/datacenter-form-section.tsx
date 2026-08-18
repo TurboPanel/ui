@@ -16,6 +16,10 @@ import type {
   OrgServerRecord,
 } from '@/lib/instance-api'
 import {
+  ADDRESS_IN_USE_ERROR,
+  ADDRESS_NOT_IN_ANY_SUBNET_ERROR,
+} from '@/lib/instance-api'
+import {
   buildCreateDatacenterFromSeed,
   listServersWithReportedPrivateNetworks,
   reportedPrivateNetworks,
@@ -53,14 +57,17 @@ function serversLoadError(isError: boolean, error: unknown): string | null {
 
 function createDatacenterErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    if (error.message.includes('server_already_member')) {
-      return 'That server is already in this datacenter.'
-    }
     if (error.message.includes('address_cidr_unreported')) {
       return 'That server has not reported a private IP.'
     }
     if (error.message.includes('address_not_reported')) {
       return 'Pick a private IP reported on that server.'
+    }
+    if (error.message.includes(ADDRESS_NOT_IN_ANY_SUBNET_ERROR)) {
+      return 'That address is not in any subnet of this datacenter.'
+    }
+    if (error.message.includes(ADDRESS_IN_USE_ERROR)) {
+      return 'That address is already pinned.'
     }
     return error.message
   }
@@ -247,7 +254,7 @@ function CreateDatacenterFields({
       ) : null}
       {selectedAddress && detectedCidr ? (
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>CIDR</Text>
+          <Text style={styles.fieldLabel}>First subnet</Text>
           <View style={styles.cidrRow}>
             <Text style={styles.detectedCidr} selectable>
               {detectedCidr}

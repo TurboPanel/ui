@@ -2,6 +2,7 @@ import { Slot, useLocalSearchParams, Redirect, type Href } from 'expo-router'
 import { ScrollView, StyleSheet } from 'react-native'
 import { ProjectProvider } from '@/components/org/project/project-context'
 import { ProjectShell } from '@/components/org/project/project-shell'
+import { organizationsHref } from '@/lib/org-navigation'
 import { colors } from '@/lib/theme'
 
 function firstParam(value: string | string[] | undefined): string {
@@ -18,7 +19,7 @@ export default function ProjectLayout() {
   const resolvedProjectId = firstParam(projectId)
 
   if (!resolvedOrgId || !resolvedProjectId) {
-    return <Redirect href={'/welcome' as Href} />
+    return <Redirect href={organizationsHref() as Href} />
   }
 
   return (

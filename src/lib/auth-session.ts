@@ -18,7 +18,7 @@ export function hasUserSession(session: SessionInfo | null): boolean {
 export function dashboardHref(
   session: SessionInfo | null,
   needsInstall: boolean,
-): '/install' | '/sign-in' | '/welcome' | `/${string}/servers` | '/' {
+): '/install' | '/sign-in' | '/welcome' | '/organizations' | `/${string}/overview` | '/' {
   if (needsInstall) {
     return '/install'
   }

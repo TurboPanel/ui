@@ -19,6 +19,7 @@ import {
   isSystemWorkspace,
 } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import {
   ALL_WORKSPACES_SCOPE,
   newProjectHrefForScope,
@@ -179,6 +180,16 @@ export function ProjectsOverviewSection({
     showWorkspaceLabels && (!scopeWorkspaces || scopeWorkspaces.length === 0)
   const workspacesQuery = useWorkspaces(orgId, {
     enabled: needsWorkspaceNames || showWorkspaceLabels,
+  })
+
+  usePullToRefresh(async () => {
+    await Promise.all([
+      projectsQuery.refetch(),
+      ...(needsWorkspaceNames || showWorkspaceLabels
+        ? [workspacesQuery.refetch()]
+        : []),
+    ])
+    await workspaceScope?.refreshWorkspaces()
   })
 
   const allWorkspaces = useMemo(() => {

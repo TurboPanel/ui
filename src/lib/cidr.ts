@@ -33,7 +33,7 @@ function expandIpv6Hextets(address: string): string[] | null {
   return parts
 }
 
-function parseIpVersion(address: string): 4 | 6 | null {
+export function ipVersionOf(address: string): 4 | 6 | null {
   const trimmed = address.trim()
   if (trimmed.length === 0) return null
   if (IPV4_ADDRESS_RE.test(trimmed)) return 4
@@ -41,9 +41,16 @@ function parseIpVersion(address: string): 4 | 6 | null {
   return null
 }
 
+export function addressFamilyLabel(address: string): 'IPv4' | 'IPv6' | null {
+  const version = ipVersionOf(address)
+  if (version === 4) return 'IPv4'
+  if (version === 6) return 'IPv6'
+  return null
+}
+
 function ipToBigInt(address: string): bigint | null {
   const trimmed = address.trim()
-  const version = parseIpVersion(trimmed)
+  const version = ipVersionOf(trimmed)
   if (version === 4) {
     const parts = trimmed.split('.')
     let value = 0n
@@ -76,7 +83,7 @@ export function parseCidr(value: string): ParsedCidr | null {
   if (slash <= 0 || slash === trimmed.length - 1) return null
   const addressPart = trimmed.slice(0, slash)
   const prefixPart = trimmed.slice(slash + 1)
-  const version = parseIpVersion(addressPart)
+  const version = ipVersionOf(addressPart)
   if (version === null) return null
   if (!/^\d+$/.test(prefixPart)) return null
   const prefix = Number.parseInt(prefixPart, 10)
@@ -173,7 +180,7 @@ export const SITE_LAN_PREFIX_V6 = 64
  * the network address.
  */
 export function inferSiteCidrFromAddress(address: string): string | null {
-  const version = parseIpVersion(address)
+  const version = ipVersionOf(address)
   if (version === null) return null
   const prefix = version === 4 ? SITE_LAN_PREFIX_V4 : SITE_LAN_PREFIX_V6
   const parsed = parseCidr(`${address.trim()}/${prefix}`)
@@ -186,10 +193,35 @@ export function addressInCidr(address: string, cidr: string): boolean {
   const parsed = parseCidr(cidr)
   const value = ipToBigInt(address)
   if (!parsed || value === null) return false
-  if (parseIpVersion(address.trim()) !== parsed.version) return false
+  if (ipVersionOf(address.trim()) !== parsed.version) return false
   const bitWidth = parsed.version === 4 ? 32 : 128
   const hostBits = bitWidth - parsed.prefix
   if (hostBits === 0) return value === parsed.base
   const hostMask = (1n << BigInt(hostBits)) - 1n
   return (value & ~hostMask) === parsed.base
+}
+
+export function normalizeCidr(value: string): string | null {
+  const parsed = parseCidr(value)
+  if (!parsed) return null
+  return formatCidr(parsed)
+}
+
+/**
+ * True when two CIDRs share a family and the shorter prefix's masked base
+ * matches the longer prefix's base (containment or equality).
+ */
+export function cidrsOverlap(a: string, b: string): boolean {
+  const left = parseCidr(a)
+  const right = parseCidr(b)
+  if (!left || !right) return false
+  if (left.version !== right.version) return false
+  const shorter = left.prefix <= right.prefix ? left : right
+  const longer = left.prefix <= right.prefix ? right : left
+  const bitWidth = shorter.version === 4 ? 32 : 128
+  const hostBits = bitWidth - shorter.prefix
+  if (hostBits === 0) return longer.base === shorter.base
+  const alignedLonger =
+    (longer.base >> BigInt(hostBits)) << BigInt(hostBits)
+  return alignedLonger === shorter.base
 }

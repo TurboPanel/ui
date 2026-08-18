@@ -1,40 +1,50 @@
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context'
-import { OrgHeader } from '@/components/org/org-header'
+import type { ReactNode } from 'react'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { OrgHeader } from '@/components/org/org-header.native'
 import { OrgShellContent } from '@/components/org/org-shell-content'
-import { OrgTabBar } from '@/components/org/org-tab-bar'
+import {
+  OrgTabBar,
+  orgTabBarOccupiedHeight,
+} from '@/components/org/org-tab-bar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
-import { colors, layout } from '@/lib/theme'
+import { PullToRefreshProvider } from '@/lib/pull-to-refresh'
+import { colors, spacing } from '@/lib/theme'
 
-export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
+export function OrgShell({
+  orgId,
+  children,
+}: Readonly<{ orgId: string; children?: ReactNode }>) {
   const { width } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-  const contentMaxWidth = width - layout.contentGutter * 2
 
   return (
     <WorkspaceScopeProvider orgId={orgId}>
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <PullToRefreshProvider>
+        {/*
+          Full-bleed column — no SafeAreaView left/right padding. Header and tab
+          bar own their vertical insets so chrome backgrounds reach the screen
+          edge (rounded corners otherwise read as side borders).
+        */}
         <View style={styles.root}>
           <OrgHeader orgId={orgId} />
           <OrgShellContent
-            maxWidth={contentMaxWidth}
-            contentPaddingBottom={layout.bottomTabHeight + insets.bottom}
-          />
+            orgId={orgId}
+            maxWidth={width}
+            contentPaddingHorizontal={spacing.md}
+            contentPaddingVertical={spacing.md}
+            contentPaddingBottom={orgTabBarOccupiedHeight(insets.bottom)}
+          >
+            {children}
+          </OrgShellContent>
           <OrgTabBar orgId={orgId} />
         </View>
-      </SafeAreaView>
+      </PullToRefreshProvider>
     </WorkspaceScopeProvider>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
   root: {
     flex: 1,
     flexDirection: 'column',

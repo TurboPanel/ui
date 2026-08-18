@@ -105,7 +105,7 @@ function isPublicAuthRoute(topSegment: string | undefined): boolean {
 function shouldLeaveUnknownSignedInRoute(ctx: AuthGuardContext): boolean {
   const { session, topSegment, developerDevBypass } = ctx
 
-  if (topSegment === 'welcome' || isPublicAuthRoute(topSegment)) {
+  if (topSegment === 'welcome' || topSegment === 'organizations' || isPublicAuthRoute(topSegment)) {
     return false
   }
   if (developerDevBypass) {
@@ -123,6 +123,7 @@ const PUBLIC_ROUTE_SEGMENTS = new Set([
   'verify-email',
   'install',
   'welcome',
+  'organizations',
   'admin',
   'recovering',
   'developer',

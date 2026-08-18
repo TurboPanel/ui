@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RelayRecord } from './instance-api'
 import {
+  formatResolvedAdvertisedCidrs,
   formatSiteLinkLabel,
   meshLabelForSite,
   relayRoleLabel,
@@ -15,6 +16,7 @@ function relay(
   return {
     address: '10.64.0.1',
     advertisedCidrs: [],
+    resolvedAdvertisedCidrs: [],
     keepalive: null,
     endpointAddress: null,
     resolvedEndpoint: null,
@@ -185,5 +187,17 @@ describe('relayRoleLabel', () => {
   it('labels gateway and member', () => {
     expect(relayRoleLabel('gateway')).toBe('Gateway')
     expect(relayRoleLabel('member')).toBe('Member')
+  })
+})
+
+describe('formatResolvedAdvertisedCidrs', () => {
+  it('joins derived IPv4 defaults for display', () => {
+    expect(
+      formatResolvedAdvertisedCidrs(['198.51.100.0/24', '203.0.113.0/24']),
+    ).toBe('198.51.100.0/24, 203.0.113.0/24')
+  })
+
+  it('labels an empty derived list', () => {
+    expect(formatResolvedAdvertisedCidrs([])).toBe('none')
   })
 })

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import type { AppStateStatus } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { focusManager } from '@tanstack/react-query'
 import { AppProviders } from '@/components/app-providers'
 import { SafeAreaRoot } from '@/components/safe-area-root'
@@ -16,6 +17,7 @@ import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { resolveAuthGuardHref } from '@/lib/auth-guard'
 import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
+import { ORG_CONSOLE_SINGULAR_ID } from '@/lib/org-navigation'
 import { colors } from '@/lib/theme'
 
 const STACK_SCREEN_OPTIONS = { headerShown: false } as const
@@ -45,11 +47,13 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaRoot>
-      <AppProviders>
-        <AuthGuard />
-      </AppProviders>
-    </SafeAreaRoot>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaRoot>
+        <AppProviders>
+          <AuthGuard />
+        </AppProviders>
+      </SafeAreaRoot>
+    </GestureHandlerRootView>
   )
 }
 
@@ -91,13 +95,26 @@ function AuthGuard() {
   // (seen right after install completes).
   return (
     <>
-      <Stack screenOptions={STACK_SCREEN_OPTIONS} />
+      <Stack screenOptions={STACK_SCREEN_OPTIONS}>
+        <Stack.Screen
+          name="[orgId]"
+          dangerouslySingular={() => ORG_CONSOLE_SINGULAR_ID}
+          options={{
+            animation: 'none',
+            gestureEnabled: false,
+            fullScreenGestureEnabled: false,
+          }}
+        />
+      </Stack>
       {href !== null ? <Redirect href={href} /> : null}
     </>
   )
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   loading: {
     flex: 1,
     backgroundColor: colors.bg,

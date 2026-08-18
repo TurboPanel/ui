@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createLicense,
+  deleteLicense,
   deleteServer,
   fetchFleetMetricsLatest,
+  fetchLicenses,
   fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServer,
@@ -11,6 +13,7 @@ import {
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchTimezones,
+  isForbiddenError,
   MetricsBackendUnavailableError,
   pingDaemon,
   rebootServer,
@@ -23,10 +26,12 @@ import {
   updateServer,
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
+  type LicenseRecord,
   type MetricsSeriesResponse,
   type OrgServerRecord,
   type ServerDetailRecord,
 } from '@/lib/instance-api'
+import { unboundPendingKeys } from '@/lib/pending-keys'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import { serversPresenceRefetchMs } from '@/lib/server-connection-status'
 
@@ -461,7 +466,7 @@ export function useBatchTriggerServerUpdates(orgId: string) {
   })
 }
 
-/** One-shot license for the add-server install command — not cached. */
+/** One-shot registration key for the add-server install command. */
 export function useCreateLicense(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -473,10 +478,62 @@ export function useCreateLicense(orgId: string) {
       installBaseUrl?: string
     }) => createLicense(displayName, installBaseUrl),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).settings.serverCapacity,
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).settings.serverCapacity,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.licenses,
+        }),
+      ])
     },
     fallbackError: 'Failed to start server setup',
+  })
+}
+
+/**
+ * Owner-only registration keys. Manage-gated 403 is swallowed so non-owners
+ * are not signed out by the global forbidden handler.
+ */
+export function useOrgLicenses(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.licenses,
+    queryFn: async () => {
+      try {
+        return await fetchLicenses()
+      } catch (err) {
+        if (isForbiddenError(err)) {
+          return { licenses: [] as LicenseRecord[] }
+        }
+        throw err
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+    retry: false,
+    refetchInterval: (query) => {
+      const pending = unboundPendingKeys(query.state.data?.licenses ?? [])
+      return pending.length > 0 ? SERVERS_REFRESH_MS : false
+    },
+  })
+}
+
+export function useDeleteLicense(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: deleteLicense,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.licenses,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).settings.serverCapacity,
+        }),
+      ])
+    },
+    fallbackError: 'Failed to delete registration key',
   })
 }

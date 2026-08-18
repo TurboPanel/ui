@@ -86,7 +86,15 @@ describe('queryKeys.org(…).topology', () => {
     ])
     expect(topology.ips().slice(0, prefix.length)).toEqual([...prefix])
     expect(topology.ip('ip-1').slice(0, prefix.length)).toEqual([...prefix])
-    expect(topology.networks().slice(0, prefix.length)).toEqual([...prefix])
+    expect(topology.networksAll).toEqual([
+      'org',
+      'org-1',
+      'topology',
+      'networks',
+    ])
+    expect(topology.networks().slice(0, topology.networksAll.length)).toEqual([
+      ...topology.networksAll,
+    ])
   })
 })
 

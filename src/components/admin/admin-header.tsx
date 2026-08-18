@@ -12,7 +12,7 @@ export function AdminHeader({
   const userLabel = session?.email
 
   return (
-    <GlassSurface style={styles.header} intensity="strong">
+    <GlassSurface style={styles.header} intensity="strong" rim="bottom">
       <View style={styles.headerMain}>
         {onMenuPress ? (
           <Pressable
@@ -48,8 +48,6 @@ export function AdminHeader({
 const styles = StyleSheet.create({
   header: {
     borderRadius: 0,
-    borderWidth: 0,
-    borderBottomWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -27,6 +27,7 @@ import {
   hasHostDeployedContainers,
 } from '@/lib/container-status'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import {
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
@@ -143,7 +144,7 @@ function EnvironmentCreateInline({
         autoCapitalize="none"
         autoCorrect={false}
         editable={!creating}
-        maxLength={255}
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
         accessibilityLabel="New environment name"
       />
       {fieldError ? <Text style={orgPanelStyles.error}>{fieldError}</Text> : null}

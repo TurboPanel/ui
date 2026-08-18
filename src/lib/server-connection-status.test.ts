@@ -70,14 +70,13 @@ describe('serverConnectionStatusLabel', () => {
 })
 
 describe('serversPresenceRefetchMs', () => {
-  it('polls quickly when the Deno fleet is still empty', () => {
+  it('uses the idle interval when the fleet is empty', () => {
     expect(
       serversPresenceRefetchMs({
-        controlPlaneRuntime: 'deno',
         servers: [],
         idleMs: IDLE_MS,
       }),
-    ).toBe(SERVER_INITIALIZING_POLL_MS)
+    ).toBe(IDLE_MS)
   })
 
   it('polls quickly while any server is initializing', () => {
@@ -92,7 +91,6 @@ describe('serversPresenceRefetchMs', () => {
   it('uses the idle interval once every server has a presence', () => {
     expect(
       serversPresenceRefetchMs({
-        controlPlaneRuntime: 'deno',
         servers: [ONLINE, OFFLINE],
         idleMs: IDLE_MS,
       }),

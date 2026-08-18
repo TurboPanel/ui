@@ -13,7 +13,7 @@ import {
   webPointer,
 } from '@/components/auth/auth-form-styles'
 import { setActiveOrganizationId } from '@/lib/org-context'
-import { defaultOrgDashboardHref } from '@/lib/org-navigation'
+import { defaultOrgDashboardHref, replaceOrganization } from '@/lib/org-navigation'
 import {
   useBootstrapInstall,
   useCompleteInstall,
@@ -129,7 +129,10 @@ export function InstallScreenContent() {
       })
       setSuccess(true)
       setActiveOrganizationId(result.organizationId)
-      router.replace(defaultOrgDashboardHref(result.organizationId) as Href)
+      replaceOrganization(
+        router,
+        defaultOrgDashboardHref(result.organizationId) as Href,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed')
       setSuccess(false)

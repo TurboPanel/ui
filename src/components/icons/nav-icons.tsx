@@ -23,6 +23,20 @@ export function ProjectsNavIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
+/** 2×2 grid — Overview. */
+export function OverviewNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3.75 3.75h6.5v6.5h-6.5zM13.75 3.75h6.5v6.5h-6.5zM3.75 13.75h6.5v6.5h-6.5zM13.75 13.75h6.5v6.5h-6.5z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 /** Database cylinder — Managed. */
 export function ManagedNavIcon({ size = 16, color }: NavIconProps) {
   return (
@@ -108,6 +122,57 @@ export function AdminNavIcon({ size = 16, color }: NavIconProps) {
         d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
         stroke={color}
         strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
+/** Magnifying glass — organization / workspace search. */
+export function SearchIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m21 21-4.35-4.35M17 10.5A6.5 6.5 0 1 1 4 10.5a6.5 6.5 0 0 1 13 0Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
+/** Plus — create organization. */
+export function PlusIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 5v14M5 12h14"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
+/** Cog — manage organization. */
+export function GearIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+        stroke={color}
+        strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -275,6 +340,7 @@ export function NotificationsBellIcon({ size = 16, color }: NavIconProps) {
 }
 
 const AREA_ICONS = {
+  overview: OverviewNavIcon,
   projects: ProjectsNavIcon,
   managed: ManagedNavIcon,
   servers: ServersNavIcon,

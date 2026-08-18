@@ -21,7 +21,7 @@ function hubLinks(orgId: string): NetworkHubLink[] {
   return [
     {
       title: 'Datacenters',
-      hint: 'A datacenter is one private CIDR. Create from a server IP — the prefix is detected.',
+      hint: 'A datacenter is a routing domain of one or more private subnets. Create from a server IP — the prefix is detected.',
       href: serversDatacentersHref(orgId),
     },
     {
@@ -51,7 +51,7 @@ export function NetworkOverviewSection({
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Network</Text>
       <Text style={orgPanelStyles.pageCopy}>
-        Private CIDRs live on Datacenters. This area is the mesh, address pool,
+        Private subnets live on Datacenters. This area is the mesh, address pool,
         and Docker registry.
       </Text>
 

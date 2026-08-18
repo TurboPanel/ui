@@ -1,17 +1,50 @@
-import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { Redirect, Stack, useLocalSearchParams, type Href } from 'expo-router'
+import { useMemo, type ReactNode } from 'react'
 import { ActivityIndicator, View } from 'react-native'
+import { OrgScreenScroll } from '@/components/org/org-screen-scroll'
 import { OrgShell } from '@/components/org/org-shell'
 import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
-import { setActiveOrganizationId } from '@/lib/org-context'
+import {
+  getActiveOrganizationId,
+  setActiveOrganizationId,
+} from '@/lib/org-context'
+import {
+  isOrgTabOverviewRouteName,
+  organizationsHref,
+} from '@/lib/org-navigation'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { colors } from '@/lib/theme'
+
+function OrgStackScreenLayout({
+  children,
+}: Readonly<{ children: ReactNode }>) {
+  return <OrgScreenScroll>{children}</OrgScreenScroll>
+}
+
+function orgNestedStackScreenOptions({
+  route,
+}: {
+  route: { name: string }
+}) {
+  const tabOverview = isOrgTabOverviewRouteName(route.name)
+  if (tabOverview) {
+    return {
+      headerShown: false,
+      animation: 'none' as const,
+      gestureEnabled: false,
+      contentStyle: { backgroundColor: colors.bg },
+    }
+  }
+  return {
+    headerShown: false,
+    contentStyle: { backgroundColor: colors.bg },
+  }
+}
 
 export default function OrganizationLayout() {
   const { session, needsInstall, isLoading, controlPlaneRuntime } = useAuth()
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-  const [readyOrgId, setReadyOrgId] = useState<string | null>(null)
   const orgsQuery = useOrganizationsQuery({
     enabled: Boolean(orgId && session),
   })
@@ -23,25 +56,15 @@ export default function OrganizationLayout() {
     return orgsQuery.data.organizations.some((org) => org.id === orgId)
   }, [orgId, session, orgsQuery.isPending, orgsQuery.isError, orgsQuery.data])
 
-  // Ready only after setActiveOrganizationId has run for this route's orgId.
-  // Comparing against orgId (not a boolean) resets readiness synchronously when
-  // the route changes — before child queries can mount with a stale header.
-  const orgReady = readyOrgId === orgId
+  // Set the instance API org header before children render so queries never
+  // fire with the previous org. This is a module store, not React state.
+  if (orgAllowed === true && orgId && getActiveOrganizationId() !== orgId) {
+    setActiveOrganizationId(orgId)
+  } else if (orgAllowed === false && getActiveOrganizationId() !== null) {
+    setActiveOrganizationId(null)
+  }
 
-  useEffect(() => {
-    if (orgAllowed === true && orgId) {
-      setActiveOrganizationId(orgId)
-      setReadyOrgId(orgId)
-    }
-  }, [orgAllowed, orgId])
-
-  useEffect(() => {
-    if (orgAllowed === false) {
-      setActiveOrganizationId(null)
-    }
-  }, [orgAllowed])
-
-  if (isLoading || (session && orgId && (orgAllowed === null || !orgReady))) {
+  if (isLoading || (session && orgId && orgAllowed === null)) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator
@@ -61,8 +84,15 @@ export default function OrganizationLayout() {
   }
 
   if (!orgId || orgAllowed === false) {
-    return <Redirect href={'/welcome' as Href} />
+    return <Redirect href={organizationsHref() as Href} />
   }
 
-  return <OrgShell orgId={orgId} />
+  return (
+    <OrgShell orgId={orgId} key={orgId}>
+      <Stack
+        screenLayout={OrgStackScreenLayout}
+        screenOptions={orgNestedStackScreenOptions}
+      />
+    </OrgShell>
+  )
 }

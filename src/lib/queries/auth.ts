@@ -9,9 +9,11 @@ import {
   signIn,
   signOut,
   signUp,
+  updateOrganization,
   verifyEmail,
   type InstallCompleteResult,
   type InstallStatus,
+  type OrganizationRecord,
   type SessionInfo,
 } from '@/lib/instance-api'
 import {
@@ -58,6 +60,34 @@ export function useCreateOrganization() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.organizations,
       })
+    },
+  })
+}
+
+export function useUpdateOrganization() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({
+      organizationId,
+      displayName,
+    }: {
+      organizationId: string
+      displayName: string
+    }) => updateOrganization(organizationId, { displayName }),
+    onSuccess: (data) => {
+      queryClient.setQueryData<{ organizations: OrganizationRecord[] }>(
+        queryKeys.auth.organizations,
+        (previous) => {
+          if (!previous) {
+            return previous
+          }
+          return {
+            organizations: previous.organizations.map((org) =>
+              org.id === data.organization.id ? data.organization : org,
+            ),
+          }
+        },
+      )
     },
   })
 }

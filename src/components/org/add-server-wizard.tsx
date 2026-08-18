@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { validateDisplayName } from '@/lib/display-name'
 import {
   isForbiddenError,
   type CreatedLicense,
@@ -352,8 +353,83 @@ type WaitingStepProps = Readonly<{
   elapsedSeconds: number
   onRetry: () => void
   onCancel: () => void
+  onAddAnother: () => void
   onFinish: () => void
 }>
+
+function WizardChromeButton({
+  label,
+  onPress,
+  variant,
+}: Readonly<{
+  label: string
+  onPress: () => void
+  variant: 'primary' | 'secondary'
+}>) {
+  const primary = variant === 'primary'
+  return (
+    <Pressable
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        primary ? orgPanelStyles.toolbarBtnPrimary : orgPanelStyles.toolbarBtnSecondary,
+        primary && styles.primaryButtonFill,
+        pressed && styles.buttonPressed,
+        webPointer,
+      ]}
+      onPress={onPress}
+    >
+      <Text
+        style={
+          primary
+            ? styles.primaryButtonText
+            : orgPanelStyles.toolbarBtnTextSecondary
+        }
+      >
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
+function WaitingActions({
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+  extraLabel,
+  onExtra,
+}: Readonly<{
+  primaryLabel: string
+  onPrimary: () => void
+  secondaryLabel?: string
+  onSecondary?: () => void
+  extraLabel?: string
+  onExtra?: () => void
+}>) {
+  return (
+    <View style={styles.waitingActions}>
+      <WizardChromeButton
+        label={primaryLabel}
+        onPress={onPrimary}
+        variant="primary"
+      />
+      {extraLabel && onExtra ? (
+        <WizardChromeButton
+          label={extraLabel}
+          onPress={onExtra}
+          variant="secondary"
+        />
+      ) : null}
+      {secondaryLabel && onSecondary ? (
+        <WizardChromeButton
+          label={secondaryLabel}
+          onPress={onSecondary}
+          variant="secondary"
+        />
+      ) : null}
+    </View>
+  )
+}
 
 function WaitingStep({
   pollError,
@@ -361,28 +437,21 @@ function WaitingStep({
   elapsedSeconds,
   onRetry,
   onCancel,
+  onAddAnother,
   onFinish,
 }: WaitingStepProps) {
   if (pollError) {
     return (
       <View style={styles.waiting}>
         <Text style={orgPanelStyles.error}>{pollError}</Text>
-        <View style={styles.waitingActions}>
-          <Pressable
-            style={({ pressed }) => [
-              orgPanelStyles.toolbarBtnPrimary,
-              styles.primaryButtonFill,
-              pressed && styles.buttonPressed,
-              webPointer,
-            ]}
-            onPress={onRetry}
-          >
-            <Text style={styles.primaryButtonText}>Retry</Text>
-          </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={onCancel}>
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
-          </Pressable>
-        </View>
+        <WaitingActions
+          primaryLabel="Retry"
+          onPrimary={onRetry}
+          extraLabel="Add another server"
+          onExtra={onAddAnother}
+          secondaryLabel="Close"
+          onSecondary={onCancel}
+        />
       </View>
     )
   }
@@ -393,12 +462,19 @@ function WaitingStep({
         <View style={styles.waitingStatus}>
           <ActivityIndicator size="small" color={colors.accent} />
           <Text style={orgPanelStyles.muted}>
-            Still waiting… ({elapsedSeconds}s)
+            Waiting for this host to connect ({elapsedSeconds}s)
           </Text>
         </View>
-        <Pressable style={styles.secondaryButton} onPress={onCancel}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
+        <Text style={orgPanelStyles.muted}>
+          This key stays under Pending keys until a host enrolls. You can add
+          another server now.
+        </Text>
+        <WaitingActions
+          primaryLabel="Add another server"
+          onPrimary={onAddAnother}
+          secondaryLabel="Close"
+          onSecondary={onCancel}
+        />
       </View>
     )
   }
@@ -414,17 +490,12 @@ function WaitingStep({
           </Text>
         </Text>
       </View>
-      <Pressable
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnPrimary,
-          styles.primaryButtonFill,
-          pressed && styles.buttonPressed,
-          webPointer,
-        ]}
-        onPress={onFinish}
-      >
-        <Text style={styles.primaryButtonText}>Done</Text>
-      </Pressable>
+      <WaitingActions
+        primaryLabel="Done"
+        onPrimary={onFinish}
+        extraLabel="Add another server"
+        onExtra={onAddAnother}
+      />
     </View>
   )
 }
@@ -482,6 +553,13 @@ export function AddServerWizard({
 
   const onStartAddServer = async () => {
     setCreateError(null)
+    if (displayName.trim()) {
+      const validationError = validateDisplayName(displayName)
+      if (validationError) {
+        setCreateError(validationError)
+        return
+      }
+    }
     const result = await createLicenseMutation.run({
       displayName: displayName.trim() || undefined,
       installBaseUrl: __DEV__ ? installBaseUrl : undefined,
@@ -647,6 +725,7 @@ export function AddServerWizard({
           elapsedSeconds={elapsedSeconds}
           onRetry={onRetryPolling}
           onCancel={dismissWizard}
+          onAddAnother={resetWizard}
           onFinish={onFinish}
         />
       ) : null}
@@ -654,11 +733,7 @@ export function AddServerWizard({
   )
 
   return (
-    <SectionPanel
-      title="Add server"
-      hint="Install the TurboPanel daemon on a new host"
-      accent
-    >
+    <SectionPanel title="Add server" accent>
       {body}
     </SectionPanel>
   )

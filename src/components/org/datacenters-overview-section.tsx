@@ -5,8 +5,8 @@ import {
   datacenterDisplayName,
   datacenterGeoFromMetadata,
   datacenterTimezoneLabel,
-  formatDatacenterCidrs,
   formatDatacenterServerCount,
+  formatDatacenterSubnetSummary,
   listServersWithReportedPrivateNetworks,
   resolveDatacenterAddEligibility,
   sortDatacentersByName,
@@ -114,7 +114,7 @@ function DatacenterTableRow({
       </View>
       <View style={[styles.tableCell, styles.colCidrs]}>
         <Text style={styles.monoText} numberOfLines={1}>
-          {formatDatacenterCidrs(datacenter.privateCidrs)}
+          {formatDatacenterSubnetSummary(datacenter.privateCidrs)}
         </Text>
       </View>
       <View style={[styles.tableCell, styles.colTimezone]}>
@@ -154,7 +154,7 @@ function DatacentersTable({
             <Text style={styles.tableHeaderText}>Servers</Text>
           </View>
           <View style={[styles.tableCell, styles.colCidrs]}>
-            <Text style={styles.tableHeaderText}>Private CIDRs</Text>
+            <Text style={styles.tableHeaderText}>Subnets</Text>
           </View>
           <View style={[styles.tableCell, styles.colTimezone]}>
             <Text style={styles.tableHeaderText}>Timezone</Text>
@@ -270,7 +270,9 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Datacenters</Text>
-      <Text style={orgPanelStyles.pageCopy}>Private networks by CIDR.</Text>
+      <Text style={orgPanelStyles.pageCopy}>
+        Private networks. A datacenter can hold several routable subnets.
+      </Text>
 
       {error && datacenters.length === 0 ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 

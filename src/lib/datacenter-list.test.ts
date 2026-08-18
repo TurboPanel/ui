@@ -1,28 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import type { DatacenterRecord, ServerReportedIp } from './instance-api'
+import type {
+  DatacenterRecord,
+  DatacenterSubnetRecord,
+  ServerReportedIp,
+} from './instance-api'
 import {
-  addressesInCidr,
   buildCreateDatacenterFromSeed,
   buildCreateDatacenterRequest,
   buildMemberPins,
+  candidateMemberNetworks,
   countServersByDatacenterId,
   datacenterDisplayName,
   datacenterGeoFromMetadata,
   datacenterTimezoneLabel,
   formatDatacenterCidrs,
   formatDatacenterServerCount,
+  formatDatacenterSubnetSummary,
   formatServerDatacenterNames,
-  listServersWithAddressInCidrs,
+  listServersWithCandidateAddresses,
   listServersWithReportedPrivateAddresses,
   listServersWithReportedPrivateNetworks,
   listServersWithoutMembership,
+  mergeDatacenterOptions,
   pruneSelectedIds,
   reportedCidrForAddress,
   reportedPrivateAddresses,
   reportedPrivateNetworks,
   resolveDatacenterAddEligibility,
   serverIsDatacenterMember,
+  sortDatacenterSubnets,
   sortDatacentersByName,
+  subnetForAddress,
   toggleSelectedId,
 } from './datacenter-list'
 import { addressInCidr, isValidCidr } from './cidr'
@@ -53,11 +61,23 @@ function privateIp(
 ): ServerReportedIp {
   const row: ServerReportedIp = {
     address,
-    version: 4,
+    version: address.includes(':') ? 6 : 4,
     scope: 'private',
   }
   if (cidr) row.cidr = cidr
   return row
+}
+
+function subnet(
+  overrides: Partial<DatacenterSubnetRecord> &
+    Pick<DatacenterSubnetRecord, 'id' | 'cidr' | 'version'>,
+): DatacenterSubnetRecord {
+  return {
+    displayName: null,
+    description: null,
+    memberCount: 0,
+    ...overrides,
+  }
 }
 
 describe('datacenterDisplayName', () => {
@@ -264,8 +284,8 @@ describe('listServersWithReportedPrivateNetworks', () => {
   })
 })
 
-describe('reportedPrivateAddresses and addressesInCidr', () => {
-  it('collects private IPs and filters by CIDR', () => {
+describe('reportedPrivateAddresses', () => {
+  it('collects private IPs', () => {
     expect(
       reportedPrivateAddresses({
         ips: ips([
@@ -277,9 +297,6 @@ describe('reportedPrivateAddresses and addressesInCidr', () => {
       }),
     ).toEqual(['10.0.0.5', '10.0.1.9', 'fd00::1'])
     expect(reportedPrivateAddresses({ ips: null })).toEqual([])
-    expect(
-      addressesInCidr(['10.0.0.5', '10.0.1.9', 'not-an-ip'], '10.0.0.0/24'),
-    ).toEqual(['10.0.0.5'])
   })
 })
 
@@ -298,24 +315,99 @@ describe('listServersWithReportedPrivateAddresses', () => {
   })
 })
 
-describe('listServersWithAddressInCidrs', () => {
-  it('keeps servers with a private IP inside any listed CIDR', () => {
+describe('sortDatacenterSubnets', () => {
+  it('orders IPv4 before IPv6, then CIDR', () => {
+    const rows = [
+      subnet({ id: 'v6', cidr: '2001:db8:1::/64', version: 6 }),
+      subnet({ id: 'v4-b', cidr: '203.0.113.0/24', version: 4 }),
+      subnet({ id: 'v4-a', cidr: '10.0.0.0/24', version: 4 }),
+    ]
+    expect(sortDatacenterSubnets(rows).map((row) => row.id)).toEqual([
+      'v4-a',
+      'v4-b',
+      'v6',
+    ])
+  })
+})
+
+describe('formatDatacenterSubnetSummary', () => {
+  it('renders an em dash, a single CIDR, or a +N remainder', () => {
+    expect(formatDatacenterSubnetSummary([])).toBe('—')
+    expect(formatDatacenterSubnetSummary(['10.0.0.0/24'])).toBe('10.0.0.0/24')
     expect(
-      listServersWithAddressInCidrs(
+      formatDatacenterSubnetSummary(['10.0.0.0/24', '10.0.1.0/24', '2001:db8::/64']),
+    ).toBe('10.0.0.0/24 +2')
+    expect(
+      formatDatacenterSubnetSummary([
+        subnet({ id: 'a', cidr: '203.0.113.0/24', version: 4 }),
+      ]),
+    ).toBe('203.0.113.0/24')
+  })
+})
+
+describe('subnetForAddress', () => {
+  it('returns the first subnet that contains the address', () => {
+    const subnets = [
+      subnet({ id: 'v4', cidr: '10.0.0.0/24', version: 4 }),
+      subnet({ id: 'v6', cidr: '2001:db8::/64', version: 6 }),
+    ]
+    expect(subnetForAddress(subnets, '10.0.0.5')?.id).toBe('v4')
+    expect(subnetForAddress(subnets, '2001:db8::5')?.id).toBe('v6')
+    expect(subnetForAddress(subnets, '203.0.113.10')).toBeNull()
+  })
+})
+
+describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => {
+  it('excludes already-pinned addresses and offers both families', () => {
+    const server = {
+      id: 'a',
+      ips: ips([
+        privateIp('10.0.0.5', '10.0.0.0/24'),
+        privateIp('2001:db8::5', '2001:db8::/64'),
+      ]),
+    }
+    expect(candidateMemberNetworks(server, ['10.0.0.5'])).toEqual([
+      {
+        address: '2001:db8::5',
+        cidr: '2001:db8::/64',
+        cidrSource: 'reported',
+      },
+    ])
+    expect(candidateMemberNetworks(server, []).map((row) => row.address)).toEqual(
+      ['10.0.0.5', '2001:db8::5'],
+    )
+    expect(
+      listServersWithCandidateAddresses(
         [
-          {
-            id: 'a',
-            ips: ips([privateIp('10.0.0.1')]),
-          },
-          {
-            id: 'b',
-            ips: ips([privateIp('10.0.1.9')]),
-          },
-          { id: 'c', ips: ips([privateIp('10.0.0.8')]) },
+          server,
+          { id: 'b', ips: ips([privateIp('10.0.1.9', '10.0.1.0/24')]) },
+          { id: 'c', ips: ips([privateIp('10.0.0.5', '10.0.0.0/24')]) },
         ],
-        ['10.0.0.0/24'],
+        ['10.0.0.5'],
       ).map((row) => row.id),
-    ).toEqual(['a', 'c'])
+    ).toEqual(['a', 'b'])
+  })
+})
+
+describe('mergeDatacenterOptions', () => {
+  it('preserves addressPreference across a timezone-only patch', () => {
+    expect(
+      mergeDatacenterOptions(
+        {
+          addressPreference: 'ipv4',
+          defaultServerTimezone: 'UTC',
+          enforceServerTimezone: false,
+        },
+        {
+          defaultServerTimezone: 'Europe/Amsterdam',
+          enforceServerTimezone: true,
+        },
+      ),
+    ).toEqual({
+      addressPreference: 'ipv4',
+      defaultServerTimezone: 'Europe/Amsterdam',
+      enforceServerTimezone: true,
+    })
   })
 })
 

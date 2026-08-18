@@ -1,42 +1,93 @@
-export const DISPLAY_NAME_PATTERN = /^[A-Za-z0-9 ._-]+$/
+export const DISPLAY_NAME_MAX_LENGTH = 255
+export const DESCRIPTION_MAX_LENGTH = 255
 
 export const PROJECT_NAME_IN_USE_ERROR = 'project_name_in_use'
 export const WORKSPACE_NAME_IN_USE_ERROR = 'workspace_name_in_use'
 
-/** Trim + lowercase key used for org-scoped display-name uniqueness. */
+const LEFT_SINGLE_QUOTE = '\u2018'
+const RIGHT_SINGLE_QUOTE = '\u2019'
+const MODIFIER_LETTER_APOSTROPHE = '\u02BC'
+
+/** Unicode C0/C1 controls, DEL, NUL (in C0), and line/paragraph separators. */
+const DISPLAY_NAME_CONTROL_CHARS_RE =
+  /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/
+
+/** Code-point length so astral characters and emoji are not double-counted. */
+export function displayNameCodePointLength(value: string): number {
+  return [...value].length
+}
+
+function hasDisallowedDisplayNameChars(value: string): boolean {
+  return DISPLAY_NAME_CONTROL_CHARS_RE.test(value)
+}
+
+/** Fold typographic apostrophes to ASCII `'` (matches instance persist). */
+export function foldDisplayNameApostrophes(name: string): string {
+  return name
+    .replaceAll(LEFT_SINGLE_QUOTE, "'")
+    .replaceAll(RIGHT_SINGLE_QUOTE, "'")
+    .replaceAll(MODIFIER_LETTER_APOSTROPHE, "'")
+}
+
+/** Trim → NFC → apostrophe-fold (matches instance persist). */
+export function normalizeDisplayName(name: string): string {
+  return foldDisplayNameApostrophes(name.trim().normalize('NFC'))
+}
+
+/** Trim + NFC + lowercase key used for org-scoped display-name uniqueness. */
 export function normalizeDisplayNameKey(name: string): string {
-  return name.trim().toLowerCase()
+  return normalizeDisplayName(name).toLowerCase()
+}
+
+/** Native header org switcher — keep the trigger readable beside the avatar. */
+export const HEADER_ORG_NAME_MAX_CHARS = 20
+
+/**
+ * Truncate a display name for compact chrome (native org switcher).
+ * Full names stay in menus and accessibility labels.
+ */
+export function truncateDisplayName(
+  name: string,
+  maxChars: number = HEADER_ORG_NAME_MAX_CHARS,
+): string {
+  const trimmed = name.trim()
+  if (trimmed.length <= maxChars) {
+    return trimmed
+  }
+  return `${trimmed.slice(0, maxChars).trimEnd()}…`
 }
 
 /**
- * Validate a required display name (project / workspace).
+ * Validate a required display name (org / project / workspace).
  * @returns An error message, or `null` when valid.
  */
 export function validateDisplayName(name: string): string | null {
-  const trimmedName = name.trim()
+  const trimmedName = normalizeDisplayName(name)
 
   if (!trimmedName) {
     return 'Name is required.'
   }
-  if (trimmedName.length > 255) {
-    return 'Name must be 255 characters or fewer.'
+  if (displayNameCodePointLength(trimmedName) > DISPLAY_NAME_MAX_LENGTH) {
+    return `Name must be ${String(DISPLAY_NAME_MAX_LENGTH)} characters or fewer.`
   }
-  if (!DISPLAY_NAME_PATTERN.test(trimmedName)) {
-    return (
-      'Name may only contain letters, numbers, spaces, dots, underscores, and hyphens.'
-    )
+  if (hasDisallowedDisplayNameChars(trimmedName)) {
+    return 'Name cannot contain control characters.'
   }
 
   return null
 }
 
 /**
- * Validate an optional description (≤255).
+ * Validate an optional description (length-capped).
  * @returns An error message, or `null` when valid.
  */
 export function validateDescription(description: string): string | null {
-  if (description.trim().length > 255) {
-    return 'Description must be 255 characters or fewer.'
+  const normalized = normalizeDisplayName(description)
+  if (displayNameCodePointLength(normalized) > DESCRIPTION_MAX_LENGTH) {
+    return `Description must be ${String(DESCRIPTION_MAX_LENGTH)} characters or fewer.`
+  }
+  if (hasDisallowedDisplayNameChars(normalized)) {
+    return 'Description cannot contain control characters.'
   }
   return null
 }

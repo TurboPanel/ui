@@ -1,7 +1,8 @@
-import { useRouter, type Href } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { usePathname, useRouter, type Href } from 'expo-router'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Modal,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,24 +11,48 @@ import {
 } from 'react-native'
 import { CreateOrganizationModal } from '@/components/create-organization-modal'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { HeaderCheck } from '@/components/header-check'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
   HEADER_MENU_WIDTH,
   HEADER_TRIGGER_ICON_SIZE,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
+import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
-import { OrganizationIcon } from '@/components/icons/nav-icons'
+import { GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
+import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { webPointer } from '@/components/org/org-panel-styles'
-import type { OrganizationRecord } from '@/lib/instance-api'
+import { truncateDisplayName } from '@/lib/display-name'
+import { organizationLabel, shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { setActiveOrganizationId } from '@/lib/org-context'
-import { defaultOrgDashboardHref } from '@/lib/org-navigation'
+import {
+  defaultOrgDashboardHref,
+  orgManageHref,
+  organizationsHref,
+  replaceOrganization,
+} from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { chrome, colors, layout } from '@/lib/theme'
+import { chrome, colors, layout, spacing } from '@/lib/theme'
 
-function organizationLabel(org: OrganizationRecord): string {
-  return org.displayName?.trim() || org.id
+const isNative = Platform.OS !== 'web'
+const COMPACT_FOOTER_HEIGHT = 108
+const COMPACT_SEARCH_HEIGHT = 52
+const COMPACT_LIST_MIN = 132
+const COMPACT_PANEL_MAX = 420
+
+function compactListMaxHeight(
+  windowHeight: number,
+  isCompact: boolean,
+  showSearch: boolean,
+): number {
+  if (!isCompact) {
+    return 280
+  }
+  const search = showSearch ? COMPACT_SEARCH_HEIGHT : 0
+  // Keep the from-top panel in the upper half so the iOS keyboard does not
+  // cover Manage / New (those sit in a sticky footer under the list).
+  const panelMax = Math.min(COMPACT_PANEL_MAX, Math.round(windowHeight * 0.5))
+  return Math.max(COMPACT_LIST_MIN, panelMax - search - COMPACT_FOOTER_HEIGHT)
 }
 
 type OrganizationSwitcherSegmentProps = Readonly<{
@@ -36,16 +61,17 @@ type OrganizationSwitcherSegmentProps = Readonly<{
 
 export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegmentProps) {
   const router = useRouter()
-  const { width } = useWindowDimensions()
-  const isCompact = width < layout.desktopBreakpoint
+  const pathname = usePathname()
+  const { width, height } = useWindowDimensions()
+  const isCompact = Platform.OS !== 'web' || width < layout.desktopBreakpoint
   const orgsQuery = useOrganizationsQuery()
   const createOrganization = useCreateOrganization()
   const organizations = orgsQuery.data?.organizations ?? []
   const currentOrg = organizations.find((org) => org.id === orgId)
-  const canSwitch = organizations.length > 1
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const buttonRef = useRef<View>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
 
@@ -61,7 +87,10 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
     })
   }, [menuOpen, isCompact])
 
-  const closeMenu = () => setMenuOpen(false)
+  const closeMenu = () => {
+    setMenuOpen(false)
+    setQuery('')
+  }
 
   let label = orgId
   if (currentOrg) {
@@ -69,6 +98,9 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   } else if (orgsQuery.isLoading) {
     label = 'Loading…'
   }
+  const triggerLabel = isNative ? truncateDisplayName(label) : label
+  const showSearch = shouldShowOrgSwitcherSearch(organizations.length, false)
+  const listMaxHeight = compactListMaxHeight(height, isCompact, showSearch)
 
   const switchTo = (nextOrgId: string) => {
     if (nextOrgId === orgId) {
@@ -77,12 +109,30 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
     }
     setActiveOrganizationId(nextOrgId)
     closeMenu()
-    router.replace(defaultOrgDashboardHref(nextOrgId) as Href)
+    replaceOrganization(router, defaultOrgDashboardHref(nextOrgId) as Href)
   }
 
   const openCreate = () => {
     closeMenu()
     setCreateOpen(true)
+  }
+
+  const openSettings = () => {
+    closeMenu()
+    const settingsHref = orgManageHref(orgId)
+    if (pathname === settingsHref) {
+      return
+    }
+    router.push(settingsHref as Href)
+  }
+
+  const openAllOrganizations = () => {
+    closeMenu()
+    const href = organizationsHref()
+    if (pathname === href || pathname === '/welcome') {
+      return
+    }
+    router.push(href as Href)
   }
 
   const handleCreate = async (displayName: string) => {
@@ -95,69 +145,64 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
       return { ok: false, error: 'Could not create organization.' }
     }
     setActiveOrganizationId(nextOrgId)
-    router.replace(defaultOrgDashboardHref(nextOrgId) as Href)
+    replaceOrganization(router, defaultOrgDashboardHref(nextOrgId) as Href)
     return { ok: true }
   }
 
   const menuBody = (
-    <GlassSurface
-      style={[headerMenuGroupStyles.menu, isCompact && headerMenuGroupStyles.menuSheet]}
-      intensity="strong"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={isCompact ? styles.compactPanel : undefined}
     >
-      {canSwitch ? (
-        <>
-          <Text style={headerMenuGroupStyles.menuHeading}>Organizations</Text>
-          {organizations.map((org) => {
-            const active = org.id === orgId
-            const name = organizationLabel(org)
-            return (
-              <Pressable
-                key={org.id}
-                style={({ pressed }) => [
-                  headerMenuGroupStyles.menuItem,
-                  active && headerMenuGroupStyles.menuItemActive,
-                  pressed && headerMenuGroupStyles.itemPressed,
-                  webPointer,
-                ]}
-                onPress={() => switchTo(org.id)}
-                accessibilityRole="menuitem"
-                accessibilityLabel={`Switch to ${name}`}
-                accessibilityState={{ selected: active }}
-              >
-                <View style={headerMenuGroupStyles.menuItemMark}>
-                  {active ? <HeaderCheck color={chrome.accent} /> : null}
-                </View>
-                <Text
-                  style={[
-                    headerMenuGroupStyles.menuItemLabel,
-                    active && headerMenuGroupStyles.menuItemLabelActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {name}
-                </Text>
-              </Pressable>
-            )
-          })}
-          <View style={headerMenuGroupStyles.menuDivider} />
-        </>
-      ) : null}
-
-      <Pressable
-        style={({ pressed }) => [
-          headerMenuGroupStyles.menuAction,
-          pressed && headerMenuGroupStyles.itemPressed,
-          webPointer,
-        ]}
-        onPress={openCreate}
-        accessibilityRole="menuitem"
-        accessibilityLabel="Create new organization"
+      <GlassSurface
+        style={[headerMenuGroupStyles.menu, isCompact && styles.topPanel]}
+        intensity="strong"
       >
-        <Text style={headerMenuGroupStyles.menuActionLabel}>
-          Create organization
-        </Text>
-      </Pressable>
-    </GlassSurface>
+        {organizations.length > 0 ? (
+          <OrganizationSwitcherList
+            organizations={organizations}
+            query={query}
+            onQueryChange={setQuery}
+            currentOrgId={orgId}
+            onSelect={switchTo}
+            showSearch={showSearch}
+            autoFocusSearch={!isCompact}
+            listMaxHeight={listMaxHeight}
+            density="compact"
+          />
+        ) : null}
+
+        <View style={headerMenuGroupStyles.menuDivider} />
+
+        <View style={styles.footerRow}>
+          <FooterAction
+            label="Manage"
+            accessibilityLabel="Manage Organization"
+            onPress={openSettings}
+            icon={<GearIcon size={14} color={colors.textChip} />}
+          />
+          <FooterAction
+            label="New"
+            accessibilityLabel="Create organization"
+            onPress={openCreate}
+            icon={<PlusIcon size={14} color={colors.textChip} />}
+          />
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.viewAll,
+            pressed && headerMenuGroupStyles.itemPressed,
+            webPointer,
+          ]}
+          onPress={openAllOrganizations}
+          accessibilityRole="button"
+          accessibilityLabel="View all organizations"
+        >
+          <Text style={styles.viewAllLabel}>View all organizations</Text>
+        </Pressable>
+      </GlassSurface>
+    </KeyboardAvoidingView>
   )
 
   return (
@@ -174,8 +219,12 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
             <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
           </View>
           <View style={headerMenuGroupStyles.triggerCopy}>
-            <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
-              {label}
+            <Text
+              style={headerMenuGroupStyles.triggerLabel}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {triggerLabel}
             </Text>
           </View>
           <HeaderChevron
@@ -185,42 +234,15 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
         </HeaderMenuTrigger>
       </View>
 
-      <Modal
-        visible={menuOpen}
-        transparent
-        animationType={isCompact ? 'slide' : 'fade'}
-        onRequestClose={closeMenu}
+      <HeaderMenuOverlay
+        open={menuOpen}
+        onClose={closeMenu}
+        closeAccessibilityLabel="Close organization menu"
+        presentation={isCompact ? 'fromTop' : 'dropdown'}
+        dropdownPosition={menuPosition}
       >
-        <View
-          style={[
-            headerMenuGroupStyles.backdrop,
-            isCompact && headerMenuGroupStyles.backdropCompact,
-          ]}
-        >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={closeMenu}
-            accessibilityRole="button"
-            accessibilityLabel="Close organization menu"
-          />
-          {isCompact ? (
-            <View style={headerMenuGroupStyles.sheetWrap}>{menuBody}</View>
-          ) : (
-            <View
-              style={[
-                headerMenuGroupStyles.desktopMenuWrap,
-                {
-                  top: menuPosition.top,
-                  left: menuPosition.left,
-                  width: HEADER_MENU_WIDTH,
-                },
-              ]}
-            >
-              {menuBody}
-            </View>
-          )}
-        </View>
-      </Modal>
+        {menuBody}
+      </HeaderMenuOverlay>
 
       <CreateOrganizationModal
         visible={createOpen}
@@ -231,9 +253,76 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   )
 }
 
+function FooterAction({
+  label,
+  accessibilityLabel,
+  onPress,
+  icon,
+}: Readonly<{
+  label: string
+  accessibilityLabel: string
+  onPress: () => void
+  icon: ReactNode
+}>) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.footerBtn,
+        pressed && headerMenuGroupStyles.itemPressed,
+        webPointer,
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      {icon}
+      <Text style={styles.footerBtnLabel}>{label}</Text>
+    </Pressable>
+  )
+}
+
 const styles = StyleSheet.create({
   triggerWrap: {
     flexShrink: 1,
     minWidth: 0,
+  },
+  compactPanel: {
+    maxHeight: '100%',
+  },
+  topPanel: {
+    maxHeight: '100%',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  footerBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    backgroundColor: colors.bgSecondary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  footerBtnLabel: {
+    color: colors.textChip,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  viewAll: {
+    minHeight: 44,
+    borderRadius: 8,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  viewAllLabel: {
+    color: chrome.accent,
+    fontSize: 13,
+    fontWeight: '600',
   },
 })

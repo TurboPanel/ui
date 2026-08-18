@@ -1,9 +1,11 @@
-import { View } from 'react-native'
+import { Platform, View } from 'react-native'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { HeaderNotificationsSegment } from '@/components/header-notifications-control'
 import { OrganizationSwitcherSegment } from '@/components/organization-switcher'
 import { ReturnToInstanceSegment } from '@/components/return-to-instance'
 import { UserAccountMenuSegment } from '@/components/user-account-menu'
+
+const showSeparateNotifications = Platform.OS === 'web'
 
 type HeaderAccountControlsProps = Readonly<{
   orgId: string
@@ -20,7 +22,7 @@ export function HeaderAccountControls({
     <View style={headerMenuGroupStyles.group}>
       <OrganizationSwitcherSegment orgId={orgId} />
       <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
-      <HeaderNotificationsSegment />
+      {showSeparateNotifications ? <HeaderNotificationsSegment /> : null}
     </View>
   )
 }
@@ -37,7 +39,7 @@ export function HeaderAdminAccountControls({
     <View style={headerMenuGroupStyles.group}>
       <ReturnToInstanceSegment />
       <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
-      <HeaderNotificationsSegment />
+      {showSeparateNotifications ? <HeaderNotificationsSegment /> : null}
     </View>
   )
 }
@@ -52,7 +54,7 @@ export function HeaderUserAccountControl({
   return (
     <View style={headerMenuGroupStyles.group}>
       <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
-      <HeaderNotificationsSegment />
+      {showSeparateNotifications ? <HeaderNotificationsSegment /> : null}
     </View>
   )
 }

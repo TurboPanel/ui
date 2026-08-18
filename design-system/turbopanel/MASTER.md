@@ -118,6 +118,8 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 - Transitions 150–200ms; press scale ≤ 0.98 (Reanimated), no layout-shifting scale on hover  
 - Web: `cursor: pointer` on all clickable elements  
 - **Header account controls** (org switcher, user menu, notifications, admin Return to instance): **not** bordered buttons. Rest transparent; hover/press fill `bgSecondary` as a rounded tile; open menu uses `chrome.bgActive`. Keep a keyboard focus ring.
+  - **Web:** separate notifications bell (right of account) opens its own empty panel until the API exists; unread badge on the bell only when count > 0. Desktop menus stay anchored dropdowns.
+  - **Compact / iOS / Android:** no bottom drawers. Org menu slides down from the top; account / notifications slide in from the right (`HeaderMenuOverlay`). Native org switcher shows the organization display name (truncated to 20 characters) plus chevron — not icon-only. The compact menu is a **searchable, scrolling org list** with a sticky **Manage** / **New** footer and **View all organizations** (full page at `/organizations`). Native profile is a circular avatar with the user icon inside (`AccountAvatar`), unread badge only when count > 0, and no chevron.
 
 ### Panels / "cards"
 
@@ -159,10 +161,11 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 ### Bottom tab bar (native)
 
-- Glass chrome (`GlassSurface` intensity strong) with a hairline top border
-- ≥44px touch targets (`layout.bottomTabHeight`); icon + label per tab (never icon-only)
+- Plain fill (`glass.fillStrong`) + top hairline — no `GlassSurface`/`GlassView` rim
+- Platform-standard content row (`layout.bottomTabHeight`: 49 iOS / 56 Android); icon + label per tab (never icon-only); ≥44pt touch targets
 - Active: `chrome.accent` plus a thin top indicator bar — never colour-only
-- Bottom safe-area inset is owned by the bar (shell SafeAreaView omits the bottom edge)
+- On each tab's **overview** only (`/{orgId}/overview`, `/{orgId}/projects`, `/{orgId}/servers` — not nested detail/settings), a finger-following pager swipes to the adjacent tab (does not wrap past Overview or Servers). Snap is 280ms; reduced motion jumps. Nested routes keep vertical scroll, pull-to-refresh, and back.
+- Switching organizations **replaces** the org console in place (no stack push, no swipe-back to the previous org).
 
 ---
 
@@ -189,7 +192,7 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 |-------------|----------|-------|
 | Hover / focus | 150–200ms | Opacity / border only |
 | Expand row | 200–250ms | Height + opacity |
-| Route change | Native / Reanimated | No blocking overlay tied to data fetch |
+| Route change | Native / Reanimated | Org switch is a replace (no slide). Native tab overviews use a 280ms pager; nested org routes keep the platform stack. |
 | Reduced motion | Off / instant | Honor `prefers-reduced-motion` / RN `reduceMotion` |
 
 ---

@@ -40,6 +40,11 @@ const triggerFocusRing =
       } as unknown as ViewStyle)
     : {}
 
+const triggerCopyFill: ViewStyle =
+  Platform.OS === 'web'
+    ? { flex: 1 }
+    : { flexGrow: 0, flexShrink: 1 }
+
 export type HeaderPressableState = Readonly<{
   pressed: boolean
   hovered?: boolean
@@ -116,9 +121,14 @@ export const headerMenuGroupStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    // Extra optical space between the 16px leading icon and the org / email label.
+    marginRight: spacing.xs,
   },
   triggerCopy: {
-    flex: 1,
+    // Web: fill the 220px trigger so CSS ellipsis can run.
+    // Native: size to the label — `flex: 1` + `minWidth: 0` collapses to 0
+    // in a shrink-wrapped row (icon + chevron only).
+    ...triggerCopyFill,
     minWidth: 0,
     justifyContent: 'center',
   },
@@ -136,9 +146,6 @@ export const headerMenuGroupStyles = StyleSheet.create({
     padding: spacing.sm,
     gap: 2,
     ...menuShadow,
-  },
-  menuSheet: {
-    maxHeight: '55%',
   },
   menuHeading: {
     color: colors.textDim,
@@ -208,12 +215,6 @@ export const headerMenuGroupStyles = StyleSheet.create({
   },
   desktopMenuWrap: {
     position: 'absolute',
-    zIndex: 2,
-    pointerEvents: 'box-none',
-  },
-  sheetWrap: {
-    marginTop: 'auto',
-    padding: spacing.md,
     zIndex: 2,
     pointerEvents: 'box-none',
   },

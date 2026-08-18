@@ -15,6 +15,8 @@ import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
+  DESCRIPTION_MAX_LENGTH,
+  DISPLAY_NAME_MAX_LENGTH,
   displayNameConflictMessage,
   isDisplayNameTaken,
   validateDescription,
@@ -306,6 +308,7 @@ function NewWorkspaceFields({
         onChangeText={onChange}
         autoCapitalize="words"
         accessibilityLabel="Workspace name"
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
         style={inputStyle(Boolean(workspaceNameError))}
       />
       {workspaceNameError ? (
@@ -577,6 +580,7 @@ export function ProjectCreateSection({
                 autoCapitalize="words"
                 autoFocus
                 accessibilityLabel="Project name"
+                maxLength={DISPLAY_NAME_MAX_LENGTH}
                 style={inputStyle(Boolean(fieldErrors.displayName))}
               />
               {fieldErrors.displayName ? (
@@ -594,6 +598,7 @@ export function ProjectCreateSection({
                 placeholder="Optional"
                 placeholderTextColor={colors.textDim}
                 accessibilityLabel="Project description"
+                maxLength={DESCRIPTION_MAX_LENGTH}
                 multiline
                 numberOfLines={2}
                 textAlignVertical="top"

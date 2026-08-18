@@ -8,13 +8,13 @@
 - Addresses → `network-addresses-section.tsx`
 - Docker networks → `network-docker-section.tsx`
 
-**Job:** Mesh, address pool, and Docker registry. **Private CIDRs are Datacenters** (`/servers/datacenters`) — do not duplicate that CRUD here.
+**Job:** Mesh, address pool, and Docker registry. **Private subnets live on Datacenters** (`/servers/datacenters`) — do not duplicate that CRUD here.
 
 ---
 
 ## Hub
 
-- Title **Network** + one line: private CIDRs live on Datacenters; this area is mesh / addresses / Docker
+- Title **Network** + one line: private subnets live on Datacenters; this area is mesh / addresses / Docker
 - Four `detailCard` links (Datacenters, TurboFabric, Addresses, Docker networks) — not a second sites inventory
 - Legacy `/network/sites/:id` redirects to `/servers/datacenters/:id`
 
@@ -23,6 +23,7 @@
 - Scopes: `public | datacenter` (no `loopback`, no `vpn`)
 - Identity is the address — optional **Description** (`varchar(255)`), never a display name
 - Scope / allocation filters use `segmentGroup` / `segmentChip`
+- Datacenter **free pool**: datacenter only (no host, no site subnet). **Membership pin**: host + required site subnet of that datacenter (`networkId`). Never POST/PATCH a pin without `networkId`.
 - **409** `ip_in_use` copy retained
 
 ## TurboFabric
@@ -32,7 +33,7 @@
 - Product name from `TURBOFABRIC_PRODUCT_NAME`. Never “tp0 fabric”, “which WireGuard network should this container join?”, or “the WireGuard mesh” in UI copy.
 - 404/503: muted “not available on this control plane yet” — do not treat as a form error.
 - Manage-gated enable toggle (`organization:manage` display hint). Status + CIDR when the API returns `fabric`.
-- **Relay table** — one row per org server: tp0 address, role chip (gateway/member) with inline promote/demote (`PATCH /organizations/:id/fabric/relays/:serverId`), advertised LAN CIDRs (editable, gateway-only), **endpoint override** (operator pin) separate from **resolved endpoint**, `calloutWarning` when auto-derivation failed (`endpointAddress` and `resolvedEndpoint` both null), host **segments** (`name` + `subnet`), keepalive, public-key-present boolean (`publicKey !== null`), preshared-key presence (`hasPresharedKey`, never the key), last handshake with staleness (`calloutWarning` when null or older than the threshold).
+- **Relay table** — one row per org server: tp0 address, role chip (gateway/member) with inline promote/demote (`PATCH /organizations/:id/fabric/relays/:serverId`), advertised LAN CIDRs (editable override, gateway-only) separate from **resolved advertised CIDRs** (`resolvedAdvertisedCidrs` — effective IPv4 list when the override is empty), **endpoint override** (operator pin) separate from **resolved endpoint**, `calloutWarning` when auto-derivation failed (`endpointAddress` and `resolvedEndpoint` both null), host **segments** (`name` + `subnet`), keepalive, public-key-present boolean (`publicKey !== null`), preshared-key presence (`hasPresharedKey`, never the key), last handshake with staleness (`calloutWarning` when null or older than the threshold).
 - Preshared key is **write-only**: optional “Set preshared key” input, empty by default, submitted only when typed — never populate from `RelayRecord`.
 - **Apply** (`POST /organizations/:id/fabric/apply`) feeds returned `{serverId, commandId}` pairs into `useCommandsBatch` / `COMMAND_POLL_MS`. Disable Apply while the POST is pending **or** any tracked command is non-terminal; merge later queued ids into the polling set. In-flight rows show pending until terminal. No DO polling.
 
@@ -45,7 +46,7 @@
 
 ## Server detail Network tab
 
-Display-only: each membership links to datacenter detail; mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
+Display-only: each membership links to datacenter detail; list **every** `scope: 'datacenter'` pin for this host (IPv4/IPv6 badge + datacenter label — dual-stack / multi-subnet hosts are not truncated to one address). Mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
 
 ## Anti-patterns
 

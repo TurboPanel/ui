@@ -1,6 +1,7 @@
 import type {
   DatacenterOptions,
   DatacenterRecord,
+  DatacenterSubnetRecord,
   ServerDatacenterRef,
   ServerGeo,
   ServerReportedIp,
@@ -9,7 +10,6 @@ import {
   addressInCidr,
   formatCidr,
   inferSiteCidrFromAddress,
-  isValidCidr,
   parseCidr,
 } from '@/lib/cidr'
 
@@ -241,14 +241,6 @@ export function reportedPrivateAddresses(server: ServerWithIps): string[] {
   return out
 }
 
-export function addressesInCidr(
-  addresses: readonly string[],
-  cidr: string,
-): string[] {
-  if (!isValidCidr(cidr)) return []
-  return addresses.filter((address) => addressInCidr(address, cidr))
-}
-
 export function listServersWithReportedPrivateAddresses<
   T extends ServerWithIps,
 >(servers: readonly T[]): T[] {
@@ -261,19 +253,78 @@ export function listServersWithReportedPrivateNetworks<
   return servers.filter((server) => reportedPrivateNetworks(server).length > 0)
 }
 
-/** Servers that report at least one private address inside any of `cidrs`. */
-export function listServersWithAddressInCidrs<T extends ServerWithIps>(
-  servers: readonly T[],
-  cidrs: readonly string[],
-): T[] {
-  const validCidrs = cidrs.filter((cidr) => isValidCidr(cidr))
-  if (validCidrs.length === 0) return []
-  return servers.filter((server) =>
-    validCidrs.some(
-      (cidr) =>
-        addressesInCidr(reportedPrivateAddresses(server), cidr).length > 0,
-    ),
+export function sortDatacenterSubnets(
+  subnets: readonly DatacenterSubnetRecord[],
+): DatacenterSubnetRecord[] {
+  return [...subnets].sort((a, b) => {
+    if (a.version !== b.version) return a.version - b.version
+    return a.cidr.localeCompare(b.cidr)
+  })
+}
+
+function cidrsFromSubnetsOrCidrs(
+  subnetsOrCidrs:
+    | readonly DatacenterSubnetRecord[]
+    | readonly string[],
+): string[] {
+  const cleaned: string[] = []
+  for (const entry of subnetsOrCidrs) {
+    const cidr = (typeof entry === 'string' ? entry : entry.cidr).trim()
+    if (cidr) cleaned.push(cidr)
+  }
+  return cleaned
+}
+
+export function formatDatacenterSubnetSummary(
+  subnetsOrCidrs:
+    | readonly DatacenterSubnetRecord[]
+    | readonly string[],
+): string {
+  const cidrs = cidrsFromSubnetsOrCidrs(subnetsOrCidrs)
+  const first = cidrs[0]
+  if (!first) return '—'
+  if (cidrs.length === 1) return first
+  return `${first} +${cidrs.length - 1}`
+}
+
+export function subnetForAddress(
+  subnets: readonly DatacenterSubnetRecord[],
+  address: string,
+): DatacenterSubnetRecord | null {
+  return (
+    subnets.find((subnet) => addressInCidr(address, subnet.cidr)) ?? null
   )
+}
+
+export function candidateMemberNetworks(
+  server: ServerWithIps,
+  pinnedAddresses: readonly string[],
+): ReportedPrivateNetwork[] {
+  const pinned = new Set(pinnedAddresses)
+  return reportedPrivateNetworks(server).filter(
+    (network) => !pinned.has(network.address),
+  )
+}
+
+export function listServersWithCandidateAddresses<
+  T extends ServerWithIps,
+>(
+  servers: readonly T[],
+  pinnedAddresses: readonly string[],
+): T[] {
+  return servers.filter(
+    (server) => candidateMemberNetworks(server, pinnedAddresses).length > 0,
+  )
+}
+
+export function mergeDatacenterOptions(
+  current: DatacenterOptions | null | undefined,
+  patch: DatacenterOptions,
+): DatacenterOptions {
+  return {
+    ...current,
+    ...patch,
+  }
 }
 
 /** Servers with zero datacenter memberships. */

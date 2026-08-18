@@ -127,3 +127,14 @@ export function relayRoleLabel(role: RelayRole): string {
   if (role === 'gateway') return 'Gateway'
   return 'Member'
 }
+
+/**
+ * Display string for a gateway's effective advertised CIDRs (operator
+ * override when stored, otherwise derived IPv4 datacenter subnets).
+ */
+export function formatResolvedAdvertisedCidrs(
+  cidrs: readonly string[],
+): string {
+  if (cidrs.length === 0) return 'none'
+  return cidrs.join(', ')
+}

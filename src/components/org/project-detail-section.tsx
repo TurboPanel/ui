@@ -26,6 +26,7 @@ import { useEnvironments } from '@/lib/queries/environments'
 import { useServicesByEnvironments } from '@/lib/queries/services'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
+import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -352,7 +353,7 @@ function projectTitleField({
       placeholder="Project name"
       placeholderTextColor={colors.textDim}
       editable={!savingMeta}
-      maxLength={255}
+      maxLength={DISPLAY_NAME_MAX_LENGTH}
     />
   )
 }
@@ -387,7 +388,7 @@ function projectDescriptionField({
         multiline
         numberOfLines={3}
         editable={!savingMeta}
-        maxLength={255}
+        maxLength={DESCRIPTION_MAX_LENGTH}
       />
     )
   }

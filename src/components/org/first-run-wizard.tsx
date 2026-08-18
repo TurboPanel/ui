@@ -1,4 +1,5 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
@@ -81,7 +82,7 @@ export function FirstRunWizard({
               autoCapitalize="words"
               autoCorrect={false}
               editable={!busy}
-              maxLength={255}
+              maxLength={DISPLAY_NAME_MAX_LENGTH}
             />
           </View>
         ) : null}

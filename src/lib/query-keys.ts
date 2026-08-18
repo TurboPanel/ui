@@ -94,6 +94,8 @@ export const queryKeys = {
         updatesBatch: ['org', orgId, 'servers', 'updates'] as const,
         /** One O(1) fleet usage snapshot (CPU stack / load / memory / swap). */
         fleetUsage: ['org', orgId, 'servers', 'fleet-usage'] as const,
+        /** Active registration keys (owner-only GET /licenses). */
+        licenses: ['org', orgId, 'servers', 'licenses'] as const,
         reporting: (serverId: string, window: string) =>
           ['org', orgId, 'server', serverId, 'reporting', window] as const,
         metricsSeries: (serverId: string, rangeId: string) =>
@@ -135,6 +137,7 @@ export const queryKeys = {
           ['org', orgId, 'topology', 'ips', filters ?? {}] as const,
         ip: (ipId: string) =>
           ['org', orgId, 'topology', 'ip', ipId] as const,
+        networksAll: ['org', orgId, 'topology', 'networks'] as const,
         networks: (filters?: NetworkListFilters) =>
           ['org', orgId, 'topology', 'networks', filters ?? {}] as const,
       },

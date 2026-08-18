@@ -1,4 +1,10 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
 import { webPointer } from '@/components/org/org-panel-styles'
@@ -8,15 +14,21 @@ import { colors, spacing } from '@/lib/theme'
 export function OrgHeader({
   orgId,
   onMenuPress,
+  style,
 }: Readonly<{
   orgId: string
   onMenuPress?: () => void
+  style?: StyleProp<ViewStyle>
 }>) {
   const { session, signOut } = useAuth()
   const userLabel = session?.email
 
   return (
-    <GlassSurface style={styles.header} intensity="strong">
+    <GlassSurface
+      style={[styles.header, style]}
+      intensity="strong"
+      rim="bottom"
+    >
       <View style={styles.headerMain}>
         {onMenuPress ? (
           <Pressable
@@ -56,8 +68,6 @@ export function OrgHeader({
 const styles = StyleSheet.create({
   header: {
     borderRadius: 0,
-    borderWidth: 0,
-    borderBottomWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

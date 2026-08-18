@@ -1,6 +1,15 @@
+import type { Href } from 'expo-router'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { projectsHrefForScope } from '@/lib/workspace-scope'
 
 export const ORG_AREAS = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    pathSegment: 'overview',
+    hint: 'Organization overview',
+    subRoutes: [],
+  },
   {
     id: 'projects',
     label: 'Projects',
@@ -33,6 +42,12 @@ export const ORG_AREAS = [
         label: 'Datacenters',
         pathSegment: 'datacenters',
         hint: 'Private CIDR locations that group servers',
+      },
+      {
+        id: 'keys',
+        label: 'Pending keys',
+        pathSegment: 'keys',
+        hint: 'Unused registration keys that have not enrolled a host',
       },
       {
         id: 'settings',
@@ -89,15 +104,29 @@ export type OrgSubRouteId =
 
 /** Native bottom-tab set. Other org areas stay reachable by deep link only on native. */
 export const ORG_TAB_AREA_IDS = [
+  'overview',
   'projects',
   'servers',
 ] as const satisfies readonly OrgAreaId[]
+
+export type OrgTabAreaId = (typeof ORG_TAB_AREA_IDS)[number]
+
+export type OrgTabSwipeDirection = 'next' | 'previous'
+
+export type OrgTabHref =
+  | `/${string}/${string}`
+  | `/${string}/projects?workspaceId=${string}`
 
 export function orgAreaHref(
   orgId: string,
   areaPathSegment: string,
 ): `/${string}/${string}` {
   return `/${orgId}/${areaPathSegment}`
+}
+
+function orgPathWithoutQuery(pathname: string): string {
+  const queryIndex = pathname.indexOf('?')
+  return queryIndex === -1 ? pathname : pathname.slice(0, queryIndex)
 }
 
 /**
@@ -111,10 +140,99 @@ export function isOrgAreaActive(
   orgId: string,
   areaPathSegment: string,
 ): boolean {
-  const queryIndex = pathname.indexOf('?')
-  const path = queryIndex === -1 ? pathname : pathname.slice(0, queryIndex)
+  const path = orgPathWithoutQuery(pathname)
   const href = orgAreaHref(orgId, areaPathSegment)
   return path === href || path.startsWith(`${href}/`)
+}
+
+/**
+ * True only on a native tab's own overview (`/{orgId}/overview|projects|servers`),
+ * not nested detail/settings routes. Query strings are ignored so a Projects
+ * workspace filter still counts as the tab overview.
+ */
+export function isOrgTabOverviewPath(pathname: string, orgId: string): boolean {
+  const path = orgPathWithoutQuery(pathname)
+  return ORG_TAB_AREA_IDS.some(
+    (areaId) => path === orgAreaHref(orgId, areaId),
+  )
+}
+
+/**
+ * Index into {@link ORG_TAB_AREA_IDS} for a native tab overview path.
+ * `-1` when the path is not one of those overviews.
+ */
+export function orgTabIndexFromPathname(pathname: string, orgId: string): number {
+  const path = orgPathWithoutQuery(pathname)
+  return ORG_TAB_AREA_IDS.findIndex(
+    (areaId) => path === orgAreaHref(orgId, areaId),
+  )
+}
+
+/**
+ * Expo Router nested-stack route names for the three native tab overviews
+ * (`overview`, `projects/index`, `[orgId]/servers` — not project Overview
+ * or server detail).
+ */
+export function isOrgTabOverviewRouteName(routeName: string): boolean {
+  const normalized = routeName
+    .replace(/\/index$/, '')
+    .replace(/^\[orgId\]\//, '')
+  return (ORG_TAB_AREA_IDS as readonly string[]).includes(normalized)
+}
+
+/** Shared identity so the root stack keeps a single org console screen. */
+export const ORG_CONSOLE_SINGULAR_ID = 'org-console'
+
+type OrganizationReplaceRouter = Readonly<{
+  replace: (
+    href: Href,
+    options?: { dangerouslySingular?: boolean | (() => string) },
+  ) => void
+}>
+
+/**
+ * Open an organization without stacking the previous org on the native back
+ * stack (no slide, no swipe-back to the org you just left).
+ */
+export function replaceOrganization(
+  router: OrganizationReplaceRouter,
+  href: Href,
+): void {
+  router.replace(href, {
+    dangerouslySingular: () => ORG_CONSOLE_SINGULAR_ID,
+  })
+}
+
+export function orgTabHref(
+  orgId: string,
+  areaId: OrgTabAreaId,
+  projectsScopeId: string,
+): OrgTabHref {
+  if (areaId === 'projects') {
+    return projectsHrefForScope(orgId, projectsScopeId)
+  }
+  return orgAreaHref(orgId, areaId)
+}
+
+export function adjacentOrgTabHref(
+  pathname: string,
+  orgId: string,
+  direction: OrgTabSwipeDirection,
+  projectsScopeId: string,
+): OrgTabHref | null {
+  const path = orgPathWithoutQuery(pathname)
+  const index = ORG_TAB_AREA_IDS.findIndex(
+    (areaId) => path === orgAreaHref(orgId, areaId),
+  )
+  if (index < 0) {
+    return null
+  }
+  const nextIndex = direction === 'next' ? index + 1 : index - 1
+  const areaId = ORG_TAB_AREA_IDS[nextIndex]
+  if (!areaId) {
+    return null
+  }
+  return orgTabHref(orgId, areaId, projectsScopeId)
 }
 
 export function orgRouteHref(
@@ -125,8 +243,17 @@ export function orgRouteHref(
   return `/${orgId}/${areaPathSegment}/${subRoutePathSegment}`
 }
 
-export function defaultOrgDashboardHref(orgId: string): `/${string}/servers` {
-  return `/${orgId}/servers`
+export function defaultOrgDashboardHref(orgId: string): `/${string}/overview` {
+  return `/${orgId}/overview`
+}
+
+/** Signed-in organization picker — searchable list, create, manage. */
+export function organizationsHref(): '/organizations' {
+  return '/organizations'
+}
+
+export function orgManageHref(orgId: string): `/${string}/manage` {
+  return `/${orgId}/manage`
 }
 
 export function serverMetricsHref(
@@ -147,6 +274,12 @@ export function serversDatacentersHref(
   orgId: string,
 ): `/${string}/servers/datacenters` {
   return `/${orgId}/servers/datacenters`
+}
+
+export function serversPendingKeysHref(
+  orgId: string,
+): `/${string}/servers/keys` {
+  return `/${orgId}/servers/keys`
 }
 
 export function datacenterHref(

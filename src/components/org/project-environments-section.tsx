@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries'
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -84,7 +85,7 @@ function EnvironmentRenameForm({
         autoCapitalize="none"
         autoCorrect={false}
         editable={!saving}
-        maxLength={255}
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
       />
       <View style={styles.inlineActions}>
         <Pressable
@@ -130,7 +131,7 @@ function EnvironmentCreateForm({
         autoCapitalize="none"
         autoCorrect={false}
         editable={!creating}
-        maxLength={255}
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
       />
       {fieldError ? <Text style={orgPanelStyles.error}>{fieldError}</Text> : null}
       <View style={styles.inlineActions}>

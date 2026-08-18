@@ -1,9 +1,23 @@
+import { OverviewNavIcon } from '@/components/icons/nav-icons'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
-import { useAuth } from '@/lib/auth-context'
+import {
+  indexFleetUsageByServerId,
+  serverCpuThreads,
+} from '@/lib/fleet-capacity'
+import {
+  getStoredServersLayout,
+  resolveServersFleetSurface,
+  SERVERS_TILE_MIN_WIDTH,
+  serversLayoutAccessibilityLabel,
+  setStoredServersLayout,
+  showServersToolbarUpdate,
+  usesCompactServersList,
+  type ServersLayout,
+} from '@/lib/servers-layout'
 import {
   isForbiddenError,
   type FleetServerUsageRecord,
@@ -12,13 +26,18 @@ import {
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { serverDetailHref } from '@/lib/org-navigation'
+import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { osLogoSource } from '@/lib/os-logos'
+import {
+  unboundPendingKeys,
+  unusedRegistrationKeysLabel,
+} from '@/lib/pending-keys'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import {
   SERVERS_REFRESH_MS,
   useBatchTriggerServerUpdates,
   useFleetServerUsage,
+  useOrgLicenses,
   useOrgServerCapacity,
   useOrgServers,
   useServersUpdateStatus,
@@ -34,10 +53,11 @@ import {
 import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
 import { formatServerOsProductName } from '@/lib/server-os-display'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -50,6 +70,7 @@ import {
   type ImageStyle,
   type ViewStyle,
 } from 'react-native'
+import Svg, { Path } from 'react-native-svg'
 
 /** Group TurboFabric tp0 addresses by server — O(1) page-level fan-in. */
 function overlayByServerId(
@@ -135,136 +156,6 @@ function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
   return 'Failed to load servers'
 }
 
-function formatSiBytes(value: number | null): string {
-  if (value == null || !Number.isFinite(value) || value < 0) return '—'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let n = value
-  let unit = 0
-  while (n >= 1024 && unit < units.length - 1) {
-    n /= 1024
-    unit += 1
-  }
-  if (unit === 0) return `${Math.round(n)} ${units[unit]}`
-  let digits = 2
-  if (n >= 100) digits = 0
-  else if (n >= 10) digits = 1
-  return `${n.toFixed(digits)} ${units[unit]}`
-}
-
-function formatCoresTotal(value: number | null): string {
-  if (value == null || !Number.isFinite(value) || value <= 0) return '—'
-  return Number.isInteger(value) ? String(value) : value.toFixed(1)
-}
-
-function memoryTotalFromUsage(usage: FleetServerUsageRecord | undefined): number | null {
-  if (!usage || usage.sampleCount <= 0) return null
-  const used = usage.values.memoryUsedBytes
-  const available = usage.values.memoryAvailableBytes
-  if (used == null || available == null || !Number.isFinite(used) || !Number.isFinite(available)) {
-    return null
-  }
-  const total = used + available
-  return total > 0 ? total : null
-}
-
-/** Physical cores for inventory totals; falls back to threads when unknown. */
-function serverInventoryCpuCores(server: OrgServerRecord): number | null {
-  const cores = server.resources?.cpu?.coreCount
-  if (cores != null && Number.isFinite(cores) && cores > 0) return cores
-  return serverCpuThreads(server)
-}
-
-/** Logical CPUs for load-average bars (`load / threads`). */
-function serverCpuThreads(server: OrgServerRecord): number | null {
-  const threads = server.resources?.cpu?.threadCount
-  if (threads != null && Number.isFinite(threads) && threads > 0) return threads
-  const cores = server.resources?.cpu?.coreCount
-  if (cores != null && Number.isFinite(cores) && cores > 0) return cores
-  return null
-}
-
-function serverMemoryTotal(
-  server: OrgServerRecord,
-  usage: FleetServerUsageRecord | undefined
-): number | null {
-  const fromResources = server.resources?.memory?.totalBytes
-  if (fromResources != null && Number.isFinite(fromResources) && fromResources > 0) {
-    return fromResources
-  }
-  return memoryTotalFromUsage(usage)
-}
-
-function computeFleetCapacityTotals(
-  servers: readonly OrgServerRecord[],
-  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
-): {
-  totalCores: number | null
-  totalMemoryBytes: number | null
-} {
-  let cores = 0
-  let coresKnown = false
-  let memory = 0
-  let memoryKnown = false
-
-  for (const server of servers) {
-    const c = serverInventoryCpuCores(server)
-    if (c != null) {
-      cores += c
-      coresKnown = true
-    }
-    const mem = serverMemoryTotal(server, usageByServerId.get(server.id))
-    if (mem != null) {
-      memory += mem
-      memoryKnown = true
-    }
-  }
-
-  return {
-    totalCores: coresKnown ? cores : null,
-    totalMemoryBytes: memoryKnown ? memory : null,
-  }
-}
-
-function usageByServerIdMap(
-  rows: readonly FleetServerUsageRecord[] | undefined
-): Map<string, FleetServerUsageRecord> {
-  const map = new Map<string, FleetServerUsageRecord>()
-  for (const entry of rows ?? []) {
-    map.set(entry.serverId, entry)
-  }
-  return map
-}
-
-function FleetInventoryTotals({
-  totalCores,
-  totalMemoryBytes,
-}: Readonly<{
-  totalCores: number | null
-  totalMemoryBytes: number | null
-}>) {
-  const a11y = [
-    `total ${formatCoresTotal(totalCores)} cores`,
-    `total ${formatSiBytes(totalMemoryBytes)} RAM`,
-  ].join(', ')
-  const stats = [
-    { key: 'cores', label: 'Cores', value: formatCoresTotal(totalCores) },
-    { key: 'ram', label: 'RAM', value: formatSiBytes(totalMemoryBytes) },
-  ]
-
-  return (
-    <View style={styles.totalsStrip} accessibilityLabel={a11y}>
-      {stats.map((stat) => (
-        <View key={stat.key} style={styles.totalsBox}>
-          <Text style={styles.totalsLabel}>{stat.label}</Text>
-          <Text style={styles.totalsValue} numberOfLines={1}>
-            {stat.value}
-          </Text>
-        </View>
-      ))}
-    </View>
-  )
-}
-
 function SelectionCheckbox({
   checked,
   indeterminate = false,
@@ -299,19 +190,102 @@ function SelectionCheckbox({
   )
 }
 
+function ListLayoutIcon({ size = 16, color }: Readonly<{ size?: number; color: string }>) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4.5 6.75h15M4.5 12h15M4.5 17.25h15"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
+function LayoutToggleChip({
+  active,
+  label,
+  onPress,
+  icon,
+}: Readonly<{
+  active: boolean
+  label: string
+  onPress: () => void
+  icon: (color: string) => ReactElement
+}>) {
+  const color = active ? chrome.accent : colors.textDim
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        orgPanelStyles.segmentChip,
+        styles.layoutChip,
+        active && orgPanelStyles.segmentChipActive,
+        webPointer,
+      ]}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+    >
+      {icon(color)}
+    </Pressable>
+  )
+}
+
+function detailViewIcon(color: string) {
+  return <ListLayoutIcon color={color} />
+}
+
+function summaryViewIcon(color: string) {
+  return <OverviewNavIcon color={color} />
+}
+
+function ServersLayoutToggle({
+  layout,
+  onChange,
+}: Readonly<{
+  layout: ServersLayout
+  onChange: (next: ServersLayout) => void
+}>) {
+  return (
+    <View
+      style={[orgPanelStyles.segmentGroup, styles.layoutToggle]}
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Server view"
+    >
+      <LayoutToggleChip
+        active={layout === 'list'}
+        label={serversLayoutAccessibilityLabel('list')}
+        onPress={() => onChange('list')}
+        icon={detailViewIcon}
+      />
+      <LayoutToggleChip
+        active={layout === 'tiles'}
+        label={serversLayoutAccessibilityLabel('tiles')}
+        onPress={() => onChange('tiles')}
+        icon={summaryViewIcon}
+      />
+    </View>
+  )
+}
+
 function AddServerToolbarButton({
   open,
   disabled,
+  compact,
   onPress,
 }: Readonly<{
   open: boolean
   disabled: boolean
+  compact: boolean
   onPress: () => void
 }>) {
   return (
     <Pressable
       style={({ pressed }) => [
         open ? orgPanelStyles.toolbarBtnSecondary : orgPanelStyles.toolbarBtnPrimary,
+        compact && styles.toolbarBtnCompact,
         disabled && styles.buttonDisabled,
         pressed && !disabled && styles.buttonPressed,
         webPointer,
@@ -328,7 +302,32 @@ function AddServerToolbarButton({
   )
 }
 
+function UnusedKeysHint({
+  orgId,
+  count,
+}: Readonly<{ orgId: string; count: number }>) {
+  const router = useRouter()
+  if (count <= 0) return null
+  const label = unusedRegistrationKeysLabel(count)
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${label}. Open pending keys.`}
+      style={({ pressed }) => [
+        styles.unusedKeysLink,
+        pressed && styles.buttonPressed,
+        webPointer,
+      ]}
+      onPress={() => router.push(serversPendingKeysHref(orgId))}
+    >
+      <Text style={styles.unusedKeysLinkText}>{label} — view and delete</Text>
+    </Pressable>
+  )
+}
+
 function ServersOverviewToolbar({
+  layout,
+  onLayoutChange,
   canOwn,
   canManage,
   addServerEligibility,
@@ -338,8 +337,15 @@ function ServersOverviewToolbar({
   batchUpdating,
   selectedCount,
   selectedUpdatableCount,
+  showSelectAll,
+  allSelected,
+  someSelected,
+  onToggleSelectAll,
   onTriggerSelectedUpdates,
+  compactChrome,
 }: Readonly<{
+  layout: ServersLayout
+  onLayoutChange: (next: ServersLayout) => void
   canOwn: boolean
   canManage: boolean
   addServerEligibility: ReturnType<typeof resolveServerAddEligibility>
@@ -349,50 +355,61 @@ function ServersOverviewToolbar({
   batchUpdating: boolean
   selectedCount: number
   selectedUpdatableCount: number
+  showSelectAll: boolean
+  allSelected: boolean
+  someSelected: boolean
+  onToggleSelectAll: () => void
   onTriggerSelectedUpdates: () => void
+  compactChrome: boolean
 }>) {
-  if (!canOwn && !canManage) return null
-
   const addDisabled = !addServerEligibility.canAdd
   const updateDisabled = anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
+  const showUpdate = showServersToolbarUpdate(
+    canManage,
+    compactChrome,
+    selectedCount,
+  )
 
   return (
-    <View style={[styles.toolbarWrap, selectedCount > 0 && styles.toolbarWrapPinned]}>
-      <View style={styles.toolbarRow}>
-        {canOwn ? (
-          <AddServerToolbarButton
-            open={showAddServerWizard}
-            disabled={addDisabled}
-            onPress={onAddServer}
-          />
-        ) : null}
-        {canManage ? (
-          <TouchableOpacity
-            style={[orgPanelStyles.toolbarBtnSecondary, updateDisabled && styles.buttonDisabled]}
-            onPress={onTriggerSelectedUpdates}
-            disabled={updateDisabled}
-          >
-            {batchUpdating ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-      {canOwn && addServerEligibility.reason ? (
-        <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
+    <View style={styles.toolbarActions}>
+      {canOwn ? (
+        <AddServerToolbarButton
+          open={showAddServerWizard}
+          disabled={addDisabled}
+          compact={compactChrome}
+          onPress={onAddServer}
+        />
       ) : null}
-      {selectedCount > 0 ? (
-        <Text style={styles.selectionHint}>
-          {selectedCount} selected
-          {selectedUpdatableCount > 0 ? ` · ${selectedUpdatableCount} updatable` : ''}
-        </Text>
+      {showUpdate ? (
+        <TouchableOpacity
+          style={[
+            orgPanelStyles.toolbarBtnSecondary,
+            compactChrome && styles.toolbarBtnCompact,
+            updateDisabled && styles.buttonDisabled,
+          ]}
+          onPress={onTriggerSelectedUpdates}
+          disabled={updateDisabled}
+        >
+          {batchUpdating ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+            {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
+          </Text>
+        </TouchableOpacity>
       ) : null}
+      {showSelectAll ? (
+        <SelectionCheckbox
+          checked={allSelected}
+          indeterminate={someSelected}
+          onPress={onToggleSelectAll}
+          accessibilityLabel="Select all servers"
+        />
+      ) : null}
+      <ServersLayoutToggle layout={layout} onChange={onLayoutChange} />
     </View>
   )
 }
 
-function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+function ServerHostIdentity({ server }: Readonly<{ server: OrgServerRecord }>) {
   const osProduct = formatServerOsProductName(server.os, server.osDisplay) ?? '—'
   const logo = osLogoSource(resolveOsLogoKey(server))
   const title = serverTitle(server)
@@ -400,27 +417,33 @@ function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   const showHostname = hostname != null && hostname.length > 0 && hostname !== title
 
   return (
-    <View style={[styles.tableCell, styles.colName]}>
-      <View style={styles.nameButton}>
-        {logo ? (
-          <Image
-            source={logo}
-            style={styles.osLogoBesideName as ImageStyle}
-            contentFit="contain"
-            accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
-          />
-        ) : null}
-        <View style={styles.nameBlock}>
-          <Text style={styles.nameText} numberOfLines={1}>
-            {title}
+    <View style={styles.nameButton}>
+      {logo ? (
+        <Image
+          source={logo}
+          style={styles.osLogoBesideName as ImageStyle}
+          contentFit="contain"
+          accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
+        />
+      ) : null}
+      <View style={styles.nameBlock}>
+        <Text style={styles.nameText} numberOfLines={1}>
+          {title}
+        </Text>
+        {showHostname ? (
+          <Text style={styles.hostnameSubtext} numberOfLines={1}>
+            {hostname}
           </Text>
-          {showHostname ? (
-            <Text style={styles.hostnameSubtext} numberOfLines={1}>
-              {hostname}
-            </Text>
-          ) : null}
-        </View>
+        ) : null}
       </View>
+    </View>
+  )
+}
+
+function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  return (
+    <View style={[styles.tableCell, styles.colName]}>
+      <ServerHostIdentity server={server} />
     </View>
   )
 }
@@ -445,49 +468,71 @@ function serverStatusBadgeStyles(status: ServerConnectionStatus) {
   }
 }
 
-function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+function ServerStatusBadge({ server }: Readonly<{ server: OrgServerRecord }>) {
   const status = resolveServerConnectionStatus(server)
   const label = serverConnectionStatusLabel(status)
   const tone = serverStatusBadgeStyles(status)
 
   return (
+    <View
+      style={[styles.statusBadge, tone.badge]}
+      accessibilityRole="text"
+      accessibilityLabel={label}
+      accessibilityState={{ busy: status === 'initializing' }}
+      accessibilityLiveRegion="polite"
+    >
+      <ConnectionStatusDot status={status} />
+      <Text style={[styles.statusText, tone.text]}>{label}</Text>
+    </View>
+  )
+}
+
+function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  return (
     <View style={[styles.tableCell, styles.colStatus]}>
-      <View
-        style={[styles.statusBadge, tone.badge]}
-        accessibilityRole="text"
-        accessibilityLabel={label}
-        accessibilityState={{ busy: status === 'initializing' }}
-        accessibilityLiveRegion="polite"
-      >
-        <ConnectionStatusDot status={status} />
-        <Text style={[styles.statusText, tone.text]}>{label}</Text>
-      </View>
+      <ServerStatusBadge server={server} />
+    </View>
+  )
+}
+
+function ServerCountryLine({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const flag = countryCodeToFlagEmoji(server.geo?.country)
+  const country = formatServerGeoCountryName(server.geo)
+
+  if (!country && !flag) {
+    return <Text style={styles.locationMuted}>—</Text>
+  }
+
+  return (
+    <View style={styles.locationRow}>
+      {flag ? <Text style={styles.locationFlag}>{flag}</Text> : null}
+      <Text style={styles.locationText} numberOfLines={1}>
+        {country || '—'}
+      </Text>
     </View>
   )
 }
 
 function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
-  const flag = countryCodeToFlagEmoji(server.geo?.country)
-  const country = formatServerGeoCountryName(server.geo)
-
-  if (!country && !flag) {
-    return (
-      <View style={[styles.tableCell, styles.colLocation]}>
-        <Text style={styles.locationMuted}>—</Text>
-      </View>
-    )
-  }
-
   return (
     <View style={[styles.tableCell, styles.colLocation]}>
-      <View style={styles.locationRow}>
-        {flag ? <Text style={styles.locationFlag}>{flag}</Text> : null}
-        <Text style={styles.locationText} numberOfLines={1}>
-          {country || '—'}
-        </Text>
-      </View>
+      <ServerCountryLine server={server} />
     </View>
   )
+}
+
+function usageBarMetrics(usage: FleetServerUsageRecord | null) {
+  return {
+    cpuUsagePercent: usage?.values.cpuUsagePercent,
+    cpuUserPercent: usage?.values.cpuUserPercent,
+    cpuSystemPercent: usage?.values.cpuSystemPercent,
+    cpuIowaitPercent: usage?.values.cpuIowaitPercent,
+    load1: usage?.values.load1,
+    load5: usage?.values.load5,
+    load15: usage?.values.load15,
+    memoryPercent: usage?.values.memoryUsedPercent,
+    swapPercent: usage?.values.swapUsedPercent,
+  }
 }
 
 function ServerUsageCell({
@@ -499,18 +544,7 @@ function ServerUsageCell({
 }>) {
   return (
     <View style={[styles.tableCell, styles.colUsage]}>
-      <ServerUsageBars
-        cpuUsagePercent={usage?.values.cpuUsagePercent}
-        cpuUserPercent={usage?.values.cpuUserPercent}
-        cpuSystemPercent={usage?.values.cpuSystemPercent}
-        cpuIowaitPercent={usage?.values.cpuIowaitPercent}
-        load1={usage?.values.load1}
-        load5={usage?.values.load5}
-        load15={usage?.values.load15}
-        cpuCores={cpuCores}
-        memoryPercent={usage?.values.memoryUsedPercent}
-        swapPercent={usage?.values.swapUsedPercent}
-      />
+      <ServerUsageBars density="list" cpuCores={cpuCores} {...usageBarMetrics(usage)} />
     </View>
   )
 }
@@ -588,23 +622,119 @@ function OrgServerTableRow({
   )
 }
 
-function ServersFleetEmptyState({
-  controlPlaneRuntime,
-}: Readonly<{ controlPlaneRuntime: string | null | undefined }>) {
-  const waiting = controlPlaneRuntime === 'deno'
+function OrgServerCompactRow({
+  orgId,
+  server,
+  selected,
+  overlayAddress,
+  usage,
+  onToggleSelected,
+}: Readonly<{
+  orgId: string
+  server: OrgServerRecord
+  selected: boolean
+  overlayAddress: string | null
+  usage: FleetServerUsageRecord | null
+  onToggleSelected: () => void
+}>) {
+  const router = useRouter()
+
+  return (
+    <Pressable
+      onPress={() => router.push(serverDetailHref(orgId, server.id))}
+      style={({ pressed }) => [
+        styles.compactRow,
+        selected ? styles.tableRowSelected : null,
+        pressed && styles.buttonPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${serverTitle(server)}`}
+    >
+      <View style={styles.compactMain}>
+        <View style={styles.compactIdentity}>
+          <ServerHostIdentity server={server} />
+          <View style={styles.compactMeta}>
+            <ServerStatusBadge server={server} />
+            <ServerCountryLine server={server} />
+          </View>
+        </View>
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation?.()
+            onToggleSelected()
+          }}
+          style={styles.compactCheck}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: selected }}
+          accessibilityLabel={`Select ${serverTitle(server)}`}
+          hitSlop={8}
+        >
+          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
+            {checkboxMark(selected, false)}
+          </View>
+        </Pressable>
+      </View>
+      <View style={styles.compactStats}>
+        <ServerUsageBars
+          density="list"
+          cpuCores={serverCpuThreads(server)}
+          {...usageBarMetrics(usage)}
+        />
+        <Text style={styles.meshText} numberOfLines={1}>
+          {overlayAddress ?? '—'}
+        </Text>
+      </View>
+    </Pressable>
+  )
+}
+
+function ServersFleetCompactList({
+  orgId,
+  servers,
+  selectedIds,
+  meshOverlayByServer,
+  usageByServerId,
+  onToggleSelected,
+}: Omit<ServersFleetViewProps, 'allSelected' | 'someSelected' | 'onToggleSelectAll'>) {
+  return (
+    <View style={styles.compactList}>
+      {servers.map((server) => (
+        <OrgServerCompactRow
+          key={server.id}
+          orgId={orgId}
+          server={server}
+          selected={selectedIds.has(server.id)}
+          overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+          usage={usageByServerId.get(server.id) ?? null}
+          onToggleSelected={() => onToggleSelected(server.id)}
+        />
+      ))}
+    </View>
+  )
+}
+
+function ServersFleetEmptyState() {
   return (
     <View style={orgPanelStyles.statePanel}>
-      <Text style={orgPanelStyles.statePanelTitle}>
-        {waiting ? 'Waiting for this server' : 'No servers yet'}
-      </Text>
+      <Text style={orgPanelStyles.statePanelTitle}>Add your first server</Text>
       <Text style={orgPanelStyles.muted}>
-        {waiting
-          ? 'The colocated host is registering with the control plane. This page refreshes automatically.'
-          : 'Add a host to start deploying projects to your fleet.'}
+        Use + Server to enroll a host and start deploying projects to your fleet.
       </Text>
     </View>
   )
 }
+
+type ServersFleetViewProps = Readonly<{
+  orgId: string
+  servers: readonly OrgServerRecord[]
+  selectedIds: ReadonlySet<string>
+  allSelected: boolean
+  someSelected: boolean
+  meshOverlayByServer: ReadonlyMap<string, string>
+  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
+  onToggleSelectAll: () => void
+  onToggleSelected: (serverId: string) => void
+}>
 
 function ServersFleetTable({
   orgId,
@@ -616,17 +746,7 @@ function ServersFleetTable({
   usageByServerId,
   onToggleSelectAll,
   onToggleSelected,
-}: Readonly<{
-  orgId: string
-  servers: readonly OrgServerRecord[]
-  selectedIds: ReadonlySet<string>
-  allSelected: boolean
-  someSelected: boolean
-  meshOverlayByServer: ReadonlyMap<string, string>
-  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
-  onToggleSelectAll: () => void
-  onToggleSelected: (serverId: string) => void
-}>) {
+}: ServersFleetViewProps) {
   return (
     <ScrollView
       horizontal
@@ -678,9 +798,210 @@ function ServersFleetTable({
   )
 }
 
+function OrgServerTile({
+  orgId,
+  server,
+  selected,
+  overlayAddress,
+  usage,
+  onToggleSelected,
+}: Readonly<{
+  orgId: string
+  server: OrgServerRecord
+  selected: boolean
+  overlayAddress: string | null
+  usage: FleetServerUsageRecord | null
+  onToggleSelected: () => void
+}>) {
+  const router = useRouter()
+  const [hovered, setHovered] = useState(false)
+  const status = resolveServerConnectionStatus(server)
+  const title = serverTitle(server)
+
+  return (
+    <Pressable
+      onPress={() => router.push(serverDetailHref(orgId, server.id))}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      style={({ pressed }) => [
+        styles.tile,
+        selected ? styles.tileSelected : null,
+        hovered ? styles.tileHovered : null,
+        pressed && styles.buttonPressed,
+        webPointer,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${title}, ${serverConnectionStatusLabel(status)}`}
+    >
+      <View style={styles.tileHeader}>
+        <View style={styles.tileIdentity}>
+          <ServerHostIdentity server={server} />
+        </View>
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation?.()
+            onToggleSelected()
+          }}
+          style={styles.tileCheck}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: selected }}
+          accessibilityLabel={`Select ${title}`}
+          hitSlop={8}
+        >
+          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
+            {checkboxMark(selected, false)}
+          </View>
+        </Pressable>
+      </View>
+      <View style={styles.tileMeta}>
+        <ServerStatusBadge server={server} />
+        <ServerCountryLine server={server} />
+      </View>
+      <View style={styles.tileUsage}>
+        <ServerUsageBars
+          density="tile"
+          cpuCores={serverCpuThreads(server)}
+          {...usageBarMetrics(usage)}
+        />
+      </View>
+      <Text style={styles.meshText} numberOfLines={1}>
+        {overlayAddress ?? '—'}
+      </Text>
+    </Pressable>
+  )
+}
+
+function ServersFleetTiles({
+  orgId,
+  servers,
+  selectedIds,
+  meshOverlayByServer,
+  usageByServerId,
+  onToggleSelected,
+}: Omit<ServersFleetViewProps, 'allSelected' | 'someSelected' | 'onToggleSelectAll'>) {
+  return (
+    <View style={styles.tilesGrid}>
+      {servers.map((server) => (
+        <OrgServerTile
+          key={server.id}
+          orgId={orgId}
+          server={server}
+          selected={selectedIds.has(server.id)}
+          overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+          usage={usageByServerId.get(server.id) ?? null}
+          onToggleSelected={() => onToggleSelected(server.id)}
+        />
+      ))}
+    </View>
+  )
+}
+
+function ServersFleetDetailView({
+  compactList,
+  ...viewProps
+}: ServersFleetViewProps & { compactList: boolean }) {
+  if (compactList) {
+    return <ServersFleetCompactList {...viewProps} />
+  }
+  return <ServersFleetTable {...viewProps} />
+}
+
+function ServersOverviewFleet({
+  error,
+  loading,
+  serverCount,
+  fleetSurface,
+  compactChrome,
+  fleetViewProps,
+}: Readonly<{
+  error: string | null
+  loading: boolean
+  serverCount: number
+  fleetSurface: ReturnType<typeof resolveServersFleetSurface>
+  compactChrome: boolean
+  fleetViewProps: ServersFleetViewProps
+}>) {
+  return (
+    <>
+      {fleetSurface.showFleetPanel ? (
+        <SectionPanel>
+          {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+          {loading && serverCount === 0 ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={orgPanelStyles.muted}>Loading fleet…</Text>
+            </View>
+          ) : null}
+          {!loading && serverCount === 0 ? <ServersFleetEmptyState /> : null}
+          {fleetSurface.showDetailInPanel ? (
+            <ServersFleetDetailView compactList={false} {...fleetViewProps} />
+          ) : null}
+        </SectionPanel>
+      ) : null}
+      {fleetSurface.showDetailFleet && compactChrome ? (
+        <ServersFleetDetailView compactList {...fleetViewProps} />
+      ) : null}
+      {fleetSurface.showSummaryFleet ? <ServersFleetTiles {...fleetViewProps} /> : null}
+    </>
+  )
+}
+
+function indexUpdatesByServerId(
+  entries: readonly ServerUpdateStatus[] | undefined,
+): Map<string, ServerUpdateStatus> {
+  const map = new Map<string, ServerUpdateStatus>()
+  for (const entry of entries ?? []) {
+    map.set(entry.serverId, entry)
+  }
+  return map
+}
+
+function collectTriggeringServerIds(
+  pending: boolean,
+  variables: readonly string[] | undefined,
+  updates: readonly ServerUpdateStatus[] | undefined,
+): Set<string> {
+  const ids = new Set<string>()
+  if (pending && variables) {
+    for (const serverId of variables) {
+      ids.add(serverId)
+    }
+  }
+  for (const entry of updates ?? []) {
+    if (entry.status === 'updating') {
+      ids.add(entry.serverId)
+    }
+  }
+  return ids
+}
+
+function countSelectedUpdatable(
+  servers: readonly OrgServerRecord[],
+  selectedIds: ReadonlySet<string>,
+  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
+  triggeringServerIds: ReadonlySet<string>,
+): number {
+  let count = 0
+  for (const server of servers) {
+    if (
+      selectedIds.has(server.id) &&
+      isServerUpdatable(server, updateByServerId, triggeringServerIds)
+    ) {
+      count += 1
+    }
+  }
+  return count
+}
+
+function toggleIdInSet(prev: Set<string>, serverId: string): Set<string> {
+  const next = new Set(prev)
+  if (next.has(serverId)) next.delete(serverId)
+  else next.add(serverId)
+  return next
+}
+
 export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
-  const { controlPlaneRuntime } = useAuth()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
 
@@ -691,35 +1012,51 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     staleTime: 0,
     refetchInterval: (query) =>
       serversPresenceRefetchMs({
-        controlPlaneRuntime,
         servers: query.state.data?.servers,
         idleMs: SERVERS_REFRESH_MS,
       }),
   })
   const updatesQuery = useServersUpdateStatus(orgId, { pollWhileUpdating: true })
   const capacityQuery = useOrgServerCapacity(orgId, { enabled: canOwn })
+  const licensesQuery = useOrgLicenses(orgId, { enabled: canOwn })
   const fleetUsageQuery = useFleetServerUsage(orgId, {
     enabled: !serversQuery.isLoading,
   })
   const batchUpdateMutation = useBatchTriggerServerUpdates(orgId)
 
+  usePullToRefresh(async () => {
+    await Promise.all([
+      serversQuery.refetch(),
+      updatesQuery.refetch(),
+      fleetUsageQuery.refetch(),
+      fabricQuery.refetch(),
+      ...(canOwn ? [capacityQuery.refetch(), licensesQuery.refetch()] : []),
+    ])
+  })
+
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [serversLayout, setServersLayout] = useState<ServersLayout>(() =>
+    getStoredServersLayout()
+  )
+
+  const handleLayoutChange = (next: ServersLayout): void => {
+    setServersLayout(next)
+    setStoredServersLayout(next)
+  }
 
   const servers = serversQuery.data?.servers ?? []
+  const pendingKeyCount = unboundPendingKeys(
+    licensesQuery.data?.licenses ?? [],
+  ).length
   const loading = serversQuery.isLoading
   const error = serversQuery.isError
     ? serversRefreshErrorMessage(serversQuery.error, isForbiddenError(serversQuery.error))
     : null
 
   const usageByServerId = useMemo(
-    () => usageByServerIdMap(fleetUsageQuery.data?.servers),
+    () => indexFleetUsageByServerId(fleetUsageQuery.data?.servers),
     [fleetUsageQuery.data]
-  )
-
-  const fleetCapacity = useMemo(
-    () => computeFleetCapacityTotals(servers, usageByServerId),
-    [servers, usageByServerId]
   )
 
   const addServerEligibility = useMemo(
@@ -727,28 +1064,20 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     [capacityQuery.data, capacityQuery.isError]
   )
 
-  const updateByServerId = useMemo(() => {
-    const map = new Map<string, ServerUpdateStatus>()
-    for (const entry of updatesQuery.data?.servers ?? []) {
-      map.set(entry.serverId, entry)
-    }
-    return map
-  }, [updatesQuery.data])
+  const updateByServerId = useMemo(
+    () => indexUpdatesByServerId(updatesQuery.data?.servers),
+    [updatesQuery.data],
+  )
 
-  const triggeringServerIds = useMemo(() => {
-    const ids = new Set<string>()
-    if (batchUpdateMutation.isPending && batchUpdateMutation.variables) {
-      for (const serverId of batchUpdateMutation.variables) {
-        ids.add(serverId)
-      }
-    }
-    for (const entry of updatesQuery.data?.servers ?? []) {
-      if (entry.status === 'updating') {
-        ids.add(entry.serverId)
-      }
-    }
-    return ids
-  }, [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data])
+  const triggeringServerIds = useMemo(
+    () =>
+      collectTriggeringServerIds(
+        batchUpdateMutation.isPending,
+        batchUpdateMutation.variables,
+        updatesQuery.data?.servers,
+      ),
+    [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data],
+  )
 
   useEffect(() => {
     setSelectedIds((prev) => pruneSelectedServerIds(prev, servers))
@@ -764,10 +1093,12 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     batchUpdateMutation.mutate(targets.map((server) => server.id))
   }
 
-  const selectedUpdatableCount = servers.filter(
-    (server) =>
-      selectedIds.has(server.id) && isServerUpdatable(server, updateByServerId, triggeringServerIds)
-  ).length
+  const selectedUpdatableCount = countSelectedUpdatable(
+    servers,
+    selectedIds,
+    updateByServerId,
+    triggeringServerIds,
+  )
 
   const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
   const someSelected = selectedIds.size > 0 && !allSelected
@@ -781,16 +1112,30 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const toggleSelected = (serverId: string): void => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(serverId)) next.delete(serverId)
-      else next.add(serverId)
-      return next
-    })
+    setSelectedIds((prev) => toggleIdInSet(prev, serverId))
   }
 
   const batchUpdating = batchUpdateMutation.isPending
   const anyUpdateInProgress = batchUpdating || triggeringServerIds.size > 0
+  const compactChrome = usesCompactServersList(Platform.OS)
+  const fleetSurface = resolveServersFleetSurface({
+    layout: serversLayout,
+    serverCount: servers.length,
+    compactChrome,
+    hasError: Boolean(error),
+  })
+
+  const fleetViewProps = {
+    orgId,
+    servers,
+    selectedIds,
+    allSelected,
+    someSelected,
+    meshOverlayByServer,
+    usageByServerId,
+    onToggleSelectAll: toggleSelectAll,
+    onToggleSelected: toggleSelected,
+  }
 
   const refreshServersList = (): void => {
     queryClient.invalidateQueries({
@@ -800,33 +1145,46 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Servers overview</Text>
-      <Text style={orgPanelStyles.pageCopy}>
-        Select hosts pdate, or open a server for its control panel.
-      </Text>
-
-      {!loading || servers.length > 0 ? (
-        <FleetInventoryTotals
-          totalCores={fleetCapacity.totalCores}
-          totalMemoryBytes={fleetCapacity.totalMemoryBytes}
+      <View
+        style={[styles.titleRow, selectedIds.size > 0 && styles.titleRowPinned]}
+      >
+        <Text
+          style={[orgPanelStyles.pageTitle, styles.titleText]}
+          numberOfLines={1}
+        >
+          Servers
+        </Text>
+        <ServersOverviewToolbar
+          layout={serversLayout}
+          onLayoutChange={handleLayoutChange}
+          canOwn={canOwn}
+          canManage={canManage}
+          addServerEligibility={addServerEligibility}
+          showAddServerWizard={showAddServerWizard}
+          onAddServer={() => setShowAddServerWizard((open) => !open)}
+          anyUpdateInProgress={anyUpdateInProgress}
+          batchUpdating={batchUpdating}
+          selectedCount={selectedIds.size}
+          selectedUpdatableCount={selectedUpdatableCount}
+          showSelectAll={fleetSurface.showToolbarSelectAll}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onToggleSelectAll={toggleSelectAll}
+          onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
+          compactChrome={compactChrome}
         />
-      ) : null}
-
-      <ServersOverviewToolbar
-        canOwn={canOwn}
-        canManage={canManage}
-        addServerEligibility={addServerEligibility}
-        showAddServerWizard={showAddServerWizard}
-        onAddServer={() => setShowAddServerWizard((open) => !open)}
-        anyUpdateInProgress={anyUpdateInProgress}
-        batchUpdating={batchUpdating}
-        selectedCount={selectedIds.size}
-        selectedUpdatableCount={selectedUpdatableCount}
-        onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
-      />
-      {canOwn && !addServerEligibility.canAdd && addServerEligibility.reason ? (
+      </View>
+      {canOwn && addServerEligibility.reason ? (
         <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
       ) : null}
+      {selectedIds.size > 0 ? (
+        <Text style={styles.selectionHint}>
+          {selectedIds.size} selected
+          {selectedUpdatableCount > 0 ? ` · ${selectedUpdatableCount} updatable` : ''}
+        </Text>
+      ) : null}
+
+      {canOwn ? <UnusedKeysHint orgId={orgId} count={pendingKeyCount} /> : null}
 
       {canOwn && showAddServerWizard ? (
         <AddServerWizard
@@ -839,34 +1197,14 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         />
       ) : null}
 
-      <SectionPanel>
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-
-        {loading && servers.length === 0 ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={colors.accent} />
-            <Text style={orgPanelStyles.muted}>Loading fleet…</Text>
-          </View>
-        ) : null}
-
-        {!loading && servers.length === 0 ? (
-          <ServersFleetEmptyState controlPlaneRuntime={controlPlaneRuntime} />
-        ) : null}
-
-        {servers.length > 0 ? (
-          <ServersFleetTable
-            orgId={orgId}
-            servers={servers}
-            selectedIds={selectedIds}
-            allSelected={allSelected}
-            someSelected={someSelected}
-            meshOverlayByServer={meshOverlayByServer}
-            usageByServerId={usageByServerId}
-            onToggleSelectAll={toggleSelectAll}
-            onToggleSelected={toggleSelected}
-          />
-        ) : null}
-      </SectionPanel>
+      <ServersOverviewFleet
+        error={error}
+        loading={loading}
+        serverCount={servers.length}
+        fleetSurface={fleetSurface}
+        compactChrome={compactChrome}
+        fleetViewProps={fleetViewProps}
+      />
     </View>
   )
 }
@@ -874,7 +1212,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 const styles = StyleSheet.create({
   root: {
     width: '100%',
-    gap: spacing.lg,
+    gap: Platform.OS === 'web' ? spacing.lg : spacing.md,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -882,10 +1220,15 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.88,
   },
-  toolbarWrap: {
-    gap: spacing.xs,
+  titleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    alignSelf: 'stretch',
   },
-  toolbarWrapPinned: {
+  titleRowPinned: {
     ...(Platform.OS === 'web'
       ? ({
           position: 'sticky',
@@ -896,13 +1239,36 @@ const styles = StyleSheet.create({
         } as unknown as ViewStyle)
       : null),
   },
-  toolbarRow: {
+  titleText: {
+    flexShrink: 1,
+    minWidth: 0,
+    ...(Platform.OS === 'web' ? null : { fontSize: 22, lineHeight: 28 }),
+  },
+  toolbarActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: spacing.sm,
-    alignSelf: 'stretch',
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  toolbarBtnCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minHeight: 44,
+  },
+  layoutToggle: {
+    flexWrap: 'nowrap',
+    flexShrink: 0,
+  },
+  layoutChip: {
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   selectionHint: {
     color: colors.textDim,
@@ -916,6 +1282,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'right',
+  },
+  unusedKeysLink: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  unusedKeysLinkText: {
+    color: chrome.accent,
+    fontSize: 13,
+    fontWeight: '600',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -934,48 +1310,7 @@ const styles = StyleSheet.create({
   table: {
     flexGrow: 1,
     width: '100%',
-    minWidth: 980,
-  },
-  totalsStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'stretch',
-    alignSelf: 'stretch',
-    width: '100%',
-    gap: spacing.sm,
-    ...(Platform.OS === 'web'
-      ? ({
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))',
-        } as unknown as ViewStyle)
-      : null),
-  },
-  totalsBox: {
-    flex: 1,
-    minWidth: 112,
-    minHeight: 56,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgArea,
-    gap: 2,
-    justifyContent: 'center',
-  },
-  totalsValue: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-    letterSpacing: -0.2,
-  },
-  totalsLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    minWidth: 900,
   },
   tableRow: {
     flexDirection: 'row',
@@ -1039,9 +1374,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   colUsage: {
-    flex: 2.2,
-    minWidth: 210,
-    alignItems: 'stretch',
+    flex: 1.6,
+    minWidth: 148,
+    alignItems: 'flex-start',
   },
   colMesh: {
     flex: 1.1,
@@ -1150,7 +1485,10 @@ const styles = StyleSheet.create({
     color: colors.textDim,
   },
   checkboxHit: {
-    padding: 2,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkbox: {
     width: 20,
@@ -1170,5 +1508,110 @@ const styles = StyleSheet.create({
     color: chrome.accent,
     fontSize: 12,
     fontWeight: '700',
+  },
+  compactList: {
+    alignSelf: 'stretch',
+    width: '100%',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  compactRow: {
+    alignSelf: 'stretch',
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    gap: spacing.sm,
+  },
+  compactMain: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  compactIdentity: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  compactMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  compactCheck: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  tilesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'grid',
+          gridTemplateColumns: `repeat(auto-fill, minmax(${SERVERS_TILE_MIN_WIDTH}px, 1fr))`,
+        } as unknown as ViewStyle)
+      : null),
+  },
+  tile: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgArea,
+    padding: spacing.md,
+    gap: spacing.sm,
+    minWidth: 160,
+    ...(Platform.OS === 'web'
+      ? null
+      : {
+          flexGrow: 1,
+          flexBasis: SERVERS_TILE_MIN_WIDTH,
+        }),
+  },
+  tileHovered: {
+    backgroundColor: colors.bgSecondary,
+  },
+  tileSelected: {
+    backgroundColor: chrome.bgActive,
+    borderColor: chrome.accent,
+  },
+  tileHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  tileIdentity: {
+    flex: 1,
+    minWidth: 0,
+  },
+  tileCheck: {
+    paddingTop: 2,
+  },
+  tileMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  tileUsage: {
+    backgroundColor: colors.bgInset,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
 })

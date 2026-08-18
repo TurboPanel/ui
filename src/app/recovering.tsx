@@ -11,6 +11,7 @@ import {
   recoveryDetail,
   recoveryTitle,
 } from '@/lib/instance-recovery'
+import { defaultOrgDashboardHref, organizationsHref, replaceOrganization } from '@/lib/org-navigation'
 import { queryKeys } from '@/lib/query-keys'
 import { colors, spacing } from '@/lib/theme'
 
@@ -59,11 +60,14 @@ export default function RecoveringScreen() {
         return
       }
       if (result.kind === 'signedIn') {
-        router.replace(`/${result.organizationId}/servers` as Href)
+        replaceOrganization(
+          router,
+          defaultOrgDashboardHref(result.organizationId) as Href,
+        )
         return
       }
       if (result.kind === 'welcome') {
-        router.replace('/welcome' as Href)
+        router.replace(organizationsHref() as Href)
         return
       }
       router.replace('/sign-in' as Href)

@@ -75,6 +75,17 @@ describe('resolveAuthGuardHref', () => {
     ).toBeNull()
   })
 
+  it('allows the organization switcher', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'organizations',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
   it('allows signed-in org routes', () => {
     expect(
       resolveAuthGuardHref({

@@ -293,6 +293,8 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
+  private_family_mismatch:
+    'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
   peer_tunnel_address_required:
     `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,

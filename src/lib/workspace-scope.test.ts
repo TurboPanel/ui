@@ -44,10 +44,12 @@ const PLATFORM_WORKSPACE: WorkspaceRecord = {
 }
 
 describe('ORG_AREAS navigation', () => {
-  it('does not list workspaces as a top-level area', () => {
+  it('does not list workspaces or organization management as top-level areas', () => {
     const areaIds = ORG_AREAS.map((area) => area.id as string)
     expect(areaIds.includes('workspaces')).toBe(false)
+    expect(areaIds.includes('manage')).toBe(false)
     expect(areaIds).toEqual([
+      'overview',
       'projects',
       'managed',
       'servers',

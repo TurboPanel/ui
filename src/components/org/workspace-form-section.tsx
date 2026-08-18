@@ -1,7 +1,7 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
-import { displayNameConflictMessage } from '@/lib/display-name'
+import { displayNameConflictMessage, DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import {
   useCreateWorkspace,
   useUpdateWorkspace,
@@ -176,7 +176,7 @@ export function WorkspaceFormSection({
                 autoCapitalize="words"
                 autoCorrect={false}
                 editable={!submitting}
-                maxLength={255}
+                maxLength={DISPLAY_NAME_MAX_LENGTH}
               />
               {fieldErrors.displayName ? (
                 <Text style={styles.fieldError}>{fieldErrors.displayName}</Text>
@@ -195,7 +195,7 @@ export function WorkspaceFormSection({
                 placeholder="Optional description"
                 placeholderTextColor={colors.textDim}
                 editable={!submitting}
-                maxLength={255}
+                maxLength={DESCRIPTION_MAX_LENGTH}
                 multiline
               />
               {fieldErrors.description ? (

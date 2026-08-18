@@ -61,7 +61,12 @@ type AuthContextValue = {
   refreshInstallStatus: () => Promise<boolean>
   handleUnauthorized: () => Promise<void>
   resolveDashboardHref: () => Promise<
-    '/connect' | '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
+    | '/connect'
+    | '/install'
+    | '/sign-in'
+    | '/welcome'
+    | '/organizations'
+    | `/${string}/overview`
   >
 }
 
@@ -158,7 +163,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [handleUnauthorized])
 
   const resolveDashboardHref = useCallback(async (): Promise<
-    '/connect' | '/install' | '/sign-in' | '/welcome' | `/${string}/servers`
+    '/connect' | '/install' | '/sign-in' | '/welcome' | '/organizations' | `/${string}/overview`
   > => {
     if (needsInstall) {
       return isRemoteCookieClient() ? '/connect' : '/install'
@@ -175,13 +180,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const preferred = resolvePreferredOrganizationId(organizations)
       if (preferred) {
         setActiveOrganizationId(preferred)
-        return `/${preferred}/servers` as `/${string}/servers`
+        return `/${preferred}/overview`
       }
     } catch {
-      // Fall back to welcome when org discovery fails.
+      // Fall back to the organization switcher when org discovery fails.
     }
 
-    return '/welcome'
+    return '/organizations'
   }, [needsInstall, queryClient, session])
 
   const signIn = useCallback(

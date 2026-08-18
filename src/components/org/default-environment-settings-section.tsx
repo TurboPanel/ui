@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import {
   fetchOrgDefaultEnvironment,
   saveOrgDefaultEnvironment,
@@ -92,7 +93,7 @@ export function DefaultEnvironmentSettingsSection({
           editable={!pending}
           placeholder={PLATFORM_DEFAULT_ENVIRONMENT_NAME}
           placeholderTextColor={colors.textMuted}
-          maxLength={255}
+          maxLength={DISPLAY_NAME_MAX_LENGTH}
           autoCapitalize="none"
           autoCorrect={false}
           style={[styles.input, pending && styles.inputDisabled]}

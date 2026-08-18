@@ -13,23 +13,34 @@ import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import type {
+  DatacenterAddressPreference,
+  DatacenterDetailRecord,
+  DatacenterMemberPin,
   DatacenterRecord,
+  DatacenterSubnetRecord,
   OrgServerRecord,
   RelayRecord,
   RelayRole,
 } from '@/lib/instance-api'
 import {
+  ADDRESS_IN_USE_ERROR,
+  ADDRESS_NOT_IN_ANY_SUBNET_ERROR,
   DATACENTER_HAS_MEMBERS_ERROR,
   DATACENTER_HAS_NETWORKS_ERROR,
+  INVALID_CIDR_ERROR,
+  SUBNET_HAS_MEMBERS_ERROR,
+  SUBNET_OVERLAPS_ERROR,
 } from '@/lib/instance-api'
 import {
   useAddDatacenterMembers,
+  useCreateDatacenterSubnet,
   useDatacenter,
   useDatacenters,
   useDeleteDatacenter,
-  useIps,
+  useDeleteDatacenterSubnet,
   useRemoveDatacenterMember,
   useUpdateDatacenter,
+  useUpdateDatacenterSubnet,
 } from '@/lib/queries/topology'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { useOrgServers, useTimezones } from '@/lib/queries/servers'
@@ -44,10 +55,19 @@ import {
 } from '@/lib/server-connection-status'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
-  addressesInCidr,
-  listServersWithAddressInCidrs,
-  reportedPrivateAddresses,
+  addressFamilyLabel,
+  cidrsOverlap,
+  isValidCidr,
+  normalizeCidr,
+} from '@/lib/cidr'
+import {
+  candidateMemberNetworks,
+  formatDatacenterServerCount,
+  listServersWithCandidateAddresses,
+  mergeDatacenterOptions,
   serverIsDatacenterMember,
+  sortDatacenterSubnets,
+  subnetForAddress,
 } from '@/lib/datacenter-list'
 import {
   formatSiteLinkLabel,
@@ -59,6 +79,30 @@ import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.displayName?.trim() || server.hostname?.trim() || server.id
+}
+
+function mutationErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message
+  return fallback
+}
+
+function errorIncludes(err: unknown, code: string): boolean {
+  return err instanceof Error && err.message.includes(code)
+}
+
+function AddressFamilyBadge({
+  family,
+}: Readonly<{ family: 'IPv4' | 'IPv6' | null }>) {
+  if (!family) return null
+  return (
+    <View
+      style={orgPanelStyles.segmentChip}
+      accessibilityRole="text"
+      accessibilityLabel={family}
+    >
+      <Text style={orgPanelStyles.segmentChipText}>{family}</Text>
+    </View>
+  )
 }
 
 function DatacenterIdentityPanel({
@@ -124,55 +168,437 @@ function DatacenterIdentityPanel({
   )
 }
 
-function PrivateNetworkPanel({
-  cidrs,
-  loading,
+function subnetCreateErrorMessage(error: unknown): string {
+  if (errorIncludes(error, INVALID_CIDR_ERROR)) {
+    return 'Enter a valid IPv4 or IPv6 CIDR.'
+  }
+  if (errorIncludes(error, SUBNET_OVERLAPS_ERROR)) {
+    return 'That range overlaps an existing subnet in this organization.'
+  }
+  return mutationErrorMessage(error, 'Failed to add subnet')
+}
+
+function subnetDeleteErrorMessage(error: unknown): string {
+  if (errorIncludes(error, SUBNET_HAS_MEMBERS_ERROR)) {
+    return 'Unassign the pinned servers first.'
+  }
+  return mutationErrorMessage(error, 'Failed to delete subnet')
+}
+
+function SubnetLabelField({
+  cidr,
+  label,
+  pending,
+  onDraftLabelChange,
+  onSaveLabel,
 }: Readonly<{
-  cidrs: readonly string[]
-  loading: boolean
+  cidr: string
+  label: string
+  pending: boolean
+  onDraftLabelChange: (value: string) => void
+  onSaveLabel: () => void
 }>) {
-  const cidr = cidrs[0]?.trim() || null
+  return (
+    <View style={styles.identityField}>
+      <Text style={styles.fieldLabel}>Label</Text>
+      <TextInput
+        value={label}
+        onChangeText={onDraftLabelChange}
+        placeholder="Optional"
+        placeholderTextColor={colors.textDim}
+        style={styles.identityInput}
+        editable={!pending}
+        accessibilityLabel={`Subnet label for ${cidr}`}
+      />
+      <Pressable
+        disabled={pending}
+        onPress={onSaveLabel}
+        style={[
+          orgPanelStyles.toolbarBtnSecondary,
+          pending && styles.buttonDisabled,
+          webPointer,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Save subnet label for ${cidr}`}
+      >
+        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+          Save label
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+function SubnetLabelReadout({ displayName }: Readonly<{ displayName: string | null }>) {
+  const shown = displayName?.trim()
+  if (!shown) return null
+  return (
+    <Text style={orgPanelStyles.detailLine}>
+      <Text style={orgPanelStyles.detailLabel}>Label: </Text>
+      {shown}
+    </Text>
+  )
+}
+
+function SubnetCard({
+  subnet,
+  canManage,
+  pending,
+  confirming,
+  onDraftLabelChange,
+  onSaveLabel,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: Readonly<{
+  subnet: DatacenterSubnetRecord
+  canManage: boolean
+  pending: boolean
+  confirming: boolean
+  onDraftLabelChange: (value: string) => void
+  onSaveLabel: () => void
+  onRequestDelete: () => void
+  onCancelDelete: () => void
+  onConfirmDelete: () => void
+}>) {
+  const family = subnet.version === 6 ? 'IPv6' : 'IPv4'
+  const blocked = subnet.memberCount > 0
+  const label = subnet.displayName ?? ''
 
   return (
-    <SectionPanel title="Private network">
-      {loading && !cidr ? (
+    <View style={orgPanelStyles.detailCard}>
+      <View style={styles.subnetTitleRow}>
+        <Text style={styles.mono} selectable>
+          {subnet.cidr}
+        </Text>
+        <AddressFamilyBadge family={family} />
+      </View>
+      <Text style={orgPanelStyles.detailLine}>
+        <Text style={orgPanelStyles.detailLabel}>Servers: </Text>
+        {formatDatacenterServerCount(subnet.memberCount)}
+      </Text>
+      {canManage ? (
+        <SubnetLabelField
+          cidr={subnet.cidr}
+          label={label}
+          pending={pending}
+          onDraftLabelChange={onDraftLabelChange}
+          onSaveLabel={onSaveLabel}
+        />
+      ) : (
+        <SubnetLabelReadout displayName={subnet.displayName} />
+      )}
+      {canManage && blocked ? (
+        <Text style={orgPanelStyles.muted}>
+          Unassign the pinned servers first.
+        </Text>
+      ) : null}
+      {canManage && confirming && !blocked ? (
+        <View style={styles.actionsRow}>
+          <Pressable
+            style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
+            onPress={onConfirmDelete}
+            accessibilityRole="button"
+            accessibilityLabel={`Confirm delete subnet ${subnet.cidr}`}
+          >
+            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+              Confirm delete
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+            onPress={onCancelDelete}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel subnet delete"
+          >
+            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {canManage && !confirming ? (
+        <Pressable
+          style={[
+            orgPanelStyles.toolbarBtnSecondary,
+            (blocked || pending) && styles.buttonDisabled,
+            webPointer,
+          ]}
+          disabled={blocked || pending}
+          onPress={onRequestDelete}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete subnet ${subnet.cidr}`}
+          accessibilityState={{ disabled: blocked || pending }}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+            Delete subnet
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+}
+
+function subnetPanelHint(count: number): string {
+  if (count === 1) return '1 subnet'
+  return `${count} subnets`
+}
+
+function SubnetsPanel({
+  subnets,
+  loading,
+  canManage,
+  pending,
+  addCidr,
+  addLabel,
+  confirmingNetworkId,
+  onAddCidrChange,
+  onAddLabelChange,
+  onAdd,
+  onDraftLabelChange,
+  onSaveLabel,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: Readonly<{
+  subnets: readonly DatacenterSubnetRecord[]
+  loading: boolean
+  canManage: boolean
+  pending: boolean
+  addCidr: string
+  addLabel: string
+  confirmingNetworkId: string | null
+  onAddCidrChange: (value: string) => void
+  onAddLabelChange: (value: string) => void
+  onAdd: () => void
+  onDraftLabelChange: (networkId: string, value: string) => void
+  onSaveLabel: (networkId: string) => void
+  onRequestDelete: (networkId: string) => void
+  onCancelDelete: () => void
+  onConfirmDelete: (networkId: string) => void
+}>) {
+  const sorted = sortDatacenterSubnets(subnets)
+  const normalizedAdd = normalizeCidr(addCidr)
+  const addDisabled = pending || !normalizedAdd
+
+  return (
+    <SectionPanel title="Subnets" hint={subnetPanelHint(sorted.length)}>
+      {loading && sorted.length === 0 ? (
         <Text style={orgPanelStyles.muted}>Loading…</Text>
       ) : null}
-      {!loading && !cidr ? (
-        <View style={orgPanelStyles.calloutWarning}>
-          <Text style={orgPanelStyles.calloutWarningText}>
-            No CIDR detected. Recreate from a server IP.
+      {!loading && sorted.length === 0 ? (
+        <View style={orgPanelStyles.statePanel}>
+          <Text style={orgPanelStyles.muted}>
+            No subnets yet — add one or pin a server whose reported prefix
+            creates it.
           </Text>
         </View>
       ) : null}
-      {cidr ? (
-        <Text style={styles.mono} selectable>
-          {cidr}
-        </Text>
+      {sorted.length > 0 ? (
+        <View style={styles.list}>
+          {sorted.map((subnet) => (
+            <SubnetCard
+              key={subnet.id}
+              subnet={subnet}
+              canManage={canManage}
+              pending={pending}
+              confirming={confirmingNetworkId === subnet.id}
+              onDraftLabelChange={(value) =>
+                onDraftLabelChange(subnet.id, value)
+              }
+              onSaveLabel={() => onSaveLabel(subnet.id)}
+              onRequestDelete={() => onRequestDelete(subnet.id)}
+              onCancelDelete={onCancelDelete}
+              onConfirmDelete={() => onConfirmDelete(subnet.id)}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {canManage ? (
+        <View style={styles.assignBlock}>
+          <View style={styles.identityField}>
+            <Text style={styles.fieldLabel}>CIDR</Text>
+            <TextInput
+              value={addCidr}
+              onChangeText={onAddCidrChange}
+              placeholder="203.0.113.0/24"
+              placeholderTextColor={colors.textDim}
+              style={[styles.identityInput, styles.monoInput]}
+              editable={!pending}
+              accessibilityLabel="New subnet CIDR"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {normalizedAdd && normalizedAdd !== addCidr.trim() ? (
+              <Text style={orgPanelStyles.muted}>{normalizedAdd}</Text>
+            ) : null}
+          </View>
+          <View style={styles.identityField}>
+            <Text style={styles.fieldLabel}>Label</Text>
+            <TextInput
+              value={addLabel}
+              onChangeText={onAddLabelChange}
+              placeholder="Optional"
+              placeholderTextColor={colors.textDim}
+              style={styles.identityInput}
+              editable={!pending}
+              accessibilityLabel="New subnet label"
+            />
+          </View>
+          <Pressable
+            style={[
+              orgPanelStyles.toolbarBtnPrimary,
+              addDisabled && styles.buttonDisabled,
+              webPointer,
+            ]}
+            disabled={addDisabled}
+            onPress={onAdd}
+            accessibilityRole="button"
+            accessibilityLabel="Add subnet"
+            accessibilityState={{ disabled: addDisabled, busy: pending }}
+          >
+            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add subnet</Text>
+          </Pressable>
+        </View>
       ) : null}
     </SectionPanel>
   )
 }
 
-function uniqueAddressesInCidrs(
-  server: OrgServerRecord | undefined,
-  siteCidrs: readonly string[],
-): string[] {
-  if (!server) return []
-  return [
-    ...new Set(
-      siteCidrs.flatMap((cidr) =>
-        addressesInCidr(reportedPrivateAddresses(server), cidr),
-      ),
-    ),
-  ]
+function AddressPreferencePanel({
+  preference,
+  canManage,
+  pending,
+  loaded,
+  onChange,
+  onSave,
+}: Readonly<{
+  preference: DatacenterAddressPreference
+  canManage: boolean
+  pending: boolean
+  loaded: boolean
+  onChange: (value: DatacenterAddressPreference) => void
+  onSave: () => void
+}>) {
+  const controlsDisabled = !canManage || pending || !loaded
+  const saveDisabled = pending || !loaded
+
+  return (
+    <SectionPanel title="Routing">
+      <Text style={styles.fieldLabel}>Address preference</Text>
+      <View style={orgPanelStyles.segmentGroup}>
+        {(['ipv6', 'ipv4'] as const).map((value) => {
+          const active = preference === value
+          const label = value === 'ipv6' ? 'Prefer IPv6' : 'Prefer IPv4'
+          return (
+            <Pressable
+              key={value}
+              style={[
+                orgPanelStyles.segmentChip,
+                active && orgPanelStyles.segmentChipActive,
+                controlsDisabled && styles.buttonDisabled,
+                webPointer,
+              ]}
+              disabled={controlsDisabled}
+              onPress={() => onChange(value)}
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: active,
+                disabled: controlsDisabled,
+              }}
+              accessibilityLabel={label}
+            >
+              <Text
+                style={[
+                  orgPanelStyles.segmentChipText,
+                  active && orgPanelStyles.segmentChipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      <Text style={orgPanelStyles.muted}>
+        Only applies when both servers have an address in the same datacenter in
+        both families.
+      </Text>
+      {canManage ? (
+        <Pressable
+          disabled={saveDisabled}
+          onPress={onSave}
+          style={[
+            orgPanelStyles.toolbarBtnPrimary,
+            saveDisabled && styles.buttonDisabled,
+            webPointer,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Save address preference"
+          accessibilityState={{ disabled: saveDisabled, busy: pending }}
+        >
+          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
+        </Pressable>
+      ) : (
+        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+      )}
+    </SectionPanel>
+  )
+}
+
+function assignMemberErrorMessage(err: unknown): string {
+  if (errorIncludes(err, 'address_cidr_unreported')) {
+    return 'That server has not reported a private IP.'
+  }
+  if (errorIncludes(err, 'address_not_reported')) {
+    return 'Pick a private IP reported on that server.'
+  }
+  if (errorIncludes(err, ADDRESS_IN_USE_ERROR)) {
+    return 'That address is already pinned.'
+  }
+  if (errorIncludes(err, SUBNET_OVERLAPS_ERROR)) {
+    return 'That range overlaps an existing subnet in this organization.'
+  }
+  if (errorIncludes(err, ADDRESS_NOT_IN_ANY_SUBNET_ERROR)) {
+    return 'That address is not in any subnet of this datacenter.'
+  }
+  return mutationErrorMessage(err, 'Failed to assign server')
+}
+
+function memberPanelHint(pinCount: number, serverCount: number): string {
+  return `${pinCount} pins · ${serverCount} servers`
+}
+
+function pinUnassignAccessibilityLabel(
+  pinCount: number,
+  serverLabel: string,
+): string {
+  if (pinCount > 1) {
+    return `Unassign all pins for ${serverLabel} in this datacenter`
+  }
+  return 'Unassign'
+}
+
+function pinUnassignText(pinCount: number): string {
+  if (pinCount > 1) return 'Unassign all pins'
+  return 'Unassign'
+}
+
+function pinSubnetCidr(
+  pin: DatacenterMemberPin,
+  subnets: readonly DatacenterSubnetRecord[],
+): string | null {
+  if (pin.networkId) {
+    const byId = subnets.find((subnet) => subnet.id === pin.networkId)
+    if (byId) return byId.cidr
+  }
+  return subnetForAddress(subnets, pin.address)?.cidr ?? null
 }
 
 function MemberServersPanel({
-  memberServers,
+  pins,
+  serversById,
+  subnets,
   candidateServers,
-  siteCidrs,
-  privateAddressByServerId,
   canManage,
   pending,
   assignServerId,
@@ -182,10 +608,10 @@ function MemberServersPanel({
   onAssign,
   onUnassign,
 }: Readonly<{
-  memberServers: OrgServerRecord[]
+  pins: readonly DatacenterMemberPin[]
+  serversById: ReadonlyMap<string, OrgServerRecord>
+  subnets: readonly DatacenterSubnetRecord[]
   candidateServers: OrgServerRecord[]
-  siteCidrs: readonly string[]
-  privateAddressByServerId: Map<string, string>
   canManage: boolean
   pending: boolean
   assignServerId: string
@@ -195,65 +621,92 @@ function MemberServersPanel({
   onAssign: () => void
   onUnassign: (serverId: string) => void
 }>) {
+  const pinnedAddresses = pins.map((pin) => pin.address)
   const selectedCandidate = candidateServers.find(
     (server) => server.id === assignServerId,
   )
-  const uniqueCandidateAddresses = uniqueAddressesInCidrs(
-    selectedCandidate,
-    siteCidrs,
-  )
+  const candidateNetworks = selectedCandidate
+    ? candidateMemberNetworks(selectedCandidate, pinnedAddresses)
+    : []
   const serverOptions = candidateServers.map((server) => ({
     value: server.id,
     label: serverTitle(server),
   }))
-  const addressOptions = uniqueCandidateAddresses.map((address) => ({
-    value: address,
-    label: address,
+  const addressOptions = candidateNetworks.map((network) => ({
+    value: network.address,
+    label: network.address,
   }))
+  const selectedNetwork = candidateNetworks.find(
+    (network) => network.address === assignAddress,
+  )
+  const newSubnetCidr =
+    selectedNetwork && !subnetForAddress(subnets, selectedNetwork.address)
+      ? selectedNetwork.cidr
+      : null
+  const uniqueServerCount = new Set(pins.map((pin) => pin.serverId)).size
+  const pinCountByServer = new Map<string, number>()
+  for (const pin of pins) {
+    pinCountByServer.set(
+      pin.serverId,
+      (pinCountByServer.get(pin.serverId) ?? 0) + 1,
+    )
+  }
 
   const selectAssignServer = (serverId: string) => {
     onSelectAssign(serverId)
     const next = candidateServers.find((server) => server.id === serverId)
-    const addresses = uniqueAddressesInCidrs(next, siteCidrs)
-    if (addresses.length === 1 && addresses[0]) {
-      onSelectAddress(addresses[0])
+    const networks = next
+      ? candidateMemberNetworks(next, pinnedAddresses)
+      : []
+    if (networks.length === 1 && networks[0]) {
+      onSelectAddress(networks[0].address)
     }
   }
 
   return (
     <SectionPanel
       title="Member servers"
-      hint={`${memberServers.length} pinned`}
+      hint={memberPanelHint(pins.length, uniqueServerCount)}
     >
-      {memberServers.length === 0 ? (
+      {pins.length === 0 ? (
         <Text style={orgPanelStyles.muted}>None yet.</Text>
       ) : (
         <View style={styles.list}>
-          {memberServers.map((server) => {
-            const privateAddress = privateAddressByServerId.get(server.id)
+          {pins.map((pin) => {
+            const server = serversById.get(pin.serverId)
+            const pinCount = pinCountByServer.get(pin.serverId) ?? 1
+            const serverLabel = server ? serverTitle(server) : pin.serverId
+            const unassignLabel = pinUnassignAccessibilityLabel(
+              pinCount,
+              serverLabel,
+            )
+            const unassignText = pinUnassignText(pinCount)
             return (
-              <View key={server.id} style={orgPanelStyles.detailCard}>
+              <View
+                key={pin.ipId}
+                style={orgPanelStyles.detailCard}
+              >
                 <Text style={orgPanelStyles.detailTitle}>
-                  {serverTitle(server)}
+                  {server ? serverTitle(server) : pin.serverId}
                 </Text>
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Status: </Text>
-                  {serverConnectionStatusLabel(
-                    resolveServerConnectionStatus(server),
-                  )}
-                </Text>
-                {privateAddress ? (
+                {server ? (
                   <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>
-                      Private address:{' '}
-                    </Text>
-                    <Text style={styles.mono} selectable>
-                      {privateAddress}
-                    </Text>
+                    <Text style={orgPanelStyles.detailLabel}>Status: </Text>
+                    {serverConnectionStatusLabel(
+                      resolveServerConnectionStatus(server),
+                    )}
                   </Text>
-                ) : (
-                  <Text style={orgPanelStyles.muted}>No private address</Text>
-                )}
+                ) : null}
+                <View style={styles.pinAddressRow}>
+                  <Text style={styles.mono} selectable>
+                    {pin.address}
+                  </Text>
+                  <AddressFamilyBadge family={addressFamilyLabel(pin.address)} />
+                </View>
+                <Text style={orgPanelStyles.detailLine}>
+                  <Text style={orgPanelStyles.detailLabel}>Subnet: </Text>
+                  {pinSubnetCidr(pin, subnets) ?? '—'}
+                </Text>
                 {canManage ? (
                   <Pressable
                     style={[
@@ -262,10 +715,12 @@ function MemberServersPanel({
                       webPointer,
                     ]}
                     disabled={pending}
-                    onPress={() => onUnassign(server.id)}
+                    onPress={() => onUnassign(pin.serverId)}
+                    accessibilityRole="button"
+                    accessibilityLabel={unassignLabel}
                   >
                     <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                      Unassign
+                      {unassignText}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -277,17 +732,11 @@ function MemberServersPanel({
 
       {canManage ? (
         <View style={styles.assignBlock}>
-          {siteCidrs.length === 0 ? (
+          {candidateServers.length === 0 ? (
             <Text style={orgPanelStyles.muted}>
-              Detect a CIDR before adding servers.
+              No unpinned private addresses on other servers.
             </Text>
-          ) : null}
-          {siteCidrs.length > 0 && candidateServers.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>
-              No other servers in {siteCidrs.join(', ')}.
-            </Text>
-          ) : null}
-          {siteCidrs.length > 0 && candidateServers.length > 0 ? (
+          ) : (
             <>
               <View style={styles.identityField}>
                 <Text style={styles.fieldLabel}>Server</Text>
@@ -314,6 +763,11 @@ function MemberServersPanel({
                   />
                 </View>
               ) : null}
+              {newSubnetCidr ? (
+                <Text style={orgPanelStyles.muted}>
+                  Adds a new subnet {newSubnetCidr} to this datacenter.
+                </Text>
+              ) : null}
               <Pressable
                 style={[
                   orgPanelStyles.toolbarBtnPrimary,
@@ -327,7 +781,7 @@ function MemberServersPanel({
                 <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add</Text>
               </Pressable>
             </>
-          ) : null}
+          )}
         </View>
       ) : null}
     </SectionPanel>
@@ -341,16 +795,6 @@ type MeshFromDatacenterRow = {
   address: string
   isPrimary: boolean
   otherDatacenterLabel: string
-}
-
-function resolvePrivateCidrs(
-  datacenter: DatacenterRecord | undefined,
-): string[] {
-  const cidrs = datacenter?.privateCidrs ?? []
-  return cidrs
-    .map((cidr) => cidr.trim())
-    .filter((cidr) => cidr.length > 0)
-    .sort((a, b) => a.localeCompare(b))
 }
 
 function resolveOtherDatacenterLabel(
@@ -421,40 +865,32 @@ function datacenterLoadError(
   return 'Failed to load datacenter'
 }
 
-function mutationErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message
-  return fallback
-}
-
 function deleteDatacenterErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.message.includes(DATACENTER_HAS_MEMBERS_ERROR)) {
-      return 'Unassign every server from this datacenter before deleting it.'
-    }
-    if (error.message.includes(DATACENTER_HAS_NETWORKS_ERROR)) {
-      return 'This datacenter still has extra networks. Remove those first.'
-    }
-    return error.message
+  if (errorIncludes(error, DATACENTER_HAS_MEMBERS_ERROR)) {
+    return 'Unassign every server from this datacenter before deleting it.'
   }
-  return 'Failed to delete datacenter'
+  if (errorIncludes(error, DATACENTER_HAS_NETWORKS_ERROR)) {
+    return 'This datacenter still has extra networks. Remove those first.'
+  }
+  return mutationErrorMessage(error, 'Failed to delete datacenter')
 }
 
 function MeshFromDatacenterPanel({
   orgId,
   rows,
-  siteCidrs,
+  subnetCount,
   loading,
   canManage,
 }: Readonly<{
   orgId: string
   rows: MeshFromDatacenterRow[]
-  siteCidrs: string[]
+  subnetCount: number
   loading: boolean
   canManage: boolean
 }>) {
   const router = useRouter()
   const hasGateway = rows.some((row) => row.role === 'gateway')
-  const missingCidr = hasGateway && siteCidrs.length === 0
+  const missingCidr = hasGateway && subnetCount === 0
 
   return (
     <SectionPanel
@@ -476,7 +912,8 @@ function MeshFromDatacenterPanel({
       {canManage && missingCidr ? (
         <View style={orgPanelStyles.calloutWarning}>
           <Text style={orgPanelStyles.calloutWarningText}>
-            Gateway has no CIDR — apply will fail until a prefix is detected.
+            This datacenter has no subnets — apply will fail until a prefix is
+            added.
           </Text>
         </View>
       ) : null}
@@ -665,6 +1102,17 @@ function DatacenterDeletePanel({
   )
 }
 
+function applySubnetLabelDrafts(
+  subnets: readonly DatacenterSubnetRecord[],
+  drafts: ReadonlyMap<string, string>,
+): DatacenterSubnetRecord[] {
+  return subnets.map((subnet) => {
+    const draft = drafts.get(subnet.id)
+    if (draft === undefined) return subnet
+    return { ...subnet, displayName: draft }
+  })
+}
+
 export function DatacenterDetailSection({
   orgId,
   datacenterId,
@@ -684,16 +1132,21 @@ export function DatacenterDetailSection({
     undefined,
   )
   const [draftEnforce, setDraftEnforce] = useState<boolean | null>(null)
+  const [draftPreference, setDraftPreference] =
+    useState<DatacenterAddressPreference | null>(null)
+  const [addCidr, setAddCidr] = useState('')
+  const [addLabel, setAddLabel] = useState('')
+  const [subnetLabelDrafts, setSubnetLabelDrafts] = useState(
+    () => new Map<string, string>(),
+  )
+  const [confirmingSubnetId, setConfirmingSubnetId] = useState<string | null>(
+    null,
+  )
 
   const datacenterQuery = useDatacenter(orgId, datacenterId, {
     enabled: Boolean(datacenterId),
   })
   const serversQuery = useOrgServers(orgId)
-  const privateIpsQuery = useIps(
-    orgId,
-    { scope: 'datacenter' },
-    { enabled: Boolean(datacenterId) },
-  )
   const timezonesQuery = useTimezones()
   const fabricQuery = useOrgFabric(orgId, { enabled: canManage })
   const datacentersQuery = useDatacenters(orgId)
@@ -705,35 +1158,29 @@ export function DatacenterDetailSection({
   const removeMemberMutation = useRemoveDatacenterMember(orgId, datacenterId)
   const updateMutation = useUpdateDatacenter(orgId, datacenterId)
   const deleteMutation = useDeleteDatacenter(orgId)
+  const createSubnetMutation = useCreateDatacenterSubnet(orgId, datacenterId)
+  const updateSubnetMutation = useUpdateDatacenterSubnet(orgId, datacenterId)
+  const deleteSubnetMutation = useDeleteDatacenterSubnet(orgId, datacenterId)
 
-  const datacenter = datacenterQuery.data?.datacenter
+  const datacenter: DatacenterDetailRecord | undefined =
+    datacenterQuery.data?.datacenter
+  const members = datacenterQuery.data?.members ?? []
   const servers = serversQuery.data?.servers ?? []
-  const memberServers = servers.filter((server) =>
-    serverIsDatacenterMember(server, datacenterId),
+  const subnets = applySubnetLabelDrafts(
+    datacenter?.subnets ?? [],
+    subnetLabelDrafts,
   )
-  const siteCidrs = resolvePrivateCidrs(datacenter)
+  const pinnedAddresses = members.map((pin) => pin.address)
+  const serversById = useMemo(
+    () => new Map(servers.map((server) => [server.id, server])),
+    [servers],
+  )
 
   const candidateServers = useMemo(() => {
-    if (siteCidrs.length === 0) return []
-    return listServersWithAddressInCidrs(
-      servers.filter(
-        (server) => !serverIsDatacenterMember(server, datacenterId),
-      ),
-      siteCidrs,
-    ).sort((a, b) => serverTitle(a).localeCompare(serverTitle(b)))
-  }, [servers, siteCidrs, datacenterId])
-
-  const privateAddressByServerId = useMemo(() => {
-    const map = new Map<string, string>()
-    const memberIds = new Set(memberServers.map((server) => server.id))
-    for (const ip of privateIpsQuery.data?.ips ?? []) {
-      if (!ip.serverId || !memberIds.has(ip.serverId)) continue
-      if (!map.has(ip.serverId)) {
-        map.set(ip.serverId, ip.address)
-      }
-    }
-    return map
-  }, [privateIpsQuery.data?.ips, memberServers])
+    return listServersWithCandidateAddresses(servers, pinnedAddresses).sort(
+      (a, b) => serverTitle(a).localeCompare(serverTitle(b)),
+    )
+  }, [servers, pinnedAddresses])
 
   const serverById = new Map(
     servers.map((server) => [
@@ -774,12 +1221,17 @@ export function DatacenterDetailSection({
   }
   const enforce =
     draftEnforce ?? (datacenter?.options?.enforceServerTimezone ?? false)
+  const addressPreference: DatacenterAddressPreference =
+    draftPreference ?? datacenter?.options?.addressPreference ?? 'ipv6'
   const identityName = draftName ?? datacenter?.displayName ?? ''
   const identityDescription = draftDescription ?? datacenter?.description ?? ''
   const pending =
     updateMutation.isPending ||
     addMembersMutation.isPending ||
-    removeMemberMutation.isPending
+    removeMemberMutation.isPending ||
+    createSubnetMutation.isPending ||
+    updateSubnetMutation.isPending ||
+    deleteSubnetMutation.isPending
   const readOnly = !canManage
 
   const queryError = datacenterLoadError(
@@ -791,12 +1243,38 @@ export function DatacenterDetailSection({
     addMembersMutation.actionError ??
     removeMemberMutation.actionError ??
     updateMutation.actionError ??
+    createSubnetMutation.actionError ??
+    updateSubnetMutation.actionError ??
+    deleteSubnetMutation.actionError ??
     deleteMutation.actionError ??
     queryError
 
   const title =
     datacenter?.displayName?.trim() ||
     (datacenterQuery.isLoading ? 'Datacenter' : 'Unnamed datacenter')
+
+  const saveMergedOptions = (
+    patch: Parameters<typeof mergeDatacenterOptions>[1],
+    onSuccess: () => void,
+    fallback: string,
+  ) => {
+    if (!datacenter) {
+      setError(fallback)
+      return
+    }
+    setError(null)
+    updateMutation.mutate(
+      {
+        options: mergeDatacenterOptions(datacenter.options, patch),
+      },
+      {
+        onSuccess,
+        onError: (err) => {
+          setError(mutationErrorMessage(err, fallback))
+        },
+      },
+    )
+  }
 
   return (
     <View style={styles.root}>
@@ -840,16 +1318,108 @@ export function DatacenterDetailSection({
         }}
       />
 
-      <PrivateNetworkPanel
-        cidrs={siteCidrs}
+      <SubnetsPanel
+        subnets={subnets}
         loading={datacenterQuery.isLoading}
+        canManage={canManage}
+        pending={pending}
+        addCidr={addCidr}
+        addLabel={addLabel}
+        confirmingNetworkId={confirmingSubnetId}
+        onAddCidrChange={setAddCidr}
+        onAddLabelChange={setAddLabel}
+        onAdd={() => {
+          const normalized = normalizeCidr(addCidr)
+          if (!isValidCidr(addCidr) || !normalized) {
+            setError('Enter a valid IPv4 or IPv6 CIDR.')
+            return
+          }
+          if (subnets.some((subnet) => cidrsOverlap(subnet.cidr, normalized))) {
+            setError(
+              'That range overlaps an existing subnet in this organization.',
+            )
+            return
+          }
+          setError(null)
+          const body: { cidr: string; displayName?: string } = {
+            cidr: normalized,
+          }
+          const label = addLabel.trim()
+          if (label) body.displayName = label
+          createSubnetMutation.mutate(body, {
+            onSuccess: () => {
+              setAddCidr('')
+              setAddLabel('')
+            },
+            onError: (err) => {
+              setError(subnetCreateErrorMessage(err))
+            },
+          })
+        }}
+        onDraftLabelChange={(networkId, value) => {
+          setSubnetLabelDrafts((current) => {
+            const next = new Map(current)
+            next.set(networkId, value)
+            return next
+          })
+        }}
+        onSaveLabel={(networkId) => {
+          const subnet = subnets.find((row) => row.id === networkId)
+          if (!subnet) return
+          const displayName = subnet.displayName?.trim() || undefined
+          setError(null)
+          updateSubnetMutation.mutate(
+            { networkId, body: { displayName: displayName ?? '' } },
+            {
+              onSuccess: () => {
+                setSubnetLabelDrafts((current) => {
+                  const next = new Map(current)
+                  next.delete(networkId)
+                  return next
+                })
+              },
+              onError: (err) => {
+                setError(
+                  mutationErrorMessage(err, 'Failed to save subnet label'),
+                )
+              },
+            },
+          )
+        }}
+        onRequestDelete={setConfirmingSubnetId}
+        onCancelDelete={() => setConfirmingSubnetId(null)}
+        onConfirmDelete={(networkId) => {
+          setError(null)
+          deleteSubnetMutation.mutate(networkId, {
+            onSuccess: () => setConfirmingSubnetId(null),
+            onError: (err) => {
+              setConfirmingSubnetId(null)
+              setError(subnetDeleteErrorMessage(err))
+            },
+          })
+        }}
+      />
+
+      <AddressPreferencePanel
+        preference={addressPreference}
+        canManage={canManage}
+        pending={pending}
+        loaded={Boolean(datacenter)}
+        onChange={setDraftPreference}
+        onSave={() =>
+          saveMergedOptions(
+            { addressPreference },
+            () => setDraftPreference(null),
+            'Failed to save address preference',
+          )
+        }
       />
 
       <MemberServersPanel
-        memberServers={memberServers}
+        pins={members}
+        serversById={serversById}
+        subnets={subnets}
         candidateServers={candidateServers}
-        siteCidrs={siteCidrs}
-        privateAddressByServerId={privateAddressByServerId}
         canManage={canManage}
         pending={pending}
         assignServerId={assignServerId}
@@ -870,7 +1440,7 @@ export function DatacenterDetailSection({
                 setAssignAddress('')
               },
               onError: (err) => {
-                setError(mutationErrorMessage(err, 'Failed to assign server'))
+                setError(assignMemberErrorMessage(err))
               },
             },
           )
@@ -888,7 +1458,7 @@ export function DatacenterDetailSection({
       <MeshFromDatacenterPanel
         orgId={orgId}
         rows={meshRows}
-        siteCidrs={siteCidrs}
+        subnetCount={subnets.length}
         loading={fabricQuery.isLoading}
         canManage={canManage}
       />
@@ -902,32 +1472,23 @@ export function DatacenterDetailSection({
         pending={pending}
         onTimezoneChange={setDraftTimezone}
         onEnforceToggle={() => setDraftEnforce(!enforce)}
-        onSave={() => {
-          setError(null)
-          updateMutation.mutate(
+        onSave={() =>
+          saveMergedOptions(
             {
-              options: {
-                defaultServerTimezone: effectiveTimezone,
-                enforceServerTimezone: enforce,
-              },
+              defaultServerTimezone: effectiveTimezone,
+              enforceServerTimezone: enforce,
             },
-            {
-              onSuccess: () => {
-                setDraftTimezone(undefined)
-                setDraftEnforce(null)
-              },
-              onError: (err) => {
-                setError(
-                  mutationErrorMessage(err, 'Failed to save datacenter timezone'),
-                )
-              },
+            () => {
+              setDraftTimezone(undefined)
+              setDraftEnforce(null)
             },
+            'Failed to save datacenter timezone',
           )
-        }}
+        }
       />
 
       <DatacenterDeletePanel
-        memberCount={memberServers.length}
+        memberCount={members.length}
         canManage={canManage}
         deleting={deleteMutation.isPending}
         confirming={confirmingDelete}
@@ -965,6 +1526,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
+  subnetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  pinAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
   primaryBadge: {
     color: chrome.accent,
     fontSize: 11,
@@ -994,6 +1568,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     minHeight: 44,
+  },
+  monoInput: {
+    fontFamily: 'monospace',
   },
   mono: {
     fontFamily: 'monospace',

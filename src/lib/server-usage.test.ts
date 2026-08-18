@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCpuStackSegments,
+  formatLoad,
   hasUsageMetrics,
   loadPercentOfCores,
 } from './server-usage'
+
+describe('formatLoad', () => {
+  it('formats compact load1 for usage columns', () => {
+    expect(formatLoad(null)).toBe('—')
+    expect(formatLoad(0.42)).toBe('0.42')
+    expect(formatLoad(12.34)).toBe('12.3')
+  })
+})
 
 describe('loadPercentOfCores', () => {
   it('maps load/cores to percent', () => {

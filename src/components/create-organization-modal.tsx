@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { validateDisplayName } from '@/lib/display-name'
+import { foldDisplayNameApostrophes, DISPLAY_NAME_MAX_LENGTH, validateDisplayName } from '@/lib/display-name'
 import { colors, layout, spacing } from '@/lib/theme'
 
 type CreateOrganizationModalProps = Readonly<{
@@ -44,7 +44,8 @@ export function CreateOrganizationModal({
   }
 
   const handleCreate = async () => {
-    const validationError = validateDisplayName(name)
+    const displayName = foldDisplayNameApostrophes(name).trim()
+    const validationError = validateDisplayName(displayName)
     if (validationError) {
       setError(validationError)
       return
@@ -52,7 +53,7 @@ export function CreateOrganizationModal({
 
     setError(null)
     setSubmitting(true)
-    const result = await onCreate(name.trim())
+    const result = await onCreate(displayName)
     setSubmitting(false)
     if (!result.ok) {
       setError(result.error ?? 'Could not create organization.')
@@ -95,6 +96,7 @@ export function CreateOrganizationModal({
             autoCapitalize="words"
             autoCorrect={false}
             editable={!submitting}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
             accessibilityLabel="Organization name"
           />
           {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}

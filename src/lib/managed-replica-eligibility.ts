@@ -220,7 +220,7 @@ export function replicaIneligibleReasonLabel(
     case 'no-datacenter':
       return 'Not assigned to a datacenter'
     case 'no-private-cidr':
-      return 'Datacenter has no private network'
+      return 'Datacenter has no subnets yet'
     case 'no-private-path':
       return 'No private path to primary'
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -10,10 +10,14 @@ import { OrgHeader } from '@/components/org/org-header'
 import { OrgShellContent } from '@/components/org/org-shell-content'
 import { OrgSidebar } from '@/components/org/org-sidebar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
+import { PullToRefreshProvider } from '@/lib/pull-to-refresh'
 import { glass } from '@/lib/glass'
 import { colors, layout } from '@/lib/theme'
 
-export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
+export function OrgShell({
+  orgId,
+  children,
+}: Readonly<{ orgId: string; children?: ReactNode }>) {
   const { width } = useWindowDimensions()
   const isDesktop = width >= layout.desktopBreakpoint
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -25,40 +29,44 @@ export function OrgShell({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <WorkspaceScopeProvider orgId={orgId}>
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.root}>
-          {isDesktop ? (
-            <View style={styles.sidebarSlot}>
-              <OrgSidebar orgId={orgId} />
-            </View>
-          ) : null}
-
-          {!isDesktop && drawerOpen ? (
-            <>
-              <Pressable
-                style={styles.backdrop}
-                onPress={() => setDrawerOpen(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Close navigation menu"
-              />
-              <View style={styles.drawer}>
-                <OrgSidebar
-                  orgId={orgId}
-                  onNavigate={() => setDrawerOpen(false)}
-                />
+      <PullToRefreshProvider>
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.root}>
+            {isDesktop ? (
+              <View style={styles.sidebarSlot}>
+                <OrgSidebar orgId={orgId} />
               </View>
-            </>
-          ) : null}
+            ) : null}
 
-          <View style={styles.main}>
-            <OrgHeader
-              orgId={orgId}
-              onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
-            />
-            <OrgShellContent maxWidth={contentMaxWidth} />
+            {!isDesktop && drawerOpen ? (
+              <>
+                <Pressable
+                  style={styles.backdrop}
+                  onPress={() => setDrawerOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close navigation menu"
+                />
+                <View style={styles.drawer}>
+                  <OrgSidebar
+                    orgId={orgId}
+                    onNavigate={() => setDrawerOpen(false)}
+                  />
+                </View>
+              </>
+            ) : null}
+
+            <View style={styles.main}>
+              <OrgHeader
+                orgId={orgId}
+                onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
+              />
+              <OrgShellContent orgId={orgId} maxWidth={contentMaxWidth}>
+                {children}
+              </OrgShellContent>
+            </View>
           </View>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </PullToRefreshProvider>
     </WorkspaceScopeProvider>
   )
 }

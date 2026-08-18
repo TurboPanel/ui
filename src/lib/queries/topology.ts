@@ -2,9 +2,11 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import {
   addDatacenterMembers,
   createDatacenter,
+  createDatacenterSubnet,
   createIp,
   createNetwork,
   deleteDatacenter,
+  deleteDatacenterSubnet,
   deleteIp,
   deleteNetwork,
   fetchDatacenter,
@@ -15,6 +17,7 @@ import {
   fetchNetworks,
   removeDatacenterMember,
   updateDatacenter,
+  updateDatacenterSubnet,
   updateIp,
   updateNetwork,
 } from '@/lib/instance-api'
@@ -222,6 +225,59 @@ export function useRemoveDatacenterMember(orgId: string, datacenterId: string) {
           queryKey: queryKeys.org(orgId).topology.all,
         }),
       ]),
+  })
+}
+
+function invalidateDatacenterSubnetQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  datacenterId: string,
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).topology.datacenters,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).topology.networksAll,
+    }),
+  ])
+}
+
+export function useCreateDatacenterSubnet(orgId: string, datacenterId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: Parameters<typeof createDatacenterSubnet>[1]) =>
+      createDatacenterSubnet(datacenterId, body),
+    onSuccess: () =>
+      invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
+  })
+}
+
+export function useUpdateDatacenterSubnet(orgId: string, datacenterId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({
+      networkId,
+      body,
+    }: {
+      networkId: string
+      body: Parameters<typeof updateDatacenterSubnet>[2]
+    }) => updateDatacenterSubnet(datacenterId, networkId, body),
+    onSuccess: () =>
+      invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
+  })
+}
+
+export function useDeleteDatacenterSubnet(orgId: string, datacenterId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (networkId: string) =>
+      deleteDatacenterSubnet(datacenterId, networkId),
+    onSuccess: () =>
+      invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
   })
 }
 

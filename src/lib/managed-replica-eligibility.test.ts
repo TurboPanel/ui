@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   hasPrivatePathToPrimary,
+  replicaIneligibleReasonLabel,
   resolveReplicaEligibility,
   type ReplicaEligibilityInput,
 } from './managed-replica-eligibility'
@@ -116,6 +117,21 @@ describe('resolveReplicaEligibility', () => {
     })
   })
 
+  it('treats a datacenter with two private CIDRs as eligible', () => {
+    const result = eligibility({
+      datacenters: [
+        { id: 'dc-1', privateCidrs: ['10.0.0.0/24', '2001:db8::/64'] },
+        { id: 'dc-empty', privateCidrs: [] },
+      ],
+    })
+    const row = result.servers.find((s) => s.serverId === 'srv-ok')
+    expect(row).toEqual({
+      serverId: 'srv-ok',
+      eligible: true,
+      candidateDatacenterId: 'dc-1',
+    })
+  })
+
   it('marks linked-site servers eligible when they share TurboFabric with primary', () => {
     const result = eligibility({
       servers: [
@@ -190,6 +206,14 @@ describe('resolveReplicaEligibility', () => {
       ],
     })
     expect(at.atReplicaLimit).toBe(true)
+  })
+})
+
+describe('replicaIneligibleReasonLabel', () => {
+  it('rewrites no-private-cidr as a subnet empty state', () => {
+    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe(
+      'Datacenter has no subnets yet',
+    )
   })
 })
 
