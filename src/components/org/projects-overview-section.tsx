@@ -14,6 +14,7 @@ import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
 import { useProjects, useWorkspaces } from '@/lib/queries'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   isSystemProject,
   isSystemWorkspace,
@@ -199,7 +200,7 @@ export function ProjectsOverviewSection({
     return workspacesQuery.data?.workspaces ?? []
   }, [scopeWorkspaces, workspacesQuery.data?.workspaces])
 
-  const rawProjects = projectsQuery.data?.projects ?? []
+  const rawProjects = orEmptyArray(projectsQuery.data?.projects)
   const projects = useMemo(() => {
     // All-workspaces scope hides platform infrastructure projects.
     if (scopeId === ALL_WORKSPACES_SCOPE) {
@@ -210,9 +211,13 @@ export function ProjectsOverviewSection({
     return rawProjects
   }, [rawProjects, scopeId, allWorkspaces])
 
-  const workspaces = needsWorkspaceNames
-    ? (workspacesQuery.data?.workspaces ?? [])
-    : []
+  const workspaces = useMemo(
+    () =>
+      needsWorkspaceNames
+        ? orEmptyArray(workspacesQuery.data?.workspaces)
+        : [],
+    [needsWorkspaceNames, workspacesQuery.data?.workspaces],
+  )
   const loading =
     projectsQuery.isLoading || (needsWorkspaceNames && workspacesQuery.isLoading)
   const error = queryErrorMessage(projectsQuery.error, workspacesQuery.error)

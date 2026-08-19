@@ -34,18 +34,18 @@ export type ReplicaServerEligibility = {
 }
 
 export type ReplicaEligibilityInput = {
-  servers: ReadonlyArray<{
+  servers: readonly {
     id: string
     displayName?: string | null
     hostname?: string | null
     connected: boolean
     datacenters: readonly ServerDatacenterRef[]
-  }>
-  datacenters: ReadonlyArray<{
+  }[]
+  datacenters: readonly {
     id: string
     privateCidrs: readonly string[]
-  }>
-  members: ReadonlyArray<Pick<ManagedMemberRecord, 'serverId' | 'role'>>
+  }[]
+  members: readonly Pick<ManagedMemberRecord, 'serverId' | 'role'>[]
   /**
    * Current primary server id (from cluster members). Used for private-path
    * checks against candidates. Null when the cluster has no primary yet.
@@ -56,7 +56,7 @@ export type ReplicaEligibilityInput = {
    * appear in this list (one org mesh). Mirrors instance
    * `resolvePrivateEndpoint` transport order: local → same site → fabric.
    */
-  fabricRelays?: ReadonlyArray<{ serverId: string }>
+  fabricRelays?: readonly { serverId: string }[]
   /** Failover vs read-only placement rules. Defaults to failover. */
   replicaClass: ManagedReplicaClass
 }
@@ -99,7 +99,7 @@ export function hasPrivatePathToPrimary(params: Readonly<{
   candidateDatacenterIds: readonly string[]
   primaryServerId: string
   primaryDatacenterIds: readonly string[]
-  fabricRelays: ReadonlyArray<{ serverId: string }>
+  fabricRelays: readonly { serverId: string }[]
 }>): boolean {
   if (params.candidateServerId === params.primaryServerId) {
     return true
@@ -142,7 +142,7 @@ export function predictReplicaTransport(params: Readonly<{
   candidateDatacenterIds: readonly string[]
   primaryServerId: string | null
   primaryDatacenterIds: readonly string[]
-  fabricRelays: ReadonlyArray<{ serverId: string }>
+  fabricRelays: readonly { serverId: string }[]
 }>): ManagedMemberTransport {
   if (
     params.primaryServerId &&
@@ -228,7 +228,7 @@ function readEligibility(params: Readonly<{
   membershipIds: readonly string[]
   primaryServerId: string | null
   primaryDatacenterIds: readonly string[]
-  fabricRelays: ReadonlyArray<{ serverId: string }>
+  fabricRelays: readonly { serverId: string }[]
   cidrsByDatacenter: ReadonlyMap<string, readonly string[]>
 }>): ReplicaServerEligibility {
   const readyDatacenterId = firstDatacenterWithCidr(

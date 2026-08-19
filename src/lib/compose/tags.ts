@@ -111,7 +111,7 @@ function seqTag(name: ComposeTagName): CollectionTag {
  * One entry per (tag × node kind). yaml selects tags by kind at parse time; a
  * single `!reset` entry would only cover scalers and leave map/seq untagged.
  */
-export const COMPOSE_CUSTOM_TAGS: Array<ScalarTag | CollectionTag> = [
+export const COMPOSE_CUSTOM_TAGS: (ScalarTag | CollectionTag)[] = [
   scalarTag('reset'),
   mapTag('reset'),
   seqTag('reset'),

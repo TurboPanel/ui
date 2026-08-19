@@ -58,6 +58,7 @@ import {
   type ServiceRecord,
 } from '@/lib/instance-api'
 import { parseComposeEditView } from '@/lib/project-navigation'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useContainersByServices, useServices } from '@/lib/queries'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
 import { useStorage } from '@/lib/queries/storage'
@@ -534,7 +535,7 @@ export function ComposeServicesTab() {
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
     enabled: servicesEnabled,
   })
-  const services = servicesQuery.data?.services ?? []
+  const services = orEmptyArray(servicesQuery.data?.services)
   const serviceIds = useMemo(
     () => services.map((service) => service.id),
     [services],

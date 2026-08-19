@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Pressable,
   ScrollView,
@@ -28,6 +28,7 @@ import {
   getAccessManagementPermissionKey,
   useCan,
 } from '@/lib/query-client'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 type SubjectKind = CreateAccessBody['subjectKind']
@@ -313,14 +314,17 @@ export function AccessOverviewSection({
   const [selectedItemId, setSelectedItemId] = useState(orgId)
 
   const teamsQuery = useTeams({ enabled: scopeKind === 'team' })
-  const teams = teamsQuery.data?.teams ?? []
-  const scopeItems =
-    scopeKind === 'organization'
-      ? [{ id: orgId, label: 'Organization' }]
-      : teams.map((row) => ({
-          id: row.id,
-          label: row.displayName?.trim() || row.id,
-        }))
+  const teams = orEmptyArray(teamsQuery.data?.teams)
+  const scopeItems = useMemo(
+    () =>
+      scopeKind === 'organization'
+        ? [{ id: orgId, label: 'Organization' }]
+        : teams.map((row) => ({
+            id: row.id,
+            label: row.displayName?.trim() || row.id,
+          })),
+    [scopeKind, orgId, teams],
+  )
 
   useEffect(() => {
     if (scopeKind === 'organization') {

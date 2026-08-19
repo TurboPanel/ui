@@ -27,6 +27,7 @@ import {
   useUpdateIp,
 } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -823,9 +824,9 @@ export function NetworkAddressesSection({
   const deleteMutation = useDeleteIp(orgId)
 
   const ips = ipsQuery.data?.ips ?? []
-  const servers = serversQuery.data?.servers ?? []
-  const networks = networksQuery.data?.networks ?? []
-  const datacenters = datacentersQuery.data?.datacenters ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
+  const networks = orEmptyArray(networksQuery.data?.networks)
+  const datacenters = orEmptyArray(datacentersQuery.data?.datacenters)
 
   const loading = isIpsOverviewLoading({
     ipsLoading: ipsQuery.isLoading,

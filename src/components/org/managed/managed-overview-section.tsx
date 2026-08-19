@@ -23,6 +23,7 @@ import {
   type ManagedStatus,
 } from '@/lib/managed-services'
 import { useOrganizationManaged } from '@/lib/queries/managed'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -502,7 +503,7 @@ export function ManagedOverviewSection({
     staleTime: MANAGED_REFRESH_MS / 2,
   })
 
-  const rows = managedQuery.data?.managed ?? []
+  const rows = orEmptyArray(managedQuery.data?.managed)
   const filtered = useMemo(
     () => filterManagedRows(rows, engineFilter, statusFilter, serverFilter),
     [rows, engineFilter, statusFilter, serverFilter],

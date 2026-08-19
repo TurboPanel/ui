@@ -909,7 +909,12 @@ export function ComposeEditorSection({
   const isDirty = useMemo(() => {
     try {
       const current =
-        tab === 'visual' ? draft : currentDocument()
+        tab === 'visual'
+          ? draft
+          : restoreComposeTurbopanelExtensions(
+              yamlToComposeDocument(yaml),
+              hideComposeTurbopanelExtensions(draft).hidden,
+            )
       return fullYaml(current) !== baselineYaml
     } catch {
       return yaml !== visibleYaml(draft)

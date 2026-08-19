@@ -26,11 +26,11 @@ export type ComposePreviewMode = 'merged' | 'prepared'
 /** Review-only open vs review-and-enqueue (Deploy / Redeploy). */
 export type PreviewDeploymentPurpose = 'inspect' | 'confirm'
 
-const MODE_OPTIONS: ReadonlyArray<{
+const MODE_OPTIONS: readonly {
   id: ComposePreviewMode
   label: string
   hint: string
-}> = [
+}[] = [
   {
     id: 'merged',
     label: 'Merged',

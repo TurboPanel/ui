@@ -19,6 +19,7 @@ import {
   type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
@@ -270,7 +271,7 @@ export function ManagedUsersPanel({
   const [redeployRequired, setRedeployRequired] =
     useState<BindingRedeployRequired | null>(null)
 
-  const bindings = bindingsQuery.data?.bindings ?? []
+  const bindings = orEmptyArray(bindingsQuery.data?.bindings)
   const bindingCountByPrincipal = useMemo(() => {
     const map = new Map<string, number>()
     for (const binding of bindings) {

@@ -12,6 +12,7 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { useEnvironments } from '@/lib/queries/environments'
 import { useProject } from '@/lib/queries/projects'
 import { useWorkspaces } from '@/lib/queries/workspaces'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   type EnvironmentRecord,
   type ProjectRecord,
@@ -110,8 +111,8 @@ export function ProjectProvider({
   const workspacesQuery = useWorkspaces(orgId)
 
   const project = projectQuery.data?.project ?? null
-  const environments = environmentsQuery.data?.environments ?? []
-  const workspaces = workspacesQuery.data?.workspaces ?? []
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
+  const workspaces = orEmptyArray(workspacesQuery.data?.workspaces)
 
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
     string | null

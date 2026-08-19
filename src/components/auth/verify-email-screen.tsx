@@ -41,7 +41,7 @@ export function VerifyEmailScreenContent() {
         setErrorMessage(err instanceof Error ? err.message : 'Verification failed')
       },
     })
-  }, [token, verifyEmailMutation.mutate])
+  }, [token, verifyEmailMutation])
 
   if (status === 'loading') {
     return (

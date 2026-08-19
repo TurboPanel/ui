@@ -191,7 +191,7 @@ export function useDeleteDatacenter(orgId: string) {
 export function useAddDatacenterMembers(orgId: string, datacenterId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (members: Array<{ serverId: string; address: string }>) =>
+    mutationFn: (members: { serverId: string; address: string }[]) =>
       addDatacenterMembers(datacenterId, members),
     onSuccess: () =>
       Promise.all([

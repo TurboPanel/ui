@@ -24,6 +24,7 @@ import {
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
 import { installTlsHint } from '@/lib/install-tls'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -506,7 +507,7 @@ export function AddServerWizard({
   onDismiss,
 }: AddServerWizardProps) {
   const publicUrlsQuery = usePublicUrlsOptional({ enabled: __DEV__ })
-  const managedUrls = publicUrlsQuery.data?.urls ?? []
+  const managedUrls = orEmptyArray(publicUrlsQuery.data?.urls)
   const createLicenseMutation = useCreateLicense(orgId)
   const [step, setStep] = useState<WizardStep>('create')
   const [displayName, setDisplayName] = useState('')
@@ -614,7 +615,7 @@ export function AddServerWizard({
     setConnectedServer(null)
     setPollError(null)
     consecutivePollFailuresRef.current = 0
-  }, [waitingForConnection, revealed?.licenseId, pollAttempt])
+  }, [waitingForConnection, revealed, revealed?.licenseId, pollAttempt])
 
   useEffect(() => {
     if (!waitingForConnection || !revealed || !serversQuery.data) {

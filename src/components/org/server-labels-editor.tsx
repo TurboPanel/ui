@@ -27,7 +27,7 @@ function createLabelRow(key = '', value = ''): ServerLabelDraftRow {
 }
 
 function rowsFromPairs(
-  pairs: ReadonlyArray<{ key: string; value: string }> | undefined,
+  pairs: readonly { key: string; value: string }[] | undefined,
 ): ServerLabelDraftRow[] {
   const rows = [...(pairs ?? [])]
     .sort((a, b) => a.key.localeCompare(b.key))
@@ -90,7 +90,7 @@ function LabelDraftRow({
 
 function LabelsReadOnlyList({
   pairs,
-}: Readonly<{ pairs: ReadonlyArray<{ key: string; value: string }> }>) {
+}: Readonly<{ pairs: readonly { key: string; value: string }[] }>) {
   if (pairs.length === 0) {
     return <Text style={orgPanelStyles.muted}>No labels.</Text>
   }
@@ -115,7 +115,7 @@ export function ServerLabelsEditor({
 }: Readonly<{
   orgId: string
   serverId: string
-  labels: ReadonlyArray<{ key: string; value: string }> | undefined
+  labels: readonly { key: string; value: string }[] | undefined
   canManage: boolean
 }>) {
   const saved = useMemo(() => pairsToLabelRecord(labels), [labels])

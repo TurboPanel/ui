@@ -63,11 +63,12 @@ import {
     useUpdateEnvironmentManaged,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
 const webInputStyle = {
@@ -204,7 +205,7 @@ function ManagedSetupPanel({
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
   const createManagedMutation = useCreateEnvironmentManaged(orgId, environmentId)
 
-  const servers = serversQuery.data?.servers ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const loading = serversQuery.isLoading
   const submitting = updateEnvironmentMutation.isPending || createManagedMutation.isPending
 
@@ -482,9 +483,9 @@ function ManagedEnvironmentReadyPanels({
   const serverId = managed.serverId ?? detail.server?.id ?? null
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
 
-  const invalidateManagedData = () => {
+  const invalidateManagedData = useCallback(() => {
     invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
-  }
+  }, [queryClient, orgId, environmentId])
 
   const registerCommand = (commandId: string, _label: string, commandServerId?: string) => {
     const resolvedServerId = commandServerId ?? serverId
@@ -502,7 +503,7 @@ function ManagedEnvironmentReadyPanels({
       }
       setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
     }
-  }, [commandsQuery.data, trackedEntries, environmentId, orgId, queryClient])
+  }, [commandsQuery.data, trackedEntries, invalidateManagedData])
 
   const inFlight =
     trackedEntries.length > 0 &&
@@ -1078,7 +1079,7 @@ export function ManagedProjectSection({
   })
   const createEnvironmentMutation = useCreateEnvironment(orgId)
 
-  const environments = environmentsQuery.data?.environments ?? []
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
 
   useEffect(() => {
     if (defaultNameLoading || environmentsQuery.isLoading) return

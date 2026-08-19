@@ -13,6 +13,7 @@ import {
   SYSTEM_HOSTING_INGRESS_COMPONENT,
   systemComponentKey,
 } from '@/lib/system-inventory'
+import { orEmptyArray } from '@/lib/or-empty-array'
 
 /**
  * Presentation join over existing workspace → project → environment →
@@ -89,7 +90,7 @@ export function useServerSystemIngress(orgId: string, serverId: string) {
     containersQuery.error ??
     null
 
-  const containers = containersQuery.data?.containers ?? []
+  const containers = orEmptyArray(containersQuery.data?.containers)
   const status = useMemo(() => {
     if (!environment) {
       return 'not_provisioned' as const

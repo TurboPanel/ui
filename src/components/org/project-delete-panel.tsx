@@ -24,6 +24,7 @@ import {
   useStopEnvironmentMutation,
   type TrackedCommandEntry,
 } from '@/lib/queries'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { colors, spacing } from '@/lib/theme'
 
 const STOPPED_CONTAINER_STATUSES = new Set(['exited', 'dead', 'removing'])
@@ -157,7 +158,7 @@ export function ProjectDeletePanel({
 }>) {
   const confirmName = projectConfirmName(project)
   const environmentsQuery = useEnvironments(orgId, project.id)
-  const environments = environmentsQuery.data?.environments ?? []
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
   const environmentIds = useMemo(
     () => environments.map((env) => env.id),
     [environments],

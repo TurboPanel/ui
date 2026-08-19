@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import {
+  environmentStatusTone,
+  serviceStatusTone,
+} from '@/lib/container-status'
+import type { ContainerRecord } from '@/lib/instance-api'
+import { colors } from '@/lib/theme'
+
 vi.mock('@/lib/theme', () => ({
   colors: {
     textMuted: '#888',
@@ -8,13 +15,6 @@ vi.mock('@/lib/theme', () => ({
     error: '#ff6b6b',
   },
 }))
-
-import {
-  environmentStatusTone,
-  serviceStatusTone,
-} from '@/lib/container-status'
-import type { ContainerRecord } from '@/lib/instance-api'
-import { colors } from '@/lib/theme'
 
 function container(
   overrides: Partial<ContainerRecord> & Pick<ContainerRecord, 'status'>,

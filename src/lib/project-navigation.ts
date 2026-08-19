@@ -336,7 +336,7 @@ export function resolveBaseComposeSelected(
 
 export function resolveSelectedEnvironmentId(
   preferred: string | null | undefined,
-  environments: ReadonlyArray<{ id: string }>,
+  environments: readonly { id: string }[],
 ): string | null {
   if (environments.length === 0) return null
   if (preferred && environments.some((env) => env.id === preferred)) {

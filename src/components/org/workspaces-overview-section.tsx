@@ -21,6 +21,7 @@ import {
 } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
 import { validateWorkspaceName } from '@/lib/workspace-validation'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 const CREATE_WORKSPACE_NOTES = [
@@ -37,7 +38,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   const createWorkspace = useCreateWorkspace(orgId)
   const deleteWorkspaceMutation = useDeleteWorkspace(orgId)
 
-  const workspaces = workspacesQuery.data?.workspaces ?? []
+  const workspaces = orEmptyArray(workspacesQuery.data?.workspaces)
   const userFacingWorkspaces = useMemo(
     () => userWorkspaces(workspaces),
     [workspaces],

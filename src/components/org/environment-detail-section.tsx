@@ -85,6 +85,7 @@ import {
 } from '@/lib/compose'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
@@ -1910,7 +1911,7 @@ export function EnvironmentDetailBody({
   const projectCompose = projectQuery.data?.project.options?.compose ?? null
   const projectDefaultServerId =
     projectQuery.data?.project.options?.defaultServerId ?? null
-  const allServers = serversQuery.data?.servers ?? []
+  const allServers = orEmptyArray(serversQuery.data?.servers)
   const tlsLibrary = tlsQuery.data?.tls ?? []
   const publicIps = ipsQuery.data?.ips ?? []
   const hostingsByService = hostingsQuery.hostingsByService

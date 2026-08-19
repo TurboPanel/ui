@@ -1,17 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/instance-api', () => ({
-  fetchHealth: vi.fn(),
-  fetchInstallStatus: vi.fn(),
-  fetchOrganizations: vi.fn(),
-  fetchSession: vi.fn(),
-}))
-
-vi.mock('@/lib/org-context', () => ({
-  resolvePreferredOrganizationId: vi.fn(),
-  setActiveOrganizationId: vi.fn(),
-}))
-
 import {
   fetchHealth,
   fetchInstallStatus,
@@ -30,6 +18,18 @@ import {
   resolvePreferredOrganizationId,
   setActiveOrganizationId,
 } from '@/lib/org-context'
+
+vi.mock('@/lib/instance-api', () => ({
+  fetchHealth: vi.fn(),
+  fetchInstallStatus: vi.fn(),
+  fetchOrganizations: vi.fn(),
+  fetchSession: vi.fn(),
+}))
+
+vi.mock('@/lib/org-context', () => ({
+  resolvePreferredOrganizationId: vi.fn(),
+  setActiveOrganizationId: vi.fn(),
+}))
 
 const installedStatus: InstallStatus = {
   needsInstall: false,

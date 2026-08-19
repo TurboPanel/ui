@@ -404,7 +404,7 @@ export type ServerDetailRecord = OrgServerRecord & {
   datacenterDefaultTimezone: string | null
   datacenterEnforceServerTimezone: boolean
   colocatedWithInstance: boolean
-  labels?: Array<{ key: string; value: string }>
+  labels?: { key: string; value: string }[]
 }
 
 export type NtpSetInput = {
@@ -2061,7 +2061,7 @@ export async function createDatacenter(body: {
   /** Ignored — site CIDR is derived from the seed member's reported prefix. */
   cidr?: string
   /** At least one membership pin (daemon-reported private address). */
-  members: Array<{ serverId: string; address: string }>
+  members: { serverId: string; address: string }[]
   sourceServerId?: string
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/datacenters`, {
@@ -2072,7 +2072,7 @@ export async function createDatacenter(body: {
 
 export async function addDatacenterMembers(
   datacenterId: string,
-  members: Array<{ serverId: string; address: string }>
+  members: { serverId: string; address: string }[]
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/members`, {
     method: 'POST',

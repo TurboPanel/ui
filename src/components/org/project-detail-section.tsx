@@ -25,6 +25,7 @@ import {
 import { useEnvironments } from '@/lib/queries/environments'
 import { useServicesByEnvironments } from '@/lib/queries/services'
 import { useWorkspaces } from '@/lib/queries/workspaces'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
@@ -71,7 +72,7 @@ export function ProjectPrincipalsSection({
 }>) {
   const principalsQuery = useProjectPrincipals(orgId, projectId)
   const environmentsQuery = useEnvironments(orgId, projectId)
-  const environments = environmentsQuery.data?.environments ?? []
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
   const environmentIds = useMemo(
     () => environments.map((env) => env.id),
     [environments],
@@ -603,7 +604,7 @@ export function ProjectDetailSection({
   const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
 
   const project = projectQuery.data?.project ?? null
-  const workspaces = workspacesQuery.data?.workspaces ?? []
+  const workspaces = orEmptyArray(workspacesQuery.data?.workspaces)
   const loading = projectQuery.isLoading || workspacesQuery.isLoading
 
   const [error, setError] = useState<string | null>(null)

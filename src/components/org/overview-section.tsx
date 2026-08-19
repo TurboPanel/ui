@@ -17,6 +17,7 @@ import {
   useOrgServers,
 } from '@/lib/queries/servers'
 import { serversPresenceRefetchMs } from '@/lib/server-connection-status'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { spacing } from '@/lib/theme'
 
 /** Org Overview — fleet status tiles. Organization name lives on Manage. */
@@ -37,7 +38,7 @@ export function OverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     await Promise.all([serversQuery.refetch(), fleetUsageQuery.refetch()])
   })
 
-  const servers = serversQuery.data?.servers ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const usageByServerId = useMemo(
     () => indexFleetUsageByServerId(fleetUsageQuery.data?.servers),
     [fleetUsageQuery.data],

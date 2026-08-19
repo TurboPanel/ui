@@ -82,7 +82,7 @@ export function serverLabelsEqual(
 }
 
 export function pairsToLabelRecord(
-  pairs: ReadonlyArray<{ key: string; value: string }> | undefined,
+  pairs: readonly { key: string; value: string }[] | undefined,
 ): Record<string, string> {
   const labels: Record<string, string> = {}
   for (const pair of pairs ?? []) {

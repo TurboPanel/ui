@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries'
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
@@ -256,7 +257,7 @@ export function ProjectEnvironmentsSection({
 
   const environmentsQuery = useEnvironments(orgId, projectId)
   const createEnvironment = useCreateEnvironment(orgId)
-  const environments = environmentsQuery.data?.environments ?? []
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
   const loading = environmentsQuery.isLoading || defaultNameLoading
 
   const [selectedId, setSelectedId] = useState<string | null>(null)

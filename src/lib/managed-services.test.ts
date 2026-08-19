@@ -151,7 +151,7 @@ describe('managedErrorMessage', () => {
 
 describe('managedStatusLabel', () => {
   it('labels every ManagedStatus for status pills', () => {
-    const cases: Array<[ManagedStatus, string]> = [
+    const cases: [ManagedStatus, string][] = [
       ['ready', 'Running'],
       ['stopped', 'Stopped'],
       ['provisioning', 'Provisioning'],

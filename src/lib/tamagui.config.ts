@@ -21,10 +21,12 @@ const tamaguiConfig = createTamagui({
 export type Conf = typeof tamaguiConfig
 
 declare module '@tamagui/core' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Tamagui module augmentation
   interface TamaguiCustomConfig extends Conf {}
 }
 
 declare module 'tamagui' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Tamagui module augmentation
   interface TamaguiCustomConfig extends Conf {}
 }
 

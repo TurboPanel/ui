@@ -13,8 +13,8 @@ export type ComposeLintDiagnostic = {
 }
 
 /** Character offset range `[start, end)` for each line in `text` (no trailing newline). */
-function lineOffsetRanges(text: string): Array<{ start: number; end: number }> {
-  const ranges: Array<{ start: number; end: number }> = []
+function lineOffsetRanges(text: string): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = []
   let start = 0
   for (const line of text.split('\n')) {
     ranges.push({ start, end: start + line.length })

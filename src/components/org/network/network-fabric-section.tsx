@@ -45,6 +45,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries/commands'
 import { useOrgServers } from '@/lib/queries/servers'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCan, queryKeys } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -1119,8 +1120,8 @@ export function NetworkFabricSection({
   const unavailable = isOrgFabricUnavailable(query.error)
   const enabled = query.data?.enabled === true
   const fabric = query.data?.fabric
-  const relays = query.data?.relays ?? []
-  const servers = serversQuery.data?.servers ?? []
+  const relays = orEmptyArray(query.data?.relays)
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const pending = mutation.isPending || query.isLoading
   const queryError = fabricLoadError(query.isError, unavailable, query.error)
   const displayError = error ?? mutation.actionError ?? applyMutation.actionError ?? queryError

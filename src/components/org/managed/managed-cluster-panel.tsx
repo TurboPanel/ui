@@ -36,6 +36,7 @@ import {
   type ReplicaServerEligibility,
 } from '@/lib/managed-replica-eligibility'
 import { formatServerDatacenterNames } from '@/lib/datacenter-list'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   datacenterHref,
   serversDatacentersHref,
@@ -160,8 +161,8 @@ export function ManagedClusterPanel({
   const [forceGateMessage, setForceGateMessage] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
 
-  const servers = serversQuery.data?.servers ?? []
-  const datacenters = datacentersQuery.data?.datacenters ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
+  const datacenters = orEmptyArray(datacentersQuery.data?.datacenters)
   const fabricRelays = useMemo(
     () =>
       (fabricQuery.data?.relays ?? []).map((relay) => ({
@@ -892,7 +893,7 @@ function DisasterRecoveryDialog({
         <Text style={orgPanelStyles.calloutWarningText}>
           This accepts possible data loss. Unreplicated commits on the old
           primary will not be recovered. Remaining failover replicas outside
-          the new primary's datacenter become remote read replicas.
+          the new primary datacenter become remote read replicas.
         </Text>
       </View>
       <Text style={orgPanelStyles.muted}>Type {confirmName} to confirm.</Text>

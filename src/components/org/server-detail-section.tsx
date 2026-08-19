@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -602,11 +603,11 @@ export function ServerDetailSection({
   const commandsQuery = useCommandsBatch(orgId, commandBatchEntries)
   const processedCommandIdsRef = useRef<Set<string>>(new Set())
 
-  const invalidateServer = () => {
+  const invalidateServer = useCallback(() => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
-  }
+  }, [queryClient, orgId, serverId])
 
   const patchCommand = (patch: Partial<ServerCommandState>) => {
     setCommandState((prev) => ({ ...prev, ...patch }))
@@ -627,12 +628,15 @@ export function ServerDetailSection({
     (item) => item.kind === 'systemRestart',
   )
 
-  const invalidateSystemContainers = (environmentId: string | undefined) => {
-    if (!environmentId) return
-    void queryClient.invalidateQueries({
-      queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
-    })
-  }
+  const invalidateSystemContainers = useCallback(
+    (environmentId: string | undefined) => {
+      if (!environmentId) return
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
+      })
+    },
+    [queryClient, orgId],
+  )
 
   useEffect(() => {
     const records = commandsQuery.data
@@ -659,7 +663,7 @@ export function ServerDetailSection({
       applyTerminalPollSuccess(entry, record, pollHandlers)
       setPollCommands((prev) => removePollCommandById(prev, entry.commandId))
     }
-  }, [commandsQuery.data, pollCommands, serverId])
+  }, [commandsQuery.data, pollCommands, serverId, invalidateServer, invalidateSystemContainers])
 
   useEffect(() => {
     if (!commandsQuery.error || pollCommands.length === 0) return
@@ -678,7 +682,12 @@ export function ServerDetailSection({
       applyPollFailure(entry, commandsQuery.error, pollHandlers)
     }
     setPollCommands([])
-  }, [commandsQuery.error, pollCommands])
+  }, [
+    commandsQuery.error,
+    pollCommands,
+    invalidateServer,
+    invalidateSystemContainers,
+  ])
 
   const setTab = (tabId: ServerDetailTabId) => {
     router.setParams({ tab: tabId })

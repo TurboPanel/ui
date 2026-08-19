@@ -26,6 +26,7 @@ import type {
 } from '@/lib/managed-services'
 import { managedErrorMessage } from '@/lib/managed-services'
 import { projectServiceHref } from '@/lib/project-navigation'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   useCreateBinding,
   useDeleteBinding,
@@ -536,8 +537,8 @@ export function ManagedBindingsPanel({
     null,
   )
 
-  const bindings = bindingsQuery.data?.bindings ?? []
-  const environments = environmentsQuery.data?.environments ?? []
+  const bindings = orEmptyArray(bindingsQuery.data?.bindings)
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
   const envProjectById = useMemo(() => {
     const map = new Map<string, string>()
     for (const env of environments) {

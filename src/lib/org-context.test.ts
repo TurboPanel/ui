@@ -1,13 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/control-plane', () => ({
-  isRemoteCookieClient: vi.fn(() => false),
-}))
-
-vi.mock('@/lib/control-plane-accounts', () => ({
-  rememberSignedInAccount: vi.fn(),
-}))
-
 import { isRemoteCookieClient } from '@/lib/control-plane'
 import { rememberSignedInAccount } from '@/lib/control-plane-accounts'
 import {
@@ -19,6 +11,14 @@ import {
   setActiveOrganizationId,
   setStoredOrganizationId,
 } from '@/lib/org-context'
+
+vi.mock('@/lib/control-plane', () => ({
+  isRemoteCookieClient: vi.fn(() => false),
+}))
+
+vi.mock('@/lib/control-plane-accounts', () => ({
+  rememberSignedInAccount: vi.fn(),
+}))
 
 function createLocalStorage() {
   const memory = new Map<string, string>()

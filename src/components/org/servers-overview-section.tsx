@@ -42,6 +42,7 @@ import {
   useOrgServers,
   useServersUpdateStatus,
 } from '@/lib/queries/servers'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import {
@@ -1045,7 +1046,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     setStoredServersLayout(next)
   }
 
-  const servers = serversQuery.data?.servers ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const pendingKeyCount = unboundPendingKeys(
     licensesQuery.data?.licenses ?? [],
   ).length

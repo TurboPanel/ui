@@ -10,6 +10,8 @@ import {
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
+import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
+
 export type ManagedServiceEngine =
   | 'postgres'
   | 'mysql'
@@ -27,8 +29,6 @@ export type ManagedStatus =
   | 'ready'
   | 'stopped'
   | 'failed'
-
-import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
 
 /** @deprecated Use {@link ManagedSqlAccessScope} — legacy alias for one-release reads. */
 export type ManagedBindScope = ManagedSqlAccessScope

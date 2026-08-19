@@ -49,6 +49,7 @@ import {
   networkFabricHref,
   serversDatacentersHref,
 } from '@/lib/org-navigation'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import {
   serverConnectionStatusLabel,
@@ -1372,7 +1373,7 @@ export function DatacenterDetailSection({
   const datacentersQuery = useDatacenters(orgId)
 
   const relays = fabricQuery.data?.relays ?? []
-  const allDatacenters = datacentersQuery.data?.datacenters ?? []
+  const allDatacenters = orEmptyArray(datacentersQuery.data?.datacenters)
 
   const addMembersMutation = useAddDatacenterMembers(orgId, datacenterId)
   const removeMemberMutation = useRemoveDatacenterMember(orgId, datacenterId)
@@ -1385,7 +1386,7 @@ export function DatacenterDetailSection({
   const datacenter: DatacenterDetailRecord | undefined =
     datacenterQuery.data?.datacenter
   const members = datacenterQuery.data?.members ?? []
-  const servers = serversQuery.data?.servers ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const subnets = applySubnetLabelDrafts(
     datacenter?.subnets ?? [],
     subnetLabelDrafts,

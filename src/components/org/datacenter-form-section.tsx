@@ -26,6 +26,7 @@ import {
   resolveDatacenterAddEligibility,
 } from '@/lib/datacenter-list'
 import { datacenterHref, serversDatacentersHref } from '@/lib/org-navigation'
+import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   useCreateDatacenter,
   useDatacenterNameSuggestions,
@@ -309,7 +310,7 @@ export function DatacenterFormSection({
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const serversQuery = useOrgServers(orgId)
-  const servers = serversQuery.data?.servers ?? []
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const eligibleServers = useMemo(() => {
     const rows = listServersWithReportedPrivateNetworks(servers)
     return [...rows].sort((a, b) =>
