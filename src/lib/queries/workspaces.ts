@@ -8,7 +8,7 @@ import {
   updateWorkspace,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
-import { findSystemWorkspace } from '@/lib/system-inventory'
+import { findTurbopanelWorkspace } from '@/lib/system-inventory'
 
 export function useWorkspaces(
   orgId: string,
@@ -25,7 +25,7 @@ export function useWorkspaces(
 export function useSystemWorkspace(orgId: string) {
   const query = useWorkspaces(orgId)
   const systemWorkspace = useMemo(
-    () => findSystemWorkspace(query.data?.workspaces ?? []),
+    () => findTurbopanelWorkspace(query.data?.workspaces ?? []),
     [query.data?.workspaces],
   )
   return { ...query, systemWorkspace }

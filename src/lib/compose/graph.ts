@@ -90,6 +90,19 @@ function serviceVolumeSources(
   return sources
 }
 
+function composePortField(value: unknown): string {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  return ''
+}
+
 function servicePorts(service: Record<string, unknown>): string[] {
   const value = service.ports
   if (!Array.isArray(value)) return []
@@ -98,10 +111,10 @@ function servicePorts(service: Record<string, unknown>): string[] {
     if (typeof entry === 'string') {
       out.push(entry)
     } else if (isPlainObjectMap(entry) && entry.target != null) {
+      const target = composePortField(entry.target)
+      const published = composePortField(entry.published)
       out.push(
-        entry.published != null
-          ? `${entry.published}:${entry.target}`
-          : `${entry.target}`,
+        published.length > 0 ? `${published}:${target}` : target,
       )
     }
   }

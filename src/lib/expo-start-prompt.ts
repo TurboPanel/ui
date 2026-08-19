@@ -54,5 +54,13 @@ export function upsertControlPlaneEnvLine(
     }
     next.push(line)
   }
-  return `${next.join('\n').replace(/\n+$/, '\n')}`
+  return `${trimTrailingNewlines(next.join('\n'))}\n`
+}
+
+function trimTrailingNewlines(text: string): string {
+  let end = text.length
+  while (end > 0 && text.charCodeAt(end - 1) === 10) {
+    end -= 1
+  }
+  return text.slice(0, end)
 }

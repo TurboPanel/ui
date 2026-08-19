@@ -16,8 +16,8 @@ import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import {
-  isSystemProject,
-  isSystemWorkspace,
+  isTurbopanelProject,
+  isTurbopanelWorkspace,
 } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
@@ -174,7 +174,7 @@ export function ProjectsOverviewSection({
   const scopeLabel = workspaceScope?.scope.label
   const scopeWorkspace = workspaceScope?.scope.workspace
   const isSystemScope =
-    scopeWorkspace != null && isSystemWorkspace(scopeWorkspace)
+    scopeWorkspace != null && isTurbopanelWorkspace(scopeWorkspace)
 
   const projectsQuery = useProjects(orgId, scopedWorkspaceId)
   const needsWorkspaceNames =
@@ -205,7 +205,7 @@ export function ProjectsOverviewSection({
     // All-workspaces scope hides platform infrastructure projects.
     if (scopeId === ALL_WORKSPACES_SCOPE) {
       return rawProjects.filter(
-        (project) => !isSystemProject(project, allWorkspaces),
+        (project) => !isTurbopanelProject(project, allWorkspaces),
       )
     }
     return rawProjects

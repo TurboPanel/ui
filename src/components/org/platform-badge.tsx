@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { SYSTEM_WORKSPACE_BADGE_LABEL } from '@/lib/system-inventory'
+import { TURBOPANEL_WORKSPACE_BADGE_LABEL } from '@/lib/system-inventory'
 
 function PlatformShieldIcon({
   size = 12,
@@ -27,7 +27,7 @@ function PlatformShieldIcon({
 
 /** SVG shield/gear + text label — never emoji. Driven by kind, not displayName. */
 export function PlatformBadge({
-  label = SYSTEM_WORKSPACE_BADGE_LABEL,
+  label = TURBOPANEL_WORKSPACE_BADGE_LABEL,
 }: Readonly<{ label?: string }>) {
   return (
     <View style={styles.badge} accessibilityRole="text">

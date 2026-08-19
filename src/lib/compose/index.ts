@@ -289,6 +289,19 @@ function portKeyString(key: PortKey): string {
   return `${key.hostIp}|${key.target}|${key.published}|${key.protocol}`
 }
 
+function portFieldString(value: unknown): string {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  return ''
+}
+
 /**
  * Parse short `[host_ip:][published:]target[/protocol]` or long-syntax mapping.
  */
@@ -300,14 +313,8 @@ function portUniqueKey(entry: unknown): string | null {
   const protocol =
     typeof entry.protocol === 'string' ? entry.protocol.toLowerCase() : 'tcp'
   const hostIp = typeof entry.host_ip === 'string' ? entry.host_ip : ''
-  const target =
-    entry.target === undefined || entry.target === null
-      ? ''
-      : String(entry.target)
-  const published =
-    entry.published === undefined || entry.published === null
-      ? ''
-      : String(entry.published)
+  const target = portFieldString(entry.target)
+  const published = portFieldString(entry.published)
   return portKeyString({ hostIp, target, published, protocol })
 }
 

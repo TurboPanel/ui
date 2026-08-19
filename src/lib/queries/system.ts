@@ -9,7 +9,7 @@ import { useServices } from '@/lib/queries/services'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import {
   findServerIngressEnvironment,
-  findSystemWorkspace,
+  findTurbopanelWorkspace,
   SYSTEM_HOSTING_INGRESS_COMPONENT,
   systemComponentKey,
 } from '@/lib/system-inventory'
@@ -25,7 +25,7 @@ export function useServerSystemIngress(orgId: string, serverId: string) {
     enabled: orgId.length > 0 && serverId.length > 0,
   })
   const systemWorkspace = useMemo(
-    () => findSystemWorkspace(workspacesQuery.data?.workspaces ?? []),
+    () => findTurbopanelWorkspace(workspacesQuery.data?.workspaces ?? []),
     [workspacesQuery.data?.workspaces],
   )
   const workspaceId = systemWorkspace?.id ?? null

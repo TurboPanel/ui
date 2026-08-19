@@ -32,7 +32,7 @@ import {
 import {
   isSystemOperateComponent,
   systemComponentLabel,
-  SYSTEM_WORKSPACE_DESCRIPTION,
+  TURBOPANEL_WORKSPACE_DESCRIPTION,
 } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
 
@@ -317,7 +317,7 @@ export function SystemProjectOverviewPanel() {
       <SectionPanel title="Platform component" hint="Read only">
         <View style={styles.badgeRow}>
           <PlatformBadge />
-          <Text style={orgPanelStyles.muted}>{SYSTEM_WORKSPACE_DESCRIPTION}</Text>
+          <Text style={orgPanelStyles.muted}>{TURBOPANEL_WORKSPACE_DESCRIPTION}</Text>
         </View>
 
         <Text style={orgPanelStyles.detailLine}>

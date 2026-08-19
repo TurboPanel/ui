@@ -15,8 +15,8 @@ import { WORKSPACE_HAS_CHILDREN_ERROR } from '@/lib/instance-api'
 import { useCreateWorkspace, useDeleteWorkspace, useWorkspaces } from '@/lib/queries'
 import { useCan } from '@/lib/query-client'
 import {
-  isSystemWorkspace,
-  SYSTEM_WORKSPACE_DESCRIPTION,
+  isTurbopanelWorkspace,
+  TURBOPANEL_WORKSPACE_DESCRIPTION,
   userWorkspaces,
 } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
@@ -29,6 +29,19 @@ const CREATE_WORKSPACE_NOTES = [
   'You can create as many workspaces as you want.',
   'Projects can be moved between workspaces at any time.',
 ] as const
+
+function workspaceDescriptionText(
+  system: boolean,
+  description: string | null | undefined,
+): string | null {
+  if (system) {
+    return TURBOPANEL_WORKSPACE_DESCRIPTION
+  }
+  if (description) {
+    return description
+  }
+  return null
+}
 
 export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
@@ -119,7 +132,8 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     workspaceListContent = (
       <View style={styles.list}>
         {workspaces.map((ws) => {
-          const system = isSystemWorkspace(ws)
+          const system = isTurbopanelWorkspace(ws)
+          const descriptionLine = workspaceDescriptionText(system, ws.description)
           return (
             <View key={ws.id} style={orgPanelStyles.detailCard}>
               <View style={styles.cardHeader}>
@@ -159,12 +173,8 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
                   </View>
                 ) : null}
               </View>
-              {system ? (
-                <Text style={orgPanelStyles.detailLine}>
-                  {SYSTEM_WORKSPACE_DESCRIPTION}
-                </Text>
-              ) : ws.description ? (
-                <Text style={orgPanelStyles.detailLine}>{ws.description}</Text>
+              {descriptionLine ? (
+                <Text style={orgPanelStyles.detailLine}>{descriptionLine}</Text>
               ) : null}
               <Text style={orgPanelStyles.detailLine}>
                 <Text style={orgPanelStyles.detailLabel}>Created: </Text>

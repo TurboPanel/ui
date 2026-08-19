@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
-import { SYSTEM_WORKSPACE_DESCRIPTION } from '@/lib/system-inventory'
+import { TURBOPANEL_WORKSPACE_DESCRIPTION } from '@/lib/system-inventory'
 
 /**
  * Shared read-only notice for URL-reachable system-managed surfaces.
@@ -9,7 +9,7 @@ import { SYSTEM_WORKSPACE_DESCRIPTION } from '@/lib/system-inventory'
  */
 export function SystemManagedNotice({
   title = 'Platform managed',
-  description = SYSTEM_WORKSPACE_DESCRIPTION,
+  description = TURBOPANEL_WORKSPACE_DESCRIPTION,
   onBack,
   backLabel = 'Back',
 }: Readonly<{
