@@ -29,6 +29,15 @@ describe('parseServerLabelRows', () => {
   it('rejects keys that do not match the Docker engine-label charset', () => {
     const parsed = parseServerLabelRows([row('1', '-nope', 'x')])
     expect(parsed.ok).toBe(false)
+    if (parsed.ok) throw new TypeError('expected invalid key failure')
+    expect(parsed.error).toContain('invalid')
+  })
+
+  it('rejects keys over the max length', () => {
+    const parsed = parseServerLabelRows([
+      row('1', `k${'a'.repeat(255)}`, 'v'),
+    ])
+    expect(parsed.ok).toBe(false)
   })
 
   it('rejects empty keys when a value is set', () => {
@@ -87,6 +96,7 @@ describe('serverLabelsEqual', () => {
   it('compares maps by key regardless of insertion order', () => {
     expect(serverLabelsEqual({ a: '1', b: '2' }, { b: '2', a: '1' })).toBe(true)
     expect(serverLabelsEqual({ a: '1' }, { a: '2' })).toBe(false)
+    expect(serverLabelsEqual({ a: '1' }, { a: '1', b: '2' })).toBe(false)
   })
 })
 

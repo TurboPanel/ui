@@ -126,6 +126,26 @@ describe('resolveReplicaEligibility', () => {
     })
   })
 
+  it('predicts local transport when the candidate is the primary host', () => {
+    const result = eligibility({
+      servers: [
+        {
+          id: 'srv-primary',
+          connected: true,
+          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+        },
+      ],
+      members: [],
+      primaryServerId: 'srv-primary',
+    })
+    expect(result.servers[0]).toEqual({
+      serverId: 'srv-primary',
+      eligible: true,
+      candidateDatacenterId: 'dc-1',
+      predictedTransport: 'local',
+    })
+  })
+
   it('treats a datacenter with two private CIDRs as eligible', () => {
     const result = eligibility({
       datacenters: [
@@ -273,16 +293,38 @@ describe('resolveReplicaEligibility', () => {
       'offline',
     )
   })
-})
 
-describe('replicaIneligibleReasonLabel', () => {
-  it('rewrites no-private-cidr as a subnet empty state', () => {
-    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe(
-      'Datacenter has no subnets yet',
+  it('handles a primary server id that is missing from the fleet list', () => {
+    const result = eligibility({
+      primaryServerId: 'srv-missing',
+      members: [],
+    })
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe(
+      'no-datacenter',
     )
   })
 
-  it('explains failover no-private-path as a shared-datacenter requirement', () => {
+  it('treats a null primary as having no datacenter pins', () => {
+    const result = eligibility({
+      primaryServerId: null,
+      members: [],
+    })
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe(
+      'no-datacenter',
+    )
+  })
+})
+
+describe('replicaIneligibleReasonLabel', () => {
+  it('labels every ineligible reason', () => {
+    expect(replicaIneligibleReasonLabel('already-member')).toBe('Already a member')
+    expect(replicaIneligibleReasonLabel('offline')).toBe('Offline')
+    expect(replicaIneligibleReasonLabel('no-datacenter')).toBe(
+      'Not assigned to a datacenter',
+    )
+    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe(
+      'Datacenter has no subnets yet',
+    )
     expect(replicaIneligibleReasonLabel('no-private-path')).toBe(
       "Must share the primary's datacenter",
     )
@@ -334,6 +376,18 @@ describe('predictReplicaTransport', () => {
 })
 
 describe('hasPrivatePathToPrimary', () => {
+  it('treats the primary host as reachable from itself', () => {
+    expect(
+      hasPrivatePathToPrimary({
+        candidateServerId: 'srv-p',
+        candidateDatacenterIds: [],
+        primaryServerId: 'srv-p',
+        primaryDatacenterIds: ['dc-1'],
+        fabricRelays: [],
+      }),
+    ).toBe(true)
+  })
+
   it('allows same-site candidates without fabric relays', () => {
     expect(
       hasPrivatePathToPrimary({

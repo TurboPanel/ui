@@ -7,7 +7,12 @@ import {
   fixComposeYamlIndentation,
   formatComposeYamlOnLineChange,
   indentAfterNewline,
+  isFullLineComment,
+  leadingWhitespace,
+  lineIndexAtOffset,
   lineOpensBlock,
+  mapOffsetThroughPerLineTrim,
+  parseYamlMappingKey,
   trimTrailingWhitespacePerLine,
   YAML_INDENT,
 } from './yaml-indent'
@@ -317,6 +322,34 @@ another:
   })
 })
 
+describe('yaml-indent helpers', () => {
+  it('leadingWhitespace returns spaces and tabs only', () => {
+    expect(leadingWhitespace('  \tkey: value')).toBe('  \t')
+    expect(leadingWhitespace('key:')).toBe('')
+  })
+
+  it('parseYamlMappingKey ignores inline comments and reads mapping keys', () => {
+    expect(parseYamlMappingKey('  services: # top')).toBe('services')
+    expect(parseYamlMappingKey('  image: nginx')).toBe('image')
+    expect(parseYamlMappingKey(': bad')).toBeNull()
+    expect(parseYamlMappingKey('  # only comment')).toBeNull()
+  })
+
+  it('isFullLineComment detects indented comments', () => {
+    expect(isFullLineComment('  # nested')).toBe(true)
+    expect(isFullLineComment('image: nginx # inline')).toBe(false)
+  })
+
+  it('lineIndexAtOffset and mapOffsetThroughPerLineTrim track caret moves', () => {
+    const text = 'services:  \n  nginx:\n'
+    expect(lineIndexAtOffset(text, 0)).toBe(0)
+    expect(lineIndexAtOffset(text, text.length)).toBe(2)
+    const trimmed = trimTrailingWhitespacePerLine(text)
+    expect(mapOffsetThroughPerLineTrim(text, trimmed, 11)).toBe(9)
+    expect(mapOffsetThroughPerLineTrim(text, trimmed, text.length)).toBe(trimmed.length)
+  })
+})
+
 describe('applyTabIndent / applyTabOutdent', () => {
   it('inserts two spaces at the caret', () => {
     expect(applyTabIndent('nginx:', { start: 0, end: 0 })).toEqual({
@@ -332,6 +365,13 @@ describe('applyTabIndent / applyTabOutdent', () => {
     })
   })
 
+  it('inserts spaces at the caret when past leading whitespace', () => {
+    const text = 'image: nginx'
+    const result = applyTabIndent(text, { start: 6, end: 6 })
+    expect(result.text).toBe('image:   nginx')
+    expect(result.selection).toEqual({ start: 8, end: 8 })
+  })
+
   it('indents every selected line', () => {
     const text = 'services:\nnginx:\nimage: nginx\n'
     const result = applyTabIndent(text, { start: 10, end: 28 })
@@ -343,5 +383,29 @@ describe('applyTabIndent / applyTabOutdent', () => {
       text: 'nginx:',
       selection: { start: 2, end: 2 },
     })
+  })
+
+  it('outdents tab- or single-space-indented lines and multi-line selections', () => {
+    expect(applyTabOutdent('\tnginx:', { start: 2, end: 2 })).toEqual({
+      text: 'nginx:',
+      selection: { start: 1, end: 1 },
+    })
+    expect(applyTabOutdent(' nginx:', { start: 2, end: 2 })).toEqual({
+      text: 'nginx:',
+      selection: { start: 1, end: 1 },
+    })
+    const text = 'services:\n  nginx:\n  image: nginx\n'
+    const result = applyTabOutdent(text, { start: 10, end: 28 })
+    expect(result.text).toBe('services:\nnginx:\nimage: nginx\n')
+  })
+
+  it('canFixComposeYamlIndentation mirrors fixComposeYamlIndentation', () => {
+    const broken = `services:
+nginx:
+  image: nginx`
+    expect(canFixComposeYamlIndentation(broken)).toBe(true)
+    expect(canFixComposeYamlIndentation('services:\n  nginx:\n    image: nginx')).toBe(
+      false,
+    )
   })
 })

@@ -222,6 +222,17 @@ services:
     expect(issues.some((issue) => issue.path === 'services' && issue.level === 'error')).toBe(true)
   })
 
+  it('errors when the document root is not a mapping', () => {
+    const issues = lintComposeYaml('- not-a-map\n')
+    expect(issues).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: '$',
+        message: 'Compose file root must be a mapping',
+      }),
+    ])
+  })
+
   it('warns when there are no services', () => {
     const source = `networks:
   default: {}

@@ -121,6 +121,39 @@ describe('formatSiteLinkLabel', () => {
       ),
     ).toBe('Unassigned hosts')
   })
+
+  it('labels an empty mesh with no peers', () => {
+    expect(
+      formatSiteLinkLabel(
+        { datacenterIds: [], hasUnassignedPeers: false },
+        names,
+      ),
+    ).toBe('No sites yet')
+  })
+
+  it('labels a single site alone or with unassigned peers', () => {
+    expect(
+      formatSiteLinkLabel(
+        { datacenterIds: ['dc-ams'], hasUnassignedPeers: false },
+        names,
+      ),
+    ).toBe('AMS')
+    expect(
+      formatSiteLinkLabel(
+        { datacenterIds: ['dc-ams'], hasUnassignedPeers: true },
+        names,
+      ),
+    ).toBe('AMS ↔ Unassigned hosts')
+  })
+
+  it('falls back to the datacenter id when a name is missing', () => {
+    expect(
+      formatSiteLinkLabel(
+        { datacenterIds: ['dc-unknown'], hasUnassignedPeers: false },
+        names,
+      ),
+    ).toBe('dc-unknown')
+  })
 })
 
 describe('meshLabelForSite', () => {
@@ -132,6 +165,19 @@ describe('meshLabelForSite', () => {
         new Map([['dc-ams', 'AMS']]),
       ),
     ).toBeNull()
+  })
+
+  it('returns the mesh label when the site participates', () => {
+    expect(
+      meshLabelForSite(
+        'dc-ams',
+        { datacenterIds: ['dc-ams', 'dc-fra'], hasUnassignedPeers: false },
+        new Map([
+          ['dc-ams', 'AMS'],
+          ['dc-fra', 'FRA'],
+        ]),
+      ),
+    ).toBe('AMS ↔ FRA')
   })
 })
 
@@ -337,6 +383,27 @@ describe('buildFabricPathMatrix', () => {
     expect(rows[0]?.fromLabel).toBe('srv-unknown')
     expect(rows[0]?.toLabel).toBe('Server B')
   })
+
+  it('carries optional handshake timestamps on matrix rows', () => {
+    const rows = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-a',
+          role: 'member',
+          paths: [
+            {
+              peerServerId: 'srv-b',
+              selected: 'direct_lan',
+              lastHandshakeAt: '2026-08-19T12:00:00.000Z',
+              degraded: false,
+            },
+          ],
+        }),
+      ],
+      names,
+    )
+    expect(rows[0]?.lastHandshakeAt).toBe('2026-08-19T12:00:00.000Z')
+  })
 })
 
 describe('fabricRoutedViaLabels', () => {
@@ -367,5 +434,23 @@ describe('fabricRoutedViaLabels', () => {
         new Map([['srv-gw', 'dc-gw-1']]),
       ),
     ).toEqual(['dc-gw-1'])
+  })
+
+  it('falls back to the raw server id when the via label is unknown', () => {
+    expect(
+      fabricRoutedViaLabels(
+        {
+          paths: [
+            {
+              peerServerId: 'srv-b',
+              selected: 'gateway',
+              viaServerId: 'srv-unknown-gw',
+              degraded: false,
+            },
+          ],
+        },
+        new Map(),
+      ),
+    ).toEqual(['srv-unknown-gw'])
   })
 })

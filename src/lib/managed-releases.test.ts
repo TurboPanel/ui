@@ -181,6 +181,18 @@ describe('display helpers', () => {
     expect(managedSeriesLabel(postgresOlder!)).toBe('17')
   })
 
+  it('flags legacy series in the picker', () => {
+    expect(
+      managedSeriesLabel({
+        engine: 'postgres',
+        series: '14',
+        lifecycle: 'legacy',
+        isDefault: false,
+        variants: [],
+      }),
+    ).toBe('14 (legacy)')
+  })
+
   it('summarizes a running release for the status header', () => {
     expect(
       managedReleaseSummary('PostgreSQL', { series: '18', variantId: 'alpine' }),
@@ -189,5 +201,8 @@ describe('display helpers', () => {
       '9.7 · Debian',
     )
     expect(managedReleaseSummary('PostgreSQL', null)).toBeNull()
+    expect(
+      managedReleaseSummary('PostgreSQL', { series: '18', variantId: 'unknown' }),
+    ).toBe('PostgreSQL 18')
   })
 })

@@ -68,4 +68,17 @@ describe('formatComposeSummaryChips', () => {
       formatComposeSummaryChips({ services: 0, networks: 0, volumes: 0 }),
     ).toEqual([])
   })
+
+  it('includes volume chips when volumes are present', () => {
+    expect(
+      formatComposeSummaryChips({ services: 0, networks: 0, volumes: 1 }),
+    ).toEqual([{ key: 'volumes', label: '1 volume' }])
+    expect(
+      formatComposeSummaryChips({ services: 2, networks: 1, volumes: 3 }),
+    ).toEqual([
+      { key: 'services', label: '2 services' },
+      { key: 'networks', label: '1 network' },
+      { key: 'volumes', label: '3 volumes' },
+    ])
+  })
 })

@@ -18,10 +18,19 @@ describe('shouldPromptForControlPlane', () => {
       }),
     ).toBe(false)
     expect(
+      shouldPromptForControlPlane({
+        isTty: true,
+        controlPlaneUrl: '   ',
+      }),
+    ).toBe(true)
+    expect(
       shouldPromptForControlPlane({ isTty: true, skipPrompt: '1' }),
     ).toBe(false)
     expect(
       shouldPromptForControlPlane({ isTty: true, ci: 'true' }),
+    ).toBe(false)
+    expect(
+      shouldPromptForControlPlane({ isTty: true, ci: '1' }),
     ).toBe(false)
     expect(
       shouldPromptForControlPlane({ isTty: false }),
@@ -35,11 +44,29 @@ describe('parseExpoStartOrigin', () => {
       ok: true,
       origin: EXPO_START_DEFAULT_ORIGIN,
     })
+    expect(parseExpoStartOrigin('   ')).toEqual({
+      ok: true,
+      origin: EXPO_START_DEFAULT_ORIGIN,
+    })
     expect(parseExpoStartOrigin('http://203.0.113.20:8880/')).toEqual({
       ok: true,
       origin: 'http://203.0.113.20:8880',
     })
-    expect(parseExpoStartOrigin('ftp://x').ok).toBe(false)
+    expect(parseExpoStartOrigin('not-a-url')).toEqual({
+      ok: false,
+      error: 'Enter a valid http(s) URL',
+    })
+    expect(parseExpoStartOrigin('ftp://x')).toEqual({
+      ok: false,
+      error: 'URL must start with http:// or https://',
+    })
+  })
+
+  it('honors a custom fallback origin', () => {
+    expect(parseExpoStartOrigin('', 'https://panel.example')).toEqual({
+      ok: true,
+      origin: 'https://panel.example',
+    })
   })
 })
 
@@ -54,5 +81,11 @@ describe('upsertControlPlaneEnvLine', () => {
         'https://new.example',
       ),
     ).toBe('FOO=1\nEXPO_PUBLIC_CONTROL_PLANE_URL=https://new.example\n')
+  })
+
+  it('appends a trailing blank line before a new key', () => {
+    expect(
+      upsertControlPlaneEnvLine('FOO=1', EXPO_START_DEFAULT_ORIGIN),
+    ).toBe(`FOO=1\n\nEXPO_PUBLIC_CONTROL_PLANE_URL=${EXPO_START_DEFAULT_ORIGIN}\n`)
   })
 })

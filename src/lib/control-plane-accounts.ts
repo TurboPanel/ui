@@ -203,12 +203,13 @@ export function configureControlPlaneStorageForTests(
 
 export function resetControlPlaneStoreForTests(
   next: ControlPlaneStoreState = emptyState,
+  options?: Readonly<{ hydrated?: boolean }>,
 ): void {
   state = {
     accounts: [...next.accounts],
     activeOrigin: next.activeOrigin,
   }
-  hydrated = true
+  hydrated = options?.hydrated ?? true
   memoryBag.value = null
   emit()
 }

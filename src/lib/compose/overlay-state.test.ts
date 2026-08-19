@@ -47,4 +47,18 @@ describe('resolveComposeOverlayState', () => {
     expect(state.overriddenKeys).toEqual(['networks', 'services'])
     expect(state.serviceNames).toEqual(['web'])
   })
+
+  it('returns no service names when services is not a mapping', () => {
+    const state = resolveComposeOverlayState({
+      version: 1,
+      data: {
+        services: 'invalid',
+        networks: { front: {} },
+      },
+      presentation: { keyOrder: ['services', 'networks'], comments: {} },
+    })
+    expect(state.blank).toBe(false)
+    expect(state.serviceNames).toEqual([])
+    expect(state.overriddenKeys).toEqual(['networks', 'services'])
+  })
 })

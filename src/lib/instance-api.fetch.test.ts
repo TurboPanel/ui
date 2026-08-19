@@ -5,7 +5,9 @@ import {
   bootstrapInstall,
   checkPermission,
   completeInstall,
+  createBinding,
   createEnvironment,
+  createLicense,
   createOrganization,
   createProject,
   createVariable,
@@ -17,6 +19,7 @@ import {
   deleteVariable,
   deleteWorkspace,
   fetchAccessGrants,
+  fetchBindings,
   fetchCommand,
   fetchContainers,
   fetchDatacenterNameSuggestions,
@@ -26,6 +29,7 @@ import {
   fetchLicenses,
   fetchOrgHostDefaults,
   fetchOrganization,
+  fetchOrganizationCa,
   fetchOrganizations,
   fetchPermissions,
   fetchProject,
@@ -612,5 +616,58 @@ describe('instance-api fetch wrappers', () => {
     await expect(deleteProject('p1')).rejects.toThrow(
       PROJECT_HAS_RUNNING_SERVICES_ERROR,
     )
+  })
+
+  it('createLicense sends optional displayName and installBaseUrl', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        licenseId: 'lic-1',
+        licenseToken: 'tok',
+        installCommand: 'curl | sh',
+      }),
+    )
+    await expect(
+      createLicense('Huey', ' https://panel.example/ '),
+    ).resolves.toMatchObject({ licenseId: 'lic-1' })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).method).toBe('POST')
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      displayName: 'Huey',
+      installBaseUrl: 'https://panel.example/',
+    })
+  })
+
+  it('fetchBindings and createBinding proxy binding routes', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ bindings: [] }))
+    await expect(fetchBindings({ serviceId: 'svc-1' })).resolves.toEqual({
+      bindings: [],
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('serviceId=svc-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'bind-1' }))
+    await expect(
+      createBinding({
+        principalId: 'principal-1',
+        serviceId: 'svc-1',
+        databaseName: 'app',
+        keyPrefix: 'APP_DB',
+      }),
+    ).resolves.toEqual({ ok: true, id: 'bind-1' })
+  })
+
+  it('fetchOrganizationCa proxies the org CA route', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        tls: {
+          id: 'tls-1',
+          source: 'self_signed',
+          certificatePem: '-----BEGIN CERTIFICATE-----\n',
+        },
+      }),
+    )
+    await expect(fetchOrganizationCa()).resolves.toMatchObject({
+      tls: { id: 'tls-1' },
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tls/ca')
   })
 })

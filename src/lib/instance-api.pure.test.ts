@@ -9,6 +9,8 @@ import {
   createLicense,
   deleteServer,
   deployEnvironment,
+  downloadOrganizationCaPem,
+  fetchBindings,
   fetchDatacenter,
   fetchHealth,
   fetchInstallStatus,
@@ -116,6 +118,39 @@ describe('toRelayRecord', () => {
     expect(record.transferTxBytes).toBeUndefined()
     expect(record.lastHandshakeAt).toBeNull()
     expect(record.hasPresharedKey).toBe(false)
+  })
+
+  it('maps fabric relay wire fields onto RelayRecord', () => {
+    const record = toRelayRecord(
+      wireRow({
+        advertisedCidrs: ['10.0.0.0/24'],
+        resolvedAdvertisedCidrs: ['10.0.0.0/24'],
+        resolvedEndpoint: '203.0.113.10:51820',
+        segments: [{ name: 'seg-a', subnet: '10.10.0.0/24' }],
+        paths: [
+          {
+            peerServerId: 'srv-2',
+            selected: 'direct_lan',
+            endpoint: '192.0.2.5:51820',
+            latencyMs: 12,
+            degraded: false,
+          },
+        ],
+        allowRelay: false,
+        effectiveAllowRelay: false,
+        preferredGatewayIds: ['srv-9'],
+        gatewayEligible: true,
+      }),
+    )
+    expect(record.advertisedCidrs).toEqual(['10.0.0.0/24'])
+    expect(record.resolvedAdvertisedCidrs).toEqual(['10.0.0.0/24'])
+    expect(record.resolvedEndpoint).toBe('203.0.113.10:51820')
+    expect(record.segments).toEqual([{ name: 'seg-a', subnet: '10.10.0.0/24' }])
+    expect(record.paths).toHaveLength(1)
+    expect(record.allowRelay).toBe(false)
+    expect(record.effectiveAllowRelay).toBe(false)
+    expect(record.preferredGatewayIds).toEqual(['srv-9'])
+    expect(record.gatewayEligible).toBe(true)
   })
 })
 
@@ -545,5 +580,43 @@ describe('fetch wrappers (mocked fetch)', () => {
   it('apiFetch keeps status detail when error body is not JSON', async () => {
     fetchMock.mockResolvedValueOnce(textResponse('nope', 502))
     await expect(fetchHealth()).rejects.toThrow('/api/health failed: HTTP 502')
+  })
+
+  it('fetchBindings builds query params for each filter shape', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ bindings: [] }))
+    await fetchBindings({ serviceId: 'svc-1' })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('serviceId=svc-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ bindings: [] }))
+    await fetchBindings({ environmentId: 'env-1' })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('environmentId=env-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ bindings: [] }))
+    await fetchBindings({ managedEnvironmentId: 'env-managed' })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      'managedEnvironmentId=env-managed',
+    )
+  })
+
+  it('downloadOrganizationCaPem returns PEM text and maps JSON errors', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n', {
+        status: 200,
+        headers: { 'content-type': 'application/x-pem-file' },
+      }),
+    )
+    await expect(downloadOrganizationCaPem()).resolves.toContain('BEGIN CERTIFICATE')
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'forbidden' }, 403),
+    )
+    await expect(downloadOrganizationCaPem()).rejects.toThrow(
+      '/api/client/v1/tls/ca/download failed: HTTP 403: forbidden',
+    )
+
+    fetchMock.mockResolvedValueOnce(textResponse('bad gateway', 502))
+    await expect(downloadOrganizationCaPem()).rejects.toThrow(
+      '/api/client/v1/tls/ca/download failed: HTTP 502',
+    )
   })
 })

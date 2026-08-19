@@ -4,11 +4,14 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 import {
+  useCompleteInstall,
   useCreateOrganization,
   useInstallStatusQuery,
   useOrganizationsQuery,
   useSessionQuery,
   useSignIn,
+  useSignOut,
+  useUpdateOrganization,
 } from '@/lib/queries/auth'
 
 const {
@@ -16,13 +19,19 @@ const {
   fetchInstallStatus,
   fetchOrganizations,
   signIn,
+  signOut,
   createOrganization,
+  updateOrganization,
+  completeInstall,
 } = vi.hoisted(() => ({
   fetchSession: vi.fn(),
   fetchInstallStatus: vi.fn(),
   fetchOrganizations: vi.fn(),
   signIn: vi.fn(),
+  signOut: vi.fn(),
   createOrganization: vi.fn(),
+  updateOrganization: vi.fn(),
+  completeInstall: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', () => ({
@@ -30,13 +39,13 @@ vi.mock('@/lib/instance-api', () => ({
   fetchInstallStatus,
   fetchOrganizations,
   signIn,
+  signOut,
   createOrganization,
-  updateOrganization: vi.fn(),
-  signOut: vi.fn(),
+  updateOrganization,
+  completeInstall,
   signUp: vi.fn(),
   verifyEmail: vi.fn(),
   bootstrapInstall: vi.fn(),
-  completeInstall: vi.fn(),
 }))
 
 vi.mock('@/lib/control-plane-accounts', () => ({
@@ -146,5 +155,84 @@ describe('auth query hooks', () => {
     await expect(
       result.current.run({ displayName: 'Beta' }),
     ).resolves.toMatchObject({ ok: true, value: { id: 'org-2' } })
+  })
+
+  it('useUpdateOrganization patches organizations cache', async () => {
+    updateOrganization.mockResolvedValueOnce({
+      ok: true,
+      organization: { id: 'org-1', displayName: 'Renamed', createdAt: 't' },
+    })
+    const client = createAppQueryClient()
+    client.setQueryData(['auth', 'organizations'], {
+      organizations: [{ id: 'org-1', displayName: 'Acme', createdAt: 't' }],
+    })
+
+    const { result } = renderHook(() => useUpdateOrganization(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ organizationId: 'org-1', displayName: 'Renamed' }),
+    ).resolves.toMatchObject({ ok: true })
+
+    await waitFor(() => {
+      const cached = client.getQueryData<{ organizations: { displayName: string }[] }>(
+        ['auth', 'organizations'],
+      )
+      expect(cached?.organizations[0]?.displayName).toBe('Renamed')
+    })
+  })
+
+  it('useSignOut clears the query client on success', async () => {
+    signOut.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    client.setQueryData(['auth', 'session'], {
+      userId: 'u1',
+      email: 'ops@example.com',
+      role: 'admin',
+    })
+
+    const { result } = renderHook(() => useSignOut(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(client.getQueryData(['auth', 'session'])).toBeUndefined()
+  })
+
+  it('useCompleteInstall clears install mode in status cache', async () => {
+    completeInstall.mockResolvedValueOnce({
+      userId: 'u1',
+      email: 'admin@example.com',
+      role: 'superadmin',
+      organizationId: 'org-install',
+    })
+    const client = createAppQueryClient()
+    client.setQueryData(['auth', 'status'], {
+      needsInstall: true,
+      isInstallMode: true,
+      isSignupEnabled: false,
+      runtime: 'deno',
+    })
+
+    const { result } = renderHook(() => useCompleteInstall(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run({
+      username: 'root',
+      password: 'secret',
+      email: 'admin@example.com',
+      superadminPassword: 'secret',
+    })).resolves.toMatchObject({ ok: true })
+
+    await waitFor(() => {
+      const status = client.getQueryData<{
+        needsInstall: boolean
+        isInstallMode: boolean
+      }>(['auth', 'status'])
+      expect(status?.needsInstall).toBe(false)
+      expect(status?.isInstallMode).toBe(false)
+    })
   })
 })

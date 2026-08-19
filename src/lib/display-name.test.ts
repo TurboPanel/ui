@@ -6,6 +6,7 @@ import {
   HEADER_ORG_NAME_MAX_CHARS,
   isDisplayNameTaken,
   normalizeDisplayName,
+  normalizeDisplayNameKey,
   truncateDisplayName,
   validateDescription,
   validateDisplayName,
@@ -96,8 +97,9 @@ describe('isDisplayNameTaken', () => {
 })
 
 describe('normalizeDisplayName / validateDescription / conflict copy', () => {
-  it('trims and NFC-normalizes display names', () => {
+  it('normalizes display names and keys', () => {
     expect(normalizeDisplayName('  Café  ')).toBe('Café')
+    expect(normalizeDisplayNameKey('  Café  ')).toBe('café')
   })
 
   it('validates optional descriptions by length and controls', () => {

@@ -136,6 +136,39 @@ describe('buildComposeGraph', () => {
     expect(web?.image).toBe('nginx:alpine')
     expect(web?.ports).toEqual(['8080:80'])
   })
+
+  it('formats long-syntax ports with numeric targets and target-only mappings', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          web: {
+            image: 'app',
+            ports: [
+              { target: 3000, published: 8080 },
+              { target: '5432' },
+            ],
+          },
+        },
+      }),
+    )
+    const web = graph.nodes.find((n) => n.id === 'service:web')
+    expect(web?.ports).toEqual(['8080:3000', '5432'])
+  })
+
+  it('reads service kind from x-turbopanel metadata', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          site: {
+            'x-turbopanel': { serviceKind: 'traditional-web', engine: 'nginx' },
+          },
+        },
+      }),
+    )
+    expect(graph.nodes.find((n) => n.id === 'service:site')?.serviceKind).toBe(
+      'traditional-web',
+    )
+  })
 })
 
 describe('describeComposeGraph', () => {

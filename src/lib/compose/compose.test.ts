@@ -573,3 +573,70 @@ describe('compose !reset / !override tag round-trip', () => {
     expect(composeTagOf(web2.ports)).toBe('override')
   })
 })
+
+describe('mergeComposeOverlay edge cases', () => {
+  function docFrom(data: Record<string, unknown>): ComposeDocument {
+    return {
+      version: 1,
+      data,
+      presentation: { keyOrder: Object.keys(data), comments: {} },
+    }
+  }
+
+  it('merges IPv6 host port syntax without duplicating published ports', () => {
+    const base = docFrom({
+      services: {
+        web: {
+          image: 'nginx',
+          ports: ['[::1]:8080:80/tcp'],
+        },
+      },
+    })
+    const overlay = docFrom({
+      services: {
+        web: {
+          ports: ['[::1]:8080:80/tcp', '3000:3000'],
+        },
+      },
+    })
+    const merged = mergeComposeOverlay(base, overlay)
+    const web = (merged.data.services as Record<string, Record<string, unknown>>).web
+    expect(web.ports).toEqual(['[::1]:8080:80/tcp', '3000:3000'])
+  })
+
+  it('drops overlay sequence comments when the overlay entry was deduplicated', () => {
+    const base: ComposeDocument = {
+      version: 1,
+      data: {
+        services: {
+          web: { image: 'nginx', expose: ['80'] },
+        },
+      },
+      presentation: {
+        keyOrder: ['services'],
+        comments: {
+          'services.web.expose[0]': { inline: 'base' },
+        },
+      },
+    }
+    const overlay: ComposeDocument = {
+      version: 1,
+      data: {
+        services: {
+          web: { expose: ['80', '443'] },
+        },
+      },
+      presentation: {
+        keyOrder: ['services'],
+        comments: {
+          'services.web.expose[0]': { inline: 'dup' },
+          'services.web.expose[1]': { inline: 'new' },
+        },
+      },
+    }
+    const merged = mergeComposeOverlay(base, overlay)
+    expect(merged.presentation.comments['services.web.expose[0]']?.inline).toBe('base')
+    expect(merged.presentation.comments['services.web.expose[1]']?.inline).toBe('new')
+    expect(merged.presentation.comments['services.web.expose[2]']).toBeUndefined()
+  })
+})

@@ -12,6 +12,8 @@ import {
   managedErrorMessage,
   managedIngressPortForEngine,
   managedRecoveryBanner,
+  managedRecoveryKindLabel,
+  managedRecoveryStateLabel,
   managedReplicaPromoteAction,
   managedStatusLabel,
   MEMBER_MANUAL_DR_CANDIDATE_LABEL,
@@ -25,6 +27,8 @@ import {
   shortBackupChecksum,
   sortManagedCatalogEntries,
   type ManagedMemberRecord,
+  type ManagedRecoveryKind,
+  type ManagedRecoveryState,
   type ManagedStatus,
 } from './managed-services'
 
@@ -146,6 +150,72 @@ describe('managedErrorMessage', () => {
     )
     expect(managedErrorMessage('not-an-error', 'use this')).toBe('use this')
     expect(managedErrorMessage(new Error(''), 'use this')).toBe('use this')
+  })
+
+  it('maps binding, placement, and recovery error codes', () => {
+    expect(
+      managedErrorMessage(new Error('HTTP 409: managed_user_has_bindings'), 'fallback'),
+    ).toBe('Still connected to one or more services. Remove those connections first.')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 409: managed_database_has_bindings'),
+        'fallback',
+      ),
+    ).toBe('Still connected to one or more services. Remove those connections first.')
+    expect(
+      managedErrorMessage(new Error('HTTP 409: binding_key_prefix_in_use'), 'fallback'),
+    ).toBe('This service already has a connection using that prefix — pick another.')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 409: binding_engine_defaults_in_use'),
+        'fallback',
+      ),
+    ).toContain('engine default keys')
+    expect(
+      managedErrorMessage(new Error('HTTP 409: binding_key_conflict'), 'fallback'),
+    ).toContain('variable key')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 422: binding_endpoint_unavailable'),
+        'fallback',
+      ),
+    ).toContain('No network path')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 500: binding_password_unavailable'),
+        'fallback',
+      ),
+    ).toContain('decrypt the database password')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 422: binding_engine_unsupported'),
+        'fallback',
+      ),
+    ).toContain('does not support service connections')
+    expect(
+      managedErrorMessage(new Error('HTTP 403: binding_owned_variable'), 'fallback'),
+    ).toContain('connected database')
+    expect(
+      managedErrorMessage(new Error('HTTP 404: database_not_found'), 'fallback'),
+    ).toBe('That database was not found on this cluster.')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 422: failover_replica_requires_datacenter_transport'),
+        'fallback',
+      ),
+    ).toContain('share a datacenter LAN')
+    expect(
+      managedErrorMessage(new Error('HTTP 422: datacenter_required'), 'fallback'),
+    ).toBe('That server is not assigned to a datacenter.')
+    expect(
+      managedErrorMessage(new Error('HTTP 422: private_family_mismatch'), 'fallback'),
+    ).toContain('address family')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 422: managed_primary_fence_failed'),
+        'fallback',
+      ),
+    ).toContain('promotion was aborted')
   })
 })
 
@@ -272,6 +342,27 @@ describe('replicationStateLabel / formatReplicationLag', () => {
         lagSeconds: 1.2,
       }),
     ).toBe('2 KB behind · 1.2s')
+    expect(
+      formatReplicationLag({
+        state: 'streaming',
+        observedAt: '2026-01-01T00:00:00.000Z',
+        lagBytes: Number.NaN,
+      }),
+    ).toBeNull()
+    expect(
+      formatReplicationLag({
+        state: 'streaming',
+        observedAt: '2026-01-01T00:00:00.000Z',
+        lagBytes: -1,
+      }),
+    ).toBe('— behind')
+    expect(
+      formatReplicationLag({
+        state: 'streaming',
+        observedAt: '2026-01-01T00:00:00.000Z',
+        lagBytes: 1024 * 1024 * 1024 * 1024,
+      }),
+    ).toBe('1 TB behind')
   })
 })
 
@@ -381,43 +472,138 @@ describe('managedReplicaPromoteAction', () => {
   })
 })
 
+function recoveryRecord(
+  partial: Partial<Parameters<typeof managedRecoveryBanner>[0]> &
+    Pick<
+      NonNullable<Parameters<typeof managedRecoveryBanner>[0]>,
+      'id' | 'kind' | 'state' | 'sourcePrimaryMemberId'
+    >,
+) {
+  return {
+    targetMemberId: null,
+    startedAt: '2026-08-19T00:00:00.000Z',
+    completedAt: null,
+    blockedReason: null,
+    lagBytes: null,
+    sourceDatacenterId: null,
+    targetDatacenterId: null,
+    sourceServerId: null,
+    targetServerId: null,
+    ...partial,
+  }
+}
+
+describe('managedRecoveryKindLabel / managedRecoveryStateLabel', () => {
+  it('labels every recovery kind', () => {
+    const kinds: ManagedRecoveryKind[] = [
+      'automatic-failover',
+      'switchover',
+      'disaster-recovery',
+    ]
+    expect(kinds.map(managedRecoveryKindLabel)).toEqual([
+      'Automatic failover',
+      'Switchover',
+      'Disaster recovery',
+    ])
+  })
+
+  it('labels every recovery state', () => {
+    const states: ManagedRecoveryState[] = [
+      'detecting',
+      'fencing',
+      'promoting',
+      'repointing',
+      'reconciling-ingress',
+      'verifying',
+      'completed',
+      'failed',
+      'blocked',
+    ]
+    expect(states.map(managedRecoveryStateLabel)).toEqual([
+      'Detecting',
+      'Fencing',
+      'Promoting',
+      'Repointing',
+      'Reconciling ingress',
+      'Verifying',
+      'Completed',
+      'Failed',
+      'Blocked',
+    ])
+  })
+})
+
 describe('managedRecoveryBanner', () => {
   it('hides completed recoveries and surfaces blocked copy', () => {
     expect(
-      managedRecoveryBanner({
-        id: 'r1',
-        kind: 'automatic-failover',
-        state: 'completed',
-        sourcePrimaryMemberId: 'p1',
-        targetMemberId: 't1',
-        startedAt: '2026-08-19T00:00:00.000Z',
-        completedAt: '2026-08-19T00:01:00.000Z',
-        blockedReason: null,
-        lagBytes: 0,
-        sourceDatacenterId: null,
-        targetDatacenterId: null,
-        sourceServerId: null,
-        targetServerId: null,
-      }),
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r1',
+          kind: 'automatic-failover',
+          state: 'completed',
+          sourcePrimaryMemberId: 'p1',
+          targetMemberId: 't1',
+          completedAt: '2026-08-19T00:01:00.000Z',
+        }),
+      ),
     ).toBeNull()
     expect(
-      managedRecoveryBanner({
-        id: 'r2',
-        kind: 'automatic-failover',
-        state: 'blocked',
-        sourcePrimaryMemberId: 'p1',
-        targetMemberId: null,
-        startedAt: '2026-08-19T00:00:00.000Z',
-        completedAt: null,
-        blockedReason: null,
-        lagBytes: null,
-        sourceDatacenterId: null,
-        targetDatacenterId: null,
-        sourceServerId: null,
-        targetServerId: null,
-      })?.text,
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r2',
+          kind: 'automatic-failover',
+          state: 'blocked',
+          sourcePrimaryMemberId: 'p1',
+        }),
+      )?.text,
     ).toBe(
       'Automatic failover blocked: unable to verify previous primary is fenced',
     )
+    expect(
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r3',
+          kind: 'switchover',
+          state: 'blocked',
+          sourcePrimaryMemberId: 'p1',
+          blockedReason: '  Primary still accepting writes  ',
+        }),
+      ),
+    ).toEqual({
+      kind: 'blocked',
+      text: 'Primary still accepting writes',
+    })
+  })
+
+  it('surfaces failed and in-flight recoveries', () => {
+    expect(
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r4',
+          kind: 'disaster-recovery',
+          state: 'failed',
+          sourcePrimaryMemberId: 'p1',
+        }),
+      ),
+    ).toEqual({
+      kind: 'failed',
+      text: 'Disaster recovery failed',
+    })
+    expect(
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r5',
+          kind: 'switchover',
+          state: 'promoting',
+          sourcePrimaryMemberId: 'p1',
+          targetMemberId: 't1',
+        }),
+      ),
+    ).toEqual({
+      kind: 'in-flight',
+      text: 'Switchover · Promoting',
+    })
+    expect(managedRecoveryBanner(null)).toBeNull()
+    expect(managedRecoveryBanner(undefined)).toBeNull()
   })
 })

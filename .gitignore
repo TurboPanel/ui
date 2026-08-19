@@ -63,6 +63,7 @@ certs/
 
 # Vitest coverage (`pnpm test:coverage` → coverage/lcov.info)
 coverage/
+coverage-test/
 
 example
 
