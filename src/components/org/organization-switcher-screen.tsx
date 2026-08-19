@@ -11,13 +11,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { CreateOrganizationModal } from '@/components/create-organization-modal'
+import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderUserAccountControl } from '@/components/header-account-controls'
 import { PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
-import { glass } from '@/lib/glass'
 import { getActiveOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
 import {
   defaultOrgDashboardHref,
@@ -112,20 +112,20 @@ export function OrganizationSwitcherScreen() {
 
   return (
     <View style={styles.safe}>
-      <View
+      <GlassSurface
         style={[
           styles.topBar,
           isNative ? { paddingTop: insets.top } : null,
         ]}
+        intensity="strong"
+        rim="bottom"
       >
-        <View style={styles.topBarRow}>
-          <TurboPanelLogo size={28} />
-          {session && userLabel ? (
-            <HeaderUserAccountControl email={userLabel} onSignOut={signOut} />
-          ) : null}
-        </View>
-        <View style={styles.hairline} pointerEvents="none" />
-      </View>
+        <TurboPanelLogo size={28} />
+        <View style={styles.topBarSpacer} />
+        {session && userLabel ? (
+          <HeaderUserAccountControl email={userLabel} onSignOut={signOut} />
+        ) : null}
+      </GlassSurface>
 
       <KeyboardAvoidingView
         style={styles.body}
@@ -188,19 +188,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   topBar: {
-    backgroundColor: glass.fillStrong,
-  },
-  topBarRow: {
+    borderRadius: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    minHeight: 44,
-    paddingBottom: 2,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+    zIndex: 5,
   },
-  hairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: glass.border,
+  topBarSpacer: {
+    flex: 1,
+    minWidth: 0,
   },
   body: {
     flex: 1,
