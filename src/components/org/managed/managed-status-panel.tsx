@@ -81,6 +81,7 @@ export function ManagedStatusPanel({
   port,
   containers,
   version,
+  lastError,
 }: Readonly<{
   orgId: string
   environmentId: string
@@ -90,6 +91,7 @@ export function ManagedStatusPanel({
   containers: ContainerRecord[]
   /** `PostgreSQL 18 · Alpine` from the release catalog; omitted when uncatalogued. */
   version?: string | null
+  lastError?: string | null
 }>) {
   const [tail, setTail] = useState<(typeof TAIL_OPTIONS)[number]>(200)
   const [logs, setLogs] = useState('')
@@ -134,6 +136,12 @@ export function ManagedStatusPanel({
           </Text>
         ) : null}
       </View>
+
+      {lastError ? (
+        <Text style={orgPanelStyles.error} accessibilityRole="alert">
+          {lastError}
+        </Text>
+      ) : null}
 
       <View style={styles.containerList}>
         {partitionContainersForDisplay(containers).map((container) => (

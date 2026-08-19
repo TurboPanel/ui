@@ -90,6 +90,18 @@ function ignorePromise(promise: Promise<unknown>): void {
   })
 }
 
+function resolveManagedLastError(
+  clusterStatus: string,
+  statusError: string | null | undefined,
+  metadata: Record<string, unknown>,
+): string | null {
+  if (clusterStatus !== 'failed') return null
+  const fromStatus = typeof statusError === 'string' ? statusError.trim() : ''
+  if (fromStatus) return fromStatus
+  const fromMeta = typeof metadata.error === 'string' ? metadata.error.trim() : ''
+  return fromMeta || null
+}
+
 type ManagedBodyFocus =
   | 'all'
   | 'overview'
@@ -473,6 +485,12 @@ function ManagedEnvironmentReadyPanels({
   const managedQuery = useEnvironmentManaged(orgId, environmentId)
 
   const status = statusQuery.data ?? null
+  const clusterStatus = status?.status ?? managed.status
+  const lastError = resolveManagedLastError(
+    clusterStatus,
+    status?.error,
+    managed.metadata ?? {},
+  )
   const users = usersQuery.data?.users ?? []
   const databases = databasesQuery.data?.databases ?? []
   const backups = backupsQuery.data?.backups ?? []
@@ -520,6 +538,7 @@ function ManagedEnvironmentReadyPanels({
           canManage={canManage}
           busy={inFlight}
           recovery={detail.recovery}
+          lastError={lastError}
           onRegisterCommand={registerCommand}
         />
       ) : null}
@@ -651,6 +670,7 @@ function ManagedEnvironmentReadyPanels({
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}
           containers={status?.containers ?? []}
+          lastError={lastError}
           version={managedReleaseSummary(
             managed.engine ? managedCatalogEntryForCode(managed.engine)?.label : null,
             detail.release

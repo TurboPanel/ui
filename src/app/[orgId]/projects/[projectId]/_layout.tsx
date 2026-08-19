@@ -1,9 +1,7 @@
 import { Slot, useLocalSearchParams, Redirect, type Href } from 'expo-router'
-import { ScrollView, StyleSheet } from 'react-native'
 import { ProjectProvider } from '@/components/org/project/project-context'
 import { ProjectShell } from '@/components/org/project/project-shell'
 import { organizationsHref } from '@/lib/org-navigation'
-import { colors } from '@/lib/theme'
 
 function firstParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? ''
@@ -24,26 +22,9 @@ export default function ProjectLayout() {
 
   return (
     <ProjectProvider orgId={resolvedOrgId} projectId={resolvedProjectId}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <ProjectShell>
-          <Slot />
-        </ProjectShell>
-      </ScrollView>
+      <ProjectShell>
+        <Slot />
+      </ProjectShell>
     </ProjectProvider>
   )
 }
-
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    flexGrow: 1,
-    paddingVertical: 12,
-  },
-})

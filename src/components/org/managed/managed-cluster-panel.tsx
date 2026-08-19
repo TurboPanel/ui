@@ -118,6 +118,7 @@ export function ManagedClusterPanel({
   managedDisplayName,
   canManage,
   busy,
+  lastError,
   onRegisterCommand,
 }: Readonly<{
   orgId: string
@@ -127,6 +128,7 @@ export function ManagedClusterPanel({
   managedDisplayName: string
   canManage: boolean
   busy: boolean
+  lastError?: string | null
   onRegisterCommand: (
     commandId: string,
     label: string,
@@ -386,6 +388,11 @@ export function ManagedClusterPanel({
       accent
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {lastError ? (
+        <Text style={orgPanelStyles.error} accessibilityRole="alert">
+          {lastError}
+        </Text>
+      ) : null}
       {recoveryBanner ? (
         <View
           style={orgPanelStyles.calloutWarning}

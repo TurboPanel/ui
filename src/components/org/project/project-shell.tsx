@@ -9,7 +9,6 @@ import {
   View,
   type TextStyle,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BreadcrumbChevron } from '@/components/header-chevron'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
@@ -334,7 +333,6 @@ function ProjectShellChrome({
 }
 
 export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
-  const insets = useSafeAreaInsets()
   const pathname = usePathname()
   const router = useRouter()
   const {
@@ -363,23 +361,18 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     !needsSetup &&
     activeTab !== 'setup'
 
-  const rootPadding = {
-    paddingBottom: Math.max(insets.bottom, spacing.md),
-    paddingTop: Platform.OS === 'web' ? 0 : Math.max(insets.top - 8, 0),
-  }
-
   // Hold the shell until the owning workspace kind is known so system projects
   // never briefly mount rename/trash/compose mutation chrome as user projects.
   if ((loading && !project) || (project != null && !isWorkspaceKindResolved)) {
     return (
-      <View style={[styles.root, { paddingBottom: insets.bottom }]}>
+      <View style={styles.root}>
         <Text style={orgPanelStyles.muted}>Loading project…</Text>
       </View>
     )
   }
 
   return (
-    <View style={[styles.root, rootPadding]}>
+    <View style={styles.root}>
       <ProjectHeader
         showManagedTrash={managed}
         deletingProject={deletingProject}

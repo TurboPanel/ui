@@ -3562,6 +3562,7 @@ export async function fetchManagedStatus(environmentId: string): Promise<{
   status: ManagedEnvironmentRecord['status']
   host: string | null
   port: number | null
+  error: string | null
   containers: ContainerRecord[]
   members: ManagedMemberRecord[]
 }> {

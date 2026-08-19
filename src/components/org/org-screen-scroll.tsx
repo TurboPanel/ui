@@ -40,6 +40,11 @@ export function OrgScreenScrollInsetsProvider({
 /**
  * Shell scroll + pull-to-refresh. Used as the org Stack `screenLayout` and
  * as each native tab-pager page.
+ *
+ * Keep `contentInsetAdjustmentBehavior="never"`: OrgHeader / OrgTabBar already
+ * own the safe-area insets. `automatic` on a pushed native-stack screen with
+ * `headerShown: false` still reserves ~status-bar + nav-bar space (~100pt)
+ * above the page title on iOS.
  */
 export function OrgScreenScroll({
   children,
@@ -77,7 +82,7 @@ export function OrgScreenScroll({
           ? null
           : { paddingBottom: insets.paddingBottom },
       ]}
-      contentInsetAdjustmentBehavior="automatic"
+      contentInsetAdjustmentBehavior="never"
       keyboardShouldPersistTaps="handled"
       refreshControl={refreshControl}
     >

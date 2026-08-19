@@ -102,6 +102,7 @@ describe('managed query hooks', () => {
       status: 'running',
       host: '127.0.0.1',
       port: 15432,
+      error: null,
       containers: [],
       members: [],
     })
