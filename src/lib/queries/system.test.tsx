@@ -1,12 +1,21 @@
 // @vitest-environment happy-dom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
+import { useContainers } from '@/lib/queries/containers'
+import { useEnvironments } from '@/lib/queries/environments'
+import { useProjects } from '@/lib/queries/projects'
+import { useServices } from '@/lib/queries/services'
 import {
   useRestartSystemComponent,
   useServerSystemIngress,
 } from '@/lib/queries/system'
+import { useWorkspaces } from '@/lib/queries/workspaces'
+import {
+  SYSTEM_HOSTING_INGRESS_COMPONENT,
+  TURBOPANEL_WORKSPACE_KIND,
+} from '@/lib/system-inventory'
 
 const { restartSystemComponent } = vi.hoisted(() => ({
   restartSystemComponent: vi.fn(),
@@ -35,14 +44,6 @@ vi.mock('@/lib/queries/services', () => ({
 vi.mock('@/lib/queries/containers', () => ({
   useContainers: vi.fn(),
 }))
-
-import { useWorkspaces } from '@/lib/queries/workspaces'
-import { useProjects } from '@/lib/queries/projects'
-import { useEnvironments } from '@/lib/queries/environments'
-import { useServices } from '@/lib/queries/services'
-import { useContainers } from '@/lib/queries/containers'
-import { TURBOPANEL_WORKSPACE_KIND } from '@/lib/system-inventory'
-import { SYSTEM_HOSTING_INGRESS_COMPONENT } from '@/lib/system-inventory'
 
 function createWrapper(client = createAppQueryClient()) {
   return function Wrapper({ children }: Readonly<{ children: React.ReactNode }>) {

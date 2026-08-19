@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import {
   HA_CONTROL_PLANE_ORIGIN,
   LOCAL_HTTPS_ORIGIN,
