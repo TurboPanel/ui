@@ -222,7 +222,7 @@ describe('auth query hooks', () => {
     await expect(result.current.run({
       username: 'root',
       password: 'secret',
-      email: 'admin@example.com',
+      superadminEmail: 'admin@example.com',
       superadminPassword: 'secret',
     })).resolves.toMatchObject({ ok: true })
 

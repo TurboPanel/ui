@@ -44,20 +44,30 @@ describe('compose tag sentinels', () => {
 
 describe('COMPOSE_CUSTOM_TAGS schema', () => {
   it('parses scalar, map, and sequence tag bodies', () => {
-    const scalar = COMPOSE_CUSTOM_TAGS.find((tag) => tag.tag === '!reset' && 'resolve' in tag && !('collection' in tag))
+    const scalar = COMPOSE_CUSTOM_TAGS.find(
+      (tag) => tag.tag === '!reset' && !('collection' in tag),
+    )
     const mapTag = COMPOSE_CUSTOM_TAGS.find(
       (tag) => tag.tag === '!override' && 'collection' in tag && tag.collection === 'map',
     )
     const seqTag = COMPOSE_CUSTOM_TAGS.find(
       (tag) => tag.tag === '!override' && 'collection' in tag && tag.collection === 'seq',
     )
-    if (!scalar || !mapTag || !seqTag || !('resolve' in scalar)) {
+    if (!scalar || !mapTag || !seqTag) {
       throw new TypeError('expected scalar, map, and sequence compose tags')
     }
 
-    expect(scalar.resolve('~')).toEqual(makeComposeTag('reset', null))
-    expect(scalar.resolve('true')).toEqual(makeComposeTag('reset', true))
-    expect(scalar.resolve('hello')).toEqual(makeComposeTag('reset', 'hello'))
+    const nullDoc = parseDocument('!reset\n~', COMPOSE_YAML_OPTIONS)
+    expect(nullDoc.errors).toEqual([])
+    expect(nullDoc.toJSON()).toEqual(makeComposeTag('reset', null))
+
+    const trueDoc = parseDocument('!reset\ntrue', COMPOSE_YAML_OPTIONS)
+    expect(trueDoc.errors).toEqual([])
+    expect(trueDoc.toJSON()).toEqual(makeComposeTag('reset', true))
+
+    const helloDoc = parseDocument('!reset\nhello', COMPOSE_YAML_OPTIONS)
+    expect(helloDoc.errors).toEqual([])
+    expect(helloDoc.toJSON()).toEqual(makeComposeTag('reset', 'hello'))
 
     const mapDoc = parseDocument('!override\n  key: value\n', COMPOSE_YAML_OPTIONS)
     expect(mapDoc.errors).toEqual([])

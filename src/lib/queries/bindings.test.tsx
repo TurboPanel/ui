@@ -79,12 +79,14 @@ describe('bindings query hooks', () => {
     await expect(
       result.current.run({
         serviceId,
-        managedPrincipalId: 'principal-1',
+        principalId: 'principal-1',
+        databaseName: 'app',
       }),
     ).resolves.toMatchObject({ ok: true, value: { ok: true, id: 'bind-2' } })
     expect(createBinding).toHaveBeenCalledWith({
       serviceId,
-      managedPrincipalId: 'principal-1',
+      principalId: 'principal-1',
+      databaseName: 'app',
     })
   })
 })

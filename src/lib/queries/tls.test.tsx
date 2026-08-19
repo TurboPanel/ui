@@ -40,7 +40,7 @@ describe('tls query hooks', () => {
 
   it('useTlsLibrary loads certificate library', async () => {
     fetchTlsLibrary.mockResolvedValueOnce({
-      certificates: [{ id: 'tls-1', displayName: 'LAN cert' }],
+      tls: [{ id: 'tls-1', displayName: 'LAN cert' }],
     })
 
     const { result } = renderHook(() => useTlsLibrary(orgId), {
@@ -50,7 +50,7 @@ describe('tls query hooks', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(result.current.data?.certificates).toHaveLength(1)
+    expect(result.current.data?.tls).toHaveLength(1)
   })
 
   it('useCreateTlsCertificate creates certificate', async () => {

@@ -138,7 +138,7 @@ describe('managed query hooks', () => {
       { wrapper: createWrapper() },
     )
 
-    await expect(result.current.run()).resolves.toMatchObject({
+    await expect(result.current.run(undefined)).resolves.toMatchObject({
       ok: true,
       value: expect.objectContaining({ rootPassword: 'show-once-secret' }),
     })

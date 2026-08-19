@@ -64,7 +64,11 @@ describe('storage query hooks', () => {
     })
 
     await expect(
-      result.current.run({ displayName: 'Uploads', projectId: 'proj-1' }),
+      result.current.run({
+        name: 'Uploads',
+        kind: 'volume',
+        projectId: 'proj-1',
+      }),
     ).resolves.toMatchObject({ ok: true })
   })
 

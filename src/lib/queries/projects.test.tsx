@@ -101,7 +101,11 @@ describe('projects query hooks', () => {
     })
 
     await expect(
-      result.current.run({ type: 'empty', displayName: 'New' }),
+      result.current.run({
+        type: 'empty',
+        workspaceId: 'ws-1',
+        displayName: 'New',
+      }),
     ).resolves.toMatchObject({ ok: true, value: { ok: true, id: 'proj-2' } })
   })
 

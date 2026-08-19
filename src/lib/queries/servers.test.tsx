@@ -171,9 +171,9 @@ describe('servers query hooks', () => {
   })
 
   it('useServerLabels loads label map', async () => {
-    fetchServerLabels.mockResolvedValueOnce({
-      labels: { role: 'gateway' },
-    })
+    fetchServerLabels.mockResolvedValueOnce([
+      { key: 'role', value: 'gateway' },
+    ])
 
     const { result } = renderHook(() => useServerLabels(orgId, serverId), {
       wrapper: createWrapper(),
@@ -182,7 +182,7 @@ describe('servers query hooks', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(result.current.data?.labels).toEqual({ role: 'gateway' })
+    expect(result.current.data).toEqual([{ key: 'role', value: 'gateway' }])
   })
 
   it('useTimezones loads timezone list when enabled', async () => {
