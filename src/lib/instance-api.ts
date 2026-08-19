@@ -1,65 +1,57 @@
-import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
-import { resolveApiUrl } from '@/lib/control-plane'
-import { formatFetchFailureDetail } from '@/lib/fetch-error-detail'
-import {
-  getActiveOrganizationId,
-  ORG_ID_HEADER,
-} from '@/lib/org-context'
 import type { ComposeDocument } from '@/lib/compose'
+import { resolveApiUrl } from '@/lib/control-plane'
+import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
+import { formatFetchFailureDetail } from '@/lib/fetch-error-detail'
+import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 import type {
-  ManagedBackupRecord,
-  ManagedConnectionRole,
-  ManagedDetailResponse,
-  ManagedEnvironmentRecord,
-  ManagedListRecord,
-  ManagedMemberRecord,
-  ManagedServiceEngine,
-  ManagedSettings,
-  ManagedSqlAccessScope,
-  ManagedUserRecord,
+    ManagedBackupRecord,
+    ManagedConnectionRole,
+    ManagedDetailResponse,
+    ManagedEnvironmentRecord,
+    ManagedListRecord,
+    ManagedMemberRecord,
+    ManagedServiceEngine,
+    ManagedSettings,
+    ManagedSqlAccessScope,
+    ManagedUserRecord,
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
-import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
+import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 export {
-  isForbiddenError,
-  isHttpStatusError,
-  isServerPlacementRequiredError,
+    isForbiddenError,
+    isHttpStatusError,
+    isServerPlacementRequiredError
 } from '@/lib/fetch-error-detail'
 
 export type { ComposeDocument } from '@/lib/compose'
+export type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 export type {
-  ManagedBackupRecord,
-  ManagedBindScope,
-  ManagedConnectionInfo,
-  ManagedConnectionRole,
-  ManagedDetailResponse,
-  ManagedEngineAvailability,
-  ManagedEnvironmentRecord,
-  ManagedListRecord,
-  ManagedMemberRecord,
-  ManagedMemberRole,
-  ManagedAccessEndpoint,
-  ManagedSqlAccessScope,
-  ManagedMemberTransport,
-  ManagedReleaseView,
-  ManagedReplicaClass,
-  ManagedReplicationHealth,
-  ManagedServerSummary,
-  ManagedServiceEngine,
-  ManagedSettings,
-  ManagedSslView,
-  ManagedStatus,
-  ManagedUserRecord,
+    ManagedAccessEndpoint, ManagedBackupRecord,
+    ManagedBindScope,
+    ManagedConnectionInfo,
+    ManagedConnectionRole,
+    ManagedDetailResponse,
+    ManagedEngineAvailability,
+    ManagedEnvironmentRecord,
+    ManagedListRecord,
+    ManagedMemberRecord,
+    ManagedMemberRole, ManagedMemberTransport,
+    ManagedReleaseView,
+    ManagedReplicaClass,
+    ManagedReplicationHealth,
+    ManagedServerSummary,
+    ManagedServiceEngine,
+    ManagedSettings, ManagedSqlAccessScope, ManagedSslView,
+    ManagedStatus,
+    ManagedUserRecord
 } from '@/lib/managed-services'
 export type { ManagedSslMode } from '@/lib/managed-ssl'
-export type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 
 /** Exported so panels compare against symbols, not string literals. */
 export const USERNAME_IN_USE_ERROR = 'username_in_use'
 export const MANAGED_MEMBER_EXISTS_ERROR = 'managed_member_exists'
 export const MANAGED_REPLICA_NOT_PROMOTABLE_ERROR = 'managed_replica_not_promotable'
-export const MANAGED_AUTOMATIC_FAILOVER_BLOCKED_ERROR =
-  'managed_automatic_failover_blocked'
+export const MANAGED_AUTOMATIC_FAILOVER_BLOCKED_ERROR = 'managed_automatic_failover_blocked'
 export const MANAGED_NO_READ_TARGETS_ERROR = 'managed_no_read_targets'
 export const FAILOVER_REPLICA_REQUIRES_DATACENTER_TRANSPORT_ERROR =
   'failover_replica_requires_datacenter_transport'
@@ -91,15 +83,14 @@ export const BINDING_KEY_CONFLICT_ERROR = 'binding_key_conflict'
 export const BINDING_ENDPOINT_UNAVAILABLE_ERROR = 'binding_endpoint_unavailable'
 export const FABRIC_RECONCILE_FAILED_ERROR = 'fabric_reconcile_failed'
 export const FABRIC_RECONCILE_PENDING_ERROR = 'fabric_reconcile_pending'
-export const BINDING_PASSWORD_UNAVAILABLE_ERROR =
-  'binding_password_unavailable' // NOSONAR typescript:S2068 — API error code, not a credential
+export const BINDING_PASSWORD_UNAVAILABLE_ERROR = 'binding_password_unavailable' // NOSONAR typescript:S2068 — API error code, not a credential
 export const BINDING_ENGINE_UNSUPPORTED_ERROR = 'binding_engine_unsupported'
 export const BINDING_OWNED_VARIABLE_ERROR = 'binding_owned_variable'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
 
-const CLIENT_API = "/api/client/v1";
-const INSTALL_API = "/api/install/v1";
-const ADMIN_API = '/api/admin/v1';
+const CLIENT_API = '/api/client/v1'
+const INSTALL_API = '/api/install/v1'
+const ADMIN_API = '/api/admin/v1'
 
 function controlPlaneUrl(path: string): string {
   return resolveApiUrl(path, getActiveControlPlaneOrigin())
@@ -110,117 +101,100 @@ function controlPlaneUrl(path: string): string {
  * local-console authenticated, and exposed through the turbopanel-dev terminal
  * console — not this web client. There is no client-surface helper here by design.
  */
-export const DEV_SYNC_WEB_AVAILABLE = false;
+export const DEV_SYNC_WEB_AVAILABLE = false
 
 export type SessionInfo = {
-  userId: string | null;
-  email: string | null;
-  role: string | null;
+  userId: string | null
+  email: string | null
+  role: string | null
   /** Deno self-hosted only — absent on Workers. */
-  needsInstall?: boolean;
-};
+  needsInstall?: boolean
+}
 
 export type OrganizationRecord = {
-  id: string;
-  displayName: string | null;
-  createdAt: string;
-};
+  id: string
+  displayName: string | null
+  createdAt: string
+}
 
 export type InstallStatus = {
   /**
    * Control-plane runtime from `GET /api/client/v1/status`.
    * Workers (HA) → blue auth chrome; Deno (self-hosted) → green.
    */
-  runtime?: 'deno' | 'workers';
+  runtime?: 'deno' | 'workers'
   /** Deno self-hosted only — absent on Workers (use sign-up for bootstrap). */
-  needsInstall?: boolean;
+  needsInstall?: boolean
   /** Deno self-hosted only — absent on Workers. */
-  isInstallMode?: boolean;
+  isInstallMode?: boolean
   /** Workers: defaults to true when env and DB are unset (sign-up is the bootstrap path). */
-  isSignupEnabled: boolean;
-  isSignupEmailVerificationEnabled?: boolean;
-};
+  isSignupEnabled: boolean
+  isSignupEmailVerificationEnabled?: boolean
+}
 
 export async function fetchSession(): Promise<SessionInfo | null> {
-  const response = await fetch(
-    controlPlaneUrl(`${CLIENT_API}/authn/session`),
-    {
-      credentials: 'include',
-      headers: { "content-type": "application/json" },
-    },
-  );
+  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/authn/session`), {
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+  })
 
   if (response.status === 401) {
-    return null;
+    return null
   }
 
   if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
+    let detail = `HTTP ${response.status}`
     try {
-      const body = await response.json() as { error?: string };
-      if (body.error) detail = body.error;
+      const body = (await response.json()) as { error?: string }
+      if (body.error) detail = body.error
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
-    throw new Error(`${CLIENT_API}/authn/session failed: ${detail}`);
+    throw new Error(`${CLIENT_API}/authn/session failed: ${detail}`)
   }
 
-  const body = await response.json() as SessionInfo & { ok: true };
+  const body = (await response.json()) as SessionInfo & { ok: true }
   return {
     userId: body.userId ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
-    ...(body.needsInstall === undefined
-      ? {}
-      : { needsInstall: body.needsInstall }),
-  };
+    ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
+  }
 }
 
-export async function signIn(
-  email: string,
-  password: string,
-): Promise<SessionInfo> {
+export async function signIn(email: string, password: string): Promise<SessionInfo> {
   const body = await apiFetch<SessionInfo & { ok: true }>(`${CLIENT_API}/auth/sign-in`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({ email, password }),
-  });
+  })
   return {
     userId: body.userId ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
-    ...(body.needsInstall === undefined
-      ? {}
-      : { needsInstall: body.needsInstall }),
-  };
+    ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
+  }
 }
 
-export async function bootstrapInstall(
-  username: string,
-  password: string,
-): Promise<{ ok: true }> {
+export async function bootstrapInstall(username: string, password: string): Promise<{ ok: true }> {
   return await apiFetch(`${INSTALL_API}/bootstrap`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({ username, password }),
-  });
+  })
 }
 
 export async function signOut(): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/sign-out`, {
-    method: "POST",
-  });
+    method: 'POST',
+  })
 }
 
 export async function fetchInstallStatus(): Promise<InstallStatus> {
-  const body = await apiFetch<
-    InstallStatus & { ok: true; needsInstall?: boolean }
-  >(`${CLIENT_API}/status`);
+  const body = await apiFetch<InstallStatus & { ok: true; needsInstall?: boolean }>(
+    `${CLIENT_API}/status`
+  )
   return {
-    ...(body.runtime === 'deno' || body.runtime === 'workers'
-      ? { runtime: body.runtime }
-      : {}),
-    ...(body.needsInstall === undefined
-      ? {}
-      : { needsInstall: body.needsInstall }),
+    ...(body.runtime === 'deno' || body.runtime === 'workers' ? { runtime: body.runtime } : {}),
+    ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
     ...(body.isInstallMode === undefined && body.needsInstall === undefined
       ? {}
       : { isInstallMode: body.isInstallMode ?? body.needsInstall ?? false }),
@@ -228,43 +202,39 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
     ...(body.isSignupEmailVerificationEnabled === undefined
       ? {}
       : {
-          isSignupEmailVerificationEnabled:
-            body.isSignupEmailVerificationEnabled,
+          isSignupEmailVerificationEnabled: body.isSignupEmailVerificationEnabled,
         }),
-  };
+  }
 }
 
-export async function signUp(
-  email: string,
-  password: string,
-): Promise<{ ok: true }> {
+export async function signUp(email: string, password: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/sign-up`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({ email, password }),
-  });
+  })
 }
 
 export async function verifyEmail(token: string): Promise<{ ok: true }> {
-  const params = new URLSearchParams({ token });
-  return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`);
+  const params = new URLSearchParams({ token })
+  return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`)
 }
 
 export type ServerGeo = {
-  asOrganization?: string;
-  country?: string;
-  city?: string;
-  continent?: string;
-  region?: string;
-  regionCode?: string;
-  timezone?: string;
-  longitude?: string;
-  latitude?: string;
-  postalCode?: string;
-  metroCode?: string;
-  asn?: number;
-  datacenter?: string;
-  capturedAt?: string;
-};
+  asOrganization?: string
+  country?: string
+  city?: string
+  continent?: string
+  region?: string
+  regionCode?: string
+  timezone?: string
+  longitude?: string
+  latitude?: string
+  postalCode?: string
+  metroCode?: string
+  asn?: number
+  datacenter?: string
+  capturedAt?: string
+}
 
 export type ServerOsFamily = 'linux' | 'windows' | 'freebsd' | 'darwin'
 
@@ -386,47 +356,47 @@ export type ServerDatacenterRef = {
 }
 
 export type OrgServerRecord = {
-  id: string;
-  displayName: string | null;
-  organizationId: string | null;
-  licenseId: string | null;
-  options: Record<string, unknown> | null;
-  createdAt: string;
-  connected: boolean;
-  hostname: string | null;
-  remoteAddress: string | null;
-  lastInboundAt: string | null;
-  connectedAt: string | null;
+  id: string
+  displayName: string | null
+  organizationId: string | null
+  licenseId: string | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  connected: boolean
+  hostname: string | null
+  remoteAddress: string | null
+  lastInboundAt: string | null
+  connectedAt: string | null
   /** Last online/offline transition (`server.status_changed_at`). */
-  statusChangedAt: string | null;
-  geo: ServerGeo | null;
+  statusChangedAt: string | null
+  geo: ServerGeo | null
   /** Host OS from server.os_* columns (daemon hello); null until reported. */
-  os: ServerOsMetadata | null;
+  os: ServerOsMetadata | null
   /** Formatted label e.g. "Debian 13.5 (Trixie)". */
-  osDisplay: string | null;
+  osDisplay: string | null
   /** Logo key for the OS column (`debian` / `raspberry-pi-os`). */
-  osLogo: ServerOsLogoKey | null;
+  osLogo: ServerOsLogoKey | null
   /** Capacity totals from daemon hello (`server.metadata.resources`, including ips). */
-  resources: ServerHostResources | null;
-  colocatedWithInstance?: boolean;
-  ips: ServerReportedIp[] | null;
-  timeSync: ServerTimeSync | null;
+  resources: ServerHostResources | null
+  colocatedWithInstance?: boolean
+  ips: ServerReportedIp[] | null
+  timeSync: ServerTimeSync | null
   /**
    * Docker CLI / Compose plugin versions (`server.metadata.docker`).
    * Null when Docker is not installed or has not been reported.
    */
-  docker: ServerDockerMetadata | null;
-  timezone: string | null;
-  timezoneSource: ServerTimezoneSource;
+  docker: ServerDockerMetadata | null
+  timezone: string | null
+  timezoneSource: ServerTimezoneSource
   /** Effective SSH listen port (server → datacenter → org → 22). */
-  sshPort: number;
-  sshPortSource: HostDefaultsSource | null;
+  sshPort: number
+  sshPortSource: HostDefaultsSource | null
   /** Effective desired NTP settings (not the observed timeSync facts). */
-  ntpDefaults: NtpDefaults | null;
-  ntpDefaultsSource: HostDefaultsSource | null;
+  ntpDefaults: NtpDefaults | null
+  ntpDefaultsSource: HostDefaultsSource | null
   /** Datacenter memberships (IP pins); a server may belong to many. */
-  datacenters: ServerDatacenterRef[];
-};
+  datacenters: ServerDatacenterRef[]
+}
 
 export type ServerDetailRecord = OrgServerRecord & {
   orgDefaultTimezone: string | null
@@ -461,26 +431,22 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
 }
 
 export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
-  const body = await apiFetch<{ servers: OrgServerRecord[] }>(
-    `${CLIENT_API}/servers`,
-  )
+  const body = await apiFetch<{ servers: OrgServerRecord[] }>(`${CLIENT_API}/servers`)
   return { servers: body.servers.map((server) => normalizeOrgServer(server)) }
 }
 
 export async function fetchServer(serverId: string): Promise<ServerDetailRecord> {
   const body = await apiFetch<{ ok: true; server: ServerDetailRecord }>(
-    `${CLIENT_API}/servers/${serverId}`,
+    `${CLIENT_API}/servers/${serverId}`
   )
   return normalizeOrgServer(body.server)
 }
 
 export type ServerLabelPair = { key: string; value: string }
 
-export async function fetchServerLabels(
-  serverId: string,
-): Promise<ServerLabelPair[]> {
+export async function fetchServerLabels(serverId: string): Promise<ServerLabelPair[]> {
   const body = await apiFetch<{ ok: true; labels: ServerLabelPair[] }>(
-    `${CLIENT_API}/servers/${serverId}/labels`,
+    `${CLIENT_API}/servers/${serverId}/labels`
   )
   return body.labels
 }
@@ -488,14 +454,14 @@ export async function fetchServerLabels(
 /** Replace-all. Pass `{}` to clear every label. */
 export async function saveServerLabels(
   serverId: string,
-  labels: Record<string, string>,
+  labels: Record<string, string>
 ): Promise<ServerLabelPair[]> {
   const body = await apiFetch<{ ok: true; labels: ServerLabelPair[] }>(
     `${CLIENT_API}/servers/${serverId}/labels`,
     {
       method: 'PUT',
       body: JSON.stringify({ labels }),
-    },
+    }
   )
   return body.labels
 }
@@ -509,7 +475,7 @@ export async function updateServer(
       ntp?: NtpDefaults | null
       hosting?: { enabled: boolean }
     }
-  },
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}`, {
     method: 'PATCH',
@@ -519,7 +485,7 @@ export async function updateServer(
 
 export async function setServerTimezone(
   serverId: string,
-  timezone: string,
+  timezone: string
 ): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/timezone`, {
     method: 'POST',
@@ -533,7 +499,7 @@ export async function setServerTimezone(
  */
 export async function setServerNtp(
   serverId: string,
-  input: NtpSetInput,
+  input: NtpSetInput
 ): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/ntp`, {
     method: 'POST',
@@ -545,46 +511,32 @@ export async function fetchTimezones(): Promise<{ timezones: string[] }> {
   return await apiFetch(`${CLIENT_API}/timezones`)
 }
 
-export async function fetchOrgDefaultTimezone(
-  orgId: string,
-): Promise<OrgDefaultTimezoneSettings> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/default-timezone`,
-  )
+export async function fetchOrgDefaultTimezone(orgId: string): Promise<OrgDefaultTimezoneSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/default-timezone`)
 }
 
 export async function saveOrgDefaultTimezone(
   orgId: string,
-  patch: Partial<OrgDefaultTimezoneSettings>,
+  patch: Partial<OrgDefaultTimezoneSettings>
 ): Promise<OrgDefaultTimezoneSettings> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/default-timezone`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/default-timezone`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
 }
 
-export async function fetchOrgHostDefaults(
-  orgId: string,
-): Promise<OrgHostDefaults> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/host-defaults`,
-  )
+export async function fetchOrgHostDefaults(orgId: string): Promise<OrgHostDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/host-defaults`)
 }
 
 export async function saveOrgHostDefaults(
   orgId: string,
-  patch: Partial<OrgHostDefaults>,
+  patch: Partial<OrgHostDefaults>
 ): Promise<OrgHostDefaults> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/host-defaults`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/host-defaults`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
 }
 
 export type OrgServerCapacity = {
@@ -595,50 +547,36 @@ export type OrgServerCapacity = {
   availableSeats: number | null
 }
 
-export async function fetchOrgServerCapacity(
-  orgId: string,
-): Promise<OrgServerCapacity> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/server-capacity`,
-  )
+export async function fetchOrgServerCapacity(orgId: string): Promise<OrgServerCapacity> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/server-capacity`)
 }
 
 export async function saveOrgServerCapacity(
   orgId: string,
-  maxServers: number | null,
+  maxServers: number | null
 ): Promise<OrgServerCapacity & { ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/server-capacity`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ maxServers }),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/server-capacity`, {
+    method: 'PUT',
+    body: JSON.stringify({ maxServers }),
+  })
 }
 
 export type OrgDefaultEnvironment = {
   defaultEnvironmentName: string | null
 }
 
-export async function fetchOrgDefaultEnvironment(
-  orgId: string,
-): Promise<OrgDefaultEnvironment> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/default-environment`,
-  )
+export async function fetchOrgDefaultEnvironment(orgId: string): Promise<OrgDefaultEnvironment> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/default-environment`)
 }
 
 export async function saveOrgDefaultEnvironment(
   orgId: string,
-  defaultEnvironmentName: string | null,
+  defaultEnvironmentName: string | null
 ): Promise<OrgDefaultEnvironment & { ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/default-environment`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ defaultEnvironmentName }),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/default-environment`, {
+    method: 'PUT',
+    body: JSON.stringify({ defaultEnvironmentName }),
+  })
 }
 
 /**
@@ -666,25 +604,18 @@ export type OrgManagedDefaultsPatch = {
   ports?: { postgres?: number | null; mysqlFamily?: number | null } | null
 }
 
-export async function fetchOrgManagedDefaults(
-  orgId: string,
-): Promise<OrgManagedDefaults> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/managed-defaults`,
-  )
+export async function fetchOrgManagedDefaults(orgId: string): Promise<OrgManagedDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/managed-defaults`)
 }
 
 export async function saveOrgManagedDefaults(
   orgId: string,
-  patch: OrgManagedDefaultsPatch,
+  patch: OrgManagedDefaultsPatch
 ): Promise<OrgManagedDefaults & { ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/managed-defaults`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/managed-defaults`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
 }
 
 export type OrgFabricRecord = {
@@ -754,8 +685,7 @@ export type OrgFabricSettings = {
 }
 
 export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
-export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR =
-  'gateway_datacenter_cidr_required'
+export const GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR = 'gateway_datacenter_cidr_required'
 export const PREFERRED_GATEWAY_INVALID_ERROR = 'preferred_gateway_invalid'
 
 export type FabricRelayWireRow = {
@@ -788,8 +718,7 @@ export type FabricRelayWireRow = {
 
 export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
   const observed = row.observed
-  const lastHandshakeAt =
-    row.lastHandshakeAt ?? observed?.lastHandshakeAt ?? null
+  const lastHandshakeAt = row.lastHandshakeAt ?? observed?.lastHandshakeAt ?? null
   const transferRx = row.transferRxBytes ?? observed?.transferRx
   const transferTx = row.transferTxBytes ?? observed?.transferTx
   return {
@@ -847,7 +776,7 @@ export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> 
 export async function saveOrgFabric(
   orgId: string,
   enabled: boolean,
-  extras?: Readonly<{ allowRelay?: boolean }>,
+  extras?: Readonly<{ allowRelay?: boolean }>
 ): Promise<OrgFabricSettings> {
   const payload: { enabled: boolean; allowRelay?: boolean } = { enabled }
   if (extras?.allowRelay !== undefined) {
@@ -878,14 +807,14 @@ export type PatchOrgFabricRelayBody = {
 export async function patchOrgFabricRelay(
   orgId: string,
   serverId: string,
-  body: PatchOrgFabricRelayBody,
+  body: PatchOrgFabricRelayBody
 ): Promise<{ ok: true; relay: RelayRecord }> {
   const result = await apiFetch<{ ok: true; relay: FabricRelayWireRow }>(
     `${CLIENT_API}/organizations/${orgId}/fabric/relays/${serverId}`,
     {
       method: 'PATCH',
       body: JSON.stringify(body),
-    },
+    }
   )
   return { ok: true, relay: toRelayRecord(result.relay) }
 }
@@ -904,9 +833,7 @@ export type FabricApplyResponse = {
   results: FabricApplyRelayResult[]
 }
 
-export async function applyOrgFabric(
-  orgId: string,
-): Promise<FabricApplyResponse> {
+export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric/apply`, {
     method: 'POST',
   })
@@ -928,10 +855,7 @@ export class ServerDeleteBlockedError extends Error {
   }
 }
 
-function formatDeleteBlockerMessage(
-  kind: 'network' | 'container',
-  count: number,
-): string {
+function formatDeleteBlockerMessage(kind: 'network' | 'container', count: number): string {
   let label: string
   if (kind === 'network') {
     label = count === 1 ? 'network' : 'networks'
@@ -962,7 +886,7 @@ export function formatServerDeleteBlockedError(err: unknown): string {
 
 export async function deleteServer(
   serverId: string,
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<{ ok: true; serverId: string }> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -986,7 +910,7 @@ export async function deleteServer(
       blockers?: ServerDeleteBlocker[]
     } = {}
     try {
-      body = await response.json() as typeof body
+      body = (await response.json()) as typeof body
     } catch {
       // Non-JSON error body.
     }
@@ -994,7 +918,7 @@ export async function deleteServer(
     if (response.status === 409 && body.code === 'server_has_blockers' && body.blockers) {
       throw new ServerDeleteBlockedError(
         body.error ?? 'Cannot delete this server while dependent resources still exist',
-        body.blockers,
+        body.blockers
       )
     }
 
@@ -1002,120 +926,121 @@ export async function deleteServer(
     throw new Error(`${path} failed: ${detail}`)
   }
 
-  return await response.json() as { ok: true; serverId: string }
+  return (await response.json()) as { ok: true; serverId: string }
 }
 
 export async function fetchOrganizations(): Promise<{ organizations: OrganizationRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/organizations`);
+  return await apiFetch(`${CLIENT_API}/organizations`)
 }
 
 export async function fetchOrganization(
-  organizationId: string,
+  organizationId: string
 ): Promise<{ organization: OrganizationRecord }> {
-  return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`);
+  return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`)
 }
 
 export async function createOrganization(body: {
-  displayName: string;
+  displayName: string
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/organizations`, {
     method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function updateOrganization(
   organizationId: string,
-  body: { displayName: string },
+  body: { displayName: string }
 ): Promise<{ ok: true; organization: OrganizationRecord }> {
   return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export type InstallCompleteResult = SessionInfo & {
-  organizationId: string;
-};
+  organizationId: string
+}
 
 export async function completeInstall(body: {
-  username: string;
-  password: string;
-  superadminEmail: string;
-  superadminPassword: string;
+  username: string
+  password: string
+  superadminEmail: string
+  superadminPassword: string
 }): Promise<InstallCompleteResult> {
-  const response = await apiFetch<SessionInfo & { ok: true; organizationId: string }>(
-    INSTALL_API,
-    {
-      method: "POST",
-      body: JSON.stringify(body),
-    },
-  );
+  const response = await apiFetch<SessionInfo & { ok: true; organizationId: string }>(INSTALL_API, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
   return {
     userId: response.userId ?? null,
     email: response.email ?? null,
     role: response.role ?? null,
     needsInstall: false,
     organizationId: response.organizationId,
-  };
+  }
 }
 
 async function apiFetch<T>(
   path: string,
   init?: RequestInit,
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<T> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
-    "content-type": "application/json",
+    'content-type': 'application/json',
     ...(init?.headers as Record<string, string> | undefined),
   }
   if (resolvedOrgId) {
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(
-    controlPlaneUrl(path),
-    {
-      ...init,
-      credentials: 'include',
-      headers,
-    },
-  );
+  const response = await fetch(controlPlaneUrl(path), {
+    ...init,
+    credentials: 'include',
+    headers,
+  })
 
   if (!response.ok) {
-    let detail = formatFetchFailureDetail(response.status);
+    let detail = formatFetchFailureDetail(response.status)
     try {
-      const body = await response.json() as {
+      const body = (await response.json()) as {
         error?: string
         issues?: { message?: string }[]
-      };
-      if (body.error === 'compose_invalid' && Array.isArray(body.issues) && body.issues.length > 0) {
-        detail = body.issues
-          .map((issue) => issue.message)
-          .filter((message): message is string => typeof message === 'string' && message.length > 0)
-          .join('; ') || body.error;
+      }
+      if (
+        body.error === 'compose_invalid' &&
+        Array.isArray(body.issues) &&
+        body.issues.length > 0
+      ) {
+        detail =
+          body.issues
+            .map((issue) => issue.message)
+            .filter(
+              (message): message is string => typeof message === 'string' && message.length > 0
+            )
+            .join('; ') || body.error
       } else if (body.error) {
-        detail = formatFetchFailureDetail(response.status, body.error);
+        detail = formatFetchFailureDetail(response.status, body.error)
       }
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
-    throw new Error(`${path} failed: ${detail}`);
+    throw new Error(`${path} failed: ${detail}`)
   }
 
-  return await response.json() as T;
+  return (await response.json()) as T
 }
 
 export async function fetchHealth(): Promise<{ ok: boolean }> {
-  return await apiFetch("/api/health");
+  return await apiFetch('/api/health')
 }
 
 export type CreatedLicense = {
-  licenseId: string;
-  licenseToken: string;
-  installCommand: string;
-};
+  licenseId: string
+  licenseToken: string
+  installCommand: string
+}
 
 export class ServerCapacityExceededError extends Error {
   readonly code = 'server_capacity_exceeded'
@@ -1126,7 +1051,7 @@ export class ServerCapacityExceededError extends Error {
     super(
       maxServers === null
         ? 'Server capacity exceeded'
-        : `Server limit reached (${usedSeats} of ${maxServers})`,
+        : `Server limit reached (${usedSeats} of ${maxServers})`
     )
     this.name = 'ServerCapacityExceededError'
     this.maxServers = maxServers
@@ -1140,12 +1065,12 @@ function throwIfLicenseCreateFailed(
     error?: string
     maxServers?: number | null
     usedSeats?: number
-  },
+  }
 ): never {
   if (status === 409 && errorBody.error === 'server_capacity_exceeded') {
     throw new ServerCapacityExceededError(
       typeof errorBody.maxServers === 'number' ? errorBody.maxServers : null,
-      typeof errorBody.usedSeats === 'number' ? errorBody.usedSeats : 0,
+      typeof errorBody.usedSeats === 'number' ? errorBody.usedSeats : 0
     )
   }
   const detail = errorBody.error
@@ -1157,7 +1082,7 @@ function throwIfLicenseCreateFailed(
 /** Mint a one-shot registration key for the Add Server flow. */
 export async function createLicense(
   displayName?: string,
-  installBaseUrl?: string,
+  installBaseUrl?: string
 ): Promise<CreatedLicense> {
   const body: Record<string, string> = {}
   if (displayName) body.displayName = displayName
@@ -1185,14 +1110,14 @@ export async function createLicense(
       usedSeats?: number
     } = {}
     try {
-      errorBody = await response.json() as typeof errorBody
+      errorBody = (await response.json()) as typeof errorBody
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
     throwIfLicenseCreateFailed(response.status, errorBody)
   }
 
-  return await response.json() as CreatedLicense
+  return (await response.json()) as CreatedLicense
 }
 
 export type LicenseBoundServer = {
@@ -1220,128 +1145,128 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
 }
 
 export type PermissionKey =
-  | "organization:own"
-  | "organization:manage"
-  | "team:own"
-  | "team:manage"
-  | "system:read"
-  | "system:operate"
-  | "system:manage";
+  | 'organization:own'
+  | 'organization:manage'
+  | 'team:own'
+  | 'team:manage'
+  | 'system:read'
+  | 'system:operate'
+  | 'system:manage'
 
 export type PermissionRecord = {
-  key: PermissionKey;
-  displayName: string;
-};
+  key: PermissionKey
+  displayName: string
+}
 
-export type AccessScopeKind = "organization" | "team";
+export type AccessScopeKind = 'organization' | 'team'
 
 // Deny grants are not supported by the instance — authorization only evaluates
 // allow grants, so `effect` is always `"allow"`.
 export type AccessGrantRecord = {
-  id: string;
-  subjectKind: "user" | "team" | "organization";
-  subjectId: string;
-  resourceId: string;
-  effect: "allow";
-  permissionKey: string;
-};
+  id: string
+  subjectKind: 'user' | 'team' | 'organization'
+  subjectId: string
+  resourceId: string
+  effect: 'allow'
+  permissionKey: string
+}
 
 export type CreateAccessBody = {
-  resourceId: string;
-  subjectKind: "user" | "team" | "organization";
-  subjectId: string;
-  effect: "allow";
-  permissionKey: PermissionKey;
-};
+  resourceId: string
+  subjectKind: 'user' | 'team' | 'organization'
+  subjectId: string
+  effect: 'allow'
+  permissionKey: PermissionKey
+}
 
 export type ResolvedResourceId = {
-  resourceId: string;
-  kind: string;
-  itemId: string;
-};
+  resourceId: string
+  kind: string
+  itemId: string
+}
 
 export type TeamRecord = {
-  id: string;
-  displayName: string | null;
-  organizationId: string;
-  createdAt: string;
-  updatedAt: string;
-};
+  id: string
+  displayName: string | null
+  organizationId: string
+  createdAt: string
+  updatedAt: string
+}
 
 export async function fetchVisibleTeams(): Promise<{ teams: TeamRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/teams`);
+  return await apiFetch(`${CLIENT_API}/teams`)
 }
 
 export async function fetchPermissions(): Promise<{ permissions: PermissionRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/permissions`);
+  return await apiFetch(`${CLIENT_API}/permissions`)
 }
 
 export async function resolveResourceId(
   kind: AccessScopeKind,
-  itemId: string,
+  itemId: string
 ): Promise<ResolvedResourceId> {
-  const params = new URLSearchParams({ kind, itemId });
-  return await apiFetch(`${CLIENT_API}/access/resource-id?${params.toString()}`);
+  const params = new URLSearchParams({ kind, itemId })
+  return await apiFetch(`${CLIENT_API}/access/resource-id?${params.toString()}`)
 }
 
 export async function fetchAccessGrants(
-  resourceId: string,
+  resourceId: string
 ): Promise<{ access: AccessGrantRecord[] }> {
-  const params = new URLSearchParams({ resourceId });
-  return await apiFetch(`${CLIENT_API}/access?${params.toString()}`);
+  const params = new URLSearchParams({ resourceId })
+  return await apiFetch(`${CLIENT_API}/access?${params.toString()}`)
 }
 
 export async function checkPermission(
   resourceId: string,
-  permissionKey: PermissionKey,
+  permissionKey: PermissionKey
 ): Promise<{ allowed: boolean }> {
-  const params = new URLSearchParams({ resourceId, permissionKey });
-  return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`);
+  const params = new URLSearchParams({ resourceId, permissionKey })
+  return await apiFetch(`${CLIENT_API}/access/check?${params.toString()}`)
 }
 
 export type WorkspaceKind = 'turbopanel' | 'user'
 
 export type WorkspaceRecord = {
-  id: string;
-  displayName: string | null;
-  description: string | null;
-  organizationId: string;
+  id: string
+  displayName: string | null
+  description: string | null
+  organizationId: string
   /** Platform vs tenant workspace — never infer from displayName. */
-  kind: WorkspaceKind;
-  createdAt: string;
-  updatedAt: string;
-};
+  kind: WorkspaceKind
+  createdAt: string
+  updatedAt: string
+}
 
 export type EnvironmentRecord = {
-  id: string;
-  displayName: string | null;
-  description: string | null;
-  projectId: string;
+  id: string
+  displayName: string | null
+  description: string | null
+  projectId: string
   /** Whole-server placement pin — single source of truth (not compose). */
-  serverId: string | null;
-  metadata: Record<string, unknown> | null;
+  serverId: string | null
+  metadata: Record<string, unknown> | null
   /** `options.compose` is a versioned ComposeDocument. */
-  options: { compose?: ComposeDocument } | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  options: { compose?: ComposeDocument } | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type ProjectRecord = {
-  id: string;
-  displayName: string | null;
-  description: string | null;
-  workspaceId: string;
+  id: string
+  displayName: string | null
+  description: string | null
+  workspaceId: string
   metadata: {
-    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | null;
+    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | null
     /** Managed engine catalog code (`postgres`, …). */
-    code?: string;
+    code?: string
     /**
      * Internal system-component idempotency key (e.g. `hosting-ingress`).
      * Never an authorization source — gate mutations on `workspace.kind` /
      * `system:*` permissions instead.
      */
-    component?: string;
-  } | null;
+    component?: string
+  } | null
   /**
    * `options.compose` is a versioned ComposeDocument.
    * `options.containerNaming` is `uuid` (default) or `custom`.
@@ -1352,46 +1277,46 @@ export type ProjectRecord = {
     compose?: ComposeDocument
     containerNaming?: 'uuid' | 'custom'
     defaultServerId?: string
-  } | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  } | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type CatalogSummary = {
-  code: string;
-  kind: 'managed' | 'template';
-  displayName: string;
-  description: string;
-};
+  code: string
+  kind: 'managed' | 'template'
+  displayName: string
+  description: string
+}
 
 /**
  * Secret write-only rule: when `isSecret` is true, `value` is always `null` —
  * never display or pre-fill secret values; use masked write-only update forms.
  */
 export type VariableRecord = {
-  id: string;
-  key: string;
-  isSecret: boolean;
-  isLiteral: boolean;
-  forBuild: boolean;
-  forRuntime: boolean;
-  value: string | null;
-  organizationId: string | null;
-  workspaceId: string | null;
-  projectId: string | null;
-  environmentId: string | null;
-  serviceId: string | null;
-  hostingId: string | null;
-  serverId: string | null;
+  id: string
+  key: string
+  isSecret: boolean
+  isLiteral: boolean
+  forBuild: boolean
+  forRuntime: boolean
+  value: string | null
+  organizationId: string | null
+  workspaceId: string | null
+  projectId: string | null
+  environmentId: string | null
+  serviceId: string | null
+  hostingId: string | null
+  serverId: string | null
   /**
    * When set, this variable is materialised by a service binding and is not
    * operator-editable. Secret values stay write-only / redacted.
    */
-  bindingId: string | null;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  bindingId: string | null
+  description: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 /**
  * Managed DB principal → compose service binding.
@@ -1437,16 +1362,16 @@ export type VariableParentFilter =
   | { environmentId: string }
   | { serviceId: string }
   | { hostingId: string }
-  | { serverId: string };
+  | { serverId: string }
 
 export type CreateVariableBody = {
-  key: string;
-  value?: string;
-  isSecret?: boolean;
-  isLiteral?: boolean;
-  forBuild?: boolean;
-  forRuntime?: boolean;
-  description?: string;
+  key: string
+  value?: string
+  isSecret?: boolean
+  isLiteral?: boolean
+  forBuild?: boolean
+  forRuntime?: boolean
+  description?: string
 } & (
   | { organizationId: string }
   | { workspaceId: string }
@@ -1455,31 +1380,31 @@ export type CreateVariableBody = {
   | { serviceId: string }
   | { hostingId: string }
   | { serverId: string }
-);
+)
 
 export type CreateProjectBody = {
-  workspaceId: string;
-  displayName?: string;
-  description?: string;
+  workspaceId: string
+  displayName?: string
+  description?: string
   /**
    * Required. `empty` creates an untyped project with one environment named
    * from the org default (`defaultEnvironmentName`, falling back to
    * `Production`); configure later via setup.
    */
-  type: 'empty' | 'docker-compose' | 'template' | 'managed';
-  code?: string;
+  type: 'empty' | 'docker-compose' | 'template' | 'managed'
+  code?: string
   /**
    * Pins the scaffolded default environment (org default name, else `Production`)
    * when creating a managed project.
    */
-  serverId?: string;
-};
+  serverId?: string
+}
 
 export type ConfigureProjectBody = {
-  type: 'docker-compose' | 'template' | 'managed';
-  code?: string;
-  serverId?: string;
-};
+  type: 'docker-compose' | 'template' | 'managed'
+  code?: string
+  serverId?: string
+}
 
 export type ManagedCommandResponse = {
   ok: true
@@ -1490,55 +1415,55 @@ export type ManagedCommandResponse = {
 
 export type EnvironmentLifecycleAction = 'start' | 'stop' | 'restart'
 
-export type HealthCheckPolicy = 'disabled' | 'warn' | 'required';
+export type HealthCheckPolicy = 'disabled' | 'warn' | 'required'
 
 export type ServiceOptions = {
-  preDeployCommand?: string;
-  postDeployCommand?: string;
+  preDeployCommand?: string
+  postDeployCommand?: string
   build?: {
-    disableCache?: boolean;
-  };
+    disableCache?: boolean
+  }
   operations?: {
-    stopGracePeriodSeconds?: number;
-    maxRestartAttempts?: number;
-  };
+    stopGracePeriodSeconds?: number
+    maxRestartAttempts?: number
+  }
   healthCheck?: {
-    policy?: HealthCheckPolicy;
-  };
+    policy?: HealthCheckPolicy
+  }
   resources?: {
-    cpus?: number;
-    memoryBytes?: number;
-    memoryReservationBytes?: number;
-  };
-};
+    cpus?: number
+    memoryBytes?: number
+    memoryReservationBytes?: number
+  }
+}
 
 export type ServiceRecord = {
-  id: string;
-  displayName: string | null;
-  description: string | null;
-  environmentId: string;
+  id: string
+  displayName: string | null
+  description: string | null
+  environmentId: string
   /** Derived from the compose document — read-only; never send this on create/update. */
-  composeServiceName: string;
-  metadata?: Record<string, unknown> | null;
-  options?: ServiceOptions | Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  composeServiceName: string
+  metadata?: Record<string, unknown> | null
+  options?: ServiceOptions | Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type HostingRecord = {
-  id: string;
-  displayName: string | null;
-  description: string | null;
-  serviceId: string;
+  id: string
+  displayName: string | null
+  description: string | null
+  serviceId: string
   /** Pinned org TLS id; null/undefined = basic self-signed (Caddy tls internal). */
-  tlsId?: string | null;
+  tlsId?: string | null
   /** Pinned public IP id; null/undefined = any interface (server resolves bind). */
-  ipId?: string | null;
-  metadata?: Record<string, unknown> | null;
-  options?: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  ipId?: string | null
+  metadata?: Record<string, unknown> | null
+  options?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed'
 
@@ -1593,25 +1518,25 @@ export type OrganizationCaRecord = {
 export type ContainerRole = 'service' | 'ingress' | 'turbopanel'
 
 export type ContainerRecord = {
-  id: string;
-  serviceId: string;
-  serverId: string;
-  containerId: string;
-  containerName: string;
-  status: string;
+  id: string
+  serviceId: string
+  serverId: string
+  containerId: string
+  containerName: string
+  status: string
   /**
    * Allocator-owned. `service` is an ordinary workload container; `ingress` is
    * the per-service Traefik container, always ordinal 1, named `<serviceId>-in`;
    * `turbopanel` is a platform component in the `turbopanel-system` Compose stack
    * (database / queue / analytics / ProxySQL), inspect-only where applicable.
    */
-  role: ContainerRole;
-  composeServiceName: string;
-  metadata?: Record<string, unknown> | null;
-  options?: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  role: ContainerRole
+  composeServiceName: string
+  metadata?: Record<string, unknown> | null
+  options?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type NetworkKind = 'datacenter' | 'docker'
 
@@ -1705,224 +1630,209 @@ export type IpRecord = {
 export const IP_IN_USE_ERROR = 'ip_in_use'
 
 export async function fetchVisibleWorkspaces(): Promise<{ workspaces: WorkspaceRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/workspaces`);
+  return await apiFetch(`${CLIENT_API}/workspaces`)
 }
 
-export const WORKSPACE_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
+export const WORKSPACE_HAS_CHILDREN_ERROR = 'Cannot delete while child resources exist'
 
-export const PROJECT_HAS_CHILDREN_ERROR = "Cannot delete while child resources exist";
+export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources exist'
 
-export const PROJECT_HAS_RUNNING_SERVICES_ERROR = "project_has_running_services";
+export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 
-export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component';
-export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR =
-  'system_component_not_provisioned';
-export const SYSTEM_RECONCILE_UNAVAILABLE_ERROR = 'system_reconcile_unavailable';
-export const SYSTEM_RESOURCE_IMMUTABLE_ERROR = 'system_resource_immutable';
+export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
+export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
+export const SYSTEM_RECONCILE_UNAVAILABLE_ERROR = 'system_reconcile_unavailable'
+export const SYSTEM_RESOURCE_IMMUTABLE_ERROR = 'system_resource_immutable'
 
-export async function fetchWorkspace(
-  id: string,
-): Promise<{ workspace: WorkspaceRecord }> {
-  return await apiFetch(`${CLIENT_API}/workspaces/${id}`);
+export async function fetchWorkspace(id: string): Promise<{ workspace: WorkspaceRecord }> {
+  return await apiFetch(`${CLIENT_API}/workspaces/${id}`)
 }
 
 export async function createWorkspace(body: {
-  displayName?: string;
-  description?: string;
+  displayName?: string
+  description?: string
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/workspaces`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function updateWorkspace(
   id: string,
-  body: { displayName?: string; description?: string },
+  body: { displayName?: string; description?: string }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/workspaces/${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function deleteWorkspace(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/workspaces/${id}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
 }
 
 export async function fetchVisibleEnvironments(
-  projectId?: string,
+  projectId?: string
 ): Promise<{ environments: EnvironmentRecord[] }> {
-  const params = projectId ? new URLSearchParams({ projectId }) : null;
-  const suffix = params ? `?${params.toString()}` : "";
-  return await apiFetch(`${CLIENT_API}/environments${suffix}`);
+  const params = projectId ? new URLSearchParams({ projectId }) : null
+  const suffix = params ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/environments${suffix}`)
 }
 
 export async function fetchVisibleProjects(
-  workspaceId?: string,
+  workspaceId?: string
 ): Promise<{ projects: ProjectRecord[] }> {
-  const params = workspaceId
-    ? new URLSearchParams({ workspaceId })
-    : null;
-  const suffix = params ? `?${params.toString()}` : "";
-  return await apiFetch(`${CLIENT_API}/projects${suffix}`);
+  const params = workspaceId ? new URLSearchParams({ workspaceId }) : null
+  const suffix = params ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/projects${suffix}`)
 }
 
 export async function fetchProjectCatalog(): Promise<{ catalog: CatalogSummary[] }> {
-  return await apiFetch(`${CLIENT_API}/project-catalog`);
+  return await apiFetch(`${CLIENT_API}/project-catalog`)
 }
 
-export async function fetchProject(
-  id: string,
-): Promise<{ project: ProjectRecord }> {
-  return await apiFetch(`${CLIENT_API}/projects/${id}`);
+export async function fetchProject(id: string): Promise<{ project: ProjectRecord }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}`)
 }
 
-export async function createProject(
-  body: CreateProjectBody,
-): Promise<{ ok: true; id: string }> {
+export async function createProject(body: CreateProjectBody): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/projects`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 /** Apply type/catalog selection to an empty project (resumable setup). */
 export async function configureProject(
   id: string,
-  body: ConfigureProjectBody,
+  body: ConfigureProjectBody
 ): Promise<{ ok: true; alreadyConfigured: boolean }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}/configure`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function updateProject(
   id: string,
   body: {
-    displayName?: string;
-    description?: string;
+    displayName?: string
+    description?: string
     options?: {
       compose?: ComposeDocument
       containerNaming?: 'uuid' | 'custom'
       /** Optional default placement; `null` clears it. */
       defaultServerId?: string | null
-    };
-    workspaceId?: string;
-  },
+    }
+    workspaceId?: string
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function deleteProject(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
 }
 
-export async function fetchEnvironment(
-  id: string,
-): Promise<{ environment: EnvironmentRecord }> {
-  return await apiFetch(`${CLIENT_API}/environments/${id}`);
+export async function fetchEnvironment(id: string): Promise<{ environment: EnvironmentRecord }> {
+  return await apiFetch(`${CLIENT_API}/environments/${id}`)
 }
 
 export async function createEnvironment(body: {
-  projectId: string;
-  displayName?: string;
-  description?: string;
-  serverId?: string | null;
-  metadata?: Record<string, unknown>;
-  options?: { compose?: ComposeDocument };
+  projectId: string
+  displayName?: string
+  description?: string
+  serverId?: string | null
+  metadata?: Record<string, unknown>
+  options?: { compose?: ComposeDocument }
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/environments`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function updateEnvironment(
   id: string,
   body: {
-    displayName?: string;
-    description?: string;
+    displayName?: string
+    description?: string
     /** Whole-server placement pin; `null` clears it. */
-    serverId?: string | null;
-    metadata?: Record<string, unknown>;
-    options?: { compose?: ComposeDocument };
-  },
+    serverId?: string | null
+    metadata?: Record<string, unknown>
+    options?: { compose?: ComposeDocument }
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function deleteEnvironment(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
 }
 
 export async function fetchVariables(
-  parentFilter: VariableParentFilter,
+  parentFilter: VariableParentFilter
 ): Promise<{ variables: VariableRecord[] }> {
   const params = new URLSearchParams(
-    Object.entries(parentFilter).map(([key, value]) => [key, value]),
-  );
-  return await apiFetch(`${CLIENT_API}/variables?${params.toString()}`);
+    Object.entries(parentFilter).map(([key, value]) => [key, value])
+  )
+  return await apiFetch(`${CLIENT_API}/variables?${params.toString()}`)
 }
 
-export async function fetchVariable(
-  id: string,
-): Promise<{ variable: VariableRecord }> {
-  return await apiFetch(`${CLIENT_API}/variables/${id}`);
+export async function fetchVariable(id: string): Promise<{ variable: VariableRecord }> {
+  return await apiFetch(`${CLIENT_API}/variables/${id}`)
 }
 
-export async function createVariable(
-  body: CreateVariableBody,
-): Promise<{ ok: true; id: string }> {
+export async function createVariable(body: CreateVariableBody): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/variables`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function updateVariable(
   id: string,
   body: {
-    key?: string;
-    value?: string;
-    isSecret?: boolean;
-    isLiteral?: boolean;
-    forBuild?: boolean;
-    forRuntime?: boolean;
-    description?: string | null;
-  },
+    key?: string
+    value?: string
+    isSecret?: boolean
+    isLiteral?: boolean
+    forBuild?: boolean
+    forRuntime?: boolean
+    description?: string | null
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/variables/${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function deleteVariable(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/variables/${id}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
 }
 
 export async function fetchVisibleServices(
-  environmentId?: string,
+  environmentId?: string
 ): Promise<{ services: ServiceRecord[] }> {
-  const params = environmentId ? new URLSearchParams({ environmentId }) : null;
-  const suffix = params ? `?${params.toString()}` : "";
-  return await apiFetch(`${CLIENT_API}/services${suffix}`);
+  const params = environmentId ? new URLSearchParams({ environmentId }) : null
+  const suffix = params ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/services${suffix}`)
 }
 
 /**
@@ -1937,7 +1847,7 @@ export async function createService(
     description?: string
     metadata?: Record<string, unknown>
     options?: ServiceOptions | Record<string, unknown>
-  },
+  }
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/services`, {
     method: 'POST',
@@ -1951,7 +1861,7 @@ export async function updateService(
     displayName?: string
     options?: ServiceOptions
     metadata?: Record<string, unknown> | null
-  },
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/services/${id}`, {
     method: 'PATCH',
@@ -1960,10 +1870,10 @@ export async function updateService(
 }
 
 export async function fetchVisibleHostings(
-  serviceId: string,
+  serviceId: string
 ): Promise<{ hostings: HostingRecord[] }> {
-  const params = new URLSearchParams({ serviceId });
-  return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`);
+  const params = new URLSearchParams({ serviceId })
+  return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`)
 }
 
 export async function createHosting(
@@ -1975,10 +1885,10 @@ export async function createHosting(
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
-  },
+  }
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({
       serviceId,
       ...(body?.displayName !== undefined ? { displayName: body.displayName } : {}),
@@ -1988,7 +1898,7 @@ export async function createHosting(
       ...(body?.tlsId !== undefined ? { tlsId: body.tlsId } : {}),
       ...(body?.ipId !== undefined ? { ipId: body.ipId } : {}),
     }),
-  });
+  })
 }
 
 export async function updateHosting(
@@ -2000,7 +1910,7 @@ export async function updateHosting(
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
-  },
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
     method: 'PATCH',
@@ -2035,12 +1945,10 @@ export async function deleteTlsCertificate(id: string): Promise<{ ok: true }> {
 }
 
 export async function fetchContainers(
-  serviceIdOrOptions?: string | { serviceId?: string; environmentId?: string },
+  serviceIdOrOptions?: string | { serviceId?: string; environmentId?: string }
 ): Promise<{ containers: ContainerRecord[] }> {
   const options =
-    typeof serviceIdOrOptions === 'string'
-      ? { serviceId: serviceIdOrOptions }
-      : serviceIdOrOptions
+    typeof serviceIdOrOptions === 'string' ? { serviceId: serviceIdOrOptions } : serviceIdOrOptions
   const params = new URLSearchParams()
   if (options?.serviceId) params.set('serviceId', options.serviceId)
   if (options?.environmentId) params.set('environmentId', options.environmentId)
@@ -2049,49 +1957,47 @@ export async function fetchContainers(
   return await apiFetch(`${CLIENT_API}/containers${suffix}`)
 }
 
-export async function fetchContainer(
-  id: string,
-): Promise<{ container: ContainerRecord }> {
-  return await apiFetch(`${CLIENT_API}/containers/${id}`);
+export async function fetchContainer(id: string): Promise<{ container: ContainerRecord }> {
+  return await apiFetch(`${CLIENT_API}/containers/${id}`)
 }
 
 export async function createContainer(body: {
-  serviceId: string;
-  serverId: string;
-  containerId: string;
-  containerName: string;
-  status: string;
-  composeServiceName: string;
-  metadata?: Record<string, unknown>;
-  options?: Record<string, unknown>;
+  serviceId: string
+  serverId: string
+  containerId: string
+  containerName: string
+  status: string
+  composeServiceName: string
+  metadata?: Record<string, unknown>
+  options?: Record<string, unknown>
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/containers`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function updateContainer(
   id: string,
   body: {
-    containerId?: string;
-    containerName?: string;
-    status?: string;
-    composeServiceName?: string;
-    metadata?: Record<string, unknown> | null;
-    options?: Record<string, unknown>;
-  },
+    containerId?: string
+    containerName?: string
+    status?: string
+    composeServiceName?: string
+    metadata?: Record<string, unknown> | null
+    options?: Record<string, unknown>
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/containers/${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function deleteContainer(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/containers/${id}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
 }
 
 export async function fetchDatacenterNameSuggestions(options?: {
@@ -2107,9 +2013,7 @@ export async function fetchDatacenterNameSuggestions(options?: {
   }
   const query = params.toString()
   const suffix = query ? `?${query}` : ''
-  return await apiFetch(
-    `${CLIENT_API}/datacenters/name-suggestions${suffix}`,
-  )
+  return await apiFetch(`${CLIENT_API}/datacenters/name-suggestions${suffix}`)
 }
 
 export async function fetchDatacenters(): Promise<{
@@ -2127,9 +2031,7 @@ function normalizeDatacenterMemberPin(pin: DatacenterMemberPin): DatacenterMembe
   }
 }
 
-function normalizeDatacenterDetail(
-  datacenter: DatacenterDetailRecord,
-): DatacenterDetailRecord {
+function normalizeDatacenterDetail(datacenter: DatacenterDetailRecord): DatacenterDetailRecord {
   return {
     ...datacenter,
     privateCidrs: datacenter.privateCidrs ?? [],
@@ -2170,7 +2072,7 @@ export async function createDatacenter(body: {
 
 export async function addDatacenterMembers(
   datacenterId: string,
-  members: Array<{ serverId: string; address: string }>,
+  members: Array<{ serverId: string; address: string }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/members`, {
     method: 'POST',
@@ -2181,12 +2083,11 @@ export async function addDatacenterMembers(
 /** Removes every pin for this server in the datacenter. */
 export async function removeDatacenterMember(
   datacenterId: string,
-  serverId: string,
+  serverId: string
 ): Promise<{ ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/datacenters/${datacenterId}/members/${serverId}`,
-    { method: 'DELETE' },
-  )
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/members/${serverId}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function createDatacenterSubnet(
@@ -2195,7 +2096,7 @@ export async function createDatacenterSubnet(
     cidr: string
     displayName?: string
     description?: string
-  },
+  }
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/subnets`, {
     method: 'POST',
@@ -2209,25 +2110,21 @@ export async function updateDatacenterSubnet(
   body: {
     displayName?: string
     description?: string
-  },
+  }
 ): Promise<{ ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/datacenters/${datacenterId}/subnets/${networkId}`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/subnets/${networkId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deleteDatacenterSubnet(
   datacenterId: string,
-  networkId: string,
+  networkId: string
 ): Promise<{ ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/datacenters/${datacenterId}/subnets/${networkId}`,
-    { method: 'DELETE' },
-  )
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/subnets/${networkId}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function updateDatacenter(
@@ -2237,7 +2134,7 @@ export async function updateDatacenter(
     description: string | null
     metadata: Record<string, unknown> | null
     options: DatacenterOptions | null
-  }>,
+  }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/datacenters/${id}`, {
     method: 'PATCH',
@@ -2299,7 +2196,7 @@ export async function updateIp(
     serverId: string | null
     metadata: Record<string, unknown> | null
     options: Record<string, unknown> | null
-  }>,
+  }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/ips/${id}`, {
     method: 'PATCH',
@@ -2317,9 +2214,7 @@ export async function deleteIp(id: string): Promise<{ ok: true }> {
       err.message.includes('HTTP 409') &&
       err.message.includes(IP_IN_USE_ERROR)
     ) {
-      throw new Error(
-        'This address is pinned to a hosting — unassign it first.',
-      )
+      throw new Error('This address is pinned to a hosting — unassign it first.')
     }
     throw err
   }
@@ -2367,7 +2262,7 @@ export async function updateNetwork(
     displayName: string | null
     metadata: Record<string, unknown> | null
     options: Record<string, unknown> | null
-  }>,
+  }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/networks/${id}`, {
     method: 'PATCH',
@@ -2375,35 +2270,33 @@ export async function updateNetwork(
   })
 }
 
-export async function deleteNetwork(
-  networkId: string,
-): Promise<{ ok: true }> {
+export async function deleteNetwork(networkId: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/networks/${networkId}`, {
     method: 'DELETE',
   })
 }
 
 export async function createAccessGrant(
-  body: CreateAccessBody,
+  body: CreateAccessBody
 ): Promise<{ ok: true; id: string; created?: boolean }> {
   return await apiFetch(`${CLIENT_API}/access`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify(body),
-  });
+  })
 }
 
 export async function revokeAccessGrant(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/access/${id}`, {
-    method: "DELETE",
-  });
+    method: 'DELETE',
+  })
 }
 
 export async function acceptInvitation(
-  invitationId: string,
+  invitationId: string
 ): Promise<{ ok: true; organizationId: string }> {
   return await apiFetch(`${CLIENT_API}/invitations/${invitationId}/accept`, {
-    method: "POST",
-  });
+    method: 'POST',
+  })
 }
 
 export type PublicUrlsResponse = {
@@ -2457,7 +2350,7 @@ export type ReencryptSecretsRequest = {
 }
 
 export async function applyReencryptSecrets(
-  body?: ReencryptSecretsRequest,
+  body?: ReencryptSecretsRequest
 ): Promise<ReencryptSecretsResponse> {
   return await apiFetch(`${ADMIN_API}/secrets/reencrypt`, {
     method: 'POST',
@@ -2514,9 +2407,7 @@ export async function fetchServersStatus(): Promise<{ servers: ServerStatusRecor
   return await apiFetch(`${CLIENT_API}/servers/status`)
 }
 
-export async function fetchServerStatus(
-  serverId: string,
-): Promise<ServerStatusRecord> {
+export async function fetchServerStatus(serverId: string): Promise<ServerStatusRecord> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/status`)
 }
 
@@ -2525,9 +2416,7 @@ export async function fetchServerStatus(
  * Future: global rate limiting should hook in here before this reaches the DO.
  * This endpoint hits the Durable Object directly — only call on explicit user action, never on a timer.
  */
-export async function fetchServerCell(
-  serverId: string,
-): Promise<FetchServerCellResponse> {
+export async function fetchServerCell(serverId: string): Promise<FetchServerCellResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/cell`)
 }
 
@@ -2591,9 +2480,7 @@ export type ServerBatchUpdateTriggerResult = {
   }[]
 }
 
-export async function fetchServerUpdate(
-  serverId: string,
-): Promise<ServerUpdateStatus> {
+export async function fetchServerUpdate(serverId: string): Promise<ServerUpdateStatus> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`)
 }
 
@@ -2601,17 +2488,13 @@ export async function fetchServersUpdateStatus(): Promise<ServerBatchUpdateStatu
   return await apiFetch(`${CLIENT_API}/servers/updates`)
 }
 
-export async function triggerServerUpdate(
-  serverId: string,
-): Promise<ServerUpdateTriggerResult> {
+export async function triggerServerUpdate(serverId: string): Promise<ServerUpdateTriggerResult> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`, {
     method: 'POST',
   })
 }
 
-export async function resetServerUpdateStatus(
-  serverId: string,
-): Promise<ServerUpdateResetResult> {
+export async function resetServerUpdateStatus(serverId: string): Promise<ServerUpdateResetResult> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update/reset`, {
     method: 'POST',
   })
@@ -2633,20 +2516,20 @@ const ADMIN_EMAIL_SETTINGS_URL = `${ADMIN_API}/settings/email`
 
 export async function fetchEmailSettings(): Promise<EmailSettingsResponse> {
   const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
-    ADMIN_EMAIL_SETTINGS_URL,
+    ADMIN_EMAIL_SETTINGS_URL
   )
   return { ok: true, settings: raw.settings ?? {} }
 }
 
 export async function saveEmailSettings(
-  settings: Record<string, string | null>,
+  settings: Record<string, string | null>
 ): Promise<EmailSettingsResponse> {
   const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
     ADMIN_EMAIL_SETTINGS_URL,
     {
       method: 'PUT',
       body: JSON.stringify(settings),
-    },
+    }
   )
   return { ok: true, settings: raw.settings ?? {} }
 }
@@ -2664,9 +2547,7 @@ export async function fetchSignupSettings(): Promise<SignupSettingsResponse> {
   return await apiFetch<SignupSettingsResponse>(ADMIN_SIGNUP_SETTINGS_URL)
 }
 
-export async function saveSignupSettings(
-  enabled: boolean,
-): Promise<SignupSettingsResponse> {
+export async function saveSignupSettings(enabled: boolean): Promise<SignupSettingsResponse> {
   return await apiFetch<SignupSettingsResponse>(ADMIN_SIGNUP_SETTINGS_URL, {
     method: 'PUT',
     body: JSON.stringify({ enabled }),
@@ -2724,9 +2605,7 @@ export type CommandEnqueueResponse = {
   serverId?: string
 }
 
-export async function pingDaemon(
-  serverId: string,
-): Promise<CommandEnqueueResponse> {
+export async function pingDaemon(serverId: string): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/ping`, {
     method: 'POST',
   })
@@ -2734,7 +2613,7 @@ export async function pingDaemon(
 
 export async function setServerHostname(
   serverId: string,
-  hostname: string,
+  hostname: string
 ): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/hostname`, {
     method: 'POST',
@@ -2742,9 +2621,7 @@ export async function setServerHostname(
   })
 }
 
-export async function rebootServer(
-  serverId: string,
-): Promise<CommandEnqueueResponse> {
+export async function rebootServer(serverId: string): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/reboot`, {
     method: 'POST',
   })
@@ -2756,18 +2633,15 @@ export async function rebootServer(
  */
 export async function restartSystemComponent(
   serverId: string,
-  component: string,
+  component: string
 ): Promise<CommandEnqueueResponse & { serverId: string }> {
   return await apiFetch(
     `${CLIENT_API}/servers/${serverId}/system/${encodeURIComponent(component)}/restart`,
-    { method: 'POST' },
+    { method: 'POST' }
   )
 }
 
-export async function fetchCommand(
-  serverId: string,
-  commandId: string,
-): Promise<CommandRecord> {
+export async function fetchCommand(serverId: string, commandId: string): Promise<CommandRecord> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/${commandId}`)
 }
 
@@ -2814,16 +2688,16 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
     return
   }
   try {
-    const errorBody = await response.json() as DeployConflictBody
+    const errorBody = (await response.json()) as DeployConflictBody
     if (errorBody.error === 'health_check_missing') {
       throw new DeployHealthCheckMissingError(
         errorBody.required === true,
-        Array.isArray(errorBody.services) ? errorBody.services : [],
+        Array.isArray(errorBody.services) ? errorBody.services : []
       )
     }
     if (errorBody.error === 'resource_limit_exceeded') {
       throw new DeployResourceLimitExceededError(
-        Array.isArray(errorBody.violations) ? errorBody.violations : [],
+        Array.isArray(errorBody.violations) ? errorBody.violations : []
       )
     }
     if (errorBody.error === 'fabric_reconcile_pending') {
@@ -2844,7 +2718,7 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
 async function throwClientFetchFailed(path: string, response: Response): Promise<never> {
   let detail = formatFetchFailureDetail(response.status)
   try {
-    const errorBody = await response.json() as { error?: string }
+    const errorBody = (await response.json()) as { error?: string }
     if (errorBody.error) {
       detail = formatFetchFailureDetail(response.status, errorBody.error)
     }
@@ -2856,7 +2730,7 @@ async function throwClientFetchFailed(path: string, response: Response): Promise
 
 export async function deployEnvironment(
   environmentId: string,
-  body?: { acknowledgeHealthCheckWarnings?: boolean; noCache?: boolean },
+  body?: { acknowledgeHealthCheckWarnings?: boolean; noCache?: boolean }
 ): Promise<CommandEnqueueResponse> {
   const path = `${CLIENT_API}/environments/${environmentId}/deploy`
   const resolvedOrgId = getActiveOrganizationId()
@@ -2880,7 +2754,7 @@ export async function deployEnvironment(
     await throwClientFetchFailed(path, response)
   }
 
-  return await response.json() as CommandEnqueueResponse
+  return (await response.json()) as CommandEnqueueResponse
 }
 
 export type DeployPreviewWarning = {
@@ -2986,12 +2860,8 @@ export type DeployPreviewResponse = {
  * Compiled runtime compose deploy would write (same prepare path), with secret
  * values redacted. May allocate containers / register volumes idempotently.
  */
-export async function fetchDeployPreview(
-  environmentId: string,
-): Promise<DeployPreviewResponse> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/deploy-preview`,
-  )
+export async function fetchDeployPreview(environmentId: string): Promise<DeployPreviewResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy-preview`)
 }
 
 export type StorageKind = 'volume' | 'directory' | 'file'
@@ -3088,20 +2958,15 @@ export type CreateStorageBody = {
 }
 
 export async function fetchStorage(
-  parentFilter:
-    | { environmentId: string }
-    | { projectId: string }
-    | { serviceId: string },
+  parentFilter: { environmentId: string } | { projectId: string } | { serviceId: string }
 ): Promise<{ storage: StorageRecord[] }> {
   const params = new URLSearchParams(
-    Object.entries(parentFilter).map(([key, value]) => [key, value]),
+    Object.entries(parentFilter).map(([key, value]) => [key, value])
   )
   return await apiFetch(`${CLIENT_API}/storage?${params.toString()}`)
 }
 
-export async function createStorage(
-  body: CreateStorageBody,
-): Promise<{ ok: true; id: string }> {
+export async function createStorage(body: CreateStorageBody): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/storage`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -3117,7 +2982,7 @@ export async function updateStorage(
     principalId?: string | null
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
-  },
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/storage/${id}`, {
     method: 'PATCH',
@@ -3132,7 +2997,7 @@ export async function updateStorageMount(
     destinationPath?: string
     subpath?: string | null
     readOnly?: boolean
-  },
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/storage/${storageId}/mounts/${mountId}`, {
     method: 'PATCH',
@@ -3160,14 +3025,14 @@ export type ProjectPrincipalRecord = {
 }
 
 export async function fetchProjectPrincipals(
-  projectId: string,
+  projectId: string
 ): Promise<{ principals: ProjectPrincipalRecord[] }> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`)
 }
 
 export async function createProjectPrincipal(
   projectId: string,
-  body: { username: string; serviceIds?: string[]; options?: Record<string, unknown> },
+  body: { username: string; serviceIds?: string[]; options?: Record<string, unknown> }
 ): Promise<{ ok: true; id: string; uid: number; gid: number; serviceIds?: string[] }> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`, {
     method: 'POST',
@@ -3178,7 +3043,7 @@ export async function createProjectPrincipal(
 export async function updateProjectPrincipalAssignments(
   projectId: string,
   principalId: string,
-  serviceIds: string[],
+  serviceIds: string[]
 ): Promise<{ ok: true; serviceIds: string[] }> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}`, {
     method: 'PATCH',
@@ -3186,10 +3051,7 @@ export async function updateProjectPrincipalAssignments(
   })
 }
 
-export async function deleteProjectPrincipal(
-  projectId: string,
-  id: string,
-): Promise<{ ok: true }> {
+export async function deleteProjectPrincipal(projectId: string, id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${id}`, {
     method: 'DELETE',
   })
@@ -3202,14 +3064,14 @@ export type ResourceLimits = {
 }
 
 export async function fetchOrgResourceLimits(
-  organizationId: string,
+  organizationId: string
 ): Promise<{ resourceLimits: ResourceLimits }> {
   return await apiFetch(`${CLIENT_API}/organizations/${organizationId}/resource-limits`)
 }
 
 export async function saveOrgResourceLimits(
   organizationId: string,
-  resourceLimits: ResourceLimits,
+  resourceLimits: ResourceLimits
 ): Promise<{ ok: true; resourceLimits: ResourceLimits }> {
   return await apiFetch(`${CLIENT_API}/organizations/${organizationId}/resource-limits`, {
     method: 'PUT',
@@ -3218,14 +3080,14 @@ export async function saveOrgResourceLimits(
 }
 
 export async function fetchServerResourceLimits(
-  serverId: string,
+  serverId: string
 ): Promise<{ resourceLimits: ResourceLimits }> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/resource-limits`)
 }
 
 export async function saveServerResourceLimits(
   serverId: string,
-  resourceLimits: ResourceLimits,
+  resourceLimits: ResourceLimits
 ): Promise<{ ok: true; resourceLimits: ResourceLimits }> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/resource-limits`, {
     method: 'PUT',
@@ -3233,9 +3095,7 @@ export async function saveServerResourceLimits(
   })
 }
 
-export async function stopEnvironment(
-  environmentId: string,
-): Promise<CommandEnqueueResponse> {
+export async function stopEnvironment(environmentId: string): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/stop`, {
     method: 'POST',
     body: JSON.stringify({}),
@@ -3268,10 +3128,7 @@ export const HOST_METRIC_KEYS = [
 
 export type HostMetricKey = (typeof HOST_METRIC_KEYS)[number]
 
-export type MetricsBackendKind =
-  | 'disabled'
-  | 'analytics-engine'
-  | 'clickhouse'
+export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'clickhouse'
 
 export type MetricsSeriesPoint = {
   at: string
@@ -3329,10 +3186,7 @@ export class MetricsBackendUnavailableError extends Error {
   readonly backend: MetricsBackendKind
 
   constructor(backend: MetricsBackendKind, message?: string) {
-    super(
-      message ??
-        `Metrics backend unavailable (${backend})`,
-    )
+    super(message ?? `Metrics backend unavailable (${backend})`)
     this.name = 'MetricsBackendUnavailableError'
     this.backend = backend
   }
@@ -3350,7 +3204,7 @@ async function fetchServerMetricsJson<T>(
   serverId: string,
   pathSuffix: string,
   query: URLSearchParams,
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<T> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -3369,14 +3223,14 @@ async function fetchServerMetricsJson<T>(
   if (response.status === 503) {
     let body: { error?: string; backend?: MetricsBackendKind } = {}
     try {
-      body = await response.json() as typeof body
+      body = (await response.json()) as typeof body
     } catch {
       // Non-JSON error body.
     }
     if (body.error === 'metrics_backend_unavailable') {
       throw new MetricsBackendUnavailableError(
         body.backend ?? 'disabled',
-        `${path} failed: metrics_backend_unavailable`,
+        `${path} failed: metrics_backend_unavailable`
       )
     }
   }
@@ -3384,7 +3238,7 @@ async function fetchServerMetricsJson<T>(
   if (!response.ok) {
     let bodyError: string | undefined
     try {
-      const body = await response.json() as { error?: string }
+      const body = (await response.json()) as { error?: string }
       if (body.error) bodyError = body.error
     } catch {
       // Non-JSON error body.
@@ -3393,13 +3247,13 @@ async function fetchServerMetricsJson<T>(
     throw new Error(`${path} failed: ${detail}`)
   }
 
-  return await response.json() as T
+  return (await response.json()) as T
 }
 
 export async function fetchServerMetricsSeries(
   serverId: string,
   options: FetchServerMetricsSeriesOptions,
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<MetricsSeriesResponse> {
   const query = new URLSearchParams({
     from: options.fromIso,
@@ -3419,14 +3273,14 @@ export async function fetchServerMetricsSeries(
     serverId,
     'series',
     query,
-    organizationId,
+    organizationId
   )
 }
 
 export async function fetchServerMetricsSummary(
   serverId: string,
   options: { fromIso: string; toIso: string },
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<MetricsSummaryResponse> {
   const query = new URLSearchParams({
     from: options.fromIso,
@@ -3437,7 +3291,7 @@ export async function fetchServerMetricsSummary(
     serverId,
     'summary',
     query,
-    organizationId,
+    organizationId
   )
 }
 
@@ -3446,7 +3300,7 @@ export async function fetchServerMetricsSummary(
  * Authz is server-side via listVisible — never pass client serverIds.
  */
 export async function fetchFleetMetricsLatest(
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<FleetMetricsLatestResponse> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -3472,7 +3326,7 @@ export async function fetchFleetMetricsLatest(
     if (body.error === 'metrics_backend_unavailable') {
       throw new MetricsBackendUnavailableError(
         body.backend ?? 'disabled',
-        `${path} failed: metrics_backend_unavailable`,
+        `${path} failed: metrics_backend_unavailable`
       )
     }
   }
@@ -3493,7 +3347,7 @@ export async function fetchFleetMetricsLatest(
 }
 
 export async function fetchEnvironmentManaged(
-  environmentId: string,
+  environmentId: string
 ): Promise<ManagedDetailResponse> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`)
 }
@@ -3519,7 +3373,7 @@ export async function createEnvironmentManaged(
       enabled: boolean
       scope?: ManagedSqlAccessScope
     }
-  },
+  }
 ): Promise<{
   ok: true
   managed: ManagedEnvironmentRecord
@@ -3528,79 +3382,62 @@ export async function createEnvironmentManaged(
   rootPassword?: string
   alreadyProvisioned?: boolean
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body ?? {}),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`, {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
+  })
 }
 
 export async function updateEnvironmentManaged(
   environmentId: string,
-  body: { settings: ManagedSettings },
+  body: { settings: ManagedSettings }
 ): Promise<{
   ok: true
   managed: ManagedEnvironmentRecord
   settings: ManagedSettings
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function applyEnvironmentManaged(
-  environmentId: string,
+  environmentId: string
 ): Promise<ManagedCommandResponse> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/apply`,
-    { method: 'POST', body: JSON.stringify({}) },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/apply`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
 }
 
 export async function runManagedLifecycle(
   environmentId: string,
-  action: 'start' | 'stop' | 'restart',
+  action: 'start' | 'stop' | 'restart'
 ): Promise<ManagedCommandResponse> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/lifecycle`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ action }),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/lifecycle`, {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
 }
 
 export async function runEnvironmentLifecycle(
   environmentId: string,
-  action: EnvironmentLifecycleAction,
+  action: EnvironmentLifecycleAction
 ): Promise<CommandEnqueueResponse> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/lifecycle`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ action }),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/lifecycle`, {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
 }
 
-export async function deleteEnvironmentManaged(
-  environmentId: string,
-): Promise<{
+export async function deleteEnvironmentManaged(environmentId: string): Promise<{
   ok: true
   deleted: boolean
   commandId?: string
   serverId?: string
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed`,
-    { method: 'DELETE' },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`, { method: 'DELETE' })
 }
 
 /**
@@ -3609,19 +3446,17 @@ export async function deleteEnvironmentManaged(
  * principal owns bindings, `redeployRequired` lists consumers that need a
  * redeploy to pick up the new password (API never restarts silently).
  */
-export async function rotateManagedRootPassword(
-  environmentId: string,
-): Promise<{
+export async function rotateManagedRootPassword(environmentId: string): Promise<{
   ok: true
   rootPassword: string
   commandId: string
   serverId: string
   redeployRequired?: BindingRedeployRequired
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/root-password`,
-    { method: 'POST', body: JSON.stringify({}) },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/root-password`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
 }
 
 /**
@@ -3631,7 +3466,7 @@ export async function rotateManagedRootPassword(
  */
 export async function rotateManagedUserPassword(
   environmentId: string,
-  principalId: string,
+  principalId: string
 ): Promise<{
   ok: true
   password: string
@@ -3641,16 +3476,14 @@ export async function rotateManagedUserPassword(
 }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}/password`,
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({}) }
   )
 }
 
 export async function fetchManagedUsers(
-  environmentId: string,
+  environmentId: string
 ): Promise<{ users: ManagedUserRecord[] }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/users`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/users`)
 }
 
 /**
@@ -3665,7 +3498,7 @@ export async function createManagedUser(
     privileges?: string[]
     /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */
     connectionRole?: ManagedConnectionRole
-  },
+  }
 ): Promise<{
   ok: true
   user: ManagedUserRecord
@@ -3673,54 +3506,46 @@ export async function createManagedUser(
   commandId: string
   serverId: string
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/users`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/users`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deleteManagedUser(
   environmentId: string,
-  principalId: string,
+  principalId: string
 ): Promise<ManagedCommandResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE' }
   )
 }
 
 export async function fetchManagedDatabases(
-  environmentId: string,
+  environmentId: string
 ): Promise<{ databases: string[] }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/databases`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/databases`)
 }
 
 export async function createManagedDatabase(
   environmentId: string,
-  body: { name: string },
+  body: { name: string }
 ): Promise<{
   ok: true
   databases: string[]
   commandId: string
   serverId: string
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/databases`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/databases`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deleteManagedDatabase(
   environmentId: string,
-  name: string,
+  name: string
 ): Promise<{
   ok: true
   databases: string[]
@@ -3729,33 +3554,26 @@ export async function deleteManagedDatabase(
 }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/databases/${encodeURIComponent(name)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE' }
   )
 }
 
-export async function fetchManagedStatus(
-  environmentId: string,
-): Promise<{
+export async function fetchManagedStatus(environmentId: string): Promise<{
   status: ManagedEnvironmentRecord['status']
   host: string | null
   port: number | null
   containers: ContainerRecord[]
   members: ManagedMemberRecord[]
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/status`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/status`)
 }
 
 export async function fetchManagedLogs(
   environmentId: string,
-  tail?: number,
+  tail?: number
 ): Promise<{ logs: string }> {
-  const query =
-    typeof tail === 'number' ? `?tail=${encodeURIComponent(String(tail))}` : ''
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/logs${query}`,
-  )
+  const query = typeof tail === 'number' ? `?tail=${encodeURIComponent(String(tail))}` : ''
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/logs${query}`)
 }
 
 /**
@@ -3763,7 +3581,7 @@ export async function fetchManagedLogs(
  * Managed overview table — never fan out per-row status or Durable Object reads.
  */
 export async function fetchOrganizationManaged(
-  orgId: string,
+  orgId: string
 ): Promise<{ managed: ManagedListRecord[] }> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/managed`)
 }
@@ -3773,54 +3591,50 @@ export async function fetchOrganizationManaged(
  * is no download endpoint and no dump bytes ever cross this API.
  */
 export async function fetchManagedBackups(
-  environmentId: string,
+  environmentId: string
 ): Promise<{ backups: ManagedBackupRecord[] }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/backups`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backups`)
 }
 
 export async function createManagedBackup(
   environmentId: string,
-  body?: { database?: string },
+  body?: { database?: string }
 ): Promise<{
   ok: true
   backupId: string
   commandId: string
   serverId: string
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/backups`,
-    { method: 'POST', body: JSON.stringify(body ?? {}) },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backups`, {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
+  })
 }
 
 export async function deleteManagedBackup(
   environmentId: string,
-  backupId: string,
+  backupId: string
 ): Promise<ManagedCommandResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/backups/${encodeURIComponent(backupId)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE' }
   )
 }
 
 export async function restoreManagedBackup(
   environmentId: string,
-  backupId: string,
+  backupId: string
 ): Promise<ManagedCommandResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/backups/${encodeURIComponent(backupId)}/restore`,
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({}) }
   )
 }
 
 export async function fetchManagedMembers(
-  environmentId: string,
+  environmentId: string
 ): Promise<{ members: ManagedMemberRecord[] }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/members`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/members`)
 }
 
 export async function addManagedReplica(
@@ -3829,15 +3643,12 @@ export async function addManagedReplica(
     serverId: string
     replicaClass?: 'failover' | 'read'
     readEligible?: boolean
-  },
+  }
 ): Promise<ManagedCommandResponse & { member?: ManagedMemberRecord }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/members`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/members`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function updateManagedMember(
@@ -3846,38 +3657,38 @@ export async function updateManagedMember(
   body: {
     readEligible?: boolean
     replicaClass?: 'failover' | 'read'
-  },
+  }
 ): Promise<ManagedCommandResponse & { member?: ManagedMemberRecord }> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}`,
     {
       method: 'PATCH',
       body: JSON.stringify(body),
-    },
+    }
   )
 }
 
 export async function removeManagedMember(
   environmentId: string,
-  memberId: string,
+  memberId: string
 ): Promise<ManagedCommandResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE' }
   )
 }
 
 export async function promoteManagedMember(
   environmentId: string,
   memberId: string,
-  body?: { force?: boolean },
+  body?: { force?: boolean }
 ): Promise<ManagedCommandResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}/promote`,
     {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
-    },
+    }
   )
 }
 
@@ -3899,14 +3710,14 @@ export type ManagedDisasterRecoveryResponse = ManagedCommandResponse & {
 
 export async function promoteManagedDisasterRecovery(
   environmentId: string,
-  body: { memberId: string; confirm: true },
+  body: { memberId: string; confirm: true }
 ): Promise<ManagedDisasterRecoveryResponse> {
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/disaster-recovery/promote`,
     {
       method: 'POST',
       body: JSON.stringify(body),
-    },
+    }
   )
 }
 
@@ -3928,7 +3739,7 @@ function bindingListQueryParams(filter: BindingListFilter): URLSearchParams {
 }
 
 export async function fetchBindings(
-  filter: BindingListFilter,
+  filter: BindingListFilter
 ): Promise<{ bindings: BindingRecord[] }> {
   const params = bindingListQueryParams(filter)
   return await apiFetch(`${CLIENT_API}/bindings?${params.toString()}`)
@@ -3953,7 +3764,7 @@ export async function updateBinding(
     keyPrefix?: string
     emitEngineDefaults?: boolean
     databaseName?: string
-  },
+  }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/bindings/${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -3961,9 +3772,7 @@ export async function updateBinding(
   })
 }
 
-export async function deleteBinding(
-  id: string,
-): Promise<{ ok: true }> {
+export async function deleteBinding(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/bindings/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })

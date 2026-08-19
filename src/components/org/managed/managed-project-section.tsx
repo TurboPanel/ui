@@ -1,16 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  useQueryClient,
-  type QueryClient,
-} from '@tanstack/react-query'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
 import { ManagedBackupsPanel } from '@/components/org/managed/managed-backups-panel'
 import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-panel'
 import { ManagedClusterPanel } from '@/components/org/managed/managed-cluster-panel'
@@ -21,66 +8,67 @@ import { ManagedSettingsPanel } from '@/components/org/managed/managed-settings-
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
 import {
-  defaultManagedVersionSelection,
-  ManagedVersionPicker,
-  type ManagedVersionSelection,
+    defaultManagedVersionSelection,
+    ManagedVersionPicker,
+    type ManagedVersionSelection,
 } from '@/components/org/managed/managed-version-picker'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
-import {
-  type EnvironmentRecord,
-} from '@/lib/instance-api'
-import {
-  managedCatalogEntryForCode,
-  managedEngineSupportsBackup,
-  managedErrorMessage,
-  type ManagedDetailResponse,
-  type ManagedSettings,
-  type ManagedUserRecord,
-} from '@/lib/managed-services'
+import { type EnvironmentRecord } from '@/lib/instance-api'
 import { hasReadEligibleReplica } from '@/lib/managed-read-endpoint'
 import { managedReleaseSummary } from '@/lib/managed-releases'
+import {
+    managedCatalogEntryForCode,
+    managedEngineSupportsBackup,
+    managedErrorMessage,
+    type ManagedDetailResponse,
+    type ManagedSettings,
+    type ManagedUserRecord,
+} from '@/lib/managed-services'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import {
-  isTerminalCommandStatus,
-  useCommandsBatch,
-  type TrackedCommandEntry,
+    isTerminalCommandStatus,
+    useCommandsBatch,
+    type TrackedCommandEntry,
 } from '@/lib/queries/commands'
 import {
-  useCreateEnvironment,
-  useDeleteEnvironment,
-  useEnvironment,
-  useEnvironments,
-  useUpdateEnvironment,
+    useCreateEnvironment,
+    useDeleteEnvironment,
+    useEnvironment,
+    useEnvironments,
+    useUpdateEnvironment,
 } from '@/lib/queries/environments'
 import {
-  useApplyEnvironmentManaged,
-  useCreateEnvironmentManaged,
-  useCreateManagedBackup,
-  useCreateManagedDatabase,
-  useCreateManagedUser,
-  useDeleteEnvironmentManaged,
-  useDeleteManagedBackup,
-  useDeleteManagedDatabase,
-  useDeleteManagedUser,
-  useEnvironmentManaged,
-  useManagedBackups,
-  useManagedDatabases,
-  useManagedStatus,
-  useManagedUsers,
-  useRestoreManagedBackup,
-  useRotateManagedRootPassword,
-  useRotateManagedUserPassword,
-  useRunManagedLifecycle,
-  useUpdateEnvironmentManaged,
-  alignMemberStatusesWithCluster,
-  mergeManagedMembers,
+    alignMemberStatusesWithCluster,
+    mergeManagedMembers,
+    useApplyEnvironmentManaged,
+    useCreateEnvironmentManaged,
+    useCreateManagedBackup,
+    useCreateManagedDatabase,
+    useCreateManagedUser,
+    useDeleteEnvironmentManaged,
+    useDeleteManagedBackup,
+    useDeleteManagedDatabase,
+    useDeleteManagedUser,
+    useEnvironmentManaged,
+    useManagedBackups,
+    useManagedDatabases,
+    useManagedStatus,
+    useManagedUsers,
+    useRestoreManagedBackup,
+    useRotateManagedRootPassword,
+    useRotateManagedUserPassword,
+    useRunManagedLifecycle,
+    useUpdateEnvironmentManaged,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
-import { queryKeys } from '@/lib/query-keys'
 import { useCan } from '@/lib/query-client'
+import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
 const webInputStyle = {
   borderWidth: 1,
@@ -124,15 +112,14 @@ function managedFocusVisibility(focus: ManagedBodyFocus): {
     showData: focus === 'all' || focus === 'data',
     showBackups: focus === 'all' || focus === 'backups',
     showSettings: focus === 'all' || focus === 'settings',
-    showLifecycle:
-      focus === 'all' || focus === 'environments' || focus === 'settings',
+    showLifecycle: focus === 'all' || focus === 'environments' || focus === 'settings',
   }
 }
 
 function invalidateEnvironmentManagedQueries(
   queryClient: QueryClient,
   orgId: string,
-  environmentId: string,
+  environmentId: string
 ): void {
   const managed = queryKeys.org(orgId).managed
   ignorePromise(
@@ -152,7 +139,7 @@ function invalidateEnvironmentManagedQueries(
       queryClient.invalidateQueries({
         queryKey: managed.backups(environmentId),
       }),
-    ]),
+    ])
   )
 }
 
@@ -208,7 +195,7 @@ function ManagedSetupPanel({
   const [serverId, setServerId] = useState<string | null>(null)
   const [expose, setExpose] = useState(false)
   const [version, setVersion] = useState<ManagedVersionSelection | null>(() =>
-    defaultManagedVersionSelection(engineCode),
+    defaultManagedVersionSelection(engineCode)
   )
   const [error, setError] = useState<string | null>(null)
   const submitGuard = useRef(false)
@@ -219,8 +206,7 @@ function ManagedSetupPanel({
 
   const servers = serversQuery.data?.servers ?? []
   const loading = serversQuery.isLoading
-  const submitting =
-    updateEnvironmentMutation.isPending || createManagedMutation.isPending
+  const submitting = updateEnvironmentMutation.isPending || createManagedMutation.isPending
 
   useEffect(() => {
     if (serverId || servers.length === 0) return
@@ -247,9 +233,7 @@ function ManagedSetupPanel({
         return
       }
       const result = await createManagedMutation.run({
-        ...(version
-          ? { engineSeries: version.series, imageVariant: version.variantId }
-          : {}),
+        ...(version ? { engineSeries: version.series, imageVariant: version.variantId } : {}),
         ...(expose ? { exposure: { enabled: true } } : {}),
       })
       if (!result.ok) {
@@ -287,9 +271,7 @@ function ManagedSetupPanel({
               <Text style={styles.serverLabel}>
                 {server.displayName?.trim() || server.hostname || server.id}
               </Text>
-              {offline ? (
-                <Text style={styles.offlineHint}>Offline</Text>
-              ) : null}
+              {offline ? <Text style={styles.offlineHint}>Offline</Text> : null}
             </Pressable>
           )
         })}
@@ -330,18 +312,14 @@ function ManagedSetupPanel({
           </Text>
         </Pressable>
       ) : (
-        <Text style={orgPanelStyles.muted}>
-          You need manage permission to create this service.
-        </Text>
+        <Text style={orgPanelStyles.muted}>You need manage permission to create this service.</Text>
       )}
     </SectionPanel>
   )
 }
 
 function isServerPlacementRequiredError(err: unknown): boolean {
-  return (
-    err instanceof Error && err.message.includes('server_placement_required')
-  )
+  return err instanceof Error && err.message.includes('server_placement_required')
 }
 
 export function ManagedEnvironmentBody({
@@ -378,8 +356,7 @@ export function ManagedEnvironmentBody({
   })
   const detail = managedQuery.data ?? null
 
-  const queryError =
-    environmentQuery.error ?? (hasServerPin ? managedQuery.error : null)
+  const queryError = environmentQuery.error ?? (hasServerPin ? managedQuery.error : null)
 
   useEffect(() => {
     if (!queryError) return
@@ -390,9 +367,7 @@ export function ManagedEnvironmentBody({
     setError(managedErrorMessage(queryError, 'Failed to load managed service'))
   }, [queryError])
 
-  const loading =
-    environmentQuery.isLoading ||
-    (hasServerPin && managedQuery.isLoading && !detail)
+  const loading = environmentQuery.isLoading || (hasServerPin && managedQuery.isLoading && !detail)
 
   if (loading && !detail && !revealPassword) {
     return <Text style={orgPanelStyles.muted}>Loading managed service…</Text>
@@ -427,11 +402,7 @@ export function ManagedEnvironmentBody({
           if (rootPassword) {
             setRevealPassword(rootPassword)
           }
-          invalidateEnvironmentManagedQueries(
-            queryClient,
-            orgId,
-            environmentId,
-          )
+          invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
           ignorePromise(environmentQuery.refetch())
           ignorePromise(managedQuery.refetch())
         }}
@@ -472,17 +443,9 @@ function ManagedEnvironmentReadyPanels({
   }
 }>) {
   const queryClient = useQueryClient()
-  const [trackedEntries, setTrackedEntries] = useState<
-    readonly TrackedCommandEntry[]
-  >([])
-  const {
-    showOverview,
-    showConnect,
-    showData,
-    showBackups,
-    showSettings,
-    showLifecycle,
-  } = managedFocusVisibility(focus)
+  const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
+  const { showOverview, showConnect, showData, showBackups, showSettings, showLifecycle } =
+    managedFocusVisibility(focus)
 
   const managed = detail.managed
   const settings = detail.settings
@@ -494,10 +457,7 @@ function ManagedEnvironmentReadyPanels({
   })
 
   const rotatePasswordMutation = useRotateManagedRootPassword(orgId, environmentId)
-  const rotateUserPasswordMutation = useRotateManagedUserPassword(
-    orgId,
-    environmentId,
-  )
+  const rotateUserPasswordMutation = useRotateManagedUserPassword(orgId, environmentId)
   const createDatabaseMutation = useCreateManagedDatabase(orgId, environmentId)
   const deleteDatabaseMutation = useDeleteManagedDatabase(orgId, environmentId)
   const createUserMutation = useCreateManagedUser(orgId, environmentId)
@@ -517,7 +477,7 @@ function ManagedEnvironmentReadyPanels({
   const backups = backupsQuery.data?.backups ?? []
   const members = alignMemberStatusesWithCluster(
     mergeManagedMembers(detail.members ?? [], status?.members ?? []),
-    status?.status ?? managed.status,
+    status?.status ?? managed.status
   )
   const serverId = managed.serverId ?? detail.server?.id ?? null
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
@@ -526,17 +486,10 @@ function ManagedEnvironmentReadyPanels({
     invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
   }
 
-  const registerCommand = (
-    commandId: string,
-    _label: string,
-    commandServerId?: string,
-  ) => {
+  const registerCommand = (commandId: string, _label: string, commandServerId?: string) => {
     const resolvedServerId = commandServerId ?? serverId
     if (!resolvedServerId) return
-    setTrackedEntries((current) => [
-      ...current,
-      { serverId: resolvedServerId, commandId },
-    ])
+    setTrackedEntries((current) => [...current, { serverId: resolvedServerId, commandId }])
   }
 
   useEffect(() => {
@@ -547,18 +500,13 @@ function ManagedEnvironmentReadyPanels({
       if (record.status === 'succeeded') {
         invalidateManagedData()
       }
-      setTrackedEntries((current) =>
-        current.filter((row) => row.commandId !== entry.commandId),
-      )
+      setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
     }
   }, [commandsQuery.data, trackedEntries, environmentId, orgId, queryClient])
 
   const inFlight =
     trackedEntries.length > 0 &&
-    (commandsQuery.data?.some(
-      (record) => !isTerminalCommandStatus(record.status),
-    ) ??
-      true)
+    (commandsQuery.data?.some((record) => !isTerminalCommandStatus(record.status)) ?? true)
 
   return (
     <View style={styles.panels}>
@@ -631,18 +579,14 @@ function ManagedEnvironmentReadyPanels({
           onDelete={async (backupId) => {
             const result = await deleteBackupMutation.run(backupId)
             if (!result.ok) {
-              throw new Error(
-                deleteBackupMutation.actionError ?? 'Failed to delete backup',
-              )
+              throw new Error(deleteBackupMutation.actionError ?? 'Failed to delete backup')
             }
             registerCommand(result.value.commandId, 'Delete backup')
           }}
           onRestore={async (backupId) => {
             const result = await restoreBackupMutation.run(backupId)
             if (!result.ok) {
-              throw new Error(
-                restoreBackupMutation.actionError ?? 'Failed to restore backup',
-              )
+              throw new Error(restoreBackupMutation.actionError ?? 'Failed to restore backup')
             }
             registerCommand(result.value.commandId, 'Restore backup')
           }}
@@ -657,9 +601,7 @@ function ManagedEnvironmentReadyPanels({
           onLifecycle={async (action) => {
             const result = await lifecycleMutation.run(action)
             if (!result.ok) {
-              throw new Error(
-                lifecycleMutation.actionError ?? 'Lifecycle action failed',
-              )
+              throw new Error(lifecycleMutation.actionError ?? 'Lifecycle action failed')
             }
             registerCommand(result.value.commandId, action)
           }}
@@ -692,9 +634,7 @@ function ManagedEnvironmentReadyPanels({
               settings: next,
             })
             if (!updateResult.ok) {
-              throw new Error(
-                updateManagedMutation.actionError ?? 'Failed to save settings',
-              )
+              throw new Error(updateManagedMutation.actionError ?? 'Failed to save settings')
             }
             const applyResult = await applyManagedMutation.mutateAsync()
             registerCommand(applyResult.commandId, 'Apply settings')
@@ -712,7 +652,7 @@ function ManagedEnvironmentReadyPanels({
           containers={status?.containers ?? []}
           version={managedReleaseSummary(
             managed.engine ? managedCatalogEntryForCode(managed.engine)?.label : null,
-            detail.release,
+            detail.release
           )}
         />
       ) : null}
@@ -755,11 +695,7 @@ function ManagedDataPanels({
   deleteUserMutation: ReturnType<typeof useDeleteManagedUser>
   usersQuery: ReturnType<typeof useManagedUsers>
   databasesQuery: ReturnType<typeof useManagedDatabases>
-  registerCommand: (
-    commandId: string,
-    label: string,
-    commandServerId?: string,
-  ) => void
+  registerCommand: (commandId: string, label: string, commandServerId?: string) => void
 }>) {
   return (
     <>
@@ -793,29 +729,21 @@ function ManagedDataPanels({
         onCreateDatabase={async (name) => {
           const result = await createDatabaseMutation.run({ name })
           if (!result.ok) {
-            throw new Error(
-              createDatabaseMutation.actionError ??
-                'Failed to create database',
-            )
+            throw new Error(createDatabaseMutation.actionError ?? 'Failed to create database')
           }
           registerCommand(result.value.commandId, 'Create database')
         }}
         onDeleteDatabase={async (name) => {
           const result = await deleteDatabaseMutation.run(name)
           if (!result.ok) {
-            throw new Error(
-              deleteDatabaseMutation.actionError ??
-                'Failed to delete database',
-            )
+            throw new Error(deleteDatabaseMutation.actionError ?? 'Failed to delete database')
           }
           registerCommand(result.value.commandId, 'Delete database')
         }}
         onCreateUser={async (input) => {
           const result = await createUserMutation.run(input)
           if (!result.ok) {
-            throw new Error(
-              createUserMutation.actionError ?? 'Failed to create user',
-            )
+            throw new Error(createUserMutation.actionError ?? 'Failed to create user')
           }
           registerCommand(result.value.commandId, 'Create user')
           return { password: result.value.password }
@@ -823,9 +751,7 @@ function ManagedDataPanels({
         onDeleteUser={async (principalId) => {
           const result = await deleteUserMutation.run(principalId)
           if (!result.ok) {
-            throw new Error(
-              deleteUserMutation.actionError ?? 'Failed to delete user',
-            )
+            throw new Error(deleteUserMutation.actionError ?? 'Failed to delete user')
           }
           registerCommand(result.value.commandId, 'Delete user')
         }}
@@ -852,7 +778,7 @@ function ManagedDataPanels({
 
 function resolveSelectedEnvironmentId(
   previous: string | null,
-  envs: EnvironmentRecord[],
+  envs: EnvironmentRecord[]
 ): string | null {
   if (previous && envs.some((env) => env.id === previous)) {
     return previous
@@ -889,19 +815,14 @@ function EnvironmentToolbarActions({
   }
   return (
     <View style={styles.toolbarActions}>
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-        onPress={onRename}
-      >
+      <Pressable style={[orgPanelStyles.toolbarBtnSecondary, webPointer]} onPress={onRename}>
         <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Rename</Text>
       </Pressable>
       <Pressable
         style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
         onPress={onNewEnvironment}
       >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-          New environment
-        </Text>
+        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>New environment</Text>
       </Pressable>
       {showDelete ? (
         <Pressable
@@ -909,9 +830,7 @@ function EnvironmentToolbarActions({
           disabled={deleting}
           onPress={onDeletePress}
         >
-          <Text
-            style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}
-          >
+          <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
             {deleteButtonLabel(deleteArmed, deleting)}
           </Text>
         </Pressable>
@@ -939,10 +858,7 @@ function RenameEnvironmentForm({
         onChangeText={onChange}
         editable={!saving}
       />
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
-        onPress={onSave}
-      >
+      <Pressable style={[orgPanelStyles.toolbarBtnPrimary, webPointer]} onPress={onSave}>
         <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
       </Pressable>
     </View>
@@ -970,10 +886,7 @@ function CreateEnvironmentForm({
         placeholderTextColor={colors.textDim}
         editable={!creating}
       />
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
-        onPress={onCreate}
-      >
+      <Pressable style={[orgPanelStyles.toolbarBtnPrimary, webPointer]} onPress={onCreate}>
         <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
           {creating ? 'Creating…' : 'Create'}
         </Text>
@@ -1011,10 +924,7 @@ function ActiveEnvironmentPanel({
   const [createName, setCreateName] = useState('')
   const [deleteArmed, setDeleteArmed] = useState(false)
 
-  const updateEnvironmentMutation = useUpdateEnvironment(
-    orgId,
-    activeEnvironment.id,
-  )
+  const updateEnvironmentMutation = useUpdateEnvironment(orgId, activeEnvironment.id)
   const createEnvironmentMutation = useCreateEnvironment(orgId)
   const deleteEnvironmentMutation = useDeleteEnvironment(orgId)
 
@@ -1087,9 +997,7 @@ function ActiveEnvironmentPanel({
       />
 
       <View style={styles.toolbar}>
-        <Text style={styles.activeName}>
-          {environmentLabel(activeEnvironment)}
-        </Text>
+        <Text style={styles.activeName}>{environmentLabel(activeEnvironment)}</Text>
         <EnvironmentToolbarActions
           canOwn={canOwn}
           showDelete={environments.length > 1}
@@ -1159,10 +1067,8 @@ export function ManagedProjectSection({
   projectDisplayName: string
 }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
-  const {
-    defaultEnvironmentName,
-    isLoading: defaultNameLoading,
-  } = useOrgDefaultEnvironmentName(orgId)
+  const { defaultEnvironmentName, isLoading: defaultNameLoading } =
+    useOrgDefaultEnvironmentName(orgId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const provisionAttemptedFor = useRef<string | null>(null)
@@ -1190,7 +1096,7 @@ export function ManagedProjectSection({
             if (!result.ok && createEnvironmentMutation.actionError) {
               setError(createEnvironmentMutation.actionError)
             }
-          }),
+          })
       )
     }
   }, [
@@ -1204,9 +1110,7 @@ export function ManagedProjectSection({
   ])
 
   useEffect(() => {
-    setSelectedId((previous) =>
-      resolveSelectedEnvironmentId(previous, environments),
-    )
+    setSelectedId((previous) => resolveSelectedEnvironmentId(previous, environments))
   }, [environments])
 
   useEffect(() => {
@@ -1214,13 +1118,12 @@ export function ManagedProjectSection({
       setError(
         environmentsQuery.error instanceof Error
           ? environmentsQuery.error.message
-          : 'Failed to load environments',
+          : 'Failed to load environments'
       )
     }
   }, [environmentsQuery.error])
 
-  const activeEnvironment =
-    environments.find((env) => env.id === selectedId) ?? null
+  const activeEnvironment = environments.find((env) => env.id === selectedId) ?? null
 
   const loading =
     defaultNameLoading ||

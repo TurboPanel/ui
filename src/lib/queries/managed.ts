@@ -1,58 +1,52 @@
 import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationResult,
-} from '@tanstack/react-query'
-import {
-  addManagedReplica,
-  applyEnvironmentManaged,
-  createEnvironmentManaged,
-  createManagedBackup,
-  createManagedDatabase,
-  createManagedUser,
-  deleteEnvironmentManaged,
-  deleteManagedBackup,
-  deleteManagedDatabase,
-  deleteManagedUser,
-  fetchEnvironmentManaged,
-  fetchManagedBackups,
-  fetchManagedDatabases,
-  fetchManagedLogs,
-  fetchManagedStatus,
-  fetchManagedUsers,
-  fetchOrganizationCa,
-  fetchOrganizationManaged,
-  isForbiddenError,
-  promoteManagedDisasterRecovery,
-  promoteManagedMember,
-  removeManagedMember,
-  restoreManagedBackup,
-  rotateManagedRootPassword,
-  rotateManagedUserPassword,
-  runManagedLifecycle,
-  updateEnvironmentManaged,
-  updateManagedMember,
+    addManagedReplica,
+    applyEnvironmentManaged,
+    createEnvironmentManaged,
+    createManagedBackup,
+    createManagedDatabase,
+    createManagedUser,
+    deleteEnvironmentManaged,
+    deleteManagedBackup,
+    deleteManagedDatabase,
+    deleteManagedUser,
+    fetchEnvironmentManaged,
+    fetchManagedBackups,
+    fetchManagedDatabases,
+    fetchManagedLogs,
+    fetchManagedStatus,
+    fetchManagedUsers,
+    fetchOrganizationCa,
+    fetchOrganizationManaged,
+    isForbiddenError,
+    promoteManagedDisasterRecovery,
+    promoteManagedMember,
+    removeManagedMember,
+    restoreManagedBackup,
+    rotateManagedRootPassword,
+    rotateManagedUserPassword,
+    runManagedLifecycle,
+    updateEnvironmentManaged,
+    updateManagedMember,
 } from '@/lib/instance-api'
 import type { ManagedMemberRecord } from '@/lib/managed-services'
+import { queryKeys, useApiMutation, type ApiMutationResult } from '@/lib/query-client'
 import {
-  useApiMutation,
-  queryKeys,
-  type ApiMutationResult,
-} from '@/lib/query-client'
+    useMutation,
+    useQuery,
+    useQueryClient,
+    type UseMutationResult,
+} from '@tanstack/react-query'
 
 const MANAGED_STATUS_POLL_MS = 5000
 
-function isManagedStatusInFlight(
-  status: string | null | undefined,
-): boolean {
+function isManagedStatusInFlight(status: string | null | undefined): boolean {
   return status === 'provisioning' || status === 'applying'
 }
 
 function invalidateManagedEnvironment(
   queryClient: ReturnType<typeof useQueryClient>,
   orgId: string,
-  environmentId: string,
+  environmentId: string
 ) {
   return Promise.all([
     queryClient.invalidateQueries({
@@ -70,7 +64,7 @@ export function useOrganizationManaged(
     enabled?: boolean
     refetchInterval?: number | false
     staleTime?: number
-  }>,
+  }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.orgList,
@@ -84,30 +78,24 @@ export function useOrganizationManaged(
 export function useEnvironmentManaged(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.environment(environmentId),
     queryFn: () => fetchEnvironmentManaged(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
 export function useManagedStatus(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.status(environmentId),
     queryFn: () => fetchManagedStatus(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
     refetchInterval: (query) => {
       const status = query.state.data?.status
       if (!isManagedStatusInFlight(status)) return false
@@ -119,45 +107,36 @@ export function useManagedStatus(
 export function useManagedUsers(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.users(environmentId),
     queryFn: () => fetchManagedUsers(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
 export function useManagedDatabases(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.databases(environmentId),
     queryFn: () => fetchManagedDatabases(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
 export function useManagedBackups(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.backups(environmentId),
     queryFn: () => fetchManagedBackups(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
@@ -165,15 +144,12 @@ export function useManagedBackups(
 export function useManagedLogs(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean; tail?: number }>,
+  options?: Readonly<{ enabled?: boolean; tail?: number }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.logs(environmentId),
     queryFn: () => fetchManagedLogs(environmentId, options?.tail),
-    enabled:
-      (options?.enabled ?? false) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? false) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
@@ -194,19 +170,14 @@ type ShowOnceSecretMutation<TData, TVariables> = Omit<
  */
 function useShowOnceSecretMutation<TData, TVariables = void>(
   mutation: UseMutationResult<TData, Error, TVariables>,
-  fallbackError: string,
+  fallbackError: string
 ): ShowOnceSecretMutation<TData, TVariables> {
   let actionError: string | null = null
   if (mutation.error && !isForbiddenError(mutation.error)) {
-    actionError =
-      mutation.error instanceof Error
-        ? mutation.error.message
-        : fallbackError
+    actionError = mutation.error instanceof Error ? mutation.error.message : fallbackError
   }
 
-  const run = async (
-    variables: TVariables,
-  ): Promise<ApiMutationResult<TData>> => {
+  const run = async (variables: TVariables): Promise<ApiMutationResult<TData>> => {
     try {
       const value = await mutation.mutateAsync(variables)
       mutation.reset()
@@ -260,8 +231,7 @@ export function useUpdateEnvironmentManaged(orgId: string, environmentId: string
   return useApiMutation({
     mutationFn: (body: Parameters<typeof updateEnvironmentManaged>[1]) =>
       updateEnvironmentManaged(environmentId, body),
-    onSuccess: () =>
-      invalidateManagedEnvironment(queryClient, orgId, environmentId),
+    onSuccess: () => invalidateManagedEnvironment(queryClient, orgId, environmentId),
   })
 }
 
@@ -341,8 +311,7 @@ export function useCreateManagedUser(orgId: string, environmentId: string) {
 export function useDeleteManagedUser(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (principalId: string) =>
-      deleteManagedUser(environmentId, principalId),
+    mutationFn: (principalId: string) => deleteManagedUser(environmentId, principalId),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -408,8 +377,7 @@ export function useCreateManagedBackup(orgId: string, environmentId: string) {
 export function useDeleteManagedBackup(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (backupId: string) =>
-      deleteManagedBackup(environmentId, backupId),
+    mutationFn: (backupId: string) => deleteManagedBackup(environmentId, backupId),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).managed.backups(environmentId),
@@ -420,8 +388,7 @@ export function useDeleteManagedBackup(orgId: string, environmentId: string) {
 export function useRestoreManagedBackup(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (backupId: string) =>
-      restoreManagedBackup(environmentId, backupId),
+    mutationFn: (backupId: string) => restoreManagedBackup(environmentId, backupId),
     onSuccess: () =>
       Promise.all([
         invalidateManagedEnvironment(queryClient, orgId, environmentId),
@@ -436,10 +403,7 @@ export function useRestoreManagedBackup(orgId: string, environmentId: string) {
  * Resolve cluster member identity from detail (`id`) or legacy status
  * (`memberId`). Empty / missing ids are dropped so merges never invent ghosts.
  */
-function memberIdentityId(member: {
-  id?: string | null
-  memberId?: string | null
-}): string | null {
+function memberIdentityId(member: { id?: string | null; memberId?: string | null }): string | null {
   if (typeof member.id === 'string' && member.id.length > 0) return member.id
   if (typeof member.memberId === 'string' && member.memberId.length > 0) {
     return member.memberId
@@ -457,7 +421,7 @@ function memberIdentityId(member: {
  */
 export function mergeManagedMembers(
   detailMembers: readonly ManagedMemberRecord[] | null | undefined,
-  statusMembers: readonly unknown[] | null | undefined,
+  statusMembers: readonly unknown[] | null | undefined
 ): ManagedMemberRecord[] {
   const byId = new Map<string, ManagedMemberRecord>()
   for (const member of detailMembers ?? []) {
@@ -471,12 +435,7 @@ export function mergeManagedMembers(
     const id = memberIdentityId(statusRow)
     if (!id) continue
     const prior = byId.get(id)
-    byId.set(
-      id,
-      prior
-        ? { ...prior, ...statusRow, id }
-        : { ...statusRow, id },
-    )
+    byId.set(id, prior ? { ...prior, ...statusRow, id } : { ...statusRow, id })
   }
   return [...byId.values()].sort((a, b) => {
     if (a.role !== b.role) {
@@ -493,7 +452,7 @@ export function mergeManagedMembers(
  */
 export function alignMemberStatusesWithCluster(
   members: readonly ManagedMemberRecord[],
-  clusterStatus: string | null | undefined,
+  clusterStatus: string | null | undefined
 ): ManagedMemberRecord[] {
   if (clusterStatus !== 'failed') {
     return [...members]
@@ -509,7 +468,7 @@ export function alignMemberStatusesWithCluster(
 function invalidateManagedMembers(
   queryClient: ReturnType<typeof useQueryClient>,
   orgId: string,
-  environmentId: string,
+  environmentId: string
 ) {
   return Promise.all([
     invalidateManagedEnvironment(queryClient, orgId, environmentId),
@@ -537,10 +496,7 @@ export function useAddManagedReplica(orgId: string, environmentId: string) {
   })
 }
 
-export function useUpdateManagedMemberReadEligible(
-  orgId: string,
-  environmentId: string,
-) {
+export function useUpdateManagedMemberReadEligible(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (input: { memberId: string; readEligible: boolean }) =>
@@ -551,16 +507,10 @@ export function useUpdateManagedMemberReadEligible(
   })
 }
 
-export function useUpdateManagedMemberReplicaClass(
-  orgId: string,
-  environmentId: string,
-) {
+export function useUpdateManagedMemberReplicaClass(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (input: {
-      memberId: string
-      replicaClass: 'failover' | 'read'
-    }) =>
+    mutationFn: (input: { memberId: string; replicaClass: 'failover' | 'read' }) =>
       updateManagedMember(environmentId, input.memberId, {
         replicaClass: input.replicaClass,
       }),
@@ -571,8 +521,7 @@ export function useUpdateManagedMemberReplicaClass(
 export function useRemoveManagedMember(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (memberId: string) =>
-      removeManagedMember(environmentId, memberId),
+    mutationFn: (memberId: string) => removeManagedMember(environmentId, memberId),
     onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
   })
 }
@@ -588,10 +537,7 @@ export function usePromoteManagedMember(orgId: string, environmentId: string) {
   })
 }
 
-export function usePromoteManagedDisasterRecovery(
-  orgId: string,
-  environmentId: string,
-) {
+export function usePromoteManagedDisasterRecovery(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (memberId: string) =>
@@ -603,14 +549,10 @@ export function usePromoteManagedDisasterRecovery(
   })
 }
 
-export function useRotateManagedUserPassword(
-  orgId: string,
-  environmentId: string,
-) {
+export function useRotateManagedUserPassword(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (principalId: string) =>
-      rotateManagedUserPassword(environmentId, principalId),
+    mutationFn: (principalId: string) => rotateManagedUserPassword(environmentId, principalId),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -628,10 +570,7 @@ export function useRotateManagedUserPassword(
 }
 
 /** Long-lived org CA — no polling. */
-export function useOrganizationCa(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrganizationCa(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).tlsCa,
     queryFn: () => fetchOrganizationCa(),
