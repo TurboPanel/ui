@@ -77,7 +77,10 @@ export function useOptionalPullToRefresh(): PullToRefreshContextValue | null {
 export function usePullToRefresh(handler: PullToRefreshHandler): void {
   const ctx = useContext(PullToRefreshContext)
   const handlerRef = useRef(handler)
-  handlerRef.current = handler
+
+  useEffect(() => {
+    handlerRef.current = handler
+  }, [handler])
 
   useEffect(() => {
     if (!ctx) return

@@ -8,15 +8,18 @@ import {
 import type { ComposeDocument } from '@/lib/compose'
 import type {
   ManagedBackupRecord,
-  ManagedBindScope,
+  ManagedConnectionRole,
   ManagedDetailResponse,
   ManagedEnvironmentRecord,
   ManagedListRecord,
   ManagedMemberRecord,
   ManagedServiceEngine,
   ManagedSettings,
+  ManagedSqlAccessScope,
   ManagedUserRecord,
 } from '@/lib/managed-services'
+import type { ManagedSslMode } from '@/lib/managed-ssl'
+import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 export {
   isForbiddenError,
   isHttpStatusError,
@@ -28,26 +31,36 @@ export type {
   ManagedBackupRecord,
   ManagedBindScope,
   ManagedConnectionInfo,
+  ManagedConnectionRole,
   ManagedDetailResponse,
   ManagedEngineAvailability,
   ManagedEnvironmentRecord,
   ManagedListRecord,
   ManagedMemberRecord,
   ManagedMemberRole,
+  ManagedAccessEndpoint,
+  ManagedSqlAccessScope,
   ManagedMemberTransport,
+  ManagedReleaseView,
   ManagedReplicaClass,
   ManagedReplicationHealth,
   ManagedServerSummary,
   ManagedServiceEngine,
   ManagedSettings,
+  ManagedSslView,
   ManagedStatus,
   ManagedUserRecord,
 } from '@/lib/managed-services'
+export type { ManagedSslMode } from '@/lib/managed-ssl'
+export type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 
 /** Exported so panels compare against symbols, not string literals. */
 export const USERNAME_IN_USE_ERROR = 'username_in_use'
 export const MANAGED_MEMBER_EXISTS_ERROR = 'managed_member_exists'
 export const MANAGED_REPLICA_NOT_PROMOTABLE_ERROR = 'managed_replica_not_promotable'
+export const MANAGED_AUTOMATIC_FAILOVER_BLOCKED_ERROR =
+  'managed_automatic_failover_blocked'
+export const MANAGED_NO_READ_TARGETS_ERROR = 'managed_no_read_targets'
 export const FAILOVER_REPLICA_REQUIRES_DATACENTER_TRANSPORT_ERROR =
   'failover_replica_requires_datacenter_transport'
 export const MANAGED_MEMBER_IS_PRIMARY_ERROR = 'managed_member_is_primary'
@@ -624,6 +637,52 @@ export async function saveOrgDefaultEnvironment(
     {
       method: 'PUT',
       body: JSON.stringify({ defaultEnvironmentName }),
+    },
+  )
+}
+
+/**
+ * Organization-wide managed-database defaults. `sslMode` / `ports` are the
+ * configured values (`null` = inheriting the platform value); the `effective*`
+ * fields are what a managed service with no override resolves to today.
+ *
+ * Ports are per protocol family and organization-wide on purpose: one shared
+ * ProxySQL fronts every managed cluster on a server, so a per-service port
+ * would defeat the shared listener. MariaDB rides `mysqlFamily`.
+ */
+export type OrgManagedDefaults = {
+  sslMode: ManagedSslMode | null
+  effectiveSslMode: ManagedSslMode
+  ports: {
+    postgres: number | null
+    mysqlFamily: number | null
+  }
+  effectivePorts: ManagedIngressPorts
+}
+
+/** `undefined` on a key leaves it unchanged; `null` clears it to the default. */
+export type OrgManagedDefaultsPatch = {
+  sslMode?: ManagedSslMode | null
+  ports?: { postgres?: number | null; mysqlFamily?: number | null } | null
+}
+
+export async function fetchOrgManagedDefaults(
+  orgId: string,
+): Promise<OrgManagedDefaults> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/managed-defaults`,
+  )
+}
+
+export async function saveOrgManagedDefaults(
+  orgId: string,
+  patch: OrgManagedDefaultsPatch,
+): Promise<OrgManagedDefaults & { ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/managed-defaults`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(patch),
     },
   )
 }
@@ -3448,9 +3507,17 @@ export async function createEnvironmentManaged(
   environmentId: string,
   body?: {
     displayName?: string
+    /**
+     * Engine version series from the release catalog (`18`, `9.7`, `12.3`).
+     * Omitted = engine default. Rejected with `managed_version_unsupported`
+     * when it is not in the catalog.
+     */
+    engineSeries?: string
+    /** Base-OS variant of `engineSeries` (`alpine` / `debian` / `oraclelinux9` / `ubi`). */
+    imageVariant?: string
     exposure?: {
       enabled: boolean
-      bind?: ManagedBindScope
+      scope?: ManagedSqlAccessScope
     }
   },
 ): Promise<{
@@ -3596,6 +3663,8 @@ export async function createManagedUser(
     username: string
     databases: string[]
     privileges?: string[]
+    /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */
+    connectionRole?: ManagedConnectionRole
   },
 ): Promise<{
   ok: true
@@ -3808,6 +3877,35 @@ export async function promoteManagedMember(
     {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
+    },
+  )
+}
+
+export type ManagedDisasterRecoveryResponse = ManagedCommandResponse & {
+  fencePending: boolean
+  kind: 'disaster-recovery'
+  lagBytes: number | null
+  source: {
+    memberId: string
+    serverId: string
+    datacenterId: string | null
+  }
+  target: {
+    memberId: string
+    serverId: string
+    datacenterId: string | null
+  }
+}
+
+export async function promoteManagedDisasterRecovery(
+  environmentId: string,
+  body: { memberId: string; confirm: true },
+): Promise<ManagedDisasterRecoveryResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/disaster-recovery/promote`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
     },
   )
 }

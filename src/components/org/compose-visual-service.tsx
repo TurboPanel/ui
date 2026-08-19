@@ -15,6 +15,7 @@ import {
   dockerfileHasFromInstruction,
   parseComposeBuild,
   setComposeBuildInline,
+  type ComposeBuildRef,
 } from '@/lib/compose/build-ref'
 import {
   formatComposeImageRef,
@@ -396,6 +397,20 @@ function ImageRefFields({
   )
 }
 
+function externalBuildLocationSuffix(buildRef: ComposeBuildRef): string {
+  const parts: string[] = []
+  if (buildRef.context) {
+    parts.push(`context: ${buildRef.context}`)
+  }
+  if (buildRef.dockerfilePath) {
+    parts.push(`dockerfile: ${buildRef.dockerfilePath}`)
+  }
+  if (parts.length === 0) {
+    return ''
+  }
+  return ` (${parts.join(', ')})`
+}
+
 function DockerfileField({
   value,
   disabled,
@@ -459,13 +474,8 @@ function DockerfileField({
         <>
           <Text style={styles.hint}>
             This service uses an external build
-            {buildRef.context ? ` (context: ${buildRef.context}` : ''}
-            {buildRef.dockerfilePath
-              ? `${buildRef.context ? ', ' : ' ('}dockerfile: ${buildRef.dockerfilePath}`
-              : ''}
-            {buildRef.context || buildRef.dockerfilePath ? ')' : ''}. Edit the
-            Compose YAML to change path-based builds, or convert to an inline
-            Dockerfile below.
+            {externalBuildLocationSuffix(buildRef)}. Edit the Compose YAML to
+            change path-based builds, or convert to an inline Dockerfile below.
           </Text>
           <Pressable
             style={styles.convertChip}
@@ -486,6 +496,54 @@ function DockerfileField({
       ) : null}
     </View>
   )
+}
+
+type ContainerVisualFlags = {
+  addable: VisualFieldDef[]
+  showRestart: boolean
+  showPorts: boolean
+  showBuild: boolean
+  showContainerName: boolean
+  showImageFields: boolean
+  showRegistryAdd: boolean
+  hasAddChips: boolean
+}
+
+function containerVisualFlags(
+  service: Record<string, unknown>,
+  traditional: boolean,
+  registryOpen: boolean,
+): ContainerVisualFlags {
+  if (traditional) {
+    return {
+      addable: [],
+      showRestart: false,
+      showPorts: false,
+      showBuild: false,
+      showContainerName: false,
+      showImageFields: false,
+      showRegistryAdd: false,
+      hasAddChips: false,
+    }
+  }
+  const showBuild = serviceHasVisualField(service, visualFieldById('build'))
+  // Image/Tag/Registry are for pulled images — hide when a Dockerfile builds on deploy.
+  const showImageFields = !showBuild
+  const showRegistryAdd = showImageFields && !registryOpen
+  const addable = addableVisualFields(service)
+  return {
+    addable,
+    showRestart: serviceHasVisualField(service, visualFieldById('restart')),
+    showPorts: serviceHasVisualField(service, visualFieldById('ports')),
+    showBuild,
+    showContainerName: serviceHasVisualField(
+      service,
+      visualFieldById('container_name'),
+    ),
+    showImageFields,
+    showRegistryAdd,
+    hasAddChips: addable.length > 0 || showRegistryAdd,
+  }
 }
 
 export function ComposeVisualServiceCard({
@@ -522,20 +580,16 @@ export function ComposeVisualServiceCard({
 
   const traditional = isTraditionalWebComposeService(service)
   const extension = readServiceTurbopanelExtension(service) ?? {}
-  const addable = traditional ? [] : addableVisualFields(service)
-  const showRestart =
-    !traditional && serviceHasVisualField(service, visualFieldById('restart'))
-  const showPorts =
-    !traditional && serviceHasVisualField(service, visualFieldById('ports'))
-  const showBuild =
-    !traditional && serviceHasVisualField(service, visualFieldById('build'))
-  const showContainerName =
-    !traditional &&
-    serviceHasVisualField(service, visualFieldById('container_name'))
-  // Image/Tag/Registry are for pulled images — hide when a Dockerfile builds on deploy.
-  const showImageFields = !traditional && !showBuild
-  const showRegistryAdd = showImageFields && !registryOpen
-  const hasAddChips = addable.length > 0 || showRegistryAdd
+  const {
+    addable,
+    showRestart,
+    showPorts,
+    showBuild,
+    showContainerName,
+    showImageFields,
+    showRegistryAdd,
+    hasAddChips,
+  } = containerVisualFlags(service, traditional, registryOpen)
 
   const applyExtension = (
     patch: Parameters<typeof patchServiceTurbopanelExtension>[1],

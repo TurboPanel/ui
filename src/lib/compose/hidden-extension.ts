@@ -81,6 +81,126 @@ function clonePresentationShell(
   }
 }
 
+function withoutServiceExtension(
+  service: Record<string, unknown>,
+): Record<string, unknown> {
+  const { [TURBOPANEL_SERVICE_EXTENSION_KEY]: _removed, ...rest } = service
+  return rest
+}
+
+function stashRootExtension(
+  data: Record<string, unknown>,
+  hidden: ComposeHiddenExtensions,
+): void {
+  if (!(TURBOPANEL_EXTENSION_KEY in data)) return
+  hidden.root = deepCopy(data[TURBOPANEL_EXTENSION_KEY])
+  delete data[TURBOPANEL_EXTENSION_KEY]
+}
+
+function stashVisibleService(
+  name: string,
+  serviceValue: unknown,
+  hidden: ComposeHiddenExtensions,
+): unknown {
+  if (!isRecord(serviceValue)) return serviceValue
+  if (!(TURBOPANEL_SERVICE_EXTENSION_KEY in serviceValue)) return serviceValue
+  hidden.services[name] = deepCopy(
+    serviceValue[TURBOPANEL_SERVICE_EXTENSION_KEY],
+  )
+  return withoutServiceExtension(serviceValue)
+}
+
+function stashServiceExtensions(
+  data: Record<string, unknown>,
+  hidden: ComposeHiddenExtensions,
+): void {
+  const servicesValue = data.services
+  if (!isRecord(servicesValue)) return
+  const nextServices: Record<string, unknown> = {}
+  for (const [name, serviceValue] of Object.entries(servicesValue)) {
+    nextServices[name] = stashVisibleService(name, serviceValue, hidden)
+  }
+  data.services = nextServices
+}
+
+function takeManagedPresentation<T>(
+  source: Record<string, T>,
+  into: Record<string, T>,
+  copy: (value: T) => T,
+): Record<string, T> {
+  const kept: Record<string, T> = {}
+  for (const [path, value] of Object.entries(source)) {
+    if (isManagedExtensionPresentationPath(path)) {
+      into[path] = copy(value)
+    } else {
+      kept[path] = value
+    }
+  }
+  return kept
+}
+
+function applyHiddenRoot(
+  data: Record<string, unknown>,
+  keyOrder: string[],
+  root: unknown,
+): void {
+  if (root !== undefined) {
+    data[TURBOPANEL_EXTENSION_KEY] = deepCopy(root)
+    if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
+      keyOrder.push(TURBOPANEL_EXTENSION_KEY)
+    }
+    return
+  }
+  delete data[TURBOPANEL_EXTENSION_KEY]
+  const extIndex = keyOrder.indexOf(TURBOPANEL_EXTENSION_KEY)
+  if (extIndex >= 0) {
+    keyOrder.splice(extIndex, 1)
+  }
+}
+
+function restoreVisibleService(
+  name: string,
+  serviceValue: unknown,
+  hiddenServices: Record<string, unknown>,
+): unknown {
+  if (!isRecord(serviceValue)) return serviceValue
+  const rest = withoutServiceExtension(serviceValue)
+  if (!Object.hasOwn(hiddenServices, name)) return rest
+  return {
+    ...rest,
+    [TURBOPANEL_SERVICE_EXTENSION_KEY]: deepCopy(hiddenServices[name]),
+  }
+}
+
+function restoreServiceExtensions(
+  data: Record<string, unknown>,
+  hiddenServices: Record<string, unknown>,
+): void {
+  const servicesValue = data.services
+  if (!isRecord(servicesValue)) return
+  const nextServices: Record<string, unknown> = {}
+  for (const [name, serviceValue] of Object.entries(servicesValue)) {
+    nextServices[name] = restoreVisibleService(name, serviceValue, hiddenServices)
+  }
+  data.services = nextServices
+}
+
+function overlayHiddenPresentation<T>(
+  visible: Record<string, T>,
+  hidden: Record<string, T>,
+  copy: (value: T) => T,
+): Record<string, T> {
+  const next: Record<string, T> = {}
+  for (const [path, value] of Object.entries(visible)) {
+    if (isManagedExtensionPresentationPath(path)) continue
+    next[path] = value
+  }
+  for (const [path, value] of Object.entries(hidden)) {
+    next[path] = copy(value)
+  }
+  return next
+}
+
 /**
  * Remove every `x-turbopanel` node (top-level and per-service) plus matching
  * presentation entries into a shadow. Service keys stay even when empty
@@ -97,55 +217,19 @@ export function hideComposeTurbopanelExtensions(
     blankLines: {},
   }
 
-  if (TURBOPANEL_EXTENSION_KEY in data) {
-    hidden.root = deepCopy(data[TURBOPANEL_EXTENSION_KEY])
-    delete data[TURBOPANEL_EXTENSION_KEY]
-  }
+  stashRootExtension(data, hidden)
+  stashServiceExtensions(data, hidden)
 
-  const servicesValue = data.services
-  if (isRecord(servicesValue)) {
-    const nextServices: Record<string, unknown> = {}
-    for (const [name, serviceValue] of Object.entries(servicesValue)) {
-      if (!isRecord(serviceValue)) {
-        nextServices[name] = serviceValue
-        continue
-      }
-      if (TURBOPANEL_SERVICE_EXTENSION_KEY in serviceValue) {
-        hidden.services[name] = deepCopy(
-          serviceValue[TURBOPANEL_SERVICE_EXTENSION_KEY],
-        )
-        const {
-          [TURBOPANEL_SERVICE_EXTENSION_KEY]: _removed,
-          ...rest
-        } = serviceValue
-        nextServices[name] = rest
-      } else {
-        nextServices[name] = serviceValue
-      }
-    }
-    data.services = nextServices
-  }
-
-  const comments: Record<string, ComposeComment> = {}
-  for (const [path, comment] of Object.entries(normalized.presentation.comments)) {
-    if (isManagedExtensionPresentationPath(path)) {
-      hidden.comments[path] = { ...comment }
-    } else {
-      comments[path] = comment
-    }
-  }
-
-  const blankLines: Record<string, number> = {}
-  for (const [path, count] of Object.entries(
+  const comments = takeManagedPresentation(
+    normalized.presentation.comments,
+    hidden.comments,
+    (comment) => ({ ...comment }),
+  )
+  const blankLines = takeManagedPresentation(
     normalized.presentation.blankLines ?? {},
-  )) {
-    if (isManagedExtensionPresentationPath(path)) {
-      hidden.blankLines[path] = count
-    } else {
-      blankLines[path] = count
-    }
-  }
-
+    hidden.blankLines,
+    (count) => count,
+  )
   const keyOrder = normalized.presentation.keyOrder.filter(
     (key) => key !== TURBOPANEL_EXTENSION_KEY,
   )
@@ -177,64 +261,19 @@ export function restoreComposeTurbopanelExtensions(
   const data = { ...normalized.data }
   const keyOrder = [...normalized.presentation.keyOrder]
 
-  if (hidden.root !== undefined) {
-    data[TURBOPANEL_EXTENSION_KEY] = deepCopy(hidden.root)
-    if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
-      keyOrder.push(TURBOPANEL_EXTENSION_KEY)
-    }
-  } else {
-    delete data[TURBOPANEL_EXTENSION_KEY]
-    const extIndex = keyOrder.indexOf(TURBOPANEL_EXTENSION_KEY)
-    if (extIndex >= 0) {
-      keyOrder.splice(extIndex, 1)
-    }
-  }
+  applyHiddenRoot(data, keyOrder, hidden.root)
+  restoreServiceExtensions(data, hidden.services)
 
-  const servicesValue = data.services
-  if (isRecord(servicesValue)) {
-    const nextServices: Record<string, unknown> = {}
-    for (const [name, serviceValue] of Object.entries(servicesValue)) {
-      if (!isRecord(serviceValue)) {
-        nextServices[name] = serviceValue
-        continue
-      }
-      const {
-        [TURBOPANEL_SERVICE_EXTENSION_KEY]: _authorTyped,
-        ...rest
-      } = serviceValue
-      if (Object.hasOwn(hidden.services, name)) {
-        nextServices[name] = {
-          ...rest,
-          [TURBOPANEL_SERVICE_EXTENSION_KEY]: deepCopy(hidden.services[name]),
-        }
-      } else {
-        nextServices[name] = rest
-      }
-    }
-    data.services = nextServices
-  }
-
-  const comments: Record<string, ComposeComment> = {}
-  for (const [path, comment] of Object.entries(normalized.presentation.comments)) {
-    if (!isManagedExtensionPresentationPath(path)) {
-      comments[path] = comment
-    }
-  }
-  for (const [path, comment] of Object.entries(hidden.comments)) {
-    comments[path] = { ...comment }
-  }
-
-  const blankLines: Record<string, number> = {}
-  for (const [path, count] of Object.entries(
+  const comments = overlayHiddenPresentation(
+    normalized.presentation.comments,
+    hidden.comments,
+    (comment) => ({ ...comment }),
+  )
+  const blankLines = overlayHiddenPresentation(
     normalized.presentation.blankLines ?? {},
-  )) {
-    if (!isManagedExtensionPresentationPath(path)) {
-      blankLines[path] = count
-    }
-  }
-  for (const [path, count] of Object.entries(hidden.blankLines)) {
-    blankLines[path] = count
-  }
+    hidden.blankLines,
+    (count) => count,
+  )
 
   return {
     version: 1,

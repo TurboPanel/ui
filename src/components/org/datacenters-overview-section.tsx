@@ -252,12 +252,15 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
     () => sortDatacentersByName(datacentersQuery.data?.datacenters ?? []),
     [datacentersQuery.data?.datacenters]
   )
-  const servers = serversQuery.data?.servers ?? []
-  const eligibleCount = listServersWithReportedPrivateNetworks(servers).length
-  const serverCounts = useMemo(() => countServersByDatacenterId(servers), [servers])
+  const serverList = serversQuery.data?.servers
+  const eligibleCount = listServersWithReportedPrivateNetworks(serverList ?? []).length
+  const serverCounts = useMemo(
+    () => countServersByDatacenterId(serverList ?? []),
+    [serverList],
+  )
   const eligibility = resolveDatacenterAddEligibility({
     serversWithPrivateAddress: eligibleCount,
-    serverCount: servers.length,
+    serverCount: serverList?.length ?? 0,
   })
   const canAdd = canManage && eligibility.canAdd
 

@@ -3,6 +3,11 @@
  * `environment_id` for engine projects created from the catalog.
  */
 
+import {
+  defaultManagedImage,
+  managedAllowedImagesForEngine,
+} from '@/lib/managed-releases'
+import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 export type ManagedServiceEngine =
@@ -23,35 +28,72 @@ export type ManagedStatus =
   | 'stopped'
   | 'failed'
 
-export type ManagedBindScope = 'public' | 'datacenter' | 'local'
+import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
 
-/** Client listener ports on the shared ProxySQL frontend (not engine-native). */
-export const MANAGED_INGRESS_PGSQL_PORT = 15432
-export const MANAGED_INGRESS_MYSQL_PORT = 16306
+/** @deprecated Use {@link ManagedSqlAccessScope} — legacy alias for one-release reads. */
+export type ManagedBindScope = ManagedSqlAccessScope
+
+export type { ManagedSqlAccessScope }
 
 /**
- * Client listener port for an engine. Catalog `defaultPort` stays engine
- * metadata; apps dial these ingress ports instead.
+ * Client listener ports on the shared ProxySQL frontend (not engine-native).
+ *
+ * Re-exported from `@/lib/managed-ingress-ports`, which is the single mirror of
+ * the control-plane contract. These are only the **platform defaults**: an
+ * organization can move either listener, so anything rendering a live endpoint
+ * must prefer the port the API resolved rather than these constants.
  */
-export function managedIngressPortForEngine(
-  engine: ManagedServiceEngine | null | undefined,
-  defaultPort?: number,
-): number {
-  if (
-    defaultPort === 3306 ||
-    engine === 'mysql' ||
-    engine === 'mariadb'
-  ) {
-    return MANAGED_INGRESS_MYSQL_PORT
-  }
-  return MANAGED_INGRESS_PGSQL_PORT
-}
+export {
+  DEFAULT_MANAGED_INGRESS_PORTS,
+  managedIngressPortForEngine,
+  MANAGED_INGRESS_MYSQL_PORT,
+  MANAGED_INGRESS_PGSQL_PORT,
+} from '@/lib/managed-ingress-ports'
+export type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 
 /** Cluster member role (mirrors instance `ManagedMemberRole`). */
 export type ManagedMemberRole = 'primary' | 'replica'
 
 /** Replica class (mirrors instance `ManagedReplicaClass`). Null on primary. */
 export type ManagedReplicaClass = 'failover' | 'read'
+
+/** Failover replica uses recorded switchover; read replica uses the DR route. */
+export type ManagedReplicaPromoteAction = 'switchover' | 'disaster-recovery'
+
+export type ManagedRecoveryKind =
+  | 'automatic-failover'
+  | 'switchover'
+  | 'disaster-recovery'
+
+export type ManagedRecoveryState =
+  | 'detecting'
+  | 'fencing'
+  | 'promoting'
+  | 'repointing'
+  | 'reconciling-ingress'
+  | 'verifying'
+  | 'completed'
+  | 'failed'
+  | 'blocked'
+
+export type ManagedRecoveryRecord = {
+  id: string
+  kind: ManagedRecoveryKind
+  state: ManagedRecoveryState
+  sourcePrimaryMemberId: string
+  targetMemberId: string | null
+  startedAt: string
+  completedAt: string | null
+  blockedReason: string | null
+  lagBytes: number | null
+  sourceDatacenterId: string | null
+  targetDatacenterId: string | null
+  sourceServerId: string | null
+  targetServerId: string | null
+}
+
+export const AUTOMATIC_FAILOVER_BLOCKED_MESSAGE =
+  'Automatic failover blocked: unable to verify previous primary is fenced'
 
 /** Private path used for replication (mirrors `PrivateEndpointTransport`). */
 export type ManagedMemberTransport =
@@ -94,12 +136,9 @@ export type ManagedServiceCatalogEntry = {
   defaultImage: string
   /**
    * Every image reference this engine's settings parser will accept
-   * (`settings.image`), in display order — mirrors the instance allowlists
-   * (`POSTGRES_ALLOWED_IMAGES` / `MYSQL_ALLOWED_IMAGES` /
-   * `MARIADB_ALLOWED_IMAGES` in `turbopanel/src/lib/managed/settings.ts`) and
-   * the daemon command-payload mirror
-   * (`turbopaneld/src/instance/commands/contracts.ts`). Engines without a curated
-   * allowlist yet (`redis` / `clickhouse`) list only their default.
+   * (`settings.image`), in display order — derived from the release catalog
+   * mirror in `./managed-releases.ts`. Engines without a catalog yet
+   * (`redis` / `clickhouse`) list only their default.
    */
   allowedImages: readonly string[]
   /** Default root username shown in create/credential UX. */
@@ -108,16 +147,19 @@ export type ManagedServiceCatalogEntry = {
   supportsBackup: boolean
 }
 
+/** Catalog default image for an engine that must have a release entry. */
+function releaseDefaultImage(engine: string): string {
+  const image = defaultManagedImage(engine)
+  if (image === undefined) {
+    throw new Error(`no managed release catalog entry for engine: ${engine}`)
+  }
+  return image
+}
+
 /**
  * Display metadata for managed engine catalog cards (mirrors instance
- * catalog options). `allowedImages` must stay in sync with the instance
- * allowlists — see the field doc on {@link ManagedServiceCatalogEntry}.
- *
- * Neither MySQL nor MariaDB publish an official Alpine-based image, so both
- * default to the Docker Official Image's Debian-based tag, with the
- * vendor-published Oracle Linux (MySQL) / UBI (MariaDB) variant offered as
- * the documented alternative. PostgreSQL's official Alpine variant stays the
- * default for its smaller footprint.
+ * catalog options). Image data comes from the release catalog mirror
+ * (`./managed-releases.ts`) so version support lives in one place.
  */
 export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
   {
@@ -126,11 +168,8 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     description: 'Relational database with backups and connection pooling.',
     status: 'available',
     defaultPort: 5432,
-    defaultImage: 'docker.io/library/postgres:18-alpine',
-    allowedImages: [
-      'docker.io/library/postgres:18-alpine',
-      'docker.io/library/postgres:18',
-    ],
+    defaultImage: releaseDefaultImage('postgres'),
+    allowedImages: managedAllowedImagesForEngine('postgres'),
     rootUsername: 'postgres',
     supportsBackup: true,
   },
@@ -140,11 +179,8 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     description: 'Popular SQL database for web apps.',
     status: 'available',
     defaultPort: 3306,
-    defaultImage: 'docker.io/library/mysql:9.7',
-    allowedImages: [
-      'docker.io/library/mysql:9.7',
-      'docker.io/library/mysql:9.7-oraclelinux9',
-    ],
+    defaultImage: releaseDefaultImage('mysql'),
+    allowedImages: managedAllowedImagesForEngine('mysql'),
     rootUsername: 'root',
     supportsBackup: true,
   },
@@ -154,11 +190,8 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     description: 'MySQL-compatible engine with open-source tooling.',
     status: 'available',
     defaultPort: 3306,
-    defaultImage: 'docker.io/library/mariadb:12.3',
-    allowedImages: [
-      'docker.io/library/mariadb:12.3',
-      'docker.io/library/mariadb:12.3-ubi',
-    ],
+    defaultImage: releaseDefaultImage('mariadb'),
+    allowedImages: managedAllowedImagesForEngine('mariadb'),
     rootUsername: 'root',
     supportsBackup: true,
   },
@@ -209,7 +242,11 @@ export type ManagedEnvironmentRecord = {
 
 export type ManagedSettings = {
   image?: string
-  ssl: { enabled: boolean }
+  /**
+   * Client TLS policy at the ProxySQL boundary. Omitted means "inherit" —
+   * the organization default, then the platform `require` fallback.
+   */
+  ssl: { mode?: ManagedSslMode }
   resources?: {
     cpus?: number
     memoryBytes?: number
@@ -226,7 +263,9 @@ export type ManagedSettings = {
   engineConfig?: string
   exposure: {
     enabled: boolean
-    bind?: ManagedBindScope
+    scope?: ManagedSqlAccessScope
+    /** @deprecated One-release read compat — API may still echo migrated `bind`. */
+    bind?: ManagedSqlAccessScope
   }
   /** Retention (keep-N) for `managed.backup` — clamped to the engine's `maxRetentionKeep`. */
   backups?: {
@@ -242,11 +281,21 @@ export type ManagedConnectionInfo = {
   username: string
 }
 
+/**
+ * Which ProxySQL hostgroup a managed login defaults to.
+ *
+ * `read-write` reaches the current primary; `read-only` reaches read-eligible
+ * replicas. This is chosen per login at create time — it is not derived from a
+ * member's read eligibility, and it never rewrites an application's queries.
+ */
+export type ManagedConnectionRole = 'read-write' | 'read-only'
+
 export type ManagedUserRecord = {
   id: string
   username: string
   databases: string[]
   privileges: string[]
+  connectionRole: ManagedConnectionRole
   createdAt: string
 }
 
@@ -267,13 +316,49 @@ export type ManagedListRecord = ManagedEnvironmentRecord & {
   members: ManagedMemberRecord[]
 }
 
+/**
+ * Catalog identity of the running engine image, derived server-side from
+ * `settings.image`. `null` when the cluster is not provisioned yet or its image
+ * is outside the release catalog.
+ */
+export type ManagedReleaseView = {
+  /** Version series (`18`, `9.7`, `12.3`). */
+  series: string
+  /** Base-OS variant id (`alpine` / `debian` / `oraclelinux9` / `ubi`). */
+  variantId: string
+  lifecycle: 'lts' | 'supported' | 'legacy'
+  image: string
+}
+
+/**
+ * Resolved client TLS policy for a managed service. `configured` is the
+ * service-level override (`null` = inheriting), `effective` is what ProxySQL
+ * enforces and the DSN renders, and `organizationDefault` lets the picker label
+ * the inherit option with what it resolves to today.
+ */
+export type ManagedSslView = {
+  configured: ManagedSslMode | null
+  effective: ManagedSslMode
+  organizationDefault: ManagedSslMode | null
+}
+
+export type ManagedAccessEndpoint = {
+  scope: ManagedSqlAccessScope
+  host: string
+  port: number
+}
+
 export type ManagedDetailResponse = {
   managed: ManagedEnvironmentRecord | null
   connection: ManagedConnectionInfo | null
+  endpoints?: ManagedAccessEndpoint[]
   settings: ManagedSettings | null
+  ssl: ManagedSslView | null
+  release: ManagedReleaseView | null
   server: ManagedServerSummary | null
   rootUsername: string | null
   members: ManagedMemberRecord[]
+  recovery?: ManagedRecoveryRecord | null
 }
 
 /** Metadata only — the daemon streams dumps to its own state dir; there is no download endpoint. */
@@ -315,11 +400,15 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     "That username is already taken on this server's organization. Pick another name.",
   managed_member_exists: 'That server already hosts a member of this cluster.',
   managed_replica_not_promotable:
-    'Only failover replicas can be promoted. Convert this replica to failover first, or promote anyway if the primary is dead.',
+    'Only failover replicas can be promoted on this path. Convert this replica to failover for a recorded switchover, or use Promote for disaster recovery.',
+  managed_automatic_failover_blocked:
+    AUTOMATIC_FAILOVER_BLOCKED_MESSAGE,
   failover_replica_requires_datacenter_transport:
     'Failover replicas must share a datacenter LAN with the primary — TurboFabric and public paths are not allowed.',
   managed_member_is_primary:
     'Promote another member first — the primary cannot be removed.',
+  managed_no_read_targets:
+    'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
@@ -399,8 +488,89 @@ export function memberReplicaClassLabel(
   replicaClass: ManagedReplicaClass | null | undefined,
 ): string | null {
   if (replicaClass === 'failover') return 'Failover'
-  if (replicaClass === 'read') return 'Read-only'
+  if (replicaClass === 'read') return 'Remote read replica'
   return null
+}
+
+/** Add-replica class picker — longer labels than the row badge. */
+export function memberReplicaClassPickerLabel(
+  replicaClass: ManagedReplicaClass,
+): string {
+  return replicaClass === 'failover' ? 'Failover replica' : 'Remote/read replica'
+}
+
+export function memberReadTrafficLabel(
+  role: ManagedMemberRole,
+  readEligible: boolean,
+): string {
+  if (role === 'primary') return 'Read/write'
+  return readEligible ? 'Serves reads' : 'Standby only'
+}
+
+export const MEMBER_MANUAL_DR_CANDIDATE_LABEL = 'Manual DR candidate'
+
+export function managedReplicaPromoteAction(
+  replicaClass: ManagedReplicaClass | null | undefined,
+): ManagedReplicaPromoteAction | null {
+  if (replicaClass === 'failover') return 'switchover'
+  if (replicaClass === 'read') return 'disaster-recovery'
+  return null
+}
+
+export function managedRecoveryKindLabel(kind: ManagedRecoveryKind): string {
+  switch (kind) {
+    case 'automatic-failover':
+      return 'Automatic failover'
+    case 'switchover':
+      return 'Switchover'
+    case 'disaster-recovery':
+      return 'Disaster recovery'
+  }
+}
+
+export function managedRecoveryStateLabel(state: ManagedRecoveryState): string {
+  switch (state) {
+    case 'detecting':
+      return 'Detecting'
+    case 'fencing':
+      return 'Fencing'
+    case 'promoting':
+      return 'Promoting'
+    case 'repointing':
+      return 'Repointing'
+    case 'reconciling-ingress':
+      return 'Reconciling ingress'
+    case 'verifying':
+      return 'Verifying'
+    case 'completed':
+      return 'Completed'
+    case 'failed':
+      return 'Failed'
+    case 'blocked':
+      return 'Blocked'
+  }
+}
+
+export function managedRecoveryBanner(
+  recovery: ManagedRecoveryRecord | null | undefined,
+): { kind: 'blocked' | 'failed' | 'in-flight'; text: string } | null {
+  if (!recovery || recovery.state === 'completed') return null
+  if (recovery.state === 'blocked') {
+    return {
+      kind: 'blocked',
+      text: recovery.blockedReason?.trim() || AUTOMATIC_FAILOVER_BLOCKED_MESSAGE,
+    }
+  }
+  if (recovery.state === 'failed') {
+    return {
+      kind: 'failed',
+      text: `${managedRecoveryKindLabel(recovery.kind)} failed`,
+    }
+  }
+  return {
+    kind: 'in-flight',
+    text: `${managedRecoveryKindLabel(recovery.kind)} · ${managedRecoveryStateLabel(recovery.state)}`,
+  }
 }
 
 export function memberTransportLabel(

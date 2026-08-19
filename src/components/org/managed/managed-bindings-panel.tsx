@@ -57,6 +57,16 @@ type ConnectBindingFields = {
   emitEngineDefaults: boolean
 }
 
+/**
+ * A read-only login cannot write, so binding it to a service that expects to
+ * write is a footgun worth labeling wherever the credential is chosen or shown.
+ */
+function managedUserPickerLabel(user: ManagedUserRecord): string {
+  return user.connectionRole === 'read-only'
+    ? `${user.username} (read-only)`
+    : user.username
+}
+
 function KeyChip({ label }: Readonly<{ label: string }>) {
   return (
     <View style={styles.keyChip}>
@@ -190,7 +200,7 @@ function BindingCard({
       </Text>
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>User: </Text>
-        {user?.username ?? binding.principalId}
+        {user ? managedUserPickerLabel(user) : binding.principalId}
       </Text>
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Prefix: </Text>
@@ -206,8 +216,9 @@ function BindingCard({
         {endpoint}
       </Text>
       <Text style={orgPanelStyles.muted}>
-        Points at this server's database ingress and does not move when the
-        primary changes.
+        {
+          "Points at this server's database ingress and does not move when the primary changes."
+        }
       </Text>
       <View style={styles.keyRow}>
         {binding.keys.map((key) => (
@@ -370,7 +381,7 @@ function ConnectServiceForm({
       <ChipSelectRow
         items={users}
         getId={(user) => user.id}
-        getLabel={(user) => user.username}
+        getLabel={(user) => managedUserPickerLabel(user)}
         selectedId={principalId}
         onSelect={setPrincipalId}
       />

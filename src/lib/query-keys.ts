@@ -119,6 +119,7 @@ export const queryKeys = {
         defaultTimezone: ['org', orgId, 'default-timezone'] as const,
         hostDefaults: ['org', orgId, 'host-defaults'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
+        managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,
       },

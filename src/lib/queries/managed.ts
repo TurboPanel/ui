@@ -24,6 +24,7 @@ import {
   fetchOrganizationCa,
   fetchOrganizationManaged,
   isForbiddenError,
+  promoteManagedDisasterRecovery,
   promoteManagedMember,
   removeManagedMember,
   restoreManagedBackup,
@@ -582,6 +583,21 @@ export function usePromoteManagedMember(orgId: string, environmentId: string) {
     mutationFn: (input: { memberId: string; force?: boolean }) =>
       promoteManagedMember(environmentId, input.memberId, {
         ...(input.force ? { force: true } : {}),
+      }),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function usePromoteManagedDisasterRecovery(
+  orgId: string,
+  environmentId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (memberId: string) =>
+      promoteManagedDisasterRecovery(environmentId, {
+        memberId,
+        confirm: true,
       }),
     onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
   })

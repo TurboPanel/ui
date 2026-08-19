@@ -6,10 +6,17 @@ import { SectionPanel } from '@/components/org/section-panel'
 import { useProjects, useWorkspace } from '@/lib/queries'
 import type { ProjectRecord, WorkspaceRecord } from '@/lib/instance-api'
 import {
-  isSystemWorkspace,
-  SYSTEM_WORKSPACE_DESCRIPTION,
+  isTurbopanelWorkspace,
+  TURBOPANEL_WORKSPACE_DESCRIPTION,
 } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
+
+function workspaceDescription(workspace: WorkspaceRecord): string | null {
+  if (isTurbopanelWorkspace(workspace)) {
+    return TURBOPANEL_WORKSPACE_DESCRIPTION
+  }
+  return workspace.description || null
+}
 
 function renderWorkspaceBody({
   loading,
@@ -26,7 +33,8 @@ function renderWorkspaceBody({
   if (!workspace) {
     return null
   }
-  const system = isSystemWorkspace(workspace)
+  const system = isTurbopanelWorkspace(workspace)
+  const description = workspaceDescription(workspace)
   return (
     <>
       <View style={styles.header}>
@@ -42,12 +50,8 @@ function renderWorkspaceBody({
           </Pressable>
         ) : null}
       </View>
-      {system ? (
-        <Text style={orgPanelStyles.detailLine}>
-          {SYSTEM_WORKSPACE_DESCRIPTION}
-        </Text>
-      ) : workspace.description ? (
-        <Text style={orgPanelStyles.detailLine}>{workspace.description}</Text>
+      {description ? (
+        <Text style={orgPanelStyles.detailLine}>{description}</Text>
       ) : null}
     </>
   )
@@ -102,7 +106,7 @@ export function WorkspaceDetailSection({
   const workspace = workspaceQuery.data?.workspace ?? null
   const projects = projectsQuery.data?.projects ?? []
   const loading = workspaceQuery.isLoading || projectsQuery.isLoading
-  const system = workspace != null && isSystemWorkspace(workspace)
+  const system = workspace != null && isTurbopanelWorkspace(workspace)
   let error: string | null = null
   if (workspaceQuery.error instanceof Error) {
     error = workspaceQuery.error.message

@@ -29,7 +29,14 @@ export const ORG_AREAS = [
     label: 'Managed',
     pathSegment: 'managed',
     hint: 'Managed database and engine services across the organization',
-    subRoutes: [],
+    subRoutes: [
+      {
+        id: 'settings',
+        label: 'Settings',
+        pathSegment: 'settings',
+        hint: 'Organization defaults inherited by managed databases',
+      },
+    ],
   },
   {
     id: 'servers',

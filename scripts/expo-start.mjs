@@ -47,6 +47,14 @@ async function promptOrigin() {
   }
 }
 
+function ensureSingleTrailingNewline(text) {
+  let end = text.length
+  while (end > 0 && text[end - 1] === '\n') {
+    end -= 1
+  }
+  return `${text.slice(0, end)}\n`
+}
+
 function upsertEnvLine(existing, origin) {
   const line = `${ENV_KEY}=${origin}`
   const lines = existing.split('\n')
@@ -66,9 +74,9 @@ function upsertEnvLine(existing, origin) {
       next.push('')
     }
     next.push(line)
-    return `${next.join('\n').replace(/\n+$/, '\n')}`
+    return ensureSingleTrailingNewline(next.join('\n'))
   }
-  return `${next.join('\n').replace(/\n+$/, '\n')}`
+  return ensureSingleTrailingNewline(next.join('\n'))
 }
 
 async function writeEnvOrigin(origin) {

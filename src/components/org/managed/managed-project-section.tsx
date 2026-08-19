@@ -20,6 +20,11 @@ import { ManagedLifecyclePanel } from '@/components/org/managed/managed-lifecycl
 import { ManagedSettingsPanel } from '@/components/org/managed/managed-settings-panel'
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
+import {
+  defaultManagedVersionSelection,
+  ManagedVersionPicker,
+  type ManagedVersionSelection,
+} from '@/components/org/managed/managed-version-picker'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
@@ -34,6 +39,8 @@ import {
   type ManagedSettings,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
+import { hasReadEligibleReplica } from '@/lib/managed-read-endpoint'
+import { managedReleaseSummary } from '@/lib/managed-releases'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import {
   isTerminalCommandStatus,
@@ -188,7 +195,7 @@ function EnvironmentTabs({
 function ManagedSetupPanel({
   orgId,
   environmentId,
-  engineCode: _engineCode,
+  engineCode,
   canManage,
   onCreated,
 }: Readonly<{
@@ -200,6 +207,9 @@ function ManagedSetupPanel({
 }>) {
   const [serverId, setServerId] = useState<string | null>(null)
   const [expose, setExpose] = useState(false)
+  const [version, setVersion] = useState<ManagedVersionSelection | null>(() =>
+    defaultManagedVersionSelection(engineCode),
+  )
   const [error, setError] = useState<string | null>(null)
   const submitGuard = useRef(false)
 
@@ -218,6 +228,12 @@ function ManagedSetupPanel({
     setServerId(connected?.id ?? null)
   }, [serverId, servers])
 
+  // The engine code arrives with the project record, which may resolve after
+  // mount — reseed the recommended version once it does.
+  useEffect(() => {
+    setVersion(defaultManagedVersionSelection(engineCode))
+  }, [engineCode])
+
   const create = async () => {
     if (submitGuard.current || !serverId) return
     submitGuard.current = true
@@ -230,15 +246,12 @@ function ManagedSetupPanel({
         }
         return
       }
-      const result = await createManagedMutation.run(
-        expose
-          ? {
-              exposure: {
-                enabled: true,
-              },
-            }
-          : undefined,
-      )
+      const result = await createManagedMutation.run({
+        ...(version
+          ? { engineSeries: version.series, imageVariant: version.variantId }
+          : {}),
+        ...(expose ? { exposure: { enabled: true } } : {}),
+      })
       if (!result.ok) {
         if (createManagedMutation.actionError) {
           setError(createManagedMutation.actionError)
@@ -281,6 +294,13 @@ function ManagedSetupPanel({
           )
         })}
       </View>
+
+      <ManagedVersionPicker
+        engine={engineCode}
+        value={version}
+        disabled={submitting}
+        onChange={setVersion}
+      />
 
       <Pressable
         style={[styles.toggleRow, webPointer]}
@@ -550,6 +570,7 @@ function ManagedEnvironmentReadyPanels({
           managedDisplayName={managed.displayName?.trim() || projectDisplayName}
           canManage={canManage}
           busy={inFlight}
+          recovery={detail.recovery}
           onRegisterCommand={registerCommand}
         />
       ) : null}
@@ -558,8 +579,11 @@ function ManagedEnvironmentReadyPanels({
           <ManagedConnectionPanel
             managed={managed}
             connection={detail.connection}
+            endpoints={detail.endpoints}
             server={detail.server}
             members={members}
+            users={users}
+            ssl={detail.ssl}
           />
           <ManagedBindingsPanel
             orgId={orgId}
@@ -581,6 +605,7 @@ function ManagedEnvironmentReadyPanels({
           users={users}
           canManage={canManage}
           inFlight={inFlight}
+          hasReadTargets={hasReadEligibleReplica(members)}
           rotatePasswordMutation={rotatePasswordMutation}
           rotateUserPasswordMutation={rotateUserPasswordMutation}
           createDatabaseMutation={createDatabaseMutation}
@@ -659,6 +684,7 @@ function ManagedEnvironmentReadyPanels({
         <ManagedSettingsPanel
           settings={settings}
           engineCode={managed.engine}
+          organizationSslMode={detail.ssl?.organizationDefault ?? null}
           canManage={canManage}
           busy={inFlight}
           onApply={async (next: ManagedSettings) => {
@@ -684,6 +710,10 @@ function ManagedEnvironmentReadyPanels({
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}
           containers={status?.containers ?? []}
+          version={managedReleaseSummary(
+            managed.engine ? managedCatalogEntryForCode(managed.engine)?.label : null,
+            detail.release,
+          )}
         />
       ) : null}
     </View>
@@ -698,6 +728,7 @@ function ManagedDataPanels({
   users,
   canManage,
   inFlight,
+  hasReadTargets,
   rotatePasswordMutation,
   rotateUserPasswordMutation,
   createDatabaseMutation,
@@ -715,6 +746,7 @@ function ManagedDataPanels({
   users: ManagedUserRecord[]
   canManage: boolean
   inFlight: boolean
+  hasReadTargets: boolean
   rotatePasswordMutation: ReturnType<typeof useRotateManagedRootPassword>
   rotateUserPasswordMutation: ReturnType<typeof useRotateManagedUserPassword>
   createDatabaseMutation: ReturnType<typeof useCreateManagedDatabase>
@@ -757,6 +789,7 @@ function ManagedDataPanels({
         users={users}
         canManage={canManage}
         busy={inFlight}
+        hasReadTargets={hasReadTargets}
         onCreateDatabase={async (name) => {
           const result = await createDatabaseMutation.run({ name })
           if (!result.ok) {

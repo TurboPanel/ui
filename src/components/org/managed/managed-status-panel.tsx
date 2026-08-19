@@ -80,6 +80,7 @@ export function ManagedStatusPanel({
   host,
   port,
   containers,
+  version,
 }: Readonly<{
   orgId: string
   environmentId: string
@@ -87,6 +88,8 @@ export function ManagedStatusPanel({
   host: string | null
   port: number | null
   containers: ContainerRecord[]
+  /** `PostgreSQL 18 · Alpine` from the release catalog; omitted when uncatalogued. */
+  version?: string | null
 }>) {
   const [tail, setTail] = useState<(typeof TAIL_OPTIONS)[number]>(200)
   const [logs, setLogs] = useState('')
@@ -124,6 +127,7 @@ export function ManagedStatusPanel({
             {managedStatusLabel(status)}
           </Text>
         </View>
+        {version ? <Text style={styles.version}>{version}</Text> : null}
         {host && port != null ? (
           <Text style={orgPanelStyles.muted}>
             {host}:{port}
@@ -224,6 +228,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  version: {
+    color: colors.textBody,
+    fontSize: 13,
+    fontWeight: '600',
   },
   containerList: {
     gap: spacing.sm,

@@ -198,6 +198,11 @@ export function WorkspaceSwitcher({
     !showPlatform &&
     !isLoading &&
     Boolean(normalizedQuery)
+  let listedWorkspaceCount = users.length
+  if (platformWorkspace) {
+    listedWorkspaceCount += 1
+  }
+  const showSearch = listedWorkspaceCount > 6
 
   useEffect(() => {
     if (!open) {
@@ -266,9 +271,9 @@ export function WorkspaceSwitcher({
         <HeaderChevron color={colors.textMuted} open={open} />
       </Pressable>
 
-      {open ? (
+      {open && (
         <View style={styles.panel}>
-          {(users.length + (platformWorkspace ? 1 : 0) > 6) ? (
+          {showSearch ? (
             <TextInput
               ref={searchRef}
               value={query}
@@ -323,7 +328,7 @@ export function WorkspaceSwitcher({
             </Pressable>
           ) : null}
         </View>
-      ) : null}
+      )}
     </View>
   )
 }

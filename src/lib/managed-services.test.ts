@@ -11,8 +11,13 @@ import {
   managedEngineSupportsBackup,
   managedErrorMessage,
   managedIngressPortForEngine,
+  managedRecoveryBanner,
+  managedReplicaPromoteAction,
   managedStatusLabel,
+  MEMBER_MANUAL_DR_CANDIDATE_LABEL,
   memberReplicaClassLabel,
+  memberReplicaClassPickerLabel,
+  memberReadTrafficLabel,
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
@@ -116,6 +121,20 @@ describe('managedErrorMessage', () => {
         'fallback',
       ),
     ).toContain(TURBOFABRIC_PRODUCT_NAME)
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 422: managed_replica_not_promotable'),
+        'fallback',
+      ),
+    ).toContain('Promote for disaster recovery')
+    expect(
+      managedErrorMessage(
+        new Error('HTTP 409: managed_automatic_failover_blocked'),
+        'fallback',
+      ),
+    ).toBe(
+      'Automatic failover blocked: unable to verify previous primary is fenced',
+    )
   })
 
   it('returns the raw message or fallback when the code is unknown', () => {
@@ -150,7 +169,7 @@ describe('member labels', () => {
     expect(memberRoleLabel('primary')).toBe('Primary')
     expect(memberRoleLabel('replica')).toBe('Replica')
     expect(memberReplicaClassLabel('failover')).toBe('Failover')
-    expect(memberReplicaClassLabel('read')).toBe('Read-only')
+    expect(memberReplicaClassLabel('read')).toBe('Remote read replica')
     expect(memberReplicaClassLabel(null)).toBeNull()
     expect(memberReplicaClassLabel(undefined)).toBeNull()
     expect(memberTransportLabel('local')).toBe('Local')
@@ -161,6 +180,12 @@ describe('member labels', () => {
     expect(memberTransportLabel('public')).toBe('Public Internet + TLS')
     expect(memberTransportLabel(null)).toBe('—')
     expect(memberTransportLabel(undefined)).toBe('—')
+    expect(memberReplicaClassPickerLabel('failover')).toBe('Failover replica')
+    expect(memberReplicaClassPickerLabel('read')).toBe('Remote/read replica')
+    expect(memberReadTrafficLabel('primary', false)).toBe('Read/write')
+    expect(memberReadTrafficLabel('replica', true)).toBe('Serves reads')
+    expect(memberReadTrafficLabel('replica', false)).toBe('Standby only')
+    expect(MEMBER_MANUAL_DR_CANDIDATE_LABEL).toBe('Manual DR candidate')
   })
 
   it('labels known member statuses and falls back for unknowns', () => {
@@ -325,17 +350,14 @@ describe('formatClusterTopologyLabel / clusterHasUnhealthyMember', () => {
 })
 
 describe('managedIngressPortForEngine', () => {
-  it('maps postgres family to the shared pgsql listener', () => {
-    expect(managedIngressPortForEngine('postgres', 5432)).toBe(
-      MANAGED_INGRESS_PGSQL_PORT,
-    )
+  // Behavior (including organization overrides) is covered in
+  // managed-ingress-ports.test.ts; this only pins the re-export other modules
+  // still import from here.
+  it('maps each engine family to its shared platform listener', () => {
     expect(managedIngressPortForEngine('postgres')).toBe(
       MANAGED_INGRESS_PGSQL_PORT,
     )
-  })
-
-  it('maps mysql and mariadb to the shared mysql listener', () => {
-    expect(managedIngressPortForEngine('mysql', 3306)).toBe(
+    expect(managedIngressPortForEngine('mysql')).toBe(
       MANAGED_INGRESS_MYSQL_PORT,
     )
     expect(managedIngressPortForEngine('mariadb')).toBe(
@@ -348,5 +370,54 @@ describe('managedIngressPortForEngine', () => {
     expect(MANAGED_INGRESS_MYSQL_PORT).toBe(16306)
     expect(managedCatalogEntryForCode('postgres')?.defaultPort).toBe(5432)
     expect(managedCatalogEntryForCode('mysql')?.defaultPort).toBe(3306)
+  })
+})
+
+describe('managedReplicaPromoteAction', () => {
+  it('maps failover to switchover and read to disaster recovery', () => {
+    expect(managedReplicaPromoteAction('failover')).toBe('switchover')
+    expect(managedReplicaPromoteAction('read')).toBe('disaster-recovery')
+    expect(managedReplicaPromoteAction(null)).toBeNull()
+  })
+})
+
+describe('managedRecoveryBanner', () => {
+  it('hides completed recoveries and surfaces blocked copy', () => {
+    expect(
+      managedRecoveryBanner({
+        id: 'r1',
+        kind: 'automatic-failover',
+        state: 'completed',
+        sourcePrimaryMemberId: 'p1',
+        targetMemberId: 't1',
+        startedAt: '2026-08-19T00:00:00.000Z',
+        completedAt: '2026-08-19T00:01:00.000Z',
+        blockedReason: null,
+        lagBytes: 0,
+        sourceDatacenterId: null,
+        targetDatacenterId: null,
+        sourceServerId: null,
+        targetServerId: null,
+      }),
+    ).toBeNull()
+    expect(
+      managedRecoveryBanner({
+        id: 'r2',
+        kind: 'automatic-failover',
+        state: 'blocked',
+        sourcePrimaryMemberId: 'p1',
+        targetMemberId: null,
+        startedAt: '2026-08-19T00:00:00.000Z',
+        completedAt: null,
+        blockedReason: null,
+        lagBytes: null,
+        sourceDatacenterId: null,
+        targetDatacenterId: null,
+        sourceServerId: null,
+        targetServerId: null,
+      })?.text,
+    ).toBe(
+      'Automatic failover blocked: unable to verify previous primary is fenced',
+    )
   })
 })

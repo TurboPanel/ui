@@ -60,23 +60,21 @@ describe('useOrgDefaultEnvironmentName', () => {
     expect(result.isError).toBe(false)
   })
 
-  it('falls back to Production for null, blank, or missing names', async () => {
-    for (const data of [
-      undefined,
-      { defaultEnvironmentName: null },
-      { defaultEnvironmentName: '   ' },
-      { defaultEnvironmentName: '' },
-    ]) {
-      useQueryMock.mockReturnValue({
-        data,
-        isLoading: false,
-        isError: false,
-      } as UseQueryResult)
-      const useOrgDefaultEnvironmentName = await loadHook()
-      expect(useOrgDefaultEnvironmentName('org-1').defaultEnvironmentName).toBe(
-        PLATFORM_DEFAULT_ENVIRONMENT_NAME,
-      )
-    }
+  it.each([
+    ['undefined data', undefined],
+    ['null name', { defaultEnvironmentName: null }],
+    ['blank name', { defaultEnvironmentName: '   ' }],
+    ['empty name', { defaultEnvironmentName: '' }],
+  ] as const)('falls back to Production for %s', async (_label, data) => {
+    useQueryMock.mockReturnValue({
+      data,
+      isLoading: false,
+      isError: false,
+    } as UseQueryResult)
+    const useOrgDefaultEnvironmentName = await loadHook()
+    expect(useOrgDefaultEnvironmentName('org-1').defaultEnvironmentName).toBe(
+      PLATFORM_DEFAULT_ENVIRONMENT_NAME,
+    )
   })
 
   it('enables the query when orgId is set unless overridden', async () => {

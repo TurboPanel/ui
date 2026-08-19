@@ -22,7 +22,7 @@ describe('patchServiceTurbopanelExtension description', () => {
     )
     const extension = next['x-turbopanel'] as Record<string, unknown>
     expect(typeof extension.description).toBe('string')
-    expect((extension.description as string).length).toBe(
+    expect(extension.description as string).toHaveLength(
       SERVICE_DESCRIPTION_MAX_LENGTH,
     )
     expect(

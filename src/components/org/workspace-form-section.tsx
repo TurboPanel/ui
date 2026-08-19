@@ -2,12 +2,13 @@ import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { displayNameConflictMessage, DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
+import type { WorkspaceRecord } from '@/lib/instance-api'
 import {
   useCreateWorkspace,
   useUpdateWorkspace,
   useWorkspace,
 } from '@/lib/queries'
-import { isSystemWorkspace } from '@/lib/system-inventory'
+import { isTurbopanelWorkspace } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 import {
   validateWorkspaceDescription,
@@ -17,6 +18,12 @@ import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+
+type WorkspaceFormMode = 'create' | 'edit'
+type WorkspaceFieldErrors = {
+  displayName?: string
+  description?: string
+}
 
 const webInputStyle = {
   borderWidth: 1,
@@ -30,6 +37,170 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
+function workspaceFormHeading(mode: WorkspaceFormMode): string {
+  return mode === 'create' ? 'New workspace' : 'Edit workspace'
+}
+
+function workspaceFormSubmitLabel(
+  submitting: boolean,
+  mode: WorkspaceFormMode,
+): string {
+  if (submitting) {
+    return 'Saving…'
+  }
+  if (mode === 'create') {
+    return 'Create workspace'
+  }
+  return 'Save changes'
+}
+
+function isTurbopanelWorkspaceEdit(
+  mode: WorkspaceFormMode,
+  workspace: WorkspaceRecord | null,
+): boolean {
+  return mode === 'edit' && workspace != null && isTurbopanelWorkspace(workspace)
+}
+
+function workspaceFormApiError(
+  queryError: unknown,
+  createError: string | null,
+  updateError: string | null,
+): string | undefined {
+  if (queryError instanceof Error) {
+    return queryError.message
+  }
+  return createError ?? updateError ?? undefined
+}
+
+function conflictOrRawError(error: string | null | undefined): string | undefined {
+  if (!error) {
+    return undefined
+  }
+  return displayNameConflictMessage(error) ?? error
+}
+
+type WorkspaceFormMutation = Readonly<{
+  run: (body: {
+    displayName: string
+    description?: string
+  }) => Promise<{ ok: true; value: unknown } | { ok: false; error: string | null }>
+}>
+
+async function persistWorkspaceForm({
+  mode,
+  displayName,
+  description,
+  createWorkspace,
+  updateWorkspace,
+}: Readonly<{
+  mode: WorkspaceFormMode
+  displayName: string
+  description: string
+  createWorkspace: WorkspaceFormMutation
+  updateWorkspace: WorkspaceFormMutation
+}>) {
+  if (mode === 'create') {
+    const body: { displayName: string; description?: string } = { displayName }
+    if (description) {
+      body.description = description
+    }
+    return createWorkspace.run(body)
+  }
+  return updateWorkspace.run({ displayName, description })
+}
+
+function workspaceFieldInputStyle(hasError: boolean) {
+  if (Platform.OS === 'web') {
+    return {
+      ...webInputStyle,
+      borderColor: hasError ? colors.error : colors.border,
+    }
+  }
+  return [styles.input, hasError && styles.inputError]
+}
+
+function WorkspaceFormFields({
+  displayName,
+  description,
+  fieldErrors,
+  apiError,
+  submitting,
+  submitLabel,
+  onDisplayNameChange,
+  onDescriptionChange,
+  onSubmit,
+  onCancel,
+}: Readonly<{
+  displayName: string
+  description: string
+  fieldErrors: WorkspaceFieldErrors
+  apiError: string | undefined
+  submitting: boolean
+  submitLabel: string
+  onDisplayNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+}>) {
+  return (
+    <>
+      <View style={styles.field}>
+        <Text style={styles.label}>Name *</Text>
+        <TextInput
+          style={workspaceFieldInputStyle(Boolean(fieldErrors.displayName))}
+          value={displayName}
+          onChangeText={onDisplayNameChange}
+          placeholder="e.g. Product or Marketing"
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="words"
+          autoCorrect={false}
+          editable={!submitting}
+          maxLength={DISPLAY_NAME_MAX_LENGTH}
+        />
+        {fieldErrors.displayName ? (
+          <Text style={styles.fieldError}>{fieldErrors.displayName}</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.field}>
+        <Text style={styles.label}>Description</Text>
+        <TextInput
+          style={workspaceFieldInputStyle(Boolean(fieldErrors.description))}
+          value={description}
+          onChangeText={onDescriptionChange}
+          placeholder="Optional description"
+          placeholderTextColor={colors.textDim}
+          editable={!submitting}
+          maxLength={DESCRIPTION_MAX_LENGTH}
+          multiline
+        />
+        {fieldErrors.description ? (
+          <Text style={styles.fieldError}>{fieldErrors.description}</Text>
+        ) : null}
+      </View>
+
+      {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
+
+      <View style={styles.actions}>
+        <Pressable
+          style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+          disabled={submitting}
+          onPress={onSubmit}
+        >
+          <Text style={styles.primaryButtonText}>{submitLabel}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          disabled={submitting}
+          onPress={onCancel}
+        >
+          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </>
+  )
+}
+
 export function WorkspaceFormSection({
   orgId,
   workspaceId,
@@ -37,7 +208,7 @@ export function WorkspaceFormSection({
 }: Readonly<{
   orgId: string
   workspaceId?: string
-  mode: 'create' | 'edit'
+  mode: WorkspaceFormMode
 }>) {
   const router = useRouter()
   const workspaceScope = useOptionalWorkspaceScope()
@@ -49,10 +220,7 @@ export function WorkspaceFormSection({
 
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
-  const [fieldErrors, setFieldErrors] = useState<{
-    displayName?: string
-    description?: string
-  }>({})
+  const [fieldErrors, setFieldErrors] = useState<WorkspaceFieldErrors>({})
 
   useEffect(() => {
     if (mode === 'edit' && workspaceQuery.data?.workspace) {
@@ -61,8 +229,8 @@ export function WorkspaceFormSection({
     }
   }, [mode, workspaceQuery.data?.workspace])
 
-  const validate = (): { displayName?: string; description?: string } => {
-    const errors: { displayName?: string; description?: string } = {}
+  const validate = (): WorkspaceFieldErrors => {
+    const errors: WorkspaceFieldErrors = {}
     const nameError = validateWorkspaceName(displayName)
     if (nameError) {
       errors.displayName = nameError
@@ -81,73 +249,44 @@ export function WorkspaceFormSection({
       return
     }
 
+    const trimmedName = displayName.trim()
     const trimmedDescription = description.trim()
-    if (mode === 'create') {
-      const result = await createWorkspace.run({
-        displayName: displayName.trim(),
-        ...(trimmedDescription ? { description: trimmedDescription } : {}),
-      })
-      if (!result.ok) {
-        if (result.error) {
-          setFieldErrors({
-            displayName: displayNameConflictMessage(result.error) ?? result.error,
-          })
-        }
-        return
+    const result = await persistWorkspaceForm({
+      mode,
+      displayName: trimmedName,
+      description: trimmedDescription,
+      createWorkspace,
+      updateWorkspace,
+    })
+    if (!result.ok) {
+      const displayNameError = conflictOrRawError(result.error)
+      if (displayNameError) {
+        setFieldErrors({ displayName: displayNameError })
       }
-    } else {
-      const result = await updateWorkspace.run({
-        displayName: displayName.trim(),
-        description: trimmedDescription,
-      })
-      if (!result.ok) {
-        if (result.error) {
-          setFieldErrors({
-            displayName: displayNameConflictMessage(result.error) ?? result.error,
-          })
-        }
-        return
-      }
+      return
     }
     await workspaceScope?.refreshWorkspaces()
     router.replace(`/${orgId}/workspaces`)
   }
 
-  const inputStyle = (hasError: boolean) => [
-    Platform.OS === 'web'
-      ? {
-          ...webInputStyle,
-          borderColor: hasError ? colors.error : colors.border,
-        }
-      : styles.input,
-    hasError && Platform.OS !== 'web' && styles.inputError,
-  ]
-
   const submitting = createWorkspace.isPending || updateWorkspace.isPending
   const loadingWorkspace = mode === 'edit' && workspaceQuery.isLoading
   const loadedWorkspace = workspaceQuery.data?.workspace ?? null
-  const systemEdit =
-    mode === 'edit' && loadedWorkspace != null && isSystemWorkspace(loadedWorkspace)
-  const apiError =
-    workspaceQuery.error instanceof Error
-      ? workspaceQuery.error.message
-      : createWorkspace.actionError ?? updateWorkspace.actionError
-
-  let submitLabel = 'Save changes'
-  if (submitting) {
-    submitLabel = 'Saving…'
-  } else if (mode === 'create') {
-    submitLabel = 'Create workspace'
-  }
+  const systemEdit = isTurbopanelWorkspaceEdit(mode, loadedWorkspace)
+  const apiError = workspaceFormApiError(
+    workspaceQuery.error,
+    createWorkspace.actionError,
+    updateWorkspace.actionError,
+  )
+  const heading = workspaceFormHeading(mode)
+  const workspacesHref = `/${orgId}/workspaces`
 
   if (systemEdit) {
     return (
       <View style={styles.root}>
-        <Text style={styles.heading}>Edit workspace</Text>
-        <SectionPanel title="Edit workspace">
-          <SystemManagedNotice
-            onBack={() => router.replace(`/${orgId}/workspaces`)}
-          />
+        <Text style={styles.heading}>{heading}</Text>
+        <SectionPanel title={heading}>
+          <SystemManagedNotice onBack={() => router.replace(workspacesHref)} />
         </SectionPanel>
       </View>
     )
@@ -155,73 +294,30 @@ export function WorkspaceFormSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>{mode === 'create' ? 'New workspace' : 'Edit workspace'}</Text>
+      <Text style={styles.heading}>{heading}</Text>
 
-      <SectionPanel title={mode === 'create' ? 'New workspace' : 'Edit workspace'}>
+      <SectionPanel title={heading}>
         {loadingWorkspace ? (
           <Text style={orgPanelStyles.muted}>Loading…</Text>
         ) : (
-          <>
-            <View style={styles.field}>
-              <Text style={styles.label}>Name *</Text>
-              <TextInput
-                style={inputStyle(Boolean(fieldErrors.displayName))}
-                value={displayName}
-                onChangeText={(t) => {
-                  setDisplayName(t)
-                  setFieldErrors({})
-                }}
-                placeholder="e.g. Product or Marketing"
-                placeholderTextColor={colors.textDim}
-                autoCapitalize="words"
-                autoCorrect={false}
-                editable={!submitting}
-                maxLength={DISPLAY_NAME_MAX_LENGTH}
-              />
-              {fieldErrors.displayName ? (
-                <Text style={styles.fieldError}>{fieldErrors.displayName}</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={inputStyle(Boolean(fieldErrors.description))}
-                value={description}
-                onChangeText={(t) => {
-                  setDescription(t)
-                  setFieldErrors((prev) => ({ ...prev, description: undefined }))
-                }}
-                placeholder="Optional description"
-                placeholderTextColor={colors.textDim}
-                editable={!submitting}
-                maxLength={DESCRIPTION_MAX_LENGTH}
-                multiline
-              />
-              {fieldErrors.description ? (
-                <Text style={styles.fieldError}>{fieldErrors.description}</Text>
-              ) : null}
-            </View>
-
-            {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
-
-            <View style={styles.actions}>
-              <Pressable
-                style={[styles.primaryButton, submitting && styles.buttonDisabled]}
-                disabled={submitting}
-                onPress={() => void handleSubmit()}
-              >
-                <Text style={styles.primaryButtonText}>{submitLabel}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.secondaryButton}
-                disabled={submitting}
-                onPress={() => router.replace(`/${orgId}/workspaces`)}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </Pressable>
-            </View>
-          </>
+          <WorkspaceFormFields
+            displayName={displayName}
+            description={description}
+            fieldErrors={fieldErrors}
+            apiError={apiError}
+            submitting={submitting}
+            submitLabel={workspaceFormSubmitLabel(submitting, mode)}
+            onDisplayNameChange={(value) => {
+              setDisplayName(value)
+              setFieldErrors({})
+            }}
+            onDescriptionChange={(value) => {
+              setDescription(value)
+              setFieldErrors((prev) => ({ ...prev, description: undefined }))
+            }}
+            onSubmit={() => void handleSubmit()}
+            onCancel={() => router.replace(workspacesHref)}
+          />
         )}
       </SectionPanel>
     </View>

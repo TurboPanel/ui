@@ -15,6 +15,7 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import type { BindingRedeployRequired } from '@/lib/instance-api'
 import {
   managedErrorMessage,
+  type ManagedConnectionRole,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
@@ -40,6 +41,80 @@ function Chip({ label }: Readonly<{ label: string }>) {
     <View style={styles.chip}>
       <Text style={styles.chipText}>{label}</Text>
     </View>
+  )
+}
+
+const CONNECTION_ROLE_OPTIONS: readonly {
+  value: ManagedConnectionRole
+  label: string
+  hint: string
+}[] = [
+  {
+    value: 'read-write',
+    label: 'Read/write',
+    hint: 'Routed to the current primary — reads and writes both follow failover.',
+  },
+  {
+    value: 'read-only',
+    label: 'Read-only',
+    hint: 'Routed to replicas that serve read traffic. The engine refuses writes on this login.',
+  },
+]
+
+/**
+ * The role decides the login's proxy hostgroup. It is a per-credential choice
+ * on purpose: TurboPanel never moves an existing login's `SELECT`s to a replica
+ * behind an application's back.
+ */
+function ConnectionRolePicker({
+  value,
+  onChange,
+  disabled,
+  readOnlyAvailable,
+}: Readonly<{
+  value: ManagedConnectionRole
+  onChange: (role: ManagedConnectionRole) => void
+  disabled: boolean
+  readOnlyAvailable: boolean
+}>) {
+  const active = CONNECTION_ROLE_OPTIONS.find((row) => row.value === value)
+  return (
+    <>
+      <Text style={orgPanelStyles.detailLabel}>Connection role</Text>
+      <View style={styles.chipRow}>
+        {CONNECTION_ROLE_OPTIONS.map((option) => {
+          const selected = option.value === value
+          const optionDisabled =
+            disabled || (option.value === 'read-only' && !readOnlyAvailable)
+          return (
+            <Pressable
+              key={option.value}
+              style={[
+                styles.chip,
+                selected && styles.chipSelected,
+                webPointer,
+                optionDisabled && styles.disabled,
+              ]}
+              disabled={optionDisabled}
+              onPress={() => onChange(option.value)}
+            >
+              <Text
+                style={[styles.chipText, selected && styles.chipTextSelected]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+      {active ? <Text style={orgPanelStyles.muted}>{active.hint}</Text> : null}
+      {readOnlyAvailable ? null : (
+        <Text style={orgPanelStyles.muted}>
+          Read-only needs a replica with read traffic enabled — add one on
+          Overview first.
+        </Text>
+      )}
+    </>
   )
 }
 
@@ -147,6 +222,7 @@ export function ManagedUsersPanel({
   users,
   canManage,
   busy,
+  hasReadTargets = false,
   onCreateDatabase,
   onDeleteDatabase,
   onCreateUser,
@@ -161,11 +237,14 @@ export function ManagedUsersPanel({
   users: ManagedUserRecord[]
   canManage: boolean
   busy: boolean
+  /** A replica serves read traffic, so a `read-only` login has somewhere to go. */
+  hasReadTargets?: boolean
   onCreateDatabase: (name: string) => Promise<void>
   onDeleteDatabase: (name: string) => Promise<void>
   onCreateUser: (input: {
     username: string
     databases: string[]
+    connectionRole: ManagedConnectionRole
   }) => Promise<{ password: string } | null>
   onDeleteUser: (principalId: string) => Promise<void>
   onRotateUserPassword: (principalId: string) => Promise<{
@@ -179,6 +258,8 @@ export function ManagedUsersPanel({
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
+  const [connectionRole, setConnectionRole] =
+    useState<ManagedConnectionRole>('read-write')
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -220,6 +301,12 @@ export function ManagedUsersPanel({
       return filtered
     })
   }, [databases])
+
+  useEffect(() => {
+    if (!hasReadTargets) {
+      setConnectionRole('read-write')
+    }
+  }, [hasReadTargets])
 
   const toggleDb = (name: string) => {
     setSelectedDbs((current) => {
@@ -281,12 +368,14 @@ export function ManagedUsersPanel({
       const result = await onCreateUser({
         username: trimmed,
         databases: selectedDbs,
+        connectionRole,
       })
       if (result?.password) {
         setRevealedUsername(trimmed)
         setRevealedPassword(result.password)
       }
       setUsername('')
+      setConnectionRole('read-write')
       await onReload()
     } catch (err) {
       const message = managedErrorMessage(err, 'Failed to create user')
@@ -449,6 +538,11 @@ export function ManagedUsersPanel({
                   <Chip key={db} label={db} />
                 ))}
               </View>
+              <Text style={orgPanelStyles.muted}>
+                {user.connectionRole === 'read-only'
+                  ? 'Read-only login — routed to replicas serving reads'
+                  : 'Read/write login — routed to the current primary'}
+              </Text>
               {bindingCount > 0 ? (
                 <Text style={styles.connectedChip}>
                   Connected to {bindingCount} service
@@ -535,6 +629,12 @@ export function ManagedUsersPanel({
               )
             })}
           </View>
+          <ConnectionRolePicker
+            value={connectionRole}
+            onChange={setConnectionRole}
+            disabled={disabled}
+            readOnlyAvailable={hasReadTargets}
+          />
           <Pressable
             style={[
               orgPanelStyles.toolbarBtnPrimary,

@@ -68,19 +68,19 @@ Submit: `POST /projects` (`type: 'managed'`) → Production env → `POST …/ma
 Topology rows ordered primary first then `ordinal`:
 
 ```
-● Primary            web-01 · Frankfurt · Local                 Running
-● Replica · Failover web-04 · Frankfurt · Datacenter LAN Reads  Streaming · 1.4 MB behind
-○ Replica · Read-only edge-02 · Ashburn · TurboFabric direct     Catching up · 22s behind
+● Primary            web-01 · Frankfurt · Local                 Read/write · Running
+● Replica · Failover web-04 · Frankfurt · Datacenter LAN Serves reads  Streaming · 1.4 MB behind
+○ Replica · Remote read replica edge-02 · Ashburn · TurboFabric direct Serves reads · Manual DR candidate  Catching up · 22s behind
 ```
 
-- `[ Failover ] [ Read-only ]` selector on add (default Failover)
+- `[ Failover replica ] [ Remote/read replica ]` selector on add (default Failover replica); **Serve read traffic** toggle
 - Transport vocabulary: **Local** / **Datacenter LAN** / **TurboFabric direct** / **Public Internet + TLS**
 - Unbounded replicas (no max-2 cap)
-- Failover: only servers sharing the primary's datacenter with a usable subnet; Read-only: any org server
+- Failover: only servers sharing the primary's datacenter with a usable subnet; Remote/read: any org server
 - **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `no-private-cidr` / `no-private-path`) with **Set up private network** links for network reasons — never silent disable
-- **Reads** chip toggles `readEligible` (manage-gated)
+- Traffic chips: **Read/write** (primary), **Serves reads** / **Standby only** (replicas); remote/read rows also show **Manual DR candidate**
 - Remove replica = two-press (destroys replica data volume)
-- **Promote** is failover-only; Read-only rows show **Convert to failover** (two-press) first. On lag-gate `409` codes, show lag/state then separate **Promote anyway** (`force: true`). On `managed_primary_fence_failed`, surface fence failure — do not auto-retry.
+- **Promote** is failover-only recorded switchover; Remote/read rows show **Convert to failover** (two-press, same-DC) and **Promote for disaster recovery** (typed confirm: current primary, target, lag, data-loss copy). On lag-gate `409` codes for failover Promote, show lag/state then separate **Promote anyway** (`force: true` — lag/health only). On `managed_primary_fence_failed`, surface fence failure — do not auto-retry. Cluster panel shows an in-flight / blocked recovery chip; blocked auto-failover copy is `Automatic failover blocked: unable to verify previous primary is fenced`. Unhealthy same-DC failover replicas are skipped; if none are healthy the chip uses `Automatic failover blocked: no same-datacenter failover replica is healthy enough to promote`.
 
 ### Connection (Connect)
 

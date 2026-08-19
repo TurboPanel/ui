@@ -22,9 +22,9 @@ const SCOPE_ALIASES: Record<string, VariableRefScope> = {
   env: 'environment',
 }
 
-const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+const KEY_RE = /^[A-Za-z_]\w*$/
 const EXACT_REF_RE =
-  /^\{\$(?:([A-Za-z_][A-Za-z0-9_]*)\.)?([A-Za-z_][A-Za-z0-9_]*)\}$/
+  /^\{\$(?:([A-Za-z_]\w*)\.)?([A-Za-z_]\w*)\}$/
 
 export type ParsedVariableRef = {
   raw: string
@@ -109,7 +109,7 @@ export function parseExactVariableRef(value: string): ParseVariableRefResult {
 
 /** Compose-native `${KEY}` / `$KEY` capture for secret-interpolation guards. */
 const COMPOSE_INTERPOLATION_RE =
-  /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g
+  /\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g
 
 export function collectComposeInterpolationKeys(value: string): string[] {
   const keys: string[] = []

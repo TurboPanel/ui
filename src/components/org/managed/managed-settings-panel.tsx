@@ -9,17 +9,30 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
+import { ManagedAccessScopePicker } from '@/components/org/managed/managed-access-scope-picker'
+import {
+  managedSslInheritLabel,
+  type ManagedSslMode,
+} from '@/lib/managed-ssl'
+import {
+  describeManagedImage,
+  managedImageVariantLabel,
+  managedVariantImagesForImage,
+} from '@/lib/managed-releases'
+import {
+  readManagedExposureScope,
+  type ManagedSqlAccessScope,
+} from '@/lib/managed-access-scope'
 import {
   managedCatalogEntryForCode,
   managedErrorMessage,
-  type ManagedBindScope,
   type ManagedSettings,
 } from '@/lib/managed-services'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const ENGINE_CONFIG_MAX = 16 * 1024
 const RESTART_POLICIES = ['no', 'always', 'on-failure', 'unless-stopped'] as const
-const BIND_SCOPES: ManagedBindScope[] = ['public', 'datacenter', 'local']
 
 const webInputStyle = {
   borderWidth: 1,
@@ -45,7 +58,8 @@ function createKvRow(key = '', value = ''): KvRow {
 
 type SettingsForm = {
   image: string
-  sslEnabled: boolean
+  /** `null` inherits the organization default (see {@link ManagedSslModePicker}). */
+  sslMode: ManagedSslMode | null
   engineConfig: string
   restart: string
   stopGrace: string
@@ -54,7 +68,7 @@ type SettingsForm = {
   memoryBytes: string
   memoryReservationBytes: string
   exposureEnabled: boolean
-  bind: ManagedBindScope
+  accessScope: ManagedSqlAccessScope
   labels: KvRow[]
   extraEnv: KvRow[]
   backupRetentionKeep: string
@@ -69,7 +83,7 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
   )
   return {
     image: settings.image ?? defaultImage,
-    sslEnabled: settings.ssl.enabled,
+    sslMode: settings.ssl.mode ?? null,
     engineConfig: settings.engineConfig ?? '',
     restart: settings.dockerOptions?.restart ?? 'unless-stopped',
     stopGrace:
@@ -90,7 +104,7 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
         ? String(settings.resources.memoryReservationBytes)
         : '',
     exposureEnabled: settings.exposure.enabled,
-    bind: settings.exposure.bind ?? 'public',
+    accessScope: readManagedExposureScope(settings.exposure),
     labels: labels.length > 0 ? labels : [createKvRow()],
     extraEnv: extraEnv.length > 0 ? extraEnv : [createKvRow()],
     backupRetentionKeep:
@@ -135,7 +149,9 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
     ok: true,
     settings: {
       image: form.image.trim() || undefined,
-      ssl: { enabled: form.sslEnabled },
+      // Omitting `mode` is what keeps a service inheriting; sending the resolved
+      // value instead would freeze it against later org-default changes.
+      ssl: form.sslMode ? { mode: form.sslMode } : {},
       engineConfig: form.engineConfig.trim() || undefined,
       dockerOptions: {
         restart: form.restart,
@@ -151,7 +167,7 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
       },
       exposure: {
         enabled: form.exposureEnabled,
-        ...(form.exposureEnabled ? { bind: form.bind } : {}),
+        ...(form.exposureEnabled ? { scope: form.accessScope } : {}),
       },
       ...(retentionKeep !== undefined
         ? { backups: { retentionKeep } }
@@ -333,6 +349,7 @@ function ImagePicker({
     <View style={styles.imageList}>
       {options.map((option) => {
         const selected = option === value
+        const label = managedImageVariantLabel(option)
         return (
           <Pressable
             key={option}
@@ -341,8 +358,11 @@ function ImagePicker({
             onPress={() => onSelect(option)}
           >
             <Text style={[styles.pickerLabel, selected && styles.pickerLabelSelected]}>
-              {option}
+              {label}
             </Text>
+            {label === option ? null : (
+              <Text style={styles.pickerHint}>{option}</Text>
+            )}
           </Pressable>
         )
       })}
@@ -351,22 +371,25 @@ function ImagePicker({
 }
 
 function ExposureExtraFields({
-  bind,
+  scope,
   disabled,
-  onBindChange,
+  onScopeChange,
 }: Readonly<{
-  bind: ManagedBindScope
+  scope: ManagedSqlAccessScope
   disabled: boolean
-  onBindChange: (value: ManagedBindScope) => void
+  onScopeChange: (value: ManagedSqlAccessScope) => void
 }>) {
   return (
     <>
-      <Text style={orgPanelStyles.detailLabel}>Bind scope</Text>
-      <SegmentPicker
-        options={BIND_SCOPES}
-        value={bind}
+      <Text style={orgPanelStyles.detailLabel}>Client access</Text>
+      <Text style={orgPanelStyles.muted}>
+        Where clients may reach the shared ProxySQL listener on this server.
+        Public clients always dial ProxySQL — never the engine container port.
+      </Text>
+      <ManagedAccessScopePicker
+        value={scope}
         disabled={disabled}
-        onSelect={onBindChange}
+        onSelect={onScopeChange}
       />
     </>
   )
@@ -407,6 +430,8 @@ function SettingsFormBody({
   saving,
   error,
   imageOptions,
+  versionLabel,
+  organizationSslMode,
   onApply,
 }: Readonly<{
   form: SettingsForm
@@ -416,13 +441,22 @@ function SettingsFormBody({
   saving: boolean
   error: string | null
   imageOptions: readonly string[]
+  /** Engine series the cluster runs (`18`, `9.7`, …); `null` outside the catalog. */
+  versionLabel: string | null
+  /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
+  organizationSslMode: ManagedSslMode | null
   onApply: () => void
 }>) {
   return (
     <View style={styles.body}>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-      <Text style={orgPanelStyles.detailLabel}>Image</Text>
+      <Text style={orgPanelStyles.detailLabel}>Base image</Text>
+      <Text style={orgPanelStyles.muted}>
+        {versionLabel
+          ? `Running version ${versionLabel}. Moving to another version means creating a new managed database — an engine cannot start on another major's data directory.`
+          : 'Only base-OS variants of the running version can be swapped here.'}
+      </Text>
       <ImagePicker
         options={imageOptions}
         value={form.image}
@@ -430,13 +464,16 @@ function SettingsFormBody({
         onSelect={(image) => setForm((current) => ({ ...current, image }))}
       />
 
-      <ToggleRow
-        label="SSL enabled"
-        checked={form.sslEnabled}
+      <Text style={orgPanelStyles.detailLabel}>Client TLS</Text>
+      <Text style={orgPanelStyles.muted}>
+        Applies to clients dialing the shared managed listener. The listener ↔
+        engine leg is always encrypted regardless of this setting.
+      </Text>
+      <ManagedSslModePicker
+        value={form.sslMode}
+        inheritLabel={managedSslInheritLabel(organizationSslMode)}
         disabled={disabled}
-        onToggle={() =>
-          setForm((current) => ({ ...current, sslEnabled: !current.sslEnabled }))
-        }
+        onSelect={(sslMode) => setForm((current) => ({ ...current, sslMode }))}
       />
 
       <Text style={orgPanelStyles.detailLabel}>Engine config</Text>
@@ -531,9 +568,11 @@ function SettingsFormBody({
 
       {form.exposureEnabled ? (
         <ExposureExtraFields
-          bind={form.bind}
+          scope={form.accessScope}
           disabled={disabled}
-          onBindChange={(bind) => setForm((current) => ({ ...current, bind }))}
+          onScopeChange={(accessScope) =>
+            setForm((current) => ({ ...current, accessScope }))
+          }
         />
       ) : null}
 
@@ -550,20 +589,30 @@ function SettingsFormBody({
 export function ManagedSettingsPanel({
   settings,
   engineCode,
+  organizationSslMode,
   canManage,
   busy,
   onApply,
 }: Readonly<{
   settings: ManagedSettings
-  /** Selects the approved image allowlist shown in the Image picker (see `managedCatalogEntryForCode`). */
+  /** Selects the release catalog used for the base-image picker (see `managedVariantImagesForImage`). */
   engineCode: string | null
+  /** From the detail response `ssl.organizationDefault`; labels the inherit row. */
+  organizationSslMode: ManagedSslMode | null
   canManage: boolean
   busy: boolean
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
-  const imageOptions = catalog?.allowedImages ?? []
   const defaultImage = catalog?.defaultImage ?? ''
+  // Series changes are refused by the control plane (`managed_series_immutable`),
+  // so only offer other base-OS variants of the version already running.
+  const imageOptions = managedVariantImagesForImage(
+    engineCode,
+    settings.image ?? defaultImage,
+  )
+  const versionLabel =
+    describeManagedImage(settings.image ?? defaultImage)?.series ?? null
   const [expanded, setExpanded] = useState(false)
   const [form, setForm] = useState(() => settingsToForm(settings, defaultImage))
   const [error, setError] = useState<string | null>(null)
@@ -612,6 +661,8 @@ export function ManagedSettingsPanel({
           saving={saving}
           error={error}
           imageOptions={imageOptions}
+          versionLabel={versionLabel}
+          organizationSslMode={organizationSslMode}
           onApply={() => {
             void apply()
           }}
@@ -648,11 +699,17 @@ const styles = StyleSheet.create({
   pickerLabel: {
     color: colors.textMuted,
     fontSize: 13,
-    fontFamily: 'monospace',
+    fontWeight: '600',
   },
   pickerLabelSelected: {
     color: colors.text,
     fontWeight: '600',
+  },
+  pickerHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginTop: 2,
   },
   input: {
     borderWidth: 1,

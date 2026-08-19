@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability -- Reanimated SharedValue `.value` writes */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'

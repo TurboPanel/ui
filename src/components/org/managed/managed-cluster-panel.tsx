@@ -10,11 +10,20 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import type { ManagedMemberRecord, ManagedReplicaClass } from '@/lib/managed-services'
+import type {
+  ManagedMemberRecord,
+  ManagedRecoveryRecord,
+  ManagedReplicaClass,
+} from '@/lib/managed-services'
 import {
   formatReplicationLag,
   managedErrorMessage,
+  managedRecoveryBanner,
+  managedReplicaPromoteAction,
+  MEMBER_MANUAL_DR_CANDIDATE_LABEL,
+  memberReadTrafficLabel,
   memberReplicaClassLabel,
+  memberReplicaClassPickerLabel,
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
@@ -40,6 +49,7 @@ import {
 } from '@/lib/instance-api'
 import {
   useAddManagedReplica,
+  usePromoteManagedDisasterRecovery,
   usePromoteManagedMember,
   useRemoveManagedMember,
   useUpdateManagedMemberReadEligible,
@@ -103,6 +113,7 @@ export function ManagedClusterPanel({
   orgId,
   environmentId,
   members,
+  recovery,
   managedDisplayName,
   canManage,
   busy,
@@ -111,6 +122,7 @@ export function ManagedClusterPanel({
   orgId: string
   environmentId: string
   members: readonly ManagedMemberRecord[]
+  recovery?: ManagedRecoveryRecord | null
   managedDisplayName: string
   canManage: boolean
   busy: boolean
@@ -132,6 +144,7 @@ export function ManagedClusterPanel({
   )
   const removeMember = useRemoveManagedMember(orgId, environmentId)
   const promoteMember = usePromoteManagedMember(orgId, environmentId)
+  const promoteDisaster = usePromoteManagedDisasterRecovery(orgId, environmentId)
 
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -141,6 +154,7 @@ export function ManagedClusterPanel({
   const [removeArmedId, setRemoveArmedId] = useState<string | null>(null)
   const [convertArmedId, setConvertArmedId] = useState<string | null>(null)
   const [promoteMemberId, setPromoteMemberId] = useState<string | null>(null)
+  const [disasterMemberId, setDisasterMemberId] = useState<string | null>(null)
   const [promoteConfirmName, setPromoteConfirmName] = useState('')
   const [forceEscalate, setForceEscalate] = useState(false)
   const [forceGateMessage, setForceGateMessage] = useState<string | null>(null)
@@ -190,6 +204,10 @@ export function ManagedClusterPanel({
     return map
   }, [eligibility.servers])
 
+  const recoveryBanner = managedRecoveryBanner(recovery)
+  const disasterMember = disasterMemberId
+    ? members.find((member) => member.id === disasterMemberId) ?? null
+    : null
   const confirmName = managedDisplayName.trim()
   const promoteTypedOk =
     promoteConfirmName.trim().length > 0 &&
@@ -320,6 +338,21 @@ export function ManagedClusterPanel({
     }
   }
 
+  const runDisasterRecovery = async (memberId: string) => {
+    setWorking(true)
+    setError(null)
+    try {
+      const result = await promoteDisaster.mutateAsync(memberId)
+      onRegisterCommand(result.commandId, 'Disaster recovery', result.serverId)
+      setDisasterMemberId(null)
+      setPromoteConfirmName('')
+    } catch (err) {
+      setError(managedErrorMessage(err, 'Failed to start disaster recovery'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
   const disabled = busy || working || !canManage
 
   const openNetworkReason = (
@@ -348,10 +381,21 @@ export function ManagedClusterPanel({
   return (
     <SectionPanel
       title="Cluster"
-      hint={`Failover stays on the datacenter LAN · read-only replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS`}
+      hint={`Failover stays on the datacenter LAN · remote/read replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS`}
       accent
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {recoveryBanner ? (
+        <View
+          style={orgPanelStyles.calloutWarning}
+          accessibilityRole="alert"
+          accessibilityLabel={recoveryBanner.text}
+        >
+          <Text style={orgPanelStyles.calloutWarningText}>
+            {recoveryBanner.text}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.list}>
         {members.map((member) => (
@@ -379,9 +423,15 @@ export function ManagedClusterPanel({
             }}
             onStartPromote={() => {
               setPromoteMemberId(member.id)
+              setDisasterMemberId(null)
               setPromoteConfirmName('')
               setForceEscalate(false)
               setForceGateMessage(null)
+            }}
+            onStartDisasterRecovery={() => {
+              setDisasterMemberId(member.id)
+              setPromoteMemberId(null)
+              setPromoteConfirmName('')
             }}
           />
         ))}
@@ -406,6 +456,27 @@ export function ManagedClusterPanel({
           onCancel={() => {
             setPromoteMemberId(null)
             setForceEscalate(false)
+            setPromoteConfirmName('')
+          }}
+        />
+      ) : null}
+
+      {disasterMemberId && disasterMember ? (
+        <DisasterRecoveryDialog
+          primaryLabel={primary ? serverLabel(primary) : null}
+          targetLabel={serverLabel(disasterMember)}
+          targetSite={siteLabel(disasterMember.serverId)}
+          lagLabel={formatReplicationLag(disasterMember.replication) || 'unknown lag'}
+          confirmName={confirmName}
+          promoteConfirmName={promoteConfirmName}
+          onChangePromoteConfirmName={setPromoteConfirmName}
+          disabled={disabled}
+          promoteTypedOk={promoteTypedOk}
+          onConfirm={() => {
+            void runDisasterRecovery(disasterMemberId)
+          }}
+          onCancel={() => {
+            setDisasterMemberId(null)
             setPromoteConfirmName('')
           }}
         />
@@ -464,6 +535,7 @@ function ClusterMemberRow({
   onCancelConvert,
   onConfirmConvert,
   onStartPromote,
+  onStartDisasterRecovery,
 }: Readonly<{
   member: ManagedMemberRecord
   canManage: boolean
@@ -480,11 +552,14 @@ function ClusterMemberRow({
   onCancelConvert: () => void
   onConfirmConvert: () => void
   onStartPromote: () => void
+  onStartDisasterRecovery: () => void
 }>) {
   const healthy = isHealthyMemberStatus(member.status)
   const healthLine = resolveHealthLine(member)
   const classLabel = memberReplicaClassLabel(member.replicaClass)
-  const isReadReplica = member.role === 'replica' && member.replicaClass === 'read'
+  const promoteAction = managedReplicaPromoteAction(member.replicaClass)
+  const isReadReplica = promoteAction === 'disaster-recovery'
+  const liveReads = member.role === 'primary' || member.readEligible
 
   return (
     <View style={styles.row}>
@@ -506,9 +581,18 @@ function ClusterMemberRow({
             </Text>
           </Text>
           <View style={styles.chipRow}>
-            {member.role === 'replica' && member.readEligible ? (
-              <View style={styles.readsChip}>
-                <Text style={styles.readsChipText}>Reads</Text>
+            <View style={liveReads ? styles.readsChip : styles.standbyChip}>
+              <Text
+                style={liveReads ? styles.readsChipText : styles.standbyChipText}
+              >
+                {memberReadTrafficLabel(member.role, member.readEligible)}
+              </Text>
+            </View>
+            {isReadReplica ? (
+              <View style={styles.standbyChip}>
+                <Text style={styles.standbyChipText}>
+                  {MEMBER_MANUAL_DR_CANDIDATE_LABEL}
+                </Text>
               </View>
             ) : null}
             <Text style={styles.healthText}>{healthLine}</Text>
@@ -524,7 +608,7 @@ function ClusterMemberRow({
             onPress={onToggleReads}
           >
             <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              {member.readEligible ? 'Disable reads' : 'Enable reads'}
+              {member.readEligible ? 'Stop serving reads' : 'Serve read traffic'}
             </Text>
           </Pressable>
           <RemoveReplicaControl
@@ -535,18 +619,31 @@ function ClusterMemberRow({
             onConfirm={onConfirmRemove}
           />
           {isReadReplica ? (
-            <ConvertToFailoverControl
-              armed={convertArmed}
-              disabled={disabled}
-              onArm={onArmConvert}
-              onCancel={onCancelConvert}
-              onConfirm={onConfirmConvert}
-            />
+            <>
+              <ConvertToFailoverControl
+                armed={convertArmed}
+                disabled={disabled}
+                onArm={onArmConvert}
+                onCancel={onCancelConvert}
+                onConfirm={onConfirmConvert}
+              />
+              <Pressable
+                style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+                disabled={disabled}
+                onPress={onStartDisasterRecovery}
+                accessibilityLabel="Promote for disaster recovery"
+              >
+                <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+                  Promote for disaster recovery
+                </Text>
+              </Pressable>
+            </>
           ) : (
             <Pressable
               style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
               disabled={disabled}
               onPress={onStartPromote}
+              accessibilityLabel="Promote"
             >
               <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
                 Promote
@@ -628,8 +725,9 @@ function ConvertToFailoverControl({
     return (
       <View style={styles.armedRow}>
         <Text style={orgPanelStyles.calloutWarning}>
-          Converts this replica to failover. It must share the primary's
-          datacenter LAN.
+          {
+            "Converts this replica to failover. It must share the primary's datacenter LAN."
+          }
         </Text>
         <Pressable
           style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
@@ -752,6 +850,85 @@ function PromoteDialog({
   )
 }
 
+function DisasterRecoveryDialog({
+  primaryLabel,
+  targetLabel,
+  targetSite,
+  lagLabel,
+  confirmName,
+  promoteConfirmName,
+  onChangePromoteConfirmName,
+  disabled,
+  promoteTypedOk,
+  onConfirm,
+  onCancel,
+}: Readonly<{
+  primaryLabel: string | null
+  targetLabel: string
+  targetSite: string
+  lagLabel: string
+  confirmName: string
+  promoteConfirmName: string
+  onChangePromoteConfirmName: (value: string) => void
+  disabled: boolean
+  promoteTypedOk: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}>) {
+  const confirmDisabled = !promoteTypedOk || disabled
+
+  return (
+    <View style={[orgPanelStyles.detailCard, styles.promoteCard]}>
+      <Text style={orgPanelStyles.detailTitle}>
+        Promote for disaster recovery
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        Current primary: {primaryLabel ?? '—'}
+      </Text>
+      <Text style={orgPanelStyles.detailLine}>
+        Target: {targetLabel} · {targetSite} · {lagLabel}
+      </Text>
+      <View style={orgPanelStyles.calloutWarning}>
+        <Text style={orgPanelStyles.calloutWarningText}>
+          This accepts possible data loss. Unreplicated commits on the old
+          primary will not be recovered. Remaining failover replicas outside
+          the new primary's datacenter become remote read replicas.
+        </Text>
+      </View>
+      <Text style={orgPanelStyles.muted}>Type {confirmName} to confirm.</Text>
+      <TextInput
+        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+        value={promoteConfirmName}
+        onChangeText={onChangePromoteConfirmName}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!disabled}
+        accessibilityLabel="Type the cluster name to confirm disaster recovery"
+      />
+      <Pressable
+        style={[
+          orgPanelStyles.toolbarBtnPrimary,
+          webPointer,
+          confirmDisabled && styles.disabled,
+        ]}
+        disabled={confirmDisabled}
+        onPress={onConfirm}
+        accessibilityLabel="Confirm disaster recovery"
+      >
+        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+          Confirm disaster recovery
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+        onPress={onCancel}
+      >
+        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
+      </Pressable>
+    </View>
+  )
+}
+
 function ServerOptionRow({
   server,
   eligibilityRow,
@@ -851,8 +1028,8 @@ function AddReplicaForm({
       <Text style={orgPanelStyles.detailLabel}>Replica class</Text>
       <View style={orgPanelStyles.segmentGroup}>
         {([
-          { id: 'failover', label: 'Failover' },
-          { id: 'read', label: 'Read-only' },
+          { id: 'failover', label: memberReplicaClassPickerLabel('failover') },
+          { id: 'read', label: memberReplicaClassPickerLabel('read') },
         ] as const).map((option) => {
           const active = replicaClass === option.id
           return (
@@ -910,7 +1087,7 @@ function AddReplicaForm({
             <Text style={styles.checkboxMark}>✓</Text>
           ) : null}
         </View>
-        <Text style={styles.toggleLabel}>Eligible for read traffic</Text>
+        <Text style={styles.toggleLabel}>Serve read traffic</Text>
       </Pressable>
       <View style={styles.addActions}>
         <Pressable
@@ -1070,6 +1247,19 @@ const styles = StyleSheet.create({
   },
   readsChipText: {
     color: chrome.accent,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  standbyChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  standbyChipText: {
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },

@@ -37,51 +37,88 @@ const DOCKERFILE_INSTRUCTIONS = new Set([
   'STOPSIGNAL',
 ])
 
+type Quote = '"' | "'"
+
+type DockerfileState = { inString: Quote | null }
+
+/** Stream methods the Dockerfile tokenizer actually uses. */
+type DockerfileStream = {
+  eol(): boolean
+  next(): string | void
+  sol(): boolean
+  eatSpace(): boolean
+  peek(): string | undefined
+  skipToEnd(): void
+  match(pattern: RegExp): unknown
+  current(): string
+}
+
+function consumeQuotedString(
+  stream: DockerfileStream,
+  state: DockerfileState,
+): 'string' {
+  const quote = state.inString
+  while (!stream.eol()) {
+    if (stream.next() === quote) {
+      state.inString = null
+      break
+    }
+  }
+  return 'string'
+}
+
+function tokenAtLineStart(
+  stream: DockerfileStream,
+): 'comment' | 'keyword' | undefined {
+  stream.eatSpace()
+  if (stream.peek() === '#') {
+    stream.skipToEnd()
+    return 'comment'
+  }
+  if (!stream.match(/^[A-Za-z_]\w*/)) {
+    return
+  }
+  if (DOCKERFILE_INSTRUCTIONS.has(stream.current().toUpperCase())) {
+    return 'keyword'
+  }
+}
+
+function tokenInline(
+  stream: DockerfileStream,
+  state: DockerfileState,
+  ch: string | void,
+): 'comment' | 'string' | null {
+  if (ch === '#') {
+    stream.skipToEnd()
+    return 'comment'
+  }
+  if (ch === '"' || ch === "'") {
+    state.inString = ch
+    return 'string'
+  }
+  return null
+}
+
 /**
  * Local StreamLanguage tokenizer — avoids a legacy-modes dependency.
  * Highlights leading instructions, `#` comments, and quoted strings.
  */
 const dockerfileLanguage = StreamLanguage.define({
   name: 'dockerfile',
-  startState() {
-    return { inString: null as '"' | "'" | null }
+  startState(): DockerfileState {
+    return { inString: null }
   },
   token(stream, state) {
     if (state.inString) {
-      const quote = state.inString
-      while (!stream.eol()) {
-        if (stream.next() === quote) {
-          state.inString = null
-          break
-        }
-      }
-      return 'string'
+      return consumeQuotedString(stream, state)
     }
-
     if (stream.sol()) {
-      stream.eatSpace()
-      if (stream.peek() === '#') {
-        stream.skipToEnd()
-        return 'comment'
-      }
-      if (stream.match(/^[A-Za-z_][A-Za-z0-9_]*/)) {
-        const word = stream.current().toUpperCase()
-        if (DOCKERFILE_INSTRUCTIONS.has(word)) {
-          return 'keyword'
-        }
+      const start = tokenAtLineStart(stream)
+      if (start) {
+        return start
       }
     }
-
-    const ch = stream.next()
-    if (ch === '#') {
-      stream.skipToEnd()
-      return 'comment'
-    }
-    if (ch === '"' || ch === "'") {
-      state.inString = ch
-      return 'string'
-    }
-    return null
+    return tokenInline(stream, state, stream.next())
   },
 })
 
