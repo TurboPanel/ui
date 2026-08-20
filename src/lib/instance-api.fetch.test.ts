@@ -30,6 +30,7 @@ import {
   fetchOrgHostDefaults,
   fetchOrganization,
   fetchOrganizationCa,
+  fetchOrganizationCaRotation,
   fetchOrganizations,
   fetchPermissions,
   fetchProject,
@@ -48,6 +49,8 @@ import {
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   rebootServer,
   resolveResourceId,
+  retireOrganizationCa,
+  rotateOrganizationCa,
   runEnvironmentLifecycle,
   saveOrgFabric,
   saveOrgHostDefaults,
@@ -660,14 +663,74 @@ describe('instance-api fetch wrappers', () => {
       jsonResponse({
         tls: {
           id: 'tls-1',
-          source: 'self_signed',
+          source: 'organization_ca',
           certificatePem: '-----BEGIN CERTIFICATE-----\n',
+          caGeneration: 1,
         },
+        trustBundlePem: '-----BEGIN CERTIFICATE-----\n',
+        leafHealth: { dueCount: 0, caGeneration: 1, caNotAfter: null },
       }),
     )
     await expect(fetchOrganizationCa()).resolves.toMatchObject({
       tls: { id: 'tls-1' },
+      leafHealth: { dueCount: 0 },
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tls/ca')
+  })
+
+  it('fetchOrganizationCaRotation returns the journal and treats 404 as none', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        rotationId: 'rot-1',
+        fromGeneration: 1,
+        toGeneration: 2,
+        state: 'awaiting_retire',
+        results: [],
+        retiredCaStillRequired: true,
+      }),
+    )
+    await expect(fetchOrganizationCaRotation()).resolves.toMatchObject({
+      rotationId: 'rot-1',
+      state: 'awaiting_retire',
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tls/ca/rotation')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'not_found' }, 404))
+    await expect(fetchOrganizationCaRotation()).resolves.toBeNull()
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
+    await expect(fetchOrganizationCaRotation()).rejects.toThrow(
+      '/tls/ca/rotation failed: HTTP 403: forbidden',
+    )
+  })
+
+  it('rotateOrganizationCa and retireOrganizationCa POST the rotation routes', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        id: 'tls-2',
+        rotationId: 'rot-1',
+        generation: 2,
+        results: [],
+        needsRedeploy: [],
+      }),
+    )
+    await expect(rotateOrganizationCa()).resolves.toMatchObject({
+      ok: true,
+      rotationId: 'rot-1',
+      generation: 2,
+    })
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tls/ca/rotate')
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, rotationId: 'rot-1' }),
+    )
+    await expect(retireOrganizationCa()).resolves.toEqual({
+      ok: true,
+      rotationId: 'rot-1',
+    })
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/tls/ca/retire')
   })
 })

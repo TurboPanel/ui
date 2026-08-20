@@ -1,7 +1,7 @@
 import type { ComposeDocument } from '@/lib/compose'
 import { resolveApiUrl } from '@/lib/control-plane'
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
-import { formatFetchFailureDetail } from '@/lib/fetch-error-detail'
+import { formatFetchFailureDetail, isHttpStatusError } from '@/lib/fetch-error-detail'
 import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 import type {
     ManagedBackupRecord,
@@ -86,6 +86,9 @@ export const FABRIC_RECONCILE_PENDING_ERROR = 'fabric_reconcile_pending'
 export const BINDING_PASSWORD_UNAVAILABLE_ERROR = 'binding_password_unavailable' // NOSONAR typescript:S2068 — API error code, not a credential
 export const BINDING_ENGINE_UNSUPPORTED_ERROR = 'binding_engine_unsupported'
 export const BINDING_OWNED_VARIABLE_ERROR = 'binding_owned_variable'
+export const CA_ROTATION_IN_PROGRESS_ERROR = 'ca_rotation_in_progress'
+export const NO_PENDING_ROTATION_ERROR = 'no_pending_rotation'
+export const CA_ROTATION_NOT_CONVERGED_ERROR = 'ca_rotation_not_converged'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
 
 const CLIENT_API = '/api/client/v1'
@@ -1465,7 +1468,7 @@ export type HostingRecord = {
   updatedAt: string
 }
 
-export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed'
+export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
 
 export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked'
 
@@ -1500,12 +1503,37 @@ export type OrganizationCaRecord = {
   id: string
   source: TlsSource
   certificatePem?: string | null
-  metadata: TlsMetadata | Record<string, unknown>
+  metadata: TlsMetadata
+  caGeneration: number | null
   status?: TlsStatus
   organizationId?: string
   displayName?: string | null
   createdAt?: string
   updatedAt?: string
+}
+
+export type OrganizationCaLeafHealth = {
+  dueCount: number
+  caGeneration: number
+  caNotAfter: string | null
+}
+
+export type CaRotationResult = {
+  serverId: string
+  status: string
+  kind?: string
+  managedId?: string
+  commandId?: string
+  error?: string
+}
+
+export type CaRotationStatus = {
+  rotationId: string
+  fromGeneration: number
+  toGeneration: number
+  state: string
+  results: CaRotationResult[]
+  retiredCaStillRequired: boolean
 }
 
 /**
@@ -1638,6 +1666,7 @@ export const WORKSPACE_HAS_CHILDREN_ERROR = 'Cannot delete while child resources
 export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources exist'
 
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
+export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
@@ -3782,8 +3811,38 @@ export async function deleteBinding(id: string): Promise<{ ok: true }> {
 /** Ensure-or-create organization CA (public certificate only — never a private key). */
 export async function fetchOrganizationCa(): Promise<{
   tls: OrganizationCaRecord
+  trustBundlePem: string
+  leafHealth: OrganizationCaLeafHealth
 }> {
   return await apiFetch(`${CLIENT_API}/tls/ca`)
+}
+
+/** Active Organization CA rotation journal; `null` when no rotation exists yet. */
+export async function fetchOrganizationCaRotation(): Promise<CaRotationStatus | null> {
+  try {
+    return await apiFetch(`${CLIENT_API}/tls/ca/rotation`)
+  } catch (err) {
+    if (isHttpStatusError(err, 404)) return null
+    throw err
+  }
+}
+
+export async function rotateOrganizationCa(): Promise<{
+  ok: true
+  id: string
+  rotationId: string
+  generation: number
+  results: CaRotationResult[]
+  needsRedeploy: { serverId: string; environmentId: string }[]
+}> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/rotate`, { method: 'POST' })
+}
+
+export async function retireOrganizationCa(): Promise<{
+  ok: true
+  rotationId: string
+}> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/retire`, { method: 'POST' })
 }
 
 /**

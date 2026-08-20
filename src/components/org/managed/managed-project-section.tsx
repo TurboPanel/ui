@@ -527,6 +527,7 @@ function ManagedEnvironmentReadyPanels({
     trackedEntries.length > 0 &&
     (commandsQuery.data?.some((record) => !isTerminalCommandStatus(record.status)) ?? true)
 
+
   return (
     <View style={styles.panels}>
       {showOverview ? (
@@ -545,6 +546,7 @@ function ManagedEnvironmentReadyPanels({
       {showConnect ? (
         <>
           <ManagedConnectionPanel
+            orgId={orgId}
             managed={managed}
             connection={detail.connection}
             endpoints={detail.endpoints}

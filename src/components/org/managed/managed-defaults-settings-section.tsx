@@ -133,7 +133,7 @@ function ManagedTlsDefaultsPanel({
         their own mode keep it.
       </Text>
       <Text style={orgPanelStyles.muted}>
-        Verify CA and Verify Full need the organization CA, which is downloadable
+        Verify CA and Verify Full need the Organization CA, which is downloadable
         from a managed service&apos;s Connect tab.
       </Text>
 

@@ -24,6 +24,7 @@ import {
   hasReadEligibleReplica,
   readOnlyLoginNames,
 } from '@/lib/managed-read-endpoint'
+import { useOrganizationCa } from '@/lib/queries/managed'
 import { colors, spacing } from '@/lib/theme'
 
 function endpointLabel(
@@ -129,7 +130,7 @@ function TlsPolicyLines({
       </Text>
       {policy.verifies ? (
         <Text style={orgPanelStyles.muted}>
-          Clients verify the certificate, so they need the organization CA below.
+          Clients verify the certificate, so they need the Organization CA below.
         </Text>
       ) : null}
     </>
@@ -158,6 +159,7 @@ function EndpointList({
 }
 
 export function ManagedConnectionPanel({
+  orgId,
   managed,
   connection,
   endpoints,
@@ -166,6 +168,7 @@ export function ManagedConnectionPanel({
   users,
   ssl,
 }: Readonly<{
+  orgId: string
   managed: ManagedEnvironmentRecord
   connection: ManagedConnectionInfo | null
   endpoints?: readonly ManagedAccessEndpoint[]
@@ -179,6 +182,9 @@ export function ManagedConnectionPanel({
   const [caBusy, setCaBusy] = useState(false)
   const [caMessage, setCaMessage] = useState<string | null>(null)
   const [caError, setCaError] = useState<string | null>(null)
+  const caQuery = useOrganizationCa(orgId)
+  const overlapping =
+    (caQuery.data?.trustBundlePem?.match(/BEGIN CERTIFICATE/g)?.length ?? 0) > 1
 
   const hasReadEligible = hasReadEligibleReplica(members)
   const readOnlyLogins = readOnlyLoginNames(users)
@@ -209,10 +215,10 @@ export function ManagedConnectionPanel({
         anchor.click()
         URL.revokeObjectURL(url)
       }
-      setCaMessage('CA certificate copied' + (typeof document !== 'undefined' ? ' and downloaded' : ''))
+      setCaMessage('Organization CA copied' + (typeof document !== 'undefined' ? ' and downloaded' : ''))
     } catch (err) {
       setCaError(
-        err instanceof Error ? err.message : 'Failed to download CA certificate',
+        err instanceof Error ? err.message : 'Failed to download Organization CA',
       )
     } finally {
       setCaBusy(false)
@@ -274,10 +280,16 @@ export function ManagedConnectionPanel({
                 }}
               >
                 <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                  {caBusy ? 'Downloading…' : 'Download CA certificate'}
+                  {caBusy ? 'Downloading…' : 'Download Organization CA'}
                 </Text>
               </Pressable>
             </View>
+            {overlapping ? (
+              <Text style={orgPanelStyles.calloutWarningText}>
+                A previous Organization CA generation is still trusted during
+                rotation — download the latest bundle to pick up the new root.
+              </Text>
+            ) : null}
             {caMessage ? (
               <Text style={orgPanelStyles.muted}>{caMessage}</Text>
             ) : null}

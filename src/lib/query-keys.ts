@@ -147,6 +147,7 @@ export const queryKeys = {
       tls: ['org', orgId, 'tls'] as const,
       /** Org CA sits under the tls prefix so one invalidation clears library + CA. */
       tlsCa: ['org', orgId, 'tls', 'ca'] as const,
+      tlsCaRotation: ['org', orgId, 'tls', 'ca', 'rotation'] as const,
 
       workspaces: {
         all: ['org', orgId, 'workspaces'] as const,

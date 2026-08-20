@@ -26,7 +26,15 @@ import {
   parseProjectEnvironmentId,
   projectOverviewHref,
 } from '@/lib/project-navigation'
-import { useDeleteEnvironment, useUpdateProject } from '@/lib/queries'
+import {
+  isTerminalCommandStatus,
+  useCommandsBatch,
+  useDeleteEnvironment,
+  useDeleteEnvironmentManagedMutation,
+  useUpdateProject,
+  type TrackedCommandEntry,
+} from '@/lib/queries'
+import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -113,16 +121,60 @@ function ManagedProjectTrashButton({
     invalidateEnvironments,
   } = useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
+  const destroyManaged = useDeleteEnvironmentManagedMutation(orgId)
   const [envArmed, setEnvArmed] = useState(false)
+  const [trackedDestroy, setTrackedDestroy] = useState<
+    readonly TrackedCommandEntry[]
+  >([])
+  const [pendingEnvDelete, setPendingEnvDelete] = useState<string | null>(null)
+  const commandsQuery = useCommandsBatch(orgId, trackedDestroy)
 
   useEffect(() => {
     setEnvArmed(false)
   }, [selectedEnvironment?.id, environments.length])
 
+  useEffect(() => {
+    if (!pendingEnvDelete) return
+    const command = commandsQuery.data?.[0]
+    if (!command || !isTerminalCommandStatus(command.status)) return
+    const environmentId = pendingEnvDelete
+    setTrackedDestroy([])
+    setPendingEnvDelete(null)
+    if (command.status !== 'succeeded') {
+      setError(command.error ?? `Destroy ${command.status}`)
+      return
+    }
+    void (async () => {
+      const result = await deleteEnvironment.run(environmentId)
+      if (!result.ok) {
+        if (deleteEnvironment.actionError?.includes(MANAGED_RUNTIME_PRESENT_ERROR)) {
+          setError(
+            'Destroy the database first — it is still running on the server.',
+          )
+        } else if (deleteEnvironment.actionError) {
+          setError(deleteEnvironment.actionError)
+        }
+        return
+      }
+      setEnvArmed(false)
+      await invalidateEnvironments()
+      if (parseProjectEnvironmentId(pathname, projectId) === environmentId) {
+        router.replace(projectOverviewHref(orgId, projectId) as Href)
+      }
+    })()
+  }, [
+    commandsQuery.data,
+    pendingEnvDelete,
+    pathname,
+    projectId,
+    orgId,
+  ])
+
   if (!canOwn) return null
 
   const multiEnv = environments.length > 1
-  const removing = deleteEnvironment.isPending
+  const destroying = destroyManaged.isPending || trackedDestroy.length > 0
+  const removing = deleteEnvironment.isPending || destroying
 
   const handlePress = () => {
     if (removing || deletingProject) return
@@ -141,23 +193,40 @@ function ManagedProjectTrashButton({
     void (async () => {
       setError(null)
       const deletedId = selectedEnvironment.id
-      const result = await deleteEnvironment.run(deletedId)
-      if (!result.ok) {
-        if (deleteEnvironment.actionError) {
-          setError(deleteEnvironment.actionError)
+      const destroy = await destroyManaged.run(deletedId)
+      if (!destroy.ok) {
+        if (destroyManaged.actionError) setError(destroyManaged.actionError)
+        return
+      }
+      if (destroy.value.deleted) {
+        const result = await deleteEnvironment.run(deletedId)
+        if (!result.ok) {
+          if (deleteEnvironment.actionError) {
+            setError(deleteEnvironment.actionError)
+          }
+          return
+        }
+        setEnvArmed(false)
+        await invalidateEnvironments()
+        if (parseProjectEnvironmentId(pathname, projectId) === deletedId) {
+          router.replace(projectOverviewHref(orgId, projectId) as Href)
         }
         return
       }
-      setEnvArmed(false)
-      await invalidateEnvironments()
-      if (parseProjectEnvironmentId(pathname, projectId) === deletedId) {
-        router.replace(projectOverviewHref(orgId, projectId) as Href)
+      const { commandId, serverId } = destroy.value
+      if (!commandId || !serverId) {
+        setError('Destroy queued but target server was not returned')
+        return
       }
+      setPendingEnvDelete(deletedId)
+      setTrackedDestroy([{ serverId, commandId }])
     })()
   }
 
   let accessibilityLabel = 'Delete this project'
-  if (multiEnv && envArmed) {
+  if (destroying) {
+    accessibilityLabel = 'Destroying database'
+  } else if (multiEnv && envArmed) {
     accessibilityLabel = 'Confirm delete this environment'
   } else if (multiEnv) {
     accessibilityLabel = 'Delete this environment'

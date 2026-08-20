@@ -6,8 +6,9 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
+import { SectionPanel } from '@/components/org/section-panel'
 import type { TlsRecord, TlsSource } from '@/lib/instance-api'
 import {
   useCreateTlsCertificate,
@@ -19,6 +20,21 @@ import { chrome, colors, spacing } from '@/lib/theme'
 
 function tlsTitle(row: TlsRecord): string {
   return row.displayName?.trim() || row.metadata.dnsNames[0] || row.id
+}
+
+function tlsSourceLabel(source: string): string {
+  switch (source) {
+    case 'organization_ca':
+      return 'Organization CA'
+    case 'upload':
+      return 'Uploaded'
+    case 'self_signed':
+      return 'Self-signed'
+    case 'lets_encrypt':
+      return "Let's Encrypt"
+    default:
+      return source
+  }
 }
 
 function formatSans(row: TlsRecord): string {
@@ -128,7 +144,7 @@ export function TlsOverviewSection({
       <View key={row.id} style={orgPanelStyles.detailCard}>
         <Text style={orgPanelStyles.detailTitle}>{tlsTitle(row)}</Text>
         <Text style={orgPanelStyles.muted}>
-          {row.source} · {row.metadata.status}
+          {tlsSourceLabel(row.source)} · {row.metadata.status}
         </Text>
         <Text style={styles.sans}>{formatSans(row)}</Text>
         {row.metadata.notAfter ? (
@@ -157,9 +173,10 @@ export function TlsOverviewSection({
 
   return (
     <View style={styles.root}>
+      <OrganizationCaPanel orgId={orgId} />
       <SectionPanel
         title="TLS certificates"
-        hint="Organization certificate library — pin explicitly on hosting (default is basic self-signed)"
+        hint="Organization certificate library — pin uploaded, self-signed, or Let's Encrypt certs explicitly on hosting (default is basic self-signed). The Organization CA row is platform-managed."
       >
         {renderCertificateList()}
       </SectionPanel>
@@ -182,7 +199,7 @@ export function TlsOverviewSection({
                     source === value && styles.sourceChipTextActive,
                   ]}
                 >
-                  {value}
+                  {tlsSourceLabel(value)}
                 </Text>
               </Pressable>
             ))}

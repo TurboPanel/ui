@@ -115,7 +115,8 @@ export function ControlPlaneUrlsSection() {
       <Text style={styles.heading}>Networking</Text>
       <Text style={styles.copy}>
         Configure the public addresses this control plane is reachable at.
-        These URLs drive TLS certificate SANs for daemon connections.
+        These URLs drive the Platform CA leaf SANs used for daemon → control-plane
+        trust (explicitly not the per-organization Organization CA).
       </Text>
 
       <SectionPanel
@@ -272,7 +273,7 @@ function ApplyAvailabilityNote({
 
   return (
     <Text style={orgPanelStyles.muted}>
-      Apply regenerates the platform-CA leaf for LAN / :8443 listeners and reloads
+      Apply regenerates the Platform CA leaf for LAN / :8443 listeners and reloads
       Caddy. Public HTTPS on port 443 (Cloudflare tunnel, Let’s Encrypt, or an
       uploaded certificate) is trusted by clients via the system store. Let’s
       Encrypt is never issued automatically — it stays opt-in.

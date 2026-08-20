@@ -275,6 +275,22 @@ export function useDeleteEnvironmentManaged(orgId: string, environmentId: string
   })
 }
 
+export function useDeleteEnvironmentManagedMutation(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (environmentId: string) => deleteEnvironmentManaged(environmentId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).managed.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).commands.all,
+        }),
+      ]),
+  })
+}
+
 export function useRotateManagedRootPassword(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   const mutation = useMutation({

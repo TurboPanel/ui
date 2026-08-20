@@ -23,7 +23,7 @@
 - Managed tabs: Overview · Connect · Data · Backups · Environments (shell strip — managed only)
 - Single environment: shell shows name (no chip strip) on managed non-Overview tabs; multi-env: chip selector on those tabs keeps selection in memory (compose scope uses path `/environments/:id`)
 - Service detail deep links remain under `/services/:id`; bare `/services` is the Services surface tab
-- Delete: compose — **Danger** rows in scope-chip settings panels (two-press environment delete when multiple exist; `ProjectDeletePanel` for project delete). Managed — header trash can (same two-press / project-wizard behavior). Old `/settings` routes redirect to Overview. Bare compose `/environments` redirects to Overview.
+- Delete: compose — **Danger** rows in scope-chip settings panels (two-press environment delete when multiple exist; `ProjectDeletePanel` for project delete). Managed — header trash can. Project delete **destroys** each remaining `managed` cluster (`DELETE …/managed` → `managed.destroy`) and waits for the command before `DELETE /projects/:id`. Environment trash on a multi-env managed project does the same before `DELETE /environments/:id`. Never call tenant `environment.stop` for a managed cluster.
 
 ## Creation / setup
 

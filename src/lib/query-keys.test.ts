@@ -144,6 +144,8 @@ describe('queryKeys.org(…).managed.members / bindings / tlsCa', () => {
     const org = queryKeys.org('org-1')
     expect(org.tlsCa).toEqual(['org', 'org-1', 'tls', 'ca'])
     expect(org.tlsCa.slice(0, org.tls.length)).toEqual([...org.tls])
+    expect(org.tlsCaRotation).toEqual(['org', 'org-1', 'tls', 'ca', 'rotation'])
+    expect(org.tlsCaRotation.slice(0, org.tls.length)).toEqual([...org.tls])
   })
 })
 
