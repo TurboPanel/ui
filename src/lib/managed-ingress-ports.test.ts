@@ -56,7 +56,7 @@ describe('validateManagedIngressPorts', () => {
   })
 
   it('names the offending field for a per-port rejection', () => {
-    expect(validateManagedIngressPorts({ postgres: 6032, mysqlFamily: 16306 })).toEqual({
+    expect(validateManagedIngressPorts({ postgres: 6032, mysqlFamily: 13306 })).toEqual({
       ok: false,
       field: 'postgres',
       reason: 'reserved_admin',

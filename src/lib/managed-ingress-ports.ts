@@ -23,7 +23,7 @@ export type ManagedIngressPorts = {
 
 /** Platform defaults when an organization configures nothing. */
 export const MANAGED_INGRESS_PGSQL_PORT = 15432
-export const MANAGED_INGRESS_MYSQL_PORT = 16306
+export const MANAGED_INGRESS_MYSQL_PORT = 13306
 
 export const DEFAULT_MANAGED_INGRESS_PORTS: ManagedIngressPorts = {
   postgres: MANAGED_INGRESS_PGSQL_PORT,

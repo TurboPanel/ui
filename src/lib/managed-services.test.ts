@@ -458,7 +458,7 @@ describe('managedIngressPortForEngine', () => {
 
   it('does not use catalog engine-native ports as the client listener', () => {
     expect(MANAGED_INGRESS_PGSQL_PORT).toBe(15432)
-    expect(MANAGED_INGRESS_MYSQL_PORT).toBe(16306)
+    expect(MANAGED_INGRESS_MYSQL_PORT).toBe(13306)
     expect(managedCatalogEntryForCode('postgres')?.defaultPort).toBe(5432)
     expect(managedCatalogEntryForCode('mysql')?.defaultPort).toBe(3306)
   })
