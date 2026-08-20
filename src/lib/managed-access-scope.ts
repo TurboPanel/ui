@@ -51,19 +51,15 @@ export function managedAccessScopeHint(scope: ManagedSqlAccessScope): string {
   return SCOPE_HINTS[scope]
 }
 
-/** Read scope from API settings, migrating a one-release legacy `bind` field. */
+/** Read scope from API settings, defaulting when omitted or invalid. */
 export function readManagedExposureScope(
   exposure: Readonly<{
     enabled: boolean
     scope?: ManagedSqlAccessScope
-    bind?: ManagedSqlAccessScope
   }>,
 ): ManagedSqlAccessScope {
   if (exposure.scope && isManagedSqlAccessScope(exposure.scope)) {
     return exposure.scope
-  }
-  if (exposure.bind && isManagedSqlAccessScope(exposure.bind)) {
-    return exposure.bind
   }
   return DEFAULT_MANAGED_SQL_ACCESS_SCOPE
 }

@@ -10,7 +10,7 @@ function license(
   patch: Partial<LicenseRecord> & Pick<LicenseRecord, 'id'>,
 ): LicenseRecord {
   return {
-    displayName: null,
+    name: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     revocable: true,
     boundServer: null,
@@ -22,7 +22,7 @@ describe('unboundPendingKeys', () => {
   it('keeps only unbound rows, newest first', () => {
     const bound = license({
       id: 'bound',
-      boundServer: { id: 's1', displayName: 'node', connected: true },
+      boundServer: { id: 's1', name: 'node', connected: true },
     })
     const older = license({
       id: 'older',
@@ -42,9 +42,9 @@ describe('unboundPendingKeys', () => {
 
 describe('pendingKeyDisplayName', () => {
   it('uses a trimmed name or Unnamed key', () => {
-    expect(pendingKeyDisplayName({ displayName: '  Rack 2  ' })).toBe('Rack 2')
-    expect(pendingKeyDisplayName({ displayName: '   ' })).toBe('Unnamed key')
-    expect(pendingKeyDisplayName({ displayName: null })).toBe('Unnamed key')
+    expect(pendingKeyDisplayName({ name: '  Rack 2  ' })).toBe('Rack 2')
+    expect(pendingKeyDisplayName({ name: '   ' })).toBe('Unnamed key')
+    expect(pendingKeyDisplayName({ name: null })).toBe('Unnamed key')
   })
 })
 

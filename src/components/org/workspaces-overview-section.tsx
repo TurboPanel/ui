@@ -76,7 +76,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     if (
       isDisplayNameTaken(
         createName,
-        userFacingWorkspaces.map((workspace) => workspace.displayName),
+        userFacingWorkspaces.map((workspace) => workspace.name),
       )
     ) {
       setCreateError(
@@ -86,7 +86,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     }
 
     setCreateError(null)
-    const result = await createWorkspace.run({ displayName: createName.trim() })
+    const result = await createWorkspace.run({ name: createName.trim() })
     if (!result.ok) {
       if (result.error) {
         setCreateError(displayNameConflictMessage(result.error) ?? result.error)
@@ -143,7 +143,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
                 >
                   <View style={styles.titleRow}>
                     <Text style={orgPanelStyles.detailTitle}>
-                      {ws.displayName?.trim() || 'Unnamed workspace'}
+                      {ws.name?.trim() || 'Unnamed workspace'}
                     </Text>
                     {system ? <PlatformBadge /> : null}
                   </View>

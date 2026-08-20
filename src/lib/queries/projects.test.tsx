@@ -56,7 +56,7 @@ describe('projects query hooks', () => {
 
   it('useProjects loads scoped projects', async () => {
     fetchVisibleProjects.mockResolvedValueOnce({
-      projects: [{ id: projectId, displayName: 'App' }],
+      projects: [{ id: projectId, name: 'App' }],
     })
 
     const { result } = renderHook(() => useProjects(orgId, 'ws-1'), {
@@ -80,7 +80,7 @@ describe('projects query hooks', () => {
 
   it('useProject loads a single project', async () => {
     fetchProject.mockResolvedValueOnce({
-      project: { id: projectId, displayName: 'App' },
+      project: { id: projectId, name: 'App' },
     })
 
     const { result } = renderHook(() => useProject(orgId, projectId), {
@@ -104,7 +104,7 @@ describe('projects query hooks', () => {
       result.current.run({
         type: 'empty',
         workspaceId: 'ws-1',
-        displayName: 'New',
+        name: 'New',
       }),
     ).resolves.toMatchObject({ ok: true, value: { ok: true, id: 'proj-2' } })
   })
@@ -112,7 +112,7 @@ describe('projects query hooks', () => {
   it('useUpdateProject refreshes detail cache on success', async () => {
     updateProject.mockResolvedValueOnce({ ok: true })
     fetchProject.mockResolvedValueOnce({
-      project: { id: projectId, displayName: 'Renamed' },
+      project: { id: projectId, name: 'Renamed' },
     })
     const client = createAppQueryClient()
 
@@ -121,7 +121,7 @@ describe('projects query hooks', () => {
     })
 
     await expect(
-      result.current.run({ displayName: 'Renamed' }),
+      result.current.run({ name: 'Renamed' }),
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -129,7 +129,7 @@ describe('projects query hooks', () => {
         queryKeys.org(orgId).projects.detail(projectId),
       )
       expect(cached).toEqual({
-        project: { id: projectId, displayName: 'Renamed' },
+        project: { id: projectId, name: 'Renamed' },
       })
     })
   })

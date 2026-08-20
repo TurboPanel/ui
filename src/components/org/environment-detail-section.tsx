@@ -321,7 +321,7 @@ function formatHostingHostnames(hostings: HostingRecord[]): string {
 }
 
 function serverLabel(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname || server.id
+  return server.name?.trim() || server.hostname || server.id
 }
 
 function serverOptionLabel(server: OrgServerRecord): string {
@@ -399,7 +399,7 @@ function deployErrorMessage(err: unknown): string {
 }
 
 function tlsLabel(row: TlsRecord): string {
-  return row.displayName?.trim() || row.metadata.dnsNames[0] || row.id.slice(0, 8)
+  return row.name?.trim() || row.metadata.dnsNames[0] || row.id.slice(0, 8)
 }
 
 function deployBlockedReason(
@@ -1057,7 +1057,7 @@ function EnvironmentInfoPanel({
   return (
     <SectionPanel title="Environment" hint="Environment details">
       <Text style={orgPanelStyles.detailTitle}>
-        {environment.displayName?.trim() || 'Unnamed environment'}
+        {environment.name?.trim() || 'Unnamed environment'}
       </Text>
       {environment.description ? (
         <Text style={orgPanelStyles.detailLine}>
@@ -1444,7 +1444,7 @@ function EnvironmentContainersSectionPanel({
             return (
               <View key={service.id} style={orgPanelStyles.detailCard}>
                 <Text style={orgPanelStyles.detailTitle}>
-                  {service.displayName?.trim() ||
+                  {service.name?.trim() ||
                     String(service.composeServiceName ?? service.id)}
                 </Text>
                 {containers.map((container) => (
@@ -1758,7 +1758,7 @@ function EnvironmentDetailChromeExtras({
           orgId={orgId}
           environmentId={environment.id}
           environmentLabel={
-            environment.displayName?.trim() || 'this environment'
+            environment.name?.trim() || 'this environment'
           }
           canManage={canManage}
           placementServerId={placementServerId}
@@ -2030,7 +2030,7 @@ export function EnvironmentDetailBody({
   const sortedServers = useMemo(
     () =>
       [...allServers].sort((a, b) =>
-        (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
+        (a.name ?? a.id).localeCompare(b.name ?? b.id),
       ),
     [allServers],
   )
@@ -2159,7 +2159,7 @@ export function EnvironmentDetailBody({
       const existing = hostingsByService[service.id]?.[0]
       const options = buildHostingOptions(editor)
       const body = {
-        displayName: composeServiceName,
+        name: composeServiceName,
         metadata: { composeServiceName },
         options,
         tlsId: editor.tlsId,

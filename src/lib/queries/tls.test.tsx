@@ -56,7 +56,7 @@ describe('tls query hooks', () => {
 
   it('useTlsLibrary loads certificate library', async () => {
     fetchTlsLibrary.mockResolvedValueOnce({
-      tls: [{ id: 'tls-1', displayName: 'LAN cert' }],
+      tls: [{ id: 'tls-1', name: 'LAN cert' }],
     })
 
     const { result } = renderHook(() => useTlsLibrary(orgId), {
@@ -79,7 +79,7 @@ describe('tls query hooks', () => {
     await expect(
       result.current.run({
         source: 'self_signed',
-        displayName: 'Dev cert',
+        name: 'Dev cert',
         certificatePem: 'pem',
       }),
     ).resolves.toMatchObject({ ok: true })

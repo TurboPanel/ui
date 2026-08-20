@@ -14,7 +14,7 @@ import { colors, spacing } from '@/lib/theme'
 
 export function ManagedLifecyclePanel({
   status,
-  projectDisplayName,
+  projectName,
   canManage,
   busy,
   onLifecycle,
@@ -22,7 +22,7 @@ export function ManagedLifecyclePanel({
   onDelete,
 }: Readonly<{
   status: ManagedStatus
-  projectDisplayName: string
+  projectName: string
   canManage: boolean
   busy: boolean
   onLifecycle: (action: 'start' | 'stop' | 'restart') => Promise<void>
@@ -36,7 +36,7 @@ export function ManagedLifecyclePanel({
 
   const applying = status === 'applying' || busy || working
   const canConfirmDelete =
-    confirmText.trim() === projectDisplayName && !applying
+    confirmText.trim() === projectName && !applying
 
   const run = async (action: () => Promise<void>) => {
     setWorking(true)
@@ -134,14 +134,14 @@ export function ManagedLifecyclePanel({
       {showDelete ? (
         <View style={styles.deleteBox}>
           <Text style={styles.deleteCopy}>
-            Type <Text style={styles.confirmName}>{projectDisplayName}</Text> to
+            Type <Text style={styles.confirmName}>{projectName}</Text> to
             permanently delete this managed service.
           </Text>
           <TextInput
             style={Platform.OS === 'web' ? styles.webInput : styles.input}
             value={confirmText}
             onChangeText={setConfirmText}
-            placeholder={projectDisplayName}
+            placeholder={projectName}
             placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}

@@ -8,9 +8,6 @@ import type {
 /** Workspace kind value for the platform-managed TurboPanel workspace. */
 export const TURBOPANEL_WORKSPACE_KIND: WorkspaceKind = 'turbopanel'
 
-/** @deprecated Prefer {@link TURBOPANEL_WORKSPACE_KIND}. */
-export const SYSTEM_WORKSPACE_KIND = TURBOPANEL_WORKSPACE_KIND
-
 /** Idempotency key for the per-server hosting ingress Traefik stack. */
 export const SYSTEM_HOSTING_INGRESS_COMPONENT = 'hosting-ingress'
 export const SYSTEM_MANAGED_INGRESS_COMPONENT = 'managed-ingress'
@@ -29,15 +26,9 @@ export type SystemOperateComponent = (typeof SYSTEM_OPERATE_COMPONENTS)[number]
 /** Badge label for platform workspaces / projects — never derived from displayName. */
 export const TURBOPANEL_WORKSPACE_BADGE_LABEL = 'Platform'
 
-/** @deprecated Prefer {@link TURBOPANEL_WORKSPACE_BADGE_LABEL}. */
-export const SYSTEM_WORKSPACE_BADGE_LABEL = TURBOPANEL_WORKSPACE_BADGE_LABEL
-
 /** Platform-managed copy for TurboPanel workspace surfaces. */
 export const TURBOPANEL_WORKSPACE_DESCRIPTION =
   'Platform managed — created and maintained by TurboPanel'
-
-/** @deprecated Prefer {@link TURBOPANEL_WORKSPACE_DESCRIPTION}. */
-export const SYSTEM_WORKSPACE_DESCRIPTION = TURBOPANEL_WORKSPACE_DESCRIPTION
 
 export function isTurbopanelWorkspace(
   workspace: Readonly<{ kind?: WorkspaceKind | null }>,
@@ -45,17 +36,11 @@ export function isTurbopanelWorkspace(
   return workspace.kind === TURBOPANEL_WORKSPACE_KIND
 }
 
-/** @deprecated Prefer {@link isTurbopanelWorkspace}. */
-export const isSystemWorkspace = isTurbopanelWorkspace
-
 export function findTurbopanelWorkspace(
   workspaces: readonly WorkspaceRecord[],
 ): WorkspaceRecord | null {
   return workspaces.find((workspace) => isTurbopanelWorkspace(workspace)) ?? null
 }
-
-/** @deprecated Prefer {@link findTurbopanelWorkspace}. */
-export const findSystemWorkspace = findTurbopanelWorkspace
 
 /** User-facing lists and uniqueness checks — excludes the platform workspace. */
 export function userWorkspaces(
@@ -79,9 +64,6 @@ export function isTurbopanelProject(
   )
   return workspace != null && isTurbopanelWorkspace(workspace)
 }
-
-/** @deprecated Prefer {@link isTurbopanelProject}. */
-export const isSystemProject = isTurbopanelProject
 
 export function systemComponentKey(
   project: Readonly<{ metadata?: ProjectRecord['metadata'] }>,

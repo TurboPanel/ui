@@ -23,7 +23,7 @@ export function ManagedFocusTab({
         orgId={orgId}
         environmentId={selectedEnvironment.id}
         engineCode={project.metadata?.code ?? null}
-        projectDisplayName={project.displayName?.trim() || 'Unnamed project'}
+        projectName={project.name?.trim() || 'Unnamed project'}
         focus={focus}
       />
     </View>

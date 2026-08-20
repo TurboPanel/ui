@@ -188,7 +188,7 @@ function RedeployServicesPanel({
       {redeployRequired.services.map((service) => (
         <View key={service.serviceId} style={styles.redeployRow}>
           <Text style={styles.rowLabel}>
-            {service.displayName?.trim() || service.keyPrefix}
+            {service.name?.trim() || service.keyPrefix}
           </Text>
           <Pressable
             style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}

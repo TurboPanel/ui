@@ -11,9 +11,9 @@ export function unboundPendingKeys(
 }
 
 export function pendingKeyDisplayName(
-  row: Pick<LicenseRecord, 'displayName'>,
+  row: Pick<LicenseRecord, 'name'>,
 ): string {
-  const name = row.displayName?.trim()
+  const name = row.name?.trim()
   return name && name.length > 0 ? name : 'Unnamed key'
 }
 

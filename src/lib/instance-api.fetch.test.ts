@@ -162,7 +162,7 @@ describe('instance-api fetch wrappers', () => {
   it('organization CRUD wrappers proxy client routes', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        organizations: [{ id: 'org-1', displayName: 'Acme', createdAt: 't' }],
+        organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
       }),
     )
     await expect(fetchOrganizations()).resolves.toMatchObject({
@@ -171,7 +171,7 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        organization: { id: 'org-1', displayName: 'Acme', createdAt: 't' },
+        organization: { id: 'org-1', name: 'Acme', createdAt: 't' },
       }),
     )
     await expect(fetchOrganization('org-1')).resolves.toMatchObject({
@@ -179,7 +179,7 @@ describe('instance-api fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'org-2' }))
-    await expect(createOrganization({ displayName: 'Beta' })).resolves.toEqual({
+    await expect(createOrganization({ name: 'Beta' })).resolves.toEqual({
       ok: true,
       id: 'org-2',
     })
@@ -187,13 +187,13 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        organization: { id: 'org-1', displayName: 'Renamed', createdAt: 't' },
+        organization: { id: 'org-1', name: 'Renamed', createdAt: 't' },
       }),
     )
     await expect(
-      updateOrganization('org-1', { displayName: 'Renamed' }),
+      updateOrganization('org-1', { name: 'Renamed' }),
     ).resolves.toMatchObject({
-      organization: { displayName: 'Renamed' },
+      organization: { name: 'Renamed' },
     })
   })
 
@@ -230,7 +230,7 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        permissions: [{ key: 'organization:own', displayName: 'Own' }],
+        permissions: [{ key: 'organization:own', name: 'Own' }],
       }),
     )
     await expect(fetchPermissions()).resolves.toMatchObject({
@@ -244,7 +244,7 @@ describe('instance-api fetch wrappers', () => {
         workspaces: [
           {
             id: 'ws-1',
-            displayName: 'Default',
+            name: 'Default',
             description: null,
             organizationId: 'org-1',
             kind: 'user',
@@ -262,7 +262,7 @@ describe('instance-api fetch wrappers', () => {
       jsonResponse({
         workspace: {
           id: 'ws-1',
-          displayName: 'Default',
+          name: 'Default',
           description: null,
           organizationId: 'org-1',
           kind: 'user',
@@ -276,14 +276,14 @@ describe('instance-api fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'ws-2' }))
-    await expect(createWorkspace({ displayName: 'Extra' })).resolves.toEqual({
+    await expect(createWorkspace({ name: 'Extra' })).resolves.toEqual({
       ok: true,
       id: 'ws-2',
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      updateWorkspace('ws-1', { displayName: 'Renamed' }),
+      updateWorkspace('ws-1', { name: 'Renamed' }),
     ).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
@@ -292,7 +292,7 @@ describe('instance-api fetch wrappers', () => {
 
   it('project and environment wrappers build query strings and bodies', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ projects: [{ id: 'p1', displayName: 'Demo' }] }),
+      jsonResponse({ projects: [{ id: 'p1', name: 'Demo' }] }),
     )
     await expect(fetchVisibleProjects('ws-1')).resolves.toMatchObject({
       projects: [{ id: 'p1' }],
@@ -303,7 +303,7 @@ describe('instance-api fetch wrappers', () => {
     await expect(fetchProjectCatalog()).resolves.toEqual({ catalog: [] })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ project: { id: 'p1', displayName: 'Demo' } }),
+      jsonResponse({ project: { id: 'p1', name: 'Demo' } }),
     )
     await expect(fetchProject('p1')).resolves.toMatchObject({
       project: { id: 'p1' },
@@ -313,14 +313,14 @@ describe('instance-api fetch wrappers', () => {
     await expect(
       createProject({
         type: 'empty',
-        displayName: 'New',
+        name: 'New',
         workspaceId: 'ws-1',
       }),
     ).resolves.toEqual({ ok: true, id: 'p2' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      updateProject('p1', { displayName: 'Renamed' }),
+      updateProject('p1', { name: 'Renamed' }),
     ).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
@@ -338,7 +338,7 @@ describe('instance-api fetch wrappers', () => {
     expect(String(environmentsCall?.[0])).toContain('projectId=p1')
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ environment: { id: 'env-1', displayName: 'Production' } }),
+      jsonResponse({ environment: { id: 'env-1', name: 'Production' } }),
     )
     await expect(fetchEnvironment('env-1')).resolves.toMatchObject({
       environment: { id: 'env-1' },
@@ -346,7 +346,7 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'env-2' }))
     await expect(
-      createEnvironment({ projectId: 'p1', displayName: 'Staging' }),
+      createEnvironment({ projectId: 'p1', name: 'Staging' }),
     ).resolves.toEqual({ ok: true, id: 'env-2' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
@@ -484,7 +484,7 @@ describe('instance-api fetch wrappers', () => {
     ).resolves.toMatchObject({ commandId: 'cmd-ntp' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(updateServer('srv-1', { displayName: 'Huey' })).resolves.toEqual({
+    await expect(updateServer('srv-1', { name: 'Huey' })).resolves.toEqual({
       ok: true,
     })
   })
@@ -537,7 +537,11 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        composeYaml: 'services: {}',
+        composeFiles: [{
+          filename: 'compose.yaml',
+          role: 'runtime',
+          content: 'services: {}',
+        }],
         projectName: 'p1',
         containers: [],
         volumes: [],
@@ -546,7 +550,11 @@ describe('instance-api fetch wrappers', () => {
     )
     await expect(fetchDeployPreview('env-1')).resolves.toMatchObject({
       ok: true,
-      composeYaml: 'services: {}',
+      composeFiles: [{
+        filename: 'compose.yaml',
+        role: 'runtime',
+        content: 'services: {}',
+      }],
     })
 
     fetchMock.mockResolvedValueOnce(
@@ -621,7 +629,7 @@ describe('instance-api fetch wrappers', () => {
     )
   })
 
-  it('createLicense sends optional displayName and installBaseUrl', async () => {
+  it('createLicense sends optional name and installBaseUrl', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         licenseId: 'lic-1',
@@ -635,7 +643,7 @@ describe('instance-api fetch wrappers', () => {
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).method).toBe('POST')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      displayName: 'Huey',
+      name: 'Huey',
       installBaseUrl: 'https://panel.example/',
     })
   })

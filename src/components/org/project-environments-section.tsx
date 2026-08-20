@@ -17,7 +17,7 @@ import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function environmentLabel(environment: EnvironmentRecord): string {
-  return environment.displayName?.trim() || 'Unnamed environment'
+  return environment.name?.trim() || 'Unnamed environment'
 }
 
 function resolveSelectedId(
@@ -295,7 +295,7 @@ export function ProjectEnvironmentsSection({
       createEnvironment
         .run({
           projectId,
-          displayName: defaultEnvironmentName,
+          name: defaultEnvironmentName,
         })
         .then((result) => {
           if (!result.ok && createEnvironment.actionError) {
@@ -327,7 +327,7 @@ export function ProjectEnvironmentsSection({
 
   const startRename = () => {
     if (!activeEnvironment) return
-    setRenameValue(activeEnvironment.displayName?.trim() ?? '')
+    setRenameValue(activeEnvironment.name?.trim() ?? '')
     setRenaming(true)
     setShowCreate(false)
     setDeleteArmed(false)
@@ -342,7 +342,7 @@ export function ProjectEnvironmentsSection({
       return
     }
     setError(null)
-    const result = await updateEnvironment.run({ displayName: trimmed })
+    const result = await updateEnvironment.run({ name: trimmed })
     if (!result.ok) {
       if (updateEnvironment.actionError) {
         setError(updateEnvironment.actionError)
@@ -363,7 +363,7 @@ export function ProjectEnvironmentsSection({
     setError(null)
     const result = await createEnvironment.run({
       projectId,
-      displayName: trimmed,
+      name: trimmed,
     })
     if (!result.ok) {
       if (createEnvironment.actionError) {

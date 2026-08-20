@@ -321,7 +321,7 @@ export function AccessOverviewSection({
         ? [{ id: orgId, label: 'Organization' }]
         : teams.map((row) => ({
             id: row.id,
-            label: row.displayName?.trim() || row.id,
+            label: row.name?.trim() || row.id,
           })),
     [scopeKind, orgId, teams],
   )

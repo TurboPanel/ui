@@ -15,14 +15,14 @@ import { colors, spacing } from '@/lib/theme'
 
 function OrganizationNameField({
   canManage,
-  displayName,
+  name,
   fallbackLabel,
   fieldError,
   submitting,
   onChange,
 }: Readonly<{
   canManage: boolean
-  displayName: string
+  name: string
   fallbackLabel: string
   fieldError: string | null
   submitting: boolean
@@ -34,7 +34,7 @@ function OrganizationNameField({
       {canManage ? (
         <TextInput
           style={[styles.input, fieldError ? styles.inputError : null]}
-          value={displayName}
+          value={name}
           onChangeText={onChange}
           autoCapitalize="words"
           autoCorrect={false}
@@ -75,7 +75,7 @@ export function OrganizationFormSection({
   const orgsQuery = useOrganizationsQuery()
   const updateOrganization = useUpdateOrganization()
   const organization = orgsQuery.data?.organizations.find((org) => org.id === orgId)
-  const savedDisplayName = organization?.displayName ?? ''
+  const savedDisplayName = organization?.name ?? ''
 
   const [displayName, setDisplayName] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
@@ -101,7 +101,7 @@ export function OrganizationFormSection({
     setFieldError(null)
     const result = await updateOrganization.run({
       organizationId: orgId,
-      displayName: draftName,
+      name: draftName,
     })
     if (!result.ok && result.error) {
       setFieldError(result.error)
@@ -122,8 +122,8 @@ export function OrganizationFormSection({
       <>
         <OrganizationNameField
           canManage={canManage}
-          displayName={displayName}
-          fallbackLabel={organization.displayName?.trim() || organization.id}
+          name={displayName}
+          fallbackLabel={organization.name?.trim() || organization.id}
           fieldError={fieldError}
           submitting={submitting}
           onChange={(value) => {

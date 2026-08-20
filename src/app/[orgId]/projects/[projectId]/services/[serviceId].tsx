@@ -37,7 +37,7 @@ export default function ProjectServiceDetailScreen() {
   return (
     <View style={{ gap: spacing.lg }}>
       <SectionPanel
-        title={service.displayName?.trim() || composeName}
+        title={service.name?.trim() || composeName}
         hint="Per-service operational settings"
         accent
       >

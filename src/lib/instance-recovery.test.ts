@@ -115,7 +115,7 @@ describe('pollInstanceRecovery', () => {
       organizations: [
         {
           id: 'org-1',
-          displayName: 'Ops',
+          name: 'Ops',
           createdAt: '2026-01-01T00:00:00.000Z',
         },
       ],
@@ -146,12 +146,12 @@ describe('pollInstanceRecovery', () => {
       organizations: [
         {
           id: 'org-a',
-          displayName: 'A',
+          name: 'A',
           createdAt: '2026-01-01T00:00:00.000Z',
         },
         {
           id: 'org-b',
-          displayName: 'B',
+          name: 'B',
           createdAt: '2026-01-02T00:00:00.000Z',
         },
       ],

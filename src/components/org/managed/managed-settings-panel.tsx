@@ -21,7 +21,7 @@ import {
   managedVariantImagesForImage,
 } from '@/lib/managed-releases'
 import {
-  readManagedExposureScope,
+  DEFAULT_MANAGED_SQL_ACCESS_SCOPE,
   type ManagedSqlAccessScope,
 } from '@/lib/managed-access-scope'
 import {
@@ -104,7 +104,7 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
         ? String(settings.resources.memoryReservationBytes)
         : '',
     exposureEnabled: settings.exposure.enabled,
-    accessScope: readManagedExposureScope(settings.exposure),
+    accessScope: settings.exposure.scope ?? DEFAULT_MANAGED_SQL_ACCESS_SCOPE,
     labels: labels.length > 0 ? labels : [createKvRow()],
     extraEnv: extraEnv.length > 0 ? extraEnv : [createKvRow()],
     backupRetentionKeep:

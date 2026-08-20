@@ -67,8 +67,8 @@ export function OrganizationSwitcherScreen() {
     openOrg(nextOrgId, orgManageHref(nextOrgId) as Href)
   }
 
-  const handleCreate = async (displayName: string) => {
-    const result = await createOrganization.run({ displayName })
+  const handleCreate = async (name: string) => {
+    const result = await createOrganization.run({ name })
     if (!result.ok) {
       return { ok: false, error: result.error ?? 'Could not create organization.' }
     }

@@ -70,22 +70,6 @@ function memoryTotalFromUsage(
   return total > 0 ? total : null
 }
 
-function leftoverCpuCores(cpu: ServerHostResources['cpu']): number | null {
-  const cores = cpu?.coreCount
-  if (cores != null && Number.isFinite(cores) && cores > 0) return cores
-  const threads = cpu?.threadCount
-  if (threads != null && Number.isFinite(threads) && threads > 0) return threads
-  return null
-}
-
-function leftoverCpuThreads(cpu: ServerHostResources['cpu']): number | null {
-  const threads = cpu?.threadCount
-  if (threads != null && Number.isFinite(threads) && threads > 0) return threads
-  const cores = cpu?.coreCount
-  if (cores != null && Number.isFinite(cores) && cores > 0) return cores
-  return null
-}
-
 function sumSocketTotals(
   sockets: NonNullable<ServerHostResources['cpus']>,
   field: 'cores' | 'threads',
@@ -111,7 +95,7 @@ export function serverInventoryCpuCores(
   if (sockets && sockets.length > 0) {
     return sumSocketTotals(sockets, 'cores', 'threads')
   }
-  return leftoverCpuCores(server.resources?.cpu)
+  return null
 }
 
 /** Logical CPUs for load-average bars (`load / threads`). */
@@ -120,7 +104,7 @@ export function serverCpuThreads(server: FleetCapacityServer): number | null {
   if (sockets && sockets.length > 0) {
     return sumSocketTotals(sockets, 'threads', 'cores')
   }
-  return leftoverCpuThreads(server.resources?.cpu)
+  return null
 }
 
 function serverMemoryTotal(

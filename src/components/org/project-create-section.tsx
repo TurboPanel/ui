@@ -54,7 +54,7 @@ const webInputStyle = {
 type WorkspaceMode = 'existing' | 'new'
 
 type FieldErrors = {
-  displayName?: string
+  name?: string
   description?: string
   workspaceId?: string
   workspaceName?: string
@@ -74,7 +74,7 @@ function resolveScopedWorkspaceId(
 }
 
 function workspaceLabel(workspace: WorkspaceRecord): string {
-  return workspace.displayName?.trim() || 'Workspace'
+  return workspace.name?.trim() || 'Workspace'
 }
 
 /** Shown / submitted workspace name: mirrors project until the operator overrides. */
@@ -102,7 +102,7 @@ function conflictOrRawError(error: string | null | undefined): string | null {
 }
 
 function validateProjectCreateFields(options: {
-  displayName: string
+  name: string
   description: string
   workspaceMode: WorkspaceMode
   pickedWorkspaceId: string
@@ -114,10 +114,10 @@ function validateProjectCreateFields(options: {
   workspaceNames: readonly (string | null | undefined)[]
 }): FieldErrors {
   const errors: FieldErrors = {}
-  const nameError = validateDisplayName(options.displayName)
-  if (nameError) errors.displayName = nameError
-  else if (isDisplayNameTaken(options.displayName, options.projectNames)) {
-    errors.displayName =
+  const nameError = validateDisplayName(options.name)
+  if (nameError) errors.name = nameError
+  else if (isDisplayNameTaken(options.name, options.projectNames)) {
+    errors.name =
       'A project with this name already exists in the organization.'
   }
 
@@ -136,7 +136,7 @@ function validateProjectCreateFields(options: {
   }
 
   const workspaceName = resolveMirroredWorkspaceName(
-    options.displayName,
+    options.name,
     options.newWorkspaceName,
     options.newWorkspaceNameOverridden,
   )
@@ -392,7 +392,7 @@ export function ProjectCreateSection({
   const workspaces = useMemo(
     () =>
       [...userWorkspaces(workspacesQuery.data?.workspaces ?? [])].sort((a, b) =>
-        (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
+        (a.name ?? a.id).localeCompare(b.name ?? b.id),
       ),
     [workspacesQuery.data?.workspaces],
   )
@@ -401,7 +401,7 @@ export function ProjectCreateSection({
     [workspaces],
   )
   const projectNames = useMemo(
-    () => (projectsQuery.data?.projects ?? []).map((row) => row.displayName),
+    () => (projectsQuery.data?.projects ?? []).map((row) => row.name),
     [projectsQuery.data?.projects],
   )
   const loadingWorkspaces = workspacesQuery.isLoading || projectsQuery.isLoading
@@ -463,7 +463,7 @@ export function ProjectCreateSection({
 
   const submit = async () => {
     const errors = validateProjectCreateFields({
-      displayName,
+      name: displayName.trim(),
       description,
       workspaceMode,
       pickedWorkspaceId,
@@ -471,7 +471,7 @@ export function ProjectCreateSection({
       newWorkspaceName,
       newWorkspaceNameOverridden,
       projectNames,
-      workspaceNames: workspaces.map((workspace) => workspace.displayName),
+      workspaceNames: workspaces.map((workspace) => workspace.name),
     })
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) return
@@ -484,12 +484,12 @@ export function ProjectCreateSection({
     let workspaceId = pickedWorkspaceId
     if (workspaceMode === 'new') {
       const workspaceName = resolveMirroredWorkspaceName(
-        displayName,
+    trimmedName,
         newWorkspaceName,
         newWorkspaceNameOverridden,
       )
       const workspaceResult = await createWorkspace.run({
-        displayName: workspaceName,
+        name: workspaceName,
       })
       if (!workspaceResult.ok) {
         setApiError(conflictOrRawError(workspaceResult.error))
@@ -505,7 +505,7 @@ export function ProjectCreateSection({
     const result = await createProject.run({
       type: 'empty',
       workspaceId,
-      displayName: trimmedName,
+      name: trimmedName,
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
     })
     if (!result.ok) {
@@ -522,8 +522,9 @@ export function ProjectCreateSection({
   ]
 
   const submitting = createWorkspace.isPending || createProject.isPending
+  const trimmedProjectName = displayName.trim()
   const mirroredWorkspaceName = resolveMirroredWorkspaceName(
-    displayName,
+    trimmedProjectName,
     newWorkspaceName,
     newWorkspaceNameOverridden,
   )
@@ -581,11 +582,11 @@ export function ProjectCreateSection({
                 autoFocus
                 accessibilityLabel="Project name"
                 maxLength={DISPLAY_NAME_MAX_LENGTH}
-                style={inputStyle(Boolean(fieldErrors.displayName))}
+                style={inputStyle(Boolean(fieldErrors.name))}
               />
-              {fieldErrors.displayName ? (
+              {fieldErrors.name ? (
                 <Text style={orgPanelStyles.error}>
-                  {fieldErrors.displayName}
+                  {fieldErrors.name}
                 </Text>
               ) : null}
             </View>

@@ -116,7 +116,7 @@ export type ManagedReplicationHealth = {
 export type ManagedMemberRecord = {
   id: string
   serverId: string
-  serverDisplayName: string | null
+  serverName: string | null
   role: ManagedMemberRole
   replicaClass: ManagedReplicaClass | null
   readEligible: boolean
@@ -228,7 +228,7 @@ export function managedEngineSupportsBackup(code: string | null | undefined): bo
 export type ManagedEnvironmentRecord = {
   id: string
   environmentId: string | null
-  displayName: string | null
+  name: string | null
   engine: ManagedServiceEngine | null
   status: ManagedStatus
   host: string | null
@@ -264,8 +264,6 @@ export type ManagedSettings = {
   exposure: {
     enabled: boolean
     scope?: ManagedSqlAccessScope
-    /** @deprecated One-release read compat — API may still echo migrated `bind`. */
-    bind?: ManagedSqlAccessScope
   }
   /** Retention (keep-N) for `managed.backup` — clamped to the engine's `maxRetentionKeep`. */
   backups?: {
@@ -301,18 +299,18 @@ export type ManagedUserRecord = {
 
 export type ManagedServerSummary = {
   id: string
-  displayName: string | null
+  name: string | null
   hostname: string | null
 }
 
 export type ManagedListRecord = ManagedEnvironmentRecord & {
   engineDisplayName: string | null
-  environmentDisplayName: string | null
+  environmentName: string | null
   projectId: string
-  projectDisplayName: string | null
+  projectName: string | null
   workspaceId: string
-  workspaceDisplayName: string | null
-  serverDisplayName: string | null
+  workspaceName: string | null
+  serverName: string | null
   members: ManagedMemberRecord[]
 }
 

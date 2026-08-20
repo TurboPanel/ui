@@ -5,8 +5,8 @@ import { colors, spacing } from '@/lib/theme'
 
 function networkTitle(network: NetworkRecord): string {
   const dockerName = readDockerNetworkName(network)
-  if (dockerName) return network.displayName?.trim() || dockerName
-  return network.displayName?.trim() || network.cidr?.trim() || network.id
+  if (dockerName) return network.name?.trim() || dockerName
+  return network.name?.trim() || network.cidr?.trim() || network.id
 }
 
 export function readDockerNetworkName(network: NetworkRecord): string | null {

@@ -109,7 +109,7 @@ describe('auth query hooks', () => {
 
   it('useOrganizationsQuery loads organizations', async () => {
     fetchOrganizations.mockResolvedValueOnce({
-      organizations: [{ id: 'org-1', displayName: 'Acme', createdAt: 't' }],
+      organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
     })
 
     const { result } = renderHook(() => useOrganizationsQuery(), {
@@ -145,7 +145,7 @@ describe('auth query hooks', () => {
     createOrganization.mockResolvedValueOnce({ ok: true, id: 'org-2' })
     const client = createAppQueryClient()
     client.setQueryData(['auth', 'organizations'], {
-      organizations: [{ id: 'org-1', displayName: 'Acme', createdAt: 't' }],
+      organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
     })
 
     const { result } = renderHook(() => useCreateOrganization(), {
@@ -153,18 +153,18 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ displayName: 'Beta' }),
+      result.current.run({ name: 'Beta' }),
     ).resolves.toMatchObject({ ok: true, value: { id: 'org-2' } })
   })
 
   it('useUpdateOrganization patches organizations cache', async () => {
     updateOrganization.mockResolvedValueOnce({
       ok: true,
-      organization: { id: 'org-1', displayName: 'Renamed', createdAt: 't' },
+      organization: { id: 'org-1', name: 'Renamed', createdAt: 't' },
     })
     const client = createAppQueryClient()
     client.setQueryData(['auth', 'organizations'], {
-      organizations: [{ id: 'org-1', displayName: 'Acme', createdAt: 't' }],
+      organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
     })
 
     const { result } = renderHook(() => useUpdateOrganization(), {
@@ -172,14 +172,14 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ organizationId: 'org-1', displayName: 'Renamed' }),
+      result.current.run({ organizationId: 'org-1', name: 'Renamed' }),
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
-      const cached = client.getQueryData<{ organizations: { displayName: string }[] }>(
+      const cached = client.getQueryData<{ organizations: { name: string }[] }>(
         ['auth', 'organizations'],
       )
-      expect(cached?.organizations[0]?.displayName).toBe('Renamed')
+      expect(cached?.organizations[0]?.name).toBe('Renamed')
     })
   })
 

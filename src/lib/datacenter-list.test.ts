@@ -39,7 +39,7 @@ function datacenter(
   overrides: Partial<DatacenterRecord> & Pick<DatacenterRecord, 'id'>,
 ): DatacenterRecord {
   return {
-    displayName: null,
+    name: null,
     description: null,
     organizationId: 'org-1',
     privateCidrs: [],
@@ -73,7 +73,7 @@ function subnet(
     Pick<DatacenterSubnetRecord, 'id' | 'cidr' | 'version'>,
 ): DatacenterSubnetRecord {
   return {
-    displayName: null,
+    name: null,
     description: null,
     memberCount: 0,
     ...overrides,
@@ -82,11 +82,11 @@ function subnet(
 
 describe('datacenterDisplayName', () => {
   it('uses a trimmed display name and falls back when blank', () => {
-    expect(datacenterDisplayName({ displayName: '  AMS-1  ' })).toBe('AMS-1')
-    expect(datacenterDisplayName({ displayName: '  ' })).toBe(
+    expect(datacenterDisplayName({ name: '  AMS-1  ' })).toBe('AMS-1')
+    expect(datacenterDisplayName({ name: '  ' })).toBe(
       'Unnamed datacenter',
     )
-    expect(datacenterDisplayName({ displayName: null })).toBe(
+    expect(datacenterDisplayName({ name: null })).toBe(
       'Unnamed datacenter',
     )
   })
@@ -96,12 +96,12 @@ describe('formatServerDatacenterNames', () => {
   it('joins names and abbreviates when many', () => {
     expect(formatServerDatacenterNames([])).toBeNull()
     expect(
-      formatServerDatacenterNames([{ id: 'dc-1', displayName: 'AMS' }]),
+      formatServerDatacenterNames([{ id: 'dc-1', name: 'AMS' }]),
     ).toBe('AMS')
     expect(
       formatServerDatacenterNames([
-        { id: 'dc-1', displayName: 'AMS' },
-        { id: 'dc-2', displayName: 'FRA' },
+        { id: 'dc-1', name: 'AMS' },
+        { id: 'dc-2', name: 'FRA' },
       ]),
     ).toBe('AMS +1')
   })
@@ -111,13 +111,13 @@ describe('serverIsDatacenterMember', () => {
   it('matches by membership id', () => {
     expect(
       serverIsDatacenterMember(
-        { datacenters: [{ id: 'dc-1', displayName: 'A' }] },
+        { datacenters: [{ id: 'dc-1', name: 'A' }] },
         'dc-1',
       ),
     ).toBe(true)
     expect(
       serverIsDatacenterMember(
-        { datacenters: [{ id: 'dc-1', displayName: 'A' }] },
+        { datacenters: [{ id: 'dc-1', name: 'A' }] },
         'dc-2',
       ),
     ).toBe(false)
@@ -174,11 +174,11 @@ describe('countServersByDatacenterId', () => {
     const counts = countServersByDatacenterId([
       {
         datacenters: [
-          { id: 'dc-a', displayName: 'A' },
-          { id: 'dc-b', displayName: 'B' },
+          { id: 'dc-a', name: 'A' },
+          { id: 'dc-b', name: 'B' },
         ],
       },
-      { datacenters: [{ id: 'dc-a', displayName: 'A' }] },
+      { datacenters: [{ id: 'dc-a', name: 'A' }] },
       { datacenters: [] },
     ])
     expect(counts.byDatacenter.get('dc-a')).toBe(2)
@@ -192,7 +192,7 @@ describe('countServersByDatacenterId', () => {
     const counts = countServersByDatacenterId([
       { datacenters: undefined },
       {},
-      { datacenters: [{ id: 'dc-a', displayName: 'A' }] },
+      { datacenters: [{ id: 'dc-a', name: 'A' }] },
     ])
     expect(counts.unassigned).toBe(2)
     expect(counts.uniqueMembers).toBe(1)
@@ -201,10 +201,10 @@ describe('countServersByDatacenterId', () => {
 })
 
 describe('sortDatacentersByName', () => {
-  it('sorts by display name without mutating the input', () => {
+  it('sorts by name without mutating the input', () => {
     const rows = [
-      datacenter({ id: '2', displayName: 'Zurich' }),
-      datacenter({ id: '1', displayName: 'Amsterdam' }),
+      datacenter({ id: '2', name: 'Zurich' }),
+      datacenter({ id: '1', name: 'Amsterdam' }),
     ]
     const sorted = sortDatacentersByName(rows)
     expect(sorted.map((row) => row.id)).toEqual(['1', '2'])
@@ -432,7 +432,7 @@ describe('listServersWithoutMembership', () => {
   it('keeps servers with an empty datacenters list', () => {
     expect(
       listServersWithoutMembership([
-        { id: 'a', datacenters: [{ id: 'dc-1', displayName: 'A' }] },
+        { id: 'a', datacenters: [{ id: 'dc-1', name: 'A' }] },
         { id: 'b', datacenters: [] },
         { id: 'c' },
       ]).map((row) => row.id),
@@ -474,14 +474,14 @@ describe('buildCreateDatacenterRequest', () => {
   it('requires at least one member pin', () => {
     expect(
       buildCreateDatacenterRequest({
-        displayName: '  ',
+        name: '  ',
         description: '',
         members: [],
       }),
     ).toBeNull()
     expect(
       buildCreateDatacenterRequest({
-        displayName: '  AMS-1 ',
+        name: '  AMS-1 ',
         description: '  core ',
         members: [
           { serverId: 'b', address: '10.0.0.2' },
@@ -490,7 +490,7 @@ describe('buildCreateDatacenterRequest', () => {
         ],
       }),
     ).toEqual({
-      displayName: 'AMS-1',
+      name: 'AMS-1',
       description: 'core',
       members: [
         { serverId: 'b', address: '10.0.0.2' },
@@ -505,13 +505,13 @@ describe('buildCreateDatacenterFromSeed', () => {
   it('builds a create body from the seed host and address', () => {
     expect(
       buildCreateDatacenterFromSeed({
-        displayName: 'AMS-1',
+        name: 'AMS-1',
         description: '',
         serverId: 'srv-1',
         address: '10.0.0.5',
       }),
     ).toEqual({
-      displayName: 'AMS-1',
+      name: 'AMS-1',
       members: [{ serverId: 'srv-1', address: '10.0.0.5' }],
       sourceServerId: 'srv-1',
     })
@@ -520,7 +520,7 @@ describe('buildCreateDatacenterFromSeed', () => {
   it('returns null when the seed address is blank', () => {
     expect(
       buildCreateDatacenterFromSeed({
-        displayName: '',
+        name: '',
         description: '',
         serverId: 'srv-1',
         address: '  ',

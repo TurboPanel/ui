@@ -82,7 +82,7 @@ describe('servers query hooks', () => {
 
   it('useOrgServers loads fleet list', async () => {
     fetchOrgServers.mockResolvedValueOnce({
-      servers: [{ id: serverId, displayName: 'edge' }],
+      servers: [{ id: serverId, name: 'edge' }],
     })
 
     const { result } = renderHook(() => useOrgServers(orgId), {
@@ -157,7 +157,7 @@ describe('servers query hooks', () => {
   it('useServerDetail loads server record', async () => {
     fetchServer.mockResolvedValueOnce({
       id: serverId,
-      displayName: 'edge',
+      name: 'edge',
     })
 
     const { result } = renderHook(() => useServerDetail(orgId, serverId), {
@@ -167,7 +167,7 @@ describe('servers query hooks', () => {
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(result.current.data?.displayName).toBe('edge')
+    expect(result.current.data?.name).toBe('edge')
   })
 
   it('useServerLabels loads label map', async () => {

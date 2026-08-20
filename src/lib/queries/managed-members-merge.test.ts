@@ -11,7 +11,7 @@ function member(
   return {
     id: overrides.id,
     serverId: overrides.serverId ?? 'server-1',
-    serverDisplayName: overrides.serverDisplayName ?? 'host',
+    serverName: overrides.serverName ?? 'host',
     role: overrides.role ?? 'primary',
     replicaClass:
       overrides.replicaClass ??

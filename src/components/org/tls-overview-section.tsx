@@ -19,7 +19,7 @@ import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 function tlsTitle(row: TlsRecord): string {
-  return row.displayName?.trim() || row.metadata.dnsNames[0] || row.id
+  return row.name?.trim() || row.metadata.dnsNames[0] || row.id
 }
 
 function tlsSourceLabel(source: string): string {
@@ -92,7 +92,7 @@ export function TlsOverviewSection({
       createMutation.mutate(
         {
           source: 'upload',
-          displayName: displayName.trim() || undefined,
+          name: displayName.trim() || undefined,
           certificatePem,
           privateKeyPem,
         },
@@ -112,7 +112,7 @@ export function TlsOverviewSection({
     createMutation.mutate(
       {
         source,
-        displayName: displayName.trim() || undefined,
+        name: displayName.trim() || undefined,
         hostnames: names,
       },
       {

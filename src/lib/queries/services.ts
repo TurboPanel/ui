@@ -109,7 +109,7 @@ export type UpsertHostingInput = Readonly<{
   serviceId: string
   hostingId?: string
   body: {
-    displayName?: string
+    name?: string
     description?: string
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>

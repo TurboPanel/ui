@@ -46,12 +46,6 @@ describe('orgAreaFromPathname', () => {
       pathSegment: 'datacenters',
     },
     {
-      pathname: '/org/network/sites/site-1',
-      areaId: 'network',
-      subRouteId: 'site-detail',
-      pathSegment: 'sites',
-    },
-    {
       pathname: '/org/servers/datacenters',
       areaId: 'servers',
       subRouteId: 'datacenters',

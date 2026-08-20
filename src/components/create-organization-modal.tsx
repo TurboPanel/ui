@@ -15,7 +15,7 @@ import { colors, layout, spacing } from '@/lib/theme'
 type CreateOrganizationModalProps = Readonly<{
   visible: boolean
   onClose: () => void
-  onCreate: (displayName: string) => Promise<{ ok: boolean; error?: string }>
+  onCreate: (name: string) => Promise<{ ok: boolean; error?: string }>
 }>
 
 export function CreateOrganizationModal({
@@ -53,7 +53,7 @@ export function CreateOrganizationModal({
 
     setError(null)
     setSubmitting(true)
-    const result = await onCreate(displayName)
+    const result = await onCreate(name)
     setSubmitting(false)
     if (!result.ok) {
       setError(result.error ?? 'Could not create organization.')

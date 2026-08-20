@@ -24,7 +24,7 @@ import type { ProjectRecord } from './instance-api'
 function project(type?: ProjectRecord['metadata']): ProjectRecord {
   return {
     id: 'p1',
-    displayName: 'Demo',
+    name: 'Demo',
     description: null,
     workspaceId: 'w1',
     metadata: type ?? null,

@@ -54,7 +54,7 @@ dev/console
 
 Then edit this repo on the host (mounted into the guest at `~/ui`). See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
 
-Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trunk/CONTRIBUTING.md)
+Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trunk/CONTRIBUTING.md). Pull requests are accepted under the [Contributor License Agreement](https://github.com/turbopanel/.github/blob/trunk/CLA.md).
 
 ## Community & support
 
@@ -66,6 +66,8 @@ Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trun
 
 ## License
 
-TurboPanel UI is licensed under the [GNU Affero General Public License v3.0 only (AGPL-3.0-only)](./LICENSE).
+TurboPanel UI is licensed under the [GNU Affero General Public License v3.0 only (AGPL-3.0-only)](./LICENSE), with the [TurboPanel Apple App Store Additional Permission](./LICENSES/TurboPanel-Apple-App-Store-Additional-Permission.txt).
 
-Copyright (C) 2025 TurboPanel contributors
+The TurboPanel name and logos are trademarks. See [TRADEMARKS.md](./TRADEMARKS.md).
+
+Copyright (C) 2025-2026 TurboPanel contributors

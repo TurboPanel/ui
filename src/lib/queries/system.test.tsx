@@ -65,7 +65,7 @@ describe('system query hooks', () => {
         workspaces: [
           {
             id: 'ws-platform',
-            displayName: 'TurboPanel',
+            name: 'TurboPanel',
             kind: TURBOPANEL_WORKSPACE_KIND,
           },
         ],
@@ -79,7 +79,7 @@ describe('system query hooks', () => {
         projects: [
           {
             id: 'proj-ingress',
-            displayName: 'Ingress',
+            name: 'Ingress',
             metadata: { component: SYSTEM_HOSTING_INGRESS_COMPONENT },
           },
         ],
@@ -93,7 +93,7 @@ describe('system query hooks', () => {
         environments: [
           {
             id: 'env-ingress',
-            displayName: 'Ingress',
+            name: 'Ingress',
             serverId,
           },
         ],
@@ -103,7 +103,7 @@ describe('system query hooks', () => {
     } as ReturnType<typeof useEnvironments>)
 
     vi.mocked(useServices).mockReturnValue({
-      data: { services: [{ id: 'svc-ingress', displayName: 'ingress' }] },
+      data: { services: [{ id: 'svc-ingress', name: 'ingress' }] },
       isLoading: false,
       error: null,
     } as ReturnType<typeof useServices>)

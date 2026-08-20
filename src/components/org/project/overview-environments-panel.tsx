@@ -805,12 +805,12 @@ function syncTrackedCommandBatch(
 
 function resolvePlacementServerLabel(
   effectiveServerId: string | null,
-  servers: readonly { id: string; displayName?: string | null; hostname?: string | null }[] | undefined,
+  servers: readonly { id: string; name?: string | null; hostname?: string | null }[] | undefined,
 ): string | null {
   if (!effectiveServerId) return null
   const server = servers?.find((row) => row.id === effectiveServerId)
   if (!server) return effectiveServerId
-  return server.displayName?.trim() || server.hostname || server.id
+  return server.name?.trim() || server.hostname || server.id
 }
 
 /** Fire-and-forget without the `void` operator (typescript:S3735). */
@@ -1134,7 +1134,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setActionError(null)
     const result = await createEnvironmentMutation.run({
       projectId,
-      displayName: trimmed,
+      name: trimmed,
     })
     if (!result.ok) {
       if (createEnvironmentMutation.actionError) {
@@ -1356,7 +1356,7 @@ function OverviewEnvironmentsPanelView({
           orgId={orgId}
           environmentId={selectedEnvironment.id}
           environmentLabel={
-            selectedEnvironment.displayName?.trim() || 'this environment'
+            selectedEnvironment.name?.trim() || 'this environment'
           }
           canManage={canMutateLifecycle}
           placementServerId={effectiveServerId}

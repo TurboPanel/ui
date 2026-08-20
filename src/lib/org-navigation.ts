@@ -302,14 +302,6 @@ export function datacenterNewHref(
   return `/${orgId}/servers/datacenters/new`
 }
 
-/** @deprecated Use {@link datacenterHref} — datacenter and site are the same entity. */
-export function networkSiteHref(
-  orgId: string,
-  datacenterId: string,
-): `/${string}/servers/datacenters/${string}` {
-  return datacenterHref(orgId, datacenterId)
-}
-
 export function networkFabricHref(
   orgId: string,
 ): `/${string}/network/fabric` {
@@ -368,13 +360,6 @@ const SERVER_METRICS_SUB_ROUTE = {
   hint: 'Host metrics charts',
 } as const
 
-const SITE_DETAIL_SUB_ROUTE = {
-  id: 'site-detail',
-  label: 'Datacenter',
-  pathSegment: 'sites',
-  hint: 'Redirects to the Datacenters detail page',
-} as const
-
 const DATACENTER_DETAIL_SUB_ROUTE = {
   id: 'datacenter-detail',
   label: 'Datacenter',
@@ -421,10 +406,6 @@ export function orgAreaFromPathname(pathname: string) {
         return { area, subRoute: SERVER_DETAIL_SUB_ROUTE }
       }
     }
-  }
-
-  if (areaSegment === 'network' && parts.length >= 4 && parts[2] === 'sites') {
-    return { area, subRoute: SITE_DETAIL_SUB_ROUTE }
   }
 
   const subRouteSegment = parts[2]

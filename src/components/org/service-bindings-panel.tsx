@@ -103,15 +103,15 @@ export function ServiceBindingsPanel({
   const managedByEnv = useMemo(() => {
     const map = new Map<
       string,
-      { projectId: string; displayName: string }
+      { projectId: string; name: string }
     >()
     for (const row of orgManagedQuery.data?.managed ?? []) {
       if (!row.environmentId) continue
       map.set(row.environmentId, {
         projectId: row.projectId,
-        displayName:
-          row.displayName?.trim() ||
-          row.projectDisplayName?.trim() ||
+        name:
+          row.name?.trim() ||
+          row.projectName?.trim() ||
           engineLabel(row.engine),
       })
     }
@@ -165,7 +165,7 @@ export function ServiceBindingsPanel({
               </View>
               <Text style={orgPanelStyles.detailLine}>
                 <Text style={orgPanelStyles.detailLabel}>Cluster: </Text>
-                {cluster?.displayName ?? 'Managed database'}
+                {cluster?.name ?? 'Managed database'}
               </Text>
               <Text style={orgPanelStyles.detailLine}>
                 <Text style={orgPanelStyles.detailLabel}>Database: </Text>

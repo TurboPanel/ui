@@ -55,7 +55,7 @@ describe('environments query hooks', () => {
 
   it('useEnvironments loads project environments', async () => {
     fetchVisibleEnvironments.mockResolvedValueOnce({
-      environments: [{ id: environmentId, displayName: 'Production' }],
+      environments: [{ id: environmentId, name: 'Production' }],
     })
 
     const { result } = renderHook(() => useEnvironments(orgId, projectId), {

@@ -15,7 +15,7 @@ function member(
   return {
     id: partial.id ?? 'm-1',
     serverId: partial.serverId ?? 'srv-1',
-    serverDisplayName: partial.serverDisplayName ?? null,
+    serverName: partial.serverName ?? null,
     role: partial.role,
     replicaClass:
       partial.replicaClass ?? (partial.role === 'replica' ? 'failover' : null),

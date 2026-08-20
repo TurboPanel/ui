@@ -12,7 +12,7 @@ import {
   projectsHrefForScope,
   resolveWorkspaceScope,
   setStoredWorkspaceScopeId,
-  workspaceDisplayName,
+  workspaceName,
   workspaceScopeStorageKey,
 } from './workspace-scope'
 import type { WorkspaceRecord } from './instance-api'
@@ -20,7 +20,7 @@ import type { WorkspaceRecord } from './instance-api'
 const WORKSPACES: WorkspaceRecord[] = [
   {
     id: 'ws-a',
-    displayName: 'Alpha',
+    name: 'Alpha',
     description: null,
     organizationId: 'org-1',
     kind: 'user',
@@ -29,7 +29,7 @@ const WORKSPACES: WorkspaceRecord[] = [
   },
   {
     id: 'ws-b',
-    displayName: '  ',
+    name: '  ',
     description: 'blank name',
     organizationId: 'org-1',
     kind: 'user',
@@ -40,7 +40,7 @@ const WORKSPACES: WorkspaceRecord[] = [
 
 const PLATFORM_WORKSPACE: WorkspaceRecord = {
   id: 'ws-platform',
-  displayName: 'TurboPanel Platform',
+  name: 'TurboPanel Platform',
   description: null,
   organizationId: 'org-1',
   kind: 'turbopanel',
@@ -150,10 +150,10 @@ describe('workspace scope href helpers', () => {
   })
 })
 
-describe('workspaceDisplayName', () => {
+describe('workspaceName', () => {
   it('falls back when display name is blank', () => {
-    expect(workspaceDisplayName(WORKSPACES[0]!)).toBe('Alpha')
-    expect(workspaceDisplayName(WORKSPACES[1]!)).toBe('Unnamed workspace')
+    expect(workspaceName(WORKSPACES[0]!)).toBe('Alpha')
+    expect(workspaceName(WORKSPACES[1]!)).toBe('Unnamed workspace')
   })
 
   it('uses a stable localStorage key per org', () => {

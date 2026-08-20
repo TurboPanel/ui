@@ -69,11 +69,11 @@ export function useUpdateOrganization() {
   return useApiMutation({
     mutationFn: ({
       organizationId,
-      displayName,
+      name,
     }: {
       organizationId: string
-      displayName: string
-    }) => updateOrganization(organizationId, { displayName }),
+      name: string
+    }) => updateOrganization(organizationId, { name }),
     onSuccess: (data) => {
       queryClient.setQueryData<{ organizations: OrganizationRecord[] }>(
         queryKeys.auth.organizations,

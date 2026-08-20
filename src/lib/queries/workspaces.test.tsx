@@ -41,7 +41,7 @@ describe('workspaces query hooks', () => {
 
   it('useWorkspaces loads workspace list', async () => {
     fetchVisibleWorkspaces.mockResolvedValueOnce({
-      workspaces: [{ id: 'ws-1', displayName: 'Default', kind: 'user' }],
+      workspaces: [{ id: 'ws-1', name: 'Default', kind: 'user' }],
     })
 
     const { result } = renderHook(() => useWorkspaces(orgId), {
@@ -57,8 +57,8 @@ describe('workspaces query hooks', () => {
   it('useSystemWorkspace selects the platform workspace', async () => {
     fetchVisibleWorkspaces.mockResolvedValueOnce({
       workspaces: [
-        { id: 'ws-user', displayName: 'Team', kind: 'user' },
-        { id: 'ws-platform', displayName: 'TurboPanel', kind: TURBOPANEL_WORKSPACE_KIND },
+        { id: 'ws-user', name: 'Team', kind: 'user' },
+        { id: 'ws-platform', name: 'TurboPanel', kind: TURBOPANEL_WORKSPACE_KIND },
       ],
     })
 
@@ -80,7 +80,7 @@ describe('workspaces query hooks', () => {
     })
 
     await expect(
-      result.current.run({ displayName: 'New workspace' }),
+      result.current.run({ name: 'New workspace' }),
     ).resolves.toMatchObject({ ok: true, value: { ok: true, id: 'ws-2' } })
   })
 })

@@ -40,7 +40,7 @@ function renderWorkspaceBody({
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Text style={orgPanelStyles.detailTitle}>
-            {workspace.displayName?.trim() || 'Unnamed workspace'}
+            {workspace.name?.trim() || 'Unnamed workspace'}
           </Text>
           {system ? <PlatformBadge /> : null}
         </View>
@@ -81,7 +81,7 @@ function renderProjectsBody({
           onPress={() => onOpenProject(project.id)}
         >
           <Text style={orgPanelStyles.detailTitle}>
-            {project.displayName?.trim() || 'Unnamed project'}
+            {project.name?.trim() || 'Unnamed project'}
           </Text>
           {project.description ? (
             <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
@@ -117,7 +117,7 @@ export function WorkspaceDetailSection({
   return (
     <View style={styles.root}>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>{workspace?.displayName?.trim() || 'Workspace'}</Text>
+        <Text style={styles.heading}>{workspace?.name?.trim() || 'Workspace'}</Text>
         {system ? <PlatformBadge /> : null}
       </View>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}

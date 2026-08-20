@@ -156,11 +156,11 @@ function isActiveContainerStatus(status: string | undefined): boolean {
 }
 
 function environmentLabel(environment: EnvironmentRecord): string {
-  return environment.displayName?.trim() || 'Unnamed environment'
+  return environment.name?.trim() || 'Unnamed environment'
 }
 
 function projectConfirmName(project: ProjectRecord): string {
-  return project.displayName?.trim() || 'Unnamed project'
+  return project.name?.trim() || 'Unnamed project'
 }
 
 function resolveEnvServerId(

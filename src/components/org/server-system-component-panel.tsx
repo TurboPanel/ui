@@ -175,7 +175,7 @@ export function ServerSystemComponentPanel({
   const containerName =
     container?.containerName ??
     ingress.service?.composeServiceName ??
-    ingress.service?.displayName ??
+    ingress.service?.name ??
     null
   const composeServiceName =
     ingress.service?.composeServiceName ??

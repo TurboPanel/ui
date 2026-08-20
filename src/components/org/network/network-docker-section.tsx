@@ -21,7 +21,7 @@ import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 function serverTitle(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 type ServerOption = { id: string; label: string }
@@ -104,7 +104,7 @@ function DockerNetworkRegisterPanel({
       {
         organizationId: orgId,
         kind: 'docker',
-        displayName: displayName.trim() || undefined,
+        name: displayName.trim() || undefined,
         serverId: hostPinServerId || undefined,
         options: {
           dockerNetworkName: dockerNetworkName.trim(),

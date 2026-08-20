@@ -11,32 +11,32 @@ const BASE_SERVERS = [
   {
     id: 'srv-primary',
     connected: true,
-    datacenters: [{ id: 'dc-1', displayName: 'One' }],
-    displayName: 'Primary host',
+    datacenters: [{ id: 'dc-1', name: 'One' }],
+    name: 'Primary host',
   },
   {
     id: 'srv-ok',
     connected: true,
-    datacenters: [{ id: 'dc-1', displayName: 'One' }],
-    displayName: 'Ready host',
+    datacenters: [{ id: 'dc-1', name: 'One' }],
+    name: 'Ready host',
   },
   {
     id: 'srv-offline',
     connected: false,
-    datacenters: [{ id: 'dc-1', displayName: 'One' }],
-    displayName: 'Offline host',
+    datacenters: [{ id: 'dc-1', name: 'One' }],
+    name: 'Offline host',
   },
   {
     id: 'srv-no-dc',
     connected: true,
     datacenters: [],
-    displayName: 'No site',
+    name: 'No site',
   },
   {
     id: 'srv-no-cidr',
     connected: true,
-    datacenters: [{ id: 'dc-empty', displayName: 'Empty' }],
-    displayName: 'Empty site',
+    datacenters: [{ id: 'dc-empty', name: 'Empty' }],
+    name: 'Empty site',
   },
 ] as const
 
@@ -71,7 +71,7 @@ describe('resolveReplicaEligibility', () => {
           id: 'srv-primary',
           connected: false,
           datacenters: [],
-          displayName: 'Primary',
+          name: 'Primary',
         },
       ],
     })
@@ -132,7 +132,7 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: true,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
       ],
       members: [],
@@ -168,13 +168,13 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: true,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
         {
           id: 'srv-remote',
           connected: true,
-          datacenters: [{ id: 'dc-2', displayName: 'Two' }],
-          displayName: 'Linked remote',
+          datacenters: [{ id: 'dc-2', name: 'Two' }],
+          name: 'Linked remote',
         },
       ],
       fabricRelays: [
@@ -197,13 +197,13 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: true,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
         {
           id: 'srv-unlinked',
           connected: true,
-          datacenters: [{ id: 'dc-3', displayName: 'Three' }],
-          displayName: 'Unlinked remote',
+          datacenters: [{ id: 'dc-3', name: 'Three' }],
+          name: 'Unlinked remote',
         },
       ],
       fabricRelays: [
@@ -241,17 +241,17 @@ describe('resolveReplicaEligibility', () => {
         {
           id: 'srv-primary',
           connected: true,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
         {
           id: 'srv-fabric',
           connected: true,
-          datacenters: [{ id: 'dc-2', displayName: 'Two' }],
+          datacenters: [{ id: 'dc-2', name: 'Two' }],
         },
         {
           id: 'srv-public',
           connected: true,
-          datacenters: [{ id: 'dc-3', displayName: 'Three' }],
+          datacenters: [{ id: 'dc-3', name: 'Three' }],
         },
         {
           id: 'srv-bare',

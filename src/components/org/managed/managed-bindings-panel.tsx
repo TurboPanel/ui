@@ -48,7 +48,7 @@ const webInputStyle = {
   minHeight: 44,
 } as const
 
-type ServiceMeta = { displayName: string; projectId: string }
+type ServiceMeta = { name: string; projectId: string }
 
 type ConnectBindingFields = {
   serviceId: string
@@ -353,7 +353,7 @@ function ConnectServiceForm({
       <ChipSelectRow
         items={otherEnvironments}
         getId={(env) => env.id}
-        getLabel={(env) => env.displayName?.trim() || 'Environment'}
+        getLabel={(env) => env.name?.trim() || 'Environment'}
         selectedId={targetEnvironmentId}
         onSelect={(id) => {
           setTargetEnvironmentId(id)
@@ -368,7 +368,7 @@ function ConnectServiceForm({
             items={envServices}
             getId={(service) => service.id}
             getLabel={(service) =>
-              service.displayName?.trim() ||
+              service.name?.trim() ||
               service.composeServiceName ||
               service.id
             }
@@ -551,8 +551,8 @@ export function ManagedBindingsPanel({
     const map = new Map<string, ServiceMeta>()
     for (const service of allServicesQuery.data?.services ?? []) {
       map.set(service.id, {
-        displayName:
-          service.displayName?.trim() ||
+        name:
+          service.name?.trim() ||
           service.composeServiceName ||
           service.id,
         projectId: envProjectById.get(service.environmentId) ?? '',
@@ -574,8 +574,8 @@ export function ManagedBindingsPanel({
       groups.set(binding.serviceId, list)
     }
     return [...groups.entries()].sort((a, b) => {
-      const an = serviceMetaById.get(a[0])?.displayName ?? a[0]
-      const bn = serviceMetaById.get(b[0])?.displayName ?? b[0]
+      const an = serviceMetaById.get(a[0])?.name ?? a[0]
+      const bn = serviceMetaById.get(b[0])?.name ?? b[0]
       return an.localeCompare(bn)
     })
   }, [bindings, serviceMetaById])
@@ -659,7 +659,7 @@ export function ManagedBindingsPanel({
           return (
             <ServiceBindingGroup
               key={svcId}
-              title={meta?.displayName ?? svcId}
+              title={meta?.name ?? svcId}
               rows={rows}
               meta={meta}
               userById={userById}

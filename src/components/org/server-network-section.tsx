@@ -206,10 +206,10 @@ export function ServerNetworkSection({
 
   const memberships = server.datacenters ?? []
   const datacenterNameById = new Map(
-    memberships.map((row) => [row.id, row.displayName?.trim() || row.id]),
+    memberships.map((row) => [row.id, row.name?.trim() || row.id]),
   )
   const serverTitle =
-    server.displayName?.trim() || server.hostname?.trim() || server.id
+    server.name?.trim() || server.hostname?.trim() || server.id
   const networkById = new Map(
     (serverManagedIpsQuery.data?.networks ?? []).map((network) => [
       network.id,
@@ -233,7 +233,7 @@ export function ServerNetworkSection({
           </Text>
         ) : (
           memberships.map((membership) => {
-            const label = membership.displayName?.trim() || membership.id
+            const label = membership.name?.trim() || membership.id
             return (
               <Pressable
                 key={membership.id}
@@ -290,9 +290,9 @@ export function ServerNetworkSection({
                 ip={ip}
                 serverLabel={serverTitle}
                 networkLabel={
-                  network?.displayName?.trim() || network?.cidr || null
+                  network?.name?.trim() || network?.cidr || null
                 }
-                datacenterLabel={datacenter?.displayName?.trim() || null}
+                datacenterLabel={datacenter?.name?.trim() || null}
                 showDelete={false}
               />
             )

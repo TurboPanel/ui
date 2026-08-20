@@ -88,7 +88,7 @@ import {
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 function serverTitle(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 function mutationErrorMessage(err: unknown, fallback: string): string {
@@ -116,7 +116,7 @@ function AddressFamilyBadge({
 }
 
 function DatacenterIdentityPanel({
-  displayName,
+  name,
   description,
   canManage,
   pending,
@@ -124,7 +124,7 @@ function DatacenterIdentityPanel({
   onDescriptionChange,
   onSave,
 }: Readonly<{
-  displayName: string
+  name: string
   description: string
   canManage: boolean
   pending: boolean
@@ -139,7 +139,7 @@ function DatacenterIdentityPanel({
       <View style={styles.identityField}>
         <Text style={styles.fieldLabel}>Display name</Text>
         <TextInput
-          value={displayName}
+          value={name}
           onChangeText={onDisplayNameChange}
           placeholder="e.g. AMS-1"
           placeholderTextColor={colors.textDim}
@@ -239,8 +239,8 @@ function SubnetLabelField({
   )
 }
 
-function SubnetLabelReadout({ displayName }: Readonly<{ displayName: string | null }>) {
-  const shown = displayName?.trim()
+function SubnetLabelReadout({ name }: Readonly<{ name: string | null }>) {
+  const shown = name?.trim()
   if (!shown) return null
   return (
     <Text style={orgPanelStyles.detailLine}>
@@ -273,7 +273,7 @@ function SubnetCard({
 }>) {
   const family = subnet.version === 6 ? 'IPv6' : 'IPv4'
   const blocked = subnet.memberCount > 0
-  const label = subnet.displayName ?? ''
+  const label = subnet.name ?? ''
 
   return (
     <View style={orgPanelStyles.detailCard}>
@@ -296,7 +296,7 @@ function SubnetCard({
           onSaveLabel={onSaveLabel}
         />
       ) : (
-        <SubnetLabelReadout displayName={subnet.displayName} />
+        <SubnetLabelReadout name={subnet.name} />
       )}
       {canManage && blocked ? (
         <Text style={orgPanelStyles.muted}>
@@ -1330,7 +1330,7 @@ function applySubnetLabelDrafts(
   return subnets.map((subnet) => {
     const draft = drafts.get(subnet.id)
     if (draft === undefined) return subnet
-    return { ...subnet, displayName: draft }
+    return { ...subnet, name: draft }
   })
 }
 
@@ -1414,10 +1414,10 @@ export function DatacenterDetailSection({
   )
   const nameById = useMemo(() => {
     const map = new Map(
-      allDatacenters.map((dc) => [dc.id, dc.displayName?.trim() || dc.id]),
+      allDatacenters.map((dc) => [dc.id, dc.name?.trim() || dc.id]),
     )
     if (datacenter) {
-      map.set(datacenterId, datacenter.displayName?.trim() || datacenterId)
+      map.set(datacenterId, datacenter.name?.trim() || datacenterId)
     }
     return map
   }, [allDatacenters, datacenter, datacenterId])
@@ -1452,7 +1452,7 @@ export function DatacenterDetailSection({
     draftEnforce ?? (datacenter?.options?.enforceServerTimezone ?? false)
   const addressPreference: DatacenterAddressPreference =
     draftPreference ?? datacenter?.options?.addressPreference ?? 'ipv6'
-  const identityName = draftName ?? datacenter?.displayName ?? ''
+  const identityName = draftName ?? datacenter?.name ?? ''
   const identityDescription = draftDescription ?? datacenter?.description ?? ''
   const pending =
     updateMutation.isPending ||
@@ -1479,7 +1479,7 @@ export function DatacenterDetailSection({
     queryError
 
   const title =
-    datacenter?.displayName?.trim() ||
+    datacenter?.name?.trim() ||
     (datacenterQuery.isLoading ? 'Datacenter' : 'Unnamed datacenter')
 
   const saveMergedOptions = (
@@ -1519,7 +1519,7 @@ export function DatacenterDetailSection({
       ) : null}
 
       <DatacenterIdentityPanel
-        displayName={identityName}
+        name={identityName}
         description={identityDescription}
         canManage={canManage}
         pending={pending}
@@ -1529,7 +1529,7 @@ export function DatacenterDetailSection({
           setError(null)
           updateMutation.mutate(
             {
-              displayName: identityName.trim(),
+              name: identityName.trim(),
               description: identityDescription.trim(),
             },
             {
@@ -1570,11 +1570,11 @@ export function DatacenterDetailSection({
             return
           }
           setError(null)
-          const body: { cidr: string; displayName?: string } = {
+          const body: { cidr: string; name?: string } = {
             cidr: normalized,
           }
           const label = addLabel.trim()
-          if (label) body.displayName = label
+          if (label) body.name = label
           createSubnetMutation.mutate(body, {
             onSuccess: () => {
               setAddCidr('')
@@ -1595,10 +1595,10 @@ export function DatacenterDetailSection({
         onSaveLabel={(networkId) => {
           const subnet = subnets.find((row) => row.id === networkId)
           if (!subnet) return
-          const displayName = subnet.displayName?.trim() || undefined
+          const displayName = subnet.name?.trim() || undefined
           setError(null)
           updateSubnetMutation.mutate(
-            { networkId, body: { displayName: displayName ?? '' } },
+            { networkId, body: { name: displayName ?? '' } },
             {
               onSuccess: () => {
                 setSubnetLabelDrafts((current) => {

@@ -193,7 +193,7 @@ function DevInstallUrlFields({
 }
 
 type CreateStepProps = Readonly<{
-  displayName: string
+  name: string
   installBaseUrl: string
   managedUrls: string[]
   creating: boolean
@@ -205,7 +205,7 @@ type CreateStepProps = Readonly<{
 }>
 
 function CreateStep({
-  displayName,
+  name,
   installBaseUrl,
   managedUrls,
   creating,
@@ -219,7 +219,7 @@ function CreateStep({
     <View style={styles.form}>
       <Text style={styles.label}>Server name (optional)</Text>
       <TextInput
-        value={displayName}
+        value={name}
         onChangeText={onDisplayNameChange}
         placeholder="Production web server"
         placeholderTextColor={colors.textDim}
@@ -562,7 +562,7 @@ export function AddServerWizard({
       }
     }
     const result = await createLicenseMutation.run({
-      displayName: displayName.trim() || undefined,
+      name: displayName.trim() || undefined,
       installBaseUrl: __DEV__ ? installBaseUrl : undefined,
     })
     if (!result.ok) {
@@ -695,7 +695,7 @@ export function AddServerWizard({
       <WizardStepIndicator step={step} />
       {step === 'create' ? (
         <CreateStep
-          displayName={displayName}
+          name={displayName}
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           creating={creating}

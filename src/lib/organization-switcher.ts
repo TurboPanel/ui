@@ -4,13 +4,13 @@ import type { OrganizationRecord } from '@/lib/instance-api'
 export const ORG_SWITCHER_HEADER_SEARCH_MIN = 2
 
 export function organizationLabel(
-  org: Pick<OrganizationRecord, 'id' | 'displayName'>,
+  org: Pick<OrganizationRecord, 'id' | 'name'>,
 ): string {
-  return org.displayName?.trim() || org.id
+  return org.name?.trim() || org.id
 }
 
 export function organizationMatchesQuery(
-  org: Pick<OrganizationRecord, 'id' | 'displayName'>,
+  org: Pick<OrganizationRecord, 'id' | 'name'>,
   query: string,
 ): boolean {
   const needle = query.trim().toLowerCase()
@@ -22,16 +22,16 @@ export function organizationMatchesQuery(
 }
 
 export function filterOrganizations<
-  T extends Pick<OrganizationRecord, 'id' | 'displayName'>,
+  T extends Pick<OrganizationRecord, 'id' | 'name'>,
 >(organizations: readonly T[], query: string): T[] {
   return organizations.filter((org) => organizationMatchesQuery(org, query))
 }
 
 /**
- * Current organization first, then A–Z by display name (id fallback).
+ * Current organization first, then A–Z by name (id fallback).
  */
 export function sortOrganizationsForSwitcher<
-  T extends Pick<OrganizationRecord, 'id' | 'displayName'>,
+  T extends Pick<OrganizationRecord, 'id' | 'name'>,
 >(organizations: readonly T[], currentOrgId: string | null): T[] {
   return [...organizations].sort((left, right) => {
     if (left.id === currentOrgId) {
@@ -45,7 +45,7 @@ export function sortOrganizationsForSwitcher<
 }
 
 export function visibleOrganizations<
-  T extends Pick<OrganizationRecord, 'id' | 'displayName'>,
+  T extends Pick<OrganizationRecord, 'id' | 'name'>,
 >(
   organizations: readonly T[],
   query: string,

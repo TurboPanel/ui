@@ -116,7 +116,7 @@ export type SessionInfo = {
 
 export type OrganizationRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   createdAt: string
 }
 
@@ -288,20 +288,9 @@ export type ServerGpu = {
   pciSlot?: string
 }
 
-/** Leftover hello CPU block; prefer {@link ServerHostResources.cpus}. */
-export type ServerCpuResources = {
-  name?: string
-  architecture?: string
-  socketCount?: number
-  coreCount?: number
-  threadCount?: number
-}
-
 /** Static host capacity from daemon hello — inventory totals + load bars. */
 export type ServerHostResources = {
   cpus?: ServerCpuSocket[]
-  /** Leftover hello shape; prefer {@link cpus}. */
-  cpu?: ServerCpuResources
   gpus?: ServerGpu[]
   memory?: { totalBytes?: number }
   swap?: { totalBytes?: number }
@@ -355,12 +344,12 @@ export type OrgHostDefaults = {
 
 export type ServerDatacenterRef = {
   id: string
-  displayName: string | null
+  name: string | null
 }
 
 export type OrgServerRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   organizationId: string | null
   licenseId: string | null
   options: Record<string, unknown> | null
@@ -472,7 +461,7 @@ export async function saveServerLabels(
 export async function updateServer(
   serverId: string,
   body: {
-    displayName?: string | null
+    name?: string | null
     options?: {
       sshPort?: number | null
       ntp?: NtpDefaults | null
@@ -943,7 +932,7 @@ export async function fetchOrganization(
 }
 
 export async function createOrganization(body: {
-  displayName: string
+  name: string
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/organizations`, {
     method: 'POST',
@@ -953,7 +942,7 @@ export async function createOrganization(body: {
 
 export async function updateOrganization(
   organizationId: string,
-  body: { displayName: string }
+  body: { name: string }
 ): Promise<{ ok: true; organization: OrganizationRecord }> {
   return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`, {
     method: 'PATCH',
@@ -1084,11 +1073,11 @@ function throwIfLicenseCreateFailed(
 
 /** Mint a one-shot registration key for the Add Server flow. */
 export async function createLicense(
-  displayName?: string,
+  name?: string,
   installBaseUrl?: string
 ): Promise<CreatedLicense> {
   const body: Record<string, string> = {}
-  if (displayName) body.displayName = displayName
+  if (name) body.name = name
   if (installBaseUrl?.trim()) body.installBaseUrl = installBaseUrl.trim()
 
   const resolvedOrgId = getActiveOrganizationId()
@@ -1125,13 +1114,13 @@ export async function createLicense(
 
 export type LicenseBoundServer = {
   id: string
-  displayName: string | null
+  name: string | null
   connected: boolean
 }
 
 export type LicenseRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   createdAt: string
   revocable: boolean
   boundServer: LicenseBoundServer | null
@@ -1190,7 +1179,7 @@ export type ResolvedResourceId = {
 
 export type TeamRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   organizationId: string
   createdAt: string
   updatedAt: string
@@ -1231,10 +1220,10 @@ export type WorkspaceKind = 'turbopanel' | 'user'
 
 export type WorkspaceRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   description: string | null
   organizationId: string
-  /** Platform vs tenant workspace — never infer from displayName. */
+  /** Platform vs tenant workspace — never infer from name. */
   kind: WorkspaceKind
   createdAt: string
   updatedAt: string
@@ -1242,7 +1231,7 @@ export type WorkspaceRecord = {
 
 export type EnvironmentRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   description: string | null
   projectId: string
   /** Whole-server placement pin — single source of truth (not compose). */
@@ -1256,7 +1245,7 @@ export type EnvironmentRecord = {
 
 export type ProjectRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   description: string | null
   workspaceId: string
   metadata: {
@@ -1347,7 +1336,7 @@ export type BindingRecord = {
 
 export type BindingImpactService = {
   serviceId: string
-  displayName: string | null
+  name: string | null
   environmentId: string
   projectId: string
   keyPrefix: string
@@ -1387,7 +1376,7 @@ export type CreateVariableBody = {
 
 export type CreateProjectBody = {
   workspaceId: string
-  displayName?: string
+  name?: string
   description?: string
   /**
    * Required. `empty` creates an untyped project with one environment named
@@ -1442,7 +1431,7 @@ export type ServiceOptions = {
 
 export type ServiceRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   description: string | null
   environmentId: string
   /** Derived from the compose document — read-only; never send this on create/update. */
@@ -1455,7 +1444,7 @@ export type ServiceRecord = {
 
 export type HostingRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   description: string | null
   serviceId: string
   /** Pinned org TLS id; null/undefined = basic self-signed (Caddy tls internal). */
@@ -1486,7 +1475,7 @@ export type TlsMetadata = {
 export type TlsRecord = {
   id: string
   organizationId: string
-  displayName: string | null
+  name: string | null
   source: TlsSource
   metadata: TlsMetadata
   options?: { prefer?: number; autoRenew?: boolean; requestedHostnames?: string[] } | null
@@ -1507,7 +1496,7 @@ export type OrganizationCaRecord = {
   caGeneration: number | null
   status?: TlsStatus
   organizationId?: string
-  displayName?: string | null
+  name?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -1575,7 +1564,7 @@ export type NetworkRecord = {
   serverId: string | null
   kind: NetworkKind
   cidr: string | null
-  displayName: string | null
+  name: string | null
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -1593,7 +1582,7 @@ export type DatacenterOptions = {
 }
 
 export type DatacenterNameSuggestion = {
-  displayName: string
+  name: string
   serverCount: number
   serverIds: string[]
   serverLabels: string[]
@@ -1602,7 +1591,7 @@ export type DatacenterNameSuggestion = {
 
 export type DatacenterRecord = {
   id: string
-  displayName: string | null
+  name: string | null
   description: string | null
   organizationId: string
   /** One CIDR per subnet; always present on list and detail (default `[]`). */
@@ -1617,7 +1606,7 @@ export type DatacenterSubnetRecord = {
   id: string
   cidr: string
   version: IpVersion
-  displayName: string | null
+  name: string | null
   description: string | null
   memberCount: number
 }
@@ -1678,7 +1667,7 @@ export async function fetchWorkspace(id: string): Promise<{ workspace: Workspace
 }
 
 export async function createWorkspace(body: {
-  displayName?: string
+  name?: string
   description?: string
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/workspaces`, {
@@ -1689,7 +1678,7 @@ export async function createWorkspace(body: {
 
 export async function updateWorkspace(
   id: string,
-  body: { displayName?: string; description?: string }
+  body: { name?: string; description?: string }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/workspaces/${id}`, {
     method: 'PATCH',
@@ -1748,7 +1737,7 @@ export async function configureProject(
 export async function updateProject(
   id: string,
   body: {
-    displayName?: string
+    name?: string
     description?: string
     options?: {
       compose?: ComposeDocument
@@ -1777,7 +1766,7 @@ export async function fetchEnvironment(id: string): Promise<{ environment: Envir
 
 export async function createEnvironment(body: {
   projectId: string
-  displayName?: string
+  name?: string
   description?: string
   serverId?: string | null
   metadata?: Record<string, unknown>
@@ -1792,7 +1781,7 @@ export async function createEnvironment(body: {
 export async function updateEnvironment(
   id: string,
   body: {
-    displayName?: string
+    name?: string
     description?: string
     /** Whole-server placement pin; `null` clears it. */
     serverId?: string | null
@@ -1872,7 +1861,7 @@ export async function fetchVisibleServices(
 export async function createService(
   environmentId: string,
   body: {
-    displayName?: string
+    name?: string
     description?: string
     metadata?: Record<string, unknown>
     options?: ServiceOptions | Record<string, unknown>
@@ -1887,7 +1876,7 @@ export async function createService(
 export async function updateService(
   id: string,
   body: {
-    displayName?: string
+    name?: string
     options?: ServiceOptions
     metadata?: Record<string, unknown> | null
   }
@@ -1908,7 +1897,7 @@ export async function fetchVisibleHostings(
 export async function createHosting(
   serviceId: string,
   body?: {
-    displayName?: string
+    name?: string
     description?: string
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
@@ -1920,7 +1909,7 @@ export async function createHosting(
     method: 'POST',
     body: JSON.stringify({
       serviceId,
-      ...(body?.displayName !== undefined ? { displayName: body.displayName } : {}),
+      ...(body?.name !== undefined ? { name: body.name } : {}),
       ...(body?.description !== undefined ? { description: body.description } : {}),
       ...(body?.metadata !== undefined ? { metadata: body.metadata } : {}),
       ...(body?.options !== undefined ? { options: body.options } : {}),
@@ -1933,7 +1922,7 @@ export async function createHosting(
 export async function updateHosting(
   hostingId: string,
   body: {
-    displayName?: string
+    name?: string
     description?: string
     metadata?: Record<string, unknown>
     options?: Record<string, unknown>
@@ -1953,7 +1942,7 @@ export async function fetchTlsLibrary(): Promise<{ tls: TlsRecord[] }> {
 
 export async function createTlsCertificate(body: {
   source: TlsSource
-  displayName?: string
+  name?: string
   certificatePem?: string
   privateKeyPem?: string
   hostnames?: string[]
@@ -2083,7 +2072,7 @@ export async function fetchDatacenter(id: string): Promise<{
 }
 
 export async function createDatacenter(body: {
-  displayName?: string
+  name?: string
   description?: string
   metadata?: Record<string, unknown>
   options?: DatacenterOptions
@@ -2123,7 +2112,7 @@ export async function createDatacenterSubnet(
   datacenterId: string,
   body: {
     cidr: string
-    displayName?: string
+    name?: string
     description?: string
   }
 ): Promise<{ ok: true; id: string }> {
@@ -2137,7 +2126,7 @@ export async function updateDatacenterSubnet(
   datacenterId: string,
   networkId: string,
   body: {
-    displayName?: string
+    name?: string
     description?: string
   }
 ): Promise<{ ok: true }> {
@@ -2159,7 +2148,7 @@ export async function deleteDatacenterSubnet(
 export async function updateDatacenter(
   id: string,
   body: Partial<{
-    displayName: string | null
+    name: string | null
     description: string | null
     metadata: Record<string, unknown> | null
     options: DatacenterOptions | null
@@ -2271,7 +2260,7 @@ export async function createNetwork(body: {
   datacenterId?: string | null
   serverId?: string | null
   cidr?: string | null
-  displayName?: string
+  name?: string
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
 }): Promise<{ ok: true; id: string }> {
@@ -2288,7 +2277,7 @@ export async function updateNetwork(
     datacenterId: string | null
     serverId: string | null
     cidr: string | null
-    displayName: string | null
+    name: string | null
     metadata: Record<string, unknown> | null
     options: Record<string, unknown> | null
   }>
@@ -2834,8 +2823,8 @@ export type DeployPreviewComposeFile = {
 /** Per-server compiled compose when an environment is scheduled across hosts. */
 export type DeployPreviewServer = {
   serverId: string
-  displayName: string
-  composeYaml: string
+  name: string
+  composeFiles: DeployPreviewComposeFile[]
   services: string[]
 }
 
@@ -2853,16 +2842,10 @@ export type DeployPreviewSecretPlanEntry = {
 export type DeployPreviewResponse = {
   ok: true
   /**
-   * Compiled runtime YAML (legacy / fallback when `composeFiles` has no
-   * `role: 'runtime'` entry).
+   * Compiled runtime snapshot (`role: 'runtime'` `compose.yaml`) for the
+   * first participating server.
    */
-  composeYaml: string
-  /**
-   * Compiled snapshot. New responses send a single `role: 'runtime'`
-   * `compose.yaml`. Older layer chains may still appear — do not present
-   * project/environment/platform files as what the daemon runs.
-   */
-  composeFiles?: DeployPreviewComposeFile[]
+  composeFiles: DeployPreviewComposeFile[]
   /** Per-host compiled compose when the scheduler splits services. */
   servers?: DeployPreviewServer[]
   projectName: string
@@ -3389,7 +3372,7 @@ export async function fetchEnvironmentManaged(
 export async function createEnvironmentManaged(
   environmentId: string,
   body?: {
-    displayName?: string
+    name?: string
     /**
      * Engine version series from the release catalog (`18`, `9.7`, `12.3`).
      * Omitted = engine default. Rejected with `managed_version_unsupported`

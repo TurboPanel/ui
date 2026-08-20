@@ -36,11 +36,11 @@ import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 function serverInventoryTitle(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 function suggestionKey(suggestion: DatacenterNameSuggestion): string {
-  return `${suggestion.displayName}:${suggestion.serverIds.join(',')}`
+  return `${suggestion.name}:${suggestion.serverIds.join(',')}`
 }
 
 function createBlockedCopy(canManage: boolean, reason: string | null): string {
@@ -103,10 +103,10 @@ function NameSuggestionChips({
             style={[styles.chip, active && styles.chipActive, webPointer]}
             onPress={() => onSelect(suggestion)}
             accessibilityRole="button"
-            accessibilityLabel={`Use ${suggestion.displayName}`}
+            accessibilityLabel={`Use ${suggestion.name}`}
           >
             <Text style={[styles.chipText, active && styles.chipTextActive]}>
-              {suggestion.displayName}
+              {suggestion.name}
             </Text>
           </Pressable>
         )
@@ -149,7 +149,7 @@ function CreateDatacenterFields({
   const detectedCidr = selectedNetwork?.cidr ?? null
   const cidrSource = selectedNetwork?.cidrSource ?? null
   const body = buildCreateDatacenterFromSeed({
-    displayName,
+    name: displayName.trim(),
     description,
     serverId: selectedServerId,
     address: selectedAddress,
@@ -167,7 +167,7 @@ function CreateDatacenterFields({
   }))
 
   const applySuggestion = (suggestion: DatacenterNameSuggestion) => {
-    setDisplayName(suggestion.displayName)
+    setDisplayName(suggestion.name)
     setActiveSuggestionKey(suggestionKey(suggestion))
   }
 

@@ -62,7 +62,7 @@ function serverLabel(server: ManagedServerSummary | null): string {
   if (!server) {
     return '—'
   }
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 /**

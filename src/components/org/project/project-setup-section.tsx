@@ -60,9 +60,9 @@ export function ProjectSetupSection() {
   const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
   const scaffoldedEnvironmentName =
     environments.find((env) => env.description === 'Default environment')
-      ?.displayName?.trim() ||
+      ?.name?.trim() ||
     (environments.length === 1
-      ? environments[0]?.displayName?.trim()
+      ? environments[0]?.name?.trim()
       : undefined) ||
     defaultEnvironmentName
 
@@ -226,7 +226,7 @@ export function ProjectSetupSection() {
                       }}
                       accessibilityRole="button"
                       accessibilityLabel={entry.displayName}
-                    >
+                      >
                       <Text style={styles.typeLabel}>{entry.displayName}</Text>
                       <Text style={styles.typeDescription}>
                         {entry.description}

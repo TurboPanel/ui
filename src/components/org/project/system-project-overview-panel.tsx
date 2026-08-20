@@ -163,7 +163,7 @@ function SystemServiceRows({
         const containerName =
           serviceContainers[0]?.containerName ??
           service.composeServiceName ??
-          service.displayName ??
+          service.name ??
           service.id
         return (
           <View key={service.id} style={styles.serviceRow}>
@@ -174,7 +174,7 @@ function SystemServiceRows({
             />
             <View style={styles.serviceText}>
               <Text style={styles.serviceLabel}>
-                {service.displayName?.trim() ||
+                {service.name?.trim() ||
                   service.composeServiceName ||
                   'Service'}
               </Text>

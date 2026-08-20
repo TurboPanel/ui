@@ -59,7 +59,7 @@ function EnvironmentSelector() {
       <View style={styles.envSingle} accessibilityLabel="Active environment">
         <Text style={styles.envSingleLabel}>Environment</Text>
         <Text style={styles.envSingleName}>
-          {only.displayName?.trim() || 'Environment'}
+          {only.name?.trim() || 'Environment'}
         </Text>
       </View>
     )
@@ -80,7 +80,7 @@ function EnvironmentSelector() {
             key={env.id}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={env.displayName?.trim() || 'Environment'}
+            accessibilityLabel={env.name?.trim() || 'Environment'}
             style={[styles.envChip, active && styles.envChipActive, webPointer]}
             onPress={() => setSelectedEnvironmentId(env.id)}
           >
@@ -88,7 +88,7 @@ function EnvironmentSelector() {
               style={[styles.envChipText, active && styles.envChipTextActive]}
               numberOfLines={1}
             >
-              {env.displayName?.trim() || 'Environment'}
+              {env.name?.trim() || 'Environment'}
             </Text>
           </Pressable>
         )
@@ -286,17 +286,17 @@ function ProjectHeader({
   const [editName, setEditName] = useState('')
 
   useEffect(() => {
-    setEditName(project?.displayName?.trim() ?? '')
-  }, [project?.displayName, project?.id])
+    setEditName(project?.name?.trim() ?? '')
+  }, [project?.name, project?.id])
 
   if (!project) return null
 
   const saveName = async () => {
     const trimmed = editName.trim()
-    if (trimmed === (project.displayName?.trim() ?? '')) return
+    if (trimmed === (project.name?.trim() ?? '')) return
     setError(null)
     const result = await updateProject.run({
-      displayName: trimmed || undefined,
+      name: trimmed || undefined,
     })
     if (!result.ok) {
       if (updateProject.actionError) {
@@ -354,7 +354,7 @@ function ProjectHeader({
             ) : (
               <View style={styles.titleReadOnly}>
                 <Text style={styles.titleText}>
-                  {project.displayName?.trim() || 'Unnamed project'}
+                  {project.name?.trim() || 'Unnamed project'}
                 </Text>
                 {isSystemProject ? <PlatformBadge /> : null}
               </View>

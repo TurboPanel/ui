@@ -182,10 +182,10 @@ function errorMessage(err: unknown, fallback: string): string {
 
 function orgConfirmName(
   orgId: string,
-  organizations: readonly { id: string; displayName: string | null }[] | undefined,
+  organizations: readonly { id: string; name: string | null }[] | undefined,
 ): string {
   const match = organizations?.find((org) => org.id === orgId)
-  return match?.displayName?.trim() || orgId
+  return match?.name?.trim() || orgId
 }
 
 function serverNameMap(
@@ -195,7 +195,7 @@ function serverNameMap(
   for (const server of servers ?? []) {
     map.set(
       server.id,
-      server.displayName?.trim() || server.hostname?.trim() || server.id,
+      server.name?.trim() || server.hostname?.trim() || server.id,
     )
   }
   return map

@@ -9,18 +9,18 @@ import {
   visibleOrganizations,
 } from './organization-switcher'
 
-const acme = { id: 'org-a', displayName: 'Acme Corp' }
-const beta = { id: 'org-b', displayName: 'Beta Client' }
-const unnamed = { id: 'org-uuid-9', displayName: null }
+const acme = { id: 'org-a', name: 'Acme Corp' }
+const beta = { id: 'org-b', name: 'Beta Client' }
+const unnamed = { id: 'org-uuid-9', name: null }
 
 describe('organizationLabel', () => {
   it('uses a trimmed display name when present', () => {
-    expect(organizationLabel({ id: 'x', displayName: '  Acme  ' })).toBe('Acme')
+    expect(organizationLabel({ id: 'x', name: '  Acme  ' })).toBe('Acme')
   })
 
   it('falls back to the id when the name is blank', () => {
-    expect(organizationLabel({ id: 'org-1', displayName: '   ' })).toBe('org-1')
-    expect(organizationLabel({ id: 'org-1', displayName: null })).toBe('org-1')
+    expect(organizationLabel({ id: 'org-1', name: '   ' })).toBe('org-1')
+    expect(organizationLabel({ id: 'org-1', name: null })).toBe('org-1')
   })
 })
 
@@ -62,7 +62,7 @@ describe('sortOrganizationsForSwitcher', () => {
 describe('visibleOrganizations', () => {
   it('filters then pins the current match first', () => {
     const rows = visibleOrganizations(
-      [acme, beta, { id: 'org-c', displayName: 'Acme West' }],
+      [acme, beta, { id: 'org-c', name: 'Acme West' }],
       'acme',
       'org-c',
     )

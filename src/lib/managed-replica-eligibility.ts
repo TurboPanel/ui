@@ -36,7 +36,7 @@ export type ReplicaServerEligibility = {
 export type ReplicaEligibilityInput = {
   servers: readonly {
     id: string
-    displayName?: string | null
+    name?: string | null
     hostname?: string | null
     connected: boolean
     datacenters: readonly ServerDatacenterRef[]

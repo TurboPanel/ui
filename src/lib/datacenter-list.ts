@@ -27,9 +27,9 @@ export function serverDatacenterMemberships(
 }
 
 export function datacenterDisplayName(
-  datacenter: Readonly<Pick<DatacenterRecord, 'displayName'>>,
+  datacenter: Readonly<Pick<DatacenterRecord, 'name'>>,
 ): string {
-  const name = datacenter.displayName?.trim()
+  const name = datacenter.name?.trim()
   return name && name.length > 0 ? name : 'Unnamed datacenter'
 }
 
@@ -40,7 +40,7 @@ export function formatServerDatacenterNames(
   const rows = datacenters ?? []
   if (rows.length === 0) return null
   const names = rows
-    .map((row) => row.displayName?.trim() || row.id)
+    .map((row) => row.name?.trim() || row.id)
     .filter((name) => name.length > 0)
   if (names.length === 0) return null
   if (names.length === 1) return names[0] ?? null
@@ -388,7 +388,7 @@ export function buildMemberPins(
 }
 
 export type CreateDatacenterRequest = {
-  displayName?: string
+  name?: string
   description?: string
   members: DatacenterMemberPin[]
   sourceServerId?: string
@@ -396,7 +396,7 @@ export type CreateDatacenterRequest = {
 
 export function buildCreateDatacenterRequest(
   input: Readonly<{
-    displayName: string
+    name: string
     description: string
     members: readonly DatacenterMemberPin[]
     sourceServerId?: string
@@ -413,10 +413,10 @@ export function buildCreateDatacenterRequest(
   }
   if (members.length === 0) return null
 
-  const displayName = input.displayName.trim()
+  const name = input.name.trim()
   const description = input.description.trim()
   const body: CreateDatacenterRequest = { members }
-  if (displayName) body.displayName = displayName
+  if (name) body.name = name
   if (description) body.description = description
 
   const sourceServerId = input.sourceServerId?.trim() || members[0]?.serverId
@@ -430,7 +430,7 @@ export function buildCreateDatacenterRequest(
  */
 export function buildCreateDatacenterFromSeed(
   input: Readonly<{
-    displayName: string
+    name: string
     description: string
     serverId: string
     address: string
@@ -439,7 +439,7 @@ export function buildCreateDatacenterFromSeed(
   const address = input.address.trim()
   if (!input.serverId || !address) return null
   return buildCreateDatacenterRequest({
-    displayName: input.displayName,
+    name: input.name,
     description: input.description,
     members: [{ serverId: input.serverId, address }],
     sourceServerId: input.serverId,

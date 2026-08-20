@@ -12,7 +12,7 @@ function project(
 ): ProjectRecord {
   return {
     id: 'p1',
-    displayName: 'Demo',
+    name: 'Demo',
     description: null,
     workspaceId: 'w1',
     metadata: { type: 'docker-compose' },
@@ -75,7 +75,7 @@ function environment(
 ): EnvironmentRecord {
   return {
     id: 'e1',
-    displayName: 'Production',
+    name: 'Production',
     description: null,
     projectId: 'p1',
     serverId: null,

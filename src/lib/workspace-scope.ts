@@ -11,8 +11,8 @@ export type WorkspaceScope = Readonly<{
   workspace: WorkspaceRecord | null
 }>
 
-export function workspaceDisplayName(workspace: WorkspaceRecord): string {
-  return workspace.displayName?.trim() || 'Unnamed workspace'
+export function workspaceName(workspace: WorkspaceRecord): string {
+  return workspace.name?.trim() || 'Unnamed workspace'
 }
 
 function allWorkspacesScope(): WorkspaceScope {
@@ -41,14 +41,14 @@ export function resolveWorkspaceScope(
   if (isTurbopanelWorkspace(workspace)) {
     return {
       id: workspace.id,
-      label: workspaceDisplayName(workspace),
+      label: workspaceName(workspace),
       workspace,
     }
   }
 
   return {
     id: workspace.id,
-    label: workspaceDisplayName(workspace),
+    label: workspaceName(workspace),
     workspace,
   }
 }

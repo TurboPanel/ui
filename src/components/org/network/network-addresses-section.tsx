@@ -40,7 +40,7 @@ const IP_LITERAL_OR_CIDR =
   /^(?:\d{1,3}(?:\.\d{1,3}){3}|\[[0-9a-fA-F:]+\]|[0-9a-fA-F:]+)(?:\/\d{1,3})?$/
 
 function serverTitle(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 function FilterChip({
@@ -300,7 +300,7 @@ function CreateIpScopeFields({
         {datacenters.map((row) => (
           <FilterChip
             key={row.id}
-            label={row.displayName?.trim() || row.id}
+            label={row.name?.trim() || row.id}
             active={createDatacenterId === row.id}
             onPress={() => onDatacenterIdChange(row.id)}
           />
@@ -320,7 +320,7 @@ function CreateIpScopeFields({
             {networkRows.map((row) => (
               <FilterChip
                 key={row.id}
-                label={row.displayName?.trim() || row.cidr || row.id}
+                label={row.name?.trim() || row.cidr || row.id}
                 active={createNetworkId === row.id}
                 onPress={() => onNetworkIdChange(row.id)}
               />
@@ -507,7 +507,7 @@ function AddressFiltersPanel({
         {datacenters.map((row) => (
           <FilterChip
             key={row.id}
-            label={row.displayName?.trim() || row.id}
+            label={row.name?.trim() || row.id}
             active={datacenterFilter === row.id}
             onPress={() => onDatacenterFilterChange(row.id)}
           />
@@ -654,8 +654,8 @@ function addressRowLabels(
     : null
   return {
     serverLabel: server ? serverTitle(server) : null,
-    networkLabel: network?.displayName?.trim() || network?.cidr || null,
-    datacenterLabel: datacenter?.displayName?.trim() || null,
+    networkLabel: network?.name?.trim() || network?.cidr || null,
+    datacenterLabel: datacenter?.name?.trim() || null,
   }
 }
 

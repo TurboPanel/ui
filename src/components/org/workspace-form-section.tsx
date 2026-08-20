@@ -21,7 +21,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 type WorkspaceFormMode = 'create' | 'edit'
 type WorkspaceFieldErrors = {
-  displayName?: string
+  name?: string
   description?: string
 }
 
@@ -81,32 +81,32 @@ function conflictOrRawError(error: string | null | undefined): string | undefine
 
 type WorkspaceFormMutation = Readonly<{
   run: (body: {
-    displayName: string
+    name: string
     description?: string
   }) => Promise<{ ok: true; value: unknown } | { ok: false; error: string | null }>
 }>
 
 async function persistWorkspaceForm({
   mode,
-  displayName,
+  name,
   description,
   createWorkspace,
   updateWorkspace,
 }: Readonly<{
   mode: WorkspaceFormMode
-  displayName: string
+  name: string
   description: string
   createWorkspace: WorkspaceFormMutation
   updateWorkspace: WorkspaceFormMutation
 }>) {
   if (mode === 'create') {
-    const body: { displayName: string; description?: string } = { displayName }
+    const body: { name: string; description?: string } = { name }
     if (description) {
       body.description = description
     }
     return createWorkspace.run(body)
   }
-  return updateWorkspace.run({ displayName, description })
+  return updateWorkspace.run({ name: name.trim(), description })
 }
 
 function workspaceFieldInputStyle(hasError: boolean) {
@@ -120,7 +120,7 @@ function workspaceFieldInputStyle(hasError: boolean) {
 }
 
 function WorkspaceFormFields({
-  displayName,
+  name,
   description,
   fieldErrors,
   apiError,
@@ -131,7 +131,7 @@ function WorkspaceFormFields({
   onSubmit,
   onCancel,
 }: Readonly<{
-  displayName: string
+  name: string
   description: string
   fieldErrors: WorkspaceFieldErrors
   apiError: string | undefined
@@ -147,8 +147,8 @@ function WorkspaceFormFields({
       <View style={styles.field}>
         <Text style={styles.label}>Name *</Text>
         <TextInput
-          style={workspaceFieldInputStyle(Boolean(fieldErrors.displayName))}
-          value={displayName}
+          style={workspaceFieldInputStyle(Boolean(fieldErrors.name))}
+          value={name}
           onChangeText={onDisplayNameChange}
           placeholder="e.g. Product or Marketing"
           placeholderTextColor={colors.textDim}
@@ -157,8 +157,8 @@ function WorkspaceFormFields({
           editable={!submitting}
           maxLength={DISPLAY_NAME_MAX_LENGTH}
         />
-        {fieldErrors.displayName ? (
-          <Text style={styles.fieldError}>{fieldErrors.displayName}</Text>
+        {fieldErrors.name ? (
+          <Text style={styles.fieldError}>{fieldErrors.name}</Text>
         ) : null}
       </View>
 
@@ -224,7 +224,7 @@ export function WorkspaceFormSection({
 
   useEffect(() => {
     if (mode === 'edit' && workspaceQuery.data?.workspace) {
-      setDisplayName(workspaceQuery.data.workspace.displayName ?? '')
+      setDisplayName(workspaceQuery.data.workspace.name ?? '')
       setDescription(workspaceQuery.data.workspace.description ?? '')
     }
   }, [mode, workspaceQuery.data?.workspace])
@@ -233,7 +233,7 @@ export function WorkspaceFormSection({
     const errors: WorkspaceFieldErrors = {}
     const nameError = validateWorkspaceName(displayName)
     if (nameError) {
-      errors.displayName = nameError
+      errors.name = nameError
     }
     const descriptionError = validateWorkspaceDescription(description)
     if (descriptionError) {
@@ -253,7 +253,7 @@ export function WorkspaceFormSection({
     const trimmedDescription = description.trim()
     const result = await persistWorkspaceForm({
       mode,
-      displayName: trimmedName,
+      name: trimmedName,
       description: trimmedDescription,
       createWorkspace,
       updateWorkspace,
@@ -261,7 +261,7 @@ export function WorkspaceFormSection({
     if (!result.ok) {
       const displayNameError = conflictOrRawError(result.error)
       if (displayNameError) {
-        setFieldErrors({ displayName: displayNameError })
+        setFieldErrors({ name: displayNameError })
       }
       return
     }
@@ -301,7 +301,7 @@ export function WorkspaceFormSection({
           <Text style={orgPanelStyles.muted}>Loading…</Text>
         ) : (
           <WorkspaceFormFields
-            displayName={displayName}
+            name={displayName}
             description={description}
             fieldErrors={fieldErrors}
             apiError={apiError}

@@ -87,7 +87,7 @@ function fabricMutationError(err: unknown): string {
 }
 
 function serverTitle(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 function parseCidrList(raw: string): string[] {

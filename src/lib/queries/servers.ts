@@ -471,12 +471,12 @@ export function useCreateLicense(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: ({
-      displayName,
+      name,
       installBaseUrl,
     }: {
-      displayName?: string
+      name?: string
       installBaseUrl?: string
-    }) => createLicense(displayName, installBaseUrl),
+    }) => createLicense(name, installBaseUrl),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({

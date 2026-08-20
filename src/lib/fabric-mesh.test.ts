@@ -41,8 +41,8 @@ function relay(
 describe('resolveSiteLinks', () => {
   it('collects datacenters from relays and flags unassigned hosts', () => {
     const serverById = new Map([
-      ['srv-a', { datacenters: [{ id: 'dc-ams', displayName: 'AMS' }] }],
-      ['srv-b', { datacenters: [{ id: 'dc-fra', displayName: 'FRA' }] }],
+      ['srv-a', { datacenters: [{ id: 'dc-ams', name: 'AMS' }] }],
+      ['srv-b', { datacenters: [{ id: 'dc-fra', name: 'FRA' }] }],
       ['srv-c', { datacenters: [] }],
     ])
     const mesh = resolveSiteLinks(
@@ -74,8 +74,8 @@ describe('resolveSiteLinks', () => {
           'srv-a',
           {
             datacenters: [
-              { id: 'dc-ams', displayName: 'AMS' },
-              { id: 'dc-fra', displayName: 'FRA' },
+              { id: 'dc-ams', name: 'AMS' },
+              { id: 'dc-fra', name: 'FRA' },
             ],
           },
         ],
@@ -188,14 +188,14 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
         'srv-b',
         {
           connected: true,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
       ],
       [
         'srv-a',
         {
           connected: false,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
       ],
     ])
@@ -216,14 +216,14 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
         'srv-z',
         {
           connected: false,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
       ],
       [
         'srv-m',
         {
           connected: false,
-          datacenters: [{ id: 'dc-1', displayName: 'One' }],
+          datacenters: [{ id: 'dc-1', name: 'One' }],
         },
       ],
     ])

@@ -267,7 +267,7 @@ function ScopeSettingsModal({
   )
   if (target !== 'project') {
     const env = environments.find((row) => row.id === target.environmentId)
-    title = `${env?.displayName?.trim() || 'Environment'} settings`
+    title = `${env?.name?.trim() || 'Environment'} settings`
     body = env ? (
       <EnvironmentSettingsPanel
         key={env.id}
@@ -520,7 +520,7 @@ export function ProjectScopeSelector() {
 
           {environments.map((env) => {
             const active = env.id === pathEnvironmentId
-            const name = env.displayName?.trim() || 'Environment'
+            const name = env.name?.trim() || 'Environment'
             const tone = environmentStatusTone(containersByEnv[env.id] ?? [])
             const settingsOpen =
               settingsTarget !== null &&

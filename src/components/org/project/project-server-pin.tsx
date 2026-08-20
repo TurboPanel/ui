@@ -9,7 +9,7 @@ import { colors } from '@/lib/theme'
 
 function serverLabel(server: OrgServerRecord): string {
   return (
-    server.displayName?.trim() ||
+    server.name?.trim() ||
     server.hostname?.trim() ||
     server.id.slice(0, 8)
   )

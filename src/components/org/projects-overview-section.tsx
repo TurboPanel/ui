@@ -24,7 +24,7 @@ import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import {
   ALL_WORKSPACES_SCOPE,
   newProjectHrefForScope,
-  workspaceDisplayName,
+  workspaceName,
 } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
@@ -105,7 +105,7 @@ function ProjectOverviewCard({
       <View style={styles.cardHeader}>
         <View style={styles.titleRow}>
           <Text style={orgPanelStyles.detailTitle}>
-            {project.displayName?.trim() || 'Unnamed project'}
+            {project.name?.trim() || 'Unnamed project'}
           </Text>
           {projectTypeBadge(project.metadata)}
           {showPlatformBadge ? <PlatformBadge /> : null}
@@ -225,7 +225,7 @@ export function ProjectsOverviewSection({
   const workspaceNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const workspace of allWorkspaces.length > 0 ? allWorkspaces : workspaces) {
-      map.set(workspace.id, workspaceDisplayName(workspace))
+      map.set(workspace.id, workspaceName(workspace))
     }
     return map
   }, [allWorkspaces, workspaces])

@@ -18,7 +18,7 @@ function workspace(
   partial: Partial<WorkspaceRecord> & Pick<WorkspaceRecord, 'id' | 'kind'>,
 ): WorkspaceRecord {
   return {
-    displayName: partial.displayName ?? 'Workspace',
+    name: partial.name ?? 'Workspace',
     description: partial.description ?? null,
     organizationId: 'org-1',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -31,7 +31,7 @@ function project(
   partial: Partial<ProjectRecord> & Pick<ProjectRecord, 'id' | 'workspaceId'>,
 ): ProjectRecord {
   return {
-    displayName: 'Project',
+    name: 'Project',
     description: null,
     metadata: null,
     options: null,
@@ -46,7 +46,7 @@ describe('system-inventory', () => {
     const namedPlatform = workspace({
       id: 'ws-user-platform',
       kind: 'user',
-      displayName: 'TurboPanel Platform',
+      name: 'TurboPanel Platform',
     })
     expect(isTurbopanelWorkspace(namedPlatform)).toBe(false)
     expect(TURBOPANEL_WORKSPACE_BADGE_LABEL).toBe('Platform')
@@ -54,13 +54,13 @@ describe('system-inventory', () => {
 
   it('findTurbopanelWorkspace returns the kind=turbopanel row', () => {
     const workspaces = [
-      workspace({ id: 'ws-a', kind: 'user', displayName: 'TurboPanel Platform' }),
+      workspace({ id: 'ws-a', kind: 'user', name: 'TurboPanel Platform' }),
       workspace({
         id: 'ws-tp',
         kind: 'turbopanel',
-        displayName: 'TurboPanel Platform',
+        name: 'TurboPanel Platform',
       }),
-      workspace({ id: 'ws-b', kind: 'user', displayName: 'Default' }),
+      workspace({ id: 'ws-b', kind: 'user', name: 'Default' }),
     ]
     expect(findTurbopanelWorkspace(workspaces)?.id).toBe('ws-tp')
     expect(userWorkspaces(workspaces).map((row) => row.id)).toEqual([
@@ -123,7 +123,7 @@ describe('system-inventory', () => {
     const environments: EnvironmentRecord[] = [
       {
         id: 'env-a',
-        displayName: 'Server A',
+        name: 'Server A',
         description: null,
         projectId: 'proj',
         serverId: 'srv-a',
@@ -134,7 +134,7 @@ describe('system-inventory', () => {
       },
       {
         id: 'env-b',
-        displayName: 'Server B',
+        name: 'Server B',
         description: null,
         projectId: 'proj',
         serverId: 'srv-b',

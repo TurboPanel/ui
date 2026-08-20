@@ -1,0 +1,24 @@
+TurboPanel Apple App Store Additional Permission
+
+As an additional permission under Section 7 of the GNU Affero
+General Public License version 3, the copyright holders of the
+TurboPanel material to which this permission applies grant permission
+to convey object-code versions of that material through Apple's
+App Store notwithstanding mandatory App Store usage rules, license
+terms, code-signing requirements, or technical distribution measures
+that would otherwise prevent such conveyance under the AGPLv3.
+
+This permission applies only to material for which the person or entity
+granting this permission has authority to grant it.
+
+All other applicable requirements of the AGPLv3 remain in effect,
+including the obligation to provide Corresponding Source when required.
+
+This permission grants no rights to the TurboPanel name, logos,
+service marks, or other trademarks.
+
+This permission does not apply to third-party material unless the
+applicable copyright holder has expressly granted an equivalent
+permission.
+
+Copyright (C) 2025-2026 TurboPanel contributors

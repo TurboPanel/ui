@@ -34,13 +34,10 @@ describe('managed-access-scope', () => {
     expect(isManagedSqlAccessScope(42)).toBe(false)
   })
 
-  it('reads scope and migrates legacy bind', () => {
+  it('reads scope and defaults when omitted or invalid', () => {
     expect(
       readManagedExposureScope({ enabled: true, scope: 'datacenter' }),
     ).toBe('datacenter')
-    expect(
-      readManagedExposureScope({ enabled: true, bind: 'local' }),
-    ).toBe('local')
     expect(readManagedExposureScope({ enabled: true })).toBe(
       DEFAULT_MANAGED_SQL_ACCESS_SCOPE,
     )
@@ -48,14 +45,12 @@ describe('managed-access-scope', () => {
       readManagedExposureScope({
         enabled: true,
         scope: 'not-a-scope' as 'public',
-        bind: 'turbofabric',
       }),
-    ).toBe('turbofabric')
+    ).toBe(DEFAULT_MANAGED_SQL_ACCESS_SCOPE)
     expect(
       readManagedExposureScope({
         enabled: false,
         scope: 'not-a-scope' as 'public',
-        bind: 'not-a-scope' as 'public',
       }),
     ).toBe(DEFAULT_MANAGED_SQL_ACCESS_SCOPE)
   })

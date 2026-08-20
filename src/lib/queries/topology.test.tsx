@@ -60,7 +60,7 @@ describe('topology query hooks', () => {
 
   it('useDatacenters loads datacenter inventory', async () => {
     fetchDatacenters.mockResolvedValueOnce({
-      datacenters: [{ id: 'dc-1', displayName: 'LAN' }],
+      datacenters: [{ id: 'dc-1', name: 'LAN' }],
     })
 
     const { result } = renderHook(() => useDatacenters(orgId), {

@@ -44,7 +44,7 @@ export function ServicesStatusList({
     <View style={styles.list}>
       {services.map((service) => {
         const label =
-          service.displayName?.trim() ||
+          service.name?.trim() ||
           service.composeServiceName ||
           'Service'
         const tone = serviceStatusTone(containersByService[service.id] ?? [])

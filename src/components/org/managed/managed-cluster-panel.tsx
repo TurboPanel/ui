@@ -185,7 +185,7 @@ export function ManagedClusterPanel({
       resolveReplicaEligibility({
         servers: servers.map((s) => ({
           id: s.id,
-          displayName: s.displayName,
+          name: s.name,
           hostname: s.hostname,
           connected: s.connected,
           datacenters: s.datacenters ?? [],
@@ -223,8 +223,8 @@ export function ManagedClusterPanel({
 
   const serverLabel = (member: ManagedMemberRecord): string => {
     return (
-      member.serverDisplayName?.trim() ||
-      serverById.get(member.serverId)?.displayName?.trim() ||
+      member.serverName?.trim() ||
+      serverById.get(member.serverId)?.name?.trim() ||
       serverById.get(member.serverId)?.hostname?.trim() ||
       member.serverId
     )
@@ -955,7 +955,7 @@ function ServerOptionRow({
   const eligible = eligibilityRow?.eligible === true
   const reason = eligibilityRow?.reason
   const predicted = eligibilityRow?.predictedTransport
-  const label = server.displayName?.trim() || server.hostname?.trim() || server.id
+  const label = server.name?.trim() || server.hostname?.trim() || server.id
   const showNetworkLink =
     reason === 'no-datacenter' ||
     reason === 'no-private-cidr' ||

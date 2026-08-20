@@ -66,7 +66,7 @@ function openAddKind<K extends string>(
 
 function serverDisplayLabel(server: OrgServerRecord): string {
   return (
-    server.displayName?.trim() ||
+    server.name?.trim() ||
     server.hostname?.trim() ||
     server.id.slice(0, 8)
   )
@@ -229,12 +229,12 @@ function WorkspaceMoveBody({
   onMove: (workspaceId: string) => void
 }>) {
   const sorted = [...workspaces].sort((a, b) =>
-    (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
+    (a.name ?? a.id).localeCompare(b.name ?? b.id),
   )
   if (!canMove) {
     return (
       <Text style={orgPanelStyles.detailLine}>
-        {sorted.find((ws) => ws.id === project.workspaceId)?.displayName ??
+        {sorted.find((ws) => ws.id === project.workspaceId)?.name ??
           project.workspaceId}
       </Text>
     )
@@ -244,7 +244,7 @@ function WorkspaceMoveBody({
       <View style={styles.list}>
         {sorted.map((ws) => {
           const selected = ws.id === project.workspaceId
-          const label = ws.displayName?.trim() || 'Workspace'
+          const label = ws.name?.trim() || 'Workspace'
           if (selected) {
             return (
               <View
@@ -587,7 +587,7 @@ function EnvironmentDeleteControl({
           ]}
         >
           {armed
-            ? `Delete ${selectedEnvironment.displayName?.trim() || 'environment'}?`
+            ? `Delete ${selectedEnvironment.name?.trim() || 'environment'}?`
             : 'Delete environment'}
         </Text>
       </Pressable>

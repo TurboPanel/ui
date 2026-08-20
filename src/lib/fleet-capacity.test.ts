@@ -79,11 +79,6 @@ describe('serverInventoryCpuCores', () => {
         }),
       ),
     ).toBe(16)
-    expect(
-      serverInventoryCpuCores(
-        server('a', { resources: { cpu: { coreCount: 8, threadCount: 16 } } }),
-      ),
-    ).toBe(8)
     expect(serverInventoryCpuCores(server('a'))).toBeNull()
   })
 
@@ -118,9 +113,6 @@ describe('serverCpuThreads', () => {
       serverCpuThreads(
         server('a', { resources: { cpus: [{ cores: { total: 8 } }] } }),
       ),
-    ).toBe(8)
-    expect(
-      serverCpuThreads(server('a', { resources: { cpu: { coreCount: 8 } } })),
     ).toBe(8)
   })
 })

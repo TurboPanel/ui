@@ -61,8 +61,8 @@ function FilterChip({
 
 function serviceTitle(row: ManagedListRecord): string {
   return (
-    row.displayName?.trim() ||
-    row.projectDisplayName?.trim() ||
+    row.name?.trim() ||
+    row.projectName?.trim() ||
     row.engineDisplayName?.trim() ||
     'Managed service'
   )
@@ -77,12 +77,12 @@ function engineLabel(row: ManagedListRecord): string {
 }
 
 function serverLabel(row: ManagedListRecord): string {
-  return row.serverDisplayName?.trim() || (row.serverId ? row.serverId : '—')
+  return row.serverName?.trim() || (row.serverId ? row.serverId : '—')
 }
 
 function projectEnvironmentLabel(row: ManagedListRecord): string {
-  const project = row.projectDisplayName?.trim() || 'Project'
-  const environment = row.environmentDisplayName?.trim()
+  const project = row.projectName?.trim() || 'Project'
+  const environment = row.environmentName?.trim()
   if (environment) return `${project} / ${environment}`
   return project
 }

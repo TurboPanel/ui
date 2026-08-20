@@ -42,11 +42,11 @@ const webInputStyle = {
 } as const
 
 function serverLabel(server: OrgServerRecord): string {
-  return server.displayName?.trim() || server.hostname || server.id.slice(0, 8)
+  return server.name?.trim() || server.hostname || server.id.slice(0, 8)
 }
 
 function serviceLabel(service: ServiceRecord): string {
-  return service.displayName?.trim() || service.composeServiceName
+  return service.name?.trim() || service.composeServiceName
 }
 
 function inputStyle() {

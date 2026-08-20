@@ -43,7 +43,7 @@ describe('storage query hooks', () => {
 
   it('useStorage loads scoped storage rows', async () => {
     fetchStorage.mockResolvedValueOnce({
-      storage: [{ id: 'stor-1', displayName: 'Data' }],
+      storage: [{ id: 'stor-1', name: 'Data' }],
     })
 
     const { result } = renderHook(() => useStorage(orgId, filter), {

@@ -157,7 +157,7 @@ function invalidateEnvironmentManagedQueries(
 }
 
 function environmentLabel(env: EnvironmentRecord): string {
-  return env.displayName?.trim() || 'Environment'
+  return env.name?.trim() || 'Environment'
 }
 
 function EnvironmentTabs({
@@ -282,7 +282,7 @@ function ManagedSetupPanel({
               onPress={() => setServerId(server.id)}
             >
               <Text style={styles.serverLabel}>
-                {server.displayName?.trim() || server.hostname || server.id}
+                {server.name?.trim() || server.hostname || server.id}
               </Text>
               {offline ? <Text style={styles.offlineHint}>Offline</Text> : null}
             </Pressable>
@@ -339,13 +339,13 @@ export function ManagedEnvironmentBody({
   orgId,
   environmentId,
   engineCode,
-  projectDisplayName,
+  projectName,
   focus = 'all',
 }: Readonly<{
   orgId: string
   environmentId: string
   engineCode: string | null
-  projectDisplayName: string
+  projectName: string
   /** When set, only render panels for that project shell tab. */
   focus?: ManagedBodyFocus
 }>) {
@@ -428,7 +428,7 @@ export function ManagedEnvironmentBody({
       orgId={orgId}
       environmentId={environmentId}
       focus={focus}
-      projectDisplayName={projectDisplayName}
+      projectName={projectName}
       supportsBackup={managedEngineSupportsBackup(engineCode)}
       canManage={canManage}
       detail={{ ...detail, managed }}
@@ -440,7 +440,7 @@ function ManagedEnvironmentReadyPanels({
   orgId,
   environmentId,
   focus,
-  projectDisplayName,
+  projectName,
   supportsBackup,
   canManage,
   detail,
@@ -448,7 +448,7 @@ function ManagedEnvironmentReadyPanels({
   orgId: string
   environmentId: string
   focus: ManagedBodyFocus
-  projectDisplayName: string
+  projectName: string
   supportsBackup: boolean
   canManage: boolean
   detail: ManagedDetailResponse & {
@@ -535,7 +535,7 @@ function ManagedEnvironmentReadyPanels({
           orgId={orgId}
           environmentId={environmentId}
           members={members}
-          managedDisplayName={managed.displayName?.trim() || projectDisplayName}
+          managedDisplayName={managed.name?.trim() || projectName}
           canManage={canManage}
           busy={inFlight}
           recovery={detail.recovery}
@@ -591,7 +591,7 @@ function ManagedEnvironmentReadyPanels({
         <ManagedBackupsPanel
           backups={backups}
           supported={supportsBackup}
-          managedDisplayName={managed.displayName?.trim() || projectDisplayName}
+          managedDisplayName={managed.name?.trim() || projectName}
           canManage={canManage}
           busy={inFlight}
           onBackupNow={async () => {
@@ -617,7 +617,7 @@ function ManagedEnvironmentReadyPanels({
       {showLifecycle ? (
         <ManagedLifecyclePanel
           status={managed.status}
-          projectDisplayName={projectDisplayName}
+          projectName={projectName}
           canManage={canManage}
           busy={inFlight}
           onLifecycle={async (action) => {
@@ -922,7 +922,7 @@ function ActiveEnvironmentPanel({
   orgId,
   projectId,
   engineCode,
-  projectDisplayName,
+  projectName,
   environments,
   activeEnvironment,
   selectedId,
@@ -933,7 +933,7 @@ function ActiveEnvironmentPanel({
   orgId: string
   projectId: string
   engineCode: string | null
-  projectDisplayName: string
+  projectName: string
   environments: EnvironmentRecord[]
   activeEnvironment: EnvironmentRecord
   selectedId: string | null
@@ -958,7 +958,7 @@ function ActiveEnvironmentPanel({
       return
     }
     onError(null)
-    const result = await updateEnvironmentMutation.run({ displayName: trimmed })
+    const result = await updateEnvironmentMutation.run({ name: trimmed })
     if (!result.ok) {
       if (updateEnvironmentMutation.actionError) {
         onError(updateEnvironmentMutation.actionError)
@@ -977,7 +977,7 @@ function ActiveEnvironmentPanel({
     onError(null)
     const result = await createEnvironmentMutation.run({
       projectId,
-      displayName: trimmed,
+      name: trimmed,
     })
     if (!result.ok) {
       if (createEnvironmentMutation.actionError) {
@@ -1027,7 +1027,7 @@ function ActiveEnvironmentPanel({
           deleteArmed={deleteArmed}
           deleting={deleting}
           onRename={() => {
-            setRenameValue(activeEnvironment.displayName?.trim() ?? '')
+            setRenameValue(activeEnvironment.name?.trim() ?? '')
             setRenaming(true)
             setShowCreate(false)
           }}
@@ -1072,7 +1072,7 @@ function ActiveEnvironmentPanel({
         orgId={orgId}
         environmentId={activeEnvironment.id}
         engineCode={engineCode}
-        projectDisplayName={projectDisplayName}
+        projectName={projectName}
       />
     </>
   )
@@ -1082,12 +1082,12 @@ export function ManagedProjectSection({
   orgId,
   projectId,
   engineCode,
-  projectDisplayName,
+  projectName,
 }: Readonly<{
   orgId: string
   projectId: string
   engineCode: string | null
-  projectDisplayName: string
+  projectName: string
 }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
   const { defaultEnvironmentName, isLoading: defaultNameLoading } =
@@ -1114,7 +1114,7 @@ export function ManagedProjectSection({
       provisionAttemptedFor.current = projectId
       ignorePromise(
         createEnvironmentMutation
-          .run({ projectId, displayName: defaultEnvironmentName })
+          .run({ projectId, name: defaultEnvironmentName })
           .then((result) => {
             if (!result.ok && createEnvironmentMutation.actionError) {
               setError(createEnvironmentMutation.actionError)
@@ -1169,7 +1169,7 @@ export function ManagedProjectSection({
           orgId={orgId}
           projectId={projectId}
           engineCode={engineCode}
-          projectDisplayName={projectDisplayName}
+          projectName={projectName}
           environments={environments}
           activeEnvironment={activeEnvironment}
           selectedId={selectedId}

@@ -322,7 +322,7 @@ describe('fetch wrappers (mocked fetch)', () => {
   it('fetchOrgServers / fetchServer fill missing host-default fields', async () => {
     const sparse = {
       id: 'srv-1',
-      displayName: 'Huey',
+      name: 'Huey',
       organizationId: 'org-1',
       licenseId: null,
       options: null,
@@ -406,7 +406,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       jsonResponse({
         datacenter: {
           id: 'dc-1',
-          displayName: 'Home',
+          name: 'Home',
           description: null,
           organizationId: 'org-1',
           options: null,

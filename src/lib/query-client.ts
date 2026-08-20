@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import {
   MutationCache,
   QueryCache,
@@ -146,15 +145,6 @@ export function useAuthStatus() {
     retry: false,
     enabled: canQueryControlPlane(),
   })
-}
-
-/** @deprecated Prefer the global forbidden handler registered by AuthProvider. */
-export function useForbiddenRecovery(error: unknown) {
-  useEffect(() => {
-    if (error && isForbiddenError(error)) {
-      void routeForbiddenError(error)
-    }
-  }, [error])
 }
 
 /**

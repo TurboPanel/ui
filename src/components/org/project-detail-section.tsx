@@ -52,9 +52,9 @@ function formatServiceOptionLabel(
   environment: EnvironmentRecord,
   service: ServiceRecord,
 ): string {
-  const envName = environment.displayName ?? 'Environment'
+  const envName = environment.name ?? 'Environment'
   const serviceName =
-    service.displayName ?? service.composeServiceName ?? service.id.slice(0, 8)
+    service.name ?? service.composeServiceName ?? service.id.slice(0, 8)
   return `${envName} · ${serviceName}`
 }
 
@@ -311,7 +311,7 @@ function projectTypeBadge(project: ProjectRecord) {
 }
 
 function workspaceLabel(ws: WorkspaceRecord): string {
-  return ws.displayName?.trim() || ws.id
+  return ws.name?.trim() || ws.id
 }
 
 function isComposeProject(project: ProjectRecord): boolean {
@@ -338,7 +338,7 @@ function projectTitleField({
   onChangeDisplayName: (value: string) => void
   onSave: () => void
 }>) {
-  const displayTitle = project.displayName?.trim() || 'Unnamed project'
+  const displayTitle = project.name?.trim() || 'Unnamed project'
   if (!canOwn) {
     return <Text style={orgPanelStyles.pageTitle}>{displayTitle}</Text>
   }
@@ -613,7 +613,7 @@ export function ProjectDetailSection({
 
   useEffect(() => {
     if (!project) return
-    setEditDisplayName(project.displayName?.trim() ?? '')
+    setEditDisplayName(project.name?.trim() ?? '')
     setEditDescription(project.description?.trim() ?? '')
   }, [project])
 
@@ -630,7 +630,7 @@ export function ProjectDetailSection({
   const sortedWorkspaces = useMemo(
     () =>
       [...workspaces].sort((a, b) =>
-        (a.displayName ?? a.id).localeCompare(b.displayName ?? b.id),
+        (a.name ?? a.id).localeCompare(b.name ?? b.id),
       ),
     [workspaces],
   )
@@ -668,7 +668,7 @@ export function ProjectDetailSection({
     const description = editDescription.trim()
     setError(null)
     const result = await updateProjectMutation.run({
-      displayName: displayName || undefined,
+      name: displayName || undefined,
       description: description || undefined,
     })
     if (!result.ok && updateProjectMutation.actionError) {
@@ -725,8 +725,8 @@ export function ProjectDetailSection({
                 orgId={orgId}
                 projectId={projectId}
                 engineCode={project.metadata?.code ?? null}
-                projectDisplayName={
-                  project.displayName?.trim() || 'Unnamed project'
+                projectName={
+                  project.name?.trim() || 'Unnamed project'
                 }
               />
               <WorkspaceMovePanel

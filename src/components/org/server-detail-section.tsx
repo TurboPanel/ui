@@ -113,8 +113,8 @@ function parseTabParam(raw: string | string[] | undefined): ServerDetailTabId {
   return 'overview'
 }
 
-function serverTitle(server: Pick<OrgServerRecord, 'displayName' | 'hostname' | 'id'>): string {
-  return server.displayName?.trim() || server.hostname?.trim() || server.id
+function serverTitle(server: Pick<OrgServerRecord, 'name' | 'hostname' | 'id'>): string {
+  return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 function shortCommit(commit?: string | null): string {
@@ -955,7 +955,7 @@ function ServerOverviewTab({
       <SectionPanel title="Identity">
         <Text style={orgPanelStyles.detailLine}>
           <Text style={orgPanelStyles.detailLabel}>Display name: </Text>
-          {server.displayName ?? '—'}
+          {server.name ?? '—'}
         </Text>
         <Text style={orgPanelStyles.detailLine}>
           <Text style={orgPanelStyles.detailLabel}>ID: </Text>

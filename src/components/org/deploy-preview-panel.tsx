@@ -53,10 +53,16 @@ function composeFileRoleLabel(role: ComposeFileRole): string {
   return 'TurboPanel'
 }
 
+function runtimeComposeFileFromFiles(
+  files: readonly DeployPreviewComposeFile[],
+): DeployPreviewComposeFile | undefined {
+  return files.find((file) => file.role === 'runtime')
+}
+
 function runtimeComposeFile(
   preview: DeployPreviewResponse,
 ): DeployPreviewComposeFile | undefined {
-  return preview.composeFiles?.find((file) => file.role === 'runtime')
+  return runtimeComposeFileFromFiles(preview.composeFiles)
 }
 
 function ComposeLayerSection({
@@ -80,7 +86,8 @@ function ServerComposeSection({
 }: Readonly<{ server: DeployPreviewServer }>) {
   const services = [...server.services].sort((a, b) => a.localeCompare(b))
   const serviceLine = services.join(', ')
-  const title = server.displayName.trim() || server.serverId
+  const title = server.name.trim() || server.serverId
+  const runtimeFile = runtimeComposeFileFromFiles(server.composeFiles)
 
   return (
     <View style={styles.layerSection}>
@@ -93,7 +100,9 @@ function ServerComposeSection({
       {serviceLine.length > 0 ? (
         <Text style={orgPanelStyles.muted}>{serviceLine}</Text>
       ) : null}
-      <ReadOnlyYamlBlock value={server.composeYaml} />
+      {runtimeFile ? (
+        <ComposeLayerSection file={runtimeFile} />
+      ) : null}
     </View>
   )
 }
@@ -123,9 +132,7 @@ function PreparedComposeSnapshot({
       </Text>
       {runtimeFile ? (
         <ComposeLayerSection file={runtimeFile} />
-      ) : (
-        <ReadOnlyYamlBlock value={preview.composeYaml} />
-      )}
+      ) : null}
       {envFile.length > 0 ? (
         <View style={styles.layerSection}>
           <View style={styles.layerHeader}>

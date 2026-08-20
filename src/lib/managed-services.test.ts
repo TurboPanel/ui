@@ -37,7 +37,7 @@ function member(
     Pick<ManagedMemberRecord, 'id' | 'serverId' | 'role'>,
 ): ManagedMemberRecord {
   return {
-    serverDisplayName: partial.serverDisplayName ?? null,
+    serverName: partial.serverName ?? null,
     replicaClass: partial.replicaClass ?? null,
     readEligible: partial.readEligible ?? false,
     ordinal: partial.ordinal ?? 0,

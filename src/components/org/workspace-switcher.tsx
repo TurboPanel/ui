@@ -23,7 +23,7 @@ import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import {
   ALL_WORKSPACES_SCOPE,
   manageWorkspacesHref,
-  workspaceDisplayName,
+  workspaceName,
   type WorkspaceScope,
 } from '@/lib/workspace-scope'
 
@@ -34,7 +34,7 @@ function matchesWorkspaceQuery(
   if (!query) {
     return true
   }
-  const name = workspaceDisplayName(workspace).toLowerCase()
+  const name = workspaceName(workspace).toLowerCase()
   return name.includes(query)
 }
 
@@ -138,7 +138,7 @@ function WorkspaceResultsList({
         <WorkspaceMenuItem
           key={workspace.id}
           active={scopeId === workspace.id}
-          label={workspaceDisplayName(workspace)}
+          label={workspaceName(workspace)}
           onPress={() => onSelectWorkspace(workspace.id)}
         />
       ))}
@@ -148,7 +148,7 @@ function WorkspaceResultsList({
           <View style={styles.menuDivider} />
           <WorkspaceMenuItem
             active={scopeId === platformWorkspace.id}
-            label={workspaceDisplayName(platformWorkspace)}
+            label={workspaceName(platformWorkspace)}
             badge
             onPress={() => onSelectWorkspace(platformWorkspace.id)}
           />

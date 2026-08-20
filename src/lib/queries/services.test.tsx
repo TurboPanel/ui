@@ -50,7 +50,7 @@ describe('services query hooks', () => {
 
   it('useServices loads environment services', async () => {
     fetchVisibleServices.mockResolvedValueOnce({
-      services: [{ id: serviceId, displayName: 'web' }],
+      services: [{ id: serviceId, name: 'web' }],
     })
 
     const { result } = renderHook(() => useServices(orgId, environmentId), {
@@ -65,7 +65,7 @@ describe('services query hooks', () => {
 
   it('useHostings loads service hostings', async () => {
     fetchVisibleHostings.mockResolvedValueOnce({
-      hostings: [{ id: 'host-1', displayName: 'app.example.com' }],
+      hostings: [{ id: 'host-1', name: 'app.example.com' }],
     })
 
     const { result } = renderHook(() => useHostings(orgId, serviceId), {
@@ -88,11 +88,11 @@ describe('services query hooks', () => {
     await expect(
       result.current.run({
         environmentId,
-        body: { displayName: 'api' },
+        body: { name: 'api' },
       }),
     ).resolves.toMatchObject({ ok: true })
     expect(createService).toHaveBeenCalledWith(environmentId, {
-      displayName: 'api',
+      name: 'api',
     })
   })
 
@@ -106,11 +106,11 @@ describe('services query hooks', () => {
     await expect(
       result.current.run({
         serviceId,
-        body: { displayName: 'www' },
+        body: { name: 'www' },
       }),
     ).resolves.toMatchObject({ ok: true })
     expect(createHosting).toHaveBeenCalledWith(serviceId, {
-      displayName: 'www',
+      name: 'www',
     })
   })
 
@@ -125,11 +125,11 @@ describe('services query hooks', () => {
       result.current.run({
         serviceId,
         hostingId: 'host-1',
-        body: { displayName: 'www-updated' },
+        body: { name: 'www-updated' },
       }),
     ).resolves.toMatchObject({ ok: true })
     expect(updateHosting).toHaveBeenCalledWith('host-1', {
-      displayName: 'www-updated',
+      name: 'www-updated',
     })
   })
 })
