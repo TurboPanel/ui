@@ -2,12 +2,12 @@
 
 **Web-first signed-in product console** for TurboPanel — fleet management, deploy workflows, managed services, networking, and admin surfaces.
 
-[![Release](https://img.shields.io/github/v/release/turbopanel/ui?label=release)](https://github.com/turbopanel/ui/releases)
+[![Release](https://img.shields.io/github/v/release/TurboPanel/ui?label=release)](https://github.com/TurboPanel/ui/releases)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=turbopanel_ui)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=coverage)](https://sonarcloud.io/component_measures?id=turbopanel_ui&metric=coverage)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=code_smells)](https://sonarcloud.io/project/issues?id=turbopanel_ui&resolved=false&types=CODE_SMELL)
 
-GitHub: [turbopanel/ui](https://github.com/turbopanel/ui). Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel).
+GitHub: [TurboPanel/ui](https://github.com/TurboPanel/ui). Main product: [TurboPanel/turbopanel](https://github.com/TurboPanel/turbopanel).
 
 > **Private alpha** — Neither TurboPanel High Availability nor self-hosted is publicly available yet. See the [roadmap](https://turbopanel.io/roadmap) for progress toward a beta release.
 
@@ -41,7 +41,7 @@ Read [AGENTS.md](./AGENTS.md) before visual work — the **ui-ux-pro-max** skill
 
 ## Contributing
 
-Use the [TurboPanel Development Environment](https://github.com/turbopanel/dev) to run the full co-located stack:
+Use the [TurboPanel Development Environment](https://github.com/TurboPanel/dev) to run the full co-located stack:
 
 Clone the six sibling repos (including this one), then from the `dev` checkout:
 
@@ -54,14 +54,14 @@ dev/console
 
 Then edit this repo on the host (mounted into the guest at `~/ui`). See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
 
-Routing guide: [CONTRIBUTING.md](https://github.com/turbopanel/.github/blob/trunk/CONTRIBUTING.md). Pull requests are accepted under the [Contributor License Agreement](https://github.com/turbopanel/.github/blob/trunk/CLA.md).
+Routing guide: [CONTRIBUTING.md](https://github.com/TurboPanel/.github/blob/trunk/CONTRIBUTING.md). Pull requests are accepted under the [Contributor License Agreement](https://github.com/TurboPanel/.github/blob/trunk/CLA.md).
 
 ## Community & support
 
 | Need | Where |
 | --- | --- |
 | Usage questions | [Discord](https://turbopanel.io/discord) |
-| UI bugs | [turbopanel/ui issues](https://github.com/turbopanel/ui/issues) |
+| UI bugs | [TurboPanel/ui issues](https://github.com/TurboPanel/ui/issues) |
 | Security | [turbopanel.io/security](https://turbopanel.io/security) |
 
 ## License

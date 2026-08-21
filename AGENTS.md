@@ -6,11 +6,11 @@ Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.d
 
 | Public name | GitHub | Internal term |
 | --- | --- | --- |
-| TurboPanel UI | [turbopanel/ui](https://github.com/turbopanel/ui) | `ui` |
+| TurboPanel UI | [TurboPanel/ui](https://github.com/TurboPanel/ui) | `ui` |
 
-Main product: [turbopanel/turbopanel](https://github.com/turbopanel/turbopanel) (TurboPanel Control Plane). **License:** AGPL-3.0-only with the [Apple App Store additional permission](./LICENSES/TurboPanel-Apple-App-Store-Additional-Permission.txt) (`LICENSE` stays unmodified AGPLv3; keep `package.json` `"license": "AGPL-3.0-only"` — do not invent an SPDX exception identifier). **Maturity:** **Private alpha**. README is product-facing; AGENTS.md is maintainer-facing. This repo is not deployed standalone — Caddy serves the control plane export.
+Main product: [TurboPanel/turbopanel](https://github.com/TurboPanel/turbopanel) (TurboPanel Control Plane). **License:** AGPL-3.0-only with the [Apple App Store additional permission](./LICENSES/TurboPanel-Apple-App-Store-Additional-Permission.txt) (`LICENSE` stays unmodified AGPLv3; keep `package.json` `"license": "AGPL-3.0-only"` — do not invent an SPDX exception identifier). **Maturity:** **Private alpha**. README is product-facing; AGENTS.md is maintainer-facing. This repo is not deployed standalone — Caddy serves the control plane export.
 
-**Licensing operations:** contributions require the [CLA](https://github.com/turbopanel/.github/blob/trunk/CLA.md). Trademarks are not granted by the software license ([`TRADEMARKS.md`](./TRADEMARKS.md)). Publish Corresponding Source for the exact revision of every store binary and production EAS Update before that artifact ships (not `trunk`). App Store Connect custom EULA must identify the AGPL source and additional permission before the first iOS release. Native **Settings → About** should name the license, version/build, and source-release URL when store binaries ship.
+**Licensing operations:** contributions require the [CLA](https://github.com/TurboPanel/.github/blob/trunk/CLA.md). Trademarks are not granted by the software license ([`TRADEMARKS.md`](./TRADEMARKS.md)). Publish Corresponding Source for the exact revision of every store binary and production EAS Update before that artifact ships (not `trunk`). App Store Connect custom EULA must identify the AGPL source and additional permission before the first iOS release. Native **Settings → About** should name the license, version/build, and source-release URL when store binaries ship.
 
 ## Documentation discipline
 
@@ -289,11 +289,11 @@ These are non-negotiable for the console (detail lives in Master):
 - **Dashboard** — `/welcome` after install/session restore: last or only org opens Overview (`defaultOrgDashboardHref`); otherwise `/organizations`. The header **View all organizations** action goes straight to `/organizations` and does not auto-leave.
 - Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
 
-The developer console has been moved to the [turbopanel/dev](https://github.com/turbopanel/dev) terminal console (`src/` in that repo).
+The developer console has been moved to the [TurboPanel/dev](https://github.com/TurboPanel/dev) terminal console (`src/` in that repo).
 
 ## Project metadata
 
-GitHub repository: [turbopanel/ui](https://github.com/turbopanel/ui). Package name: `@turbopanel/ui` (`package.json`).
+GitHub repository: [TurboPanel/ui](https://github.com/TurboPanel/ui). Package name: `@turbopanel/ui` (`package.json`).
 
 Identifiers for Cloudflare and Expo deployments:
 
