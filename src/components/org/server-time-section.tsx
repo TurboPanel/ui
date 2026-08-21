@@ -1,15 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'expo-router'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { Button, MonoText, TextField } from '@/components/ui'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
   type CommandEnqueueResponse,
@@ -118,7 +112,7 @@ function HostListLine({
   return (
     <Text style={orgPanelStyles.detailLine}>
       <Text style={orgPanelStyles.detailLabel}>{label}: </Text>
-      <Text style={styles.mono}>{hosts.join(', ')}</Text>
+      <MonoText>{hosts.join(', ')}</MonoText>
     </Text>
   )
 }
@@ -211,7 +205,7 @@ function TimezoneSettingsPanel({
     <SectionPanel title="Timezone" hint="Effective timezone on this host">
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
-        <Text style={styles.mono}>{server.timezone ?? 'Not set'}</Text>
+        <MonoText>{server.timezone ?? 'Not set'}</MonoText>
       </Text>
       <Text style={orgPanelStyles.muted}>
         Source: {configuredSourceLabel(server.timezoneSource)}
@@ -226,6 +220,7 @@ function TimezoneSettingsPanel({
             router.push(datacenterHref(orgId, datacenterId))
           }
           style={webPointer}
+          accessibilityRole="link"
         >
           <Text style={styles.linkText}>Open datacenter timezone settings</Text>
         </Pressable>
@@ -237,6 +232,7 @@ function TimezoneSettingsPanel({
             router.push(orgRouteHref(orgId, 'servers', 'settings') as `/${string}/servers/settings`)
           }
           style={webPointer}
+          accessibilityRole="link"
         >
           <Text style={styles.linkText}>Open fleet timezone settings</Text>
         </Pressable>
@@ -253,21 +249,13 @@ function TimezoneSettingsPanel({
         onChange={onPickTimezone}
       />
 
-      <Pressable
+      <Button
+        label="Apply timezone"
+        variant="primary"
+        busy={submitting || commandInFlight}
         disabled={applyDisabled}
         onPress={onApply}
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnPrimary,
-          (formsDisabled || !pickedTimezone) && styles.btnDisabled,
-          pressed && styles.btnPressed,
-          webPointer,
-        ]}
-      >
-        {submitting || commandInFlight ? (
-          <ActivityIndicator size="small" color={colors.buttonText} />
-        ) : null}
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Apply timezone</Text>
-      </Pressable>
+      />
       {commandInFlight ? (
         <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
       ) : null}
@@ -335,41 +323,31 @@ function NtpSettingsPanel({
         </Pressable>
       </View>
 
-      <Text style={orgPanelStyles.detailLabel}>NTP servers</Text>
-      <TextInput
+      <TextField
+        label="NTP servers"
+        mono
         value={ntpServersText}
         onChangeText={onServersChange}
         editable={!formsDisabled}
         placeholder="pool.ntp.org, time.google.com"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
       />
 
-      <Text style={orgPanelStyles.detailLabel}>Fallback servers</Text>
-      <TextInput
+      <TextField
+        label="Fallback servers"
+        mono
         value={fallbackText}
         onChangeText={onFallbackChange}
         editable={!formsDisabled}
         placeholder="Optional fallback hosts"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
       />
 
-      <Pressable
+      <Button
+        label="Apply NTP"
+        variant="secondary"
+        busy={submitting || commandInFlight}
         disabled={formsDisabled}
         onPress={onApply}
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnSecondary,
-          formsDisabled && styles.btnDisabled,
-          pressed && styles.btnPressed,
-          webPointer,
-        ]}
-      >
-        {submitting || commandInFlight ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : null}
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Apply NTP</Text>
-      </Pressable>
+      />
       {commandInFlight ? (
         <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
       ) : null}
@@ -578,10 +556,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  mono: {
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
   linkText: {
     color: chrome.accent,
     fontSize: 13,
@@ -621,22 +595,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontFamily: 'monospace',
-    fontSize: 13,
-    padding: spacing.sm,
-    minHeight: 44,
-    marginBottom: spacing.sm,
-  },
   btnDisabled: {
     opacity: 0.5,
-  },
-  btnPressed: {
-    opacity: 0.88,
   },
 })

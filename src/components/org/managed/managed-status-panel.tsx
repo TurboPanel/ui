@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +11,8 @@ import {
   ContainerStatusBadge,
 } from '@/components/org/managed/container-status-badge'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, EmptyState, SegmentedControl } from '@/components/ui'
 import type { ContainerRecord } from '@/lib/instance-api'
 import {
   managedStatusLabel,
@@ -164,47 +164,31 @@ export function ManagedStatusPanel({
           </View>
         ))}
         {containers.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No containers reported yet.</Text>
+          <EmptyState title="No containers reported yet." />
         ) : null}
       </View>
 
       <Text style={orgPanelStyles.detailLabel}>Logs</Text>
-      <View style={orgPanelStyles.segmentGroup}>
-        {TAIL_OPTIONS.map((option) => (
-          <Pressable
-            key={option}
-            style={[
-              styles.segment,
-              tail === option && styles.segmentActive,
-              webPointer,
-            ]}
-            onPress={() => setTail(option)}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                tail === option && styles.segmentTextActive,
-              ]}
-            >
-              {option}
-            </Text>
-          </Pressable>
-        ))}
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            webPointer,
-            loadingLogs && styles.disabled,
-          ]}
-          disabled={loadingLogs}
+      <View style={styles.logControls}>
+        <SegmentedControl
+          options={TAIL_OPTIONS.map((option) => ({
+            value: String(option),
+            label: String(option),
+          }))}
+          value={String(tail)}
+          onChange={(value) =>
+            setTail(Number(value) as (typeof TAIL_OPTIONS)[number])
+          }
+          accessibilityLabel="Log tail lines"
+        />
+        <Button
+          label="Refresh logs"
+          busyLabel="Loading…"
+          busy={loadingLogs}
           onPress={() => {
             void refreshLogs()
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            {loadingLogs ? 'Loading…' : 'Refresh logs'}
-          </Text>
-        </Pressable>
+        />
       </View>
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
@@ -267,25 +251,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'monospace',
   },
-  segment: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  segmentActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
-  },
-  segmentText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  segmentTextActive: {
-    color: colors.accent,
+  logControls: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   logs: {
     minHeight: 180,
@@ -294,7 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     color: colors.textBody,
     padding: spacing.sm,
-    borderRadius: 6,
+    borderRadius: 8,
     fontFamily: 'monospace',
     fontSize: 12,
   },
@@ -305,11 +275,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     color: colors.textBody,
     padding: spacing.sm,
-    borderRadius: 6,
+    borderRadius: 8,
     fontFamily: 'monospace',
     fontSize: 12,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

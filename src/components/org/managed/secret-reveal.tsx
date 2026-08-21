@@ -1,7 +1,6 @@
-import * as Clipboard from 'expo-clipboard'
-import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, ButtonRow, CopyButton } from '@/components/ui'
 import { colors, spacing } from '@/lib/theme'
 
 const SHOW_ONCE_WARNING =
@@ -22,19 +21,6 @@ export function SecretReveal({
   onContinue: () => void
   continueLabel?: string
 }>) {
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    return () => {
-      setCopied(false)
-    }
-  }, [])
-
-  const copyPassword = async () => {
-    await Clipboard.setStringAsync(password)
-    setCopied(true)
-  }
-
   return (
     <View style={styles.root}>
       <View style={orgPanelStyles.calloutWarning}>
@@ -55,24 +41,10 @@ export function SecretReveal({
         </Text>
       </View>
 
-      <View style={styles.actions}>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={() => {
-            void copyPassword()
-          }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            {copied ? 'Copied' : 'Copy password'}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
-          onPress={onContinue}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>{continueLabel}</Text>
-        </Pressable>
-      </View>
+      <ButtonRow>
+        <CopyButton value={password} label="Copy password" size="md" />
+        <Button label={continueLabel} variant="primary" onPress={onContinue} />
+      </ButtonRow>
     </View>
   )
 }
@@ -85,10 +57,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontFamily: 'monospace',
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
   },
 })

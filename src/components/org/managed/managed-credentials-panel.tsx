@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button } from '@/components/ui'
 import type {
   BindingImpactService,
   BindingRedeployRequired,
@@ -72,30 +73,24 @@ export function ManagedCredentialsPanel({
                 <Text style={styles.serviceLabel}>
                   {service.name?.trim() || service.keyPrefix}
                 </Text>
-                <Pressable
-                  style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-                  disabled={redeployBusy === service.serviceId}
+                <Button
+                  label={
+                    redeployBusy === service.serviceId
+                      ? 'Redeploying…'
+                      : 'Redeploy'
+                  }
+                  size="sm"
+                  busy={redeployBusy === service.serviceId}
                   onPress={() => {
                     setRedeployBusy(service.serviceId)
                     void onRedeployService(service.environmentId).finally(() =>
                       setRedeployBusy(null),
                     )
                   }}
-                >
-                  <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                    {redeployBusy === service.serviceId
-                      ? 'Redeploying…'
-                      : 'Redeploy'}
-                  </Text>
-                </Pressable>
+                />
               </View>
             ))}
-            <Pressable
-              style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-              onPress={() => setRedeployRequired(null)}
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Done</Text>
-            </Pressable>
+            <Button label="Done" onPress={() => setRedeployRequired(null)} />
           </View>
         ) : null}
       </SectionPanel>
@@ -114,21 +109,15 @@ export function ManagedCredentialsPanel({
         </Text>
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
         {canManage ? (
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnSecondary,
-              webPointer,
-              (busy || rotating) && styles.disabled,
-            ]}
-            disabled={busy || rotating}
+          <Button
+            label="Rotate password"
+            busyLabel="Rotating…"
+            busy={rotating}
+            disabled={busy}
             onPress={() => {
               void handleRotate()
             }}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              {rotating ? 'Rotating…' : 'Rotate password'}
-            </Text>
-          </Pressable>
+          />
         ) : null}
       </View>
     </SectionPanel>
@@ -136,9 +125,6 @@ export function ManagedCredentialsPanel({
 }
 
 const styles = StyleSheet.create({
-  disabled: {
-    opacity: 0.55,
-  },
   redeployCard: {
     marginTop: spacing.md,
     gap: spacing.sm,

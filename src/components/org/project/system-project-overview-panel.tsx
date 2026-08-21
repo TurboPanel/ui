@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { SectionPanel } from '@/components/org/section-panel'
+import { Button, EmptyState, MonoText } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import {
@@ -146,7 +147,7 @@ function SystemServiceRows({
   loading: boolean
 }>) {
   if (services.length === 0 && !loading) {
-    return <Text style={orgPanelStyles.muted}>No services yet.</Text>
+    return <EmptyState title="No services yet." />
   }
 
   return (
@@ -178,9 +179,7 @@ function SystemServiceRows({
                   service.composeServiceName ||
                   'Service'}
               </Text>
-              <Text style={styles.mono} numberOfLines={1}>
-                {containerName}
-              </Text>
+              <MonoText numberOfLines={1}>{containerName}</MonoText>
               <Text style={styles.statusLabel}>{tone.label}</Text>
             </View>
           </View>
@@ -214,21 +213,16 @@ function SystemRestartAction({
   }
 
   return (
-    <Pressable
-      style={[
-        orgPanelStyles.toolbarBtnPrimary,
-        disabled && styles.disabled,
-        webPointer,
-      ]}
+    <Button
+      label="Restart"
+      busyLabel="Restarting…"
+      variant="primary"
+      size="sm"
+      busy={inFlight}
       disabled={disabled}
-      onPress={onRestart}
-      accessibilityRole="button"
       accessibilityLabel="Restart platform component"
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-        {inFlight ? 'Restarting…' : 'Restart'}
-      </Text>
-    </Pressable>
+      onPress={onRestart}
+    />
   )
 }
 
@@ -322,15 +316,13 @@ export function SystemProjectOverviewPanel() {
 
         <Text style={orgPanelStyles.detailLine}>
           <Text style={orgPanelStyles.detailLabel}>Component: </Text>
-          <Text style={styles.mono}>
-            {systemComponentLabel(componentKey)}
-          </Text>
+          <MonoText>{systemComponentLabel(componentKey)}</MonoText>
         </Text>
 
         {serverId ? (
           <Text style={orgPanelStyles.detailLine}>
             <Text style={orgPanelStyles.detailLabel}>Target server: </Text>
-            <Text style={styles.mono}>{serverId}</Text>
+            <MonoText>{serverId}</MonoText>
           </Text>
         ) : (
           <Text style={orgPanelStyles.muted}>
@@ -384,11 +376,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  mono: {
-    color: colors.textBody,
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
   serviceList: {
     gap: spacing.sm,
     marginVertical: spacing.sm,
@@ -416,8 +403,5 @@ const styles = StyleSheet.create({
   statusLabel: {
     color: colors.textMuted,
     fontSize: 12,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 })

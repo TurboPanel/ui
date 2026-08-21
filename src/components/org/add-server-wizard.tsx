@@ -1,15 +1,14 @@
-import * as Clipboard from 'expo-clipboard'
 import { useEffect, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  CopyButton,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import { validateDisplayName } from '@/lib/display-name'
 import {
   isForbiddenError,
@@ -131,16 +130,14 @@ function DevInstallUrlFields({
 
   return (
     <>
-      <Text style={styles.label}>Public install URL (dev)</Text>
-      <TextInput
+      <TextField
+        label="Public install URL (dev)"
         value={installBaseUrl}
         onChangeText={onChange}
         placeholder="https://192.168.1.10:8443"
-        placeholderTextColor={colors.textDim}
         autoCapitalize="none"
         autoCorrect={false}
         editable={editable}
-        style={styles.input}
       />
       {origins.length > 0 ? (
         <View style={styles.devUrlQuickPicks}>
@@ -171,20 +168,18 @@ function DevInstallUrlFields({
           })}
         </View>
       ) : null}
-      <View style={styles.devUrlQuickPicks}>
-        <Pressable
-          style={styles.secondaryButton}
+      <ButtonRow>
+        <Button
+          label="Use HTTPS (:8443)"
+          size="sm"
           onPress={() => onChange(defaultDevCaddyHttpsBaseUrl(managedUrls))}
-        >
-          <Text style={styles.secondaryButtonText}>Use HTTPS (:8443)</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
+        />
+        <Button
+          label="Use HTTP (:8880)"
+          size="sm"
           onPress={() => onChange(defaultDevInstallHttpBaseUrl(managedUrls))}
-        >
-          <Text style={styles.secondaryButtonText}>Use HTTP (:8880)</Text>
-        </Pressable>
-      </View>
+        />
+      </ButtonRow>
       {tlsHint ? (
         <Text style={orgPanelStyles.muted}>{tlsHint}</Text>
       ) : null}
@@ -217,14 +212,12 @@ function CreateStep({
 }: CreateStepProps) {
   return (
     <View style={styles.form}>
-      <Text style={styles.label}>Server name (optional)</Text>
-      <TextInput
+      <TextField
+        label="Server name (optional)"
         value={name}
         onChangeText={onDisplayNameChange}
         placeholder="Production web server"
-        placeholderTextColor={colors.textDim}
         editable={!creating}
-        style={styles.input}
       />
       {createError ? (
         <Text style={orgPanelStyles.error}>{createError}</Text>
@@ -242,36 +235,18 @@ function CreateStep({
           </Text>
         </>
       ) : null}
-      <View style={styles.formActions}>
-        <Pressable
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
-            styles.primaryButtonFill,
-            creating && styles.buttonDisabled,
-            pressed && styles.buttonPressed,
-            webPointer,
-          ]}
-          disabled={creating}
+      <ButtonRow>
+        <Button
+          label="Continue"
+          busyLabel="Preparing…"
+          variant="primary"
+          busy={creating}
           onPress={onContinue}
-        >
-          <Text style={styles.primaryButtonText}>
-            {creating ? 'Preparing…' : 'Continue'}
-          </Text>
-        </Pressable>
+        />
         {onCancel ? (
-          <Pressable
-            style={({ pressed }) => [
-              orgPanelStyles.toolbarBtnSecondary,
-              pressed && styles.buttonPressed,
-              webPointer,
-            ]}
-            disabled={creating}
-            onPress={onCancel}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-          </Pressable>
+          <Button label="Cancel" disabled={creating} onPress={onCancel} />
         ) : null}
-      </View>
+      </ButtonRow>
     </View>
   )
 }
@@ -280,9 +255,7 @@ type InstallStepProps = Readonly<{
   installBaseUrl: string
   managedUrls: string[]
   displayedInstallCommand: string
-  installCommandCopied: boolean
   onInstallBaseUrlChange: (url: string) => void
-  onCopyInstallCommand: () => void
   onContinue: () => void
 }>
 
@@ -290,9 +263,7 @@ function InstallStep({
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
-  installCommandCopied,
   onInstallBaseUrlChange,
-  onCopyInstallCommand,
   onContinue,
 }: InstallStepProps) {
   return (
@@ -316,34 +287,15 @@ function InstallStep({
           {displayedInstallCommand}
         </Text>
       </View>
-      <Pressable
-        style={({ pressed }) => [
-          styles.secondaryButton,
-          pressed && styles.buttonPressed,
-          webPointer,
-        ]}
-        onPress={onCopyInstallCommand}
-      >
-        <Text style={styles.secondaryButtonText}>
-          {installCommandCopied
-            ? 'Copied install command'
-            : 'Copy install command'}
-        </Text>
-      </Pressable>
+      <CopyButton
+        value={displayedInstallCommand}
+        label="Copy install command"
+        copiedLabel="Copied install command"
+      />
       <Text style={orgPanelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
-      <Pressable
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnPrimary,
-          styles.primaryButtonFill,
-          pressed && styles.buttonPressed,
-          webPointer,
-        ]}
-        onPress={onContinue}
-      >
-        <Text style={styles.primaryButtonText}>Continue</Text>
-      </Pressable>
+      <Button label="Continue" variant="primary" onPress={onContinue} />
     </View>
   )
 }
@@ -357,40 +309,6 @@ type WaitingStepProps = Readonly<{
   onAddAnother: () => void
   onFinish: () => void
 }>
-
-function WizardChromeButton({
-  label,
-  onPress,
-  variant,
-}: Readonly<{
-  label: string
-  onPress: () => void
-  variant: 'primary' | 'secondary'
-}>) {
-  const primary = variant === 'primary'
-  return (
-    <Pressable
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        primary ? orgPanelStyles.toolbarBtnPrimary : orgPanelStyles.toolbarBtnSecondary,
-        primary && styles.primaryButtonFill,
-        pressed && styles.buttonPressed,
-        webPointer,
-      ]}
-      onPress={onPress}
-    >
-      <Text
-        style={
-          primary
-            ? styles.primaryButtonText
-            : orgPanelStyles.toolbarBtnTextSecondary
-        }
-      >
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
 
 function WaitingActions({
   primaryLabel,
@@ -408,27 +326,15 @@ function WaitingActions({
   onExtra?: () => void
 }>) {
   return (
-    <View style={styles.waitingActions}>
-      <WizardChromeButton
-        label={primaryLabel}
-        onPress={onPrimary}
-        variant="primary"
-      />
+    <ButtonRow>
+      <Button label={primaryLabel} variant="primary" onPress={onPrimary} />
       {extraLabel && onExtra ? (
-        <WizardChromeButton
-          label={extraLabel}
-          onPress={onExtra}
-          variant="secondary"
-        />
+        <Button label={extraLabel} onPress={onExtra} />
       ) : null}
       {secondaryLabel && onSecondary ? (
-        <WizardChromeButton
-          label={secondaryLabel}
-          onPress={onSecondary}
-          variant="secondary"
-        />
+        <Button label={secondaryLabel} onPress={onSecondary} />
       ) : null}
-    </View>
+    </ButtonRow>
   )
 }
 
@@ -460,12 +366,9 @@ function WaitingStep({
   if (connectedServer == null) {
     return (
       <View style={styles.waiting}>
-        <View style={styles.waitingStatus}>
-          <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={orgPanelStyles.muted}>
-            Waiting for this host to connect ({elapsedSeconds}s)
-          </Text>
-        </View>
+        <LoadingState
+          label={`Waiting for this host to connect (${elapsedSeconds}s)`}
+        />
         <Text style={orgPanelStyles.muted}>
           This key stays under Pending keys until a host enrolls. You can add
           another server now.
@@ -516,7 +419,6 @@ export function AddServerWizard({
   )
   const [createError, setCreateError] = useState<string | null>(null)
   const [revealed, setRevealed] = useState<CreatedLicense | null>(null)
-  const [installCommandCopied, setInstallCommandCopied] = useState(false)
   const [connectedServer, setConnectedServer] = useState<OrgServerRecord | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [pollError, setPollError] = useState<string | null>(null)
@@ -544,7 +446,6 @@ export function AddServerWizard({
     setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl(managedUrls) : '')
     setCreateError(null)
     setRevealed(null)
-    setInstallCommandCopied(false)
     setConnectedServer(null)
     setElapsedSeconds(0)
     setPollError(null)
@@ -570,7 +471,6 @@ export function AddServerWizard({
       return
     }
     setRevealed(result.value)
-    setInstallCommandCopied(false)
     setDisplayName('')
     setStep('install')
   }
@@ -578,19 +478,6 @@ export function AddServerWizard({
   const displayedInstallCommand = revealed
     ? resolveDisplayedInstallCommand(revealed, installBaseUrl)
     : ''
-
-  const onCopyInstallCommand = async () => {
-    if (!revealed) {
-      return
-    }
-
-    try {
-      await Clipboard.setStringAsync(displayedInstallCommand)
-      setInstallCommandCopied(true)
-    } catch {
-      setInstallCommandCopied(false)
-    }
-  }
 
   const dismissWizard = () => {
     resetWizard()
@@ -712,9 +599,7 @@ export function AddServerWizard({
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           displayedInstallCommand={displayedInstallCommand}
-          installCommandCopied={installCommandCopied}
           onInstallBaseUrlChange={setInstallBaseUrl}
-          onCopyInstallCommand={() => void onCopyInstallCommand()}
           onContinue={() => setStep('waiting')}
         />
       ) : null}
@@ -744,12 +629,6 @@ const styles = StyleSheet.create({
   form: {
     gap: spacing.sm,
   },
-  formActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   devUrlQuickPicks: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -761,31 +640,6 @@ const styles = StyleSheet.create({
   },
   devUrlChipTextActive: {
     color: chrome.accent,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  primaryButtonFill: {
-    backgroundColor: chrome.accent,
-    borderColor: chrome.accent,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
   },
   secondaryButton: {
     alignSelf: 'flex-start',
@@ -799,12 +653,6 @@ const styles = StyleSheet.create({
     color: colors.textChip,
     fontSize: 13,
     fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonPressed: {
-    opacity: 0.88,
   },
   stepRow: {
     flexDirection: 'row',
@@ -884,16 +732,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   waiting: {
-    gap: spacing.sm,
-  },
-  waitingStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  waitingActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   secretLabel: {

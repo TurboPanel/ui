@@ -1,7 +1,6 @@
 import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -11,6 +10,7 @@ import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
+import { Badge, Button, EmptyState, LoadingState } from '@/components/ui'
 import { useProjects, useWorkspaces } from '@/lib/queries'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
@@ -20,7 +20,7 @@ import {
   isTurbopanelProject,
   isTurbopanelWorkspace,
 } from '@/lib/system-inventory'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import {
   ALL_WORKSPACES_SCOPE,
@@ -35,31 +35,15 @@ function projectTypeBadge(type: ProjectRecord['metadata']) {
     return null
   }
   if (projectType === 'managed') {
-    return (
-      <View style={styles.badgeAccent}>
-        <Text style={styles.badgeAccentText}>managed</Text>
-      </View>
-    )
+    return <Badge label="managed" tone="ok" />
   }
   if (projectType === 'template') {
-    return (
-      <View style={styles.badgeMuted}>
-        <Text style={styles.badgeMutedText}>template</Text>
-      </View>
-    )
+    return <Badge label="template" tone="muted" />
   }
   if (projectType === 'docker-compose') {
-    return (
-      <View style={styles.badgeMuted}>
-        <Text style={styles.badgeMutedText}>compose</Text>
-      </View>
-    )
+    return <Badge label="compose" tone="muted" />
   }
-  return (
-    <View style={styles.badgeMuted}>
-      <Text style={styles.badgeMutedText}>setup</Text>
-    </View>
-  )
+  return <Badge label="setup" tone="muted" />
 }
 
 function queryErrorMessage(
@@ -115,20 +99,15 @@ function ProjectOverviewCard({
           {showPlatformBadge ? <PlatformBadge /> : null}
         </View>
         <View style={styles.cardActions}>
-          <Pressable style={styles.secondaryButton} onPress={onOpen}>
-            <Text style={styles.secondaryButtonText}>Open</Text>
-          </Pressable>
+          <Button label="Open" variant="secondary" size="sm" onPress={onOpen} />
           {canOwn && !hideDelete ? (
-            <Pressable
-              style={[
-                styles.secondaryButton,
-                isDeleting && styles.buttonDisabled,
-              ]}
+            <Button
+              label="Delete"
+              variant="danger"
+              size="sm"
               disabled={isDeleting}
               onPress={onDelete}
-            >
-              <Text style={styles.secondaryButtonText}>Delete</Text>
-            </Pressable>
+            />
           ) : null}
         </View>
       </View>
@@ -250,13 +229,9 @@ export function ProjectsOverviewSection({
 
   let projectListContent
   if (loading && projects.length === 0) {
-    projectListContent = (
-      <Text style={orgPanelStyles.muted}>Loading…</Text>
-    )
+    projectListContent = <LoadingState />
   } else if (projects.length === 0) {
-    projectListContent = (
-      <Text style={orgPanelStyles.muted}>No projects yet.</Text>
-    )
+    projectListContent = <EmptyState title="No projects yet." />
   } else {
     projectListContent = (
       <View style={styles.list}>
@@ -295,12 +270,11 @@ export function ProjectsOverviewSection({
 
       <SectionPanel title="Projects" hint={panelHint}>
         {canOwn && !isSystemScope ? (
-          <Pressable
-            style={styles.primaryButton}
+          <Button
+            label="New project"
+            variant="primary"
             onPress={() => router.push(newProjectHref)}
-          >
-            <Text style={styles.primaryButtonText}>New project</Text>
-          </Pressable>
+          />
         ) : null}
 
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
@@ -340,65 +314,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  badgeAccent: {
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeAccentText: {
-    color: chrome.accent,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  badgeMuted: {
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeMutedText: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: chrome.bgActive,
-    marginBottom: spacing.sm,
-  },
-  primaryButtonText: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

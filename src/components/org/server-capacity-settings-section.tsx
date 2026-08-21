@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, TextField } from '@/components/ui'
 import {
   saveOrgServerCapacity,
   type OrgServerCapacity,
@@ -123,24 +124,17 @@ export function ServerCapacitySettingsSection({
       </View>
 
       {!isUnlimited ? (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Max servers</Text>
-          <TextInput
-            value={draftValue}
-            onChangeText={(text) => {
-              setDraftText(text)
-              setUnlimited(false)
-            }}
-            editable={!readOnly && !pending}
-            keyboardType="number-pad"
-            placeholder="e.g. 10"
-            placeholderTextColor={colors.textMuted}
-            style={[
-              styles.input,
-              (readOnly || pending) && styles.inputDisabled,
-            ]}
-          />
-        </View>
+        <TextField
+          label="Max servers"
+          value={draftValue}
+          onChangeText={(text) => {
+            setDraftText(text)
+            setUnlimited(false)
+          }}
+          editable={!readOnly && !pending}
+          keyboardType="number-pad"
+          placeholder="e.g. 10"
+        />
       ) : null}
 
       {readOnly ? (
@@ -148,18 +142,13 @@ export function ServerCapacitySettingsSection({
           Organization owner permission is required to change the seat cap.
         </Text>
       ) : (
-        <Pressable
+        <Button
+          label="Save capacity"
+          variant="primary"
+          busy={mutation.isPending}
           disabled={pending || !capacity}
           onPress={saveCapacity}
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
-            pending && styles.toggleDisabled,
-            pressed && styles.btnPressed,
-            webPointer,
-          ]}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save capacity</Text>
-        </Pressable>
+        />
       )}
     </SectionPanel>
   )
@@ -183,10 +172,12 @@ const styles = StyleSheet.create({
   },
   toggle: {
     minWidth: 52,
+    minHeight: 44,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   toggleOn: {
     backgroundColor: chrome.accent,
@@ -201,28 +192,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: '600',
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  fieldLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 15,
-  },
-  inputDisabled: {
-    opacity: 0.5,
-  },
-  btnPressed: {
-    opacity: 0.85,
   },
 })

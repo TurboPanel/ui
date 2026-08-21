@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Link, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
+import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
   authAccentStyles,
@@ -144,36 +145,20 @@ export function SignInScreenContent() {
         </Link>
       ) : null}
 
-      <Pressable
+      <AuthPrimaryButton
         onPress={() => {
           onSubmit().catch(() => {
             // Errors are surfaced via setError inside onSubmit.
           })
         }}
         disabled={loading}
-        accessibilityRole="button"
+        busy={loading}
         accessibilityLabel={loading ? 'Signing In' : 'Sign In'}
-        style={({ pressed }) => [
-          authFormStyles.primaryButton,
-          tint.primaryButton,
-          loading && authFormStyles.primaryButtonDisabled,
-          pressed && !loading && authFormStyles.primaryButtonPressed,
-          webPointer,
-        ]}
-      >
-        {loading ? (
-          <View style={authFormStyles.primaryButtonContent}>
-            <ActivityIndicator size="small" color={accent.onAccent} />
-            <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
-              Signing In…
-            </Text>
-          </View>
-        ) : (
-          <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
-            Sign In
-          </Text>
-        )}
-      </Pressable>
+        label="Sign In"
+        busyLabel="Signing In…"
+        tint={tint}
+        spinnerColor={accent.onAccent}
+      />
     </AuthScreenShell>
   )
 }

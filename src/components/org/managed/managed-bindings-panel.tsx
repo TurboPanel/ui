@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  Checkbox,
+  ConfirmButton,
+  EmptyState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import {
   DEFAULT_BINDING_KEY_PREFIX,
   previewBindingKeys,
@@ -35,18 +37,6 @@ import {
 import { useEnvironments } from '@/lib/queries/environments'
 import { useServices } from '@/lib/queries/services'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
 
 type ServiceMeta = { name: string; projectId: string }
 
@@ -88,81 +78,25 @@ function ChipSelectRow<T>({
   getLabel,
   selectedId,
   onSelect,
+  accessibilityLabel,
 }: Readonly<{
   items: readonly T[]
   getId: (item: T) => string
   getLabel: (item: T) => string
   selectedId: string
   onSelect: (id: string) => void
+  accessibilityLabel?: string
 }>) {
   return (
-    <View style={styles.chipRow}>
-      {items.map((item) => {
-        const id = getId(item)
-        const selected = selectedId === id
-        return (
-          <Pressable
-            key={id}
-            style={[styles.chip, selected && styles.chipSelected, webPointer]}
-            onPress={() => onSelect(id)}
-          >
-            <Text
-              style={[styles.chipText, selected && styles.chipTextSelected]}
-            >
-              {getLabel(item)}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
-}
-
-function BindingDisconnectAction({
-  disabled,
-  armed,
-  onArm,
-  onDisarm,
-  onConfirm,
-}: Readonly<{
-  disabled: boolean
-  armed: boolean
-  onArm: () => void
-  onDisarm: () => void
-  onConfirm: () => void
-}>) {
-  if (armed) {
-    return (
-      <>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={disabled}
-          onPress={onConfirm}
-        >
-          <Text
-            style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}
-          >
-            Confirm disconnect
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onDisarm}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </>
-    )
-  }
-
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-      disabled={disabled}
-      onPress={onArm}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Disconnect</Text>
-    </Pressable>
+    <SegmentedControl
+      options={items.map((item) => ({
+        value: getId(item),
+        label: getLabel(item),
+      }))}
+      value={selectedId}
+      onChange={onSelect}
+      accessibilityLabel={accessibilityLabel}
+    />
   )
 }
 
@@ -172,10 +106,7 @@ function BindingCard({
   user,
   canManage,
   disabled,
-  disconnectArmedId,
   onOpenService,
-  onArmDisconnect,
-  onDisarmDisconnect,
   onDisconnect,
 }: Readonly<{
   binding: BindingRecord
@@ -183,10 +114,7 @@ function BindingCard({
   user: ManagedUserRecord | undefined
   canManage: boolean
   disabled: boolean
-  disconnectArmedId: string | null
   onOpenService: (projectId: string, serviceId: string) => void
-  onArmDisconnect: (id: string) => void
-  onDisarmDisconnect: () => void
   onDisconnect: (binding: BindingRecord) => void
 }>) {
   const endpoint = binding.endpoint
@@ -226,27 +154,24 @@ function BindingCard({
           <KeyChip key={key} label={key} />
         ))}
       </View>
-      <View style={styles.actions}>
+      <ButtonRow>
         {meta?.projectId ? (
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+          <Button
+            label="Open service"
+            size="sm"
             onPress={() => onOpenService(meta.projectId, binding.serviceId)}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              Open service
-            </Text>
-          </Pressable>
+          />
         ) : null}
         {canManage ? (
-          <BindingDisconnectAction
+          <ConfirmButton
+            label="Disconnect"
+            confirmLabel="Confirm disconnect"
+            prompt="Disconnect this service?"
             disabled={disabled}
-            armed={disconnectArmedId === binding.id}
-            onArm={() => onArmDisconnect(binding.id)}
-            onDisarm={onDisarmDisconnect}
             onConfirm={() => onDisconnect(binding)}
           />
         ) : null}
-      </View>
+      </ButtonRow>
     </View>
   )
 }
@@ -258,10 +183,7 @@ function ServiceBindingGroup({
   userById,
   canManage,
   disabled,
-  disconnectArmedId,
   onOpenService,
-  onArmDisconnect,
-  onDisarmDisconnect,
   onDisconnect,
 }: Readonly<{
   title: string
@@ -270,10 +192,7 @@ function ServiceBindingGroup({
   userById: Map<string, ManagedUserRecord>
   canManage: boolean
   disabled: boolean
-  disconnectArmedId: string | null
   onOpenService: (projectId: string, serviceId: string) => void
-  onArmDisconnect: (id: string) => void
-  onDisarmDisconnect: () => void
   onDisconnect: (binding: BindingRecord) => void
 }>) {
   return (
@@ -287,10 +206,7 @@ function ServiceBindingGroup({
           user={userById.get(binding.principalId)}
           canManage={canManage}
           disabled={disabled}
-          disconnectArmedId={disconnectArmedId}
           onOpenService={onOpenService}
-          onArmDisconnect={onArmDisconnect}
-          onDisarmDisconnect={onDisarmDisconnect}
           onDisconnect={onDisconnect}
         />
       ))}
@@ -355,6 +271,7 @@ function ConnectServiceForm({
         getId={(env) => env.id}
         getLabel={(env) => env.name?.trim() || 'Environment'}
         selectedId={targetEnvironmentId}
+        accessibilityLabel="Environment"
         onSelect={(id) => {
           setTargetEnvironmentId(id)
           setServiceId('')
@@ -373,6 +290,7 @@ function ConnectServiceForm({
               service.id
             }
             selectedId={serviceId}
+            accessibilityLabel="Service"
             onSelect={setServiceId}
           />
         </>
@@ -384,6 +302,7 @@ function ConnectServiceForm({
         getId={(user) => user.id}
         getLabel={(user) => managedUserPickerLabel(user)}
         selectedId={principalId}
+        accessibilityLabel="User"
         onSelect={setPrincipalId}
       />
 
@@ -393,39 +312,26 @@ function ConnectServiceForm({
         getId={(name) => name}
         getLabel={(name) => name}
         selectedId={databaseName}
+        accessibilityLabel="Database"
         onSelect={setDatabaseName}
       />
 
-      <Text style={orgPanelStyles.detailLabel}>Key prefix</Text>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+      <TextField
+        label="Key prefix"
         value={keyPrefix}
         onChangeText={setKeyPrefix}
+        error={prefixValidation.ok ? null : prefixValidation.error}
         autoCapitalize="characters"
         autoCorrect={false}
         editable={!disabled}
       />
-      {!prefixValidation.ok ? (
-        <Text style={orgPanelStyles.error}>{prefixValidation.error}</Text>
-      ) : null}
 
-      <Pressable
-        style={[styles.toggleRow, webPointer]}
-        onPress={() => setEmitEngineDefaults((v) => !v)}
+      <Checkbox
+        label="Also set engine defaults"
+        checked={emitEngineDefaults}
         disabled={disabled}
-      >
-        <View
-          style={[
-            styles.checkbox,
-            emitEngineDefaults && styles.checkboxChecked,
-          ]}
-        >
-          {emitEngineDefaults ? (
-            <Text style={styles.checkboxMark}>✓</Text>
-          ) : null}
-        </View>
-        <Text style={styles.toggleLabel}>Also set engine defaults</Text>
-      </Pressable>
+        onPress={() => setEmitEngineDefaults((v) => !v)}
+      />
 
       {previewKeys.length > 0 ? (
         <View style={styles.keyRow}>
@@ -435,13 +341,10 @@ function ConnectServiceForm({
         </View>
       ) : null}
 
-      <View style={styles.actions}>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            webPointer,
-            disabled && styles.disabled,
-          ]}
+      <ButtonRow>
+        <Button
+          label="Connect"
+          variant="primary"
           disabled={disabled}
           onPress={() =>
             onSubmit({
@@ -452,16 +355,9 @@ function ConnectServiceForm({
               emitEngineDefaults,
             })
           }
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Connect</Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancel}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
+        />
+        <Button label="Cancel" onPress={onCancel} />
+      </ButtonRow>
     </View>
   )
 }
@@ -489,19 +385,12 @@ function ConnectServiceSection({
   }
 
   return (
-    <Pressable
-      style={[
-        orgPanelStyles.toolbarBtnPrimary,
-        webPointer,
-        disabled && styles.disabled,
-      ]}
+    <Button
+      label="Connect to a service"
+      variant="primary"
       disabled={disabled}
       onPress={onShowForm}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-        Connect to a service
-      </Text>
-    </Pressable>
+    />
   )
 }
 
@@ -533,9 +422,6 @@ export function ManagedBindingsPanel({
   const [error, setError] = useState<string | null>(null)
   const [endpointUnavailable, setEndpointUnavailable] = useState(false)
   const [working, setWorking] = useState(false)
-  const [disconnectArmedId, setDisconnectArmedId] = useState<string | null>(
-    null,
-  )
 
   const bindings = orEmptyArray(bindingsQuery.data?.bindings)
   const environments = orEmptyArray(environmentsQuery.data?.environments)
@@ -622,10 +508,8 @@ export function ManagedBindingsPanel({
         serviceId: binding.serviceId,
         managedEnvironmentId: environmentId,
       })
-      setDisconnectArmedId(null)
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to disconnect'))
-      setDisconnectArmedId(null)
     } finally {
       setWorking(false)
     }
@@ -665,19 +549,13 @@ export function ManagedBindingsPanel({
               userById={userById}
               canManage={canManage}
               disabled={disabled}
-              disconnectArmedId={disconnectArmedId}
               onOpenService={handleOpenService}
-              onArmDisconnect={setDisconnectArmedId}
-              onDisarmDisconnect={() => setDisconnectArmedId(null)}
               onDisconnect={handleDisconnect}
             />
           )
         })}
         {bindings.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
-            No services connected yet. Credentials are delivered on deploy when
-            you connect a service — the password is never shown here.
-          </Text>
+          <EmptyState title="No services connected yet. Credentials are delivered on deploy when you connect a service — the password is never shown here." />
         ) : null}
       </View>
 
@@ -741,20 +619,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
   },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
   form: {
     gap: spacing.sm,
     marginTop: spacing.md,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
   },
   chip: {
     borderRadius: 999,
@@ -765,60 +632,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     alignSelf: 'flex-start',
   },
-  chipSelected: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
   chipText: {
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
-  },
-  chipTextSelected: {
-    color: chrome.accent,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  checkboxMark: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  toggleLabel: {
-    color: colors.textBody,
-    fontSize: 13,
-  },
-  danger: {
-    color: colors.error,
-  },
-  disabled: {
-    opacity: 0.55,
   },
   linkText: {
     color: chrome.accent,

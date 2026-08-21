@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import {
   useCreateEnvironment,
   useDeleteEnvironment,
@@ -77,31 +85,25 @@ function EnvironmentRenameForm({
 }>) {
   return (
     <View style={styles.inlineForm}>
-      <TextInput
-        style={styles.input}
+      <TextField
+        label="Environment name"
         value={value}
         onChangeText={onChange}
-        placeholder="Environment name"
-        placeholderTextColor={colors.textDim}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!saving}
         maxLength={DISPLAY_NAME_MAX_LENGTH}
       />
-      <View style={styles.inlineActions}>
-        <Pressable
-          style={[styles.primaryButton, saving && styles.buttonDisabled]}
-          disabled={saving}
+      <ButtonRow>
+        <Button
+          label="Save name"
+          busyLabel="Saving…"
+          variant="primary"
+          busy={saving}
           onPress={onSave}
-        >
-          <Text style={styles.primaryButtonText}>
-            {saving ? 'Saving…' : 'Save name'}
-          </Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={onCancel}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
-      </View>
+        />
+        <Button label="Cancel" variant="secondary" size="sm" onPress={onCancel} />
+      </ButtonRow>
     </View>
   )
 }
@@ -123,74 +125,28 @@ function EnvironmentCreateForm({
 }>) {
   return (
     <View style={styles.inlineForm}>
-      <TextInput
-        style={styles.input}
+      <TextField
+        label="Environment name"
+        hint="e.g. staging"
         value={value}
         onChangeText={onChange}
-        placeholder="e.g. staging"
-        placeholderTextColor={colors.textDim}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!creating}
         maxLength={DISPLAY_NAME_MAX_LENGTH}
+        error={fieldError}
       />
-      {fieldError ? <Text style={orgPanelStyles.error}>{fieldError}</Text> : null}
-      <View style={styles.inlineActions}>
-        <Pressable
-          style={[styles.primaryButton, creating && styles.buttonDisabled]}
-          disabled={creating}
+      <ButtonRow>
+        <Button
+          label="Create environment"
+          busyLabel="Creating…"
+          variant="primary"
+          busy={creating}
           onPress={onSubmit}
-        >
-          <Text style={styles.primaryButtonText}>
-            {creating ? 'Creating…' : 'Create environment'}
-          </Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={onCancel}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
-      </View>
+        />
+        <Button label="Cancel" variant="secondary" size="sm" onPress={onCancel} />
+      </ButtonRow>
     </View>
-  )
-}
-
-function deleteButtonLabel(deleting: boolean, armed: boolean): string {
-  if (deleting) {
-    return 'Deleting…'
-  }
-  if (armed) {
-    return 'Confirm delete'
-  }
-  return 'Delete'
-}
-
-function EnvironmentDeleteControl({
-  deleteArmed,
-  deleting,
-  onConfirm,
-  onToggleArm,
-}: Readonly<{
-  deleteArmed: boolean
-  deleting: boolean
-  onConfirm: () => void
-  onToggleArm: () => void
-}>) {
-  return (
-    <>
-      <Pressable
-        style={[styles.secondaryButton, deleting && styles.buttonDisabled]}
-        disabled={deleting}
-        onPress={deleteArmed ? onConfirm : onToggleArm}
-      >
-        <Text style={styles.deleteButtonText}>
-          {deleteButtonLabel(deleting, deleteArmed)}
-        </Text>
-      </Pressable>
-      {deleteArmed ? (
-        <Pressable style={styles.secondaryButton} onPress={onToggleArm}>
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
-      ) : null}
-    </>
   )
 }
 
@@ -200,38 +156,37 @@ function EnvironmentToolbar({
   canDelete,
   onRename,
   onAdd,
-  deleteArmed,
   deleting,
   onConfirmDelete,
-  onToggleArm,
 }: Readonly<{
   activeEnvironment: EnvironmentRecord
   canOwn: boolean
   canDelete: boolean
   onRename: () => void
   onAdd: () => void
-  deleteArmed: boolean
   deleting: boolean
   onConfirmDelete: () => void
-  onToggleArm: () => void
 }>) {
   return (
     <View style={styles.toolbar}>
       <Text style={styles.activeName}>{environmentLabel(activeEnvironment)}</Text>
       {canOwn ? (
         <View style={styles.toolbarActions}>
-          <Pressable style={styles.secondaryButton} onPress={onRename}>
-            <Text style={styles.secondaryButtonText}>Rename</Text>
-          </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={onAdd}>
-            <Text style={styles.secondaryButtonText}>New environment</Text>
-          </Pressable>
+          <Button label="Rename" variant="secondary" size="sm" onPress={onRename} />
+          <Button
+            label="New environment"
+            variant="secondary"
+            size="sm"
+            onPress={onAdd}
+          />
           {canDelete ? (
-            <EnvironmentDeleteControl
-              deleteArmed={deleteArmed}
-              deleting={deleting}
+            <ConfirmButton
+              key={activeEnvironment.id}
+              label={deleting ? 'Deleting…' : 'Delete'}
+              confirmLabel="Confirm delete"
+              prompt="Delete this environment?"
+              busy={deleting}
               onConfirm={onConfirmDelete}
-              onToggleArm={onToggleArm}
             />
           ) : null}
         </View>
@@ -267,7 +222,6 @@ export function ProjectEnvironmentsSection({
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
-  const [deleteArmed, setDeleteArmed] = useState(false)
 
   const provisionAttemptedFor = useRef<string | null>(null)
 
@@ -322,7 +276,6 @@ export function ProjectEnvironmentsSection({
     setSelectedId(id)
     setRenaming(false)
     setShowCreate(false)
-    setDeleteArmed(false)
   }
 
   const startRename = () => {
@@ -330,7 +283,6 @@ export function ProjectEnvironmentsSection({
     setRenameValue(activeEnvironment.name?.trim() ?? '')
     setRenaming(true)
     setShowCreate(false)
-    setDeleteArmed(false)
   }
 
   const saveRename = async () => {
@@ -384,20 +336,17 @@ export function ProjectEnvironmentsSection({
       if (deleteEnvironment.actionError) {
         setError(deleteEnvironment.actionError)
       }
-      return
     }
-    setDeleteArmed(false)
   }
 
   let content
   if (loading && environments.length === 0) {
-    content = <Text style={orgPanelStyles.muted}>Loading environments…</Text>
+    content = <LoadingState label="Loading environments…" />
   } else if (!activeEnvironment) {
     content = (
-      <Text style={orgPanelStyles.muted}>
-        No environments yet.
-        {canOwn ? ' Create one to configure deploys.' : ''}
-      </Text>
+      <EmptyState
+        title={`No environments yet.${canOwn ? ' Create one to configure deploys.' : ''}`}
+      />
     )
   } else {
     content = (
@@ -423,12 +372,9 @@ export function ProjectEnvironmentsSection({
             onRename={startRename}
             onAdd={() => {
               setShowCreate(true)
-              setDeleteArmed(false)
             }}
-            deleteArmed={deleteArmed}
             deleting={deleteEnvironment.isPending}
             onConfirmDelete={() => void deleteActive()}
-            onToggleArm={() => setDeleteArmed((current) => !current)}
           />
         )}
         {showCreate && canOwn ? (
@@ -491,7 +437,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   tab: {
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
@@ -530,55 +476,5 @@ const styles = StyleSheet.create({
   },
   inlineForm: {
     gap: spacing.sm,
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteButtonText: {
-    color: colors.error,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

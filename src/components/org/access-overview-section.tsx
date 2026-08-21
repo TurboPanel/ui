@@ -4,11 +4,19 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Badge,
+  Button,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type {
   AccessGrantRecord,
   AccessScopeKind,
@@ -33,10 +41,16 @@ import { chrome, colors, spacing } from '@/lib/theme'
 
 type SubjectKind = CreateAccessBody['subjectKind']
 
-const SCOPE_KINDS: { kind: AccessScopeKind; label: string }[] = [
-  { kind: 'organization', label: 'Organization' },
-  { kind: 'team', label: 'Team' },
-]
+const SCOPE_OPTIONS = [
+  { value: 'organization', label: 'Organization' },
+  { value: 'team', label: 'Team' },
+] as const
+
+const SUBJECT_KIND_OPTIONS = [
+  { value: 'user', label: 'user' },
+  { value: 'team', label: 'team' },
+  { value: 'organization', label: 'organization' },
+] as const
 
 const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
   organization: ['organization:own', 'organization:manage'],
@@ -69,7 +83,7 @@ function TeamScopePicker({
 }>) {
   let body: ReactNode
   if (isLoading) {
-    body = <Text style={orgPanelStyles.muted}>Loading teams...</Text>
+    body = <LoadingState label="Loading teams..." />
   } else if (isError) {
     body = (
       <Text style={orgPanelStyles.error}>
@@ -77,9 +91,7 @@ function TeamScopePicker({
       </Text>
     )
   } else if (items.length === 0) {
-    body = (
-      <Text style={orgPanelStyles.muted}>No teams in this organization.</Text>
-    )
+    body = <EmptyState title="No teams in this organization." />
   } else {
     body = (
       <ScrollView style={styles.pickerList} nestedScrollEnabled>
@@ -119,9 +131,6 @@ function AccessGrantCard({
   isRevoking: boolean
   onRevoke: (grantId: string) => void
 }>) {
-  // Deny grants are not supported — every grant is an allow grant.
-  const effectStyle = styles.badgeAllow
-
   return (
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.cardHeader}>
@@ -130,22 +139,21 @@ function AccessGrantCard({
             {grant.subjectKind}: {grant.subjectId}
           </Text>
           <View style={styles.badgeRow}>
-            <Text style={[styles.badge, effectStyle]}>{grant.effect}</Text>
+            {/* Deny grants are not supported — every grant is an allow grant. */}
+            <Badge label={grant.effect} tone="ok" />
             <Text style={orgPanelStyles.detailLine}>
               permission: {grant.permissionKey}
             </Text>
           </View>
         </View>
         {canManage ? (
-          <Pressable
-            style={[styles.secondaryButton, isRevoking && styles.buttonDisabled]}
-            disabled={isRevoking}
-            onPress={() => onRevoke(grant.id)}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {isRevoking ? 'Revoking...' : 'Revoke'}
-            </Text>
-          </Pressable>
+          <ConfirmButton
+            label={isRevoking ? 'Revoking...' : 'Revoke'}
+            confirmLabel="Revoke grant"
+            prompt="Revoke this access grant?"
+            busy={isRevoking}
+            onConfirm={() => onRevoke(grant.id)}
+          />
         ) : null}
       </View>
     </View>
@@ -173,7 +181,7 @@ function AccessGrantsPanel({
 }>) {
   let body: ReactNode
   if (isLoading && grants.length === 0) {
-    body = <Text style={orgPanelStyles.muted}>Loading...</Text>
+    body = <LoadingState />
   } else if (isError) {
     body = (
       <Text style={orgPanelStyles.error}>
@@ -181,7 +189,7 @@ function AccessGrantsPanel({
       </Text>
     )
   } else if (grants.length === 0) {
-    body = <Text style={orgPanelStyles.muted}>No access grants yet.</Text>
+    body = <EmptyState title="No access grants yet." />
   } else {
     body = (
       <View style={styles.list}>
@@ -236,41 +244,28 @@ function AddGrantForm({
   return (
     <View style={styles.form}>
       <Text style={styles.label}>Subject kind</Text>
-      <View style={styles.chipRow}>
-        {(['user', 'team', 'organization'] as const).map((kind) => (
-          <Pressable
-            key={kind}
-            style={[styles.chip, subjectKind === kind && styles.chipActive]}
-            onPress={() => onSubjectKindChange(kind)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                subjectKind === kind && styles.chipTextActive,
-              ]}
-            >
-              {kind}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl
+        options={SUBJECT_KIND_OPTIONS}
+        value={subjectKind}
+        onChange={onSubjectKindChange}
+        accessibilityLabel="Subject kind"
+      />
 
-      <Text style={styles.label}>Subject ID</Text>
-      <TextInput
+      <TextField
+        label="Subject ID"
+        hint="UUID"
         value={subjectId}
         onChangeText={onSubjectIdChange}
-        placeholder="UUID"
-        placeholderTextColor={colors.textDim}
         editable={!submitting}
         autoCapitalize="none"
         autoCorrect={false}
-        style={styles.input}
+        mono
       />
 
       <Text style={styles.label}>Permission</Text>
       <ScrollView style={styles.pickerList} nestedScrollEnabled>
         {permissionsLoading ? (
-          <Text style={orgPanelStyles.muted}>Loading permissions...</Text>
+          <LoadingState label="Loading permissions..." />
         ) : (
           compatiblePermissions.map((permission) => {
             const selected = selectedPermissionKey === permission.key
@@ -294,15 +289,13 @@ function AddGrantForm({
       {submitError ? (
         <Text style={orgPanelStyles.error}>{submitError}</Text>
       ) : null}
-      <Pressable
-        style={[styles.primaryButton, submitting && styles.buttonDisabled]}
-        disabled={submitting}
+      <Button
+        label="Create grant"
+        busyLabel="Creating..."
+        variant="primary"
+        busy={submitting}
         onPress={onSubmit}
-      >
-        <Text style={styles.primaryButtonText}>
-          {submitting ? 'Creating...' : 'Create grant'}
-        </Text>
-      </Pressable>
+      />
     </View>
   )
 }
@@ -432,50 +425,35 @@ export function AccessOverviewSection({
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Access</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageCopy}>
         Manage permission grants for organizations and teams.
       </Text>
 
-      <SectionPanel title="Scope" hint="Choose the grant target">
-        <Text style={styles.label}>Grant target</Text>
-        <View style={styles.chipRow}>
-          {SCOPE_KINDS.map(({ kind, label }) => (
-            <Pressable
-              key={kind}
-              style={[styles.chip, scopeKind === kind && styles.chipActive]}
-              onPress={() => {
-                setScopeKind(kind)
-                setActionError(null)
-                setSubmitError(null)
-              }}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  scopeKind === kind && styles.chipTextActive,
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      <SegmentedControl
+        options={SCOPE_OPTIONS}
+        value={scopeKind}
+        onChange={(kind) => {
+          setScopeKind(kind)
+          setActionError(null)
+          setSubmitError(null)
+        }}
+        accessibilityLabel="Grant target"
+      />
 
-        {scopeKind === 'team' ? (
-          <TeamScopePicker
-            isLoading={teamsQuery.isLoading}
-            isError={teamsQuery.isError}
-            error={teamsQuery.error}
-            items={scopeItems}
-            selectedItemId={selectedItemId}
-            onSelect={setSelectedItemId}
-          />
-        ) : (
-          <Text style={orgPanelStyles.muted}>
-            Managing access for organization {orgId}.
-          </Text>
-        )}
-      </SectionPanel>
+      {scopeKind === 'team' ? (
+        <TeamScopePicker
+          isLoading={teamsQuery.isLoading}
+          isError={teamsQuery.isError}
+          error={teamsQuery.error}
+          items={scopeItems}
+          selectedItemId={selectedItemId}
+          onSelect={setSelectedItemId}
+        />
+      ) : (
+        <Text style={orgPanelStyles.muted}>
+          Managing access for organization {orgId}.
+        </Text>
+      )}
 
       <AccessGrantsPanel
         actionError={actionError}
@@ -489,7 +467,12 @@ export function AccessOverviewSection({
       />
 
       {canManage ? (
-        <SectionPanel title="Add grant" hint="Assign a permission">
+        <SectionPanel
+          title="Add grant"
+          hint="Assign a permission"
+          collapsible
+          defaultCollapsed
+        >
           <AddGrantForm
             subjectKind={subjectKind}
             subjectId={subjectId}
@@ -511,11 +494,7 @@ export function AccessOverviewSection({
           />
         </SectionPanel>
       ) : (
-        <SectionPanel title="Add grant">
-          <Text style={orgPanelStyles.muted}>
-            You don&apos;t have permission to manage access on this scope.
-          </Text>
-        </SectionPanel>
+        <EmptyState title="You don't have permission to manage access on this scope." />
       )}
     </View>
   )
@@ -525,16 +504,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
   },
   list: {
     gap: 8,
@@ -555,20 +524,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
-  badge: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  badgeAllow: {
-    color: colors.accent,
-    backgroundColor: colors.bgActive,
-  },
   form: {
     gap: spacing.sm,
   },
@@ -577,47 +532,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  chipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  chipText: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  chipTextActive: {
-    color: chrome.accent,
-  },
   pickerList: {
     maxHeight: 200,
     borderWidth: 1,
     borderColor: colors.borderMuted,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.bgInput,
   },
   pickerRow: {
@@ -639,33 +558,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'monospace',
     marginTop: 2,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  secondaryButtonText: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
 })

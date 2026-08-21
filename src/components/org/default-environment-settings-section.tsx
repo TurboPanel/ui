@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Text } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, TextField } from '@/components/ui'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import {
@@ -11,7 +12,6 @@ import {
 } from '@/lib/instance-api'
 import { PLATFORM_DEFAULT_ENVIRONMENT_NAME } from '@/lib/org-default-environment'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -83,64 +83,27 @@ export function DefaultEnvironmentSettingsSection({
         projects are unchanged.
       </Text>
 
-      <View style={styles.field}>
-        <TextInput
-          value={draftValue}
-          onChangeText={(text) => {
-            setDraftText(text)
-            setError(null)
-          }}
-          editable={!pending}
-          placeholder={PLATFORM_DEFAULT_ENVIRONMENT_NAME}
-          placeholderTextColor={colors.textMuted}
-          maxLength={DISPLAY_NAME_MAX_LENGTH}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={[styles.input, pending && styles.inputDisabled]}
-        />
-        <Text style={orgPanelStyles.muted}>
-          Leave empty to restore the platform default (
-          {PLATFORM_DEFAULT_ENVIRONMENT_NAME}).
-        </Text>
-      </View>
+      <TextField
+        label="Environment name"
+        value={draftValue}
+        onChangeText={(text) => {
+          setDraftText(text)
+          setError(null)
+        }}
+        editable={!pending}
+        placeholder={PLATFORM_DEFAULT_ENVIRONMENT_NAME}
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
+        autoCapitalize="none"
+        autoCorrect={false}
+        hint={`Leave empty to restore the platform default (${PLATFORM_DEFAULT_ENVIRONMENT_NAME}).`}
+      />
 
-      <Pressable
+      <Button
+        label="Save settings"
+        variant="primary"
         disabled={pending}
         onPress={saveSettings}
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnPrimary,
-          pending && styles.btnDisabled,
-          pressed && styles.btnPressed,
-          webPointer,
-        ]}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save settings</Text>
-      </Pressable>
+      />
     </SectionPanel>
   )
 }
-
-const styles = StyleSheet.create({
-  field: {
-    gap: spacing.xs,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 15,
-    minHeight: 44,
-  },
-  inputDisabled: {
-    opacity: 0.5,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  btnPressed: {
-    opacity: 0.85,
-  },
-})

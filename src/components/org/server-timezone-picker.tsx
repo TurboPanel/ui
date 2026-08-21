@@ -8,7 +8,7 @@ const webSelectStyle: CSSProperties = {
   borderWidth: 1,
   borderStyle: 'solid',
   borderColor: colors.border,
-  borderRadius: 6,
+  borderRadius: 8,
   backgroundColor: colors.bgInput,
   color: colors.text,
   fontFamily: 'monospace',
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   nativeOption: {
     borderWidth: 1,
     borderColor: colors.borderMuted,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     minHeight: 44,

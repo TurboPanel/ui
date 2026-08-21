@@ -1,6 +1,7 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
+import { Button, ButtonRow, LoadingState, TextField } from '@/components/ui'
 import { displayNameConflictMessage, DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import {
@@ -9,7 +10,7 @@ import {
   useWorkspace,
 } from '@/lib/queries'
 import { isTurbopanelWorkspace } from '@/lib/system-inventory'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 import {
   validateWorkspaceDescription,
   validateWorkspaceName,
@@ -17,25 +18,13 @@ import {
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 
 type WorkspaceFormMode = 'create' | 'edit'
 type WorkspaceFieldErrors = {
   name?: string
   description?: string
 }
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
 
 function workspaceFormHeading(mode: WorkspaceFormMode): string {
   return mode === 'create' ? 'New workspace' : 'Edit workspace'
@@ -109,16 +98,6 @@ async function persistWorkspaceForm({
   return updateWorkspace.run({ name: name.trim(), description })
 }
 
-function workspaceFieldInputStyle(hasError: boolean) {
-  if (Platform.OS === 'web') {
-    return {
-      ...webInputStyle,
-      borderColor: hasError ? colors.error : colors.border,
-    }
-  }
-  return [styles.input, hasError && styles.inputError]
-}
-
 function WorkspaceFormFields({
   name,
   description,
@@ -144,59 +123,45 @@ function WorkspaceFormFields({
 }>) {
   return (
     <>
-      <View style={styles.field}>
-        <Text style={styles.label}>Name *</Text>
-        <TextInput
-          style={workspaceFieldInputStyle(Boolean(fieldErrors.name))}
-          value={name}
-          onChangeText={onDisplayNameChange}
-          placeholder="e.g. Product or Marketing"
-          placeholderTextColor={colors.textDim}
-          autoCapitalize="words"
-          autoCorrect={false}
-          editable={!submitting}
-          maxLength={DISPLAY_NAME_MAX_LENGTH}
-        />
-        {fieldErrors.name ? (
-          <Text style={styles.fieldError}>{fieldErrors.name}</Text>
-        ) : null}
-      </View>
+      <TextField
+        label="Name *"
+        value={name}
+        onChangeText={onDisplayNameChange}
+        placeholder="e.g. Product or Marketing"
+        autoCapitalize="words"
+        autoCorrect={false}
+        editable={!submitting}
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
+        error={fieldErrors.name}
+      />
 
-      <View style={styles.field}>
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={workspaceFieldInputStyle(Boolean(fieldErrors.description))}
-          value={description}
-          onChangeText={onDescriptionChange}
-          placeholder="Optional description"
-          placeholderTextColor={colors.textDim}
-          editable={!submitting}
-          maxLength={DESCRIPTION_MAX_LENGTH}
-          multiline
-        />
-        {fieldErrors.description ? (
-          <Text style={styles.fieldError}>{fieldErrors.description}</Text>
-        ) : null}
-      </View>
+      <TextField
+        label="Description"
+        value={description}
+        onChangeText={onDescriptionChange}
+        placeholder="Optional description"
+        editable={!submitting}
+        maxLength={DESCRIPTION_MAX_LENGTH}
+        multiline
+        error={fieldErrors.description}
+      />
 
       {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
 
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.primaryButton, submitting && styles.buttonDisabled]}
-          disabled={submitting}
+      <ButtonRow>
+        <Button
+          label={submitLabel}
+          variant="primary"
+          busy={submitting}
           onPress={onSubmit}
-        >
-          <Text style={styles.primaryButtonText}>{submitLabel}</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
           disabled={submitting}
           onPress={onCancel}
-        >
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
-      </View>
+        />
+      </ButtonRow>
     </>
   )
 }
@@ -284,7 +249,6 @@ export function WorkspaceFormSection({
   if (systemEdit) {
     return (
       <View style={styles.root}>
-        <Text style={styles.heading}>{heading}</Text>
         <SectionPanel title={heading}>
           <SystemManagedNotice onBack={() => router.replace(workspacesHref)} />
         </SectionPanel>
@@ -294,11 +258,9 @@ export function WorkspaceFormSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>{heading}</Text>
-
       <SectionPanel title={heading}>
         {loadingWorkspace ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
+          <LoadingState />
         ) : (
           <WorkspaceFormFields
             name={displayName}
@@ -328,71 +290,5 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  field: {
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
-  fieldError: {
-    color: colors.errorText,
-    fontSize: 13,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  secondaryButtonText: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
 })

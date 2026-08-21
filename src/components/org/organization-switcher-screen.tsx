@@ -16,6 +16,7 @@ import { HeaderUserAccountControl } from '@/components/header-account-controls'
 import { PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { LoadingState } from '@/components/ui'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { getActiveOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
@@ -84,7 +85,7 @@ export function OrganizationSwitcherScreen() {
 
   let body
   if (orgsQuery.isLoading) {
-    body = <Text style={styles.detail}>Loading organizations…</Text>
+    body = <LoadingState label="Loading organizations…" />
   } else if (error) {
     body = <Text style={styles.detail}>{error}</Text>
   } else if (organizations.length === 0) {

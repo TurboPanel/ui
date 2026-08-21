@@ -14,6 +14,7 @@ import { HeaderCheck } from '@/components/header-check'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { GearIcon, SearchIcon } from '@/components/icons/nav-icons'
 import { webPointer } from '@/components/org/org-panel-styles'
+import { EmptyState } from '@/components/ui'
 import type { OrganizationRecord } from '@/lib/instance-api'
 import {
   organizationLabel,
@@ -166,9 +167,9 @@ export function OrganizationSwitcherList({
   let listBody
   if (visible.length === 0 && trimmedQuery) {
     listBody = (
-      <Text style={styles.emptyHint}>
-        No organizations match “{trimmedQuery}”.
-      </Text>
+      <View style={styles.emptyHint}>
+        <EmptyState title={`No organizations match “${trimmedQuery}”.`} />
+      </View>
     )
   } else {
     listBody = visible.map((org) => {
@@ -291,9 +292,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   emptyHint: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
   },

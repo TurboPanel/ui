@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import {
   type CommandRecord,
   type PingLatencyBreakdown,
   type OrgServerRecord,
 } from '@/lib/instance-api'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 import { isTerminalCommandStatus } from '@/lib/queries/commands'
 
 export { COMMAND_POLL_MS, isTerminalCommandStatus } from '@/lib/queries/commands'
@@ -86,12 +86,7 @@ type ServerCommandsPanelProps = Readonly<{
 function CommandProgressRow({
   message,
 }: Readonly<{ message: string }>) {
-  return (
-    <View style={styles.cellRow}>
-      <ActivityIndicator size="small" color={colors.textMuted} />
-      <Text style={orgPanelStyles.muted}>{message}</Text>
-    </View>
-  )
+  return <LoadingState label={message} />
 }
 
 function PingLatencyBlock({
@@ -118,59 +113,34 @@ function RebootControls({
   connected,
   commandInFlight,
   rebootRunning,
-  confirmingReboot,
-  onRequestConfirm,
   onConfirm,
-  onCancel,
 }: Readonly<{
   connected: boolean
   commandInFlight: boolean
   rebootRunning: boolean
-  confirmingReboot: boolean
-  onRequestConfirm: () => void
   onConfirm: () => void
-  onCancel: () => void
 }>) {
   if (rebootRunning) {
     return (
-      <TouchableOpacity
-        style={[styles.actionButton, styles.actionButtonDisabled]}
+      <Button
+        label="Rebooting…"
+        variant="danger"
+        busy
         disabled
-      >
-        <ActivityIndicator size="small" color={colors.textMuted} />
-        <Text style={styles.actionButtonText}>Rebooting…</Text>
-      </TouchableOpacity>
-    )
-  }
-
-  if (confirmingReboot) {
-    return (
-      <View style={styles.confirmRow}>
-        <Text style={orgPanelStyles.muted}>Confirm reboot?</Text>
-        <TouchableOpacity style={styles.actionButton} onPress={onConfirm}>
-          <Text style={styles.actionButtonText}>Confirm</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mutedButton} onPress={onCancel}>
-          <Text style={styles.mutedButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
+        onPress={() => {}}
+      />
     )
   }
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.actionButton,
-        styles.actionButtonDanger,
-        (!connected || commandInFlight) && styles.actionButtonDisabled,
-      ]}
-      onPress={onRequestConfirm}
+    <ConfirmButton
+      label="Reboot server"
+      confirmLabel="Confirm"
+      prompt="Confirm reboot?"
+      size="md"
       disabled={!connected || commandInFlight}
-    >
-      <Text style={[styles.actionButtonText, styles.actionButtonTextDanger]}>
-        Reboot server
-      </Text>
-    </TouchableOpacity>
+      onConfirm={onConfirm}
+    />
   )
 }
 
@@ -203,44 +173,32 @@ function HostnameBlock({
 
   return (
     <View style={styles.hostnameBlock}>
-      <Text style={styles.label}>Change hostname</Text>
-      <TextInput
+      <TextField
+        label="Change hostname"
         value={hostnameInput}
         onChangeText={onHostnameInputChange}
         placeholder="hostname.example"
         autoCapitalize="none"
         autoCorrect={false}
         editable={connected && !hostnameRunning && !commandInFlight}
-        style={[
-          styles.input,
-          (!connected || hostnameRunning || commandInFlight) &&
-            styles.inputDisabled,
-        ]}
+        error={hostnameError}
       />
-      <TouchableOpacity
-        style={[styles.actionButton, disabled && styles.actionButtonDisabled]}
-        onPress={() => onSetHostname(trimmedHostname)}
+      <Button
+        label={actionButtonLabel(
+          hostnameRunning,
+          connected,
+          'Applying…',
+          'Apply hostname',
+        )}
+        variant="primary"
+        busy={hostnameRunning}
         disabled={disabled}
-      >
-        {hostnameRunning ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : null}
-        <Text style={styles.actionButtonText}>
-          {actionButtonLabel(
-            hostnameRunning,
-            connected,
-            'Applying…',
-            'Apply hostname',
-          )}
-        </Text>
-      </TouchableOpacity>
+        onPress={() => onSetHostname(trimmedHostname)}
+      />
       {showProgress ? (
         <CommandProgressRow
           message={`Applying hostname (${commandRecord.status})…`}
         />
-      ) : null}
-      {hostnameError ? (
-        <Text style={styles.errorText}>{hostnameError}</Text>
       ) : null}
     </View>
   )
@@ -256,7 +214,6 @@ export function ServerCommandsPanel({
   onReboot,
 }: ServerCommandsPanelProps) {
   const [hostnameInput, setHostnameInput] = useState(server.hostname ?? '')
-  const [confirmingReboot, setConfirmingReboot] = useState(false)
 
   const {
     pingRunning,
@@ -272,12 +229,6 @@ export function ServerCommandsPanel({
   useEffect(() => {
     setHostnameInput(server.hostname ?? '')
   }, [server.hostname])
-
-  useEffect(() => {
-    if (rebootRunning) {
-      setConfirmingReboot(false)
-    }
-  }, [rebootRunning])
 
   const commandInFlight = activeCommand !== null
   const showPingLatency =
@@ -299,45 +250,29 @@ export function ServerCommandsPanel({
     <View style={styles.root}>
       <Text style={orgPanelStyles.detailTitle}>Commands</Text>
 
-      <View style={styles.actionBar}>
-        <View style={styles.commandRow}>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            pingDisabled && styles.actionButtonDisabled,
-          ]}
-          onPress={onPing}
+      <ButtonRow>
+        <Button
+          label={actionButtonLabel(
+            pingRunning,
+            server.connected,
+            'Pinging…',
+            'Ping daemon',
+          )}
+          variant="primary"
+          busy={pingRunning}
           disabled={pingDisabled}
-        >
-          {pingRunning ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : null}
-          <Text style={styles.actionButtonText}>
-            {actionButtonLabel(
-              pingRunning,
-              server.connected,
-              'Pinging…',
-              'Ping daemon',
-            )}
-          </Text>
-        </TouchableOpacity>
+          onPress={onPing}
+        />
 
         {canManage && showReboot ? (
           <RebootControls
             connected={server.connected}
             commandInFlight={commandInFlight}
             rebootRunning={rebootRunning}
-            confirmingReboot={confirmingReboot}
-            onRequestConfirm={() => setConfirmingReboot(true)}
-            onConfirm={() => {
-              setConfirmingReboot(false)
-              onReboot()
-            }}
-            onCancel={() => setConfirmingReboot(false)}
+            onConfirm={onReboot}
           />
         ) : null}
-        </View>
-      </View>
+      </ButtonRow>
 
       {showRebootProgress ? (
         <CommandProgressRow
@@ -346,7 +281,7 @@ export function ServerCommandsPanel({
       ) : null}
 
       {showReboot && rebootError ? (
-        <Text style={styles.errorText}>{rebootError}</Text>
+        <Text style={orgPanelStyles.error}>{rebootError}</Text>
       ) : null}
 
       {showPingProgress ? (
@@ -359,7 +294,7 @@ export function ServerCommandsPanel({
         <PingLatencyBlock latency={commandRecord.latency} />
       ) : null}
 
-      {pingError ? <Text style={styles.errorText}>{pingError}</Text> : null}
+      {pingError ? <Text style={orgPanelStyles.error}>{pingError}</Text> : null}
 
       {canManage ? (
         <HostnameBlock
@@ -381,101 +316,12 @@ const styles = StyleSheet.create({
   root: {
     gap: spacing.sm,
   },
-  actionBar: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderArea,
-    backgroundColor: colors.bgInset,
-    padding: spacing.sm,
-    gap: spacing.sm,
-  },
-  commandRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: chrome.bgActive,
-  },
-  actionButtonDanger: {
-    borderColor: colors.error,
-    backgroundColor: colors.bgSecondary,
-  },
-  actionButtonDisabled: {
-    opacity: 0.5,
-  },
-  actionButtonText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  actionButtonTextDanger: {
-    color: colors.error,
-  },
-  confirmRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  mutedButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  mutedButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cellRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  errorText: {
-    color: colors.errorText,
-    fontSize: 12,
-  },
   hostnameBlock: {
     marginTop: spacing.xs,
     gap: spacing.xs,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.borderArea,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  inputDisabled: {
-    opacity: 0.5,
   },
   latencyGrid: {
     gap: spacing.xs,

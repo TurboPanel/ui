@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
+import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
   authAccentStyles,
@@ -152,36 +153,20 @@ function NativeConnectScreen() {
         </Text>
       ) : null}
 
-      <Pressable
+      <AuthPrimaryButton
         onPress={() => {
           onConnect(url).catch(() => {
             // Errors are surfaced via setError.
           })
         }}
         disabled={loading}
-        accessibilityRole="button"
+        busy={loading}
         accessibilityLabel={loading ? 'Connecting' : 'Connect'}
-        style={({ pressed }) => [
-          authFormStyles.primaryButton,
-          tint.primaryButton,
-          loading && authFormStyles.primaryButtonDisabled,
-          pressed && !loading && authFormStyles.primaryButtonPressed,
-          webPointer,
-        ]}
-      >
-        {loading ? (
-          <View style={authFormStyles.primaryButtonContent}>
-            <ActivityIndicator size="small" color={accent.onAccent} />
-            <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
-              Connecting…
-            </Text>
-          </View>
-        ) : (
-          <Text style={[authFormStyles.primaryButtonText, tint.primaryButtonText]}>
-            Connect
-          </Text>
-        )}
-      </Pressable>
+        label="Connect"
+        busyLabel="Connecting…"
+        tint={tint}
+        spinnerColor={accent.onAccent}
+      />
     </AuthScreenShell>
   )
 }

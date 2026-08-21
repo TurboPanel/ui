@@ -1,6 +1,7 @@
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
+import { Button } from '@/components/ui'
 import { TURBOPANEL_WORKSPACE_DESCRIPTION } from '@/lib/system-inventory'
 
 /**
@@ -25,11 +26,7 @@ export function SystemManagedNotice({
         <Text style={orgPanelStyles.detailTitle}>{title}</Text>
       </View>
       <Text style={orgPanelStyles.muted}>{description}</Text>
-      {onBack ? (
-        <Pressable style={orgPanelStyles.toolbarBtnSecondary} onPress={onBack}>
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>{backLabel}</Text>
-        </Pressable>
-      ) : null}
+      {onBack ? <Button label={backLabel} onPress={onBack} /> : null}
     </View>
   )
 }

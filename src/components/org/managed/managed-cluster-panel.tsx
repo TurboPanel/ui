@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  Checkbox,
+  ConfirmButton,
+  EmptyState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type {
   ManagedMemberRecord,
   ManagedRecoveryRecord,
@@ -61,18 +63,6 @@ import { useDatacenters } from '@/lib/queries/topology'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
 
 const PROMOTE_GATE_CODES = new Set([
   MANAGED_REPLICA_NOT_STREAMING_ERROR,
@@ -154,8 +144,6 @@ export function ManagedClusterPanel({
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
   const [replicaClass, setReplicaClass] = useState<ManagedReplicaClass>('failover')
   const [readEligible, setReadEligible] = useState(true)
-  const [removeArmedId, setRemoveArmedId] = useState<string | null>(null)
-  const [convertArmedId, setConvertArmedId] = useState<string | null>(null)
   const [promoteMemberId, setPromoteMemberId] = useState<string | null>(null)
   const [disasterMemberId, setDisasterMemberId] = useState<string | null>(null)
   const [promoteConfirmName, setPromoteConfirmName] = useState('')
@@ -286,10 +274,8 @@ export function ManagedClusterPanel({
       if (result.commandId) {
         onRegisterCommand(result.commandId, 'Convert to failover', result.serverId)
       }
-      setConvertArmedId(null)
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to convert replica class'))
-      setConvertArmedId(null)
     } finally {
       setWorking(false)
     }
@@ -301,10 +287,8 @@ export function ManagedClusterPanel({
     try {
       const result = await removeMember.mutateAsync(memberId)
       onRegisterCommand(result.commandId, 'Remove replica', result.serverId)
-      setRemoveArmedId(null)
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to remove replica'))
-      setRemoveArmedId(null)
     } finally {
       setWorking(false)
     }
@@ -414,18 +398,12 @@ export function ManagedClusterPanel({
             disabled={disabled}
             serverLabel={serverLabel(member)}
             siteLabel={siteLabel(member.serverId)}
-            removeArmed={removeArmedId === member.id}
-            convertArmed={convertArmedId === member.id}
             onToggleReads={() => {
               void handleToggleReads(member, !member.readEligible)
             }}
-            onArmRemove={() => setRemoveArmedId(member.id)}
-            onCancelRemove={() => setRemoveArmedId(null)}
             onConfirmRemove={() => {
               void handleRemove(member.id)
             }}
-            onArmConvert={() => setConvertArmedId(member.id)}
-            onCancelConvert={() => setConvertArmedId(null)}
             onConfirmConvert={() => {
               void handleConvertToFailover(member.id)
             }}
@@ -444,7 +422,7 @@ export function ManagedClusterPanel({
           />
         ))}
         {members.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No cluster members yet.</Text>
+          <EmptyState title="No cluster members yet." />
         ) : null}
       </View>
 
@@ -533,14 +511,8 @@ function ClusterMemberRow({
   disabled,
   serverLabel,
   siteLabel,
-  removeArmed,
-  convertArmed,
   onToggleReads,
-  onArmRemove,
-  onCancelRemove,
   onConfirmRemove,
-  onArmConvert,
-  onCancelConvert,
   onConfirmConvert,
   onStartPromote,
   onStartDisasterRecovery,
@@ -550,14 +522,8 @@ function ClusterMemberRow({
   disabled: boolean
   serverLabel: string
   siteLabel: string
-  removeArmed: boolean
-  convertArmed: boolean
   onToggleReads: () => void
-  onArmRemove: () => void
-  onCancelRemove: () => void
   onConfirmRemove: () => void
-  onArmConvert: () => void
-  onCancelConvert: () => void
   onConfirmConvert: () => void
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
@@ -609,162 +575,49 @@ function ClusterMemberRow({
       </View>
 
       {canManage && member.role === 'replica' ? (
-        <View style={styles.actions}>
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+        <ButtonRow>
+          <Button
+            label={
+              member.readEligible ? 'Stop serving reads' : 'Serve read traffic'
+            }
+            size="sm"
             disabled={disabled}
             onPress={onToggleReads}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              {member.readEligible ? 'Stop serving reads' : 'Serve read traffic'}
-            </Text>
-          </Pressable>
-          <RemoveReplicaControl
-            armed={removeArmed}
+          />
+          <ConfirmButton
+            label="Remove replica"
+            confirmLabel="Confirm remove"
+            prompt="Removes this replica and destroys its data volume."
             disabled={disabled}
-            onArm={onArmRemove}
-            onCancel={onCancelRemove}
             onConfirm={onConfirmRemove}
           />
           {isReadReplica ? (
             <>
-              <ConvertToFailoverControl
-                armed={convertArmed}
+              <ConfirmButton
+                label="Convert to failover"
+                confirmLabel="Confirm convert"
+                prompt="Converts this replica to failover. It must share the primary's datacenter LAN."
                 disabled={disabled}
-                onArm={onArmConvert}
-                onCancel={onCancelConvert}
                 onConfirm={onConfirmConvert}
               />
-              <Pressable
-                style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+              <Button
+                label="Promote for disaster recovery"
+                size="sm"
                 disabled={disabled}
                 onPress={onStartDisasterRecovery}
-                accessibilityLabel="Promote for disaster recovery"
-              >
-                <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                  Promote for disaster recovery
-                </Text>
-              </Pressable>
+              />
             </>
           ) : (
-            <Pressable
-              style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+            <Button
+              label="Promote"
+              size="sm"
               disabled={disabled}
               onPress={onStartPromote}
-              accessibilityLabel="Promote"
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                Promote
-              </Text>
-            </Pressable>
+            />
           )}
-        </View>
+        </ButtonRow>
       ) : null}
     </View>
-  )
-}
-
-function RemoveReplicaControl({
-  armed,
-  disabled,
-  onArm,
-  onCancel,
-  onConfirm,
-}: Readonly<{
-  armed: boolean
-  disabled: boolean
-  onArm: () => void
-  onCancel: () => void
-  onConfirm: () => void
-}>) {
-  if (armed) {
-    return (
-      <View style={styles.armedRow}>
-        <Text style={orgPanelStyles.calloutWarning}>
-          Removes this replica and destroys its data volume.
-        </Text>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={disabled}
-          onPress={onConfirm}
-        >
-          <Text
-            style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}
-          >
-            Confirm remove
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancel}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
-    )
-  }
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-      disabled={disabled}
-      onPress={onArm}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-        Remove replica
-      </Text>
-    </Pressable>
-  )
-}
-
-function ConvertToFailoverControl({
-  armed,
-  disabled,
-  onArm,
-  onCancel,
-  onConfirm,
-}: Readonly<{
-  armed: boolean
-  disabled: boolean
-  onArm: () => void
-  onCancel: () => void
-  onConfirm: () => void
-}>) {
-  if (armed) {
-    return (
-      <View style={styles.armedRow}>
-        <Text style={orgPanelStyles.calloutWarning}>
-          {
-            "Converts this replica to failover. It must share the primary's datacenter LAN."
-          }
-        </Text>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={disabled}
-          onPress={onConfirm}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Confirm convert
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancel}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
-    )
-  }
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-      disabled={disabled}
-      onPress={onArm}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-        Convert to failover
-      </Text>
-    </Pressable>
   )
 }
 
@@ -802,8 +655,8 @@ function PromoteDialog({
           : 'Writes pause during the primary switch.'}
       </Text>
       <Text style={orgPanelStyles.muted}>Type {confirmName} to confirm.</Text>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+      <TextField
+        label="Confirmation"
         value={promoteConfirmName}
         onChangeText={onChangePromoteConfirmName}
         autoCapitalize="none"
@@ -819,41 +672,22 @@ function PromoteDialog({
             Promote anyway accepts possible data loss if the primary still has
             unreplicated commits.
           </Text>
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              webPointer,
-              promoteDisabled && styles.disabled,
-            ]}
+          <Button
+            label="Promote anyway"
+            variant="primary"
             disabled={promoteDisabled}
             onPress={onConfirmPromote}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-              Promote anyway
-            </Text>
-          </Pressable>
+          />
         </View>
       ) : (
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            webPointer,
-            promoteDisabled && styles.disabled,
-          ]}
+        <Button
+          label="Confirm promote"
+          variant="primary"
           disabled={promoteDisabled}
           onPress={onConfirmPromote}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            Confirm promote
-          </Text>
-        </Pressable>
+        />
       )}
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-        onPress={onCancel}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-      </Pressable>
+      <Button label="Cancel" onPress={onCancel} />
     </View>
   )
 }
@@ -904,8 +738,8 @@ function DisasterRecoveryDialog({
         </Text>
       </View>
       <Text style={orgPanelStyles.muted}>Type {confirmName} to confirm.</Text>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+      <TextField
+        label="Confirmation"
         value={promoteConfirmName}
         onChangeText={onChangePromoteConfirmName}
         autoCapitalize="none"
@@ -913,26 +747,14 @@ function DisasterRecoveryDialog({
         editable={!disabled}
         accessibilityLabel="Type the cluster name to confirm disaster recovery"
       />
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnPrimary,
-          webPointer,
-          confirmDisabled && styles.disabled,
-        ]}
+      <Button
+        label="Confirm disaster recovery"
+        variant="primary"
         disabled={confirmDisabled}
         onPress={onConfirm}
         accessibilityLabel="Confirm disaster recovery"
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-          Confirm disaster recovery
-        </Text>
-      </Pressable>
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-        onPress={onCancel}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-      </Pressable>
+      />
+      <Button label="Cancel" onPress={onCancel} />
     </View>
   )
 }
@@ -972,6 +794,9 @@ function ServerOptionRow({
       onPress={() => {
         if (eligible) onSelect()
       }}
+      accessibilityRole="radio"
+      accessibilityState={{ selected, disabled: disabled || !eligible }}
+      accessibilityLabel={label}
     >
       <Text style={[styles.pickerLabel, !eligible && styles.pickerDisabled]}>
         {label}
@@ -1034,39 +859,16 @@ function AddReplicaForm({
   return (
     <View style={styles.addForm}>
       <Text style={orgPanelStyles.detailLabel}>Replica class</Text>
-      <View style={orgPanelStyles.segmentGroup}>
-        {([
-          { id: 'failover', label: memberReplicaClassPickerLabel('failover') },
-          { id: 'read', label: memberReplicaClassPickerLabel('read') },
-        ] as const).map((option) => {
-          const active = replicaClass === option.id
-          return (
-            <Pressable
-              key={option.id}
-              style={[
-                orgPanelStyles.segmentChip,
-                { minHeight: 44, justifyContent: 'center' },
-                active && orgPanelStyles.segmentChipActive,
-                webPointer,
-              ]}
-              disabled={disabled}
-              onPress={() => onSelectReplicaClass(option.id)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={option.label}
-            >
-              <Text
-                style={[
-                  orgPanelStyles.segmentChipText,
-                  active && orgPanelStyles.segmentChipTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      <SegmentedControl
+        options={[
+          { value: 'failover', label: memberReplicaClassPickerLabel('failover') },
+          { value: 'read', label: memberReplicaClassPickerLabel('read') },
+        ]}
+        value={replicaClass}
+        disabled={disabled}
+        accessibilityLabel="Replica class"
+        onChange={(next) => onSelectReplicaClass(next as ManagedReplicaClass)}
+      />
       <Text style={orgPanelStyles.detailLabel}>Server</Text>
       {servers
         .filter((s) => s.id !== primaryServerId)
@@ -1083,41 +885,21 @@ function AddReplicaForm({
             }
           />
         ))}
-      <Pressable
-        style={[styles.toggleRow, webPointer]}
-        onPress={onToggleReadEligible}
+      <Checkbox
+        label="Serve read traffic"
+        checked={readEligible}
         disabled={disabled}
-      >
-        <View
-          style={[styles.checkbox, readEligible && styles.checkboxChecked]}
-        >
-          {readEligible ? (
-            <Text style={styles.checkboxMark}>✓</Text>
-          ) : null}
-        </View>
-        <Text style={styles.toggleLabel}>Serve read traffic</Text>
-      </Pressable>
-      <View style={styles.addActions}>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            webPointer,
-            (disabled || !selectedServerId) && styles.disabled,
-          ]}
+        onPress={onToggleReadEligible}
+      />
+      <ButtonRow>
+        <Button
+          label="Add replica"
+          variant="primary"
           disabled={disabled || !selectedServerId}
           onPress={onAddReplica}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            Add replica
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancelAdd}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
+        />
+        <Button label="Cancel" onPress={onCancelAdd} />
+      </ButtonRow>
     </View>
   )
 }
@@ -1175,15 +957,7 @@ function AddReplicaBlock({
     )
   }
 
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer, disabled && styles.disabled]}
-      disabled={disabled}
-      onPress={onShowAdd}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Add replica</Text>
-    </Pressable>
-  )
+  return <Button label="Add replica" disabled={disabled} onPress={onShowAdd} />
 }
 
 const styles = StyleSheet.create({
@@ -1275,31 +1049,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
   armedRow: {
     gap: spacing.xs,
     width: '100%',
   },
-  danger: {
-    color: colors.error,
-  },
   promoteCard: {
     gap: spacing.sm,
     marginTop: spacing.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minHeight: 44,
   },
   addBlock: {
     marginTop: spacing.md,
@@ -1340,40 +1096,5 @@ const styles = StyleSheet.create({
     color: chrome.accent,
     fontSize: 12,
     fontWeight: '600',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  checkboxMark: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  toggleLabel: {
-    color: colors.textBody,
-    fontSize: 13,
-  },
-  addActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

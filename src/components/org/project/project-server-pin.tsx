@@ -132,6 +132,7 @@ export function ProjectServerHeaderControl() {
           <Pressable
             style={[styles.selectedChip, busy && styles.disabled, webPointer]}
             disabled={busy}
+            hitSlop={{ top: 4, bottom: 4 }}
             onPress={openPicker}
             accessibilityRole="button"
             accessibilityLabel={`Project-wide default server: ${serverOptionLabel(selected)}. Change`}
@@ -143,6 +144,7 @@ export function ProjectServerHeaderControl() {
           <Pressable
             style={[styles.clearBtn, busy && styles.disabled, webPointer]}
             disabled={busy}
+            hitSlop={{ top: 4, bottom: 4, right: 4 }}
             onPress={() => {
               void save(null)
             }}
@@ -156,6 +158,7 @@ export function ProjectServerHeaderControl() {
         <Pressable
           style={[styles.addBtn, busy && styles.disabled, webPointer]}
           disabled={busy || options.length === 0}
+          hitSlop={{ top: 4, bottom: 4 }}
           onPress={openPicker}
           accessibilityRole="button"
           accessibilityLabel="Set default project server (optional)"
@@ -180,7 +183,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: 'transparent',
@@ -205,7 +208,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   selectedChip: {
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
@@ -224,7 +227,7 @@ const styles = StyleSheet.create({
   clearBtn: {
     width: 36,
     height: 36,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },

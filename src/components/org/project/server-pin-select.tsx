@@ -1,6 +1,7 @@
 import { createElement, type CSSProperties, type ReactNode } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { EmptyState } from '@/components/ui'
 import type { OrgServerRecord } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
 
@@ -52,7 +53,7 @@ function webSelectStyle(
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.bgSecondary,
     color: muted ? colors.textMuted : colors.text,
     fontFamily: muted ? undefined : 'monospace',
@@ -210,7 +211,7 @@ function renderServerPinPicker(params: Readonly<{
   onClear?: () => void
 }>): ReactNode {
   if (params.options.length === 0) {
-    return <Text style={styles.empty}>No connected servers</Text>
+    return <EmptyState title="No connected servers" />
   }
   if (Platform.OS === 'web') {
     return (
@@ -308,6 +309,7 @@ export function ServerPinSelect({
           <Pressable
             style={[styles.clearBtn, busy && styles.buttonDisabled, webPointer]}
             disabled={busy}
+            hitSlop={{ top: 6, bottom: 6 }}
             onPress={onClear}
             accessibilityRole="button"
             accessibilityLabel="Clear server pin"
@@ -351,10 +353,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  empty: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
   clearBtn: {
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -370,7 +368,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   nativeOption: {
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,

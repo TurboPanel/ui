@@ -153,6 +153,7 @@ function SectionTabStrip({
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={labels[tabId] ?? tabId}
+                hitSlop={{ top: 8, bottom: 8 }}
                 style={tabStyle}
               >
                 <Text
@@ -366,6 +367,7 @@ function ScopeChip({
         accessibilityRole="tab"
         accessibilityState={{ selected }}
         accessibilityLabel={accessibilityLabel}
+        hitSlop={{ top: 8, bottom: 8 }}
         style={[styles.chipLabelBtn, webPointer]}
         onPress={onSelect}
       >
@@ -390,6 +392,7 @@ function ScopeChip({
           accessibilityRole="button"
           accessibilityLabel={`${label} settings`}
           accessibilityState={{ expanded: settingsOpen }}
+          hitSlop={{ top: 6, bottom: 6 }}
           style={[styles.gearBtn, webPointer]}
           onPress={onOpenSettings}
         >
@@ -585,13 +588,13 @@ const styles = StyleSheet.create({
   group: {
     flexWrap: 'nowrap',
     padding: 2,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   chip: {
     paddingHorizontal: 0,
     paddingVertical: 0,
     minWidth: 40,
-    borderRadius: 5,
+    borderRadius: 6,
     overflow: 'hidden',
   },
   chipSplit: {

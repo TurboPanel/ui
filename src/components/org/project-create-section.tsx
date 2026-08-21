@@ -1,19 +1,23 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
-  type StyleProp,
-  type TextStyle,
 } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import {
   DESCRIPTION_MAX_LENGTH,
   DISPLAY_NAME_MAX_LENGTH,
@@ -38,20 +42,12 @@ import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 const FORM_MAX_WIDTH = 440
 
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 8,
-  minHeight: 44,
-  width: '100%' as const,
-} as const
-
 type WorkspaceMode = 'existing' | 'new'
+
+const WORKSPACE_MODE_OPTIONS = [
+  { value: 'existing', label: 'Existing' },
+  { value: 'new', label: 'Create new' },
+] as const
 
 type FieldErrors = {
   name?: string
@@ -153,53 +149,6 @@ function validateProjectCreateFields(options: {
   return errors
 }
 
-function SegmentChoice<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: Readonly<{
-  label: string
-  options: readonly { id: T; label: string }[]
-  value: T
-  onChange: (next: T) => void
-}>) {
-  return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={[orgPanelStyles.segmentGroup, styles.segmentStretch]}>
-        {options.map((option) => {
-          const active = value === option.id
-          return (
-            <Pressable
-              key={option.id}
-              style={[
-                orgPanelStyles.segmentChip,
-                styles.segmentChipFlex,
-                active && orgPanelStyles.segmentChipActive,
-                webPointer,
-              ]}
-              onPress={() => onChange(option.id)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={option.label}
-            >
-              <Text
-                style={[
-                  orgPanelStyles.segmentChipText,
-                  active && orgPanelStyles.segmentChipTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
-    </View>
-  )
-}
-
 function WorkspacePickerBody({
   workspaces,
   loading,
@@ -212,14 +161,10 @@ function WorkspacePickerBody({
   onSelect: (workspaceId: string) => void
 }>) {
   if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading workspaces…</Text>
+    return <LoadingState label="Loading workspaces…" />
   }
   if (workspaces.length === 0) {
-    return (
-      <Text style={orgPanelStyles.muted}>
-        No workspaces yet — switch to Create new.
-      </Text>
-    )
+    return <EmptyState title="No workspaces yet — switch to Create new." />
   }
 
   // Single workspace: no need for a tall picker list.
@@ -292,29 +237,22 @@ function WorkspacePicker({
 function NewWorkspaceFields({
   value,
   workspaceNameError,
-  inputStyle,
   onChange,
 }: Readonly<{
   value: string
   workspaceNameError?: string
-  inputStyle: (hasError: boolean) => StyleProp<TextStyle>
   onChange: (name: string) => void
 }>) {
   return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.label}>Workspace name</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        autoCapitalize="words"
-        accessibilityLabel="Workspace name"
-        maxLength={DISPLAY_NAME_MAX_LENGTH}
-        style={inputStyle(Boolean(workspaceNameError))}
-      />
-      {workspaceNameError ? (
-        <Text style={orgPanelStyles.error}>{workspaceNameError}</Text>
-      ) : null}
-    </View>
+    <TextField
+      label="Workspace name"
+      value={value}
+      onChangeText={onChange}
+      autoCapitalize="words"
+      accessibilityLabel="Workspace name"
+      maxLength={DISPLAY_NAME_MAX_LENGTH}
+      error={workspaceNameError}
+    />
   )
 }
 
@@ -325,7 +263,6 @@ function ProjectWorkspaceFields({
   pickedWorkspaceId,
   fieldErrors,
   newWorkspaceNameValue,
-  inputStyle,
   onWorkspaceModeChange,
   onPickedWorkspaceIdChange,
   onNewWorkspaceNameChange,
@@ -336,22 +273,20 @@ function ProjectWorkspaceFields({
   pickedWorkspaceId: string
   fieldErrors: FieldErrors
   newWorkspaceNameValue: string
-  inputStyle: (hasError: boolean) => StyleProp<TextStyle>
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onPickedWorkspaceIdChange: (id: string) => void
   onNewWorkspaceNameChange: (name: string) => void
 }>) {
   return (
     <>
-      <SegmentChoice
-        label="Workspace"
-        options={[
-          { id: 'existing', label: 'Existing' },
-          { id: 'new', label: 'Create new' },
-        ]}
-        value={workspaceMode}
-        onChange={onWorkspaceModeChange}
-      />
+      <FormField label="Workspace">
+        <SegmentedControl
+          options={WORKSPACE_MODE_OPTIONS}
+          value={workspaceMode}
+          onChange={onWorkspaceModeChange}
+          accessibilityLabel="Workspace"
+        />
+      </FormField>
       {workspaceMode === 'existing' ? (
         <WorkspacePicker
           workspaces={workspaces}
@@ -364,7 +299,6 @@ function ProjectWorkspaceFields({
         <NewWorkspaceFields
           value={newWorkspaceNameValue}
           workspaceNameError={fieldErrors.workspaceName}
-          inputStyle={inputStyle}
           onChange={onNewWorkspaceNameChange}
         />
       )}
@@ -516,11 +450,6 @@ export function ProjectCreateSection({
     router.replace(projectSetupHref(orgId, result.value.id) as Href)
   }
 
-  const inputStyle = (hasError: boolean) => [
-    Platform.OS === 'web' ? webInputStyle : styles.input,
-    hasError ? styles.inputError : null,
-  ]
-
   const submitting = createWorkspace.isPending || createProject.isPending
   const trimmedProjectName = displayName.trim()
   const mirroredWorkspaceName = resolveMirroredWorkspaceName(
@@ -548,8 +477,10 @@ export function ProjectCreateSection({
     >
       <View style={styles.column}>
         <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>New project</Text>
-          <Text style={styles.pageCopy}>
+          <Text style={[orgPanelStyles.pageTitle, styles.centeredText]}>
+            New project
+          </Text>
+          <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
             Creates a {defaultEnvironmentName} environment. Choose type next.
           </Text>
         </View>
@@ -571,49 +502,31 @@ export function ProjectCreateSection({
               />
             ) : null}
 
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Name</Text>
-              <TextInput
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="My project"
-                placeholderTextColor={colors.textDim}
-                autoCapitalize="words"
-                autoFocus
-                accessibilityLabel="Project name"
-                maxLength={DISPLAY_NAME_MAX_LENGTH}
-                style={inputStyle(Boolean(fieldErrors.name))}
-              />
-              {fieldErrors.name ? (
-                <Text style={orgPanelStyles.error}>
-                  {fieldErrors.name}
-                </Text>
-              ) : null}
-            </View>
+            <TextField
+              label="Name"
+              value={displayName}
+              onChangeText={setDisplayName}
+              placeholder="My project"
+              autoCapitalize="words"
+              autoFocus
+              accessibilityLabel="Project name"
+              maxLength={DISPLAY_NAME_MAX_LENGTH}
+              error={fieldErrors.name}
+            />
 
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Optional"
-                placeholderTextColor={colors.textDim}
-                accessibilityLabel="Project description"
-                maxLength={DESCRIPTION_MAX_LENGTH}
-                multiline
-                numberOfLines={2}
-                textAlignVertical="top"
-                style={[
-                  inputStyle(Boolean(fieldErrors.description)),
-                  styles.descriptionInput,
-                ]}
-              />
-              {fieldErrors.description ? (
-                <Text style={orgPanelStyles.error}>
-                  {fieldErrors.description}
-                </Text>
-              ) : null}
-            </View>
+            <TextField
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Optional"
+              accessibilityLabel="Project description"
+              maxLength={DESCRIPTION_MAX_LENGTH}
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
+              style={styles.descriptionInput}
+              error={fieldErrors.description}
+            />
 
             <ProjectWorkspaceFields
               workspaceMode={workspaceMode}
@@ -622,29 +535,21 @@ export function ProjectCreateSection({
               pickedWorkspaceId={pickedWorkspaceId}
               fieldErrors={fieldErrors}
               newWorkspaceNameValue={mirroredWorkspaceName}
-              inputStyle={inputStyle}
               onWorkspaceModeChange={setWorkspaceMode}
               onPickedWorkspaceIdChange={setPickedWorkspaceId}
               onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
             />
 
-            <Pressable
-              style={[
-                styles.primaryButton,
-                webPointer,
-                submitting && styles.disabled,
-              ]}
-              disabled={submitting}
+            <Button
+              label="Create project"
+              busyLabel="Creating…"
+              variant="primary"
+              busy={submitting}
               onPress={() => {
                 void submit()
               }}
-              accessibilityRole="button"
               accessibilityLabel="Create project"
-            >
-              <Text style={styles.primaryButtonText}>
-                {submitting ? 'Creating…' : 'Create project'}
-              </Text>
-            </Pressable>
+            />
           </View>
         </GlassSurface>
 
@@ -684,17 +589,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     alignItems: 'center',
   },
-  pageTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-    textAlign: 'center',
-  },
-  pageCopy: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
+  centeredText: {
     textAlign: 'center',
   },
   panel: {
@@ -710,42 +605,15 @@ const styles = StyleSheet.create({
   fieldBlock: {
     gap: spacing.xs,
   },
-  label: {
-    color: colors.textLabel,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
   subLabel: {
     color: colors.textDim,
     fontSize: 12,
     fontWeight: '600',
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 8,
-    minHeight: 44,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
   descriptionInput: {
     minHeight: 72,
     paddingTop: 10,
     paddingBottom: 10,
-  },
-  segmentStretch: {
-    alignSelf: 'stretch',
-  },
-  segmentChipFlex: {
-    flex: 1,
   },
   workspaceList: {
     gap: spacing.xs,
@@ -783,21 +651,6 @@ const styles = StyleSheet.create({
     color: colors.textBody,
     fontSize: 14,
   },
-  primaryButton: {
-    marginTop: spacing.xs,
-    alignSelf: 'stretch',
-    backgroundColor: chrome.accent,
-    borderRadius: 8,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 15,
-    fontWeight: '700',
-  },
   cancelLink: {
     alignSelf: 'center',
     minHeight: 44,
@@ -808,8 +661,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

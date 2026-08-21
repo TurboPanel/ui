@@ -11,6 +11,7 @@ import {
 import { HeaderChevron } from '@/components/header-chevron'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { webPointer } from '@/components/org/org-panel-styles'
+import { EmptyState } from '@/components/ui'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import {
@@ -125,13 +126,15 @@ function WorkspaceResultsList({
       ) : null}
 
       {emptyWithoutQuery ? (
-        <Text style={styles.emptyHint}>No workspaces yet.</Text>
+        <View style={styles.emptyHint}>
+          <EmptyState title="No workspaces yet." />
+        </View>
       ) : null}
 
       {hasNoMatches ? (
-        <Text style={styles.emptyHint}>
-          No workspaces match “{queryLabel}”.
-        </Text>
+        <View style={styles.emptyHint}>
+          <EmptyState title={`No workspaces match “${queryLabel}”.`} />
+        </View>
       ) : null}
 
       {filteredUsers.map((workspace) => (
@@ -399,7 +402,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 14,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 36,
     marginHorizontal: spacing.xs,
     marginTop: spacing.xs,
@@ -408,7 +411,7 @@ const styles = StyleSheet.create({
     maxHeight: 240,
   },
   menuItem: {
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
     paddingHorizontal: spacing.sm,
@@ -438,8 +441,6 @@ const styles = StyleSheet.create({
     color: chrome.accent,
   },
   emptyHint: {
-    color: colors.textDim,
-    fontSize: 12,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
@@ -449,7 +450,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   menuAction: {
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: 8,
     minHeight: 36,

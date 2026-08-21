@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Checkbox, LoadingState } from '@/components/ui'
 import type { VariableParentFilter, VariableRecord } from '@/lib/instance-api'
 import {
   useCreateVariable,
@@ -105,7 +105,7 @@ const webCellInputStyle = {
   paddingHorizontal: 8,
   paddingVertical: 6,
   fontSize: 13,
-  borderRadius: 6,
+  borderRadius: 8,
   minHeight: 32,
 } as const
 
@@ -123,91 +123,15 @@ function trimOnBlur(
   }
 }
 
-function CheckboxIndicator({
-  pending,
-  checked,
-}: Readonly<{ pending: boolean; checked: boolean }>) {
-  if (pending) {
-    return (
-      <ActivityIndicator
-        size="small"
-        color={colors.textMuted}
-        style={styles.checkboxSpinner}
-      />
-    )
-  }
-  if (checked) {
-    return <Text style={styles.checkboxMark}>✓</Text>
-  }
-  return null
-}
-
-/** Bare boolean toggle — used for the Build / Runtime table columns. */
-function Checkbox({
-  checked,
-  disabled,
-  pending,
-  onToggle,
-}: Readonly<{
-  checked: boolean
-  disabled: boolean
-  pending: boolean
-  onToggle: () => void
-}>) {
-  return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled: disabled || pending }}
-      disabled={disabled || pending}
-      onPress={onToggle}
-      style={[
-        styles.checkbox,
-        checked && styles.checkboxChecked,
-        (disabled || pending) && styles.checkboxDisabled,
-      ]}
-    >
-      <CheckboxIndicator pending={pending} checked={checked} />
-    </Pressable>
-  )
-}
-
-/** Interactive Type checkbox for the add-variable row (Secret is chosen once, at creation). */
-function TypeCheckbox({
-  checked,
-  disabled,
-  onToggle,
-}: Readonly<{ checked: boolean; disabled: boolean; onToggle: () => void }>) {
-  return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled }}
-      disabled={disabled}
-      onPress={onToggle}
-      style={styles.labeledCheckbox}
-    >
-      <View
-        style={[
-          styles.checkbox,
-          checked && styles.checkboxChecked,
-          disabled && styles.checkboxDisabled,
-        ]}
-      >
-        <CheckboxIndicator pending={false} checked={checked} />
-      </View>
-      <Text style={styles.labeledCheckboxText}>Secret</Text>
-    </Pressable>
-  )
-}
-
 /** Read-only Type indicator for existing rows — secret status is fixed at creation. */
 function TypeCell({ secret }: Readonly<{ secret: boolean }>) {
   return (
-    <View style={styles.labeledCheckbox}>
-      <View style={[styles.checkbox, secret && styles.checkboxChecked, styles.checkboxDisabled]}>
-        <CheckboxIndicator pending={false} checked={secret} />
-      </View>
-      <Text style={styles.labeledCheckboxText}>Secret</Text>
-    </View>
+    <Checkbox
+      checked={secret}
+      disabled
+      onPress={() => undefined}
+      label="Secret"
+    />
   )
 }
 
@@ -626,16 +550,18 @@ function VariableTableRow({
         <Checkbox
           checked={variable.forBuild}
           disabled={!canOwn}
-          pending={togglingKey === `${variable.id}:forBuild`}
-          onToggle={() => onToggleFlag(variable, 'forBuild')}
+          busy={togglingKey === `${variable.id}:forBuild`}
+          onPress={() => onToggleFlag(variable, 'forBuild')}
+          accessibilityLabel={`${variable.key} for build`}
         />
       </View>
       <View style={[styles.colRuntime, styles.colCenter]}>
         <Checkbox
           checked={variable.forRuntime}
           disabled={!canOwn}
-          pending={togglingKey === `${variable.id}:forRuntime`}
-          onToggle={() => onToggleFlag(variable, 'forRuntime')}
+          busy={togglingKey === `${variable.id}:forRuntime`}
+          onPress={() => onToggleFlag(variable, 'forRuntime')}
+          accessibilityLabel={`${variable.key} for runtime`}
         />
       </View>
       <VariableActionsCell
@@ -700,10 +626,11 @@ function NewVariableRow({
   return (
     <View style={[styles.row, styles.rowNew]}>
       <View style={styles.colType}>
-        <TypeCheckbox
+        <Checkbox
           checked={newIsSecret}
           disabled={adding}
-          onToggle={onToggleSecret}
+          onPress={onToggleSecret}
+          label="Secret"
         />
       </View>
       <View style={styles.colName}>
@@ -759,16 +686,16 @@ function NewVariableRow({
         <Checkbox
           checked={newForBuild}
           disabled={adding}
-          pending={false}
-          onToggle={onToggleForBuild}
+          onPress={onToggleForBuild}
+          accessibilityLabel="For build"
         />
       </View>
       <View style={[styles.colRuntime, styles.colCenter]}>
         <Checkbox
           checked={newForRuntime}
           disabled={adding}
-          pending={false}
-          onToggle={onToggleForRuntime}
+          onPress={onToggleForRuntime}
+          accessibilityLabel="For runtime"
         />
       </View>
       <VariableEditActions
@@ -892,7 +819,7 @@ function VariablesTable({
   onToggleFlag: (variable: VariableRecord, field: VariableBooleanField) => void
 }>) {
   if (loading && variables.length === 0 && !showAddForm) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <LoadingState />
   }
 
   if (variables.length === 0 && !showAddForm) {
@@ -1661,7 +1588,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     fontSize: 13,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 32,
   },
   cellInputError: {
@@ -1670,41 +1597,6 @@ const styles = StyleSheet.create({
   cellMultiline: {
     minHeight: 32,
     textAlignVertical: 'top',
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgInput,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-  },
-  checkboxDisabled: {
-    opacity: 0.6,
-  },
-  checkboxMark: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  checkboxSpinner: {
-    transform: [{ scale: 0.6 }],
-  },
-  labeledCheckbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  labeledCheckboxText: {
-    color: colors.textBody,
-    fontSize: 11,
-    fontWeight: '600',
   },
   flagChip: {
     alignSelf: 'flex-start',

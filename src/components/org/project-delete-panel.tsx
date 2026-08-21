@@ -6,16 +6,9 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react'
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, LoadingState, TextField } from '@/components/ui'
 import {
   MANAGED_RUNTIME_PRESENT_ERROR,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
@@ -228,18 +221,13 @@ function StopStepSection({
                 <Text style={orgPanelStyles.error}>{row.error}</Text>
               ) : null}
             </View>
-            <Pressable
-              style={[
-                styles.dangerButton,
-                row.stopping && styles.buttonDisabled,
-              ]}
-              disabled={row.stopping}
+            <Button
+              label={row.stopping ? copy.actionBusyLabel : copy.actionLabel}
+              variant="danger"
+              size="sm"
+              busy={row.stopping}
               onPress={() => onStop(row.environment.id)}
-            >
-              <Text style={styles.dangerButtonText}>
-                {row.stopping ? copy.actionBusyLabel : copy.actionLabel}
-              </Text>
-            </Pressable>
+            />
           </View>
         ))}
       </View>
@@ -267,12 +255,11 @@ function ConfirmStepSection({
         Type <Text style={styles.confirmName}>{confirmName}</Text> to
         permanently delete this project.
       </Text>
-      <TextInput
-        style={Platform.OS === 'web' ? styles.webInput : styles.input}
+      <TextField
+        label="Project name"
         value={confirmText}
         onChangeText={onConfirmTextChange}
         placeholder={confirmName}
-        placeholderTextColor={colors.textDim}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!deleting}
@@ -337,14 +324,13 @@ function DeletePanelBody({
 }>) {
   if (loading) {
     return (
-      <View style={styles.loadingRow}>
-        <ActivityIndicator color={colors.accent} />
-        <Text style={orgPanelStyles.muted}>
-          {managedProject
+      <LoadingState
+        label={
+          managedProject
             ? 'Checking managed databases…'
-            : 'Checking running services…'}
-        </Text>
-      </View>
+            : 'Checking running services…'
+        }
+      />
     )
   }
   if (hasActiveServices) {
@@ -382,23 +368,23 @@ function ProjectDeleteActions({
 }>) {
   return (
     <View style={styles.actions}>
-      <Pressable
-        style={styles.secondaryButton}
-        onPress={onCancel}
+      <Button
+        label="Cancel"
+        variant="secondary"
+        size="sm"
         disabled={deleting}
-      >
-        <Text style={styles.secondaryButtonText}>Cancel</Text>
-      </Pressable>
+        onPress={onCancel}
+      />
       {showDelete ? (
-        <Pressable
-          style={[styles.dangerButton, !canDelete && styles.buttonDisabled]}
+        <Button
+          label="Delete permanently"
+          busyLabel="Deleting…"
+          variant="danger"
+          size="sm"
           disabled={!canDelete}
+          busy={deleting}
           onPress={onDelete}
-        >
-          <Text style={styles.dangerButtonText}>
-            {deleting ? 'Deleting…' : 'Delete permanently'}
-          </Text>
-        </Pressable>
+        />
       ) : null}
     </View>
   )
@@ -763,11 +749,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   section: {
     gap: spacing.sm,
   },
@@ -808,59 +789,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    borderRadius: 6,
-  },
-  webInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    borderRadius: 6,
-  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: spacing.sm,
     flexWrap: 'wrap',
-  },
-  secondaryButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  dangerButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.error,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  dangerButtonText: {
-    color: colors.error,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AdminHeader } from '@/components/admin/admin-header'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
-import { colors, layout } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 export function AdminShell() {
   const { width } = useWindowDimensions()
@@ -81,8 +81,8 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     paddingHorizontal: layout.contentGutter,
-    paddingVertical: 20,
-    gap: 12,
+    paddingVertical: spacing.xl,
+    gap: spacing.md,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,

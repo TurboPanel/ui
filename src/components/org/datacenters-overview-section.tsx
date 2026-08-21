@@ -1,5 +1,6 @@
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
+import { Button, EmptyState, LoadingState } from '@/components/ui'
 import {
   countServersByDatacenterId,
   datacenterDisplayName,
@@ -188,7 +189,7 @@ function DatacentersListBody({
   serverCountByDatacenter: ReadonlyMap<string, number>
 }>) {
   if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading datacenters…</Text>
+    return <LoadingState label="Loading datacenters…" />
   }
   if (datacenters.length === 0) {
     return <DatacentersEmptyState reason={eligibilityReason} />
@@ -204,10 +205,11 @@ function DatacentersListBody({
 
 function DatacentersEmptyState({ reason }: Readonly<{ reason: string | null }>) {
   return (
-    <View style={orgPanelStyles.statePanel}>
-      <Text style={orgPanelStyles.statePanelTitle}>No datacenters yet</Text>
-      <Text style={orgPanelStyles.muted}>{reason ?? 'Create one from a server IP.'}</Text>
-    </View>
+    <EmptyState
+      title="No datacenters yet"
+      hint={reason ?? 'Create one from a server IP.'}
+      panel
+    />
   )
 }
 
@@ -223,21 +225,13 @@ function DatacentersToolbar({
   if (!canManage) return null
   return (
     <View style={styles.toolbarRow}>
-      <Pressable
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnPrimary,
-          !canAdd && styles.buttonDisabled,
-          pressed && canAdd && styles.rowPressed,
-          webPointer,
-        ]}
+      <Button
+        label="+ Datacenter"
+        variant="primary"
         disabled={!canAdd}
         onPress={onAdd}
-        accessibilityRole="button"
         accessibilityLabel="Add datacenter"
-        accessibilityState={{ disabled: !canAdd }}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>+ Datacenter</Text>
-      </Pressable>
+      />
     </View>
   )
 }
@@ -318,9 +312,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginBottom: spacing.sm,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
   tableScroll: {
     width: '100%',

@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, ButtonRow } from '@/components/ui'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import {
   applyReencryptSecrets,
   type ReencryptSecretsCursor,
   type ReencryptSecretsResponse,
 } from '@/lib/instance-api'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 type SweepTotals = {
   scanned: number
@@ -103,27 +104,18 @@ function ReencryptActions(props: Readonly<{
 }>) {
   const { running, resumeCursor, onReencrypt, onResume } = props
   return (
-    <View style={styles.actions}>
-      <Pressable
-        accessibilityRole="button"
-        disabled={running}
+    <ButtonRow>
+      <Button
+        label="Re-encrypt secrets"
+        busyLabel="Re-encrypting…"
+        variant="primary"
+        busy={running}
         onPress={onReencrypt}
-        style={[styles.primaryButton, running ? styles.buttonDisabled : null]}
-      >
-        <Text style={styles.primaryButtonText}>
-          {running ? 'Re-encrypting…' : 'Re-encrypt secrets'}
-        </Text>
-      </Pressable>
+      />
       {resumeCursor && !running ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onResume}
-          style={styles.secondaryButton}
-        >
-          <Text style={styles.secondaryButtonText}>Resume sweep</Text>
-        </Pressable>
+        <Button label="Resume sweep" onPress={onResume} />
       ) : null}
-    </View>
+    </ButtonRow>
   )
 }
 
@@ -194,8 +186,8 @@ export function SecretsReencryptSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Secrets</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageTitle}>Secrets</Text>
+      <Text style={orgPanelStyles.pageCopy}>
         Re-seal at-rest secret envelopes to the current encryption key version
         after a key rotation. Runs in bounded batches so large installs can
         resume. Daemon-bound envelopes are left untouched; invalid plaintext
@@ -242,49 +234,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  secondaryButtonText: {
-    color: colors.textChip,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   summary: {
     marginTop: spacing.md,

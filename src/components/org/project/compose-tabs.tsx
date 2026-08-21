@@ -5,9 +5,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { usePathname } from 'expo-router'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button } from '@/components/ui'
 import {
   composeDraftScopeKey,
   composeFullYaml,
@@ -67,7 +68,7 @@ import {
   countDistinctProjectServers,
   resolveEffectiveServerId,
 } from '@/lib/project-options'
-import { chrome, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 function inventoryItem(
   key: string,
@@ -99,19 +100,15 @@ function OverviewSaveButton({
   onSave: () => void
 }>) {
   return (
-    <Pressable
-      style={[
-        styles.saveButton,
-        webPointer,
-        disabled && styles.buttonDisabled,
-      ]}
-      onPress={onSave}
+    <Button
+      label="Save"
+      busyLabel="Saving…"
+      variant="primary"
+      size="sm"
+      busy={saving}
       disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={saving ? 'Saving…' : 'Save'}
-    >
-      <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
-    </Pressable>
+      onPress={onSave}
+    />
   )
 }
 
@@ -680,19 +677,4 @@ export function ComposeStorageTab() {
 const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
   overviewCompose: { width: '100%', gap: spacing.md },
-  saveButton: {
-    borderRadius: 6,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 0,
-    minHeight: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: chrome.onAccent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  buttonDisabled: { opacity: 0.6 },
 })

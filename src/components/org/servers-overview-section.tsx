@@ -3,6 +3,7 @@ import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
+import { Checkbox, EmptyState, LoadingState } from '@/components/ui'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
 import {
   indexFleetUsageByServerId,
@@ -88,16 +89,6 @@ function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
-function checkboxMark(checked: boolean, indeterminate: boolean) {
-  if (indeterminate) {
-    return <Text style={styles.checkboxMark}>−</Text>
-  }
-  if (checked) {
-    return <Text style={styles.checkboxMark}>✓</Text>
-  }
-  return null
-}
-
 function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
   if (server.osLogo) return server.osLogo
   const id = server.os?.id?.toLowerCase()
@@ -155,40 +146,6 @@ function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
   if (err instanceof Error) return err.message
   if (forbidden) return 'Access to servers was denied'
   return 'Failed to load servers'
-}
-
-function SelectionCheckbox({
-  checked,
-  indeterminate = false,
-  onPress,
-  accessibilityLabel,
-  stopPropagation,
-}: Readonly<{
-  checked: boolean
-  indeterminate?: boolean
-  onPress: () => void
-  accessibilityLabel: string
-  stopPropagation?: boolean
-}>) {
-  return (
-    <Pressable
-      onPress={(event) => {
-        if (stopPropagation && 'stopPropagation' in event) {
-          ;(event as { stopPropagation?: () => void }).stopPropagation?.()
-        }
-        onPress()
-      }}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: indeterminate ? 'mixed' : checked }}
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={8}
-      style={styles.checkboxHit}
-    >
-      <View style={[styles.checkbox, (checked || indeterminate) && styles.checkboxChecked]}>
-        {checkboxMark(checked, indeterminate)}
-      </View>
-    </Pressable>
-  )
 }
 
 function ListLayoutIcon({ size = 16, color }: Readonly<{ size?: number; color: string }>) {
@@ -398,12 +355,14 @@ function ServersOverviewToolbar({
         </TouchableOpacity>
       ) : null}
       {showSelectAll ? (
-        <SelectionCheckbox
-          checked={allSelected}
-          indeterminate={someSelected}
-          onPress={onToggleSelectAll}
-          accessibilityLabel="Select all servers"
-        />
+        <View style={styles.checkboxHit}>
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onPress={onToggleSelectAll}
+            accessibilityLabel="Select all servers"
+          />
+        </View>
       ) : null}
       <ServersLayoutToggle layout={layout} onChange={onLayoutChange} />
     </View>
@@ -604,21 +563,13 @@ function OrgServerTableRow({
       <ServerLocationCell server={server} />
       <ServerUsageCell usage={usage} cpuCores={serverCpuThreads(server)} />
       <ServerMeshCell overlayAddress={overlayAddress} />
-      <Pressable
-        onPress={(event) => {
-          event.stopPropagation?.()
-          onToggleSelected()
-        }}
-        style={[styles.tableCell, styles.colCheck]}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: selected }}
-        accessibilityLabel={`Select ${serverTitle(server)}`}
-        hitSlop={8}
-      >
-        <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
-          {checkboxMark(selected, false)}
-        </View>
-      </Pressable>
+      <View style={[styles.tableCell, styles.colCheck]}>
+        <Checkbox
+          checked={selected}
+          onPress={onToggleSelected}
+          accessibilityLabel={`Select ${serverTitle(server)}`}
+        />
+      </View>
     </Pressable>
   )
 }
@@ -659,21 +610,13 @@ function OrgServerCompactRow({
             <ServerCountryLine server={server} />
           </View>
         </View>
-        <Pressable
-          onPress={(event) => {
-            event.stopPropagation?.()
-            onToggleSelected()
-          }}
-          style={styles.compactCheck}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: selected }}
-          accessibilityLabel={`Select ${serverTitle(server)}`}
-          hitSlop={8}
-        >
-          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
-            {checkboxMark(selected, false)}
-          </View>
-        </Pressable>
+        <View style={styles.compactCheck}>
+          <Checkbox
+            checked={selected}
+            onPress={onToggleSelected}
+            accessibilityLabel={`Select ${serverTitle(server)}`}
+          />
+        </View>
       </View>
       <View style={styles.compactStats}>
         <ServerUsageBars
@@ -716,12 +659,11 @@ function ServersFleetCompactList({
 
 function ServersFleetEmptyState() {
   return (
-    <View style={orgPanelStyles.statePanel}>
-      <Text style={orgPanelStyles.statePanelTitle}>Add your first server</Text>
-      <Text style={orgPanelStyles.muted}>
-        Use + Server to enroll a host and start deploying projects to your fleet.
-      </Text>
-    </View>
+    <EmptyState
+      panel
+      title="Add your first server"
+      hint="Use + Server to enroll a host and start deploying projects to your fleet."
+    />
   )
 }
 
@@ -773,7 +715,7 @@ function ServersFleetTable({
             <Text style={styles.tableHeaderText}>Mesh</Text>
           </View>
           <View style={[styles.tableCell, styles.colCheck]}>
-            <SelectionCheckbox
+            <Checkbox
               checked={allSelected}
               indeterminate={someSelected}
               onPress={onToggleSelectAll}
@@ -838,21 +780,13 @@ function OrgServerTile({
         <View style={styles.tileIdentity}>
           <ServerHostIdentity server={server} />
         </View>
-        <Pressable
-          onPress={(event) => {
-            event.stopPropagation?.()
-            onToggleSelected()
-          }}
-          style={styles.tileCheck}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: selected }}
-          accessibilityLabel={`Select ${title}`}
-          hitSlop={8}
-        >
-          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
-            {checkboxMark(selected, false)}
-          </View>
-        </Pressable>
+        <View style={styles.tileCheck}>
+          <Checkbox
+            checked={selected}
+            onPress={onToggleSelected}
+            accessibilityLabel={`Select ${title}`}
+          />
+        </View>
       </View>
       <View style={styles.tileMeta}>
         <ServerStatusBadge server={server} />
@@ -927,12 +861,7 @@ function ServersOverviewFleet({
       {fleetSurface.showFleetPanel ? (
         <SectionPanel>
           {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-          {loading && serverCount === 0 ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={orgPanelStyles.muted}>Loading fleet…</Text>
-            </View>
-          ) : null}
+          {loading && serverCount === 0 ? <LoadingState label="Loading fleet…" /> : null}
           {!loading && serverCount === 0 ? <ServersFleetEmptyState /> : null}
           {fleetSurface.showDetailInPanel ? (
             <ServersFleetDetailView compactList={false} {...fleetViewProps} />
@@ -1294,12 +1223,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-  },
   tableScroll: {
     width: '100%',
     alignSelf: 'stretch',
@@ -1490,25 +1413,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgInput,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  checkboxMark: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '700',
   },
   compactList: {
     alignSelf: 'stretch',

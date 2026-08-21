@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  EmptyState,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import {
   useApplyPublicUrls,
   usePublicUrls,
   useSavePublicUrls,
 } from '@/lib/queries/admin'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
@@ -112,8 +113,8 @@ export function ControlPlaneUrlsSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Networking</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageTitle}>Networking</Text>
+      <Text style={orgPanelStyles.pageCopy}>
         Configure the public addresses this control plane is reachable at.
         These URLs drive the Platform CA leaf SANs used for daemon → control-plane
         trust (explicitly not the per-organization Organization CA).
@@ -125,7 +126,7 @@ export function ControlPlaneUrlsSection() {
       >
         {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
         {publicUrlsQuery.isLoading ? (
-          <Text style={orgPanelStyles.muted}>Loading...</Text>
+          <LoadingState />
         ) : (
           <PublicUrlsEditor
             draft={draft}
@@ -179,44 +180,38 @@ function PublicUrlsEditor({
       <UrlList draft={draft} onRemoveUrl={onRemoveUrl} />
 
       <View style={styles.addRow}>
-        <TextInput
-          value={newUrl}
-          onChangeText={onNewUrlChange}
-          placeholder="https://panel.example.com:8443"
-          placeholderTextColor={colors.textDim}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={styles.input}
-          onSubmitEditing={onAddUrl}
-        />
-        <Pressable style={styles.secondaryButton} onPress={onAddUrl}>
-          <Text style={styles.secondaryButtonText}>Add</Text>
-        </Pressable>
+        <View style={styles.addField}>
+          <TextField
+            label="New URL"
+            value={newUrl}
+            onChangeText={onNewUrlChange}
+            placeholder="https://panel.example.com:8443"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={onAddUrl}
+          />
+        </View>
+        <Button label="Add" onPress={onAddUrl} />
       </View>
 
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.primaryButton, saving && styles.buttonDisabled]}
-          disabled={saving}
+      <ButtonRow>
+        <Button
+          label="Save"
+          busyLabel="Saving..."
+          variant="primary"
+          busy={saving}
           onPress={onSave}
-        >
-          <Text style={styles.primaryButtonText}>
-            {saving ? 'Saving...' : 'Save'}
-          </Text>
-        </Pressable>
-
+        />
         {!applyNotAvailable ? (
-          <Pressable
-            style={[styles.primaryButton, applying && styles.buttonDisabled]}
-            disabled={applying}
+          <Button
+            label="Save & Apply"
+            busyLabel="Saving & Applying..."
+            variant="primary"
+            busy={applying}
             onPress={onSaveAndApply}
-          >
-            <Text style={styles.primaryButtonText}>
-              {applying ? 'Saving & Applying...' : 'Save & Apply'}
-            </Text>
-          </Pressable>
+          />
         ) : null}
-      </View>
+      </ButtonRow>
 
       <ApplyAvailabilityNote applyNotAvailable={applyNotAvailable} />
       <ApplyFeedback
@@ -238,7 +233,7 @@ function UrlList({
   if (draft.length === 0) {
     return (
       <View style={styles.list}>
-        <Text style={orgPanelStyles.muted}>No public URLs configured.</Text>
+        <EmptyState title="No public URLs configured." />
       </View>
     )
   }
@@ -250,12 +245,11 @@ function UrlList({
           <Text selectable style={styles.urlText}>
             {url}
           </Text>
-          <Pressable
-            style={styles.removeButton}
+          <Button
+            label="Remove"
+            size="sm"
             onPress={() => onRemoveUrl(index)}
-          >
-            <Text style={styles.removeButtonText}>Remove</Text>
-          </Pressable>
+          />
         </View>
       ))}
     </View>
@@ -311,16 +305,6 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
   list: {
     gap: 8,
   },
@@ -343,66 +327,12 @@ const styles = StyleSheet.create({
   },
   addRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  input: {
+  addField: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  secondaryButtonText: {
-    color: colors.textChip,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  removeButton: {
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  removeButtonText: {
-    color: colors.textChip,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   applyPending: {
     color: colors.pending,

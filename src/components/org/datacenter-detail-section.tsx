@@ -1,17 +1,22 @@
 import { useRouter, type Href } from 'expo-router'
-import { useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { HeaderChevron } from '@/components/header-chevron'
+import { AddressFamilyBadge } from '@/components/org/address-family-badge'
 import { FormSelect } from '@/components/org/form-select'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type {
   DatacenterAddressPreference,
   DatacenterDetailRecord,
@@ -101,18 +106,29 @@ function errorIncludes(err: unknown, code: string): boolean {
   return err instanceof Error && err.message.includes(code)
 }
 
-function AddressFamilyBadge({
-  family,
-}: Readonly<{ family: 'IPv4' | 'IPv6' | null }>) {
-  if (!family) return null
+/** Compact summary row that expands its detail in place. */
+function ExpandToggle({
+  expanded,
+  accessibilityLabel,
+  onPress,
+  children,
+}: Readonly<{
+  expanded: boolean
+  accessibilityLabel: string
+  onPress: () => void
+  children: ReactNode
+}>) {
   return (
-    <View
-      style={orgPanelStyles.segmentChip}
-      accessibilityRole="text"
-      accessibilityLabel={family}
+    <Pressable
+      style={[styles.summaryRow, webPointer]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityLabel={accessibilityLabel}
     >
-      <Text style={orgPanelStyles.segmentChipText}>{family}</Text>
-    </View>
+      <View style={styles.summaryCopy}>{children}</View>
+      <HeaderChevron size={12} color={colors.textMuted} open={expanded} />
+    </Pressable>
   )
 }
 
@@ -137,44 +153,29 @@ function DatacenterIdentityPanel({
 
   return (
     <SectionPanel title="Datacenter">
-      <View style={styles.identityField}>
-        <Text style={styles.fieldLabel}>Display name</Text>
-        <TextInput
-          value={name}
-          onChangeText={onDisplayNameChange}
-          placeholder="e.g. AMS-1"
-          placeholderTextColor={colors.textDim}
-          style={styles.identityInput}
-          editable={!pending}
-          accessibilityLabel="Datacenter display name"
-        />
-      </View>
-      <View style={styles.identityField}>
-        <Text style={styles.fieldLabel}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={onDescriptionChange}
-          placeholder="Optional notes"
-          placeholderTextColor={colors.textDim}
-          style={styles.identityInput}
-          editable={!pending}
-          accessibilityLabel="Datacenter description"
-        />
-      </View>
-      <Pressable
-        disabled={pending}
+      <TextField
+        label="Display name"
+        value={name}
+        onChangeText={onDisplayNameChange}
+        placeholder="e.g. AMS-1"
+        editable={!pending}
+        accessibilityLabel="Datacenter display name"
+      />
+      <TextField
+        label="Description"
+        value={description}
+        onChangeText={onDescriptionChange}
+        placeholder="Optional notes"
+        editable={!pending}
+        accessibilityLabel="Datacenter description"
+      />
+      <Button
+        label="Save"
+        variant="primary"
+        busy={pending}
         onPress={onSave}
-        style={[
-          orgPanelStyles.toolbarBtnPrimary,
-          pending && styles.buttonDisabled,
-          webPointer,
-        ]}
-        accessibilityRole="button"
         accessibilityLabel="Save datacenter"
-        accessibilityState={{ disabled: pending, busy: pending }}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-      </Pressable>
+      />
     </SectionPanel>
   )
 }
@@ -210,32 +211,21 @@ function SubnetLabelField({
   onSaveLabel: () => void
 }>) {
   return (
-    <View style={styles.identityField}>
-      <Text style={styles.fieldLabel}>Label</Text>
-      <TextInput
+    <View style={styles.labelField}>
+      <TextField
+        label="Label"
         value={label}
         onChangeText={onDraftLabelChange}
         placeholder="Optional"
-        placeholderTextColor={colors.textDim}
-        style={styles.identityInput}
         editable={!pending}
         accessibilityLabel={`Subnet label for ${cidr}`}
       />
-      <Pressable
+      <Button
+        label="Save label"
         disabled={pending}
         onPress={onSaveLabel}
-        style={[
-          orgPanelStyles.toolbarBtnSecondary,
-          pending && styles.buttonDisabled,
-          webPointer,
-        ]}
-        accessibilityRole="button"
         accessibilityLabel={`Save subnet label for ${cidr}`}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-          Save label
-        </Text>
-      </Pressable>
+      />
     </View>
   )
 }
@@ -255,94 +245,73 @@ function SubnetCard({
   subnet,
   canManage,
   pending,
-  confirming,
   onDraftLabelChange,
   onSaveLabel,
-  onRequestDelete,
-  onCancelDelete,
-  onConfirmDelete,
+  onDelete,
 }: Readonly<{
   subnet: DatacenterSubnetRecord
   canManage: boolean
   pending: boolean
-  confirming: boolean
   onDraftLabelChange: (value: string) => void
   onSaveLabel: () => void
-  onRequestDelete: () => void
-  onCancelDelete: () => void
-  onConfirmDelete: () => void
+  onDelete: () => void
 }>) {
+  const [expanded, setExpanded] = useState(false)
   const family = subnet.version === 6 ? 'IPv6' : 'IPv4'
   const blocked = subnet.memberCount > 0
   const label = subnet.name ?? ''
 
   return (
     <View style={orgPanelStyles.detailCard}>
-      <View style={styles.subnetTitleRow}>
-        <Text style={styles.mono} selectable>
-          {subnet.cidr}
-        </Text>
-        <AddressFamilyBadge family={family} />
-      </View>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Servers: </Text>
-        {formatDatacenterServerCount(subnet.memberCount)}
-      </Text>
-      {canManage ? (
-        <SubnetLabelField
-          cidr={subnet.cidr}
-          label={label}
-          pending={pending}
-          onDraftLabelChange={onDraftLabelChange}
-          onSaveLabel={onSaveLabel}
-        />
-      ) : (
-        <SubnetLabelReadout name={subnet.name} />
-      )}
-      {canManage && blocked ? (
-        <Text style={orgPanelStyles.muted}>
-          Unassign the pinned servers first.
-        </Text>
-      ) : null}
-      {canManage && confirming && !blocked ? (
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
-            onPress={onConfirmDelete}
-            accessibilityRole="button"
-            accessibilityLabel={`Confirm delete subnet ${subnet.cidr}`}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-              Confirm delete
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-            onPress={onCancelDelete}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel subnet delete"
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {canManage && !confirming ? (
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            (blocked || pending) && styles.buttonDisabled,
-            webPointer,
-          ]}
-          disabled={blocked || pending}
-          onPress={onRequestDelete}
-          accessibilityRole="button"
-          accessibilityLabel={`Delete subnet ${subnet.cidr}`}
-          accessibilityState={{ disabled: blocked || pending }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Delete subnet
+      <ExpandToggle
+        expanded={expanded}
+        accessibilityLabel={
+          expanded
+            ? `Collapse subnet ${subnet.cidr}`
+            : `Expand subnet ${subnet.cidr}`
+        }
+        onPress={() => setExpanded((prev) => !prev)}
+      >
+        <View style={styles.subnetTitleRow}>
+          <Text style={styles.mono} selectable>
+            {subnet.cidr}
           </Text>
-        </Pressable>
+          <AddressFamilyBadge family={family} />
+        </View>
+        <Text style={orgPanelStyles.detailLine}>
+          <Text style={orgPanelStyles.detailLabel}>Servers: </Text>
+          {formatDatacenterServerCount(subnet.memberCount)}
+        </Text>
+        {!expanded ? <SubnetLabelReadout name={subnet.name} /> : null}
+      </ExpandToggle>
+      {expanded ? (
+        <>
+          {canManage ? (
+            <SubnetLabelField
+              cidr={subnet.cidr}
+              label={label}
+              pending={pending}
+              onDraftLabelChange={onDraftLabelChange}
+              onSaveLabel={onSaveLabel}
+            />
+          ) : (
+            <SubnetLabelReadout name={subnet.name} />
+          )}
+          {canManage && blocked ? (
+            <Text style={orgPanelStyles.muted}>
+              Unassign the pinned servers first.
+            </Text>
+          ) : null}
+          {canManage ? (
+            <ConfirmButton
+              label="Delete subnet"
+              confirmLabel="Confirm delete"
+              prompt={`Delete subnet ${subnet.cidr}?`}
+              disabled={blocked || pending}
+              onConfirm={onDelete}
+            />
+          ) : null}
+        </>
       ) : null}
     </View>
   )
@@ -360,15 +329,12 @@ function SubnetsPanel({
   pending,
   addCidr,
   addLabel,
-  confirmingNetworkId,
   onAddCidrChange,
   onAddLabelChange,
   onAdd,
   onDraftLabelChange,
   onSaveLabel,
-  onRequestDelete,
-  onCancelDelete,
-  onConfirmDelete,
+  onDeleteSubnet,
 }: Readonly<{
   subnets: readonly DatacenterSubnetRecord[]
   loading: boolean
@@ -376,15 +342,12 @@ function SubnetsPanel({
   pending: boolean
   addCidr: string
   addLabel: string
-  confirmingNetworkId: string | null
   onAddCidrChange: (value: string) => void
   onAddLabelChange: (value: string) => void
   onAdd: () => void
   onDraftLabelChange: (networkId: string, value: string) => void
   onSaveLabel: (networkId: string) => void
-  onRequestDelete: (networkId: string) => void
-  onCancelDelete: () => void
-  onConfirmDelete: (networkId: string) => void
+  onDeleteSubnet: (networkId: string) => void
 }>) {
   const sorted = sortDatacenterSubnets(subnets)
   const normalizedAdd = normalizeCidr(addCidr)
@@ -392,15 +355,9 @@ function SubnetsPanel({
 
   return (
     <SectionPanel title="Subnets" hint={subnetPanelHint(sorted.length)}>
-      {loading && sorted.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
-      ) : null}
+      {loading && sorted.length === 0 ? <LoadingState label="Loading…" /> : null}
       {!loading && sorted.length === 0 ? (
-        <View style={orgPanelStyles.statePanel}>
-          <Text style={orgPanelStyles.muted}>
-            No subnets yet — add one.
-          </Text>
-        </View>
+        <EmptyState title="No subnets yet — add one." panel />
       ) : null}
       {sorted.length > 0 ? (
         <View style={styles.list}>
@@ -410,14 +367,11 @@ function SubnetsPanel({
               subnet={subnet}
               canManage={canManage}
               pending={pending}
-              confirming={confirmingNetworkId === subnet.id}
               onDraftLabelChange={(value) =>
                 onDraftLabelChange(subnet.id, value)
               }
               onSaveLabel={() => onSaveLabel(subnet.id)}
-              onRequestDelete={() => onRequestDelete(subnet.id)}
-              onCancelDelete={onCancelDelete}
-              onConfirmDelete={() => onConfirmDelete(subnet.id)}
+              onDelete={() => onDeleteSubnet(subnet.id)}
             />
           ))}
         </View>
@@ -425,49 +379,38 @@ function SubnetsPanel({
 
       {canManage ? (
         <View style={styles.assignBlock}>
-          <View style={styles.identityField}>
-            <Text style={styles.fieldLabel}>CIDR</Text>
-            <TextInput
-              value={addCidr}
-              onChangeText={onAddCidrChange}
-              placeholder="203.0.113.0/24"
-              placeholderTextColor={colors.textDim}
-              style={[styles.identityInput, styles.monoInput]}
-              editable={!pending}
-              accessibilityLabel="New subnet CIDR"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {normalizedAdd && normalizedAdd !== addCidr.trim() ? (
-              <Text style={orgPanelStyles.muted}>{normalizedAdd}</Text>
-            ) : null}
-          </View>
-          <View style={styles.identityField}>
-            <Text style={styles.fieldLabel}>Label</Text>
-            <TextInput
-              value={addLabel}
-              onChangeText={onAddLabelChange}
-              placeholder="Optional"
-              placeholderTextColor={colors.textDim}
-              style={styles.identityInput}
-              editable={!pending}
-              accessibilityLabel="New subnet label"
-            />
-          </View>
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              addDisabled && styles.buttonDisabled,
-              webPointer,
-            ]}
+          <TextField
+            label="CIDR"
+            value={addCidr}
+            onChangeText={onAddCidrChange}
+            placeholder="203.0.113.0/24"
+            hint={
+              normalizedAdd && normalizedAdd !== addCidr.trim()
+                ? normalizedAdd
+                : undefined
+            }
+            editable={!pending}
+            accessibilityLabel="New subnet CIDR"
+            autoCapitalize="none"
+            autoCorrect={false}
+            mono
+          />
+          <TextField
+            label="Label"
+            value={addLabel}
+            onChangeText={onAddLabelChange}
+            placeholder="Optional"
+            editable={!pending}
+            accessibilityLabel="New subnet label"
+          />
+          <Button
+            label="Add subnet"
+            variant="primary"
             disabled={addDisabled}
+            busy={pending}
             onPress={onAdd}
-            accessibilityRole="button"
             accessibilityLabel="Add subnet"
-            accessibilityState={{ disabled: addDisabled, busy: pending }}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add subnet</Text>
-          </Pressable>
+          />
         </View>
       ) : null}
     </SectionPanel>
@@ -493,61 +436,30 @@ function AddressPreferencePanel({
   const saveDisabled = pending || !loaded
 
   return (
-    <SectionPanel title="Routing">
+    <SectionPanel title="Routing" collapsible defaultCollapsed>
       <Text style={styles.fieldLabel}>Address preference</Text>
-      <View style={orgPanelStyles.segmentGroup}>
-        {(['ipv6', 'ipv4'] as const).map((value) => {
-          const active = preference === value
-          const label = value === 'ipv6' ? 'Prefer IPv6' : 'Prefer IPv4'
-          return (
-            <Pressable
-              key={value}
-              style={[
-                orgPanelStyles.segmentChip,
-                active && orgPanelStyles.segmentChipActive,
-                controlsDisabled && styles.buttonDisabled,
-                webPointer,
-              ]}
-              disabled={controlsDisabled}
-              onPress={() => onChange(value)}
-              accessibilityRole="button"
-              accessibilityState={{
-                selected: active,
-                disabled: controlsDisabled,
-              }}
-              accessibilityLabel={label}
-            >
-              <Text
-                style={[
-                  orgPanelStyles.segmentChipText,
-                  active && orgPanelStyles.segmentChipTextActive,
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      <SegmentedControl
+        options={[
+          { value: 'ipv6', label: 'Prefer IPv6' },
+          { value: 'ipv4', label: 'Prefer IPv4' },
+        ]}
+        value={preference}
+        onChange={onChange}
+        disabled={controlsDisabled}
+      />
       <Text style={orgPanelStyles.muted}>
         Only applies when both servers have an address in the same datacenter in
         both families.
       </Text>
       {canManage ? (
-        <Pressable
+        <Button
+          label="Save"
+          variant="primary"
           disabled={saveDisabled}
+          busy={pending}
           onPress={onSave}
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            saveDisabled && styles.buttonDisabled,
-            webPointer,
-          ]}
-          accessibilityRole="button"
           accessibilityLabel="Save address preference"
-          accessibilityState={{ disabled: saveDisabled, busy: pending }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-        </Pressable>
+        />
       ) : (
         <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
       )}
@@ -602,6 +514,75 @@ function pinSubnetCidr(
     if (byId) return byId.cidr
   }
   return subnetForAddress(subnets, pin.address)?.cidr ?? null
+}
+
+function MemberPinCard({
+  pin,
+  server,
+  pinCount,
+  subnets,
+  canManage,
+  pending,
+  onUnassign,
+}: Readonly<{
+  pin: DatacenterMemberPin
+  server: OrgServerRecord | undefined
+  pinCount: number
+  subnets: readonly DatacenterSubnetRecord[]
+  canManage: boolean
+  pending: boolean
+  onUnassign: () => void
+}>) {
+  const [expanded, setExpanded] = useState(false)
+  const serverLabel = server ? serverTitle(server) : pin.serverId
+  const unassignLabel = pinUnassignAccessibilityLabel(pinCount, serverLabel)
+  const unassignText = pinUnassignText(pinCount)
+
+  return (
+    <View style={orgPanelStyles.detailCard}>
+      <ExpandToggle
+        expanded={expanded}
+        accessibilityLabel={
+          expanded
+            ? `Collapse ${serverLabel} ${pin.address}`
+            : `Expand ${serverLabel} ${pin.address}`
+        }
+        onPress={() => setExpanded((prev) => !prev)}
+      >
+        <Text style={orgPanelStyles.detailTitle}>{serverLabel}</Text>
+        <View style={styles.pinAddressRow}>
+          <Text style={styles.mono} selectable>
+            {pin.address}
+          </Text>
+          <AddressFamilyBadge family={addressFamilyLabel(pin.address)} />
+        </View>
+      </ExpandToggle>
+      {expanded ? (
+        <>
+          {server ? (
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Status: </Text>
+              {serverConnectionStatusLabel(
+                resolveServerConnectionStatus(server),
+              )}
+            </Text>
+          ) : null}
+          <Text style={orgPanelStyles.detailLine}>
+            <Text style={orgPanelStyles.detailLabel}>Subnet: </Text>
+            {pinSubnetCidr(pin, subnets) ?? '—'}
+          </Text>
+          {canManage ? (
+            <Button
+              label={unassignText}
+              disabled={pending}
+              onPress={onUnassign}
+              accessibilityLabel={unassignLabel}
+            />
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  )
 }
 
 function MemberServersPanel({
@@ -675,64 +656,21 @@ function MemberServersPanel({
       hint={memberPanelHint(pins.length, uniqueServerCount)}
     >
       {pins.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>None yet.</Text>
+        <EmptyState title="None yet." />
       ) : (
         <View style={styles.list}>
-          {pins.map((pin) => {
-            const server = serversById.get(pin.serverId)
-            const pinCount = pinCountByServer.get(pin.serverId) ?? 1
-            const serverLabel = server ? serverTitle(server) : pin.serverId
-            const unassignLabel = pinUnassignAccessibilityLabel(
-              pinCount,
-              serverLabel,
-            )
-            const unassignText = pinUnassignText(pinCount)
-            return (
-              <View
-                key={pin.ipId}
-                style={orgPanelStyles.detailCard}
-              >
-                <Text style={orgPanelStyles.detailTitle}>
-                  {server ? serverTitle(server) : pin.serverId}
-                </Text>
-                {server ? (
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>Status: </Text>
-                    {serverConnectionStatusLabel(
-                      resolveServerConnectionStatus(server),
-                    )}
-                  </Text>
-                ) : null}
-                <View style={styles.pinAddressRow}>
-                  <Text style={styles.mono} selectable>
-                    {pin.address}
-                  </Text>
-                  <AddressFamilyBadge family={addressFamilyLabel(pin.address)} />
-                </View>
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Subnet: </Text>
-                  {pinSubnetCidr(pin, subnets) ?? '—'}
-                </Text>
-                {canManage ? (
-                  <Pressable
-                    style={[
-                      orgPanelStyles.toolbarBtnSecondary,
-                      pending && styles.buttonDisabled,
-                      webPointer,
-                    ]}
-                    disabled={pending}
-                    onPress={() => onUnassign(pin.serverId)}
-                    accessibilityRole="button"
-                    accessibilityLabel={unassignLabel}
-                  >
-                    <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                      {unassignText}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            )
-          })}
+          {pins.map((pin) => (
+            <MemberPinCard
+              key={pin.ipId}
+              pin={pin}
+              server={serversById.get(pin.serverId)}
+              pinCount={pinCountByServer.get(pin.serverId) ?? 1}
+              subnets={subnets}
+              canManage={canManage}
+              pending={pending}
+              onUnassign={() => onUnassign(pin.serverId)}
+            />
+          ))}
         </View>
       )}
 
@@ -744,8 +682,7 @@ function MemberServersPanel({
             </Text>
           ) : (
             <>
-              <View style={styles.identityField}>
-                <Text style={styles.fieldLabel}>Server</Text>
+              <FormField label="Server">
                 <FormSelect
                   value={assignServerId}
                   options={serverOptions}
@@ -754,10 +691,9 @@ function MemberServersPanel({
                   accessibilityLabel="Add server"
                   onChange={selectAssignServer}
                 />
-              </View>
+              </FormField>
               {assignServerId ? (
-                <View style={styles.identityField}>
-                  <Text style={styles.fieldLabel}>Private IP</Text>
+                <FormField label="Private IP">
                   <FormSelect
                     value={assignAddress}
                     options={addressOptions}
@@ -767,18 +703,11 @@ function MemberServersPanel({
                     mono
                     onChange={onSelectAddress}
                   />
-                </View>
+                </FormField>
               ) : null}
-              <Pressable
-                style={[
-                  orgPanelStyles.toolbarBtnPrimary,
-                  (!assignServerId ||
-                    !assignAddress ||
-                    !addressIsCandidate ||
-                    pending) &&
-                    styles.buttonDisabled,
-                  webPointer,
-                ]}
+              <Button
+                label="Add"
+                variant="primary"
                 disabled={
                   !assignServerId ||
                   !assignAddress ||
@@ -786,9 +715,7 @@ function MemberServersPanel({
                   pending
                 }
                 onPress={onAssign}
-              >
-                <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add</Text>
-              </Pressable>
+              />
             </>
           )}
         </View>
@@ -917,10 +844,10 @@ function MeshFromDatacenterPanel({
         </Text>
       ) : null}
       {canManage && loading && rows.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading mesh…</Text>
+        <LoadingState label="Loading mesh…" />
       ) : null}
       {canManage && !loading && rows.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No relays here.</Text>
+        <EmptyState title="No relays here." />
       ) : null}
 
       {canManage && missingCidr ? (
@@ -1013,39 +940,36 @@ function DatacenterSshPortPanel({
   }
 
   return (
-    <SectionPanel title="SSH port" hint="Inherited by member servers">
-      <TextInput
+    <SectionPanel
+      title="SSH port"
+      hint="Inherited by member servers"
+      collapsible
+      defaultCollapsed
+    >
+      <TextField
+        label="SSH port"
         value={sshText}
         onChangeText={setDraft}
         editable={!readOnly && !pending && Boolean(datacenter)}
         keyboardType="number-pad"
         placeholder={String(DEFAULT_SSH_PORT)}
-        placeholderTextColor={colors.textMuted}
+        error={localError}
         accessibilityLabel="Datacenter SSH port"
-        style={[
-          styles.identityInput,
-          (readOnly || pending) && styles.buttonDisabled,
-        ]}
       />
       <Text style={orgPanelStyles.muted}>
         Empty inherits the organization default (then {String(DEFAULT_SSH_PORT)}
         ). Saving does not change sshd.
       </Text>
-      {localError ? <Text style={orgPanelStyles.error}>{localError}</Text> : null}
       {readOnly ? (
         <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
       ) : (
-        <Pressable
+        <Button
+          label="Save"
+          variant="primary"
           disabled={pending || !datacenter}
+          busy={pending}
           onPress={save}
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            (pending || !datacenter) && styles.buttonDisabled,
-            webPointer,
-          ]}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-        </Pressable>
+        />
       )}
     </SectionPanel>
   )
@@ -1077,7 +1001,12 @@ function DatacenterNtpPanel({
   }
 
   return (
-    <SectionPanel title="NTP defaults" hint="Desired settings · apply per host">
+    <SectionPanel
+      title="NTP defaults"
+      hint="Desired settings · apply per host"
+      collapsible
+      defaultCollapsed
+    >
       <View style={styles.switchRow}>
         <View style={styles.switchCopy}>
           <Text style={styles.switchLabel}>NTP client enabled</Text>
@@ -1099,36 +1028,22 @@ function DatacenterNtpPanel({
           <Text style={styles.toggleText}>{enabled ? 'On' : 'Off'}</Text>
         </Pressable>
       </View>
-      <View style={styles.identityField}>
-        <Text style={styles.fieldLabel}>NTP servers</Text>
-        <TextInput
-          value={serversText}
-          onChangeText={setDraftServers}
-          editable={!readOnly && !pending && Boolean(datacenter)}
-          placeholder="time.cloudflare.com, pool.ntp.org"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Datacenter NTP servers"
-          style={[
-            styles.identityInput,
-            (readOnly || pending) && styles.buttonDisabled,
-          ]}
-        />
-      </View>
-      <View style={styles.identityField}>
-        <Text style={styles.fieldLabel}>Fallback NTP servers</Text>
-        <TextInput
-          value={fallbackText}
-          onChangeText={setDraftFallback}
-          editable={!readOnly && !pending && Boolean(datacenter)}
-          placeholder="Optional fallback hosts"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Datacenter fallback NTP servers"
-          style={[
-            styles.identityInput,
-            (readOnly || pending) && styles.buttonDisabled,
-          ]}
-        />
-      </View>
+      <TextField
+        label="NTP servers"
+        value={serversText}
+        onChangeText={setDraftServers}
+        editable={!readOnly && !pending && Boolean(datacenter)}
+        placeholder="time.cloudflare.com, pool.ntp.org"
+        accessibilityLabel="Datacenter NTP servers"
+      />
+      <TextField
+        label="Fallback NTP servers"
+        value={fallbackText}
+        onChangeText={setDraftFallback}
+        editable={!readOnly && !pending && Boolean(datacenter)}
+        placeholder="Optional fallback hosts"
+        accessibilityLabel="Datacenter fallback NTP servers"
+      />
       <Text style={orgPanelStyles.muted}>
         Empty + off inherits the organization NTP default. Apply still happens
         on each server Time tab.
@@ -1136,39 +1051,27 @@ function DatacenterNtpPanel({
       {readOnly ? (
         <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
       ) : (
-        <View style={styles.actionsRow}>
-          <Pressable
+        <ButtonRow>
+          <Button
+            label="Save"
+            variant="primary"
             disabled={pending || !datacenter}
+            busy={pending}
             onPress={() => {
               const next = isEmptyNtpDraft(enabled, serversText, fallbackText)
                 ? null
                 : ntpDefaultsFromDrafts(enabled, serversText, fallbackText)
               onSave(next, resetDrafts)
             }}
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              (pending || !datacenter) && styles.buttonDisabled,
-              webPointer,
-            ]}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-          </Pressable>
+          />
           {ntp != null ? (
-            <Pressable
+            <Button
+              label="Clear (inherit)"
               disabled={pending || !datacenter}
               onPress={() => onSave(null, resetDrafts)}
-              style={[
-                orgPanelStyles.toolbarBtnSecondary,
-                (pending || !datacenter) && styles.buttonDisabled,
-                webPointer,
-              ]}
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                Clear (inherit)
-              </Text>
-            </Pressable>
+            />
           ) : null}
-        </View>
+        </ButtonRow>
       )}
     </SectionPanel>
   )
@@ -1196,7 +1099,7 @@ function DatacenterTimezonePanel({
   onSave: () => void
 }>) {
   return (
-    <SectionPanel title="Timezone">
+    <SectionPanel title="Timezone" collapsible defaultCollapsed>
       <ServerTimezonePicker
         value={effectiveTimezone}
         options={timezoneOptions}
@@ -1229,19 +1132,13 @@ function DatacenterTimezonePanel({
       {readOnly ? (
         <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
       ) : (
-        <Pressable
+        <Button
+          label="Save"
+          variant="primary"
           disabled={pending || !datacenter}
+          busy={pending}
           onPress={onSave}
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            (pending || !datacenter) && styles.buttonDisabled,
-            webPointer,
-          ]}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            Save
-          </Text>
-        </Pressable>
+        />
       )}
     </SectionPanel>
   )
@@ -1251,17 +1148,11 @@ function DatacenterDeletePanel({
   memberCount,
   canManage,
   deleting,
-  confirming,
-  onRequestConfirm,
-  onCancel,
   onConfirm,
 }: Readonly<{
   memberCount: number
   canManage: boolean
   deleting: boolean
-  confirming: boolean
-  onRequestConfirm: () => void
-  onCancel: () => void
   onConfirm: () => void
 }>) {
   if (!canManage) return null
@@ -1269,7 +1160,7 @@ function DatacenterDeletePanel({
   const blocked = memberCount > 0
 
   return (
-    <SectionPanel title="Delete">
+    <SectionPanel title="Delete" collapsible defaultCollapsed>
       {blocked ? (
         <Text style={orgPanelStyles.muted}>
           Unassign every server first.
@@ -1279,45 +1170,14 @@ function DatacenterDeletePanel({
           Permanently remove this empty datacenter.
         </Text>
       )}
-      {deleting ? (
-        <View style={styles.inlineRow}>
-          <ActivityIndicator size="small" color={colors.textMuted} />
-          <Text style={orgPanelStyles.muted}>Deleting…</Text>
-        </View>
-      ) : null}
-      {!deleting && confirming && !blocked ? (
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnPrimary, webPointer]}
-            onPress={onConfirm}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-              Confirm delete
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-            onPress={onCancel}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {!deleting && !confirming ? (
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            blocked && styles.buttonDisabled,
-            webPointer,
-          ]}
-          disabled={blocked}
-          onPress={onRequestConfirm}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Delete datacenter
-          </Text>
-        </Pressable>
-      ) : null}
+      <ConfirmButton
+        label="Delete datacenter"
+        confirmLabel="Confirm delete"
+        prompt="Permanently delete this datacenter?"
+        busy={deleting}
+        disabled={blocked}
+        onConfirm={onConfirm}
+      />
     </SectionPanel>
   )
 }
@@ -1345,7 +1205,6 @@ export function DatacenterDetailSection({
   const [error, setError] = useState<string | null>(null)
   const [assignServerId, setAssignServerId] = useState('')
   const [assignAddress, setAssignAddress] = useState('')
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [draftName, setDraftName] = useState<string | null>(null)
   const [draftDescription, setDraftDescription] = useState<string | null>(null)
   const [draftTimezone, setDraftTimezone] = useState<string | null | undefined>(
@@ -1358,9 +1217,6 @@ export function DatacenterDetailSection({
   const [addLabel, setAddLabel] = useState('')
   const [subnetLabelDrafts, setSubnetLabelDrafts] = useState(
     () => new Map<string, string>(),
-  )
-  const [confirmingSubnetId, setConfirmingSubnetId] = useState<string | null>(
-    null,
   )
 
   const datacenterQuery = useDatacenter(orgId, datacenterId, {
@@ -1555,7 +1411,6 @@ export function DatacenterDetailSection({
         pending={pending}
         addCidr={addCidr}
         addLabel={addLabel}
-        confirmingNetworkId={confirmingSubnetId}
         onAddCidrChange={setAddCidr}
         onAddLabelChange={setAddLabel}
         onAdd={() => {
@@ -1616,33 +1471,14 @@ export function DatacenterDetailSection({
             },
           )
         }}
-        onRequestDelete={setConfirmingSubnetId}
-        onCancelDelete={() => setConfirmingSubnetId(null)}
-        onConfirmDelete={(networkId) => {
+        onDeleteSubnet={(networkId) => {
           setError(null)
           deleteSubnetMutation.mutate(networkId, {
-            onSuccess: () => setConfirmingSubnetId(null),
             onError: (err) => {
-              setConfirmingSubnetId(null)
               setError(subnetDeleteErrorMessage(err))
             },
           })
         }}
-      />
-
-      <AddressPreferencePanel
-        preference={addressPreference}
-        canManage={canManage}
-        pending={pending}
-        loaded={Boolean(datacenter)}
-        onChange={setDraftPreference}
-        onSave={() =>
-          saveMergedOptions(
-            { addressPreference },
-            () => setDraftPreference(null),
-            'Failed to save address preference',
-          )
-        }
       />
 
       <MemberServersPanel
@@ -1691,6 +1527,21 @@ export function DatacenterDetailSection({
         subnetCount={subnets.length}
         loading={fabricQuery.isLoading}
         canManage={canManage}
+      />
+
+      <AddressPreferencePanel
+        preference={addressPreference}
+        canManage={canManage}
+        pending={pending}
+        loaded={Boolean(datacenter)}
+        onChange={setDraftPreference}
+        onSave={() =>
+          saveMergedOptions(
+            { addressPreference },
+            () => setDraftPreference(null),
+            'Failed to save address preference',
+          )
+        }
       />
 
       <DatacenterTimezonePanel
@@ -1743,9 +1594,6 @@ export function DatacenterDetailSection({
         memberCount={members.length}
         canManage={canManage}
         deleting={deleteMutation.isPending}
-        confirming={confirmingDelete}
-        onRequestConfirm={() => setConfirmingDelete(true)}
-        onCancel={() => setConfirmingDelete(false)}
         onConfirm={() => {
           setError(null)
           deleteMutation.mutate(datacenterId, {
@@ -1753,7 +1601,6 @@ export function DatacenterDetailSection({
               router.replace(serversDatacentersHref(orgId) as Href)
             },
             onError: (err) => {
-              setConfirmingDelete(false)
               setError(deleteDatacenterErrorMessage(err))
             },
           })
@@ -1785,6 +1632,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  summaryCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
   pinAddressRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1807,22 +1664,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  identityField: {
+  labelField: {
     gap: spacing.xs,
-  },
-  identityInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontSize: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 44,
-  },
-  monoInput: {
-    fontFamily: 'monospace',
   },
   mono: {
     fontFamily: 'monospace',
@@ -1865,16 +1708,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: '600',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  inlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
   },
   buttonDisabled: {
     opacity: 0.5,

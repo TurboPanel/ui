@@ -33,8 +33,8 @@ export function SignupSettingsSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Sign-up</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageTitle}>Sign-up</Text>
+      <Text style={orgPanelStyles.pageCopy}>
         Control whether public account creation is available on the sign-in
         page. {HA_SIGNUP_SETTINGS_NOTE}
       </Text>
@@ -111,16 +111,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
   },
   row: {
     flexDirection: 'row',

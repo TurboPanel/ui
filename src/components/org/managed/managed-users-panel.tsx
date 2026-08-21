@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  EmptyState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type { BindingRedeployRequired } from '@/lib/instance-api'
 import {
   managedErrorMessage,
@@ -24,18 +23,6 @@ import { chrome, colors, spacing } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
 const DATABASE_PATTERN = /^[a-zA-Z_]\w{0,62}$/
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
 
 function Chip({ label }: Readonly<{ label: string }>) {
   return (
@@ -82,32 +69,19 @@ function ConnectionRolePicker({
   return (
     <>
       <Text style={orgPanelStyles.detailLabel}>Connection role</Text>
-      <View style={styles.chipRow}>
-        {CONNECTION_ROLE_OPTIONS.map((option) => {
-          const selected = option.value === value
-          const optionDisabled =
-            disabled || (option.value === 'read-only' && !readOnlyAvailable)
-          return (
-            <Pressable
-              key={option.value}
-              style={[
-                styles.chip,
-                selected && styles.chipSelected,
-                webPointer,
-                optionDisabled && styles.disabled,
-              ]}
-              disabled={optionDisabled}
-              onPress={() => onChange(option.value)}
-            >
-              <Text
-                style={[styles.chipText, selected && styles.chipTextSelected]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      <SegmentedControl
+        options={CONNECTION_ROLE_OPTIONS.map((option) => ({
+          value: option.value,
+          label: option.label,
+          // With no read-eligible replica only the Read-only option locks;
+          // Read/write stays selectable.
+          disabled: option.value === 'read-only' && !readOnlyAvailable,
+        }))}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        accessibilityLabel="Connection role"
+      />
       {active ? <Text style={orgPanelStyles.muted}>{active.hint}</Text> : null}
       {readOnlyAvailable ? null : (
         <Text style={orgPanelStyles.muted}>
@@ -116,56 +90,6 @@ function ConnectionRolePicker({
         </Text>
       )}
     </>
-  )
-}
-
-function DeleteActions({
-  armed,
-  disabled,
-  onConfirm,
-  onCancel,
-  onArm,
-  buttonStyle,
-  label = 'Delete',
-}: Readonly<{
-  armed: boolean
-  disabled: boolean
-  onConfirm: () => void
-  onCancel: () => void
-  onArm: () => void
-  buttonStyle?: StyleProp<ViewStyle>
-  label?: string
-}>) {
-  if (armed) {
-    return (
-      <View style={styles.rowActions}>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={disabled}
-          onPress={onConfirm}
-        >
-          <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
-            Confirm delete
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancel}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
-    )
-  }
-
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer, buttonStyle]}
-      disabled={disabled}
-      onPress={onArm}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>{label}</Text>
-    </Pressable>
   )
 }
 
@@ -190,28 +114,21 @@ function RedeployServicesPanel({
           <Text style={styles.rowLabel}>
             {service.name?.trim() || service.keyPrefix}
           </Text>
-          <Pressable
-            style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-            disabled={busyId === service.serviceId}
+          <Button
+            label="Redeploy"
+            busyLabel="Redeploying…"
+            size="sm"
+            busy={busyId === service.serviceId}
             onPress={() => {
               setBusyId(service.serviceId)
               void onRedeploy(service.environmentId).finally(() =>
                 setBusyId(null),
               )
             }}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-              {busyId === service.serviceId ? 'Redeploying…' : 'Redeploy'}
-            </Text>
-          </Pressable>
+          />
         </View>
       ))}
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-        onPress={onDismiss}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Done</Text>
-      </Pressable>
+      <Button label="Done" onPress={onDismiss} />
     </View>
   )
 }
@@ -264,8 +181,6 @@ export function ManagedUsersPanel({
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
-  const [deleteArmedDb, setDeleteArmedDb] = useState<string | null>(null)
-  const [deleteArmedUser, setDeleteArmedUser] = useState<string | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
   const [revealedUsername, setRevealedUsername] = useState<string | null>(null)
   const [redeployRequired, setRedeployRequired] =
@@ -342,11 +257,9 @@ export function ManagedUsersPanel({
     setError(null)
     try {
       await onDeleteDatabase(name)
-      setDeleteArmedDb(null)
       await onReload()
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete database'))
-      setDeleteArmedDb(null)
     } finally {
       setWorking(false)
     }
@@ -401,11 +314,9 @@ export function ManagedUsersPanel({
     setError(null)
     try {
       await onDeleteUser(principalId)
-      setDeleteArmedUser(null)
       await onReload()
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete user'))
-      setDeleteArmedUser(null)
     } finally {
       setWorking(false)
     }
@@ -479,14 +390,14 @@ export function ManagedUsersPanel({
                 </Text>
               ) : null}
               {canManage && !deleteBlocked ? (
-                <DeleteActions
-                  armed={deleteArmedDb === name}
+                <ConfirmButton
+                  label="Delete"
+                  confirmLabel="Confirm delete"
+                  prompt="Delete this database?"
                   disabled={disabled}
                   onConfirm={() => {
                     void deleteDatabase(name)
                   }}
-                  onCancel={() => setDeleteArmedDb(null)}
-                  onArm={() => setDeleteArmedDb(name)}
                 />
               ) : null}
             </View>
@@ -495,30 +406,24 @@ export function ManagedUsersPanel({
       </View>
 
       {canManage ? (
-        <View style={styles.formRow}>
-          <TextInput
-            style={Platform.OS === 'web' ? webInputStyle : styles.input}
+        <View style={styles.formCol}>
+          <TextField
+            label="Database name"
             value={dbName}
             onChangeText={setDbName}
             placeholder="database_name"
-            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!disabled}
           />
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              webPointer,
-              disabled && styles.disabled,
-            ]}
+          <Button
+            label="Add database"
+            variant="primary"
             disabled={disabled}
             onPress={() => {
               void createDatabase()
             }}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add database</Text>
-          </Pressable>
+          />
         </View>
       ) : null}
 
@@ -556,55 +461,50 @@ export function ManagedUsersPanel({
                 </Text>
               ) : null}
               {canManage ? (
-                <View style={styles.userActions}>
-                  <Pressable
-                    style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+                <ButtonRow>
+                  <Button
+                    label="Rotate password"
+                    size="sm"
                     disabled={disabled}
                     onPress={() => {
                       void rotateUser(user.id, user.username)
                     }}
-                  >
-                    <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                      Rotate password
-                    </Text>
-                  </Pressable>
+                  />
                   {deleteBlocked ? (
                     <Text style={orgPanelStyles.muted}>
                       Remove connections first ({bindingCount})
                     </Text>
                   ) : (
-                    <DeleteActions
-                      armed={deleteArmedUser === user.id}
+                    <ConfirmButton
+                      label="Delete"
+                      confirmLabel="Confirm delete"
+                      prompt="Delete this user?"
                       disabled={disabled}
                       onConfirm={() => {
                         void deleteUser(user.id)
                       }}
-                      onCancel={() => setDeleteArmedUser(null)}
-                      onArm={() => setDeleteArmedUser(user.id)}
-                      buttonStyle={styles.deleteBtn}
                     />
                   )}
-                </View>
+                </ButtonRow>
               ) : null}
             </View>
           )
         })}
         {users.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No additional users yet.</Text>
+          <EmptyState title="No additional users yet." />
         ) : null}
       </View>
 
       {canManage ? (
         <View style={styles.createUser}>
-          <TextInput
-            style={Platform.OS === 'web' ? webInputStyle : styles.input}
+          <TextField
+            label="Username"
             value={username}
             onChangeText={(value) => {
               setUsername(value)
               setUsernameHint(null)
             }}
             placeholder="username"
-            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!disabled}
@@ -622,6 +522,9 @@ export function ManagedUsersPanel({
                   style={[styles.chip, selected && styles.chipSelected, webPointer]}
                   onPress={() => toggleDb(name)}
                   disabled={disabled}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected, disabled }}
+                  accessibilityLabel={name}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                     {name}
@@ -636,19 +539,14 @@ export function ManagedUsersPanel({
             disabled={disabled}
             readOnlyAvailable={hasReadTargets}
           />
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnPrimary,
-              webPointer,
-              disabled && styles.disabled,
-            ]}
+          <Button
+            label="Create user"
+            variant="primary"
             disabled={disabled}
             onPress={() => {
               void createUser()
             }}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Create user</Text>
-          </Pressable>
+          />
         </View>
       ) : null}
     </SectionPanel>
@@ -677,28 +575,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'monospace',
   },
-  rowActions: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  formRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  formCol: {
     gap: spacing.sm,
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    minWidth: 160,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minHeight: 44,
   },
   userCard: {
     borderWidth: 1,
@@ -737,25 +615,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  deleteBtn: {
-    alignSelf: 'flex-start',
-  },
-  danger: {
-    color: colors.error,
-  },
-  disabled: {
-    opacity: 0.55,
-  },
   connectedChip: {
     color: chrome.accent,
     fontSize: 11,
     fontWeight: '600',
-  },
-  userActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
   },
   redeployCard: {
     marginTop: spacing.md,

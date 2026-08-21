@@ -1,14 +1,8 @@
 import { useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, ButtonRow, TextField } from '@/components/ui'
 import type { ManagedStatus } from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
 
@@ -63,73 +57,43 @@ export function ManagedLifecyclePanel({
   return (
     <SectionPanel title="Lifecycle" hint="Start, stop, apply, or delete">
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      <View style={styles.actions}>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            webPointer,
-            applying && styles.disabled,
-          ]}
+      <ButtonRow>
+        <Button
+          label="Start"
           disabled={applying}
           onPress={() => {
             void run(() => onLifecycle('start'))
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Start</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            webPointer,
-            applying && styles.disabled,
-          ]}
+        />
+        <Button
+          label="Stop"
           disabled={applying}
           onPress={() => {
             void run(() => onLifecycle('stop'))
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Stop</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            webPointer,
-            applying && styles.disabled,
-          ]}
+        />
+        <Button
+          label="Restart"
           disabled={applying}
           onPress={() => {
             void run(() => onLifecycle('restart'))
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Restart</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            webPointer,
-            applying && styles.disabled,
-          ]}
+        />
+        <Button
+          label="Apply changes"
+          variant="primary"
           disabled={applying}
           onPress={() => {
             void run(onApply)
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Apply changes</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            webPointer,
-            applying && styles.disabled,
-          ]}
+        />
+        <Button
+          label="Delete"
+          variant="danger"
           disabled={applying}
           onPress={() => setShowDelete((current) => !current)}
-        >
-          <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
-            Delete
-          </Text>
-        </Pressable>
-      </View>
+        />
+      </ButtonRow>
 
       {showDelete ? (
         <View style={styles.deleteBox}>
@@ -137,23 +101,21 @@ export function ManagedLifecyclePanel({
             Type <Text style={styles.confirmName}>{projectName}</Text> to
             permanently delete this managed service.
           </Text>
-          <TextInput
-            style={Platform.OS === 'web' ? styles.webInput : styles.input}
+          <TextField
+            label="Confirmation"
             value={confirmText}
             onChangeText={setConfirmText}
             placeholder={projectName}
-            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!applying}
           />
-          <View style={styles.actions}>
-            <Pressable
-              style={[
-                orgPanelStyles.toolbarBtnSecondary,
-                webPointer,
-                !canConfirmDelete && styles.disabled,
-              ]}
+          <ButtonRow>
+            <Button
+              label="Confirm delete"
+              busyLabel="Deleting…"
+              variant="danger"
+              busy={working}
               disabled={!canConfirmDelete}
               onPress={() => {
                 void run(async () => {
@@ -162,21 +124,15 @@ export function ManagedLifecyclePanel({
                   setConfirmText('')
                 })
               }}
-            >
-              <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
-                {working ? 'Deleting…' : 'Confirm delete'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+            />
+            <Button
+              label="Cancel"
               onPress={() => {
                 setShowDelete(false)
                 setConfirmText('')
               }}
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-            </Pressable>
-          </View>
+            />
+          </ButtonRow>
         </View>
       ) : null}
     </SectionPanel>
@@ -184,11 +140,6 @@ export function ManagedLifecyclePanel({
 }
 
 const styles = StyleSheet.create({
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
   deleteBox: {
     marginTop: spacing.md,
     gap: spacing.sm,
@@ -206,32 +157,5 @@ const styles = StyleSheet.create({
   confirmName: {
     color: colors.text,
     fontWeight: '700',
-  },
-  webInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  danger: {
-    color: colors.error,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

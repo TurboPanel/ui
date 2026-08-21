@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { NetworkListItem } from '@/components/org/network/network-rows'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type { NetworkRecord, OrgServerRecord } from '@/lib/instance-api'
 import {
   useCreateNetwork,
@@ -18,57 +19,10 @@ import {
 } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
-type ServerOption = { id: string; label: string }
-
-function HostPinChips({
-  options,
-  selectedId,
-  onSelect,
-}: Readonly<{
-  options: ServerOption[]
-  selectedId: string
-  onSelect: (id: string) => void
-}>) {
-  return (
-    <View style={styles.chipRow}>
-      <HostPinChip
-        label="None"
-        active={selectedId === ''}
-        onPress={() => onSelect('')}
-      />
-      {options.map((option) => (
-        <HostPinChip
-          key={option.id}
-          label={option.label}
-          active={selectedId === option.id}
-          onPress={() => onSelect(option.id)}
-        />
-      ))}
-    </View>
-  )
-}
-
-function HostPinChip({
-  label,
-  active,
-  onPress,
-}: Readonly<{ label: string; active: boolean; onPress: () => void }>) {
-  return (
-    <Pressable
-      style={[styles.chip, active && styles.chipActive, webPointer]}
-      onPress={onPress}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  )
 }
 
 /**
@@ -85,12 +39,14 @@ function DockerNetworkRegisterPanel({
   const [hostPinServerId, setHostPinServerId] = useState('')
   const createMutation = useCreateNetwork(orgId)
 
-  const serverOptions = useMemo(
-    () =>
-      servers.map((server) => ({
-        id: server.id,
+  const hostPinOptions = useMemo(
+    () => [
+      { value: '', label: 'None' },
+      ...servers.map((server) => ({
+        value: server.id,
         label: serverTitle(server),
       })),
+    ],
     [servers],
   )
 
@@ -124,53 +80,47 @@ function DockerNetworkRegisterPanel({
   }
 
   return (
-    <SectionPanel title="Register Docker network" hint="Manage-gated">
+    <SectionPanel
+      title="Register Docker network"
+      hint="Manage-gated"
+      collapsible
+      defaultCollapsed
+    >
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
-      <Text style={styles.fieldLabel}>Display name</Text>
-      <TextInput
+      <TextField
+        label="Display name"
+        placeholder="Optional label"
         value={displayName}
         onChangeText={setDisplayName}
-        placeholder="Optional label"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
       />
-      <Text style={styles.fieldLabel}>Docker network name</Text>
-      <Text style={orgPanelStyles.muted}>
-        Must match compose networks.*.name on deploy.
-      </Text>
-      <TextInput
+      <TextField
+        label="Docker network name"
+        hint="Must match compose networks.*.name on deploy."
+        placeholder="turbopanel-shared"
         value={dockerNetworkName}
         onChangeText={setDockerNetworkName}
-        placeholder="turbopanel-shared"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
+        mono
       />
-      <Text style={styles.fieldLabel}>Host pin (optional)</Text>
-      <Text style={orgPanelStyles.muted}>
-        Pin to a host for a host-local external network.
-      </Text>
-      <HostPinChips
-        options={serverOptions}
-        selectedId={hostPinServerId}
-        onSelect={setHostPinServerId}
-      />
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnPrimary,
-          createDisabled && styles.buttonDisabled,
-          webPointer,
-        ]}
+      <FormField
+        label="Host pin (optional)"
+        hint="Pin to a host for a host-local external network."
+      >
+        <SegmentedControl
+          options={hostPinOptions}
+          value={hostPinServerId}
+          onChange={setHostPinServerId}
+          accessibilityLabel="Host pin"
+        />
+      </FormField>
+      <Button
+        label="Register"
+        variant="primary"
+        busy={creating}
         disabled={createDisabled}
         onPress={handleRegister}
-      >
-        {creating ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : (
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Register</Text>
-        )}
-      </Pressable>
+      />
     </SectionPanel>
   )
 }
@@ -207,10 +157,10 @@ function DockerNetworkListPanel({
     >
       {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
       {loading && networks.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading Docker networks…</Text>
+        <LoadingState label="Loading Docker networks…" />
       ) : null}
       {!loading && networks.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No Docker networks registered yet.</Text>
+        <EmptyState title="No Docker networks registered yet." />
       ) : null}
       <View style={styles.list}>
         {networks.map((network) => (
@@ -285,54 +235,5 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 8,
-  },
-  fieldLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontSize: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: spacing.sm,
-    minHeight: 44,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  chip: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
-  },
-  chipText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: colors.accent,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

@@ -14,10 +14,18 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native'
+import { HeaderChevron } from '@/components/header-chevron'
+import {
+  Button,
+  ButtonRow,
+  Checkbox,
+  EmptyState,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -70,7 +78,6 @@ import { useTlsLibrary } from '@/lib/queries/tls'
 import { useIps } from '@/lib/queries/topology'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
-  composeDocumentToRuntimeYaml,
   hostingDockerBridgeHint,
   hostingPathPrefixHint,
   hostingPhpSectionCopy,
@@ -455,27 +462,6 @@ const webSelectStyle: CSSProperties = {
   minHeight: 44,
 }
 
-function ProxyToggle({
-  label,
-  checked,
-  disabled,
-  onToggle,
-}: Readonly<{
-  label: string
-  checked: boolean
-  disabled: boolean
-  onToggle: () => void
-}>) {
-  return (
-    <Pressable style={styles.proxyToggleRow} disabled={disabled} onPress={onToggle}>
-      <View style={[styles.proxyCheckbox, checked && styles.proxyCheckboxChecked]}>
-        {checked ? <Text style={styles.proxyCheckboxMark}>✓</Text> : null}
-      </View>
-      <Text style={styles.proxyToggleLabel}>{label}</Text>
-    </Pressable>
-  )
-}
-
 function HostingWebEnvAndPhpFields({
   serviceContext,
   editor,
@@ -503,9 +489,12 @@ function HostingWebEnvAndPhpFields({
 
   return (
     <>
-      <Text style={styles.fieldLabel}>{webEnvCopy.title}</Text>
-      <Text style={orgPanelStyles.muted}>{webEnvCopy.hint}</Text>
-      {showWebEnvFields ? (
+      {!showWebEnvFields ? (
+        <>
+          <Text style={styles.fieldLabel}>{webEnvCopy.title}</Text>
+          <Text style={orgPanelStyles.muted}>{webEnvCopy.hint}</Text>
+        </>
+      ) : (
         <>
           {!webEnvCopy.showFields && hasWebEnvValues ? (
             <Text style={styles.staleFieldWarn}>
@@ -513,17 +502,18 @@ function HostingWebEnvAndPhpFields({
               before save if you no longer need them.
             </Text>
           ) : null}
-          <TextInput
+          <TextField
+            label={webEnvCopy.title}
+            hint={webEnvCopy.hint}
             value={editor.webEnvLines}
             onChangeText={(value) => onChange({ webEnvLines: value })}
             placeholder={'APP_ENV=production\n# comments allowed'}
-            placeholderTextColor={colors.textDim}
-            style={[styles.hostnamesInput, styles.webEnvInput]}
+            mono
             autoCapitalize="none"
             multiline
           />
         </>
-      ) : null}
+      )}
 
       <Text style={styles.fieldLabel}>{phpCopy.title}</Text>
       <Text style={orgPanelStyles.muted}>{phpCopy.hint}</Text>
@@ -535,31 +525,28 @@ function HostingWebEnvAndPhpFields({
               before save if you no longer need them.
             </Text>
           ) : null}
-          <Text style={styles.fieldLabel}>PHP version</Text>
-          <TextInput
+          <TextField
+            label="PHP version"
             value={editor.phpVersion}
             onChangeText={(value) => onChange({ phpVersion: value })}
             placeholder="8.4"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
+            mono
             autoCapitalize="none"
           />
-          <Text style={styles.fieldLabel}>Memory limit</Text>
-          <TextInput
+          <TextField
+            label="Memory limit"
             value={editor.phpMemoryLimit}
             onChangeText={(value) => onChange({ phpMemoryLimit: value })}
             placeholder="256M"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
+            mono
             autoCapitalize="none"
           />
-          <Text style={styles.fieldLabel}>Max execution time (seconds)</Text>
-          <TextInput
+          <TextField
+            label="Max execution time (seconds)"
             value={editor.phpMaxExecutionTime}
             onChangeText={(value) => onChange({ phpMaxExecutionTime: value })}
             placeholder="30"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
+            mono
             keyboardType="number-pad"
           />
         </>
@@ -568,12 +555,45 @@ function HostingWebEnvAndPhpFields({
   )
 }
 
+const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
+  public: 'Public',
+  datacenter: 'Datacenter',
+  local: 'Local',
+}
+
+/** One-line collapsed summary: hostnames/ports + port + TLS mode + bind. */
+function hostingRowSummary(
+  editor: HostingEditorState,
+  tlsOptions: TlsRecord[],
+): string {
+  const bindLabel = HOSTING_BIND_LABELS[editor.bind]
+  if (editor.protocol !== 'http') {
+    return [
+      editor.protocol === 'tcp' ? 'Tcp' : 'Udp',
+      editor.ports.trim() || 'no ports',
+      bindLabel,
+    ].join(' · ')
+  }
+  const tlsRow = editor.tlsId
+    ? tlsOptions.find((row) => row.id === editor.tlsId)
+    : undefined
+  const parts = [
+    editor.hostnames.trim() || 'no hostnames',
+    editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
+    tlsRow ? tlsLabel(tlsRow) : 'Self-signed',
+    bindLabel,
+  ]
+  return parts.filter(Boolean).join(' · ')
+}
+
 function HostingPanelRow({
   orgId,
   composeServiceName,
   serviceContext,
   hostingId,
   focused = false,
+  expanded,
+  onToggleExpanded,
   editor,
   tlsOptions,
   publicIps,
@@ -589,6 +609,9 @@ function HostingPanelRow({
   hostingId: string | null
   /** Highlight when opened from a `/networking/:hostingId` deep link. */
   focused?: boolean
+  /** Full editor visible; collapsed rows show the one-line summary only. */
+  expanded: boolean
+  onToggleExpanded: () => void
   editor: HostingEditorState
   tlsOptions: TlsRecord[]
   publicIps: IpRecord[]
@@ -608,15 +631,48 @@ function HostingPanelRow({
   const kindLabel = hostingServiceKindLabel(serviceContext)
   const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
 
+  const header = (
+    <Pressable
+      style={[styles.hostingSummaryPress, webPointer]}
+      onPress={onToggleExpanded}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityLabel={
+        expanded
+          ? `Collapse ${composeServiceName} hosting`
+          : `Expand ${composeServiceName} hosting`
+      }
+    >
+      <View style={styles.hostingSummaryCopy}>
+        <View style={styles.hostingTitleRow}>
+          <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
+          <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
+        </View>
+        <Text style={styles.hostingSummaryText} numberOfLines={1}>
+          {hostingRowSummary(editor, tlsOptions)}
+        </Text>
+      </View>
+      <HeaderChevron size={12} color={colors.textMuted} open={expanded} />
+    </Pressable>
+  )
+
+  if (!expanded) {
+    return (
+      <View
+        style={[orgPanelStyles.detailCard, focused && styles.hostingRowFocused]}
+        accessibilityState={focused ? { selected: true } : undefined}
+      >
+        {header}
+      </View>
+    )
+  }
+
   return (
     <View
       style={[orgPanelStyles.detailCard, focused && styles.hostingRowFocused]}
       accessibilityState={focused ? { selected: true } : undefined}
     >
-      <View style={styles.hostingTitleRow}>
-        <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
-        <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
-      </View>
+      {header}
       {dockerBridgeHint ? (
         <Text style={styles.tlsHint}>{dockerBridgeHint}</Text>
       ) : null}
@@ -650,29 +706,26 @@ function HostingPanelRow({
       </View>
 
       {isHttp ? (
-        <TextInput
+        <TextField
+          label="Hostnames"
           value={editor.hostnames}
           onChangeText={(value) => onChange({ hostnames: value })}
           placeholder="app.example.com, www.example.com"
-          placeholderTextColor={colors.textDim}
-          style={styles.hostnamesInput}
+          mono
+          autoCapitalize="none"
         />
       ) : (
-        <>
-          <Text style={styles.fieldLabel}>Ports</Text>
-          <Text style={styles.tlsHint}>
-            Comma-separated published[:target] pairs. Target defaults to
-            published when omitted (e.g. &quot;5432, 8443:8080&quot;).
-          </Text>
-          <TextInput
-            value={editor.ports}
-            onChangeText={(value) => onChange({ ports: value })}
-            placeholder="5432, 8443:8080"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
-            autoCapitalize="none"
-          />
-        </>
+        <TextField
+          label="Ports"
+          hint={
+            'Comma-separated published[:target] pairs. Target defaults to published when omitted (e.g. "5432, 8443:8080").'
+          }
+          value={editor.ports}
+          onChangeText={(value) => onChange({ ports: value })}
+          placeholder="5432, 8443:8080"
+          mono
+          autoCapitalize="none"
+        />
       )}
 
       {isHttp ? (
@@ -774,53 +827,48 @@ function HostingPanelRow({
       {isHttp ? (
         <>
           <Text style={styles.tlsLabel}>Proxy</Text>
-          <ProxyToggle
+          <Checkbox
             label="Force HTTPS"
             checked={editor.forceHttps}
             disabled={disabled}
-            onToggle={() => onChange({ forceHttps: !editor.forceHttps })}
+            onPress={() => onChange({ forceHttps: !editor.forceHttps })}
           />
-          <ProxyToggle
+          <Checkbox
             label="Gzip"
             checked={editor.gzip}
             disabled={disabled}
-            onToggle={() => onChange({ gzip: !editor.gzip })}
+            onPress={() => onChange({ gzip: !editor.gzip })}
           />
-          <ProxyToggle
+          <Checkbox
             label="Brotli"
             checked={editor.brotli}
             disabled={disabled}
-            onToggle={() => onChange({ brotli: !editor.brotli })}
+            onPress={() => onChange({ brotli: !editor.brotli })}
           />
 
-          <Text style={styles.fieldLabel}>Strip prefix</Text>
-          <TextInput
+          <TextField
+            label="Strip prefix"
             value={editor.stripPrefix}
             onChangeText={(value) => onChange({ stripPrefix: value })}
             placeholder="/api"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
+            mono
             autoCapitalize="none"
           />
-          <Text style={styles.fieldLabel}>Path prefix</Text>
-          <Text style={orgPanelStyles.muted}>
-            {hostingPathPrefixHint(serviceContext)}
-          </Text>
-          <TextInput
+          <TextField
+            label="Path prefix"
+            hint={hostingPathPrefixHint(serviceContext)}
             value={editor.pathPrefix}
             onChangeText={(value) => onChange({ pathPrefix: value })}
             placeholder="/"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
+            mono
             autoCapitalize="none"
           />
-          <Text style={styles.fieldLabel}>Target port</Text>
-          <TextInput
+          <TextField
+            label="Target port"
             value={editor.targetPort}
             onChangeText={(value) => onChange({ targetPort: value })}
             placeholder="8080"
-            placeholderTextColor={colors.textDim}
-            style={styles.hostnamesInput}
+            mono
             keyboardType="number-pad"
           />
 
@@ -832,15 +880,15 @@ function HostingPanelRow({
         </>
       ) : null}
 
-      <Pressable
-        style={[styles.saveHostingButton, saving && styles.buttonDisabled]}
+      <Button
+        label="Save hosting"
+        busyLabel="Saving…"
+        size="sm"
+        variant="secondary"
+        busy={saving}
         disabled={disabled}
         onPress={onSave}
-      >
-        <Text style={styles.saveHostingButtonText}>
-          {saving ? 'Saving…' : 'Save hosting'}
-        </Text>
-      </Pressable>
+      />
 
       <Text style={styles.tlsLabel}>Hosting variables</Text>
       <Text style={styles.tlsHint}>
@@ -1017,22 +1065,24 @@ function HealthCheckAckModal({
             : 'These services have no healthcheck configured. You can deploy anyway:'}
         </Text>
         <Text style={styles.modalServices}>{serviceList || 'Unknown services'}</Text>
-        <View style={styles.modalActions}>
-          <Pressable style={styles.modalSecondaryButton} disabled={deploying} onPress={onCancel}>
-            <Text style={styles.modalSecondaryText}>Cancel</Text>
-          </Pressable>
+        <ButtonRow>
+          <Button
+            label="Cancel"
+            variant="secondary"
+            disabled={deploying}
+            onPress={onCancel}
+          />
           {!required ? (
-            <Pressable
-              style={[styles.modalPrimaryButton, deploying && styles.buttonDisabled]}
+            <Button
+              label="Deploy anyway"
+              busyLabel="Deploying…"
+              variant="primary"
+              busy={deploying}
               disabled={deploying}
               onPress={onConfirm}
-            >
-              <Text style={styles.modalPrimaryText}>
-                {deploying ? 'Deploying…' : 'Deploy anyway'}
-              </Text>
-            </Pressable>
+            />
           ) : null}
-        </View>
+        </ButtonRow>
       </View>
     </View>
   )
@@ -1086,7 +1136,12 @@ function EnvironmentComposeOverlayPanel({
   savingCompose: boolean
 }>) {
   return (
-    <SectionPanel title="Compose overlay" hint="Overrides the project compose">
+    <SectionPanel
+      title="Compose overlay"
+      hint="Overrides the project compose"
+      collapsible
+      defaultCollapsed
+    >
       <ComposeEditorSection
         document={environment.options?.compose}
         onSave={onSaveCompose}
@@ -1103,7 +1158,6 @@ function EnvironmentDeployChromePanels({
   savingPlacement,
   inheritsProjectDefault,
   onSavePlacement,
-  mergedCompose,
   deploying,
   deployBlocked,
   onPreviewMerged,
@@ -1116,7 +1170,6 @@ function EnvironmentDeployChromePanels({
   savingPlacement: boolean
   inheritsProjectDefault: boolean
   onSavePlacement: (serverId: string) => void
-  mergedCompose: ComposeDocument
   deploying: boolean
   deployBlocked: boolean
   onPreviewMerged: () => void
@@ -1154,21 +1207,6 @@ function EnvironmentDeployChromePanels({
       />
 
       <SectionPanel
-        title="Merged runtime compose"
-        hint="Project base + environment overrides, including TurboPanel service metadata (x-turbopanel). Placement is pinned on the environment, not in YAML."
-      >
-        <TextInput
-          editable={false}
-          multiline
-          value={composeDocumentToRuntimeYaml(
-            stripComposePlacement(mergedCompose),
-          )}
-          style={styles.preview}
-          textAlignVertical="top"
-        />
-      </SectionPanel>
-
-      <SectionPanel
         title="Deploy"
         hint="Preview compose, then deploy this environment to its selected server"
       >
@@ -1204,21 +1242,15 @@ function EnvironmentDeployChromePanels({
               <Text style={styles.splitCaretText}>▾</Text>
             </Pressable>
           </View>
-          <Pressable
-            style={[
-              styles.deployButton,
-              (deploying || deployBlocked) && styles.buttonDisabled,
-              webPointer,
-            ]}
+          <Button
+            label="Deploy"
+            busyLabel="Deploying…"
+            variant="primary"
+            busy={deploying}
             disabled={deploying || deployBlocked}
             onPress={onDeploy}
-            accessibilityRole="button"
             accessibilityLabel="Deploy environment"
-          >
-            <Text style={styles.deployButtonText}>
-              {deploying ? 'Deploying…' : 'Deploy'}
-            </Text>
-          </Pressable>
+          />
         </View>
         {deployStatus ? (
           <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text>
@@ -1328,13 +1360,15 @@ function EnvironmentHostingSectionPanel({
   onSaveHosting: (composeServiceName: string) => void
   focusHostingId: string | null
 }>) {
+  // Per-row expand-in-place; deep-linked (focused) rows open by default.
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
   return (
     <SectionPanel
       title="Hosting"
       hint="Map compose services to hostnames (http) or raw ports (tcp/udp)"
     >
       {serviceNames.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Add services to Compose before configuring hostnames.</Text>
+        <EmptyState title="Add services to Compose before configuring hostnames." />
       ) : (
         <View style={styles.hostingList}>
           {serviceNames.map((composeServiceName) => {
@@ -1346,6 +1380,9 @@ function EnvironmentHostingSectionPanel({
               hostingEditors[serviceKey] ??
               readHostingEditor([])
             const hostingId = hostingsByService[serviceKey]?.[0]?.id ?? null
+            const focused =
+              focusHostingId != null && hostingId === focusHostingId
+            const expanded = expandedRows[serviceKey] ?? focused
             return (
               <HostingPanelRow
                 key={composeServiceName}
@@ -1356,8 +1393,13 @@ function EnvironmentHostingSectionPanel({
                   composeServiceName,
                 )}
                 hostingId={hostingId}
-                focused={
-                  focusHostingId != null && hostingId === focusHostingId
+                focused={focused}
+                expanded={expanded}
+                onToggleExpanded={() =>
+                  setExpandedRows((current) => ({
+                    ...current,
+                    [serviceKey]: !expanded,
+                  }))
                 }
                 editor={editor}
                 tlsOptions={tlsLibrary}
@@ -1394,9 +1436,14 @@ function EnvironmentServiceSettingsSectionPanel({
   onServiceChange: (nextService: ServiceRecord) => void
 }>) {
   return (
-    <SectionPanel title="Service settings" hint="Per-service deploy options">
+    <SectionPanel
+      title="Service settings"
+      hint="Per-service deploy options"
+      collapsible
+      defaultCollapsed
+    >
       {serviceNames.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Add services to Compose first.</Text>
+        <EmptyState title="Add services to Compose first." />
       ) : (
         <View style={styles.hostingList}>
           {serviceNames.map((composeServiceName) => {
@@ -1435,7 +1482,7 @@ function EnvironmentContainersSectionPanel({
   return (
     <SectionPanel title="Containers" hint="Deployed containers and their status">
       {!hasContainers ? (
-        <Text style={orgPanelStyles.muted}>No containers deployed yet.</Text>
+        <EmptyState title="No containers deployed yet." />
       ) : (
         <View style={styles.containerList}>
           {services.map((service) => {
@@ -1580,7 +1627,6 @@ function EnvironmentLoadedPanels({
           savingPlacement={savingPlacement}
           inheritsProjectDefault={inheritsProjectDefault}
           onSavePlacement={onSavePlacement}
-          mergedCompose={mergedCompose}
           deploying={deploying}
           deployBlocked={deployBlocked}
           onPreviewMerged={onPreviewMerged}
@@ -2209,7 +2255,7 @@ export function EnvironmentDetailBody({
   }
 
   if (loading && !environment) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <LoadingState />
   }
 
   return (
@@ -2324,17 +2370,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
   },
-  preview: {
-    minHeight: 220,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.bgInput,
-    color: colors.textMuted,
-    fontFamily: 'monospace',
-    fontSize: 13,
-    padding: spacing.sm,
-  },
   serverList: { gap: spacing.xs },
   serverOption: {
     borderWidth: 1,
@@ -2347,14 +2382,6 @@ const styles = StyleSheet.create({
   serverOptionDisabled: { opacity: 0.6 },
   serverOptionText: { color: colors.text, fontSize: 13, fontFamily: 'monospace' },
   serverOptionTextDisabled: { color: colors.textMuted },
-  deployButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: chrome.accent,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  deployButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
   deployActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2431,6 +2458,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  hostingSummaryPress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  hostingSummaryCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  hostingSummaryText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
   serviceKindBadge: {
     color: colors.command,
     fontSize: 11,
@@ -2448,21 +2490,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     marginBottom: spacing.xs,
-  },
-  hostnamesInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontFamily: 'monospace',
-    fontSize: 13,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  webEnvInput: {
-    minHeight: 72,
-    textAlignVertical: 'top',
   },
   tlsLabel: {
     color: colors.textMuted,
@@ -2498,15 +2525,6 @@ const styles = StyleSheet.create({
     color: colors.textChip,
     fontSize: 12,
   },
-  saveHostingButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  saveHostingButtonText: { color: colors.accent, fontSize: 12, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },
   containerList: { gap: spacing.sm },
   containerRow: { gap: spacing.xs, marginTop: spacing.sm },
@@ -2527,35 +2545,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
-  },
-  proxyToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  proxyCheckbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgInput,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  proxyCheckboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-  },
-  proxyCheckboxMark: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  proxyToggleLabel: {
-    color: colors.textBody,
-    fontSize: 13,
   },
   modalBackdrop: {
     position: 'absolute',
@@ -2583,35 +2572,5 @@ const styles = StyleSheet.create({
     color: colors.command,
     fontFamily: 'monospace',
     fontSize: 13,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  modalPrimaryButton: {
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  modalPrimaryText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalSecondaryButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  modalSecondaryText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
   },
 })

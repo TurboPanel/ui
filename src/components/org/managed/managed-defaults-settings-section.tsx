@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { StyleSheet, Text } from 'react-native'
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
+import { Button, TextField } from '@/components/ui'
 import {
   fetchOrgManagedDefaults,
   saveOrgManagedDefaults,
@@ -25,7 +26,7 @@ import {
   type ManagedIngressPortField,
 } from '@/lib/managed-ingress-ports'
 import { queryKeys, useApiMutation, useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { colors } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -117,6 +118,8 @@ function ManagedTlsDefaultsPanel({
     <SectionPanel
       title="Managed database TLS"
       hint="Manage-gated · inherited by services with no explicit mode"
+      collapsible
+      defaultCollapsed
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
@@ -255,6 +258,8 @@ function ManagedListenerPortsPanel({
     <SectionPanel
       title="Managed database listener ports"
       hint="Manage-gated · applies to every shared listener in this organization"
+      collapsible
+      defaultCollapsed
     >
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
@@ -271,36 +276,26 @@ function ManagedListenerPortsPanel({
       </Text>
 
       {(['postgres', 'mysqlFamily'] as const).map((field) => (
-        <View key={field} style={styles.field}>
-          <Text style={styles.fieldLabel}>
-            {MANAGED_INGRESS_PORT_LABELS[field]}
-          </Text>
-          <TextInput
-            value={text(field)}
-            onChangeText={(next) => {
-              setDrafts((prev) => ({ ...prev, [field]: next }))
-              setInvalidField(null)
-              setError(null)
-            }}
-            editable={!pending}
-            keyboardType="number-pad"
-            placeholder={String(DEFAULT_MANAGED_INGRESS_PORTS[field])}
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel={`${
-              MANAGED_INGRESS_PORT_LABELS[field]
-            } listener port`}
-            style={[
-              styles.input,
-              pending && styles.inputDisabled,
-              invalidField === field && styles.inputInvalid,
-            ]}
-          />
-          <Text style={orgPanelStyles.muted}>
-            Empty inherits the platform default{' '}
-            {DEFAULT_MANAGED_INGRESS_PORTS[field]}.
-            {field === 'mysqlFamily' ? ' MariaDB uses this port too.' : ''}
-          </Text>
-        </View>
+        <TextField
+          key={field}
+          label={MANAGED_INGRESS_PORT_LABELS[field]}
+          hint={`Empty inherits the platform default ${
+            DEFAULT_MANAGED_INGRESS_PORTS[field]
+          }.${field === 'mysqlFamily' ? ' MariaDB uses this port too.' : ''}`}
+          value={text(field)}
+          onChangeText={(next) => {
+            setDrafts((prev) => ({ ...prev, [field]: next }))
+            setInvalidField(null)
+            setError(null)
+          }}
+          editable={!pending}
+          keyboardType="number-pad"
+          placeholder={String(DEFAULT_MANAGED_INGRESS_PORTS[field])}
+          accessibilityLabel={`${
+            MANAGED_INGRESS_PORT_LABELS[field]
+          } listener port`}
+          style={invalidField === field ? styles.inputInvalid : undefined}
+        />
       ))}
 
       <SaveButton
@@ -328,51 +323,17 @@ function SaveButton({
   onPress: () => void
 }>) {
   return (
-    <Pressable
+    <Button
+      label={pending ? pendingLabel : label}
+      variant="primary"
+      busy={pending}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
-        orgPanelStyles.toolbarBtnPrimary,
-        disabled && styles.btnDisabled,
-        pressed && styles.btnPressed,
-        webPointer,
-      ]}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-        {pending ? pendingLabel : label}
-      </Text>
-    </Pressable>
+    />
   )
 }
 
 const styles = StyleSheet.create({
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  btnPressed: {
-    opacity: 0.85,
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  fieldLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 15,
-    minHeight: 44,
-  },
-  inputDisabled: {
-    opacity: 0.5,
-  },
   inputInvalid: {
     borderColor: colors.error,
   },

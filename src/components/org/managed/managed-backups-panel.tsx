@@ -1,16 +1,14 @@
 import { useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  EmptyState,
+  TextField,
+} from '@/components/ui'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { formatBytes } from '@/lib/format-metrics'
 import {
@@ -20,76 +18,13 @@ import {
 } from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
 
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
-
-function DeleteActions({
-  armed,
-  disabled,
-  onConfirm,
-  onCancel,
-  onArm,
-  buttonStyle,
-}: Readonly<{
-  armed: boolean
-  disabled: boolean
-  onConfirm: () => void
-  onCancel: () => void
-  onArm: () => void
-  buttonStyle?: StyleProp<ViewStyle>
-}>) {
-  if (armed) {
-    return (
-      <View style={styles.rowActions}>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={disabled}
-          onPress={onConfirm}
-        >
-          <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
-            Confirm delete
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancel}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
-    )
-  }
-
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer, buttonStyle]}
-      disabled={disabled}
-      onPress={onArm}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Delete</Text>
-    </Pressable>
-  )
-}
-
 function BackupRow({
   backup,
   canManage,
   disabled,
   managedDisplayName,
-  deleteArmed,
   restoreArmed,
   working,
-  onArmDelete,
-  onCancelDelete,
   onConfirmDelete,
   onArmRestore,
   onCancelRestore,
@@ -99,11 +34,8 @@ function BackupRow({
   canManage: boolean
   disabled: boolean
   managedDisplayName: string
-  deleteArmed: boolean
   restoreArmed: boolean
   working: boolean
-  onArmDelete: () => void
-  onCancelDelete: () => void
   onConfirmDelete: () => void
   onArmRestore: () => void
   onCancelRestore: () => void
@@ -127,26 +59,22 @@ function BackupRow({
       </View>
 
       {canManage ? (
-        <View style={styles.rowActions}>
-          <Pressable
-            style={[
-              orgPanelStyles.toolbarBtnSecondary,
-              webPointer,
-              disabled && styles.disabled,
-            ]}
+        <ButtonRow>
+          <Button
+            label="Restore"
+            size="sm"
             disabled={disabled}
             onPress={onArmRestore}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Restore</Text>
-          </Pressable>
-          <DeleteActions
-            armed={deleteArmed}
-            disabled={disabled}
-            onConfirm={onConfirmDelete}
-            onCancel={onCancelDelete}
-            onArm={onArmDelete}
           />
-        </View>
+          <ConfirmButton
+            key={`delete-${restoreArmed}`}
+            label="Delete"
+            confirmLabel="Confirm delete"
+            prompt="Delete this backup?"
+            disabled={disabled || restoreArmed}
+            onConfirm={onConfirmDelete}
+          />
+        </ButtonRow>
       ) : null}
 
       {restoreArmed ? (
@@ -160,40 +88,34 @@ function BackupRow({
             <Text style={styles.confirmName}>{managedDisplayName}</Text> to
             confirm.
           </Text>
-          <TextInput
-            style={Platform.OS === 'web' ? webInputStyle : styles.input}
+          <TextField
+            label="Confirmation"
             value={restoreConfirmText}
             onChangeText={setRestoreConfirmText}
             placeholder={managedDisplayName}
-            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!working}
           />
-          <View style={styles.rowActions}>
-            <Pressable
-              style={[
-                orgPanelStyles.toolbarBtnSecondary,
-                webPointer,
-                !canConfirmRestore && styles.disabled,
-              ]}
+          <ButtonRow>
+            <Button
+              label="Confirm restore"
+              busyLabel="Restoring…"
+              variant="danger"
+              size="sm"
+              busy={working}
               disabled={!canConfirmRestore}
               onPress={onConfirmRestore}
-            >
-              <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
-                {working ? 'Restoring…' : 'Confirm restore'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+            />
+            <Button
+              label="Cancel"
+              size="sm"
               onPress={() => {
                 setRestoreConfirmText('')
                 onCancelRestore()
               }}
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-            </Pressable>
-          </View>
+            />
+          </ButtonRow>
         </View>
       ) : null}
     </View>
@@ -222,7 +144,6 @@ export function ManagedBackupsPanel({
 }>) {
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
-  const [deleteArmed, setDeleteArmed] = useState<string | null>(null)
   const [restoreArmed, setRestoreArmed] = useState<string | null>(null)
 
   const disabled = !supported || busy || working || !canManage
@@ -244,10 +165,8 @@ export function ManagedBackupsPanel({
     setError(null)
     try {
       await onDelete(backupId)
-      setDeleteArmed(null)
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete backup'))
-      setDeleteArmed(null)
     } finally {
       setWorking(false)
     }
@@ -281,21 +200,16 @@ export function ManagedBackupsPanel({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       {canManage ? (
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            webPointer,
-            disabled && styles.disabled,
-          ]}
+        <Button
+          label="Back up now"
+          busyLabel="Backing up…"
+          variant="primary"
+          busy={working}
           disabled={disabled}
           onPress={() => {
             void backupNow()
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            {working ? 'Backing up…' : 'Back up now'}
-          </Text>
-        </Pressable>
+        />
       ) : null}
 
       <View style={styles.list}>
@@ -306,20 +220,13 @@ export function ManagedBackupsPanel({
             canManage={canManage}
             disabled={disabled}
             managedDisplayName={managedDisplayName}
-            deleteArmed={deleteArmed === backup.id}
             restoreArmed={restoreArmed === backup.id}
             working={working}
-            onArmDelete={() => {
-              setDeleteArmed(backup.id)
-              setRestoreArmed(null)
-            }}
-            onCancelDelete={() => setDeleteArmed(null)}
             onConfirmDelete={() => {
               void deleteBackup(backup.id)
             }}
             onArmRestore={() => {
               setRestoreArmed(backup.id)
-              setDeleteArmed(null)
             }}
             onCancelRestore={() => setRestoreArmed(null)}
             onConfirmRestore={() => {
@@ -328,7 +235,7 @@ export function ManagedBackupsPanel({
           />
         ))}
         {backups.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>No backups yet.</Text>
+          <EmptyState title="No backups yet." />
         ) : null}
       </View>
     </SectionPanel>
@@ -356,11 +263,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  rowActions: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
   restoreBox: {
     marginTop: spacing.sm,
     gap: spacing.sm,
@@ -378,21 +280,5 @@ const styles = StyleSheet.create({
   confirmName: {
     color: colors.text,
     fontWeight: '700',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  danger: {
-    color: colors.error,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

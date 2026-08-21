@@ -59,6 +59,7 @@ import {
   formatComposeYamlOnLineChange,
   lineIndexAtOffset,
 } from '@/lib/compose/yaml-indent'
+import { Button } from '@/components/ui'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 type EditorTab = ComposeEditorView
@@ -156,10 +157,6 @@ function initEditorState(
   return seedComposeDraftFromDocument(document)
 }
 
-function saveButtonLabel(saving: boolean): string {
-  return saving ? 'Saving…' : 'Save'
-}
-
 /** Live editor: keep soft warnings; defer hard errors until a save attempt. */
 function liveComposeLintIssues(
   issues: readonly ComposeLintIssue[],
@@ -197,12 +194,7 @@ function ComposeLintPanel({
         <Text style={styles.lintSummary}>Compose issues — {summary}</Text>
       ) : null}
       {indentFixAvailable && onFixIndentation ? (
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, styles.lintFixButton]}
-          onPress={onFixIndentation}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Fix indentation</Text>
-        </Pressable>
+        <Button label="Fix indentation" size="sm" onPress={onFixIndentation} />
       ) : null}
       {issues.map((issue) => {
         const isError = issue.level === 'error'
@@ -964,13 +956,7 @@ export function ComposeEditorSection({
             onAddField={(field) => addServiceField(name, field)}
           />
         ))}
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={addService}
-          disabled={saving}
-        >
-          <Text style={styles.secondaryButtonText}>Add service</Text>
-        </Pressable>
+        <Button label="Add service" size="sm" disabled={saving} onPress={addService} />
       </View>
     )
 
@@ -994,21 +980,15 @@ export function ComposeEditorSection({
             <View style={styles.headerActions}>
               {toolbarTrailing}
               {showSave ? (
-                <Pressable
-                  style={[
-                    styles.saveButton,
-                    webPointer,
-                    !canSave && styles.buttonDisabled,
-                  ]}
-                  onPress={() => void handleSave()}
+                <Button
+                  label="Save"
+                  busyLabel="Saving…"
+                  variant="primary"
+                  size="sm"
+                  busy={saving}
                   disabled={!canSave}
-                  accessibilityRole="button"
-                  accessibilityLabel={saveButtonLabel(saving)}
-                >
-                  <Text style={styles.saveButtonText}>
-                    {saveButtonLabel(saving)}
-                  </Text>
-                </Pressable>
+                  onPress={() => void handleSave()}
+                />
               ) : null}
             </View>
           ) : undefined
@@ -1143,9 +1123,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     padding: spacing.sm,
   },
-  lintFixButton: {
-    alignSelf: 'flex-start',
-  },
   lintSummary: { color: colors.text, fontSize: 12, fontWeight: '700' },
   lintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   lintBadge: {
@@ -1173,21 +1150,4 @@ const styles = StyleSheet.create({
   visualBody: {
     padding: spacing.sm,
   },
-  saveButton: {
-    borderRadius: 6,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 0,
-    minHeight: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: chrome.onAccent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  secondaryButton: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, borderColor: colors.borderChip, paddingHorizontal: 10, paddingVertical: 7 },
-  secondaryButtonText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.6 },
 })

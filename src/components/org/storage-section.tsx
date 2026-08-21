@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type {
   OrgServerRecord,
   ServiceRecord,
@@ -21,25 +31,17 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-const STORAGE_KINDS: StorageKind[] = ['volume', 'directory', 'file']
-
 const KIND_LABELS: Record<StorageKind, string> = {
   volume: 'Volume',
   directory: 'Directory',
   file: 'File',
 }
 
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 14,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
+const KIND_OPTIONS = [
+  { value: 'volume', label: KIND_LABELS.volume },
+  { value: 'directory', label: KIND_LABELS.directory },
+  { value: 'file', label: KIND_LABELS.file },
+] as const
 
 function serverLabel(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname || server.id.slice(0, 8)
@@ -47,10 +49,6 @@ function serverLabel(server: OrgServerRecord): string {
 
 function serviceLabel(service: ServiceRecord): string {
   return service.name?.trim() || service.composeServiceName
-}
-
-function inputStyle() {
-  return Platform.OS === 'web' ? webInputStyle : styles.input
 }
 
 function locationProviderForKind(kind: StorageKind): 'docker' | 'path' {
@@ -226,10 +224,10 @@ function StorageListStatus({
   isEmpty,
 }: Readonly<{ loading: boolean; isEmpty: boolean }>) {
   if (loading && isEmpty) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <LoadingState />
   }
   if (!loading && isEmpty) {
-    return <Text style={orgPanelStyles.muted}>No storage entries yet.</Text>
+    return <EmptyState title="No storage entries yet." />
   }
   return null
 }
@@ -272,34 +270,24 @@ function StorageAddForm({
   const showSourcePath = kind !== 'volume'
   return (
     <View style={styles.form}>
-      <View style={styles.field}>
-        <Text style={styles.label}>Name *</Text>
-        <TextInput
-          style={inputStyle()}
-          value={name}
-          onChangeText={onNameChange}
-          placeholder="data"
-          placeholderTextColor={colors.textDim}
-          editable={!adding}
+      <TextField
+        label="Name *"
+        value={name}
+        onChangeText={onNameChange}
+        placeholder="data"
+        editable={!adding}
+      />
+      <FormField label="Kind">
+        <SegmentedControl
+          options={KIND_OPTIONS}
+          value={kind}
+          onChange={(value) => {
+            if (!adding) onKindChange(value)
+          }}
+          accessibilityLabel="Storage kind"
         />
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>Kind</Text>
-        <View style={styles.kindRow}>
-          {STORAGE_KINDS.map((option) => (
-            <Pressable
-              key={option}
-              style={[styles.kindChip, kind === option && styles.kindChipActive]}
-              disabled={adding}
-              onPress={() => onKindChange(option)}
-            >
-              <Text style={styles.kindChipText}>{KIND_LABELS[option]}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>Server *</Text>
+      </FormField>
+      <FormField label="Server *">
         <View style={styles.serverList}>
           {servers.map((server) => (
             <Pressable
@@ -315,24 +303,19 @@ function StorageAddForm({
             </Pressable>
           ))}
         </View>
-      </View>
+      </FormField>
       {showSourcePath ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>Host path</Text>
-          <TextInput
-            style={inputStyle()}
-            value={sourcePath}
-            onChangeText={onSourcePathChange}
-            placeholder="/host/path"
-            placeholderTextColor={colors.textDim}
-            editable={!adding}
-            autoCapitalize="none"
-          />
-        </View>
+        <TextField
+          label="Host path"
+          value={sourcePath}
+          onChangeText={onSourcePathChange}
+          placeholder="/host/path"
+          editable={!adding}
+          autoCapitalize="none"
+        />
       ) : null}
       {services.length > 0 ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>Mount service</Text>
+        <FormField label="Mount service">
           <View style={styles.serverList}>
             {services.map((service) => (
               <Pressable
@@ -348,29 +331,23 @@ function StorageAddForm({
               </Pressable>
             ))}
           </View>
-        </View>
+        </FormField>
       ) : null}
-      <View style={styles.field}>
-        <Text style={styles.label}>Destination path</Text>
-        <TextInput
-          style={inputStyle()}
-          value={destinationPath}
-          onChangeText={onDestinationPathChange}
-          placeholder="/container/path"
-          placeholderTextColor={colors.textDim}
-          editable={!adding}
-          autoCapitalize="none"
-        />
-      </View>
-      <Pressable
-        style={[styles.submitButton, adding && styles.buttonDisabled]}
-        disabled={adding}
+      <TextField
+        label="Destination path"
+        value={destinationPath}
+        onChangeText={onDestinationPathChange}
+        placeholder="/container/path"
+        editable={!adding}
+        autoCapitalize="none"
+      />
+      <Button
+        label="Create storage"
+        busyLabel="Adding…"
+        variant="primary"
+        busy={adding}
         onPress={onSubmit}
-      >
-        <Text style={styles.submitButtonText}>
-          {adding ? 'Adding…' : 'Create storage'}
-        </Text>
-      </Pressable>
+      />
     </View>
   )
 }
@@ -453,40 +430,36 @@ function MountDestination({
 
   if (canManage && editing) {
     return (
-      <View style={styles.field}>
-        <Text style={styles.label}>Destination path</Text>
-        <TextInput
-          style={inputStyle()}
+      <View style={styles.editBlock}>
+        <TextField
+          label="Destination path"
           value={draft}
           onChangeText={setDraft}
           placeholder="/container/path"
-          placeholderTextColor={colors.textDim}
           editable={!saving}
           autoCapitalize="none"
         />
-        <View style={styles.editActions}>
-          <Pressable
-            style={[styles.submitButton, saving && styles.buttonDisabled]}
-            disabled={saving}
+        <ButtonRow>
+          <Button
+            label="Save"
+            busyLabel="Saving…"
+            variant="primary"
+            busy={saving}
             onPress={() => {
               void save()
             }}
-          >
-            <Text style={styles.submitButtonText}>
-              {saving ? 'Saving…' : 'Save'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.cancelButton}
+          />
+          <Button
+            label="Cancel"
+            variant="secondary"
+            size="sm"
             disabled={saving}
             onPress={() => {
               setDraft(mount.destinationPath)
               setEditing(false)
             }}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </Pressable>
-        </View>
+          />
+        </ButtonRow>
       </View>
     )
   }
@@ -548,15 +521,13 @@ function StorageRow({
         ))
       )}
       {canManage ? (
-        <Pressable
-          style={[styles.deleteButton, deleting && styles.buttonDisabled]}
-          disabled={deleting}
-          onPress={() => onDelete(row.id)}
-        >
-          <Text style={styles.deleteButtonText}>
-            {deleting ? 'Deleting…' : 'Delete'}
-          </Text>
-        </Pressable>
+        <ConfirmButton
+          label={deleting ? 'Deleting…' : 'Delete'}
+          confirmLabel="Delete storage"
+          prompt="Remove this storage entry?"
+          busy={deleting}
+          onConfirm={() => onDelete(row.id)}
+        />
       ) : null}
     </View>
   )
@@ -590,14 +561,12 @@ export function StorageSection({
       {storage.error ? <Text style={orgPanelStyles.error}>{storage.error}</Text> : null}
 
       {canManage ? (
-        <Pressable
-          style={styles.primaryButton}
+        <Button
+          label={storage.showAdd ? 'Cancel' : 'Add storage'}
+          variant="secondary"
+          size="sm"
           onPress={() => storage.setShowAdd((current) => !current)}
-        >
-          <Text style={styles.primaryButtonText}>
-            {storage.showAdd ? 'Cancel' : 'Add storage'}
-          </Text>
-        </Pressable>
+        />
       ) : null}
 
       {storage.showAdd && canManage ? (
@@ -668,65 +637,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
   },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: chrome.bgActive,
-    marginBottom: spacing.sm,
-  },
-  primaryButtonText: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '600',
-  },
   form: {
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  field: {
+  editBlock: {
     gap: spacing.xs,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  kindRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  kindChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  kindChipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  kindChipText: {
-    color: colors.text,
-    fontSize: 11,
-    fontWeight: '600',
   },
   serverList: {
     gap: spacing.xs,
@@ -734,7 +650,7 @@ const styles = StyleSheet.create({
   serverOption: {
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.bgSecondary,
     padding: spacing.sm,
   },
@@ -745,53 +661,5 @@ const styles = StyleSheet.create({
   serverOptionText: {
     color: colors.text,
     fontSize: 13,
-  },
-  submitButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  submitButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  editActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: colors.bgSecondary,
-  },
-  cancelButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  deleteButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

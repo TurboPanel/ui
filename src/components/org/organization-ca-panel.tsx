@@ -1,20 +1,20 @@
-import * as Clipboard from 'expo-clipboard'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
+import { downloadCaBundle, downloadSuccessMessage } from '@/lib/download-ca'
 import {
   CA_ROTATION_IN_PROGRESS_ERROR,
   CA_ROTATION_NOT_CONVERGED_ERROR,
-  downloadOrganizationCaPem,
   NO_PENDING_ROTATION_ERROR,
   type CaRotationResult,
   type CaRotationStatus,
@@ -41,7 +41,6 @@ import { useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 
 const CA_NEAR_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000
-const FINGERPRINT_VISIBLE_CHARS = 16
 
 function queuedRotationEntries(
   results: readonly CaRotationResult[],
@@ -74,19 +73,6 @@ function visibleRotationResults(
 ): CaRotationResult[] {
   if (seeded.size > 0) return Array.from(seeded.values())
   return journal ? [...journal] : []
-}
-
-function caCommonName(tls: OrganizationCaRecord): string {
-  const subject = tls.metadata.subject?.trim()
-  if (subject) return subject
-  const dnsName = tls.metadata.dnsNames[0]?.trim()
-  if (dnsName) return dnsName
-  return 'Organization CA'
-}
-
-function truncateFingerprint(fingerprint: string): string {
-  if (fingerprint.length <= FINGERPRINT_VISIBLE_CHARS) return fingerprint
-  return `${fingerprint.slice(0, FINGERPRINT_VISIBLE_CHARS)}…`
 }
 
 function formatTlsDate(value: string | null | undefined): string {
@@ -225,31 +211,6 @@ function retireBlockerReason(
   return retireErrorCopy(CA_ROTATION_NOT_CONVERGED_ERROR)
 }
 
-async function downloadCaBundle(): Promise<void> {
-  const pem = await downloadOrganizationCaPem()
-  await Clipboard.setStringAsync(pem)
-  if (typeof document === 'undefined') return
-  const blob = new Blob([pem], { type: 'application/x-pem-file' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'turbopanel-org-ca.pem'
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
-
-function generationLabel(generation: number | null): string {
-  if (generation == null) return '—'
-  return String(generation)
-}
-
-function downloadSuccessMessage(): string {
-  if (typeof document !== 'undefined') {
-    return 'Organization CA copied and downloaded'
-  }
-  return 'Organization CA copied'
-}
-
 function caLoadError(isError: boolean, error: unknown): string | null {
   if (!isError) return null
   return errorMessage(error, 'Failed to load Organization CA')
@@ -274,17 +235,9 @@ function ActiveCaCard({
 }: Readonly<{ tls: OrganizationCaRecord; warnings: readonly string[] }>) {
   return (
     <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>{caCommonName(tls)}</Text>
       <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Fingerprint: </Text>
-        {truncateFingerprint(tls.metadata.fingerprintSha256)}
-      </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Generation: </Text>
-        {generationLabel(tls.caGeneration)}
-      </Text>
-      <Text style={orgPanelStyles.muted}>
-        Valid {formatTlsDate(tls.metadata.notBefore)} →{' '}
+        <Text style={orgPanelStyles.detailLabel}>Valid: </Text>
+        {formatTlsDate(tls.metadata.notBefore)} →{' '}
         {formatTlsDate(tls.metadata.notAfter)}
       </Text>
       <CaWarningCallout messages={warnings} />
@@ -306,40 +259,25 @@ function CaActionToolbar({
   onRotate: () => void
 }>) {
   return (
-    <View style={styles.toolbar}>
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnSecondary,
-          webPointer,
-          caBusy && styles.buttonDisabled,
-        ]}
-        disabled={caBusy}
+    <ButtonRow>
+      <Button
+        label="Download CA bundle"
+        busyLabel="Downloading…"
+        variant="secondary"
+        busy={caBusy}
         onPress={onDownload}
-        accessibilityRole="button"
         accessibilityLabel="Download CA bundle"
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-          {caBusy ? 'Downloading…' : 'Download CA bundle'}
-        </Text>
-      </Pressable>
+      />
       {canManage ? (
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            styles.destructiveBtn,
-            rotateBusy && styles.buttonDisabled,
-            webPointer,
-          ]}
+        <Button
+          label="Rotate"
+          variant="danger"
           disabled={rotateBusy}
           onPress={onRotate}
-          accessibilityRole="button"
           accessibilityLabel="Rotate Organization CA"
-          accessibilityState={{ disabled: rotateBusy }}
-        >
-          <Text style={styles.destructiveBtnText}>Rotate</Text>
-        </Pressable>
+        />
       ) : null}
-    </View>
+    </ButtonRow>
   )
 }
 
@@ -377,26 +315,16 @@ function RetirePreviousCaButton({
   blockerReason: string | null
   onPress: () => void
 }>) {
-  const disabled = !enabled || pending
   return (
     <View style={styles.retireBlock}>
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnSecondary,
-          disabled && styles.buttonDisabled,
-          webPointer,
-        ]}
-        disabled={disabled}
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel="Retire previous Organization CA"
-        accessibilityHint={blockerReason ?? undefined}
-        accessibilityState={{ disabled, busy: pending }}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-          {pending ? 'Retiring…' : 'Retire previous CA'}
-        </Text>
-      </Pressable>
+      <ConfirmButton
+        label={pending ? 'Retiring…' : 'Retire previous CA'}
+        confirmLabel="Retire previous CA"
+        prompt="Retire the previous Organization CA generation?"
+        busy={pending}
+        disabled={!enabled}
+        onConfirm={onPress}
+      />
       {blockerReason ? (
         <Text style={orgPanelStyles.muted}>{blockerReason}</Text>
       ) : null}
@@ -459,43 +387,31 @@ function RotateConfirmSection({
         bundle. Binding-consuming services need a redeploy. Type{' '}
         <Text style={styles.confirmName}>{confirmName}</Text> to rotate.
       </Text>
-      <TextInput
-        style={Platform.OS === 'web' ? styles.webInput : styles.input}
+      <TextField
+        label={confirmName}
         value={confirmText}
         onChangeText={onConfirmTextChange}
-        placeholder={confirmName}
-        placeholderTextColor={colors.textDim}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!confirming}
       />
       <View style={styles.actions}>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+        <Button
+          label="Cancel"
+          variant="secondary"
           disabled={confirming}
           onPress={onCancel}
-          accessibilityRole="button"
           accessibilityLabel="Cancel Organization CA rotation"
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            styles.destructiveBtn,
-            confirmDisabled && styles.buttonDisabled,
-            webPointer,
-          ]}
+        />
+        <Button
+          label="Rotate Organization CA"
+          busyLabel="Rotating…"
+          variant="danger"
+          busy={confirming}
           disabled={confirmDisabled}
           onPress={onConfirm}
-          accessibilityRole="button"
           accessibilityLabel="Confirm Organization CA rotation"
-          accessibilityState={{ disabled: confirmDisabled, busy: confirming }}
-        >
-          <Text style={styles.destructiveBtnText}>
-            {confirming ? 'Rotating…' : 'Rotate Organization CA'}
-          </Text>
-        </Pressable>
+        />
       </View>
     </View>
   )
@@ -599,12 +515,10 @@ function OrganizationCaBody({
 }: Readonly<{ loading: boolean; tls: OrganizationCaRecord | undefined }> &
   Omit<Parameters<typeof OrganizationCaReady>[0], 'tls'>) {
   if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <LoadingState />
   }
   if (!tls) {
-    return (
-      <Text style={orgPanelStyles.muted}>Organization CA is not available.</Text>
-    )
+    return <EmptyState title="Organization CA is not available." />
   }
   return <OrganizationCaReady tls={tls} {...readyProps} />
 }
@@ -767,27 +681,11 @@ export function OrganizationCaPanel({ orgId }: Readonly<{ orgId: string }>) {
 }
 
 const styles = StyleSheet.create({
-  toolbar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
   progressList: {
     gap: spacing.sm,
   },
   retireBlock: {
     gap: spacing.sm,
-  },
-  destructiveBtn: {
-    borderColor: colors.error,
-  },
-  destructiveBtnText: {
-    color: colors.errorText,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
   stepLabel: {
     color: colors.text,
@@ -802,26 +700,6 @@ const styles = StyleSheet.create({
   confirmName: {
     color: colors.text,
     fontWeight: '700',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    borderRadius: 6,
-  },
-  webInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    borderRadius: 6,
   },
   actions: {
     flexDirection: 'row',

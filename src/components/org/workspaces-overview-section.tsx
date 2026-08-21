@@ -10,6 +10,7 @@ import { FirstRunWizard } from '@/components/org/first-run-wizard'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, ConfirmButton, EmptyState, LoadingState } from '@/components/ui'
 import { displayNameConflictMessage, isDisplayNameTaken } from '@/lib/display-name'
 import { WORKSPACE_HAS_CHILDREN_ERROR } from '@/lib/instance-api'
 import { useCreateWorkspace, useDeleteWorkspace, useWorkspaces } from '@/lib/queries'
@@ -19,7 +20,7 @@ import {
   TURBOPANEL_WORKSPACE_DESCRIPTION,
   userWorkspaces,
 } from '@/lib/system-inventory'
-import { colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 import { validateWorkspaceName } from '@/lib/workspace-validation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
@@ -121,13 +122,9 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
 
   let workspaceListContent
   if (loading && workspaces.length === 0) {
-    workspaceListContent = (
-      <Text style={orgPanelStyles.muted}>Loading…</Text>
-    )
+    workspaceListContent = <LoadingState />
   } else if (workspaces.length === 0) {
-    workspaceListContent = (
-      <Text style={orgPanelStyles.muted}>No workspaces yet.</Text>
-    )
+    workspaceListContent = <EmptyState title="No workspaces yet." />
   } else {
     workspaceListContent = (
       <View style={styles.list}>
@@ -150,26 +147,21 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
                 </Pressable>
                 {canOwn && !system ? (
                   <View style={styles.cardActions}>
-                    <Pressable
-                      style={styles.secondaryButton}
+                    <Button
+                      label="Edit"
+                      variant="secondary"
+                      size="sm"
                       onPress={() =>
                         router.push(`/${orgId}/workspaces/${ws.id}/edit`)
                       }
-                    >
-                      <Text style={styles.secondaryButtonText}>Edit</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.secondaryButton,
-                        deleting.has(ws.id) && styles.buttonDisabled,
-                      ]}
-                      disabled={deleting.has(ws.id)}
-                      onPress={() => void handleDelete(ws.id)}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        {deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
-                      </Text>
-                    </Pressable>
+                    />
+                    <ConfirmButton
+                      label={deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
+                      confirmLabel="Delete workspace"
+                      prompt="Remove this workspace?"
+                      busy={deleting.has(ws.id)}
+                      onConfirm={() => void handleDelete(ws.id)}
+                    />
                   </View>
                 ) : null}
               </View>
@@ -190,7 +182,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>Workspaces</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageCopy}>
         New organizations start with a Default Workspace. Create more here, then
         use the workspace switcher on Projects to filter by workspace.
       </Text>
@@ -230,16 +222,6 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
   list: {
     gap: 8,
   },
@@ -262,22 +244,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

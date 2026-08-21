@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View, type TextStyle } from 'react-native'
+import { Badge, Button, EmptyState, LoadingState, TextField } from '@/components/ui'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
@@ -30,18 +31,6 @@ import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
 
 type ProjectServiceOption = {
   id: string
@@ -180,11 +169,9 @@ export function ProjectPrincipalsSection({
   const body = (
     <>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      {loading && principals.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
-      ) : null}
+      {loading && principals.length === 0 ? <LoadingState /> : null}
       {!loading && principals.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No principals yet.</Text>
+        <EmptyState title="No principals yet." />
       ) : null}
       <View style={styles.principalList}>
         {principals.map((row) => (
@@ -233,45 +220,44 @@ export function ProjectPrincipalsSection({
               </View>
             ) : null}
             {canManage ? (
-              <Pressable
-                style={[styles.principalDelete, deleting.has(row.id) && styles.buttonDisabled]}
-                disabled={deleting.has(row.id)}
-                onPress={() => {
-                  void handleDelete(row.id)
-                }}
-              >
-                <Text style={styles.principalDeleteText}>
-                  {deleting.has(row.id) ? 'Deleting…' : 'Delete'}
-                </Text>
-              </Pressable>
+              <View style={styles.principalDeleteRow}>
+                <Button
+                  label="Delete"
+                  busyLabel="Deleting…"
+                  variant="secondary"
+                  size="sm"
+                  busy={deleting.has(row.id)}
+                  accessibilityLabel={`Delete ${row.username}`}
+                  onPress={() => {
+                    void handleDelete(row.id)
+                  }}
+                />
+              </View>
             ) : null}
           </View>
         ))}
       </View>
       {canManage ? (
         <View style={styles.principalForm}>
-          <TextInput
-            style={Platform.OS === 'web' ? webInputStyle : styles.inlineInput}
+          <TextField
+            label="Username"
             value={username}
             onChangeText={setUsername}
             onBlur={() => setUsername((current) => current.trim())}
             placeholder="Username (e.g. appuser)"
-            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!adding}
           />
-          <Pressable
-            style={[styles.principalAdd, adding && styles.buttonDisabled]}
-            disabled={adding}
+          <Button
+            label="Add principal"
+            busyLabel="Adding…"
+            variant="primary"
+            busy={adding}
             onPress={() => {
               void handleAdd()
             }}
-          >
-            <Text style={styles.principalAddText}>
-              {adding ? 'Adding…' : 'Add principal'}
-            </Text>
-          </Pressable>
+          />
         </View>
       ) : null}
     </>
@@ -294,18 +280,10 @@ export function ProjectPrincipalsSection({
 function projectTypeBadge(project: ProjectRecord) {
   const type = project.metadata?.type
   if (type === 'managed') {
-    return (
-      <View style={styles.badgeAccent}>
-        <Text style={styles.badgeAccentText}>managed</Text>
-      </View>
-    )
+    return <Badge label="managed" tone="ok" />
   }
   if (type === 'template') {
-    return (
-      <View style={styles.badgeMuted}>
-        <Text style={styles.badgeMutedText}>template</Text>
-      </View>
-    )
+    return <Badge label="template" tone="muted" />
   }
   return null
 }
@@ -481,6 +459,7 @@ function ContainerNamingPanel({
               accessibilityState={{ checked: keepOriginal, disabled: saving }}
               accessibilityLabel="Keep original container names"
               disabled={saving}
+              hitSlop={6}
               onPress={() => {
                 onChange(keepOriginal ? 'uuid' : 'custom')
               }}
@@ -696,7 +675,7 @@ export function ProjectDetailSection({
   if (loading && !project) {
     return (
       <View style={styles.root}>
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
+        <LoadingState />
       </View>
     )
   }
@@ -843,34 +822,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     textAlignVertical: 'top',
   },
-  badgeAccent: {
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeAccentText: {
-    color: chrome.accent,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  badgeMuted: {
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeMutedText: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
   namingDisabled: { opacity: 0.55 },
   namingBlock: {
     gap: spacing.sm,
@@ -894,7 +845,7 @@ const styles = StyleSheet.create({
     minWidth: 52,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
     minHeight: 32,
     justifyContent: 'center',
@@ -914,7 +865,7 @@ const styles = StyleSheet.create({
   serverOption: {
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.bgSecondary,
     padding: spacing.sm,
   },
@@ -925,19 +876,6 @@ const styles = StyleSheet.create({
   workspaceOptionText: {
     color: colors.text,
     fontSize: 13,
-  },
-  inlineInput: {
-    flex: 1,
-    minWidth: 200,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
   },
   principalEmbedded: {
     gap: spacing.sm,
@@ -978,32 +916,9 @@ const styles = StyleSheet.create({
   principalForm: {
     gap: spacing.sm,
   },
-  principalAdd: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  principalAddText: {
-    color: colors.buttonText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  principalDelete: {
-    alignSelf: 'flex-start',
+  principalDeleteRow: {
     marginTop: spacing.sm,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  principalDeleteText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
+    alignSelf: 'flex-start',
   },
   buttonDisabled: {
     opacity: 0.5,

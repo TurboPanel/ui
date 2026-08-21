@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  Text,
-  View,
-} from 'react-native'
+import { Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
+import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
-import {
-  authFormStyles,
-  webPointer,
-} from '@/components/auth/auth-form-styles'
+import { authFormStyles } from '@/components/auth/auth-form-styles'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref, replaceOrganization } from '@/lib/org-navigation'
 import {
@@ -265,42 +258,19 @@ export function InstallScreenContent() {
         </Text>
       ) : null}
 
-      <Pressable
+      <AuthPrimaryButton
         onPress={onSubmit}
         disabled={completeDisabled}
-        accessibilityRole="button"
+        busy={loading}
         accessibilityLabel={submitAccessibilityLabel(loading, hostVerified)}
-        style={({ pressed }) => [
-          authFormStyles.primaryButton,
-          { backgroundColor: colors.text },
-          completeDisabled && authFormStyles.primaryButtonDisabled,
-          pressed && !completeDisabled && authFormStyles.primaryButtonPressed,
-          webPointer,
-        ]}
-      >
-        {loading ? (
-          <View style={authFormStyles.primaryButtonContent}>
-            <ActivityIndicator size="small" color={colors.buttonText} />
-            <Text
-              style={[
-                authFormStyles.primaryButtonText,
-                { color: colors.buttonText },
-              ]}
-            >
-              {submitButtonLabel(true, hostVerified)}
-            </Text>
-          </View>
-        ) : (
-          <Text
-            style={[
-              authFormStyles.primaryButtonText,
-              { color: colors.buttonText },
-            ]}
-          >
-            {submitButtonLabel(false, hostVerified)}
-          </Text>
-        )}
-      </Pressable>
+        label={submitButtonLabel(false, hostVerified)}
+        busyLabel={submitButtonLabel(true, hostVerified)}
+        tint={{
+          primaryButton: { backgroundColor: colors.text },
+          primaryButtonText: { color: colors.buttonText },
+        }}
+        spinnerColor={colors.buttonText}
+      />
     </AuthScreenShell>
   )
 }

@@ -49,7 +49,7 @@ const webSelectStyle: CSSProperties = {
   borderWidth: 1,
   borderStyle: 'solid',
   borderColor: colors.border,
-  borderRadius: 6,
+  borderRadius: 8,
   backgroundColor: colors.bgInput,
   color: colors.text,
   fontFamily: 'monospace',
@@ -151,7 +151,13 @@ function FieldHeader({
   return (
     <View style={styles.fieldHeader}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable onPress={onRemove} disabled={disabled}>
+      <Pressable
+        onPress={onRemove}
+        disabled={disabled}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${label}`}
+      >
         <Text style={styles.removeFieldText}>Remove</Text>
       </Pressable>
     </View>
@@ -627,7 +633,13 @@ export function ComposeVisualServiceCard({
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.serviceHeader}>
         <Text style={styles.serviceHeaderTitle}>Service</Text>
-        <Pressable onPress={onRemoveService} disabled={saving}>
+        <Pressable
+          onPress={onRemoveService}
+          disabled={saving}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Remove service"
+        >
           <Text style={styles.removeText}>Remove</Text>
         </Pressable>
       </View>
@@ -848,7 +860,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.bgInput,
     color: colors.text,
     fontFamily: 'monospace',
@@ -870,7 +882,7 @@ const styles = StyleSheet.create({
   optionChip: {
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
@@ -884,7 +896,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     borderStyle: 'dashed',
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -902,7 +914,7 @@ const styles = StyleSheet.create({
   addChip: {
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     borderStyle: 'dashed',
     paddingHorizontal: 10,
     paddingVertical: 6,

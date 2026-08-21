@@ -1,14 +1,18 @@
-import { type ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useState, type ReactNode } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
+import { HeaderChevron } from '@/components/header-chevron'
+import { webPointer } from '@/components/org/org-panel-styles'
 import { glass } from '@/lib/glass'
-import { chrome, colors } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 export function SectionPanel({
   title,
   hint,
   accent,
   headerRight,
+  collapsible = false,
+  defaultCollapsed = false,
   children,
 }: Readonly<{
   title?: string
@@ -16,23 +20,64 @@ export function SectionPanel({
   accent?: boolean
   /** Optional trailing control in the title row (e.g. project server picker). */
   headerRight?: ReactNode
+  /**
+   * Collapsible header (chevron + press-to-toggle). Use for settings-y
+   * panels that are rarely touched; pair with `defaultCollapsed` so the
+   * page stays scannable without removing anything.
+   */
+  collapsible?: boolean
+  defaultCollapsed?: boolean
   children: ReactNode
 }>) {
+  const [collapsed, setCollapsed] = useState(collapsible && defaultCollapsed)
+  const expanded = !collapsible || !collapsed
+
+  const headerCopy = (
+    <View style={styles.areaHeaderCopy}>
+      <Text style={styles.areaTitle}>{title}</Text>
+      {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
+    </View>
+  )
+
   return (
     <GlassSurface style={styles.area} intensity="soft">
       {title ? (
-        <View style={[styles.areaHeader, accent && styles.areaHeaderAccent]}>
+        <View
+          style={[
+            styles.areaHeader,
+            accent && styles.areaHeaderAccent,
+            !expanded && styles.areaHeaderCollapsed,
+          ]}
+        >
           {accent ? <View style={styles.accentStripe} /> : null}
-          <View style={styles.areaHeaderCopy}>
-            <Text style={styles.areaTitle}>{title}</Text>
-            {hint ? <Text style={styles.areaHint}>{hint}</Text> : null}
-          </View>
+          {collapsible ? (
+            <Pressable
+              style={[styles.headerToggle, webPointer]}
+              onPress={() => setCollapsed((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={
+                expanded ? `Collapse ${title}` : `Expand ${title}`
+              }
+            >
+              {headerCopy}
+              <View style={styles.chevronSlot}>
+                <HeaderChevron
+                  size={12}
+                  color={colors.textMuted}
+                  open={expanded}
+                />
+              </View>
+            </Pressable>
+          ) : (
+            headerCopy
+          )}
           {headerRight ? (
             <View style={styles.areaHeaderRight}>{headerRight}</View>
           ) : null}
         </View>
       ) : null}
-      <View style={styles.areaBody}>{children}</View>
+      {expanded ? <View style={styles.areaBody}>{children}</View> : null}
     </GlassSurface>
   )
 }
@@ -49,6 +94,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderArea,
     backgroundColor: glass.fillSoft,
   },
+  areaHeaderCollapsed: {
+    borderBottomWidth: 0,
+  },
   areaHeaderAccent: {
     backgroundColor: colors.bgActive,
   },
@@ -56,18 +104,28 @@ const styles = StyleSheet.create({
     width: 3,
     backgroundColor: chrome.accent,
   },
+  headerToggle: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chevronSlot: {
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+  },
   areaHeaderCopy: {
     flex: 1,
     minWidth: 0,
-    paddingHorizontal: 14,
+    paddingHorizontal: spacing.md,
     paddingVertical: 10,
     justifyContent: 'center',
   },
   areaHeaderRight: {
     flexShrink: 0,
-    paddingRight: 12,
-    paddingLeft: 4,
-    paddingVertical: 8,
+    paddingRight: spacing.md,
+    paddingLeft: spacing.xs,
+    paddingVertical: spacing.sm,
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
@@ -82,7 +140,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   areaBody: {
-    padding: 14,
-    gap: 8,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
 })

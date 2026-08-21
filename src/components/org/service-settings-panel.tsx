@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
+import { Checkbox } from '@/components/ui'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
   type HealthCheckPolicy,
@@ -18,7 +19,7 @@ const webInputStyle = {
   paddingHorizontal: 12,
   paddingVertical: 10,
   fontSize: 14,
-  borderRadius: 6,
+  borderRadius: 8,
   minHeight: 44,
   fontFamily: 'monospace',
 } as const
@@ -42,12 +43,14 @@ function ToggleRow({
   onToggle: () => void
 }>) {
   return (
-    <Pressable style={styles.toggleRow} disabled={disabled} onPress={onToggle}>
-      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-        {checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
-      </View>
-      <Text style={styles.toggleLabel}>{label}</Text>
-    </Pressable>
+    <View style={styles.toggleRow}>
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        onPress={onToggle}
+        label={label}
+      />
+    </View>
   )
 }
 
@@ -396,7 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 44,
     fontFamily: 'monospace',
   },
@@ -409,29 +412,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgInput,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-  },
-  checkboxMark: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  toggleLabel: {
-    color: colors.textBody,
-    fontSize: 13,
   },
   policyRow: {
     flexDirection: 'row',

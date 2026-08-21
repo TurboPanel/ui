@@ -1,11 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { SegmentedControl } from '@/components/ui'
 import {
   managedReleasesForEngine,
   managedSeriesLabel,
-  type ManagedEngineRelease,
 } from '@/lib/managed-releases'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 export type ManagedVersionSelection = {
   /** Version series from the release catalog (`18`, `9.7`, `12.3`). */
@@ -56,101 +56,48 @@ export function ManagedVersionPicker({
   return (
     <View style={styles.group}>
       <Text style={orgPanelStyles.detailLabel}>Version</Text>
-      <View style={styles.chipRow}>
-        {releases.map((release) => (
-          <SeriesChip
-            key={release.series}
-            release={release}
-            selected={release.series === value.series}
-            disabled={disabled}
-            onPress={() =>
-              onChange({
-                series: release.series,
-                // Reset to this series' default variant — variant ids are not
-                // guaranteed to exist across series.
-                variantId: release.variants[0]?.id ?? value.variantId,
-              })
-            }
-          />
-        ))}
-      </View>
+      <SegmentedControl
+        options={releases.map((release) => ({
+          value: release.series,
+          label: managedSeriesLabel(release),
+        }))}
+        value={value.series}
+        disabled={disabled}
+        accessibilityLabel="Version"
+        onChange={(series) => {
+          const release = releases.find((row) => row.series === series)
+          onChange({
+            series,
+            // Reset to this series' default variant — variant ids are not
+            // guaranteed to exist across series.
+            variantId: release?.variants[0]?.id ?? value.variantId,
+          })
+        }}
+      />
 
       {selected && selected.variants.length > 1 ? (
         <>
           <Text style={orgPanelStyles.detailLabel}>Base image</Text>
-          <View style={styles.chipRow}>
-            {selected.variants.map((variant) => {
-              const active = variant.id === value.variantId
-              return (
-                <Pressable
-                  key={variant.id}
-                  style={[styles.chip, active && styles.chipActive, webPointer]}
-                  disabled={disabled}
-                  onPress={() => onChange({ series: value.series, variantId: variant.id })}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {variant.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
+          <SegmentedControl
+            options={selected.variants.map((variant) => ({
+              value: variant.id,
+              label: variant.label,
+            }))}
+            value={value.variantId}
+            disabled={disabled}
+            accessibilityLabel="Base image"
+            onChange={(variantId) =>
+              onChange({ series: value.series, variantId })
+            }
+          />
         </>
       ) : null}
     </View>
   )
 }
 
-function SeriesChip({
-  release,
-  selected,
-  disabled,
-  onPress,
-}: Readonly<{
-  release: ManagedEngineRelease
-  selected: boolean
-  disabled: boolean
-  onPress: () => void
-}>) {
-  return (
-    <Pressable
-      style={[styles.chip, selected && styles.chipActive, webPointer]}
-      disabled={disabled}
-      onPress={onPress}
-    >
-      <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-        {managedSeriesLabel(release)}
-      </Text>
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
   group: {
     gap: spacing.xs,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-  },
-  chipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  chipText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: colors.text,
   },
 })

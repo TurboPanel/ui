@@ -1,3 +1,13 @@
+import {
+  Button,
+  ButtonRow,
+  Checkbox,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import { ManagedBackupsPanel } from '@/components/org/managed/managed-backups-panel'
 import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-panel'
 import { ManagedClusterPanel } from '@/components/org/managed/managed-cluster-panel'
@@ -69,19 +79,7 @@ import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useCallback, useRef, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 /** Fire-and-forget without the `void` operator (typescript:S3735). */
 function ignorePromise(promise: Promise<unknown>): void {
@@ -173,22 +171,15 @@ function EnvironmentTabs({
     return null
   }
   return (
-    <View style={styles.tabBar}>
-      {environments.map((env) => {
-        const active = env.id === selectedId
-        return (
-          <Pressable
-            key={env.id}
-            style={[styles.tab, active && styles.tabActive, webPointer]}
-            onPress={() => onSelect(env.id)}
-          >
-            <Text style={[styles.tabText, active && styles.tabTextActive]}>
-              {environmentLabel(env)}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
+    <SegmentedControl
+      options={environments.map((env) => ({
+        value: env.id,
+        label: environmentLabel(env),
+      }))}
+      value={selectedId ?? ''}
+      onChange={onSelect}
+      accessibilityLabel="Environment"
+    />
   )
 }
 
@@ -263,7 +254,7 @@ function ManagedSetupPanel({
 
   return (
     <SectionPanel title="Set up" hint="Pin a server and create the managed service" accent>
-      {loading ? <Text style={orgPanelStyles.muted}>Loading servers…</Text> : null}
+      {loading ? <LoadingState label="Loading servers…" /> : null}
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
       <View style={styles.serverList}>
         {servers.map((server) => {
@@ -280,6 +271,9 @@ function ManagedSetupPanel({
               ]}
               disabled={offline || submitting}
               onPress={() => setServerId(server.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected, disabled: offline || submitting }}
+              accessibilityLabel={server.name?.trim() || server.hostname || server.id}
             >
               <Text style={styles.serverLabel}>
                 {server.name?.trim() || server.hostname || server.id}
@@ -297,33 +291,24 @@ function ManagedSetupPanel({
         onChange={setVersion}
       />
 
-      <Pressable
-        style={[styles.toggleRow, webPointer]}
-        onPress={() => setExpose((current) => !current)}
+      <Checkbox
+        label="Expose externally"
+        checked={expose}
         disabled={submitting}
-      >
-        <View style={[styles.checkbox, expose && styles.checkboxChecked]}>
-          {expose ? <Text style={styles.checkmark}>✓</Text> : null}
-        </View>
-        <Text style={styles.toggleLabel}>Expose externally</Text>
-      </Pressable>
+        onPress={() => setExpose((current) => !current)}
+      />
 
       {canManage ? (
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            webPointer,
-            (submitting || !serverId) && styles.disabled,
-          ]}
+        <Button
+          label="Create service"
+          busyLabel="Creating…"
+          variant="primary"
+          busy={submitting}
           disabled={submitting || !serverId}
           onPress={() => {
             ignorePromise(create())
           }}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            {submitting ? 'Creating…' : 'Create service'}
-          </Text>
-        </Pressable>
+        />
       ) : (
         <Text style={orgPanelStyles.muted}>You need manage permission to create this service.</Text>
       )}
@@ -383,7 +368,7 @@ export function ManagedEnvironmentBody({
   const loading = environmentQuery.isLoading || (hasServerPin && managedQuery.isLoading && !detail)
 
   if (loading && !detail && !revealPassword) {
-    return <Text style={orgPanelStyles.muted}>Loading managed service…</Text>
+    return <LoadingState label="Loading managed service…" />
   }
 
   if (error) {
@@ -809,56 +794,38 @@ function resolveSelectedEnvironmentId(
   return envs[0]?.id ?? null
 }
 
-function deleteButtonLabel(deleteArmed: boolean, deleting: boolean): string {
-  if (!deleteArmed) {
-    return 'Delete'
-  }
-  return deleting ? 'Deleting…' : 'Confirm delete'
-}
-
 function EnvironmentToolbarActions({
   canOwn,
   showDelete,
-  deleteArmed,
   deleting,
   onRename,
   onNewEnvironment,
-  onDeletePress,
+  onDeleteConfirm,
 }: Readonly<{
   canOwn: boolean
   showDelete: boolean
-  deleteArmed: boolean
   deleting: boolean
   onRename: () => void
   onNewEnvironment: () => void
-  onDeletePress: () => void
+  onDeleteConfirm: () => void
 }>) {
   if (!canOwn) {
     return null
   }
   return (
-    <View style={styles.toolbarActions}>
-      <Pressable style={[orgPanelStyles.toolbarBtnSecondary, webPointer]} onPress={onRename}>
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Rename</Text>
-      </Pressable>
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-        onPress={onNewEnvironment}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>New environment</Text>
-      </Pressable>
+    <ButtonRow>
+      <Button label="Rename" size="sm" onPress={onRename} />
+      <Button label="New environment" size="sm" onPress={onNewEnvironment} />
       {showDelete ? (
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={deleting}
-          onPress={onDeletePress}
-        >
-          <Text style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}>
-            {deleteButtonLabel(deleteArmed, deleting)}
-          </Text>
-        </Pressable>
+        <ConfirmButton
+          label="Delete"
+          confirmLabel={deleting ? 'Deleting…' : 'Confirm delete'}
+          prompt="Delete this environment?"
+          busy={deleting}
+          onConfirm={onDeleteConfirm}
+        />
       ) : null}
-    </View>
+    </ButtonRow>
   )
 }
 
@@ -875,15 +842,13 @@ function RenameEnvironmentForm({
 }>) {
   return (
     <View style={styles.inlineForm}>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+      <TextField
+        label="Environment name"
         value={value}
         onChangeText={onChange}
         editable={!saving}
       />
-      <Pressable style={[orgPanelStyles.toolbarBtnPrimary, webPointer]} onPress={onSave}>
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-      </Pressable>
+      <Button label="Save" variant="primary" busy={saving} onPress={onSave} />
     </View>
   )
 }
@@ -901,19 +866,20 @@ function CreateEnvironmentForm({
 }>) {
   return (
     <View style={styles.inlineForm}>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
+      <TextField
+        label="Environment name"
         value={value}
         onChangeText={onChange}
         placeholder="Environment name"
-        placeholderTextColor={colors.textDim}
         editable={!creating}
       />
-      <Pressable style={[orgPanelStyles.toolbarBtnPrimary, webPointer]} onPress={onCreate}>
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-          {creating ? 'Creating…' : 'Create'}
-        </Text>
-      </Pressable>
+      <Button
+        label="Create"
+        busyLabel="Creating…"
+        variant="primary"
+        busy={creating}
+        onPress={onCreate}
+      />
     </View>
   )
 }
@@ -945,7 +911,6 @@ function ActiveEnvironmentPanel({
   const [renameValue, setRenameValue] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
-  const [deleteArmed, setDeleteArmed] = useState(false)
 
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, activeEnvironment.id)
   const createEnvironmentMutation = useCreateEnvironment(orgId)
@@ -997,9 +962,7 @@ function ActiveEnvironmentPanel({
       if (deleteEnvironmentMutation.actionError) {
         onError(deleteEnvironmentMutation.actionError)
       }
-      return
     }
-    setDeleteArmed(false)
   }
 
   const renameSaving = updateEnvironmentMutation.isPending
@@ -1015,16 +978,15 @@ function ActiveEnvironmentPanel({
           onSelect(id)
           setRenaming(false)
           setShowCreate(false)
-          setDeleteArmed(false)
         }}
       />
 
       <View style={styles.toolbar}>
         <Text style={styles.activeName}>{environmentLabel(activeEnvironment)}</Text>
         <EnvironmentToolbarActions
+          key={activeEnvironment.id}
           canOwn={canOwn}
           showDelete={environments.length > 1}
-          deleteArmed={deleteArmed}
           deleting={deleting}
           onRename={() => {
             setRenameValue(activeEnvironment.name?.trim() ?? '')
@@ -1033,14 +995,9 @@ function ActiveEnvironmentPanel({
           }}
           onNewEnvironment={() => {
             setShowCreate(true)
-            setDeleteArmed(false)
           }}
-          onDeletePress={() => {
-            if (deleteArmed) {
-              ignorePromise(deleteActive())
-              return
-            }
-            setDeleteArmed(true)
+          onDeleteConfirm={() => {
+            ignorePromise(deleteActive())
           }}
         />
       </View>
@@ -1154,7 +1111,7 @@ export function ManagedProjectSection({
       environments.length === 0)
 
   if (loading && environments.length === 0) {
-    return <Text style={orgPanelStyles.muted}>Loading environments…</Text>
+    return <LoadingState label="Loading environments…" />
   }
 
   return (
@@ -1163,7 +1120,7 @@ export function ManagedProjectSection({
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
       {!activeEnvironment ? (
-        <Text style={orgPanelStyles.muted}>No environments yet.</Text>
+        <EmptyState title="No environments yet." />
       ) : (
         <ActiveEnvironmentPanel
           orgId={orgId}
@@ -1195,34 +1152,6 @@ const styles = StyleSheet.create({
   panels: {
     gap: spacing.lg,
   },
-  tabBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderArea,
-    paddingBottom: spacing.xs,
-  },
-  tab: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  tabActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: chrome.accent,
-  },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1235,28 +1164,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  toolbarActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
   inlineForm: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    minWidth: 160,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minHeight: 44,
   },
   serverList: {
     gap: spacing.sm,
@@ -1284,39 +1193,5 @@ const styles = StyleSheet.create({
   offlineHint: {
     color: colors.textMuted,
     fontSize: 12,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgInput,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-  },
-  checkmark: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  toggleLabel: {
-    color: colors.textBody,
-    fontSize: 13,
-  },
-  danger: {
-    color: colors.error,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

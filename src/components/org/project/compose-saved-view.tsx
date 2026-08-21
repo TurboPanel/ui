@@ -7,6 +7,7 @@ import {
 } from '@/components/org/compose-editor-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
+import { EmptyState } from '@/components/ui'
 import {
   ComposeInventoryStrip,
   type InventoryStripItem,
@@ -38,7 +39,7 @@ export function ServicesStatusList({
   containersByService: Record<string, ContainerRecord[]>
 }>) {
   if (services.length === 0) {
-    return <Text style={orgPanelStyles.muted}>No services yet.</Text>
+    return <EmptyState title="No services yet." />
   }
   return (
     <View style={styles.list}>
@@ -134,9 +135,7 @@ export function ComposeSavedView({
 
   let overviewBody: ReactNode
   if (blank) {
-    overviewBody = (
-      <Text style={orgPanelStyles.muted}>No compose defined yet.</Text>
-    )
+    overviewBody = <EmptyState title="No compose defined yet." />
   } else if (hasDiagram) {
     overviewBody = (
       <ComposeGraphView
@@ -180,6 +179,7 @@ export function ComposeSavedView({
                       key={id}
                       accessibilityRole="tab"
                       accessibilityState={{ selected: active }}
+                      hitSlop={{ top: 10, bottom: 10 }}
                       style={[
                         styles.sourceChip,
                         active && styles.sourceChipActive,
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     gap: 2,
     borderWidth: 1,
     borderColor: colors.borderChip,
-    borderRadius: 6,
+    borderRadius: 8,
     padding: 2,
     backgroundColor: colors.bgInput,
   },

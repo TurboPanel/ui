@@ -3,13 +3,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
+import { Button, ButtonRow, EmptyState, LoadingState } from '@/components/ui'
 import { useProjects, useWorkspace } from '@/lib/queries'
 import type { ProjectRecord, WorkspaceRecord } from '@/lib/instance-api'
 import {
   isTurbopanelWorkspace,
   TURBOPANEL_WORKSPACE_DESCRIPTION,
 } from '@/lib/system-inventory'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 function workspaceDescription(workspace: WorkspaceRecord): string | null {
   if (isTurbopanelWorkspace(workspace)) {
@@ -28,7 +29,7 @@ function renderWorkspaceBody({
   onEdit: () => void
 }>) {
   if (loading && !workspace) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <LoadingState />
   }
   if (!workspace) {
     return null
@@ -45,9 +46,7 @@ function renderWorkspaceBody({
           {system ? <PlatformBadge /> : null}
         </View>
         {!system ? (
-          <Pressable style={styles.secondaryButton} onPress={onEdit}>
-            <Text style={styles.secondaryButtonText}>Edit</Text>
-          </Pressable>
+          <Button label="Edit" variant="secondary" size="sm" onPress={onEdit} />
         ) : null}
       </View>
       {description ? (
@@ -67,10 +66,10 @@ function renderProjectsBody({
   onOpenProject: (projectId: string) => void
 }>) {
   if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading projects…</Text>
+    return <LoadingState label="Loading projects…" />
   }
   if (projects.length === 0) {
-    return <Text style={orgPanelStyles.muted}>No projects yet.</Text>
+    return <EmptyState title="No projects yet." />
   }
   return (
     <View style={styles.list}>
@@ -117,7 +116,9 @@ export function WorkspaceDetailSection({
   return (
     <View style={styles.root}>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>{workspace?.name?.trim() || 'Workspace'}</Text>
+        <Text style={orgPanelStyles.pageTitle}>
+          {workspace?.name?.trim() || 'Workspace'}
+        </Text>
         {system ? <PlatformBadge /> : null}
       </View>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
@@ -131,30 +132,29 @@ export function WorkspaceDetailSection({
       </SectionPanel>
 
       <SectionPanel title="Projects" hint="Projects in this workspace">
-        <View style={styles.projectActions}>
+        <ButtonRow>
           {!system ? (
-            <Pressable
-              style={styles.primaryButton}
+            <Button
+              label="New project"
+              variant="primary"
               onPress={() =>
                 router.push(
                   `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`,
                 )
               }
-            >
-              <Text style={styles.primaryButtonText}>New project</Text>
-            </Pressable>
+            />
           ) : null}
-          <Pressable
-            style={styles.secondaryButton}
+          <Button
+            label="View in Projects"
+            variant="secondary"
+            size="sm"
             onPress={() =>
               router.push(
                 `/${orgId}/projects?workspaceId=${encodeURIComponent(workspaceId)}`,
               )
             }
-          >
-            <Text style={styles.secondaryButtonText}>View in Projects</Text>
-          </Pressable>
-        </View>
+          />
+        </ButtonRow>
         {renderProjectsBody({
           loading,
           projects,
@@ -173,7 +173,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  heading: { color: colors.text, fontSize: 28, fontWeight: '700' },
   header: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   titleRow: {
     flexDirection: 'row',
@@ -183,29 +182,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   list: { gap: spacing.sm },
-  projectActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: { color: chrome.onAccent, fontSize: 14, fontWeight: '700' },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  secondaryButtonText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
 })

@@ -5,11 +5,18 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import {
   GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR,
   GATEWAY_DATACENTER_REQUIRED_ERROR,
@@ -372,45 +379,23 @@ function AllowRelayOverridePicker({
   const selected = allowRelayOverride(value)
   return (
     <>
-      <Text style={styles.fieldLabel}>Allow relay</Text>
-      <View style={orgPanelStyles.segmentGroup}>
-        {(
-          [
-            { id: 'inherit', label: 'Inherit', next: null },
-            { id: 'on', label: 'On', next: true },
-            { id: 'off', label: 'Off', next: false },
-          ] as const
-        ).map((option) => {
-          const active = selected === option.id
-          return (
-            <Pressable
-              key={option.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Allow relay ${option.label}`}
-              accessibilityState={{ selected: active, disabled }}
-              disabled={disabled}
-              onPress={() => {
-                if (!disabled && option.id !== selected) onChange(option.next)
-              }}
-              style={[
-                orgPanelStyles.segmentChip,
-                active && orgPanelStyles.segmentChipActive,
-                disabled && styles.toggleDisabled,
-                webPointer,
-              ]}
-            >
-              <Text
-                style={[
-                  orgPanelStyles.segmentChipText,
-                  active && orgPanelStyles.segmentChipTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          )
-        })}
-      </View>
+      <FormField label="Allow relay">
+        <SegmentedControl
+          options={[
+            { value: 'inherit', label: 'Inherit' },
+            { value: 'on', label: 'On' },
+            { value: 'off', label: 'Off' },
+          ]}
+          value={selected}
+          disabled={disabled}
+          accessibilityLabel="Allow relay"
+          onChange={(next) => {
+            if (next === selected) return
+            if (next === 'inherit') onChange(null)
+            else onChange(next === 'on')
+          }}
+        />
+      </FormField>
       <Text style={orgPanelStyles.muted}>
         Effective: {effective ? 'On' : 'Off'}
       </Text>
@@ -495,9 +480,7 @@ function FabricPathMatrixPanel({
   return (
     <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
       {rows.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>
-          No peer paths observed yet. Apply to probe.
-        </Text>
+        <EmptyState title="No peer paths observed yet. Apply to probe." />
       ) : (
         <View style={styles.list}>
           {rows.map((row) => {
@@ -548,38 +531,18 @@ function RolePicker({
   onChange: (role: RelayRole) => void
 }>) {
   return (
-    <View style={orgPanelStyles.segmentGroup}>
-      {(['gateway', 'member'] as const).map((value) => {
-        const active = role === value
-        return (
-          <Pressable
-            key={value}
-            accessibilityRole="button"
-            accessibilityLabel={relayRoleLabel(value)}
-            accessibilityState={{ selected: active, disabled }}
-            disabled={disabled}
-            onPress={() => {
-              if (!disabled && value !== role) onChange(value)
-            }}
-            style={[
-              orgPanelStyles.segmentChip,
-              active && orgPanelStyles.segmentChipActive,
-              disabled && styles.toggleDisabled,
-              webPointer,
-            ]}
-          >
-            <Text
-              style={[
-                orgPanelStyles.segmentChipText,
-                active && orgPanelStyles.segmentChipTextActive,
-              ]}
-            >
-              {relayRoleLabel(value)}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
+    <SegmentedControl
+      options={(['gateway', 'member'] as const).map((value) => ({
+        value,
+        label: relayRoleLabel(value),
+      }))}
+      value={role}
+      disabled={disabled}
+      accessibilityLabel="Role"
+      onChange={(value) => {
+        if (value !== role) onChange(value)
+      }}
+    />
   )
 }
 
@@ -656,24 +619,23 @@ function AdvertisedCidrsField({
   }
   return (
     <>
-      <Text style={styles.fieldLabel}>Advertised LAN CIDRs</Text>
-      <TextInput
+      <TextField
+        label="Advertised LAN CIDRs"
+        hint={
+          storedEmpty
+            ? 'Empty override uses derived IPv4 datacenter subnets.'
+            : undefined
+        }
         value={draft}
         onChangeText={onChange}
         onBlur={onSave}
         editable={!disabled}
         placeholder="(derived IPv4 datacenter subnets)"
-        placeholderTextColor={colors.textFaint}
-        style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
+        mono
         accessibilityLabel="Advertised LAN CIDRs override"
       />
-      {storedEmpty ? (
-        <Text style={orgPanelStyles.muted}>
-          Empty override uses derived IPv4 datacenter subnets.
-        </Text>
-      ) : null}
       <RelayResolvedAdvertisedCidrs cidrs={resolvedCidrs} />
     </>
   )
@@ -692,29 +654,21 @@ function RelayPresharedKeyField({
 }>) {
   return (
     <>
-      <Text style={styles.fieldLabel}>Set preshared key</Text>
-      <TextInput
+      <TextField
+        label="Set preshared key"
         value={draft}
         onChangeText={onChange}
         editable={!disabled}
         placeholder="Write-only — leave empty to keep current"
-        placeholderTextColor={colors.textFaint}
-        style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
         secureTextEntry
       />
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnSecondary,
-          (!draft.trim() || disabled) && styles.toggleDisabled,
-          webPointer,
-        ]}
+      <Button
+        label="Set key"
         disabled={!draft.trim() || disabled}
         onPress={onSave}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Set key</Text>
-      </Pressable>
+      />
     </>
   )
 }
@@ -771,12 +725,13 @@ function RelayConfiguredFields({
           {relay.address}
         </Text>
       </Text>
-      <Text style={styles.fieldLabel}>Role</Text>
-      <RolePicker
-        role={relay.role}
-        disabled={disabled}
-        onChange={onRoleChange}
-      />
+      <FormField label="Role">
+        <RolePicker
+          role={relay.role}
+          disabled={disabled}
+          onChange={onRoleChange}
+        />
+      </FormField>
       <AdvertisedCidrsField
         role={relay.role}
         draft={advertisedDraft}
@@ -786,35 +741,32 @@ function RelayConfiguredFields({
         onChange={onAdvertisedChange}
         onSave={onSaveAdvertised}
       />
-      <Text style={styles.fieldLabel}>Endpoint override</Text>
-      <TextInput
+      <TextField
+        label="Endpoint override"
+        hint={
+          relay.endpointAddress
+            ? undefined
+            : 'Empty override uses auto-derivation.'
+        }
         value={endpointDraft}
         onChangeText={onEndpointChange}
         onBlur={onSaveEndpoint}
         editable={!disabled}
         placeholder="(auto)"
-        placeholderTextColor={colors.textFaint}
-        style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
+        mono
       />
-      {!relay.endpointAddress ? (
-        <Text style={orgPanelStyles.muted}>
-          Empty override uses auto-derivation.
-        </Text>
-      ) : null}
       <RelayResolvedEndpoint relay={relay} />
       <RelaySegments segments={relay.segments} />
-      <Text style={styles.fieldLabel}>Keepalive (seconds)</Text>
-      <TextInput
+      <TextField
+        label="Keepalive (seconds)"
         value={keepaliveDraft}
         onChangeText={onKeepaliveChange}
         onBlur={onSaveKeepalive}
         editable={!disabled}
         keyboardType="number-pad"
         placeholder="default"
-        placeholderTextColor={colors.textFaint}
-        style={styles.input}
       />
       <AllowRelayOverridePicker
         value={relay.allowRelay}
@@ -1011,24 +963,14 @@ function FabricApplyButton({
   onPress: () => void
 }>) {
   return (
-    <Pressable
-      style={[
-        orgPanelStyles.toolbarBtnPrimary,
-        disabled && styles.toggleDisabled,
-        webPointer,
-      ]}
+    <Button
+      label="Apply"
+      variant="primary"
+      busy={busy}
       disabled={disabled}
       onPress={onPress}
-      accessibilityRole="button"
       accessibilityLabel={`Apply ${TURBOFABRIC_PRODUCT_NAME}`}
-      accessibilityState={{ disabled, busy }}
-    >
-      {busy ? (
-        <ActivityIndicator size="small" color={chrome.accent} />
-      ) : (
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Apply</Text>
-      )}
-    </Pressable>
+    />
   )
 }
 
@@ -1071,10 +1013,10 @@ function FabricRelaysPanel({
         />
       ) : null}
       {serversLoading && servers.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>Loading servers…</Text>
+        <LoadingState label="Loading servers…" />
       ) : null}
       {!serversLoading && servers.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No servers enrolled yet.</Text>
+        <EmptyState title="No servers enrolled yet." />
       ) : null}
       <View style={styles.list}>
         {servers.map((server) => (
@@ -1247,9 +1189,7 @@ export function NetworkFabricSection({
         title={TURBOFABRIC_PRODUCT_NAME}
         hint="Opt-in · default off"
       >
-        {query.isLoading && !query.data ? (
-          <Text style={orgPanelStyles.muted}>Loading…</Text>
-        ) : null}
+        {query.isLoading && !query.data ? <LoadingState /> : null}
 
         <FabricStatusBlock
           enabled={enabled}
@@ -1329,17 +1269,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontSize: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 44,
   },
   toggleRow: {
     flexDirection: 'row',

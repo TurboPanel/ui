@@ -11,11 +11,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { TextField } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   PreviewDeploymentModal,
@@ -109,6 +109,7 @@ function QuietButton({
         webPointer,
       ]}
       disabled={disabled}
+      hitSlop={{ top: 6, bottom: 6 }}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
@@ -135,19 +136,18 @@ function EnvironmentCreateInline({
 }>) {
   return (
     <View style={styles.inlineForm}>
-      <TextInput
-        style={styles.input}
+      <TextField
+        label="Environment name"
         value={value}
         onChangeText={onChange}
         placeholder="e.g. Staging"
-        placeholderTextColor={colors.textDim}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!creating}
         maxLength={DISPLAY_NAME_MAX_LENGTH}
         accessibilityLabel="New environment name"
+        error={fieldError}
       />
-      {fieldError ? <Text style={orgPanelStyles.error}>{fieldError}</Text> : null}
       <View style={styles.inlineActions}>
         <QuietButton
           label={creating ? 'Creating…' : 'Create'}
@@ -218,6 +218,7 @@ function ToolbarSplitButton({
             webPointer,
           ]}
           disabled={disabled}
+          hitSlop={{ top: 6, bottom: 6 }}
           onPress={onPrimaryPress}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
@@ -239,6 +240,7 @@ function ToolbarSplitButton({
             webPointer,
           ]}
           disabled={disabled}
+          hitSlop={{ top: 6, bottom: 6 }}
           onPress={() => setMenuOpen((open) => !open)}
           accessibilityRole="button"
           accessibilityLabel={caretAccessibilityLabel}
@@ -1510,7 +1512,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   quietBtn: {
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
@@ -1556,17 +1558,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-  },
-  input: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    color: colors.text,
-    fontSize: 13,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 36,
   },
   buttonDisabled: {
     opacity: 0.45,

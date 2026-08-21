@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,13 @@ import {
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+} from '@/components/ui'
 import { type ManagedListRecord } from '@/lib/instance-api'
 import {
   MANAGED_SERVICE_CATALOG,
@@ -38,26 +44,6 @@ const STATUS_FILTERS: readonly (ManagedStatus | 'all')[] = [
   'applying',
   'failed',
 ]
-
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: Readonly<{ label: string; active: boolean; onPress: () => void }>) {
-  return (
-    <Pressable
-      style={[styles.chip, active && styles.chipActive, webPointer]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={label}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
 
 function serviceTitle(row: ManagedListRecord): string {
   return (
@@ -294,51 +280,47 @@ function ManagedFiltersPanel({
 }>) {
   return (
     <SectionPanel title="Filters" hint="Narrow the loaded list">
-      <Text style={styles.fieldLabel}>Engine</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="All"
-          active={engineFilter === 'all'}
-          onPress={() => onEngineFilter('all')}
+      <FormField label="Engine">
+        <SegmentedControl
+          options={[
+            { value: 'all', label: 'All' },
+            ...engines.map((engine) => ({
+              value: engine,
+              label: managedCatalogEntryForCode(engine)?.label ?? engine,
+            })),
+          ]}
+          value={engineFilter}
+          onChange={(value) => onEngineFilter(value)}
+          accessibilityLabel="Engine"
         />
-        {engines.map((engine) => (
-          <FilterChip
-            key={engine}
-            label={managedCatalogEntryForCode(engine)?.label ?? engine}
-            active={engineFilter === engine}
-            onPress={() => onEngineFilter(engine)}
-          />
-        ))}
-      </View>
+      </FormField>
 
-      <Text style={styles.fieldLabel}>Status</Text>
-      <View style={styles.chipRow}>
-        {STATUS_FILTERS.map((status) => (
-          <FilterChip
-            key={status}
-            label={statusFilterLabel(status)}
-            active={statusFilter === status}
-            onPress={() => onStatusFilter(status)}
-          />
-        ))}
-      </View>
-
-      <Text style={styles.fieldLabel}>Server</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="All servers"
-          active={serverFilter === ''}
-          onPress={() => onServerFilter('')}
+      <FormField label="Status">
+        <SegmentedControl
+          options={STATUS_FILTERS.map((status) => ({
+            value: status,
+            label: statusFilterLabel(status),
+          }))}
+          value={statusFilter}
+          onChange={(value) => onStatusFilter(value)}
+          accessibilityLabel="Status"
         />
-        {servers.map((server) => (
-          <FilterChip
-            key={server.id}
-            label={server.label}
-            active={serverFilter === server.id}
-            onPress={() => onServerFilter(server.id)}
-          />
-        ))}
-      </View>
+      </FormField>
+
+      <FormField label="Server">
+        <SegmentedControl
+          options={[
+            { value: '', label: 'All servers' },
+            ...servers.map((server) => ({
+              value: server.id,
+              label: server.label,
+            })),
+          ]}
+          value={serverFilter}
+          onChange={(value) => onServerFilter(value)}
+          accessibilityLabel="Server"
+        />
+      </FormField>
     </SectionPanel>
   )
 }
@@ -348,29 +330,21 @@ function ManagedEmptyState({
   onCreate,
 }: Readonly<{ canManage: boolean; onCreate: () => void }>) {
   return (
-    <View style={orgPanelStyles.statePanel}>
-      <Text style={orgPanelStyles.statePanelTitle}>No managed services yet</Text>
-      <Text style={orgPanelStyles.muted}>
-        Provision a managed engine (Postgres first) from the create flow.
-      </Text>
-      {canManage ? (
-        <Pressable
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
-            styles.emptyAction,
-            pressed && styles.buttonPressed,
-            webPointer,
-          ]}
-          onPress={onCreate}
-          accessibilityRole="button"
-          accessibilityLabel="Create managed service"
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-            + Managed service
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <EmptyState
+      panel
+      title="No managed services yet"
+      hint="Provision a managed engine (Postgres first) from the create flow."
+      action={
+        canManage ? (
+          <Button
+            label="+ Managed service"
+            variant="primary"
+            accessibilityLabel="Create managed service"
+            onPress={onCreate}
+          />
+        ) : undefined
+      }
+    />
   )
 }
 
@@ -442,12 +416,7 @@ function ManagedFleetBody({
   onCreate: () => void
 }>) {
   if (loading) {
-    return (
-      <View style={styles.loadingRow}>
-        <ActivityIndicator size="small" color={colors.accent} />
-        <Text style={orgPanelStyles.muted}>Loading managed services…</Text>
-      </View>
-    )
+    return <LoadingState label="Loading managed services…" />
   }
 
   // Initial-load failure only — preserve cached fleet rows on background refresh errors.
@@ -467,14 +436,15 @@ function ManagedFleetBody({
     return (
       <View style={styles.fleetBody}>
         {refreshError}
-        <View style={orgPanelStyles.statePanel}>
-          <Text style={orgPanelStyles.statePanelTitle}>No matches</Text>
-          <Text style={orgPanelStyles.muted}>
-            {filtersActive
+        <EmptyState
+          panel
+          title="No matches"
+          hint={
+            filtersActive
               ? 'No managed services match these filters.'
-              : 'No managed services to show.'}
-          </Text>
-        </View>
+              : 'No managed services to show.'
+          }
+        />
       </View>
     )
   }
@@ -547,20 +517,12 @@ export function ManagedOverviewSection({
       <SectionPanel title="Fleet" hint={listHint} accent>
         {canManage ? (
           <View style={styles.toolbarRow}>
-            <Pressable
-              style={({ pressed }) => [
-                orgPanelStyles.toolbarBtnPrimary,
-                pressed && styles.buttonPressed,
-                webPointer,
-              ]}
-              onPress={openCreate}
-              accessibilityRole="button"
+            <Button
+              label="+ Managed service"
+              variant="primary"
               accessibilityLabel="Create managed service"
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-                + Managed service
-              </Text>
-            </Pressable>
+              onPress={openCreate}
+            />
           </View>
         ) : null}
 
@@ -596,50 +558,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderArea,
-  },
-  emptyAction: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.md,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  fieldLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  chip: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  chipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  chipText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: chrome.accent,
   },
   buttonPressed: {
     opacity: 0.88,

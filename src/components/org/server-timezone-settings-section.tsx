@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button } from '@/components/ui'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
   fetchOrgDefaultTimezone,
@@ -69,8 +70,8 @@ export function ServerTimezoneSettingsSection({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Server fleet settings</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageTitle}>Server fleet settings</Text>
+      <Text style={orgPanelStyles.pageCopy}>
         Default timezone applied to new hosts and optionally enforced across the
         fleet. SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference sit in
         Host defaults below. Per-server overrides live on each host unless
@@ -128,18 +129,13 @@ export function ServerTimezoneSettingsSection({
             Organization manage permission is required to edit these settings.
           </Text>
         ) : (
-          <Pressable
+          <Button
+            label="Save settings"
+            variant="primary"
+            busy={mutation.isPending}
             disabled={pending || !settings}
             onPress={saveDefaults}
-            style={({ pressed }) => [
-              orgPanelStyles.toolbarBtnPrimary,
-              pending && styles.toggleDisabled,
-              pressed && styles.btnPressed,
-              webPointer,
-            ]}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save settings</Text>
-          </Pressable>
+          />
         )}
       </SectionPanel>
     </View>
@@ -150,16 +146,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
   },
   switchRow: {
     flexDirection: 'row',
@@ -200,8 +186,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
     fontSize: 13,
-  },
-  btnPressed: {
-    opacity: 0.88,
   },
 })

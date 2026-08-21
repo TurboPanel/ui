@@ -1,9 +1,9 @@
-import * as Clipboard from 'expo-clipboard'
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { downloadOrganizationCaPem } from '@/lib/instance-api'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, CopyButton } from '@/components/ui'
+import { downloadCaBundle, downloadSuccessMessage } from '@/lib/download-ca'
 import type {
   ManagedAccessEndpoint,
   ManagedConnectionInfo,
@@ -178,7 +178,6 @@ export function ManagedConnectionPanel({
   /** From the detail response; resolved service override → org default → platform. */
   ssl?: ManagedSslView | null
 }>) {
-  const [copied, setCopied] = useState(false)
   const [caBusy, setCaBusy] = useState(false)
   const [caMessage, setCaMessage] = useState<string | null>(null)
   const [caError, setCaError] = useState<string | null>(null)
@@ -191,31 +190,13 @@ export function ManagedConnectionPanel({
   const port = protocolPort(managed.engine, connection, managed)
   const visibleEndpoints = endpoints ?? []
 
-  const copyDsn = async () => {
-    if (!connection?.dsn) {
-      return
-    }
-    await Clipboard.setStringAsync(connection.dsn)
-    setCopied(true)
-  }
-
   const downloadCa = async () => {
     setCaBusy(true)
     setCaError(null)
     setCaMessage(null)
     try {
-      const pem = await downloadOrganizationCaPem()
-      await Clipboard.setStringAsync(pem)
-      if (typeof document !== 'undefined') {
-        const blob = new Blob([pem], { type: 'application/x-pem-file' })
-        const url = URL.createObjectURL(blob)
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = 'turbopanel-org-ca.pem'
-        anchor.click()
-        URL.revokeObjectURL(url)
-      }
-      setCaMessage('Organization CA copied' + (typeof document !== 'undefined' ? ' and downloaded' : ''))
+      await downloadCaBundle()
+      setCaMessage(downloadSuccessMessage())
     } catch (err) {
       setCaError(
         err instanceof Error ? err.message : 'Failed to download Organization CA',
@@ -268,21 +249,14 @@ export function ManagedConnectionPanel({
             </Text>
             <TlsPolicyLines engine={managed.engine} ssl={ssl} />
             <View style={styles.caRow}>
-              <Pressable
-                style={[
-                  orgPanelStyles.toolbarBtnSecondary,
-                  webPointer,
-                  caBusy && styles.disabled,
-                ]}
-                disabled={caBusy}
+              <Button
+                label="Download Organization CA"
+                busyLabel="Downloading…"
+                busy={caBusy}
                 onPress={() => {
                   void downloadCa()
                 }}
-              >
-                <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                  {caBusy ? 'Downloading…' : 'Download Organization CA'}
-                </Text>
-              </Pressable>
+              />
             </View>
             {overlapping ? (
               <Text style={orgPanelStyles.calloutWarningText}>
@@ -302,20 +276,7 @@ export function ManagedConnectionPanel({
                 {connection.dsn}
               </Text>
             </View>
-            <Pressable
-              style={[
-                orgPanelStyles.toolbarBtnSecondary,
-                webPointer,
-                styles.copyBtn,
-              ]}
-              onPress={() => {
-                void copyDsn()
-              }}
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                {copied ? 'Copied' : 'Copy DSN'}
-              </Text>
-            </Pressable>
+            <CopyButton value={connection.dsn} label="Copy DSN" size="md" />
           </>
         ) : null}
       </View>
@@ -332,10 +293,6 @@ const styles = StyleSheet.create({
     color: colors.textBody,
     fontSize: 12,
     fontFamily: 'monospace',
-  },
-  copyBtn: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.xs,
   },
   caRow: {
     flexDirection: 'row',
@@ -368,8 +325,5 @@ const styles = StyleSheet.create({
   endpointList: {
     gap: spacing.xs,
     marginTop: spacing.xs,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

@@ -1,19 +1,42 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
+import Svg, { Path, Rect } from 'react-native-svg'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Badge,
+  Button,
+  LoadingState,
+  SegmentedControl,
+} from '@/components/ui'
 import type {
   EmailSettingSource,
   EmailSettingsResponse,
 } from '@/lib/instance-api'
 import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
+
+function LockIcon() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+      <Rect
+        x={2.75}
+        y={6.25}
+        width={8.5}
+        height={5.5}
+        rx={1.5}
+        stroke={colors.textMuted}
+        strokeWidth={1.25}
+      />
+      <Path
+        d="M4.75 6V4.5a2.25 2.25 0 0 1 4.5 0V6"
+        stroke={colors.textMuted}
+        strokeWidth={1.25}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
 
 const FULL_KEYS = [
   'TURBOPANEL_SYSTEM_EMAIL__PROVIDER',
@@ -61,6 +84,11 @@ const PROVIDER_LABELS: Record<(typeof PROVIDER_OPTIONS)[number], string> = {
   smtp: 'SMTP',
   mailgun: 'Mailgun API',
 }
+
+const PROVIDER_SEGMENT_OPTIONS = PROVIDER_OPTIONS.map((value) => ({
+  value,
+  label: PROVIDER_LABELS[value],
+}))
 
 const SMTP_KEYS: FullKey[] = [
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_HOST',
@@ -235,44 +263,29 @@ export function EmailSettingsSection() {
 
     let sourceBadge: ReactNode = null
     if (isEnv) {
-      sourceBadge = (
-        <View style={[styles.badge, styles.badgeEnv]}>
-          <Text style={styles.badgeTextEnv}>Set by environment</Text>
-        </View>
-      )
+      sourceBadge = <Badge label="Set by environment" tone="pending" />
     } else if (isDb) {
-      sourceBadge = (
-        <View style={[styles.badge, styles.badgeDb]}>
-          <Text style={styles.badgeTextDb}>Saved</Text>
-        </View>
-      )
+      sourceBadge = <Badge label="Saved" tone="ok" />
     }
 
     let fieldControl: ReactNode
     if (isProvider) {
       fieldControl = (
-        <View style={styles.chipRow}>
-          {PROVIDER_OPTIONS.map((opt) => {
-            const selected = (value || 'smtp') === opt
-            return (
-              <Pressable
-                key={opt}
-                style={[styles.chip, selected && styles.chipActive]}
-                onPress={isEnv || saveMutation.isPending ? undefined : () => onProviderChange(opt)}
-                disabled={isEnv || saveMutation.isPending}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                  {PROVIDER_LABELS[opt]}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </View>
+        <SegmentedControl
+          options={PROVIDER_SEGMENT_OPTIONS}
+          value={value === 'mailgun' ? 'mailgun' : 'smtp'}
+          disabled={isEnv || saveMutation.isPending}
+          onChange={(opt) => {
+            if (isEnv || saveMutation.isPending) return
+            onProviderChange(opt)
+          }}
+          accessibilityLabel="Email provider"
+        />
       )
     } else if (isEnv) {
       fieldControl = (
         <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
-          <Text style={styles.lockIcon}>🔒</Text>
+          <LockIcon />
           <Text style={styles.lockValue} numberOfLines={1}>
             {isSecret ? '••••••••' : (value || '')}
           </Text>
@@ -319,8 +332,8 @@ export function EmailSettingsSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Email</Text>
-      <Text style={styles.copy}>
+      <Text style={orgPanelStyles.pageTitle}>Email</Text>
+      <Text style={orgPanelStyles.pageCopy}>
         Configure the email provider used for system notifications. Settings stored in the
         database can be edited here. Environment variables take precedence and appear read-only.
       </Text>
@@ -340,7 +353,7 @@ export function EmailSettingsSection() {
         {success ? <Text style={styles.success}>{success}</Text> : null}
 
         {emailQuery.isLoading ? (
-          <Text style={orgPanelStyles.muted}>Loading...</Text>
+          <LoadingState />
         ) : (
           <>
             {visibleKeysForProvider(
@@ -349,17 +362,13 @@ export function EmailSettingsSection() {
                 'smtp',
             ).map((k) => renderField(k))}
 
-            <View style={styles.actions}>
-              <Pressable
-                style={[styles.primaryButton, saveMutation.isPending && styles.buttonDisabled]}
-                disabled={saveMutation.isPending}
-                onPress={() => onSave()}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {saveMutation.isPending ? 'Saving...' : 'Save'}
-                </Text>
-              </Pressable>
-            </View>
+            <Button
+              label="Save"
+              busyLabel="Saving..."
+              variant="primary"
+              busy={saveMutation.isPending}
+              onPress={() => onSave()}
+            />
 
             <Text style={orgPanelStyles.muted}>
               Only fields not overridden by environment variables are sent on save.
@@ -377,16 +386,6 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
   },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
   field: {
     gap: 6,
     marginBottom: 4,
@@ -402,36 +401,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  badgeEnv: {
-    backgroundColor: colors.bgSecondary,
-    borderWidth: 1,
-    borderColor: colors.pending,
-  },
-  badgeDb: {
-    backgroundColor: colors.bgActive,
-    borderWidth: 1,
-    borderColor: chrome.accent,
-  },
-  badgeTextEnv: {
-    color: colors.pending,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  badgeTextDb: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
   input: {
     borderWidth: 1,
     borderColor: colors.borderMuted,
@@ -440,7 +409,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 44,
   },
   inputDisabled: {
@@ -453,17 +422,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  lockIcon: {
-    fontSize: 14,
-  },
   lockValue: {
     color: colors.textMuted,
     fontSize: 16,
     flex: 1,
-  },
-  lockText: {
-    color: colors.textMuted,
-    fontSize: 14,
   },
   help: {
     color: colors.textFaint,
@@ -473,51 +435,6 @@ const styles = StyleSheet.create({
   helpMuted: {
     color: colors.textFaint,
     fontSize: 12,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  chipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  chipText: {
-    color: colors.textChip,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: colors.text,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   success: {
     color: colors.accent,

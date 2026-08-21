@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, ConfirmButton, LoadingState } from '@/components/ui'
 import type { BindingRecord } from '@/lib/instance-api'
 import {
   managedCatalogEntryForCode,
@@ -30,55 +31,6 @@ function engineLabel(engine: string | null | undefined): string {
   return managedCatalogEntryForCode(engine)?.label ?? engine
 }
 
-function DisconnectActions({
-  bindingId,
-  armed,
-  working,
-  onArm,
-  onConfirm,
-  onCancel,
-}: Readonly<{
-  bindingId: string
-  armed: boolean
-  working: boolean
-  onArm: (id: string) => void
-  onConfirm: () => void
-  onCancel: () => void
-}>) {
-  if (armed) {
-    return (
-      <>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          disabled={working}
-          onPress={onConfirm}
-        >
-          <Text
-            style={[orgPanelStyles.toolbarBtnTextSecondary, styles.danger]}
-          >
-            Confirm disconnect
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={onCancel}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </>
-    )
-  }
-  return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-      disabled={working}
-      onPress={() => onArm(bindingId)}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Disconnect</Text>
-    </Pressable>
-  )
-}
-
 export function ServiceBindingsPanel({
   orgId,
   serviceId,
@@ -95,10 +47,7 @@ export function ServiceBindingsPanel({
   const orgManagedQuery = useOrganizationManaged(orgId)
   const deleteBinding = useDeleteBinding(orgId)
   const [error, setError] = useState<string | null>(null)
-  const [disconnectArmedId, setDisconnectArmedId] = useState<string | null>(
-    null,
-  )
-  const [working, setWorking] = useState(false)
+  const [workingBindingId, setWorkingBindingId] = useState<string | null>(null)
 
   const managedByEnv = useMemo(() => {
     const map = new Map<
@@ -122,7 +71,7 @@ export function ServiceBindingsPanel({
   if (bindingsQuery.isLoading) {
     return (
       <SectionPanel title="Bound databases" hint="Connected managed clusters">
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
+        <LoadingState />
       </SectionPanel>
     )
   }
@@ -131,7 +80,7 @@ export function ServiceBindingsPanel({
   }
 
   const handleDisconnect = async (binding: BindingRecord) => {
-    setWorking(true)
+    setWorkingBindingId(binding.id)
     setError(null)
     try {
       await deleteBinding.mutateAsync({
@@ -139,12 +88,10 @@ export function ServiceBindingsPanel({
         serviceId,
         managedEnvironmentId: binding.managedEnvironmentId ?? undefined,
       })
-      setDisconnectArmedId(null)
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to disconnect'))
-      setDisconnectArmedId(null)
     } finally {
-      setWorking(false)
+      setWorkingBindingId(null)
     }
   }
 
@@ -182,8 +129,9 @@ export function ServiceBindingsPanel({
               </View>
               <View style={styles.actions}>
                 {cluster?.projectId ? (
-                  <Pressable
-                    style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+                  <Button
+                    label="Open database"
+                    size="sm"
                     onPress={() => {
                       router.push(
                         projectTabHref(
@@ -193,22 +141,20 @@ export function ServiceBindingsPanel({
                         ) as Href,
                       )
                     }}
-                  >
-                    <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-                      Open database
-                    </Text>
-                  </Pressable>
+                  />
                 ) : null}
                 {canManage ? (
-                  <DisconnectActions
-                    bindingId={binding.id}
-                    armed={disconnectArmedId === binding.id}
-                    working={working}
-                    onArm={setDisconnectArmedId}
+                  <ConfirmButton
+                    label="Disconnect"
+                    confirmLabel="Confirm disconnect"
+                    busy={workingBindingId === binding.id}
+                    disabled={
+                      workingBindingId !== null &&
+                      workingBindingId !== binding.id
+                    }
                     onConfirm={() => {
                       void handleDisconnect(binding)
                     }}
-                    onCancel={() => setDisconnectArmedId(null)}
                   />
                 ) : null}
               </View>
@@ -275,8 +221,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.xs,
     marginTop: spacing.xs,
-  },
-  danger: {
-    color: colors.error,
   },
 })

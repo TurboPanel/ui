@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { Button, MonoText } from '@/components/ui'
 import { systemRestartErrorMessage } from '@/components/org/project/system-project-overview-panel'
 import type { CommandEnqueueResponse } from '@/lib/instance-api'
 import { serviceStatusTone } from '@/lib/container-status'
@@ -86,13 +87,13 @@ function ProvisionedIngressStatus({
       {containerName ? (
         <Text style={orgPanelStyles.detailLine}>
           <Text style={orgPanelStyles.detailLabel}>Container: </Text>
-          <Text style={styles.mono}>{containerName}</Text>
+          <MonoText>{containerName}</MonoText>
         </Text>
       ) : null}
       {composeServiceName ? (
         <Text style={orgPanelStyles.detailLine}>
           <Text style={orgPanelStyles.detailLabel}>Service: </Text>
-          <Text style={styles.mono}>{composeServiceName}</Text>
+          <MonoText>{composeServiceName}</MonoText>
         </Text>
       ) : null}
       <SystemWorkspaceLink
@@ -217,21 +218,15 @@ export function ServerSystemComponentPanel({
     <View style={styles.root}>
       {body}
 
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnPrimary,
-          restartDisabled && styles.disabled,
-          webPointer,
-        ]}
+      <Button
+        label="Restart"
+        busyLabel="Restarting…"
+        variant="primary"
+        busy={restart.isPending || restartInFlight}
         disabled={restartDisabled}
         onPress={() => void handleRestart()}
-        accessibilityRole="button"
         accessibilityLabel="Restart server proxy"
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-          {restart.isPending || restartInFlight ? 'Restarting…' : 'Restart'}
-        </Text>
-      </Pressable>
+      />
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
     </View>
@@ -260,11 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  mono: {
-    color: colors.textBody,
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
   linkBtn: {
     alignSelf: 'flex-start',
     marginTop: spacing.xs,
@@ -273,8 +263,5 @@ const styles = StyleSheet.create({
     color: colors.command,
     fontSize: 13,
     fontWeight: '600',
-  },
-  disabled: {
-    opacity: 0.5,
   },
 })

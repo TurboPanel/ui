@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, ButtonRow } from '@/components/ui'
 import { useSaveServerLabels } from '@/lib/queries/servers'
 import {
   MAX_SERVER_LABELS,
@@ -74,15 +68,13 @@ function LabelDraftRow({
         style={styles.input}
       />
       {canRemove ? (
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+        <Button
+          label="Remove"
+          variant="secondary"
           disabled={disabled}
           onPress={onRemove}
-          accessibilityRole="button"
           accessibilityLabel={`Remove label ${row.key || 'row'}`}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Remove</Text>
-        </Pressable>
+        />
       ) : null}
     </View>
   )
@@ -165,10 +157,22 @@ export function ServerLabelsEditor({
     saveMutation.mutate(result.labels)
   }
 
+  const savedCount = labels?.length ?? 0
+  let countSummary: string
+  if (savedCount === 0) {
+    countSummary = 'No labels'
+  } else if (savedCount === 1) {
+    countSummary = '1 label'
+  } else {
+    countSummary = `${String(savedCount)} labels`
+  }
+
   return (
     <SectionPanel
       title="Labels"
-      hint="Replace-all · Docker engine-label keys"
+      hint={`${countSummary} · Replace-all · Docker engine-label keys`}
+      collapsible
+      defaultCollapsed
     >
       <Text style={orgPanelStyles.muted}>
         Keys must start with a letter or digit, then letters, digits, dots,
@@ -194,38 +198,22 @@ export function ServerLabelsEditor({
               canRemove={rows.length > 1 || row.key.length > 0 || row.value.length > 0}
             />
           ))}
-          <View style={styles.actions}>
-            <Pressable
-              style={[
-                orgPanelStyles.toolbarBtnSecondary,
-                addDisabled && styles.disabled,
-                webPointer,
-              ]}
+          <ButtonRow>
+            <Button
+              label="Add label"
+              variant="secondary"
               disabled={addDisabled}
               onPress={() => setRows((current) => [...current, createLabelRow()])}
-              accessibilityRole="button"
-              accessibilityLabel="Add label"
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Add label</Text>
-            </Pressable>
-            <Pressable
-              style={[
-                orgPanelStyles.toolbarBtnPrimary,
-                (!dirty || pending || !parsed.ok) && styles.disabled,
-                webPointer,
-              ]}
+            />
+            <Button
+              label="Save"
+              variant="primary"
+              busy={pending}
               disabled={!dirty || pending || !parsed.ok}
               onPress={handleSave}
-              accessibilityRole="button"
               accessibilityLabel="Save labels"
-            >
-              {pending ? (
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : (
-                <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-              )}
-            </Pressable>
-          </View>
+            />
+          </ButtonRow>
         </>
       ) : null}
     </SectionPanel>
@@ -254,17 +242,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
   readList: {
     gap: spacing.xs,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 })

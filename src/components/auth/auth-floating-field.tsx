@@ -30,6 +30,8 @@ type AuthFloatingFieldProps = Readonly<{
   onTogglePasswordVisible?: () => void
   returnKeyType?: NonNullable<TextInputProps['returnKeyType']>
   onSubmitEditing?: NonNullable<TextInputProps['onSubmitEditing']>
+  /** Called after the field loses focus (e.g. deferred validation). */
+  onBlur?: NonNullable<TextInputProps['onBlur']>
 }>
 
 export function AuthFloatingField({
@@ -46,6 +48,7 @@ export function AuthFloatingField({
   onTogglePasswordVisible,
   returnKeyType,
   onSubmitEditing,
+  onBlur,
 }: AuthFloatingFieldProps) {
   const [focused, setFocused] = useState(false)
   const raised = focused || value.length > 0
@@ -103,7 +106,10 @@ export function AuthFloatingField({
         value={value}
         onChangeText={onChangeText}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={(event) => {
+          setFocused(false)
+          onBlur?.(event)
+        }}
         autoComplete={autoComplete}
         keyboardType={keyboardType}
         autoCapitalize="none"

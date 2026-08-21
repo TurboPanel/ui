@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
 import { SectionPanel } from '@/components/org/section-panel'
+import {
+  Button,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import type { TlsRecord, TlsSource } from '@/lib/instance-api'
 import {
   useCreateTlsCertificate,
@@ -16,7 +18,7 @@ import {
   useTlsLibrary,
 } from '@/lib/queries/tls'
 import { useCan } from '@/lib/query-client'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 function tlsTitle(row: TlsRecord): string {
   return row.name?.trim() || row.metadata.dnsNames[0] || row.id
@@ -40,6 +42,12 @@ function tlsSourceLabel(source: string): string {
 function formatSans(row: TlsRecord): string {
   return row.metadata.dnsNames.join(', ') || '—'
 }
+
+const SOURCE_OPTIONS = [
+  { value: 'upload', label: 'Uploaded' },
+  { value: 'self_signed', label: 'Self-signed' },
+  { value: 'lets_encrypt', label: "Let's Encrypt" },
+] as const
 
 export function TlsOverviewSection({
   orgId,
@@ -135,10 +143,10 @@ export function TlsOverviewSection({
 
   const renderCertificateList = () => {
     if (loading) {
-      return <Text style={orgPanelStyles.muted}>Loading…</Text>
+      return <LoadingState label="Loading certificates…" />
     }
     if (rows.length === 0) {
-      return <Text style={orgPanelStyles.muted}>No certificates yet.</Text>
+      return <EmptyState title="No certificates yet." />
     }
     return rows.map((row) => (
       <View key={row.id} style={orgPanelStyles.detailCard}>
@@ -153,19 +161,14 @@ export function TlsOverviewSection({
           </Text>
         ) : null}
         {canManage ? (
-          <Pressable
-            style={[
-              styles.secondaryButton,
-              (deletingId !== null || deleteMutation.isPending) &&
-                styles.buttonDisabled,
-            ]}
-            disabled={deleteMutation.isPending}
-            onPress={() => onDelete(row.id)}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {deletingId === row.id ? 'Deleting…' : 'Delete'}
-            </Text>
-          </Pressable>
+          <ConfirmButton
+            label={deletingId === row.id ? 'Deleting…' : 'Delete'}
+            confirmLabel="Delete certificate"
+            prompt="Remove this certificate?"
+            busy={deletingId === row.id}
+            disabled={deleteMutation.isPending && deletingId !== row.id}
+            onConfirm={() => onDelete(row.id)}
+          />
         ) : null}
       </View>
     ))
@@ -182,61 +185,48 @@ export function TlsOverviewSection({
       </SectionPanel>
 
       {canManage ? (
-        <SectionPanel title="Add certificate" hint="Upload PEM, mint self-signed, or request Let's Encrypt">
-          <View style={styles.sourceRow}>
-            {(['upload', 'self_signed', 'lets_encrypt'] as const).map((value) => (
-              <Pressable
-                key={value}
-                style={[
-                  styles.sourceChip,
-                  source === value && styles.sourceChipActive,
-                ]}
-                onPress={() => setSource(value)}
-              >
-                <Text
-                  style={[
-                    styles.sourceChipText,
-                    source === value && styles.sourceChipTextActive,
-                  ]}
-                >
-                  {tlsSourceLabel(value)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput
+        <SectionPanel
+          title="Add certificate"
+          hint="Upload PEM, mint self-signed, or request Let's Encrypt"
+          collapsible
+          defaultCollapsed
+        >
+          <SegmentedControl
+            options={SOURCE_OPTIONS}
+            value={source as (typeof SOURCE_OPTIONS)[number]['value']}
+            onChange={(value) => setSource(value)}
+            accessibilityLabel="Certificate source"
+          />
+          <TextField
+            label="Display name"
+            hint="Optional"
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="Display name (optional)"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
           />
           {source === 'upload' ? (
             <>
-              <TextInput
+              <TextField
+                label="Certificate PEM"
+                hint="Leaf + chain"
                 value={certificatePem}
                 onChangeText={setCertificatePem}
-                placeholder="Certificate PEM (leaf + chain)"
-                placeholderTextColor={colors.textDim}
                 multiline
-                style={[styles.input, styles.pemInput]}
+                mono
               />
-              <TextInput
+              <TextField
+                label="Private key PEM"
                 value={privateKeyPem}
                 onChangeText={setPrivateKeyPem}
-                placeholder="Private key PEM"
-                placeholderTextColor={colors.textDim}
                 multiline
-                style={[styles.input, styles.pemInput]}
+                mono
               />
             </>
           ) : (
-            <TextInput
+            <TextField
+              label="Hostnames"
+              hint="Comma-separated"
               value={hostnames}
               onChangeText={setHostnames}
-              placeholder="hostnames, comma-separated"
-              placeholderTextColor={colors.textDim}
-              style={styles.input}
             />
           )}
           {source === 'lets_encrypt' ? (
@@ -244,22 +234,19 @@ export function TlsOverviewSection({
               Creates a pending ACME order; certificates become usable after issuance.
             </Text>
           ) : null}
-          <Pressable
-            style={[
-              styles.primaryButton,
-              createMutation.isPending && styles.buttonDisabled,
-            ]}
-            disabled={createMutation.isPending}
+          <Button
+            label="Add certificate"
+            busyLabel="Saving…"
+            variant="primary"
+            busy={createMutation.isPending}
             onPress={onCreate}
-          >
-            <Text style={styles.primaryButtonText}>
-              {createMutation.isPending ? 'Saving…' : 'Add certificate'}
-            </Text>
-          </Pressable>
+          />
         </SectionPanel>
       ) : null}
 
-      {displayError ? <Text style={styles.error}>{displayError}</Text> : null}
+      {displayError ? (
+        <Text style={orgPanelStyles.error}>{displayError}</Text>
+      ) : null}
     </View>
   )
 }
@@ -271,73 +258,5 @@ const styles = StyleSheet.create({
   sans: {
     color: colors.text,
     marginTop: spacing.xs,
-  },
-  sourceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  sourceChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  sourceChipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgSecondary,
-  },
-  sourceChipText: {
-    color: colors.textDim,
-    fontSize: 13,
-  },
-  sourceChipTextActive: {
-    color: colors.text,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  pemInput: {
-    minHeight: 120,
-    textAlignVertical: 'top',
-    fontFamily: 'monospace',
-  },
-  primaryButton: {
-    backgroundColor: chrome.accent,
-    borderRadius: 6,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    marginTop: spacing.sm,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  secondaryButtonText: {
-    color: colors.textChip,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  error: {
-    color: colors.error,
   },
 })

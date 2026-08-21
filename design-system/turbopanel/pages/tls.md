@@ -28,7 +28,7 @@
 ## Components
 
 - Reuse `orgPanelStyles` `detailCard`, `calloutWarning`, `expandedSection`, `toolbarBtnSecondary`
-- Active CA card: common name, truncated monospace fingerprint, generation, `notBefore` / `notAfter`
+- Active CA card: validity window (`notBefore` → `notAfter`) only — no common name, fingerprint, or generation
 - Warning callout when the CA is near expiry, a rotation is in progress (`state !== 'completed'`), or `leafHealth.dueCount > 0`
 - Typed confirmation matches `ConfirmStepSection` in `project-delete-panel.tsx`: operator types the organization display name; copy states that `verify-ca` / `verify-full` clients must pick up the new bundle and binding-consuming services need a redeploy
 - Rotation progress table reuses the Fabric pattern (`useCommandsBatch` + `mergeTrackedCommandEntries` + `hasPendingTrackedCommands`): one `detailCard` row per result (server label, optional `kind` / `managedId` badge, live command status falling back to the journal, error text). Hidden when the journal is missing or `completed`; local `tracked` / `resultsById` reset then so retirement does not leave stale rows

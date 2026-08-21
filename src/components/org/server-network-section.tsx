@@ -1,7 +1,9 @@
 import { useRouter, type Href } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { AddressFamilyBadge } from '@/components/org/address-family-badge'
 import { IpListRow } from '@/components/org/network/network-rows'
+import { MonoText } from '@/components/ui'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import {
@@ -29,9 +31,9 @@ function AddressGroup({
     <View style={styles.group}>
       <Text style={orgPanelStyles.detailTitle}>{label}</Text>
       {addresses.map((addr) => (
-        <Text key={addr} style={styles.mono} selectable>
+        <MonoText key={addr} style={styles.mono} selectable>
           {addr}
-        </Text>
+        </MonoText>
       ))}
     </View>
   )
@@ -67,18 +69,10 @@ function DatacenterPrivatePins({
           : null
         return (
           <View key={ip.id} style={styles.pinRow}>
-            <Text style={styles.mono} selectable>
+            <MonoText style={styles.mono} selectable>
               {ip.address}
-            </Text>
-            {family ? (
-              <View
-                style={orgPanelStyles.segmentChip}
-                accessibilityRole="text"
-                accessibilityLabel={family}
-              >
-                <Text style={orgPanelStyles.segmentChipText}>{family}</Text>
-              </View>
-            ) : null}
+            </MonoText>
+            <AddressFamilyBadge family={family} />
             {datacenterLabel ? (
               <Text style={orgPanelStyles.muted}>{datacenterLabel}</Text>
             ) : null}
@@ -139,9 +133,9 @@ function ServerMeshMembershipPanel({
             <Text style={orgPanelStyles.detailLabel}>
               TurboFabric address:{' '}
             </Text>
-            <Text style={styles.mono} selectable>
+            <MonoText style={styles.mono} selectable>
               {relay.address}
-            </Text>
+            </MonoText>
           </Text>
         </View>
       ) : null}
@@ -341,7 +335,5 @@ const styles = StyleSheet.create({
   },
   mono: {
     color: colors.text,
-    fontFamily: 'monospace',
-    fontSize: 13,
   },
 })

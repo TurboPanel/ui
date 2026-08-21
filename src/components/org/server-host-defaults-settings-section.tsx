@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, TextField } from '@/components/ui'
 import {
   fetchOrgHostDefaults,
   saveOrgHostDefaults,
@@ -213,22 +214,16 @@ function HostDefaultsFields({
         NTP. Saving here does not change sshd or push NTP to hosts.
       </Text>
 
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>SSH port</Text>
-        <TextInput
-          value={sshText}
-          onChangeText={onSshChange}
-          editable={!fieldsDisabled}
-          keyboardType="number-pad"
-          placeholder={String(DEFAULT_SSH_PORT)}
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Organization SSH port"
-          style={[styles.input, fieldsDisabled && styles.inputDisabled]}
-        />
-        <Text style={orgPanelStyles.muted}>
-          Empty inherits platform default {DEFAULT_SSH_PORT}.
-        </Text>
-      </View>
+      <TextField
+        label="SSH port"
+        value={sshText}
+        onChangeText={onSshChange}
+        editable={!fieldsDisabled}
+        keyboardType="number-pad"
+        placeholder={String(DEFAULT_SSH_PORT)}
+        accessibilityLabel="Organization SSH port"
+        hint={`Empty inherits platform default ${String(DEFAULT_SSH_PORT)}.`}
+      />
 
       <View style={styles.switchRow}>
         <View style={styles.switchCopy}>
@@ -252,47 +247,31 @@ function HostDefaultsFields({
         </Pressable>
       </View>
 
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>NTP servers</Text>
-        <TextInput
-          value={ntpServersText}
-          onChangeText={onNtpServersChange}
-          editable={!fieldsDisabled}
-          placeholder="time.cloudflare.com, pool.ntp.org"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Organization NTP servers"
-          style={[styles.input, fieldsDisabled && styles.inputDisabled]}
-        />
-      </View>
+      <TextField
+        label="NTP servers"
+        value={ntpServersText}
+        onChangeText={onNtpServersChange}
+        editable={!fieldsDisabled}
+        placeholder="time.cloudflare.com, pool.ntp.org"
+        accessibilityLabel="Organization NTP servers"
+      />
 
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Fallback NTP servers</Text>
-        <TextInput
-          value={ntpFallbackText}
-          onChangeText={onNtpFallbackChange}
-          editable={!fieldsDisabled}
-          placeholder="Optional fallback hosts"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Organization fallback NTP servers"
-          style={[styles.input, fieldsDisabled && styles.inputDisabled]}
-        />
-      </View>
+      <TextField
+        label="Fallback NTP servers"
+        value={ntpFallbackText}
+        onChangeText={onNtpFallbackChange}
+        editable={!fieldsDisabled}
+        placeholder="Optional fallback hosts"
+        accessibilityLabel="Organization fallback NTP servers"
+      />
 
       {hasNtp ? (
-        <Pressable
+        <Button
+          label="Clear NTP (inherit none)"
+          variant="secondary"
           disabled={pending}
           onPress={onClearNtp}
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnSecondary,
-            pending && styles.toggleDisabled,
-            pressed && styles.btnPressed,
-            webPointer,
-          ]}
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Clear NTP (inherit none)
-          </Text>
-        </Pressable>
+        />
       ) : null}
 
       <View style={styles.switchRow}>
@@ -323,18 +302,13 @@ function HostDefaultsFields({
         </Pressable>
       </View>
 
-      <Pressable
+      <Button
+        label="Save host defaults"
+        variant="primary"
+        busy={pending}
         disabled={pending || !settingsLoaded}
         onPress={onSave}
-        style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnPrimary,
-          pending && styles.toggleDisabled,
-          pressed && styles.btnPressed,
-          webPointer,
-        ]}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save host defaults</Text>
-      </Pressable>
+      />
     </>
   )
 }
@@ -360,7 +334,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -377,29 +351,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: '600',
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  fieldLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 15,
-    minHeight: 44,
-  },
-  inputDisabled: {
-    opacity: 0.5,
-  },
-  btnPressed: {
-    opacity: 0.85,
   },
 })

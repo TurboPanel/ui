@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
+import { Button, FormField, LoadingState, TextField } from '@/components/ui'
 import {
   foldDisplayNameApostrophes,
   DISPLAY_NAME_MAX_LENGTH,
@@ -11,7 +12,7 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { OrganizationRecord } from '@/lib/instance-api'
 import { useOrganizationsQuery, useUpdateOrganization } from '@/lib/queries/auth'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { colors } from '@/lib/theme'
 
 function OrganizationNameField({
   canManage,
@@ -28,25 +29,25 @@ function OrganizationNameField({
   submitting: boolean
   onChange: (value: string) => void
 }>) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>Name</Text>
-      {canManage ? (
-        <TextInput
-          style={[styles.input, fieldError ? styles.inputError : null]}
-          value={name}
-          onChangeText={onChange}
-          autoCapitalize="words"
-          autoCorrect={false}
-          editable={!submitting}
-          maxLength={DISPLAY_NAME_MAX_LENGTH}
-          accessibilityLabel="Organization name"
-        />
-      ) : (
+  if (!canManage) {
+    return (
+      <FormField label="Name" error={fieldError}>
         <Text style={styles.readOnlyValue}>{fallbackLabel}</Text>
-      )}
-      {fieldError ? <Text style={styles.fieldError}>{fieldError}</Text> : null}
-    </View>
+      </FormField>
+    )
+  }
+  return (
+    <TextField
+      label="Name"
+      value={name}
+      onChangeText={onChange}
+      autoCapitalize="words"
+      autoCorrect={false}
+      editable={!submitting}
+      maxLength={DISPLAY_NAME_MAX_LENGTH}
+      accessibilityLabel="Organization name"
+      error={fieldError}
+    />
   )
 }
 
@@ -108,7 +109,7 @@ export function OrganizationFormSection({
     }
   }
 
-  let body = <Text style={orgPanelStyles.muted}>Loading…</Text>
+  let body = <LoadingState />
   if (!orgsQuery.isLoading && !organization) {
     body = (
       <Text style={orgPanelStyles.error}>
@@ -135,25 +136,17 @@ export function OrganizationFormSection({
         />
         <OrganizationIdentityCard organization={organization} />
         {canManage ? (
-          <Pressable
-            style={({ pressed }) => [
-              orgPanelStyles.toolbarBtnPrimary,
-              saveDisabled && styles.buttonDisabled,
-              pressed && !saveDisabled && styles.buttonPressed,
-              webPointer,
-            ]}
+          <Button
+            label="Save"
+            busyLabel="Saving…"
+            variant="primary"
+            busy={submitting}
             disabled={saveDisabled}
+            accessibilityLabel="Save organization"
             onPress={() => {
               void handleSave()
             }}
-            accessibilityRole="button"
-            accessibilityLabel="Save organization"
-            accessibilityState={{ disabled: saveDisabled }}
-          >
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-              {submitting ? 'Saving…' : 'Save'}
-            </Text>
-          </Pressable>
+          />
         ) : null}
       </>
     )
@@ -170,43 +163,11 @@ export function OrganizationFormSection({
 }
 
 const styles = StyleSheet.create({
-  field: {
-    gap: spacing.xs,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
   readOnlyValue: {
     color: colors.text,
     fontSize: 16,
     lineHeight: 24,
     minHeight: 44,
     paddingVertical: 10,
-  },
-  fieldError: {
-    color: colors.errorText,
-    fontSize: 13,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonPressed: {
-    opacity: 0.85,
   },
 })

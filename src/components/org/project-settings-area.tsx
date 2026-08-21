@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
-import { HeaderChevron } from '@/components/header-chevron'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
@@ -11,6 +10,7 @@ import { ProjectServerHeaderControl } from '@/components/org/project/project-ser
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
 import { SectionPanel } from '@/components/org/section-panel'
 import { StorageSection } from '@/components/org/storage-section'
+import { Button, ButtonRow, ConfirmButton } from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
 import type {
   EnvironmentRecord,
@@ -111,40 +111,6 @@ function ResourceSection({
   )
 }
 
-function DangerSection({
-  title,
-  hint,
-  expanded,
-  onExpandedChange,
-  children,
-}: Readonly<{
-  title: string
-  hint: string
-  expanded: boolean
-  onExpandedChange: (expanded: boolean) => void
-  children: ReactNode
-}>) {
-  return (
-    <SectionPanel
-      title={title}
-      hint={hint}
-      headerRight={
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer, styles.chevronBtn]}
-          onPress={() => onExpandedChange(!expanded)}
-          accessibilityRole="button"
-          accessibilityState={{ expanded }}
-          accessibilityLabel={expanded ? `Collapse ${title}` : `Expand ${title}`}
-        >
-          <HeaderChevron size={12} color={colors.textMuted} open={expanded} />
-        </Pressable>
-      }
-    >
-      {expanded ? children : null}
-    </SectionPanel>
-  )
-}
-
 /**
  * Default `uuid` renames containers so multiple project instances can coexist
  * (and so rolling updates can run later). `custom` keeps compose names and
@@ -188,6 +154,7 @@ function ContainerNamingBody({
           accessibilityState={{ checked: keepOriginal, disabled: saving }}
           accessibilityLabel="Keep original container names"
           disabled={saving}
+          hitSlop={6}
           onPress={() => {
             onSave(keepOriginal ? 'uuid' : 'custom')
           }}
@@ -328,7 +295,8 @@ export function ProjectSettingsPanel({
   const [addSeed, setAddSeed] = useState<Partial<Record<ProjectAddKind, number>>>(
     {},
   )
-  const [dangerExpanded, setDangerExpanded] = useState(false)
+  // Bumped to remount the collapsed danger panel (cancel re-collapses it).
+  const [dangerSeed, setDangerSeed] = useState(0)
   const scopeHint = 'Applies to every environment'
 
   if (!project) return null
@@ -443,17 +411,18 @@ export function ProjectSettingsPanel({
         />
       </SectionPanel>
 
-      <DangerSection
+      <SectionPanel
+        key={`danger-${dangerSeed}`}
         title="Danger → Delete project"
         hint={scopeHint}
-        expanded={dangerExpanded}
-        onExpandedChange={setDangerExpanded}
+        collapsible
+        defaultCollapsed
       >
         {canOwn && projectAllowsMutations ? (
           <ProjectDeletePanel
             orgId={orgId}
             project={project}
-            onCancel={() => setDangerExpanded(false)}
+            onCancel={() => setDangerSeed((seed) => seed + 1)}
             onDeleted={() => {
               onDeleted?.()
               router.replace(`/${orgId}/projects` as Href)
@@ -462,7 +431,7 @@ export function ProjectSettingsPanel({
         ) : (
           <Text style={orgPanelStyles.muted}>View only</Text>
         )}
-      </DangerSection>
+      </SectionPanel>
     </View>
   )
 }
@@ -485,11 +454,6 @@ function EnvironmentDeleteControl({
     invalidateEnvironments,
   } = useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
-  const [armed, setArmed] = useState(false)
-
-  useEffect(() => {
-    setArmed(false)
-  }, [selectedEnvironment.id, environments.length])
 
   if (!canOwn) {
     return <Text style={orgPanelStyles.muted}>View only</Text>
@@ -497,22 +461,15 @@ function EnvironmentDeleteControl({
 
   if (environments.length <= 1) {
     return (
-      <View style={styles.dangerRow}>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnSecondary,
-            styles.disabled,
-            webPointer,
-          ]}
+      <ButtonRow>
+        <Button
+          label="Delete environment"
+          variant="secondary"
+          size="sm"
           disabled
-          accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
           accessibilityLabel="Delete this environment"
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Delete environment
-          </Text>
-        </Pressable>
+          onPress={() => {}}
+        />
         <Pressable
           style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
           onPress={onOpenProjectSettings}
@@ -524,18 +481,14 @@ function EnvironmentDeleteControl({
             Only environment — delete the project under Project settings (gear)
           </Text>
         </Pressable>
-      </View>
+      </ButtonRow>
     )
   }
 
   const removing = deleteEnvironment.isPending
 
-  const handlePress = () => {
+  const handleDelete = () => {
     if (removing) return
-    if (!armed) {
-      setArmed(true)
-      return
-    }
     void (async () => {
       setError(null)
       const deletedId = selectedEnvironment.id
@@ -546,7 +499,6 @@ function EnvironmentDeleteControl({
         }
         return
       }
-      setArmed(false)
       await invalidateEnvironments()
       if (parseProjectEnvironmentId(pathname, projectId) === deletedId) {
         router.replace(projectOverviewHref(orgId, projectId) as Href)
@@ -555,43 +507,14 @@ function EnvironmentDeleteControl({
   }
 
   return (
-    <View style={styles.dangerRow}>
-      {armed ? (
-        <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
-          onPress={() => setArmed(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel delete"
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      ) : null}
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnSecondary,
-          armed && styles.dangerArmed,
-          removing && styles.disabled,
-          webPointer,
-        ]}
-        onPress={handlePress}
-        disabled={removing}
-        accessibilityRole="button"
-        accessibilityLabel={
-          armed ? 'Confirm delete this environment' : 'Delete this environment'
-        }
-      >
-        <Text
-          style={[
-            orgPanelStyles.toolbarBtnTextSecondary,
-            armed && styles.dangerArmedText,
-          ]}
-        >
-          {armed
-            ? `Delete ${selectedEnvironment.name?.trim() || 'environment'}?`
-            : 'Delete environment'}
-        </Text>
-      </Pressable>
-    </View>
+    <ConfirmButton
+      key={`${selectedEnvironment.id}:${environments.length}`}
+      label="Delete environment"
+      prompt={`Delete ${selectedEnvironment.name?.trim() || 'environment'}?`}
+      confirmLabel="Delete environment"
+      busy={removing}
+      onConfirm={handleDelete}
+    />
   )
 }
 
@@ -687,7 +610,6 @@ export function EnvironmentSettingsPanel({
   const [addSeed, setAddSeed] = useState<Partial<Record<EnvironmentAddKind, number>>>(
     {},
   )
-  const [dangerExpanded, setDangerExpanded] = useState(false)
   const serversQuery = useOrgServers(orgId)
   const servicesQuery = useServices(orgId, selectedEnvironment.id)
   const serviceIds = useMemo(
@@ -827,17 +749,17 @@ export function EnvironmentSettingsPanel({
         </ResourceSection>
       ) : null}
 
-      <DangerSection
+      <SectionPanel
         title="Danger → Delete environment"
         hint={scopeHint}
-        expanded={dangerExpanded}
-        onExpandedChange={setDangerExpanded}
+        collapsible
+        defaultCollapsed
       >
         <EnvironmentDeleteControl
           selectedEnvironment={selectedEnvironment}
           onOpenProjectSettings={onOpenProjectSettings}
         />
-      </DangerSection>
+      </SectionPanel>
     </View>
   )
 }
@@ -864,7 +786,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: 'transparent',
@@ -906,7 +828,7 @@ const styles = StyleSheet.create({
     minWidth: 52,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
     minHeight: 32,
     justifyContent: 'center',
@@ -921,13 +843,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: '600',
-  },
-  chevronBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
   },
   list: { gap: spacing.xs },
   row: {
@@ -946,16 +861,4 @@ const styles = StyleSheet.create({
   },
   rowTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   disabled: { opacity: 0.55 },
-  dangerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  dangerArmed: {
-    borderColor: colors.error,
-  },
-  dangerArmedText: {
-    color: colors.error,
-  },
 })

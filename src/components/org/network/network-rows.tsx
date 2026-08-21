@@ -1,7 +1,14 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Badge,
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  MonoText,
+} from '@/components/ui'
 import type { NetworkKind, NetworkRecord, IpRecord } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 function networkTitle(network: NetworkRecord): string {
   const dockerName = readDockerNetworkName(network)
@@ -40,28 +47,20 @@ export function NetworkListItem({
       <View style={styles.cardHeader}>
         <Text style={orgPanelStyles.detailTitle}>{networkTitle(network)}</Text>
         {showDelete && onDelete ? (
-          <Pressable
-            style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
-            disabled={isDeleting}
-            onPress={() => onDelete(network.id)}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {isDeleting ? 'Deleting…' : 'Delete'}
-            </Text>
-          </Pressable>
+          <ConfirmButton
+            label={isDeleting ? 'Deleting…' : 'Delete'}
+            confirmLabel="Delete network"
+            prompt="Remove this network?"
+            busy={isDeleting}
+            onConfirm={() => onDelete(network.id)}
+          />
         ) : null}
       </View>
       <View style={styles.badgeRow}>
-        <Text style={styles.badge}>{kindLabel(network.kind)}</Text>
-        {dockerName ? (
-          <Text style={styles.mono} selectable>
-            {dockerName}
-          </Text>
-        ) : null}
+        <Badge label={kindLabel(network.kind)} />
+        {dockerName ? <MonoText selectable>{dockerName}</MonoText> : null}
         {network.cidr ? (
-          <Text style={styles.mono} selectable>
-            {network.cidr}
-          </Text>
+          <MonoText selectable>{network.cidr}</MonoText>
         ) : (
           <Text style={orgPanelStyles.muted}>No CIDR</Text>
         )}
@@ -98,30 +97,26 @@ export function IpListRow({
   return (
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.cardHeader}>
-        <Text style={styles.mono} selectable>
-          {ip.address}
-        </Text>
-        <View style={styles.cardActions}>
+        <MonoText selectable>{ip.address}</MonoText>
+        <ButtonRow>
           {showEdit && onEdit ? (
-            <Pressable
-              style={styles.secondaryButton}
+            <Button
+              label="Edit"
+              size="sm"
               onPress={() => onEdit(ip.id)}
-            >
-              <Text style={styles.secondaryButtonText}>Edit</Text>
-            </Pressable>
+              accessibilityLabel={`Edit ${ip.address}`}
+            />
           ) : null}
           {showDelete && onDelete ? (
-            <Pressable
-              style={[styles.secondaryButton, isDeleting && styles.buttonDisabled]}
-              disabled={isDeleting}
-              onPress={() => onDelete(ip.id)}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {isDeleting ? 'Deleting…' : 'Delete'}
-              </Text>
-            </Pressable>
+            <ConfirmButton
+              label={isDeleting ? 'Deleting…' : 'Delete'}
+              confirmLabel="Delete address"
+              prompt="Remove this address?"
+              busy={isDeleting}
+              onConfirm={() => onDelete(ip.id)}
+            />
           ) : null}
-        </View>
+        </ButtonRow>
       </View>
       {ip.description?.trim() ? (
         <Text style={orgPanelStyles.detailLine}>
@@ -130,9 +125,9 @@ export function IpListRow({
         </Text>
       ) : null}
       <View style={styles.badgeRow}>
-        <Text style={styles.badge}>v{ip.version}</Text>
-        <Text style={styles.badge}>{ip.scope}</Text>
-        <Text style={styles.badge}>{ip.allocation}</Text>
+        <Badge label={`v${ip.version}`} />
+        <Badge label={ip.scope} />
+        <Badge label={ip.allocation} />
       </View>
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Server: </Text>
@@ -155,12 +150,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -168,41 +159,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.xs,
-  },
-  badge: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: colors.bgSecondary,
-  },
-  mono: {
-    color: colors.text,
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 36,
-    justifyContent: 'center',
-    backgroundColor: colors.bgSecondary,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

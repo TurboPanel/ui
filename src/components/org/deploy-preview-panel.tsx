@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { EmptyState, LoadingState } from '@/components/ui'
 import { useDeployPreview } from '@/lib/queries'
 import {
   isServerPlacementRequiredError,
@@ -182,7 +183,7 @@ export function DeployPreviewBody({
   return (
     <View style={orgPanelStyles.expandedSection}>
       {loading && !preview ? (
-        <Text style={orgPanelStyles.muted}>Loading deploy preview…</Text>
+        <LoadingState label="Loading deploy preview…" />
       ) : null}
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
@@ -194,7 +195,7 @@ export function DeployPreviewBody({
       ) : null}
 
       {!loading && !error && !preview ? (
-        <Text style={orgPanelStyles.muted}>No preview loaded yet.</Text>
+        <EmptyState title="No preview loaded yet." />
       ) : null}
     </View>
   )

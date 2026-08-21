@@ -12,12 +12,11 @@ import { Link, useRouter, useLocalSearchParams } from 'expo-router'
 import { Image } from 'expo-image'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import { TurboPanelLogoMark } from '@/components/brand/turbopanel-logo'
@@ -37,6 +36,16 @@ import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Badge,
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  LoadingState,
+  MonoText,
+  SegmentedControl,
+  type BadgeTone,
+} from '@/components/ui'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import {
@@ -78,7 +87,7 @@ import {
   formatServerGeoCountryCode,
   formatServerGeoLocation,
 } from '@/lib/server-geo'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 type DetailActiveCommand = ActiveCommand
 
@@ -492,9 +501,6 @@ function renderServerDeletePanel(input: Readonly<{
   colocated: boolean
   deleting: boolean
   deleteError: string | null
-  confirmingDelete: boolean
-  onRequestConfirm: () => void
-  onCancel: () => void
   onConfirm: () => void
 }>): ReactNode {
   if (!input.canManage) return null
@@ -509,21 +515,13 @@ function renderServerDeletePanel(input: Readonly<{
     <ServerDeletePanel
       deleting={input.deleting}
       deleteError={input.deleteError}
-      confirming={input.confirmingDelete}
-      onRequestConfirm={input.onRequestConfirm}
-      onCancel={input.onCancel}
       onConfirm={input.onConfirm}
     />
   )
 }
 
 function ServerDetailLoading(): ReactNode {
-  return (
-    <View style={styles.loadingRow}>
-      <ActivityIndicator size="small" color={colors.accent} />
-      <Text style={orgPanelStyles.muted}>Loading server…</Text>
-    </View>
-  )
+  return <LoadingState label="Loading server…" />
 }
 
 function ServerDetailError({ message }: Readonly<{ message: string }>): ReactNode {
@@ -559,7 +557,6 @@ export function ServerDetailSection({
     string | null
   >(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const server = serverQuery.data
 
@@ -788,11 +785,7 @@ export function ServerDetailSection({
     colocated: updateVm.colocated,
     deleting: deleteMutation.isPending,
     deleteError,
-    confirmingDelete,
-    onRequestConfirm: () => setConfirmingDelete(true),
-    onCancel: () => setConfirmingDelete(false),
     onConfirm: () => {
-      setConfirmingDelete(false)
       setDeleteError(null)
       deleteMutation.mutate(serverId, {
         onSuccess: () => {
@@ -809,7 +802,11 @@ export function ServerDetailSection({
   return (
     <View style={styles.root}>
       <Link href={defaultOrgDashboardHref(orgId)} asChild>
-        <Pressable style={({ pressed }) => [styles.backLink, pressed && styles.pressed, webPointer]}>
+        <Pressable
+          style={({ pressed }) => [styles.backLink, pressed && styles.pressed, webPointer]}
+          accessibilityRole="link"
+          accessibilityLabel="Back to fleet"
+        >
           <Text style={styles.backText}>← Fleet</Text>
         </Pressable>
       </Link>
@@ -821,7 +818,7 @@ export function ServerDetailSection({
         <View style={styles.headerText}>
           <Text style={styles.title}>{title}</Text>
           {hostname && hostname !== title ? (
-            <Text style={styles.hostname}>{hostname}</Text>
+            <MonoText style={styles.hostname}>{hostname}</MonoText>
           ) : null}
           <View style={styles.headerMeta}>
             <ConnectionStatusDot status={connectionStatus} size={8} />
@@ -845,39 +842,20 @@ export function ServerDetailSection({
             ) : null}
           </View>
           {connectedVia ? (
-            <Text style={styles.connectedVia}>{connectedVia}</Text>
+            <MonoText style={styles.connectedVia}>{connectedVia}</MonoText>
           ) : null}
         </View>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={orgPanelStyles.segmentGroup}>
-          {SERVER_DETAIL_TAB_IDS.map((tabId) => {
-            const active = tabId === activeTab
-            return (
-              <Pressable
-                key={tabId}
-                onPress={() => setTab(tabId)}
-                style={[
-                  orgPanelStyles.segmentChip,
-                  active && orgPanelStyles.segmentChipActive,
-                  webPointer,
-                ]}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-              >
-                <Text
-                  style={[
-                    orgPanelStyles.segmentChipText,
-                    active && orgPanelStyles.segmentChipTextActive,
-                  ]}
-                >
-                  {SERVER_DETAIL_TAB_LABELS[tabId]}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </View>
+        <SegmentedControl
+          options={SERVER_DETAIL_TAB_IDS.map((tabId) => ({
+            value: tabId,
+            label: SERVER_DETAIL_TAB_LABELS[tabId],
+          }))}
+          value={activeTab}
+          onChange={setTab}
+        />
       </ScrollView>
 
       <DetailTabBody
@@ -944,74 +922,88 @@ function ServerOverviewTab({
   server: ServerDetailRecord
   canManage: boolean
 }>) {
+  const { width } = useWindowDimensions()
+  const twoColumn = width >= layout.desktopBreakpoint
   const geoLine = formatServerGeoLocation(server.geo)
   const country = formatServerGeoCountryCode(server.geo)
   const asn = formatServerGeoAsn(server.geo)
   const hasGeo = Boolean(geoLine || country || asn)
   const timezoneSource = configuredSourceLabel(server.timezoneSource)
+  const groupStyle = [
+    styles.detailGroup,
+    twoColumn && styles.detailGroupHalf,
+  ]
 
   return (
     <View style={styles.tabBody}>
-      <SectionPanel title="Identity">
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Display name: </Text>
-          {server.name ?? '—'}
-        </Text>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>ID: </Text>
-          <Text style={styles.mono}>{server.id}</Text>
-        </Text>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Created: </Text>
-          {formatLocalDateTime(server.createdAt)}
-        </Text>
-      </SectionPanel>
+      <SectionPanel title="Details">
+        <View style={styles.detailGrid}>
+          <View style={groupStyle}>
+            <Text style={orgPanelStyles.detailTitle}>Identity</Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Display name: </Text>
+              {server.name ?? '—'}
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>ID: </Text>
+              <MonoText>{server.id}</MonoText>
+            </Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+              {formatLocalDateTime(server.createdAt)}
+            </Text>
+          </View>
 
-      <SectionPanel title="Operating system">
-        <Text style={orgPanelStyles.detailLine}>
-          {server.osDisplay ?? 'Not reported yet'}
-        </Text>
-        {server.os?.architecture ? (
-          <Text style={orgPanelStyles.muted}>
-            Arch: {server.os.architecture}
-          </Text>
-        ) : null}
-        {server.os?.codename ? (
-          <Text style={orgPanelStyles.muted}>
-            Codename: {server.os.codename}
-          </Text>
-        ) : null}
-      </SectionPanel>
+          <View style={groupStyle}>
+            <Text style={orgPanelStyles.detailTitle}>Operating system</Text>
+            <Text style={orgPanelStyles.detailLine}>
+              {server.osDisplay ?? 'Not reported yet'}
+            </Text>
+            {server.os?.architecture ? (
+              <Text style={orgPanelStyles.muted}>
+                Arch: {server.os.architecture}
+              </Text>
+            ) : null}
+            {server.os?.codename ? (
+              <Text style={orgPanelStyles.muted}>
+                Codename: {server.os.codename}
+              </Text>
+            ) : null}
+          </View>
 
-      {hasGeo ? (
-        <SectionPanel title="Geo">
-          {geoLine ? (
-            <Text style={orgPanelStyles.detailLine}>{geoLine}</Text>
+          {hasGeo ? (
+            <View style={groupStyle}>
+              <Text style={orgPanelStyles.detailTitle}>Geo</Text>
+              {geoLine ? (
+                <Text style={orgPanelStyles.detailLine}>{geoLine}</Text>
+              ) : null}
+              {country ? (
+                <Text style={orgPanelStyles.detailLine}>{country}</Text>
+              ) : null}
+              {asn ? <Text style={orgPanelStyles.muted}>{asn}</Text> : null}
+            </View>
           ) : null}
-          {country ? (
-            <Text style={orgPanelStyles.detailLine}>{country}</Text>
-          ) : null}
-          {asn ? <Text style={orgPanelStyles.muted}>{asn}</Text> : null}
-        </SectionPanel>
-      ) : null}
 
-      <SectionPanel title="Timezone">
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
-          <Text style={styles.mono}>{server.timezone ?? 'Not set'}</Text>
-        </Text>
-        <Text style={orgPanelStyles.muted}>Source: {timezoneSource}</Text>
-        {server.datacenterEnforceServerTimezone ? (
-          <Text style={orgPanelStyles.muted}>
-            Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
-          </Text>
-        ) : null}
-        {!server.datacenterEnforceServerTimezone &&
-        server.enforceServerTimezone ? (
-          <Text style={orgPanelStyles.muted}>
-            Organization enforces {server.orgDefaultTimezone ?? 'its default'}.
-          </Text>
-        ) : null}
+          <View style={groupStyle}>
+            <Text style={orgPanelStyles.detailTitle}>Timezone</Text>
+            <Text style={orgPanelStyles.detailLine}>
+              <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
+              <MonoText>{server.timezone ?? 'Not set'}</MonoText>
+            </Text>
+            <Text style={orgPanelStyles.muted}>Source: {timezoneSource}</Text>
+            {server.datacenterEnforceServerTimezone ? (
+              <Text style={orgPanelStyles.muted}>
+                Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
+              </Text>
+            ) : null}
+            {!server.datacenterEnforceServerTimezone &&
+            server.enforceServerTimezone ? (
+              <Text style={orgPanelStyles.muted}>
+                Organization enforces {server.orgDefaultTimezone ?? 'its default'}.
+              </Text>
+            ) : null}
+          </View>
+        </View>
       </SectionPanel>
 
       <ServerSshPortPanel
@@ -1107,23 +1099,15 @@ function ServerControlTab({
             ? 'Unknown'
             : shortCommit(viewModel.updateData?.target?.commit)}
         </Text>
-        <View style={[styles.updateBadge, pickBadgeStyle(viewModel.badgeVariant).container]}>
-          <Text style={[styles.updateBadgeText, pickBadgeStyle(viewModel.badgeVariant).text]}>
-            {updateBadgeLabel(viewModel.badgeVariant, viewModel.runningVersionUnknown)}
-          </Text>
-        </View>
+        <Badge
+          tone={updateBadgeTone(viewModel.badgeVariant)}
+          label={updateBadgeLabel(viewModel.badgeVariant, viewModel.runningVersionUnknown)}
+        />
         {canManage ? (
-          <View style={styles.updateActions}>
-            <TouchableOpacity
-              style={[
-                styles.updateBtn,
-                (viewModel.isUpdateInProgress ||
-                  !server.connected ||
-                  !viewModel.targetKnown ||
-                  viewModel.colocated ||
-                  !viewModel.updateData?.updateAvailable) &&
-                  styles.btnDisabled,
-              ]}
+          <ButtonRow>
+            <Button
+              label="Update"
+              variant="primary"
               disabled={
                 viewModel.isUpdateInProgress ||
                 !server.connected ||
@@ -1132,19 +1116,17 @@ function ServerControlTab({
                 !viewModel.updateData?.updateAvailable
               }
               onPress={onTriggerUpdate}
-            >
-              <Text style={styles.updateBtnText}>Update</Text>
-            </TouchableOpacity>
+            />
             {viewModel.canResetUpdateStatus ? (
-              <TouchableOpacity
-                style={[styles.resetBtn, updateState.resetting && styles.btnDisabled]}
+              <Button
+                label="Clear stuck update"
+                variant="secondary"
+                size="sm"
                 disabled={updateState.resetting}
                 onPress={onResetUpdate}
-              >
-                <Text style={styles.resetBtnText}>Clear stuck update</Text>
-              </TouchableOpacity>
+              />
             ) : null}
-          </View>
+          </ButtonRow>
         ) : null}
         {updateState.error ? (
           <Text style={orgPanelStyles.error}>{updateState.error}</Text>
@@ -1161,64 +1143,36 @@ function ServerControlTab({
 function ServerDeletePanel({
   deleting,
   deleteError,
-  confirming,
-  onRequestConfirm,
-  onCancel,
   onConfirm,
 }: Readonly<{
   deleting: boolean
   deleteError: string | null
-  confirming: boolean
-  onRequestConfirm: () => void
-  onCancel: () => void
   onConfirm: () => void
 }>) {
-  if (deleting) {
-    return (
-      <View style={styles.inlineRow}>
-        <ActivityIndicator size="small" color={colors.textMuted} />
-        <Text style={orgPanelStyles.muted}>Deleting…</Text>
-      </View>
-    )
-  }
-  if (confirming) {
-    return (
-      <View style={styles.confirmBlock}>
-        <Text style={orgPanelStyles.muted}>
-          Permanently remove this server from the organization?
-        </Text>
-        <TouchableOpacity style={styles.deleteBtn} onPress={onConfirm}>
-          <Text style={styles.deleteBtnText}>Confirm delete</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onCancel}>
-          <Text style={orgPanelStyles.muted}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  }
   return (
     <>
       {deleteError ? <Text style={orgPanelStyles.error}>{deleteError}</Text> : null}
-      <TouchableOpacity style={styles.deleteBtn} onPress={onRequestConfirm}>
-        <Text style={styles.deleteBtnText}>Delete server</Text>
-      </TouchableOpacity>
+      <ConfirmButton
+        label={deleting ? 'Deleting…' : 'Delete server'}
+        confirmLabel="Confirm delete"
+        prompt="Permanently remove this server from the organization?"
+        busy={deleting}
+        onConfirm={onConfirm}
+      />
     </>
   )
 }
 
-function pickBadgeStyle(variant: UpdateBadgeVariant): {
-  container: object
-  text: object
-} {
+function updateBadgeTone(variant: UpdateBadgeVariant): BadgeTone {
   switch (variant) {
     case 'updating':
-      return { container: styles.badgeUpdating, text: styles.badgeTextAccent }
+      return 'ok'
     case 'error':
-      return { container: styles.badgeError, text: styles.badgeTextError }
+      return 'danger'
     case 'available':
-      return { container: styles.badgePending, text: styles.badgeTextPending }
+      return 'pending'
     default:
-      return { container: styles.badgeMuted, text: styles.badgeTextMuted }
+      return 'muted'
   }
 }
 
@@ -1226,11 +1180,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
   },
   backLink: {
     alignSelf: 'flex-start',
@@ -1265,8 +1214,6 @@ const styles = StyleSheet.create({
   },
   hostname: {
     color: colors.textDim,
-    fontFamily: 'monospace',
-    fontSize: 13,
   },
   headerMeta: {
     flexDirection: 'row',
@@ -1285,7 +1232,6 @@ const styles = StyleSheet.create({
   connectedVia: {
     color: colors.textMuted,
     fontSize: 12,
-    fontFamily: 'monospace',
     marginTop: 2,
   },
   instanceDaemonBadge: {
@@ -1306,92 +1252,16 @@ const styles = StyleSheet.create({
   tabBody: {
     gap: spacing.lg,
   },
-  mono: {
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
-  updateBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: spacing.sm,
-  },
-  updateBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  badgeUpdating: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-  },
-  badgeError: {
-    borderColor: colors.error,
-  },
-  badgePending: {
-    borderColor: colors.pending,
-  },
-  badgeMuted: {
-    borderColor: colors.borderChip,
-  },
-  badgeTextAccent: { color: chrome.accent },
-  badgeTextError: { color: colors.error },
-  badgeTextPending: { color: colors.pending },
-  badgeTextMuted: { color: colors.textDim },
-  updateActions: {
+  detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    gap: spacing.lg,
   },
-  updateBtn: {
-    borderWidth: 1,
-    borderColor: chrome.accent,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: chrome.bgActive,
+  detailGroup: {
+    width: '100%',
+    gap: spacing.xs,
   },
-  updateBtnText: {
-    color: colors.accent,
-    fontWeight: '600',
-  },
-  resetBtn: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  resetBtnText: {
-    color: colors.textMuted,
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
-  deleteBtn: {
-    alignSelf: 'flex-start',
-    borderColor: colors.error,
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  deleteBtnText: {
-    color: colors.error,
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  inlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  confirmBlock: {
-    gap: spacing.sm,
+  detailGroupHalf: {
+    width: '48%',
   },
 })

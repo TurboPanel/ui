@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   subItem: {
     paddingVertical: 7,
     paddingHorizontal: spacing.md,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
   },

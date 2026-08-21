@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { FormSelect } from '@/components/org/form-select'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  FormField,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import type {
   DatacenterNameSuggestion,
   OrgServerRecord,
@@ -193,16 +193,14 @@ function CreateDatacenterFields({
   return (
     <View style={styles.formBody}>
       <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Name</Text>
-        <TextInput
+        <TextField
+          label="Name"
           value={displayName}
           onChangeText={(value) => {
             setDisplayName(value)
             setActiveSuggestionKey(null)
           }}
           placeholder="AMS-1"
-          placeholderTextColor={colors.textDim}
-          style={styles.input}
           editable={!submitting}
           accessibilityLabel="Datacenter name"
         />
@@ -212,20 +210,15 @@ function CreateDatacenterFields({
           onSelect={applySuggestion}
         />
       </View>
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Optional"
-          placeholderTextColor={colors.textDim}
-          style={styles.input}
-          editable={!submitting}
-          accessibilityLabel="Datacenter description"
-        />
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Server</Text>
+      <TextField
+        label="Description"
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Optional"
+        editable={!submitting}
+        accessibilityLabel="Datacenter description"
+      />
+      <FormField label="Server">
         <FormSelect
           value={selectedServerId}
           options={serverOptions}
@@ -234,10 +227,9 @@ function CreateDatacenterFields({
           accessibilityLabel="Server"
           onChange={selectServer}
         />
-      </View>
+      </FormField>
       {selectedServer ? (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Private IP</Text>
+        <FormField label="Private IP">
           {serverNetworks.length === 0 ? (
             <Text style={orgPanelStyles.muted}>No private IP reported.</Text>
           ) : (
@@ -251,11 +243,10 @@ function CreateDatacenterFields({
               onChange={setSelectedAddress}
             />
           )}
-        </View>
+        </FormField>
       ) : null}
       {selectedAddress && detectedCidr ? (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>First subnet</Text>
+        <FormField label="First subnet">
           <View style={styles.cidrRow}>
             <Text style={styles.detectedCidr} selectable>
               {detectedCidr}
@@ -264,42 +255,24 @@ function CreateDatacenterFields({
               <Text style={styles.cidrMeta}>typical LAN</Text>
             ) : null}
           </View>
-        </View>
+        </FormField>
       ) : null}
       {formError ? <Text style={orgPanelStyles.error}>{formError}</Text> : null}
-      <View style={styles.formActions}>
-        <Pressable
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
-            createDisabled && styles.buttonDisabled,
-            pressed && !createDisabled && styles.rowPressed,
-            webPointer,
-          ]}
+      <ButtonRow>
+        <Button
+          label="Create"
+          variant="primary"
           disabled={createDisabled}
+          busy={submitting}
           onPress={submitCreate}
-          accessibilityRole="button"
           accessibilityLabel="Create datacenter"
-          accessibilityState={{ disabled: createDisabled, busy: submitting }}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : (
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Create</Text>
-          )}
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnSecondary,
-            pressed && styles.rowPressed,
-            webPointer,
-          ]}
+        />
+        <Button
+          label="Cancel"
           onPress={() => router.replace(listHref)}
-          accessibilityRole="button"
           accessibilityLabel="Cancel new datacenter"
-        >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
+        />
+      </ButtonRow>
     </View>
   )
 }
@@ -338,26 +311,17 @@ export function DatacenterFormSection({
 
       <View style={styles.formFrame}>
         <SectionPanel>
-          {loading ? (
-            <Text style={orgPanelStyles.muted}>Loading servers…</Text>
-          ) : null}
+          {loading ? <LoadingState label="Loading servers…" /> : null}
           {!loading && blocked ? (
             <View style={styles.formBody}>
               <Text style={orgPanelStyles.muted}>
                 {createBlockedCopy(canManage, eligibility.reason)}
               </Text>
-              <Pressable
-                style={({ pressed }) => [
-                  orgPanelStyles.toolbarBtnSecondary,
-                  pressed && styles.rowPressed,
-                  webPointer,
-                ]}
+              <Button
+                label="Back"
                 onPress={() => router.replace(listHref)}
-                accessibilityRole="button"
                 accessibilityLabel="Back to datacenters"
-              >
-                <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Back</Text>
-              </Pressable>
+              />
             </View>
           ) : null}
           {!loading && !blocked ? (
@@ -387,11 +351,6 @@ const styles = StyleSheet.create({
   field: {
     gap: spacing.xs,
   },
-  fieldLabel: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -419,17 +378,6 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: colors.text,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontSize: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 44,
-  },
   cidrRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -437,7 +385,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.borderMuted,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.bgInset,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -452,18 +400,5 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 12,
     fontWeight: '600',
-  },
-  formActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  rowPressed: {
-    opacity: 0.88,
   },
 })

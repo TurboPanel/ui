@@ -1,19 +1,8 @@
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { Button, TextField } from '@/components/ui'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-
-const webInputStyle = {
-  borderWidth: 1,
-  borderColor: colors.border,
-  backgroundColor: colors.bgInput,
-  color: colors.text,
-  paddingHorizontal: 12,
-  paddingVertical: 10,
-  fontSize: 16,
-  borderRadius: 6,
-  minHeight: 44,
-} as const
+import { StyleSheet, Text, View } from 'react-native'
 
 function NoteRow({ text }: Readonly<{ text: string }>) {
   return (
@@ -71,31 +60,25 @@ export function FirstRunWizard({
         ) : null}
 
         {onNameChange ? (
-          <View style={styles.field}>
-            {nameLabel ? <Text style={styles.label}>{nameLabel}</Text> : null}
-            <TextInput
-              style={Platform.OS === 'web' ? webInputStyle : styles.input}
-              value={nameValue ?? ''}
-              onChangeText={onNameChange}
-              placeholder={namePlaceholder}
-              placeholderTextColor={colors.textDim}
-              autoCapitalize="words"
-              autoCorrect={false}
-              editable={!busy}
-              maxLength={DISPLAY_NAME_MAX_LENGTH}
-            />
-          </View>
+          <TextField
+            label={nameLabel ?? namePlaceholder ?? 'Name'}
+            value={nameValue ?? ''}
+            onChangeText={onNameChange}
+            autoCapitalize="words"
+            autoCorrect={false}
+            editable={!busy}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+          />
         ) : null}
 
         {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-        <Pressable
-          style={[styles.primaryButton, busy && styles.buttonDisabled]}
-          disabled={busy}
+        <Button
+          label={actionLabel}
+          variant="primary"
+          busy={busy}
           onPress={onPrimaryAction}
-        >
-          <Text style={styles.primaryButtonText}>{actionLabel}</Text>
-        </Pressable>
+        />
       </View>
     </View>
   )
@@ -149,39 +132,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  label: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    minHeight: 44,
-  },
-  primaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: chrome.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: chrome.onAccent,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
 })

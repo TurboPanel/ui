@@ -1,15 +1,18 @@
 import { useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
 import { IpListRow } from '@/components/org/network/network-rows'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import {
+  Button,
+  ButtonRow,
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+  type SegmentedOption,
+} from '@/components/ui'
 import type {
   DatacenterRecord,
   IpAllocation,
@@ -35,6 +38,19 @@ import { chrome, colors, spacing } from '@/lib/theme'
 const SCOPES: IpScope[] = ['public', 'datacenter']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
+const SCOPE_OPTIONS: readonly SegmentedOption<IpScope>[] = SCOPES.map(
+  (value) => ({ value, label: value }),
+)
+const ALLOCATION_OPTIONS: readonly SegmentedOption<IpAllocation>[] =
+  ALLOCATIONS.map((value) => ({ value, label: value }))
+const SCOPE_FILTER_OPTIONS: readonly SegmentedOption<IpScope | 'all'>[] = [
+  { value: 'all', label: 'All' },
+  ...SCOPE_OPTIONS,
+]
+const ALLOCATION_FILTER_OPTIONS: readonly SegmentedOption<
+  IpAllocation | 'all'
+>[] = [{ value: 'all', label: 'All' }, ...ALLOCATION_OPTIONS]
+
 /** Simple client pre-check; server `ip-address.ts` is authoritative. */
 const IP_LITERAL_OR_CIDR =
   /^(?:\d{1,3}(?:\.\d{1,3}){3}|\[[0-9a-fA-F:]+\]|[0-9a-fA-F:]+)(?:\/\d{1,3})?$/
@@ -43,46 +59,17 @@ function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: Readonly<{ label: string; active: boolean; onPress: () => void }>) {
-  return (
-    <Pressable
-      style={[styles.chip, active && styles.chipActive, webPointer]}
-      onPress={onPress}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
-function SegmentFilterChip({
-  label,
-  active,
-  onPress,
-}: Readonly<{ label: string; active: boolean; onPress: () => void }>) {
-  return (
-    <Pressable
-      style={[
-        orgPanelStyles.segmentChip,
-        active && orgPanelStyles.segmentChipActive,
-      ]}
-      onPress={onPress}
-    >
-      <Text
-        style={[
-          orgPanelStyles.segmentChipText,
-          active && orgPanelStyles.segmentChipTextActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  )
+function datacenterOptions(
+  datacenters: readonly DatacenterRecord[],
+  emptyLabel: string,
+): SegmentedOption<string>[] {
+  return [
+    { value: '', label: emptyLabel },
+    ...datacenters.map((row) => ({
+      value: row.id,
+      label: row.name?.trim() || row.id,
+    })),
+  ]
 }
 
 function siteSubnetsForDatacenter(
@@ -288,62 +275,49 @@ function CreateIpScopeFields({
   if (scope === 'datacenter') datacenterLabel = 'Datacenter'
   if (requireSiteSubnet) networkLabel = 'Site subnet'
 
+  const networkOptions: SegmentedOption<string>[] = [
+    ...(requireSiteSubnet ? [] : [{ value: '', label: 'None' }]),
+    ...networkRows.map((row) => ({
+      value: row.id,
+      label: row.name?.trim() || row.cidr || row.id,
+    })),
+  ]
+  const serverOptions: SegmentedOption<string>[] = [
+    { value: '', label: 'None' },
+    ...servers.map((server) => ({
+      value: server.id,
+      label: serverTitle(server),
+    })),
+  ]
+
   return (
     <>
-      <Text style={styles.fieldLabel}>{datacenterLabel}</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="None"
-          active={createDatacenterId === ''}
-          onPress={() => onDatacenterIdChange('')}
+      <FormField label={datacenterLabel}>
+        <SegmentedControl
+          options={datacenterOptions(datacenters, 'None')}
+          value={createDatacenterId}
+          onChange={onDatacenterIdChange}
+          accessibilityLabel={datacenterLabel}
         />
-        {datacenters.map((row) => (
-          <FilterChip
-            key={row.id}
-            label={row.name?.trim() || row.id}
-            active={createDatacenterId === row.id}
-            onPress={() => onDatacenterIdChange(row.id)}
-          />
-        ))}
-      </View>
+      </FormField>
       {scope === 'public' || requireSiteSubnet ? (
-        <>
-          <Text style={styles.fieldLabel}>{networkLabel}</Text>
-          <View style={styles.chipRow}>
-            {requireSiteSubnet ? null : (
-              <FilterChip
-                label="None"
-                active={createNetworkId === ''}
-                onPress={() => onNetworkIdChange('')}
-              />
-            )}
-            {networkRows.map((row) => (
-              <FilterChip
-                key={row.id}
-                label={row.name?.trim() || row.cidr || row.id}
-                active={createNetworkId === row.id}
-                onPress={() => onNetworkIdChange(row.id)}
-              />
-            ))}
-          </View>
-        </>
-      ) : null}
-      <Text style={styles.fieldLabel}>Server (optional)</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="None"
-          active={createServerId === ''}
-          onPress={() => onServerIdChange('')}
-        />
-        {servers.map((server) => (
-          <FilterChip
-            key={server.id}
-            label={serverTitle(server)}
-            active={createServerId === server.id}
-            onPress={() => onServerIdChange(server.id)}
+        <FormField label={networkLabel}>
+          <SegmentedControl
+            options={networkOptions}
+            value={createNetworkId}
+            onChange={onNetworkIdChange}
+            accessibilityLabel={networkLabel}
           />
-        ))}
-      </View>
+        </FormField>
+      ) : null}
+      <FormField label="Server (optional)">
+        <SegmentedControl
+          options={serverOptions}
+          value={createServerId}
+          onChange={onServerIdChange}
+          accessibilityLabel="Server (optional)"
+        />
+      </FormField>
     </>
   )
 }
@@ -396,15 +370,12 @@ function IpEditPanel({
       <Text style={orgPanelStyles.detailLine}>{allocation}</Text>
       <Text style={styles.fieldLabel}>Scope</Text>
       <Text style={orgPanelStyles.detailLine}>{scope}</Text>
-      <Text style={styles.fieldLabel}>Description</Text>
-      <TextInput
+      <TextField
+        label="Description"
         value={description}
         onChangeText={onDescriptionChange}
         placeholder="Optional note"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
         maxLength={DESCRIPTION_MAX_LENGTH}
-        accessibilityLabel="Description"
       />
       <CreateIpScopeFields
         scope={scope}
@@ -418,30 +389,16 @@ function IpEditPanel({
         onNetworkIdChange={onNetworkIdChange}
         onServerIdChange={onServerIdChange}
       />
-      <View style={styles.editActions}>
-        <Pressable
-          style={[styles.secondaryButton, webPointer]}
-          disabled={saving}
-          onPress={onCancel}
-        >
-          <Text style={styles.secondaryButtonText}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          style={[
-            orgPanelStyles.toolbarBtnPrimary,
-            saveDisabled && styles.buttonDisabled,
-            webPointer,
-          ]}
+      <ButtonRow>
+        <Button label="Cancel" disabled={saving} onPress={onCancel} />
+        <Button
+          label="Save"
+          variant="primary"
+          busy={saving}
           disabled={saveDisabled}
           onPress={onSave}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : (
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Save</Text>
-          )}
-        </Pressable>
-      </View>
+        />
+      </ButtonRow>
     </View>
   )
 }
@@ -465,54 +422,30 @@ function AddressFiltersPanel({
 }>) {
   return (
     <SectionPanel title="Filters" hint="Optional narrowing">
-      <Text style={styles.fieldLabel}>Scope</Text>
-      <View style={orgPanelStyles.segmentGroup}>
-        <SegmentFilterChip
-          label="All"
-          active={scopeFilter === 'all'}
-          onPress={() => onScopeFilterChange('all')}
+      <FormField label="Scope">
+        <SegmentedControl
+          options={SCOPE_FILTER_OPTIONS}
+          value={scopeFilter}
+          onChange={onScopeFilterChange}
+          accessibilityLabel="Scope filter"
         />
-        {SCOPES.map((value) => (
-          <SegmentFilterChip
-            key={value}
-            label={value}
-            active={scopeFilter === value}
-            onPress={() => onScopeFilterChange(value)}
-          />
-        ))}
-      </View>
-      <Text style={styles.fieldLabel}>Allocation</Text>
-      <View style={orgPanelStyles.segmentGroup}>
-        <SegmentFilterChip
-          label="All"
-          active={allocationFilter === 'all'}
-          onPress={() => onAllocationFilterChange('all')}
+      </FormField>
+      <FormField label="Allocation">
+        <SegmentedControl
+          options={ALLOCATION_FILTER_OPTIONS}
+          value={allocationFilter}
+          onChange={onAllocationFilterChange}
+          accessibilityLabel="Allocation filter"
         />
-        {ALLOCATIONS.map((value) => (
-          <SegmentFilterChip
-            key={value}
-            label={value}
-            active={allocationFilter === value}
-            onPress={() => onAllocationFilterChange(value)}
-          />
-        ))}
-      </View>
-      <Text style={styles.fieldLabel}>Site</Text>
-      <View style={styles.chipRow}>
-        <FilterChip
-          label="All"
-          active={datacenterFilter === ''}
-          onPress={() => onDatacenterFilterChange('')}
+      </FormField>
+      <FormField label="Site">
+        <SegmentedControl
+          options={datacenterOptions(datacenters, 'All')}
+          value={datacenterFilter}
+          onChange={onDatacenterFilterChange}
+          accessibilityLabel="Site filter"
         />
-        {datacenters.map((row) => (
-          <FilterChip
-            key={row.id}
-            label={row.name?.trim() || row.id}
-            active={datacenterFilter === row.id}
-            onPress={() => onDatacenterFilterChange(row.id)}
-          />
-        ))}
-      </View>
+      </FormField>
     </SectionPanel>
   )
 }
@@ -561,49 +494,44 @@ function AddAddressPanel({
   onCreate: () => void
 }>) {
   return (
-    <SectionPanel title="Add IP address" hint="Manage-gated">
-      <Text style={styles.fieldLabel}>Address</Text>
-      <TextInput
+    <SectionPanel
+      title="Add IP address"
+      hint="Manage-gated"
+      collapsible
+      defaultCollapsed
+    >
+      <TextField
+        label="Address"
         value={address}
         onChangeText={onAddressChange}
         placeholder="203.0.113.10 or 2001:db8::1"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
+        mono
       />
-      <Text style={styles.fieldLabel}>Description</Text>
-      <TextInput
+      <TextField
+        label="Description"
         value={description}
         onChangeText={onDescriptionChange}
         placeholder="Optional note"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
         maxLength={DESCRIPTION_MAX_LENGTH}
-        accessibilityLabel="Description"
       />
-      <Text style={styles.fieldLabel}>Allocation</Text>
-      <View style={styles.chipRow}>
-        {ALLOCATIONS.map((value) => (
-          <FilterChip
-            key={value}
-            label={value}
-            active={allocation === value}
-            onPress={() => onAllocationChange(value)}
-          />
-        ))}
-      </View>
-      <Text style={styles.fieldLabel}>Scope</Text>
-      <View style={styles.chipRow}>
-        {SCOPES.map((value) => (
-          <FilterChip
-            key={value}
-            label={value}
-            active={scope === value}
-            onPress={() => onScopeChange(value)}
-          />
-        ))}
-      </View>
+      <FormField label="Allocation">
+        <SegmentedControl
+          options={ALLOCATION_OPTIONS}
+          value={allocation}
+          onChange={onAllocationChange}
+          accessibilityLabel="Allocation"
+        />
+      </FormField>
+      <FormField label="Scope">
+        <SegmentedControl
+          options={SCOPE_OPTIONS}
+          value={scope}
+          onChange={onScopeChange}
+          accessibilityLabel="Scope"
+        />
+      </FormField>
       <CreateIpScopeFields
         scope={scope}
         datacenters={datacenters}
@@ -616,21 +544,13 @@ function AddAddressPanel({
         onNetworkIdChange={onNetworkIdChange}
         onServerIdChange={onServerIdChange}
       />
-      <Pressable
-        style={[
-          orgPanelStyles.toolbarBtnPrimary,
-          createDisabled && styles.buttonDisabled,
-          webPointer,
-        ]}
+      <Button
+        label="Add address"
+        variant="primary"
+        busy={creating}
         disabled={createDisabled}
         onPress={onCreate}
-      >
-        {creating ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : (
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add address</Text>
-        )}
-      </Pressable>
+      />
     </SectionPanel>
   )
 }
@@ -716,19 +636,16 @@ function AddressPoolPanel({
   onBeginEdit: (ip: IpRecord) => void
   onDelete: (ipId: string) => void
 }>) {
-  let emptyState: string | null = null
-  if (loading && ips.length === 0) emptyState = 'Loading addresses…'
-  else if (!loading && ips.length === 0) {
-    emptyState = 'No addresses match these filters.'
-  }
-
   return (
     <SectionPanel
       title="Address pool"
       hint={loading ? 'Loading…' : `${ips.length} address(es)`}
     >
-      {emptyState ? (
-        <Text style={orgPanelStyles.muted}>{emptyState}</Text>
+      {loading && ips.length === 0 ? (
+        <LoadingState label="Loading addresses…" />
+      ) : null}
+      {!loading && ips.length === 0 ? (
+        <EmptyState title="No addresses match these filters." />
       ) : null}
       <View style={styles.list}>
         {ips.map((ip) => {
@@ -1120,113 +1037,13 @@ const styles = StyleSheet.create({
   list: {
     gap: 8,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
   editCard: {
     borderColor: chrome.accent,
-  },
-  editActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginVertical: spacing.xs,
-  },
-  badge: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: colors.bgSecondary,
-  },
-  mono: {
-    color: colors.text,
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  chip: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  chipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  chipText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: chrome.accent,
   },
   fieldLabel: {
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: spacing.xs,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 6,
-    backgroundColor: colors.bgInput,
-    color: colors.text,
-    fontSize: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: spacing.sm,
-    minHeight: 44,
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.bgSecondary,
-  },
-  secondaryButtonText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 })

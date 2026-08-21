@@ -8,6 +8,12 @@ import {
   View,
 } from 'react-native'
 import { SectionPanel } from '@/components/org/section-panel'
+import {
+  Button,
+  Checkbox,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedAccessScopePicker } from '@/components/org/managed/managed-access-scope-picker'
@@ -42,7 +48,7 @@ const webInputStyle = {
   paddingHorizontal: 12,
   paddingVertical: 10,
   fontSize: 16,
-  borderRadius: 6,
+  borderRadius: 8,
   minHeight: 44,
 } as const
 
@@ -176,69 +182,6 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
   }
 }
 
-function ToggleRow({
-  label,
-  checked,
-  disabled,
-  onToggle,
-}: Readonly<{
-  label: string
-  checked: boolean
-  disabled: boolean
-  onToggle: () => void
-}>) {
-  return (
-    <Pressable
-      style={[styles.toggleRow, webPointer]}
-      onPress={onToggle}
-      disabled={disabled}
-    >
-      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-        {checked ? <Text style={styles.checkmark}>✓</Text> : null}
-      </View>
-      <Text style={styles.toggleLabel}>{label}</Text>
-    </Pressable>
-  )
-}
-
-function SegmentPicker<T extends string>({
-  options,
-  value,
-  disabled,
-  onSelect,
-}: Readonly<{
-  options: readonly T[]
-  value: T
-  disabled: boolean
-  onSelect: (value: T) => void
-}>) {
-  return (
-    <View style={orgPanelStyles.segmentGroup}>
-      {options.map((option) => (
-        <Pressable
-          key={option}
-          style={[
-            styles.segment,
-            value === option && styles.segmentActive,
-            webPointer,
-          ]}
-          onPress={() => onSelect(option)}
-          disabled={disabled}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              value === option && styles.segmentTextActive,
-            ]}
-          >
-            {option}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
-  )
-}
-
 function LabeledNumber({
   label,
   value,
@@ -251,17 +194,13 @@ function LabeledNumber({
   onChange: (value: string) => void
 }>) {
   return (
-    <View style={styles.field}>
-      <Text style={orgPanelStyles.detailLabel}>{label}</Text>
-      <TextInput
-        style={Platform.OS === 'web' ? webInputStyle : styles.input}
-        value={value}
-        onChangeText={onChange}
-        keyboardType="numeric"
-        placeholderTextColor={colors.textDim}
-        editable={!disabled}
-      />
-    </View>
+    <TextField
+      label={label}
+      value={value}
+      onChangeText={onChange}
+      keyboardType="numeric"
+      editable={!disabled}
+    />
   )
 }
 
@@ -309,13 +248,12 @@ function KvEditor({
           />
         </View>
       ))}
-      <Pressable
-        style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+      <Button
+        label="Add row"
+        size="sm"
         disabled={disabled}
         onPress={() => onChange([...rows, createKvRow()])}
-      >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Add row</Text>
-      </Pressable>
+      />
     </View>
   )
 }
@@ -410,15 +348,14 @@ function ApplyButton({
     return null
   }
   return (
-    <Pressable
-      style={[orgPanelStyles.toolbarBtnPrimary, webPointer, disabled && styles.disabled]}
+    <Button
+      label="Apply"
+      busyLabel="Applying…"
+      variant="primary"
+      busy={saving}
       disabled={disabled}
       onPress={onPress}
-    >
-      <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
-        {saving ? 'Applying…' : 'Apply'}
-      </Text>
-    </Pressable>
+    />
   )
 }
 
@@ -476,25 +413,28 @@ function SettingsFormBody({
         onSelect={(sslMode) => setForm((current) => ({ ...current, sslMode }))}
       />
 
-      <Text style={orgPanelStyles.detailLabel}>Engine config</Text>
-      <TextInput
-        style={[Platform.OS === 'web' ? webInputStyle : styles.input, styles.textarea]}
+      <TextField
+        label="Engine config"
         value={form.engineConfig}
         onChangeText={(engineConfig) =>
           setForm((current) => ({ ...current, engineConfig }))
         }
         placeholder="Optional engine configuration"
-        placeholderTextColor={colors.textDim}
         multiline
+        mono
         editable={!disabled}
       />
 
       <Text style={orgPanelStyles.detailLabel}>Restart policy</Text>
-      <SegmentPicker
-        options={RESTART_POLICIES}
-        value={form.restart}
+      <SegmentedControl
+        options={RESTART_POLICIES.map((policy) => ({
+          value: policy,
+          label: policy,
+        }))}
+        value={form.restart as (typeof RESTART_POLICIES)[number]}
         disabled={disabled}
-        onSelect={(restart) => setForm((current) => ({ ...current, restart }))}
+        accessibilityLabel="Restart policy"
+        onChange={(restart) => setForm((current) => ({ ...current, restart }))}
       />
 
       <View style={styles.grid}>
@@ -554,11 +494,11 @@ function SettingsFormBody({
         }
       />
 
-      <ToggleRow
+      <Checkbox
         label="Expose externally"
         checked={form.exposureEnabled}
         disabled={disabled}
-        onToggle={() =>
+        onPress={() =>
           setForm((current) => ({
             ...current,
             exposureEnabled: !current.exposureEnabled,
@@ -642,7 +582,12 @@ export function ManagedSettingsPanel({
   const disabled = busy || saving || !canManage
 
   return (
-    <SectionPanel title="Settings" hint="Image, resources, exposure, and Docker options">
+    <SectionPanel
+      title="Settings"
+      hint="Image, resources, exposure, and Docker options"
+      collapsible
+      defaultCollapsed
+    >
       <Pressable
         style={[orgPanelStyles.expandedSection, webPointer]}
         onPress={() => setExpanded((current) => !current)}
@@ -718,68 +663,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 44,
-  },
-  textarea: {
-    minHeight: 120,
-    textAlignVertical: 'top',
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgInput,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    borderColor: chrome.accent,
-    backgroundColor: colors.bgActive,
-  },
-  checkmark: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  toggleLabel: {
-    color: colors.textBody,
-    fontSize: 13,
-  },
-  segment: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  segmentActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  segmentText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  segmentTextActive: {
-    color: chrome.accent,
   },
   grid: {
     gap: spacing.sm,
-  },
-  field: {
-    gap: spacing.xs,
   },
   kvBlock: {
     gap: spacing.xs,
@@ -792,8 +680,5 @@ const styles = StyleSheet.create({
   kvInput: {
     flex: 1,
     minWidth: 120,
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })
