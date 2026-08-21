@@ -83,13 +83,13 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    // Icon centers against the whole card, not just the first line of the label.
+    alignItems: 'center',
     gap: spacing.sm,
   },
   icon: {
     width: 22,
     height: 22,
-    marginTop: 1,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',

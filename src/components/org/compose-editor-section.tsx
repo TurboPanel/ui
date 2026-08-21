@@ -29,6 +29,7 @@ import {
   parseComposeProjectTab,
   parseProjectEnvironmentId,
   projectComposeSectionHref,
+  type ComposeProjectTabId,
 } from '@/lib/project-navigation'
 import { ComposeYamlEditor } from '@/components/org/compose-yaml-editor'
 import type {
@@ -284,15 +285,36 @@ const SURFACE_SECTION_ICONS = {
   services: ComposeVisualIcon,
 } as const
 
+/** One Overview/Compose/Services tab face — shared by the routed and draft strips. */
+function ComposeSectionTabFace({
+  tabId,
+  active,
+}: Readonly<{ tabId: ComposeProjectTabId; active: boolean }>) {
+  const Icon = SURFACE_SECTION_ICONS[tabId]
+  return (
+    <View style={styles.surfaceTabInner}>
+      <Icon size={15} color={active ? colors.text : colors.textMuted} />
+      <Text
+        style={[styles.surfaceTabText, active && styles.surfaceTabTextActive]}
+      >
+        {COMPOSE_PROJECT_TAB_LABELS[tabId]}
+      </Text>
+    </View>
+  )
+}
+
 /**
  * Overview · Compose · Services — underline tabs inside the compose surface.
- * Path-driven; keeps Project / environment scope when switching tabs.
+ * Path-driven; keeps Project / environment scope when switching tabs. An
+ * unsaved wizard draft has no route, so it drives the same tabs from state.
  */
 export function ComposeSurfaceSectionTabs() {
   const pathname = usePathname()
-  const { orgId, projectId } = useProjectContext()
+  const { orgId, projectId, draft } = useProjectContext()
   const pathEnvironmentId = parseProjectEnvironmentId(pathname, projectId)
-  const activeTab = parseComposeProjectTab(pathname, projectId)
+  const activeTab = draft
+    ? draft.section
+    : parseComposeProjectTab(pathname, projectId)
 
   return (
     <View
@@ -302,14 +324,6 @@ export function ComposeSurfaceSectionTabs() {
     >
       {COMPOSE_PROJECT_TAB_IDS.map((tabId) => {
         const active = activeTab === tabId
-        const tone = active ? colors.text : colors.textMuted
-        const Icon = SURFACE_SECTION_ICONS[tabId]
-        const href = projectComposeSectionHref(
-          orgId,
-          projectId,
-          tabId,
-          pathEnvironmentId,
-        ) as Href
         const label = COMPOSE_PROJECT_TAB_LABELS[tabId]
         // Link asChild → Slot rejects style arrays (expo-router).
         const tabStyle = StyleSheet.flatten([
@@ -317,6 +331,29 @@ export function ComposeSurfaceSectionTabs() {
           active && styles.surfaceTabActive,
           webPointer,
         ])
+
+        // A draft has no route to navigate to — same tabs, local state.
+        if (draft) {
+          return (
+            <Pressable
+              key={tabId}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={label}
+              style={tabStyle}
+              onPress={() => draft.setSection(tabId)}
+            >
+              <ComposeSectionTabFace tabId={tabId} active={active} />
+            </Pressable>
+          )
+        }
+
+        const href = projectComposeSectionHref(
+          orgId,
+          projectId,
+          tabId,
+          pathEnvironmentId,
+        ) as Href
         return (
           <Link key={tabId} href={href} asChild>
             <Pressable
@@ -325,17 +362,7 @@ export function ComposeSurfaceSectionTabs() {
               accessibilityLabel={label}
               style={tabStyle}
             >
-              <View style={styles.surfaceTabInner}>
-                <Icon size={15} color={tone} />
-                <Text
-                  style={[
-                    styles.surfaceTabText,
-                    active && styles.surfaceTabTextActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-              </View>
+              <ComposeSectionTabFace tabId={tabId} active={active} />
             </Pressable>
           </Link>
         )

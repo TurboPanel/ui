@@ -9,33 +9,64 @@ import {
   managedCatalogEntryForCode,
   sortManagedCatalogEntries,
 } from '@/lib/managed-services'
+import type { ComposeProjectTabId } from '@/lib/project-navigation'
 
+/** Project type stored on the row and sent to `POST /projects`. */
 export type SetupType = 'docker-compose' | 'template' | 'managed'
 
+/**
+ * Card the operator picks. Compose and Services are the *same* project type —
+ * they differ only in which tab of the compose surface you land on, so someone
+ * who thinks in service cards never has to meet raw YAML first.
+ */
+export type SetupChoice = 'compose' | 'services' | 'template' | 'managed'
+
 export type SetupTypeOption = {
+  choice: SetupChoice
   type: SetupType
   label: string
   description: string
+  /** Compose-surface tab this choice opens on. */
+  section: ComposeProjectTabId
 }
 
 export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
   {
+    choice: 'compose',
     type: 'docker-compose',
     label: 'Compose',
-    description: 'A blank slate for multiple services.',
+    description: 'A blank slate. You define the whole stack in YAML.',
+    section: 'compose',
   },
   {
+    choice: 'services',
+    type: 'docker-compose',
+    label: 'Services',
+    description: 'The same stack, defined with service cards instead of YAML.',
+    section: 'services',
+  },
+  {
+    choice: 'template',
     type: 'template',
     label: 'Template',
-    description: 'Start from a catalog template with sensible defaults already wired up.',
+    description: 'A ready-made stack from the catalog.',
+    section: 'overview',
   },
   {
+    choice: 'managed',
     type: 'managed',
     label: 'Managed',
     description:
-      'A service that is automatically set up for you. Provisioning, pooling, backups, and connections are handled.',
+      'Fully configured on your own servers — provisioning, backups, and connections included.',
+    section: 'overview',
   },
 ]
+
+export function setupOptionForChoice(
+  choice: SetupChoice,
+): SetupTypeOption | undefined {
+  return SETUP_TYPE_OPTIONS.find((option) => option.choice === choice)
+}
 
 /** Catalog rows a setup type offers, ordered for display. */
 export function filterSetupCatalog(

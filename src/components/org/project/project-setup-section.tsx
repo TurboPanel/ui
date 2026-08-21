@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Text } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
@@ -9,12 +9,13 @@ import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
-  type SetupType,
+  setupOptionForChoice,
+  type SetupChoice,
 } from '@/components/org/project-create/setup-types'
 import { Button, ButtonRow } from '@/components/ui'
 import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import { projectOverviewHref } from '@/lib/project-navigation'
+import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { spacing } from '@/lib/theme'
 
 /**
@@ -41,12 +42,18 @@ export function ProjectSetupSection() {
     (environments.length === 1 ? environments[0]?.name?.trim() : undefined) ||
     defaultEnvironmentName
 
-  const [selectedType, setSelectedType] = useState<SetupType | null>(null)
+  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(
+    null,
+  )
+  const selectedOption = selectedChoice
+    ? setupOptionForChoice(selectedChoice) ?? null
+    : null
   const [selectedCode, setSelectedCode] = useState('')
   const configureProject = useConfigureProject(orgId, projectId)
 
   const catalogQuery = useProjectCatalog(orgId, {
-    enabled: selectedType != null && selectedType !== 'docker-compose',
+    enabled:
+      selectedOption != null && selectedOption.type !== 'docker-compose',
   })
 
   const localError =
@@ -54,21 +61,30 @@ export function ProjectSetupSection() {
       ? catalogQuery.error.message
       : configureProject.actionError
 
+  // Where setup hands off. Services lands on the Services tab so the operator
+  // continues in the surface they picked; everything else lands on Overview.
+  const landingSection = selectedOption?.section ?? 'overview'
+  const landingHref = projectComposeSectionHref(
+    orgId,
+    projectId,
+    landingSection,
+  ) as Href
+
   useEffect(() => {
     if (!needsSetup && project) {
-      router.replace(projectOverviewHref(orgId, projectId) as Href)
+      router.replace(landingHref)
     }
-  }, [needsSetup, project, orgId, projectId, router])
+  }, [needsSetup, project, router, landingHref])
 
   const finish = async () => {
-    if (!selectedType) return
+    if (!selectedOption) return
     if (!canManage) {
       setError('You need manage permission to finish setup.')
       return
     }
     setError(null)
     const result = await configureProject.run({
-      type: selectedType,
+      type: selectedOption.type,
       ...(selectedCode ? { code: selectedCode } : {}),
     })
     if (!result.ok) {
@@ -77,18 +93,19 @@ export function ProjectSetupSection() {
       }
       return
     }
-    router.replace(projectOverviewHref(orgId, projectId) as Href)
+    router.replace(landingHref)
   }
 
-  const needsCode = selectedType != null && selectedType !== 'docker-compose'
+  const needsCode =
+    selectedOption != null && selectedOption.type !== 'docker-compose'
   const canFinish =
     canManage &&
-    selectedType != null &&
+    selectedOption != null &&
     (!needsCode || selectedCode.length > 0) &&
     !configureProject.isPending
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
+    <View style={styles.root}>
       <SectionPanel
         title="Finish project setup"
         hint={`${scaffoldedEnvironmentName} already exists. Choose how this project runs — nothing changes until you finish.`}
@@ -107,21 +124,21 @@ export function ProjectSetupSection() {
         <ChoiceGrid>
           {SETUP_TYPE_OPTIONS.map((option) => (
             <SetupTypeChoiceCard
-              key={option.type}
+              key={option.choice}
               option={option}
-              selected={selectedType === option.type}
+              selected={selectedChoice === option.choice}
               disabled={configureProject.isPending || !canManage}
               onPress={() => {
-                setSelectedType(option.type)
+                setSelectedChoice(option.choice)
                 setSelectedCode('')
               }}
             />
           ))}
         </ChoiceGrid>
 
-        {needsCode && selectedType ? (
+        {needsCode && selectedOption && selectedOption.type !== 'docker-compose' ? (
           <CatalogStep
-            type={selectedType}
+            type={selectedOption.type}
             catalog={catalogQuery.data?.catalog ?? []}
             loading={catalogQuery.isLoading}
             selectedCode={selectedCode}
@@ -144,13 +161,14 @@ export function ProjectSetupSection() {
           />
         </ButtonRow>
       </SectionPanel>
-    </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  // Plain View, not a ScrollView: `OrgScreenScroll` already scrolls this screen
+  // and owns its insets. A nested vertical scroll is unbounded on native.
   root: {
     gap: spacing.lg,
-    paddingBottom: spacing.xl,
   },
 })

@@ -19,6 +19,7 @@ export function ComposeBasePanel({
   hideHeader = false,
   hideViewTabs = false,
   showSectionTabs = false,
+  hideSave = false,
   toolbarLeading,
   toolbarTrailing,
 }: Readonly<{
@@ -36,6 +37,8 @@ export function ComposeBasePanel({
   hideViewTabs?: boolean
   /** Overview · Compose · Services inside the editor chrome. */
   showSectionTabs?: boolean
+  /** Hide the Save action for surfaces that commit elsewhere (create wizard). */
+  hideSave?: boolean
   toolbarLeading?: ReactNode
   toolbarTrailing?: ReactNode
 }>) {
@@ -53,6 +56,7 @@ export function ComposeBasePanel({
         sessionKey={sessionKey}
         hideHeader={hideHeader}
         hideViewTabs={hideViewTabs || showSectionTabs}
+        hideSave={hideSave}
         surfaceTabs={showSectionTabs ? <ComposeSurfaceSectionTabs /> : undefined}
         toolbarLeading={toolbarLeading}
         toolbarTrailing={toolbarTrailing}

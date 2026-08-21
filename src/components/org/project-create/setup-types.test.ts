@@ -3,6 +3,7 @@ import {
   SETUP_TYPE_OPTIONS,
   filterSetupCatalog,
   isCatalogEntrySelectable,
+  setupOptionForChoice,
 } from '@/components/org/project-create/setup-types'
 import type { CatalogSummary } from '@/lib/instance-api'
 
@@ -23,22 +24,68 @@ const CATALOG: CatalogSummary[] = [
 ]
 
 describe('SETUP_TYPE_OPTIONS', () => {
-  it('uses short type labels without Docker, From, or Service', () => {
+  it('offers Services second, between Compose and Template', () => {
     expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
       'Compose',
+      'Services',
       'Template',
       'Managed',
     ])
   })
 
-  it('describes compose as a blank slate and managed as handled for you', () => {
-    const compose = SETUP_TYPE_OPTIONS.find((o) => o.type === 'docker-compose')
-    const managed = SETUP_TYPE_OPTIONS.find((o) => o.type === 'managed')
+  it('gives every card a unique choice id — React keys off it, and two cards share a type', () => {
+    const choices = SETUP_TYPE_OPTIONS.map((option) => option.choice)
+    expect(new Set(choices).size).toBe(choices.length)
+    const types = SETUP_TYPE_OPTIONS.map((option) => option.type)
+    expect(new Set(types).size).toBeLessThan(types.length)
+  })
+
+  it('makes Compose and Services the same project type, differing only by tab', () => {
+    const compose = setupOptionForChoice('compose')
+    const services = setupOptionForChoice('services')
+    expect(compose?.type).toBe('docker-compose')
+    expect(services?.type).toBe('docker-compose')
+    expect(compose?.section).toBe('compose')
+    expect(services?.section).toBe('services')
+  })
+
+  it('never opens a compose draft on Overview — the operator picked a surface', () => {
+    for (const option of SETUP_TYPE_OPTIONS) {
+      if (option.type !== 'docker-compose') continue
+      expect(option.section).not.toBe('overview')
+    }
+  })
+
+  it('names YAML on both compose cards — it is what tells them apart', () => {
+    const compose = setupOptionForChoice('compose')
+    const services = setupOptionForChoice('services')
     expect(compose?.description.toLowerCase()).toContain('blank slate')
-    expect(managed?.description.toLowerCase()).toContain('automatically set up')
+    expect(compose?.description).toContain('YAML')
+    expect(services?.description).toContain('YAML')
+  })
+
+  /**
+   * Managed happens to be databases today, but the catalog is meant to grow
+   * past them — the card must not promise a database.
+   */
+  it('keeps engine names and the word database off the Managed card', () => {
+    const managed = setupOptionForChoice('managed')
     expect(managed?.description).not.toContain('Redis')
     expect(managed?.description).not.toContain('ClickHouse')
     expect(managed?.description).not.toContain('PostgreSQL')
+    expect(managed?.description.toLowerCase()).not.toContain('database')
+  })
+
+  /**
+   * TurboPanel is self-hosted: the operator's own servers run the container.
+   * Managed means we configure it, never that we host or run it.
+   */
+  it('says Managed runs on the operator’s own servers, not ours', () => {
+    const managed = setupOptionForChoice('managed')
+    expect(managed?.description.toLowerCase()).toContain('your own servers')
+    for (const option of SETUP_TYPE_OPTIONS) {
+      expect(option.description).not.toMatch(/\bwe run\b|\bwe host\b/i)
+    }
   })
 })
 

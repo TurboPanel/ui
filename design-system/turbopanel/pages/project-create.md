@@ -10,26 +10,82 @@
 ## Flow
 
 1. **Details** (`/projects/new`) — name, optional description, workspace (existing or create). Nothing is written yet.
-2. **Type** — **Compose** / **Template** / **Managed** (not “Docker Compose”, “From Template”, or “Managed Service”)
-3. **Catalog or compose draft** — template or managed engine pick, or a compose YAML draft; **Create project** writes the project with its final type
+2. **Type** — **Compose** / **Services** / **Template** / **Managed** (not “Docker Compose”, “From Template”, or “Managed Service”)
+3. **Catalog or compose draft** — template or managed engine pick, or a compose draft; **Create project** writes the project with its final type
 
 Progress: wizard steps inside one screen — no numbered step chips. Back walks the wizard; a **Cancel** text link under the panel always returns to projects.
 
+## Compose step is the project screen
+
+Choosing **Compose** does not open a wizard-shaped editor. It renders the
+project's **own** surface against an unsaved draft — `ProjectProvider` takes a
+`draft`, and `ProjectShell` + `ProjectOverviewTab` mount exactly as they do for
+a saved project:
+
+- Same **content width** (`layout.contentMaxWidth`), not the 440 form column
+- Same **header**: `Projects ›` breadcrumb, type glyph, editable project name
+  (the rename writes back to the wizard's name field, not a PATCH)
+- Same **Overview · Compose · Services** section tabs — Overview included
+- Same editor, lint panel, and graph view
+
+Differences, and only these: section tabs are local state (there is no URL to
+navigate), the surface shows **no Save** (nothing to patch yet), scope chips and
+the environments panel are hidden (nothing to scope to yet), and every
+project-scoped query is parked so the synthetic id never reaches the API.
+
+It opens on the tab the type card promised — **Compose** or **Services**, never
+Overview. Overview is still one tab away; it is just not where drafting starts,
+because the operator already said which surface they wanted.
+
+Actions sit in a footer below the shell, aligned to the shell's own content
+column: **Back** on the left, **Create project** on the **bottom right**.
+Create is the single commit for this step — never put it in the compose
+surface's toolbar. It disables while the YAML will not parse.
+
 ## Type cards
 
-Leading outline SVG (never emoji) beside each label, accent when selected:
+Leading outline SVG (never emoji) beside each label, accent when selected, and
+**vertically centered against the whole card** — not top-aligned to the label
+line, which leaves it floating when the description wraps to two lines.
 
-| Type | Label | Icon | Copy |
-|------|-------|------|------|
-| `docker-compose` | Compose | Feather / quill | A blank slate for multiple services. |
-| `template` | Template | Page layout blocks | Start from a catalog template with sensible defaults already wired up. |
-| `managed` | Managed | Database cylinder | A service that is automatically set up for you. Provisioning, pooling, backups, and connections are handled. |
+Order is fixed: **Compose, Services, Template, Managed.**
+
+| Choice | Project type | Label | Icon | Opens on | Copy |
+|--------|--------------|-------|------|----------|------|
+| `compose` | `docker-compose` | Compose | Feather / quill | Compose tab | A blank slate. You define the whole stack in YAML. |
+| `services` | `docker-compose` | Services | Compose surface's own Services glyph (2×2 squares) | Services tab | The same stack, defined with service cards instead of YAML. |
+| `template` | `template` | Template | Page layout blocks | Overview | A ready-made stack from the catalog. |
+| `managed` | `managed` | Managed | Database cylinder | Overview | Fully configured on your own servers — provisioning, backups, and connections included. |
+
+Copy voice: plain and factual — two short beats per card, what it is then what
+you do. No swagger, no first-person bragging, no winking asides. Name **YAML**
+explicitly on both compose cards; it is the one word that tells the two apart at
+a glance.
+
+**Managed is not "databases".** The catalog is engines today and is meant to
+grow past them, so the card describes the *treatment* (fully configured) rather
+than the thing. Do not write "database" on it, and do not name engines.
+
+**TurboPanel is self-hosted, and the copy must never forget it.** The operator's
+own servers run every container. Managed means TurboPanel *configures* the
+engine — provisioning, pooling, backups, connection details — not that
+TurboPanel hosts or runs it. Never write "we run it", "we host it", or anything
+that implies our infrastructure is in the path.
+
+`choice` is the React key for these cards. Compose and Services deliberately
+share a `type`, so keying off `type` produces duplicate keys.
+
+**Compose and Services are one project type.** They differ only in which tab of
+the compose surface opens — someone who thinks in service cards never has to
+meet raw YAML to start. The Services card reuses the section tab's own glyph so
+the card and the tab it lands on read as the same thing.
 
 Do not name engines on the Managed card or advertise Redis / ClickHouse as coming.
 
 ## Layout (Details step)
 
-- **Centered single column** — `maxWidth: 440`, vertically centered in the org content area (`flexGrow` + `justifyContent: 'center'`)
+- **Centered single column** — `maxWidth: 440`, horizontally centered (`alignSelf: 'center'`), top-aligned in the org content area
+- **No ScrollView of its own.** `OrgScreenScroll` is the org Stack's `screenLayout`: it already scrolls every org screen and already applies the page's vertical and horizontal insets. Nesting a second vertical ScrollView leaves the inner one unbounded on native, so `flexGrow: 1` + `justifyContent: 'center'` padded the page with dead space above and below on iOS and produced a second scroll surface. Page-level sections use **horizontal** ScrollViews only (wide tables); vertical scrolling is the shell's job.
 - Compact **GlassSurface** panel (not a full-bleed `SectionPanel`); short centered page title + one-line subtitle above the panel
 - Density closer to auth create flows than dense fleet tables — keep fields tight, avoid long panel hints
 - Description is always visible as a **2-line multiline** field (`minHeight` ~72) so longer copy is obvious
@@ -58,8 +114,19 @@ Do not name engines on the Managed card or advertise Redis / ClickHouse as comin
 - ❌ Writing the project before the type is chosen (except resumable setup for already-empty projects)
 - ❌ Requiring a second Production create
 - ❌ Full-bleed / max-width content form on desktop
+- ❌ A vertical `ScrollView` inside a page-level org section — `OrgScreenScroll` owns that
+- ❌ A pull-to-refresh spinner on the wizard — there is nothing to refresh; it must not register a handler
+- ❌ Vertically centering a page by growing it to the viewport; it only works on web and breaks native
 - ❌ Long explanatory paragraphs in the create header
 - ❌ Single-line description that hides multi-line intent
 - ❌ Numbered wizard step chips (1 / 2) on create or setup
+- ❌ A bespoke compose editor for the create flow — the compose step **is** the project screen
+- ❌ Hiding the Overview tab, the project header, or the full content width during the compose step
+- ❌ Putting the compose step's Create button in the editor toolbar instead of the bottom-right footer
+- ❌ Opening the compose step on Overview when the operator chose Compose or Services
+- ❌ Treating Services as its own project type — it is `docker-compose` with a different landing tab
+- ❌ Keying the type cards off `option.type` — Compose and Services share it; key off `option.choice`
+- ❌ Copy implying TurboPanel hosts or runs anything ("we run it", "we host it") — it is self-hosted
+- ❌ Calling Managed "a database" — it is whatever the catalog offers, described by its treatment
 - ❌ Separate draft/runtime status field
 - ❌ Naming Redis / ClickHouse as coming on the Managed type card

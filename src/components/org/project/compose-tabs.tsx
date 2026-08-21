@@ -18,7 +18,10 @@ import {
   seedComposeDraftFromDocument,
   useComposeDraftStore,
 } from '@/components/org/project/compose-draft-context'
-import { useProjectContext } from '@/components/org/project/project-context'
+import {
+  useProjectContext,
+  type ProjectDraft,
+} from '@/components/org/project/project-context'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import {
   ComposeSavedView,
@@ -69,6 +72,15 @@ import {
   resolveEffectiveServerId,
 } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
+
+/** Draft section tab → the editor view the compose surface renders. */
+function draftSectionView(
+  section: ProjectDraft['section'],
+): ComposeEditorView | null {
+  if (section === 'compose') return 'editor'
+  if (section === 'services') return 'visual'
+  return null
+}
 
 function inventoryItem(
   key: string,
@@ -127,7 +139,11 @@ function overviewSaveTrailing(
   isDirty: boolean,
   saving: boolean,
   onSave: () => void,
+  draft?: ProjectDraft | null,
 ): ReactNode {
+  // The create wizard commits from its own footer button, so the draft surface
+  // shows no Save in the toolbar at all.
+  if (draft) return undefined
   if (!isDirty && !saving) return undefined
   return (
     <OverviewSaveButton
@@ -144,12 +160,16 @@ function ComposeEditorPanel({
   saving,
   editView,
   sessionKey,
+  hideSave = false,
+  onDraftChange,
 }: Readonly<{
   document: unknown
   onSave: (compose: ComposeDocument) => Promise<void>
   saving: boolean
   editView: ComposeEditorView
   sessionKey: string
+  hideSave?: boolean
+  onDraftChange?: (compose: ComposeDocument | null) => void
 }>) {
   return (
     <ComposeBasePanel
@@ -161,6 +181,8 @@ function ComposeEditorPanel({
       sessionKey={sessionKey}
       hideHeader
       showSectionTabs
+      {...(onDraftChange ? { onDraftChange } : {})}
+      hideSave={hideSave}
     />
   )
 }
@@ -174,6 +196,7 @@ function ProjectOverviewCompose({
   services,
   containersByService,
   isDirty,
+  draft,
   overviewSource,
   onOverviewSourceChange,
   proposedDoc,
@@ -188,6 +211,7 @@ function ProjectOverviewCompose({
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   isDirty: boolean
+  draft: ProjectDraft | null
   overviewSource: OverviewComposeSource
   onOverviewSourceChange: (source: OverviewComposeSource) => void
   proposedDoc: unknown
@@ -214,7 +238,7 @@ function ProjectOverviewCompose({
       showServiceStatus={false}
       draftSource={isDirty ? overviewSource : undefined}
       onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
-      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave)}
+      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave, draft)}
     />
   )
 }
@@ -315,6 +339,7 @@ function ServicesPanelBody({
   saving,
   isStarted,
   sectionView,
+  draft,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
 }: Readonly<{
@@ -336,6 +361,7 @@ function ServicesPanelBody({
   isStarted: boolean
   /** null = Overview (saved view); editor/visual = Compose/Services tabs. */
   sectionView: ComposeEditorView | null
+  draft: ProjectDraft | null
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
@@ -409,6 +435,9 @@ function ServicesPanelBody({
           saving={saving}
           editView={editView}
           sessionKey={scopeKey}
+          {...(draft
+            ? { hideSave: true, onDraftChange: draft.onDraftChange }
+            : {})}
         />
       )
     }
@@ -422,6 +451,7 @@ function ServicesPanelBody({
         services={services}
         containersByService={containersByService}
         isDirty={isDirty}
+        draft={draft}
         overviewSource={overviewSource}
         onOverviewSourceChange={setOverviewSource}
         proposedDoc={overviewComposeDocument(
@@ -501,6 +531,7 @@ export function ComposeServicesTab() {
     isSystemProject,
     isWorkspaceKindResolved,
     projectAllowsMutations,
+    draft,
   } = useProjectContext()
   const projectServerCount = project
     ? countDistinctProjectServers(project, environments)
@@ -511,13 +542,13 @@ export function ComposeServicesTab() {
     selectedEnvironmentId,
   )
   const storageQuery = useStorage(orgId, storageFilter ?? { projectId }, {
-    enabled: storageFilter != null,
+    enabled: !draft && storageFilter != null,
   })
   const storageCount = storageQuery.data?.storage.length ?? 0
   const bindingsQuery = useEnvironmentBindings(
     orgId,
     selectedEnvironmentId ?? '',
-    { enabled: !baseSelected && Boolean(selectedEnvironmentId) },
+    { enabled: !draft && !baseSelected && Boolean(selectedEnvironmentId) },
   )
   const bindingsCount = bindingsQuery.data?.bindings.length ?? 0
   const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
@@ -525,10 +556,16 @@ export function ComposeServicesTab() {
     orgId,
     selectedEnvironmentId ?? '',
   )
-  const sectionView = parseComposeEditView(pathname, projectId)
+  // A draft owns its section in local state — there is no URL to read it from.
+  const sectionView = draft
+    ? draftSectionView(draft.section)
+    : parseComposeEditView(pathname, projectId)
 
   const servicesEnabled =
-    Boolean(selectedEnvironmentId) && !baseSelected && projectAllowsMutations
+    !draft &&
+    Boolean(selectedEnvironmentId) &&
+    !baseSelected &&
+    projectAllowsMutations
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
     enabled: servicesEnabled,
   })
@@ -550,13 +587,16 @@ export function ComposeServicesTab() {
 
   const handleSaveProjectCompose = useCallback(
     async (compose: ComposeDocument) => {
+      // A draft has no row to PATCH and shows no Save — the wizard's footer
+      // Create button is the only commit path.
+      if (draft) return
       setError(null)
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
         setError(persistProjectCompose.actionError)
       }
     },
-    [persistProjectCompose, setError],
+    [draft, persistProjectCompose, setError],
   )
 
   const handleSaveEnvironmentCompose = useCallback(
@@ -629,10 +669,11 @@ export function ComposeServicesTab() {
           saving={composeSaving}
           isStarted={isStarted}
           sectionView={sectionView}
+          draft={draft}
           onSaveProjectCompose={handleSaveProjectCompose}
           onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
         />
-        <OverviewEnvironmentsPanel />
+        {draft ? null : <OverviewEnvironmentsPanel />}
       </View>
     </View>
   )

@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -11,7 +11,9 @@ import { DetailsStep } from '@/components/org/project-create/details-step'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
-  type SetupType,
+  setupOptionForChoice,
+  type SetupChoice,
+  type SetupTypeOption,
 } from '@/components/org/project-create/setup-types'
 import {
   conflictOrRawError,
@@ -42,8 +44,6 @@ import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 const FORM_MAX_WIDTH = 440
-/** Compose drafting needs room for real YAML lines. */
-const COMPOSE_MAX_WIDTH = 760
 
 /**
  * Wizard position. Nothing is persisted until the final step's Create button,
@@ -73,12 +73,18 @@ function resolveLoadError(
   return null
 }
 
-/** `?type=managed` from the managed overview CTA jumps past the type cards. */
-function parsePreselectedType(
+/**
+ * `?type=managed` from the managed overview CTA jumps past the type cards.
+ * Accepts either a card id (`services`) or a project type (`docker-compose`);
+ * a bare project type resolves to the first card offering it.
+ */
+function parsePreselectedChoice(
   value: string | string[] | undefined,
-): SetupType | null {
-  const found = SETUP_TYPE_OPTIONS.find((option) => option.type === value)
-  return found?.type ?? null
+): SetupChoice | null {
+  const found = SETUP_TYPE_OPTIONS.find(
+    (option) => option.choice === value || option.type === value,
+  )
+  return found?.choice ?? null
 }
 
 /** `compose_invalid` is the control plane's machine code — say it in English. */
@@ -89,8 +95,8 @@ function createErrorMessage(error: string | null | undefined): string | null {
   return conflictOrRawError(error)
 }
 
-function stepForType(type: SetupType): Step {
-  return type === 'docker-compose' ? 'compose' : 'catalog'
+function stepForOption(option: SetupTypeOption): Step {
+  return option.type === 'docker-compose' ? 'compose' : 'catalog'
 }
 
 const STEP_COPY: Record<Step, { title: string; hint: string }> = {
@@ -106,9 +112,11 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   compose: { title: '', hint: '' },
 }
 
-function stepTitle(step: Step, type: SetupType | null): string {
+function stepTitle(step: Step, option: SetupTypeOption | null): string {
   if (step === 'catalog') {
-    return type === 'template' ? 'Choose a template' : 'Choose a database'
+    return option?.type === 'template'
+      ? 'Choose a template'
+      : 'Choose a database'
   }
   return STEP_COPY[step].title
 }
@@ -131,14 +139,15 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const createProject = useCreateProject(orgId)
 
   const [step, setStep] = useState<Step>('details')
-  const [selectedType, setSelectedType] = useState<SetupType | null>(null)
+  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(
+    null,
+  )
   const [selectedCode, setSelectedCode] = useState('')
   /** Seed document handed to the editor; edits come back via onDraftChange. */
-  const [composeSeed] = useState(() => emptyComposeDocument())
-  /** Latest editor draft — `null` while the YAML does not parse. */
-  const [composeDraft, setComposeDraft] = useState<ComposeDocument | null>(
-    composeSeed,
+  const [composeDoc, setComposeDoc] = useState<ComposeDocument>(() =>
+    emptyComposeDocument(),
   )
+  /** Latest editor draft — `null` while the YAML does not parse. */
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
@@ -155,7 +164,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
 
-  const preselectedType = parsePreselectedType(params.type)
+  const preselectedChoice = parsePreselectedChoice(params.type)
+  const selectedOption = selectedChoice
+    ? setupOptionForChoice(selectedChoice) ?? null
+    : null
 
   const catalogQuery = useProjectCatalog(orgId, {
     enabled: step === 'catalog',
@@ -264,19 +276,22 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     if (Object.keys(errors).length > 0) return
 
     setApiError(null)
-    if (preselectedType) {
-      setSelectedType(preselectedType)
-      setStep(stepForType(preselectedType))
+    const preselected = preselectedChoice
+      ? setupOptionForChoice(preselectedChoice)
+      : undefined
+    if (preselected) {
+      setSelectedChoice(preselected.choice)
+      setStep(stepForOption(preselected))
       return
     }
     setStep('type')
   }
 
-  const chooseType = (type: SetupType) => {
-    setSelectedType(type)
+  const chooseType = (option: SetupTypeOption) => {
+    setSelectedChoice(option.choice)
     setSelectedCode('')
     setApiError(null)
-    setStep(stepForType(type))
+    setStep(stepForOption(option))
   }
 
   const goBack = () => {
@@ -309,17 +324,18 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     return result.value.id
   }
 
-  const create = async () => {
-    if (!selectedType) return
+  /**
+   * Commits the wizard. `drafted` arrives from the compose surface's Save slot;
+   * catalog types pass nothing and create straight from the selection.
+   */
+  const create = async (drafted?: ComposeDocument) => {
+    if (!selectedOption) return
+    const selectedType = selectedOption.type
     setApiError(null)
 
     let compose: ComposeDocument | undefined
     if (selectedType === 'docker-compose') {
-      if (!composeDraft) {
-        setApiError('Fix the compose YAML before creating this project.')
-        return
-      }
-      const normalized = normalizeCompose(composeDraft)
+      const normalized = normalizeCompose(drafted ?? composeDoc)
       // A blank draft sends no options at all, so the project lands with the
       // same empty compose a bare compose project has always started with.
       if (!isBlankComposeData(normalized.data)) {
@@ -354,155 +370,144 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     router.replace(projectOverviewHref(orgId, result.value.id) as Href)
   }
 
+  if (step === 'compose') {
+    return (
+      <ComposeStep
+        orgId={orgId}
+        name={displayName}
+        description={description}
+        workspaceId={pickedWorkspaceId}
+        compose={composeDoc}
+        initialSection={selectedOption?.section ?? 'compose'}
+        creating={submitting}
+        error={apiError ?? loadError}
+        onNameChange={setDisplayName}
+        onDraftChange={(next) => {
+          // `null` means the YAML is mid-edit and unparseable — keep the last
+          // good document so Back/forward does not lose the file.
+          if (next) setComposeDoc(next)
+        }}
+        onCreate={() => {
+          void create()
+        }}
+        onBack={goBack}
+      />
+    )
+  }
+
   const copy = STEP_COPY[step]
-  // Compose drafting borrows the project's own compose surface, so it gets the
-  // project's name as its heading rather than a wizard-step title.
-  const title =
-    step === 'compose'
-      ? trimmedProjectName || 'New project'
-      : stepTitle(step, selectedType)
+  const title = stepTitle(step, selectedOption)
   const hint =
     step === 'details'
       ? `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
       : copy.hint
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.root}
-      keyboardShouldPersistTaps="handled"
-      style={styles.scroll}
-    >
-      <View
-        style={[
-          styles.column,
-          { maxWidth: step === 'compose' ? COMPOSE_MAX_WIDTH : FORM_MAX_WIDTH },
-        ]}
-      >
-        <View style={styles.pageHeader}>
-          <Text style={[orgPanelStyles.pageTitle, styles.centeredText]}>
-            {title}
+    <View style={styles.column}>
+      <View style={styles.pageHeader}>
+        <Text style={[orgPanelStyles.pageTitle, styles.centeredText]}>
+          {title}
+        </Text>
+        {hint ? (
+          <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
+            {hint}
           </Text>
-          {hint ? (
-            <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
-              {hint}
-            </Text>
-          ) : null}
-        </View>
-
-        <PanelShell plain={step === 'compose'}>
-            {apiError ?? loadError ? (
-              <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
-            ) : null}
-
-            {scopedWorkspaceBlocked ? (
-              <SystemManagedNotice
-                title="Platform workspace"
-                description="Projects cannot be created in the System workspace. Choose a user workspace below."
-                onBack={() => {
-                  router.replace(`/${orgId}/projects` as Href)
-                }}
-                backLabel="Back to projects"
-              />
-            ) : null}
-
-            {step === 'details' ? (
-              <DetailsStep
-                displayName={displayName}
-                description={description}
-                workspaceMode={workspaceMode}
-                workspaces={workspaces}
-                loadingWorkspaces={loadingWorkspaces}
-                pickedWorkspaceId={pickedWorkspaceId}
-                newWorkspaceNameValue={mirroredWorkspaceName}
-                fieldErrors={fieldErrors}
-                onDisplayNameChange={handleDisplayNameChange}
-                onDescriptionChange={setDescription}
-                onWorkspaceModeChange={handleWorkspaceModeChange}
-                onPickedWorkspaceIdChange={setPickedWorkspaceId}
-                onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
-              />
-            ) : null}
-
-            {step === 'type' ? (
-              <ChoiceGrid>
-                {SETUP_TYPE_OPTIONS.map((option) => (
-                  <SetupTypeChoiceCard
-                    key={option.type}
-                    option={option}
-                    selected={selectedType === option.type}
-                    onPress={() => chooseType(option.type)}
-                  />
-                ))}
-              </ChoiceGrid>
-            ) : null}
-
-            {step === 'catalog' && selectedType && selectedType !== 'docker-compose' ? (
-              <CatalogStep
-                type={selectedType}
-                catalog={catalogQuery.data?.catalog ?? []}
-                loading={catalogQuery.isLoading}
-                error={
-                  catalogQuery.error instanceof Error
-                    ? catalogQuery.error.message
-                    : null
-                }
-                selectedCode={selectedCode}
-                disabled={submitting}
-                onSelect={setSelectedCode}
-              />
-            ) : null}
-
-            {step === 'compose' ? (
-              <ComposeStep
-                document={composeSeed}
-                editable={!submitting}
-                onDraftChange={setComposeDraft}
-              />
-            ) : null}
-
-            <StepActions
-              step={step}
-              submitting={submitting}
-              canCreate={
-                selectedType === 'docker-compose'
-                  ? composeDraft != null
-                  : selectedCode.length > 0
-              }
-              onBack={goBack}
-              onNext={goToTypeStep}
-              onCreate={() => {
-                void create()
-              }}
-            />
-        </PanelShell>
-
-        <Pressable
-          style={[styles.cancelLink, webPointer]}
-          onPress={() => {
-            router.replace(`/${orgId}/projects` as Href)
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-        >
-          <Text style={styles.cancelLinkText}>Cancel</Text>
-        </Pressable>
+        ) : null}
       </View>
-    </ScrollView>
+
+      <PanelShell>
+        {apiError ?? loadError ? (
+          <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
+        ) : null}
+
+        {scopedWorkspaceBlocked ? (
+          <SystemManagedNotice
+            title="Platform workspace"
+            description="Projects cannot be created in the System workspace. Choose a user workspace below."
+            onBack={() => {
+              router.replace(`/${orgId}/projects` as Href)
+            }}
+            backLabel="Back to projects"
+          />
+        ) : null}
+
+        {step === 'details' ? (
+          <DetailsStep
+            displayName={displayName}
+            description={description}
+            workspaceMode={workspaceMode}
+            workspaces={workspaces}
+            loadingWorkspaces={loadingWorkspaces}
+            pickedWorkspaceId={pickedWorkspaceId}
+            newWorkspaceNameValue={mirroredWorkspaceName}
+            fieldErrors={fieldErrors}
+            onDisplayNameChange={handleDisplayNameChange}
+            onDescriptionChange={setDescription}
+            onWorkspaceModeChange={handleWorkspaceModeChange}
+            onPickedWorkspaceIdChange={setPickedWorkspaceId}
+            onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
+          />
+        ) : null}
+
+        {step === 'type' ? (
+          <ChoiceGrid>
+            {SETUP_TYPE_OPTIONS.map((option) => (
+              <SetupTypeChoiceCard
+                key={option.choice}
+                option={option}
+                selected={selectedChoice === option.choice}
+                onPress={() => chooseType(option)}
+              />
+            ))}
+          </ChoiceGrid>
+        ) : null}
+
+        {step === 'catalog' &&
+        selectedOption &&
+        selectedOption.type !== 'docker-compose' ? (
+          <CatalogStep
+            type={selectedOption.type}
+            catalog={catalogQuery.data?.catalog ?? []}
+            loading={catalogQuery.isLoading}
+            error={
+              catalogQuery.error instanceof Error
+                ? catalogQuery.error.message
+                : null
+            }
+            selectedCode={selectedCode}
+            disabled={submitting}
+            onSelect={setSelectedCode}
+          />
+        ) : null}
+
+        <StepActions
+          step={step}
+          submitting={submitting}
+          canCreate={selectedCode.length > 0}
+          onBack={goBack}
+          onNext={goToTypeStep}
+          onCreate={() => {
+            void create()
+          }}
+        />
+      </PanelShell>
+
+      <Pressable
+        style={[styles.cancelLink, webPointer]}
+        onPress={() => {
+          router.replace(`/${orgId}/projects` as Href)
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+      >
+        <Text style={styles.cancelLinkText}>Cancel</Text>
+      </Pressable>
+    </View>
   )
 }
 
-/**
- * Wizard body container. The compose step renders the project's own compose
- * editor surface, which already draws its own frame — wrapping it in the glass
- * panel would nest one container inside another.
- */
-function PanelShell({
-  plain,
-  children,
-}: Readonly<{ plain: boolean; children: ReactNode }>) {
-  if (plain) {
-    return <View style={styles.plainPanelBody}>{children}</View>
-  }
+/** Wizard body container for the form-shaped steps. */
+function PanelShell({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <GlassSurface style={styles.panel} intensity="regular">
       <View style={styles.panelBody}>{children}</View>
@@ -562,18 +567,13 @@ function StepActions({
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  root: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'stretch',
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.md,
-  },
+  // No ScrollView here: `OrgScreenScroll` (the org Stack screen layout) already
+  // scrolls and already applies the page's vertical/horizontal insets. Nesting a
+  // second vertical ScrollView leaves the inner one unbounded on native, which
+  // is what padded the wizard with dead space above and below on iOS.
   column: {
     width: '100%',
+    maxWidth: FORM_MAX_WIDTH,
     alignSelf: 'center',
     gap: spacing.md,
   },

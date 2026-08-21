@@ -280,6 +280,7 @@ function ProjectHeader({
     canOwn,
     isSystemProject,
     projectAllowsMutations,
+    draft,
     setError,
   } = useProjectContext()
   const updateProject = useUpdateProject(orgId, projectId)
@@ -294,6 +295,11 @@ function ProjectHeader({
   const saveName = async () => {
     const trimmed = editName.trim()
     if (trimmed === (project.name?.trim() ?? '')) return
+    // A draft has no row to PATCH — the rename lands in wizard state instead.
+    if (draft) {
+      draft.onProjectNameChange(trimmed)
+      return
+    }
     setError(null)
     const result = await updateProject.run({
       name: trimmed || undefined,
@@ -305,7 +311,7 @@ function ProjectHeader({
     }
   }
 
-  const saving = updateProject.isPending
+  const saving = !draft && updateProject.isPending
   const showMutableChrome = canOwn && projectAllowsMutations
   const projectsHref = `/${orgId}/projects` as Href
   const crumbLinkStyle = StyleSheet.flatten([styles.crumbLink, webPointer])
@@ -413,6 +419,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     needsSetup,
     isWorkspaceKindResolved,
     projectAllowsMutations,
+    draft,
   } = useProjectContext()
   const [deletingProject, setDeletingProject] = useState(false)
 
@@ -424,10 +431,12 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   const hideEnvSelector = managed
     ? activeTab === 'environments' || activeTab === 'overview'
     : true
+  // Drafts have no environments to scope to and no settings to open yet.
   const showScopeSelector =
     Boolean(project) &&
     !managed &&
     !needsSetup &&
+    !draft &&
     activeTab !== 'setup'
 
   // Hold the shell until the owning workspace kind is known so system projects

@@ -13,6 +13,7 @@ import { useEnvironments } from '@/lib/queries/environments'
 import { useProject } from '@/lib/queries/projects'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import { orEmptyArray } from '@/lib/or-empty-array'
+import type { ComposeDocument } from '@/lib/compose'
 import {
   type EnvironmentRecord,
   type ProjectRecord,
@@ -28,12 +29,35 @@ import {
   resolveBaseComposeSelected,
   resolveEnvironmentScopeActive,
   resolveSelectedEnvironmentId,
+  type ComposeProjectTabId,
 } from '@/lib/project-navigation'
 import { queryKeys, useCan } from '@/lib/query-client'
 import {
   isTurbopanelProject,
   systemComponentKey,
 } from '@/lib/system-inventory'
+
+/**
+ * An unsaved project the operator is still composing in the create wizard.
+ * The whole project surface renders against this exactly as it does for a
+ * saved project — same shell, same tabs, same editor — but section navigation
+ * is local state instead of the URL, and there is no Save: the wizard's own
+ * Create button commits the draft by creating the project.
+ */
+export type ProjectDraft = {
+  /** Synthetic record standing in for the row that does not exist yet. */
+  project: ProjectRecord
+  section: ComposeProjectTabId
+  setSection: (section: ComposeProjectTabId) => void
+  /** Header title edits feed back into the wizard's name field. */
+  onProjectNameChange: (name: string) => void
+  /**
+   * Debounced editor edits. `null` means the YAML is mid-edit and unparseable.
+   * The wizard keeps the last good document so Back/forward does not lose the
+   * file, and owns the Create button that commits it.
+   */
+  onDraftChange: (compose: ComposeDocument | null) => void
+}
 
 type ProjectContextValue = {
   orgId: string
@@ -80,6 +104,8 @@ type ProjectContextValue = {
   canOwn: boolean
   canManage: boolean
   needsSetup: boolean
+  /** Non-null only inside the create wizard's compose step. */
+  draft: ProjectDraft | null
   setSelectedEnvironmentId: (id: string | null) => void
   selectBaseCompose: () => void
   invalidateProject: () => Promise<void>
@@ -89,13 +115,29 @@ type ProjectContextValue = {
 
 const ProjectContext = createContext<ProjectContextValue | null>(null)
 
+/** Stable identity so a draft never remounts consumers via a fresh array. */
+const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = []
+
+function resolveNeedsSetup(
+  isDraft: boolean,
+  project: ProjectRecord | null,
+): boolean {
+  if (isDraft || project == null) {
+    return false
+  }
+  return projectNeedsSetup(project)
+}
+
 export function ProjectProvider({
   orgId,
   projectId,
+  draft = null,
   children,
 }: Readonly<{
   orgId: string
   projectId: string
+  /** Renders the surface for an unsaved wizard draft instead of a fetched project. */
+  draft?: ProjectDraft | null
   children: ReactNode
 }>) {
   const router = useRouter()
@@ -106,12 +148,19 @@ export function ProjectProvider({
   const canOwn = useCan('organization', orgId, 'organization:own')
   const canManage = useCan('organization', orgId, 'organization:manage')
 
-  const projectQuery = useProject(orgId, projectId)
-  const environmentsQuery = useEnvironments(orgId, projectId)
+  const isDraft = draft != null
+  // A draft has no row to fetch — every project-scoped query stays parked so
+  // the synthetic id never reaches the API.
+  const projectQuery = useProject(orgId, isDraft ? '' : projectId)
+  const environmentsQuery = useEnvironments(orgId, projectId, {
+    enabled: !isDraft,
+  })
   const workspacesQuery = useWorkspaces(orgId)
 
-  const project = projectQuery.data?.project ?? null
-  const environments = orEmptyArray(environmentsQuery.data?.environments)
+  const project = draft?.project ?? projectQuery.data?.project ?? null
+  const environments = isDraft
+    ? EMPTY_ENVIRONMENTS
+    : orEmptyArray(environmentsQuery.data?.environments)
   const workspaces = orEmptyArray(workspacesQuery.data?.workspaces)
 
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
@@ -121,16 +170,23 @@ export function ProjectProvider({
   const [error, setError] = useState<string | null>(null)
 
   const loading =
-    projectQuery.isLoading ||
-    environmentsQuery.isLoading ||
-    workspacesQuery.isLoading
+    !isDraft &&
+    (projectQuery.isLoading ||
+      environmentsQuery.isLoading ||
+      workspacesQuery.isLoading)
 
   const queryError = useMemo(() => {
+    if (isDraft) return null
     const err =
       projectQuery.error ?? environmentsQuery.error ?? workspacesQuery.error
     if (!err) return null
     return err instanceof Error ? err.message : 'Failed to load project'
-  }, [projectQuery.error, environmentsQuery.error, workspacesQuery.error])
+  }, [
+    isDraft,
+    projectQuery.error,
+    environmentsQuery.error,
+    workspacesQuery.error,
+  ])
 
   useEffect(() => {
     setError(queryError)
@@ -202,24 +258,37 @@ export function ProjectProvider({
   const selectedEnvironment =
     environments.find((env) => env.id === selectedEnvironmentId) ?? null
 
-  const needsSetup = project ? projectNeedsSetup(project) : false
+  // A draft is always Project scope: it has no environments to select and its
+  // section tabs are local state, so nothing may be inferred from the URL.
+  const resolvedBaseSelected = isDraft || baseSelected
+  const resolvedPathEnvironmentId = isDraft ? null : pathEnvironmentId
+  const resolvedEnvironmentScopeActive = isDraft
+    ? false
+    : environmentScopeActive
+  const resolvedSelectedEnvironmentId = isDraft ? null : selectedEnvironmentId
+  const resolvedSelectedEnvironment = isDraft ? null : selectedEnvironment
+
+  const needsSetup = resolveNeedsSetup(isDraft, project)
 
   const owningWorkspace = useMemo(() => {
     if (!project) return null
     return workspaces.find((entry) => entry.id === project.workspaceId) ?? null
   }, [project, workspaces])
 
-  const workspaceKind = owningWorkspace?.kind ?? null
+  const workspaceKind = isDraft ? 'user' : owningWorkspace?.kind ?? null
   const isWorkspaceKindResolved =
+    isDraft ||
     project == null ||
     owningWorkspace != null ||
     (workspacesQuery.isFetched && !workspacesQuery.isLoading)
-  const projectIsSystem = project
-    ? isTurbopanelProject(project, workspaceKind ?? workspaces)
-    : false
+  const projectIsSystem =
+    !isDraft && project
+      ? isTurbopanelProject(project, workspaceKind ?? workspaces)
+      : false
+  // A draft is authored by someone who already passed the org create gate.
   const projectAllowsMutations =
-    isWorkspaceKindResolved && workspaceKind === 'user'
-  const systemComponent = project ? systemComponentKey(project) : null
+    isDraft || (isWorkspaceKindResolved && workspaceKind === 'user')
+  const systemComponent = isDraft || !project ? null : systemComponentKey(project)
 
   const value = useMemo<ProjectContextValue>(
     () => ({
@@ -233,16 +302,17 @@ export function ProjectProvider({
       isSystemProject: projectIsSystem,
       projectAllowsMutations,
       systemComponent,
-      selectedEnvironmentId,
-      selectedEnvironment,
-      pathEnvironmentId,
-      baseSelected,
-      environmentScopeActive,
+      selectedEnvironmentId: resolvedSelectedEnvironmentId,
+      selectedEnvironment: resolvedSelectedEnvironment,
+      pathEnvironmentId: resolvedPathEnvironmentId,
+      baseSelected: resolvedBaseSelected,
+      environmentScopeActive: resolvedEnvironmentScopeActive,
       loading,
       error,
       canOwn,
       canManage,
       needsSetup,
+      draft,
       setSelectedEnvironmentId: setSelectedEnvironmentIdWithRoute,
       selectBaseCompose,
       invalidateProject,
@@ -260,16 +330,17 @@ export function ProjectProvider({
       projectIsSystem,
       projectAllowsMutations,
       systemComponent,
-      selectedEnvironmentId,
-      selectedEnvironment,
-      pathEnvironmentId,
-      baseSelected,
-      environmentScopeActive,
+      resolvedSelectedEnvironmentId,
+      resolvedSelectedEnvironment,
+      resolvedPathEnvironmentId,
+      resolvedBaseSelected,
+      resolvedEnvironmentScopeActive,
       loading,
       error,
       canOwn,
       canManage,
       needsSetup,
+      draft,
       setSelectedEnvironmentIdWithRoute,
       selectBaseCompose,
       invalidateProject,

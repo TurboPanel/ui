@@ -1,7 +1,8 @@
 import Svg, { Path, Rect } from 'react-native-svg'
+import { ComposeVisualIcon } from '@/components/org/compose-view-icons'
 import { ChoiceCard } from '@/components/org/project-create/choice-card'
 import type {
-  SetupType,
+  SetupChoice,
   SetupTypeOption,
 } from '@/components/org/project-create/setup-types'
 import { chrome, colors } from '@/lib/theme'
@@ -98,19 +99,24 @@ function ManagedCylinderGlyph({ size = 22, color }: IconProps) {
 
 /** Leading glyph for a project type choice card. Never emoji. */
 function SetupTypeGlyph({
-  type,
+  choice,
   size = 22,
   color,
 }: Readonly<{
-  type: SetupType
+  choice: SetupChoice
   size?: number
   color: string
 }>) {
-  if (type === 'managed') {
+  if (choice === 'managed') {
     return <ManagedCylinderGlyph size={size} color={color} />
   }
-  if (type === 'template') {
+  if (choice === 'template') {
     return <TemplateLayoutGlyph size={size} color={color} />
+  }
+  // Services reuses the compose surface's own Services tab glyph, so the card
+  // and the tab it lands on read as the same thing.
+  if (choice === 'services') {
+    return <ComposeVisualIcon size={size} color={color} />
   }
   return <ComposeFeatherGlyph size={size} color={color} />
 }
@@ -134,7 +140,7 @@ export function SetupTypeChoiceCard({
       description={option.description}
       selected={selected}
       disabled={disabled}
-      icon={<SetupTypeGlyph type={option.type} color={iconColor} />}
+      icon={<SetupTypeGlyph choice={option.choice} color={iconColor} />}
       onPress={onPress}
     />
   )
