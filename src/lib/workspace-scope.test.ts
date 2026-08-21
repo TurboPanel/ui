@@ -40,7 +40,7 @@ const WORKSPACES: WorkspaceRecord[] = [
 
 const PLATFORM_WORKSPACE: WorkspaceRecord = {
   id: 'ws-platform',
-  name: 'TurboPanel Platform',
+  name: 'TurboPanel',
   description: null,
   organizationId: 'org-1',
   kind: 'turbopanel',
@@ -116,7 +116,7 @@ describe('resolveWorkspaceScope', () => {
     const withPlatform = [WORKSPACES[0]!, PLATFORM_WORKSPACE]
     expect(resolveWorkspaceScope(withPlatform, 'ws-platform')).toEqual({
       id: 'ws-platform',
-      label: 'TurboPanel Platform',
+      label: 'TurboPanel',
       workspace: PLATFORM_WORKSPACE,
     })
   })

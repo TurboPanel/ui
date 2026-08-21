@@ -1249,7 +1249,11 @@ export type ProjectRecord = {
   description: string | null
   workspaceId: string
   metadata: {
-    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | null
+    /**
+     * Read-side type stamp. `system` is platform-owned and read-only — this
+     * client never sends it on create or configure.
+     */
+    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | 'system' | null
     /** Managed engine catalog code (`postgres`, …). */
     code?: string
     /**

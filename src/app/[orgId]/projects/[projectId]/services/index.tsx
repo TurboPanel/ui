@@ -12,9 +12,9 @@ import {
  * `/services/:serviceId`.
  */
 export default function ProjectServicesEditScreen() {
-  const { orgId, projectId, project } = useProjectContext()
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
 
-  if (project && isManagedProject(project)) {
+  if (isSystemProject || (project && isManagedProject(project))) {
     return (
       <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
     )

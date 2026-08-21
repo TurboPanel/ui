@@ -16,6 +16,7 @@ import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import {
+  SYSTEM_PROJECT_METADATA_TYPE,
   isTurbopanelProject,
   isTurbopanelWorkspace,
 } from '@/lib/system-inventory'
@@ -30,6 +31,9 @@ import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 function projectTypeBadge(type: ProjectRecord['metadata']) {
   const projectType = type?.type
+  if (projectType === SYSTEM_PROJECT_METADATA_TYPE) {
+    return null
+  }
   if (projectType === 'managed') {
     return (
       <View style={styles.badgeAccent}>

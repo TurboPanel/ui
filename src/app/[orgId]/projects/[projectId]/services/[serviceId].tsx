@@ -1,9 +1,10 @@
-import { useLocalSearchParams } from 'expo-router'
+import { Redirect, type Href, useLocalSearchParams } from 'expo-router'
 import { Text, View } from 'react-native'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { projectOverviewHref } from '@/lib/project-navigation'
 import { useServices } from '@/lib/queries/services'
 import { spacing } from '@/lib/theme'
 
@@ -17,13 +18,24 @@ export default function ProjectServiceDetailScreen() {
     serviceId: string | string[]
   }>()
   const serviceId = firstParam(rawServiceId)
-  const { orgId, selectedEnvironmentId, canManage } = useProjectContext()
+  const {
+    orgId,
+    projectId,
+    selectedEnvironmentId,
+    canManage,
+    isSystemProject,
+    projectAllowsMutations,
+  } = useProjectContext()
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
-    enabled: Boolean(selectedEnvironmentId && serviceId),
+    enabled: !isSystemProject && Boolean(selectedEnvironmentId && serviceId),
   })
 
   const service =
     servicesQuery.data?.services.find((row) => row.id === serviceId) ?? null
+
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
 
   if (servicesQuery.isLoading) {
     return <Text style={orgPanelStyles.muted}>Loading service…</Text>
@@ -45,7 +57,7 @@ export default function ProjectServiceDetailScreen() {
           orgId={orgId}
           composeServiceName={composeName}
           service={service}
-          canManage={canManage}
+          canManage={canManage && projectAllowsMutations}
         />
       </SectionPanel>
     </View>

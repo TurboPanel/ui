@@ -1,4 +1,8 @@
 import type { ProjectRecord } from '@/lib/instance-api'
+import {
+  SYSTEM_PROJECT_METADATA_TYPE,
+  TURBOPANEL_WORKSPACE_BADGE_LABEL,
+} from '@/lib/system-inventory'
 
 /** True when the project has not yet chosen compose / template / managed. */
 export function projectNeedsSetup(project: ProjectRecord): boolean {
@@ -20,8 +24,20 @@ export function isComposeProject(project: ProjectRecord): boolean {
   return type === 'docker-compose' || type === 'template'
 }
 
+/**
+ * Display classifier only — true when `metadata.type` is the platform `system`
+ * stamp. `isTurbopanelProject` / `workspaceKind` remain the authoritative
+ * read-only gate.
+ */
+export function isSystemProject(project: ProjectRecord): boolean {
+  return project.metadata?.type === SYSTEM_PROJECT_METADATA_TYPE
+}
+
 export function projectTypeLabel(project: ProjectRecord): string {
   const type = project.metadata?.type
+  if (type === SYSTEM_PROJECT_METADATA_TYPE) {
+    return TURBOPANEL_WORKSPACE_BADGE_LABEL
+  }
   if (type === 'managed') return 'Managed'
   if (type === 'template') return 'Template'
   if (type === 'docker-compose') return 'Compose'
@@ -40,7 +56,7 @@ export const COMPOSE_PROJECT_TAB_IDS = [
 
 export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
 
-/** System projects are compose-shaped but never accept mutations from the UI. */
+/** Platform projects never accept mutations from the UI. */
 export function systemProjectAllowsMutations(): boolean {
   return false
 }

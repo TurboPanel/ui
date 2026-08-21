@@ -7,7 +7,9 @@ import {
   isTurbopanelProject,
   isTurbopanelWorkspace,
   SYSTEM_HOSTING_INGRESS_COMPONENT,
+  SYSTEM_MANAGED_HA_COMPONENT,
   SYSTEM_MANAGED_INGRESS_COMPONENT,
+  SYSTEM_SELF_HOST_COMPONENT,
   TURBOPANEL_WORKSPACE_BADGE_LABEL,
   systemComponentKey,
   systemComponentLabel,
@@ -42,11 +44,11 @@ function project(
 }
 
 describe('system-inventory', () => {
-  it('is driven by kind — a user workspace named TurboPanel Platform is not platform', () => {
+  it('is driven by kind — a user workspace named TurboPanel is not platform', () => {
     const namedPlatform = workspace({
       id: 'ws-user-platform',
       kind: 'user',
-      name: 'TurboPanel Platform',
+      name: 'TurboPanel',
     })
     expect(isTurbopanelWorkspace(namedPlatform)).toBe(false)
     expect(TURBOPANEL_WORKSPACE_BADGE_LABEL).toBe('Platform')
@@ -54,11 +56,11 @@ describe('system-inventory', () => {
 
   it('findTurbopanelWorkspace returns the kind=turbopanel row', () => {
     const workspaces = [
-      workspace({ id: 'ws-a', kind: 'user', name: 'TurboPanel Platform' }),
+      workspace({ id: 'ws-a', kind: 'user', name: 'TurboPanel' }),
       workspace({
         id: 'ws-tp',
         kind: 'turbopanel',
-        name: 'TurboPanel Platform',
+        name: 'TurboPanel',
       }),
       workspace({ id: 'ws-b', kind: 'user', name: 'Default' }),
     ]
@@ -151,12 +153,17 @@ describe('system-inventory', () => {
 
   it('systemComponentLabel maps known keys and falls back for unknowns', () => {
     expect(systemComponentLabel(SYSTEM_HOSTING_INGRESS_COMPONENT)).toBe(
-      'Hosting ingress',
+      'HTTP/HTTPS Ingress',
     )
     expect(systemComponentLabel(SYSTEM_MANAGED_INGRESS_COMPONENT)).toBe(
-      'Database ingress',
+      'Database Ingress',
     )
-    expect(systemComponentLabel('turbopanel')).toBe('TurboPanel')
+    expect(systemComponentLabel(SYSTEM_MANAGED_HA_COMPONENT)).toBe(
+      'Database High-Availability',
+    )
+    expect(systemComponentLabel(SYSTEM_SELF_HOST_COMPONENT)).toBe(
+      'Self Hosted TurboPanel Instance',
+    )
     expect(systemComponentLabel('custom-component')).toBe('custom-component')
     expect(systemComponentLabel('  ')).toBe('—')
     expect(systemComponentLabel(null)).toBe('—')

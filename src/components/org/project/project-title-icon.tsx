@@ -1,6 +1,8 @@
 import { StyleSheet, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
+import { PlatformShieldIcon } from '@/components/org/platform-badge'
 import type { ProjectRecord } from '@/lib/instance-api'
+import { SYSTEM_PROJECT_METADATA_TYPE } from '@/lib/system-inventory'
 import { chrome } from '@/lib/theme'
 
 type ProjectType = NonNullable<ProjectRecord['metadata']>['type']
@@ -69,6 +71,7 @@ function accessibilityLabelForType(type: ProjectType | undefined): string {
   if (type === 'managed') return 'Managed project'
   if (type === 'template') return 'Template project'
   if (type === 'docker-compose') return 'Compose project'
+  if (type === SYSTEM_PROJECT_METADATA_TYPE) return 'Platform project'
   return 'Project setup'
 }
 
@@ -87,12 +90,16 @@ function ProjectTypeGlyph({
   if (type === 'docker-compose' || type === 'template') {
     return <ComposeProjectGlyph size={size} color={color} />
   }
+  if (type === SYSTEM_PROJECT_METADATA_TYPE) {
+    return <PlatformShieldIcon size={size} color={color} />
+  }
   return <SetupProjectGlyph size={size} color={color} />
 }
 
 /**
- * Bare type glyph beside the project title — cube (compose), DB (managed), or
- * folder (setup). Layers are reserved for environments. Never emoji.
+ * Bare type glyph beside the project title — cube (compose), DB (managed),
+ * shield (platform), or folder (setup). Layers are reserved for environments.
+ * Never emoji.
  */
 export function ProjectTitleIcon({
   project,

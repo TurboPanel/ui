@@ -11,6 +11,8 @@ export const TURBOPANEL_WORKSPACE_KIND: WorkspaceKind = 'turbopanel'
 /** Idempotency key for the per-server hosting ingress Traefik stack. */
 export const SYSTEM_HOSTING_INGRESS_COMPONENT = 'hosting-ingress'
 export const SYSTEM_MANAGED_INGRESS_COMPONENT = 'managed-ingress'
+export const SYSTEM_MANAGED_HA_COMPONENT = 'managed-ha'
+export const SYSTEM_SELF_HOST_COMPONENT = 'turbopanel'
 
 /**
  * Allowlisted system components that may be restarted via
@@ -20,6 +22,9 @@ export const SYSTEM_OPERATE_COMPONENTS = [
   SYSTEM_HOSTING_INGRESS_COMPONENT,
   SYSTEM_MANAGED_INGRESS_COMPONENT,
 ] as const
+
+/** Read-side `metadata.type` stamp for platform-owned projects (presentation only). */
+export const SYSTEM_PROJECT_METADATA_TYPE = 'system'
 
 export type SystemOperateComponent = (typeof SYSTEM_OPERATE_COMPONENTS)[number]
 
@@ -97,11 +102,13 @@ export function findServerIngressEnvironment(
 export function systemComponentLabel(component: string | null | undefined): string {
   switch (component) {
     case SYSTEM_HOSTING_INGRESS_COMPONENT:
-      return 'Hosting ingress'
+      return 'HTTP/HTTPS Ingress'
     case SYSTEM_MANAGED_INGRESS_COMPONENT:
-      return 'Database ingress'
-    case 'turbopanel':
-      return 'TurboPanel'
+      return 'Database Ingress'
+    case SYSTEM_MANAGED_HA_COMPONENT:
+      return 'Database High-Availability'
+    case SYSTEM_SELF_HOST_COMPONENT:
+      return 'Self Hosted TurboPanel Instance'
     default:
       return component?.trim() || '—'
   }

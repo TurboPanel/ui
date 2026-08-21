@@ -3,7 +3,7 @@ import Svg, { Path } from 'react-native-svg'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { TURBOPANEL_WORKSPACE_BADGE_LABEL } from '@/lib/system-inventory'
 
-function PlatformShieldIcon({
+export function PlatformShieldIcon({
   size = 12,
   color = chrome.accent,
 }: Readonly<{ size?: number; color?: string }>) {

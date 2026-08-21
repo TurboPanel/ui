@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isComposeOrTemplateProject,
+  isComposeProject,
+  isManagedProject,
   isProjectOverviewBasePath,
+  isSystemProject,
   parseComposeEditView,
   parseComposeProjectTab,
   parseProjectEnvironmentId,
@@ -14,12 +18,14 @@ import {
   projectOverviewHref,
   projectServicesEditHref,
   projectTabHref,
+  projectTypeLabel,
   resolveBaseComposeSelected,
   resolveEnvironmentScopeActive,
   resolveSelectedEnvironmentId,
   systemProjectAllowsMutations,
 } from './project-navigation'
 import type { ProjectRecord } from './instance-api'
+import { TURBOPANEL_WORKSPACE_BADGE_LABEL } from './system-inventory'
 
 function project(type?: ProjectRecord['metadata']): ProjectRecord {
   return {
@@ -53,13 +59,19 @@ describe('system project predicates', () => {
     expect(systemProjectAllowsMutations()).toBe(false)
   })
 
-  it('treats system projects as compose-shaped (not managed)', () => {
-    const systemCompose = project({
-      type: 'docker-compose',
+  it('classifies type system as a platform project, not compose or setup', () => {
+    const system = project({
+      type: 'system',
       component: 'hosting-ingress',
     })
-    expect(projectNeedsSetup(systemCompose)).toBe(false)
-    expect(systemCompose.metadata?.type).not.toBe('managed')
+    expect(isSystemProject(system)).toBe(true)
+    expect(isSystemProject(project({ type: 'docker-compose' }))).toBe(false)
+    expect(isComposeProject(system)).toBe(false)
+    expect(isComposeOrTemplateProject(system)).toBe(false)
+    expect(isManagedProject(system)).toBe(false)
+    expect(projectNeedsSetup(system)).toBe(false)
+    expect(projectTypeLabel(system)).toBe(TURBOPANEL_WORKSPACE_BADGE_LABEL)
+    expect(isComposeOrTemplateProject(project(null))).toBe(true)
   })
 })
 

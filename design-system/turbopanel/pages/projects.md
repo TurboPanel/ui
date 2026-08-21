@@ -38,12 +38,13 @@
 
 ## System / platform projects
 
-- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name.
-- Platform workspace display name is **TurboPanel Platform**; badge label is **Platform**.
+- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name. `project.metadata.type === 'system'` is a **display classifier only** — glyph/badge/label selection — and must never be used as the read-only or authorization gate.
+- Platform workspace display name is **TurboPanel**; badge label is **Platform**. Type badge text comes from `projectTypeLabel` → `TURBOPANEL_WORKSPACE_BADGE_LABEL`, not a new literal.
+- `ProjectTitleIcon` (`src/components/org/project/project-title-icon.tsx`) renders `PlatformShieldIcon` from `src/components/org/platform-badge.tsx` for `system`-typed projects instead of the compose cube, with accessible label **Platform project**; colors from `chrome.*` in `src/lib/theme.ts` — no one-off hex, no emoji.
 - System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Networking/Storage chips.
-- Overview shows a platform panel (component key, target server, container status + name) plus optional read-only YAML; Restart when `system:operate` permits.
-- Platform badge label is **Platform** (SVG shield/gear + text — never emoji); paired with existing type badge on the TurboPanel Platform workspace project list.
-- All-workspaces scope hides platform projects; they appear only when the TurboPanel Platform workspace is explicitly selected.
+- Overview shows a platform panel (component key, target server, container status + name) plus optional read-only YAML; Restart when `system:operate` permits. Platform panel copy is HTTP/HTTPS Ingress · Database Ingress · Database High-Availability · Self Hosted TurboPanel Instance via `systemComponentLabel()`.
+- Platform badge label is **Platform** (SVG shield/gear + text — never emoji); paired with existing type badge on the TurboPanel workspace project list.
+- All-workspaces scope hides platform projects; they appear only when the TurboPanel workspace is explicitly selected.
 
 ## Workspace filter
 
@@ -68,6 +69,8 @@
 - ❌ Showing an environment editor with no inheritance / scope statement above it (banner-less editing)  
 - ❌ Stack of empty Settings sections for every resource type (use Add chips inside the gear panel; reveal sections when opened or when data exists)  
 - ❌ Treating a user workspace named “System” as platform-managed  
+- ❌ Gating read-only chrome on `metadata.type` instead of `workspace.kind`
+- ❌ Inventing a parallel platform badge/glyph or label literal instead of reusing `PlatformShieldIcon` / `TURBOPANEL_WORKSPACE_BADGE_LABEL` / `systemComponentLabel()`
 - ❌ Compose editor / lifecycle / delete chrome on system projects  
 - ❌ Reintroducing the under-compose settings strip (settings belong on the scope-chip gear)  
 - ❌ Defaulting the saved-compose view to raw YAML (Overview is diagram-only; YAML is the Compose tab)

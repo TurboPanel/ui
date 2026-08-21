@@ -314,6 +314,7 @@ function workspaceLabel(ws: WorkspaceRecord): string {
   return ws.name?.trim() || ws.id
 }
 
+/** Platform type (`system`) is deliberately excluded. */
 function isComposeProject(project: ProjectRecord): boolean {
   const type = project.metadata?.type
   return type === 'docker-compose' || type == null
