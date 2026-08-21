@@ -1390,6 +1390,12 @@ export type CreateProjectBody = {
   type: 'empty' | 'docker-compose' | 'template' | 'managed'
   code?: string
   /**
+   * Seeds the project's stored options at insert time. The create wizard sends
+   * the compose it drafted so a compose project lands with its YAML already
+   * saved instead of needing a follow-up PATCH.
+   */
+  options?: { compose?: ComposeDocument }
+  /**
    * Pins the scaffolded default environment (org default name, else `Production`)
    * when creating a managed project.
    */

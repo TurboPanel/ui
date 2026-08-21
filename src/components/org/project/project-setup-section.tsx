@@ -1,51 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { useEffect, useState } from 'react'
+import { ScrollView, StyleSheet, Text } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
+import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import {
-  managedCatalogEntryForCode,
-  sortManagedCatalogEntries,
-  type ManagedEngineAvailability,
-} from '@/lib/managed-services'
+  ChoiceCard,
+  ChoiceGrid,
+} from '@/components/org/project-create/choice-card'
+import {
+  SETUP_TYPE_OPTIONS,
+  type SetupType,
+} from '@/components/org/project-create/setup-types'
+import { Button, ButtonRow } from '@/components/ui'
+import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectOverviewHref } from '@/lib/project-navigation'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
-type SetupType = 'docker-compose' | 'template' | 'managed'
-type Step = 'type' | 'catalog'
-
-const TYPE_OPTIONS: {
-  type: SetupType
-  label: string
-  description: string
-}[] = [
-  {
-    type: 'docker-compose',
-    label: 'Docker Compose',
-    description: 'Define a base stack once and override per environment.',
-  },
-  {
-    type: 'template',
-    label: 'From Template',
-    description: 'Start from a catalog template with sensible defaults.',
-  },
-  {
-    type: 'managed',
-    label: 'Managed Service',
-    description: 'Managed databases and engines (Postgres first).',
-  },
-]
-
+/**
+ * Resumable setup for projects that exist without a type — the create wizard
+ * now picks the type before the project is written, so this only serves
+ * projects created empty earlier (or left mid-setup). Selection is local until
+ * Finish setup, matching the wizard: a mis-clicked card costs nothing.
+ */
 export function ProjectSetupSection() {
   const router = useRouter()
   const {
@@ -61,39 +40,16 @@ export function ProjectSetupSection() {
   const scaffoldedEnvironmentName =
     environments.find((env) => env.description === 'Default environment')
       ?.name?.trim() ||
-    (environments.length === 1
-      ? environments[0]?.name?.trim()
-      : undefined) ||
+    (environments.length === 1 ? environments[0]?.name?.trim() : undefined) ||
     defaultEnvironmentName
 
-  const [step, setStep] = useState<Step>('type')
   const [selectedType, setSelectedType] = useState<SetupType | null>(null)
+  const [selectedCode, setSelectedCode] = useState('')
   const configureProject = useConfigureProject(orgId, projectId)
 
   const catalogQuery = useProjectCatalog(orgId, {
-    enabled: step === 'catalog' && selectedType != null,
+    enabled: selectedType != null && selectedType !== 'docker-compose',
   })
-
-  const catalog = useMemo(() => {
-    const raw = catalogQuery.data?.catalog ?? []
-    if (!selectedType) return []
-    const filtered = raw.filter((entry) => {
-      if (selectedType === 'template') return entry.kind === 'template'
-      if (selectedType === 'managed') {
-        return (
-          entry.kind === 'managed' &&
-          managedCatalogEntryForCode(entry.code) !== undefined
-        )
-      }
-      return false
-    })
-    if (selectedType === 'managed') {
-      return sortManagedCatalogEntries(filtered)
-    }
-    return filtered.toSorted((a, b) =>
-      a.displayName.localeCompare(b.displayName),
-    )
-  }, [catalogQuery.data?.catalog, selectedType])
 
   const localError =
     catalogQuery.error instanceof Error
@@ -102,21 +58,20 @@ export function ProjectSetupSection() {
 
   useEffect(() => {
     if (!needsSetup && project) {
-      router.replace(
-        projectOverviewHref(orgId, projectId) as Href,
-      )
+      router.replace(projectOverviewHref(orgId, projectId) as Href)
     }
   }, [needsSetup, project, orgId, projectId, router])
 
-  const finish = async (type: SetupType, code?: string) => {
+  const finish = async () => {
+    if (!selectedType) return
     if (!canManage) {
       setError('You need manage permission to finish setup.')
       return
     }
     setError(null)
     const result = await configureProject.run({
-      type,
-      ...(code ? { code } : {}),
+      type: selectedType,
+      ...(selectedCode ? { code: selectedCode } : {}),
     })
     if (!result.ok) {
       if (configureProject.actionError) {
@@ -124,30 +79,21 @@ export function ProjectSetupSection() {
       }
       return
     }
-    router.replace(
-      projectOverviewHref(orgId, projectId) as Href,
-    )
+    router.replace(projectOverviewHref(orgId, projectId) as Href)
   }
 
-  const onSelectType = (type: SetupType) => {
-    setSelectedType(type)
-    if (type === 'docker-compose') {
-      void finish('docker-compose')
-      return
-    }
-    setStep('catalog')
-  }
-
-  const availability = (code: string): ManagedEngineAvailability => {
-    const entry = managedCatalogEntryForCode(code)
-    return entry?.status ?? 'coming-soon'
-  }
+  const needsCode = selectedType != null && selectedType !== 'docker-compose'
+  const canFinish =
+    canManage &&
+    selectedType != null &&
+    (!needsCode || selectedCode.length > 0) &&
+    !configureProject.isPending
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
       <SectionPanel
         title="Finish project setup"
-        hint={`${scaffoldedEnvironmentName} already exists. Choose how this project runs — you can leave and resume anytime.`}
+        hint={`${scaffoldedEnvironmentName} already exists. Choose how this project runs — nothing changes until you finish.`}
         accent
       >
         {localError ? (
@@ -160,91 +106,46 @@ export function ProjectSetupSection() {
           </Text>
         ) : null}
 
-        {step === 'type' ? (
-          <View style={styles.typeGrid}>
-            {TYPE_OPTIONS.map((option) => (
-              <Pressable
-                key={option.type}
-                style={[
-                  styles.typeCard,
-                  webPointer,
-                  configureProject.isPending && styles.disabled,
-                ]}
-                disabled={configureProject.isPending || !canManage}
-                onPress={() => onSelectType(option.type)}
-                accessibilityRole="button"
-                accessibilityLabel={option.label}
-              >
-                <Text style={styles.typeLabel}>{option.label}</Text>
-                <Text style={styles.typeDescription}>{option.description}</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {step === 'catalog' ? (
-          <View style={styles.catalog}>
-            <Pressable
-              style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+        <ChoiceGrid>
+          {SETUP_TYPE_OPTIONS.map((option) => (
+            <ChoiceCard
+              key={option.type}
+              label={option.label}
+              description={option.description}
+              selected={selectedType === option.type}
+              disabled={configureProject.isPending || !canManage}
               onPress={() => {
-                setStep('type')
-                setSelectedType(null)
+                setSelectedType(option.type)
+                setSelectedCode('')
               }}
-              disabled={configureProject.isPending}
-              accessibilityRole="button"
-              accessibilityLabel="Back to type"
-            >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>← Back</Text>
-            </Pressable>
-            {catalogQuery.isLoading ? (
-              <ActivityIndicator color={chrome.accent} />
-            ) : (
-              <View style={styles.typeGrid}>
-                {catalog.map((entry) => {
-                  const avail =
-                    selectedType === 'managed'
-                      ? availability(entry.code)
-                      : 'available'
-                  const disabled =
-                    configureProject.isPending ||
-                    !canManage ||
-                    (selectedType === 'managed' && avail !== 'available')
-                  return (
-                    <Pressable
-                      key={entry.code}
-                      style={[
-                        styles.typeCard,
-                        webPointer,
-                        disabled && styles.disabled,
-                      ]}
-                      disabled={disabled}
-                      onPress={() => {
-                        if (!selectedType || selectedType === 'docker-compose') {
-                          return
-                        }
-                        void finish(selectedType, entry.code)
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={entry.displayName}
-                      >
-                      <Text style={styles.typeLabel}>{entry.displayName}</Text>
-                      <Text style={styles.typeDescription}>
-                        {entry.description}
-                      </Text>
-                      {selectedType === 'managed' && avail !== 'available' ? (
-                        <Text style={styles.comingSoon}>Coming soon</Text>
-                      ) : null}
-                    </Pressable>
-                  )
-                })}
-              </View>
-            )}
-          </View>
+            />
+          ))}
+        </ChoiceGrid>
+
+        {needsCode && selectedType ? (
+          <CatalogStep
+            type={selectedType}
+            catalog={catalogQuery.data?.catalog ?? []}
+            loading={catalogQuery.isLoading}
+            selectedCode={selectedCode}
+            disabled={configureProject.isPending || !canManage}
+            onSelect={setSelectedCode}
+          />
         ) : null}
 
-        {configureProject.isPending ? (
-          <Text style={orgPanelStyles.muted}>Configuring…</Text>
-        ) : null}
+        <ButtonRow>
+          <Button
+            label="Finish setup"
+            busyLabel="Configuring…"
+            variant="primary"
+            busy={configureProject.isPending}
+            disabled={!canFinish}
+            onPress={() => {
+              void finish()
+            }}
+            accessibilityLabel="Finish setup"
+          />
+        </ButtonRow>
       </SectionPanel>
     </ScrollView>
   )
@@ -254,38 +155,5 @@ const styles = StyleSheet.create({
   root: {
     gap: spacing.lg,
     paddingBottom: spacing.xl,
-  },
-  typeGrid: {
-    gap: spacing.sm,
-  },
-  typeCard: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 10,
-    backgroundColor: colors.bgSecondary,
-    padding: spacing.md,
-    minHeight: 72,
-    gap: spacing.xs,
-  },
-  typeLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  typeDescription: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  catalog: {
-    gap: spacing.md,
-  },
-  comingSoon: {
-    color: colors.pending,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  disabled: {
-    opacity: 0.55,
   },
 })

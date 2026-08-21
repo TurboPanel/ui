@@ -333,7 +333,7 @@ function ManagedEmptyState({
     <EmptyState
       panel
       title="No managed services yet"
-      hint="Provision a managed engine (Postgres first) from the create flow."
+      hint="Provision a managed PostgreSQL, MySQL, or MariaDB engine from the create flow."
       action={
         canManage ? (
           <Button

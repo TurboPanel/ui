@@ -2,8 +2,9 @@ import { useLocalSearchParams } from 'expo-router'
 import { ProjectCreateSection } from '@/components/org/project-create-section'
 
 /**
- * Create-project wizard. Optional `?type=managed` (or `docker-compose` /
- * `template`) preselects that branch — used by the managed overview CTAs.
+ * Create-project wizard: details → type → compose draft or catalog pick →
+ * Create. Optional `?type=managed` (or `docker-compose` / `template`) skips the
+ * type cards — used by the managed overview CTAs.
  */
 export default function NewProjectScreen() {
   const { orgId } = useLocalSearchParams<{

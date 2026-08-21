@@ -1,60 +1,54 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import {
-  Button,
-  EmptyState,
-  FormField,
-  LoadingState,
-  SegmentedControl,
-  TextField,
-} from '@/components/ui'
+  ChoiceCard,
+  ChoiceGrid,
+} from '@/components/org/project-create/choice-card'
+import { parseComposeDraft } from '@/components/org/project-create/compose-draft'
+import { ComposeStep } from '@/components/org/project-create/compose-step'
+import { DetailsStep } from '@/components/org/project-create/details-step'
 import {
-  DESCRIPTION_MAX_LENGTH,
-  DISPLAY_NAME_MAX_LENGTH,
-  displayNameConflictMessage,
-  isDisplayNameTaken,
-  validateDescription,
-  validateDisplayName,
-} from '@/lib/display-name'
-import type { WorkspaceRecord } from '@/lib/instance-api'
+  SETUP_TYPE_OPTIONS,
+  type SetupType,
+} from '@/components/org/project-create/setup-types'
+import {
+  conflictOrRawError,
+  resolveMirroredWorkspaceName,
+  validateProjectCreateFields,
+  type FieldErrors,
+  type WorkspaceMode,
+} from '@/components/org/project-create/validation'
+import { Button, ButtonRow } from '@/components/ui'
+import { isBlankComposeData } from '@/lib/compose'
+import type { ComposeDocument } from '@/lib/instance-api'
 import {
   useCreateProject,
   useCreateWorkspace,
+  useProjectCatalog,
   useProjects,
   useWorkspaces,
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import { projectSetupHref } from '@/lib/project-navigation'
+import { projectOverviewHref } from '@/lib/project-navigation'
 import { userWorkspaces } from '@/lib/system-inventory'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 const FORM_MAX_WIDTH = 440
+/** Compose drafting needs room for real YAML lines. */
+const COMPOSE_MAX_WIDTH = 760
 
-type WorkspaceMode = 'existing' | 'new'
-
-const WORKSPACE_MODE_OPTIONS = [
-  { value: 'existing', label: 'Existing' },
-  { value: 'new', label: 'Create new' },
-] as const
-
-type FieldErrors = {
-  name?: string
-  description?: string
-  workspaceId?: string
-  workspaceName?: string
-}
+/**
+ * Wizard position. Nothing is persisted until the final step's Create button,
+ * so every step is freely reversible.
+ */
+type Step = 'details' | 'type' | 'catalog' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
@@ -69,20 +63,6 @@ function resolveScopedWorkspaceId(
   return undefined
 }
 
-function workspaceLabel(workspace: WorkspaceRecord): string {
-  return workspace.name?.trim() || 'Workspace'
-}
-
-/** Shown / submitted workspace name: mirrors project until the operator overrides. */
-function resolveMirroredWorkspaceName(
-  projectName: string,
-  workspaceName: string,
-  overridden: boolean,
-): string {
-  if (overridden) return workspaceName.trim()
-  return projectName.trim()
-}
-
 function resolveLoadError(
   workspacesError: unknown,
   projectsError: unknown,
@@ -92,229 +72,55 @@ function resolveLoadError(
   return null
 }
 
-function conflictOrRawError(error: string | null | undefined): string | null {
-  if (!error) return null
-  return displayNameConflictMessage(error) ?? error
+/** `?type=managed` from the managed overview CTA jumps past the type cards. */
+function parsePreselectedType(
+  value: string | string[] | undefined,
+): SetupType | null {
+  const found = SETUP_TYPE_OPTIONS.find((option) => option.type === value)
+  return found?.type ?? null
 }
 
-function validateProjectCreateFields(options: {
-  name: string
-  description: string
-  workspaceMode: WorkspaceMode
-  pickedWorkspaceId: string
-  /** Ids the picker offers — existing mode must pick one of these. */
-  allowedWorkspaceIds: readonly string[]
-  newWorkspaceName: string
-  newWorkspaceNameOverridden: boolean
-  projectNames: readonly (string | null | undefined)[]
-  workspaceNames: readonly (string | null | undefined)[]
-}): FieldErrors {
-  const errors: FieldErrors = {}
-  const nameError = validateDisplayName(options.name)
-  if (nameError) errors.name = nameError
-  else if (isDisplayNameTaken(options.name, options.projectNames)) {
-    errors.name =
-      'A project with this name already exists in the organization.'
+/** `compose_invalid` is the control plane's machine code — say it in English. */
+function createErrorMessage(error: string | null | undefined): string | null {
+  if (error === 'compose_invalid') {
+    return 'The control plane rejected this compose file. Fix the reported issues and try again.'
   }
-
-  const descriptionError = validateDescription(options.description)
-  if (descriptionError) errors.description = descriptionError
-
-  if (options.workspaceMode === 'existing') {
-    if (!options.pickedWorkspaceId) {
-      errors.workspaceId = 'Select a workspace.'
-    } else if (
-      !options.allowedWorkspaceIds.includes(options.pickedWorkspaceId)
-    ) {
-      errors.workspaceId = 'Select a user workspace.'
-    }
-    return errors
-  }
-
-  const workspaceName = resolveMirroredWorkspaceName(
-    options.name,
-    options.newWorkspaceName,
-    options.newWorkspaceNameOverridden,
-  )
-  const workspaceNameError = validateDisplayName(workspaceName)
-  if (workspaceNameError) {
-    errors.workspaceName = options.newWorkspaceNameOverridden
-      ? workspaceNameError
-      : 'Project name is required before creating a matching workspace.'
-  } else if (isDisplayNameTaken(workspaceName, options.workspaceNames)) {
-    errors.workspaceName =
-      'A workspace with this name already exists in the organization.'
-  }
-
-  return errors
+  return conflictOrRawError(error)
 }
 
-function WorkspacePickerBody({
-  workspaces,
-  loading,
-  selectedId,
-  onSelect,
-}: Readonly<{
-  workspaces: WorkspaceRecord[]
-  loading: boolean
-  selectedId?: string
-  onSelect: (workspaceId: string) => void
-}>) {
-  if (loading) {
-    return <LoadingState label="Loading workspaces…" />
-  }
-  if (workspaces.length === 0) {
-    return <EmptyState title="No workspaces yet — switch to Create new." />
-  }
-
-  // Single workspace: no need for a tall picker list.
-  if (workspaces.length === 1) {
-    const only = workspaces[0]
-    if (!only) return null
-    return (
-      <View style={styles.singleWorkspace}>
-        <Text style={styles.singleWorkspaceText}>{workspaceLabel(only)}</Text>
-      </View>
-    )
-  }
-
-  return (
-    <View style={styles.workspaceList}>
-      {workspaces.map((ws) => {
-        const selected = selectedId === ws.id
-        return (
-          <Pressable
-            key={ws.id}
-            style={[
-              styles.workspaceOption,
-              selected && styles.workspaceOptionSelected,
-              webPointer,
-            ]}
-            onPress={() => onSelect(ws.id)}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            accessibilityLabel={workspaceLabel(ws)}
-          >
-            <Text style={styles.workspaceOptionText}>
-              {workspaceLabel(ws)}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
+function stepForType(type: SetupType): Step {
+  return type === 'docker-compose' ? 'compose' : 'catalog'
 }
 
-function WorkspacePicker({
-  workspaces,
-  loading,
-  selectedId,
-  error,
-  onSelect,
-}: Readonly<{
-  workspaces: WorkspaceRecord[]
-  loading: boolean
-  selectedId?: string
-  error?: string
-  onSelect: (workspaceId: string) => void
-}>) {
-  return (
-    <View style={styles.fieldBlock}>
-      {workspaces.length > 1 ? (
-        <Text style={styles.subLabel}>Choose workspace</Text>
-      ) : null}
-      <WorkspacePickerBody
-        workspaces={workspaces}
-        loading={loading}
-        selectedId={selectedId}
-        onSelect={onSelect}
-      />
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-    </View>
-  )
+const STEP_COPY: Record<Step, { title: string; hint: string }> = {
+  details: {
+    title: 'New project',
+    hint: 'Name it and pick where it lives. Nothing is created yet.',
+  },
+  type: {
+    title: 'How does it run?',
+    hint: 'Pick a type — you can come back and change it before creating.',
+  },
+  catalog: { title: 'Choose a service', hint: '' },
+  compose: { title: 'Compose file', hint: '' },
 }
 
-function NewWorkspaceFields({
-  value,
-  workspaceNameError,
-  onChange,
-}: Readonly<{
-  value: string
-  workspaceNameError?: string
-  onChange: (name: string) => void
-}>) {
-  return (
-    <TextField
-      label="Workspace name"
-      value={value}
-      onChangeText={onChange}
-      autoCapitalize="words"
-      accessibilityLabel="Workspace name"
-      maxLength={DISPLAY_NAME_MAX_LENGTH}
-      error={workspaceNameError}
-    />
-  )
-}
-
-function ProjectWorkspaceFields({
-  workspaceMode,
-  workspaces,
-  loadingWorkspaces,
-  pickedWorkspaceId,
-  fieldErrors,
-  newWorkspaceNameValue,
-  onWorkspaceModeChange,
-  onPickedWorkspaceIdChange,
-  onNewWorkspaceNameChange,
-}: Readonly<{
-  workspaceMode: WorkspaceMode
-  workspaces: WorkspaceRecord[]
-  loadingWorkspaces: boolean
-  pickedWorkspaceId: string
-  fieldErrors: FieldErrors
-  newWorkspaceNameValue: string
-  onWorkspaceModeChange: (mode: WorkspaceMode) => void
-  onPickedWorkspaceIdChange: (id: string) => void
-  onNewWorkspaceNameChange: (name: string) => void
-}>) {
-  return (
-    <>
-      <FormField label="Workspace">
-        <SegmentedControl
-          options={WORKSPACE_MODE_OPTIONS}
-          value={workspaceMode}
-          onChange={onWorkspaceModeChange}
-          accessibilityLabel="Workspace"
-        />
-      </FormField>
-      {workspaceMode === 'existing' ? (
-        <WorkspacePicker
-          workspaces={workspaces}
-          loading={loadingWorkspaces}
-          selectedId={pickedWorkspaceId}
-          error={fieldErrors.workspaceId}
-          onSelect={onPickedWorkspaceIdChange}
-        />
-      ) : (
-        <NewWorkspaceFields
-          value={newWorkspaceNameValue}
-          workspaceNameError={fieldErrors.workspaceName}
-          onChange={onNewWorkspaceNameChange}
-        />
-      )}
-    </>
-  )
+function stepTitle(step: Step, type: SetupType | null): string {
+  if (step === 'catalog') {
+    return type === 'template' ? 'Choose a template' : 'Choose a database'
+  }
+  return STEP_COPY[step].title
 }
 
 /**
- * Step 1 of project setup: create an empty project (org default environment once).
- * Type / catalog selection continues on the project setup screen.
+ * Create-project wizard: details → type → (compose draft | catalog pick) →
+ * Create. The project, its workspace, and its environment are only written on
+ * the final Create press, so backing out of a mis-clicked type leaves no
+ * half-made project to clean up.
  */
-export function ProjectCreateSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
-  const params = useLocalSearchParams<{ workspaceId?: string }>()
+  const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
   const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
 
@@ -322,6 +128,32 @@ export function ProjectCreateSection({
   const projectsQuery = useProjects(orgId)
   const createWorkspace = useCreateWorkspace(orgId)
   const createProject = useCreateProject(orgId)
+
+  const [step, setStep] = useState<Step>('details')
+  const [selectedType, setSelectedType] = useState<SetupType | null>(null)
+  const [selectedCode, setSelectedCode] = useState('')
+  const [composeYaml, setComposeYaml] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [description, setDescription] = useState('')
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
+  const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [newWorkspaceNameOverridden, setNewWorkspaceNameOverridden] =
+    useState(false)
+  /**
+   * Workspace already created by a Create press whose project insert then
+   * failed — reused on retry so a second press does not collide with the
+   * workspace the first one left behind.
+   */
+  const [createdWorkspaceId, setCreatedWorkspaceId] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [apiError, setApiError] = useState<string | null>(null)
+
+  const preselectedType = parsePreselectedType(params.type)
+
+  const catalogQuery = useProjectCatalog(orgId, {
+    enabled: step === 'catalog',
+  })
 
   const workspaces = useMemo(
     () =>
@@ -340,16 +172,6 @@ export function ProjectCreateSection({
   )
   const loadingWorkspaces = workspacesQuery.isLoading || projectsQuery.isLoading
 
-  const [displayName, setDisplayName] = useState('')
-  const [description, setDescription] = useState('')
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
-  const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
-  const [newWorkspaceName, setNewWorkspaceName] = useState('')
-  const [newWorkspaceNameOverridden, setNewWorkspaceNameOverridden] =
-    useState(false)
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const [apiError, setApiError] = useState<string | null>(null)
-
   const scopedWorkspaceId = resolveScopedWorkspaceId(
     params.workspaceId,
     workspaceScope?.scopeId,
@@ -361,10 +183,7 @@ export function ProjectCreateSection({
     return !allowedWorkspaceIds.includes(scopedWorkspaceId)
   }, [scopedWorkspaceId, loadingWorkspaces, allowedWorkspaceIds])
 
-  const loadError = resolveLoadError(
-    workspacesQuery.error,
-    projectsQuery.error,
-  )
+  const loadError = resolveLoadError(workspacesQuery.error, projectsQuery.error)
 
   useEffect(() => {
     if (workspaces.length === 0 && !loadingWorkspaces) {
@@ -384,10 +203,7 @@ export function ProjectCreateSection({
 
   useEffect(() => {
     if (pickedWorkspaceId) return
-    if (
-      scopedWorkspaceId &&
-      allowedWorkspaceIds.includes(scopedWorkspaceId)
-    ) {
+    if (scopedWorkspaceId && allowedWorkspaceIds.includes(scopedWorkspaceId)) {
       return
     }
     if (workspaces.length === 1) {
@@ -395,9 +211,40 @@ export function ProjectCreateSection({
     }
   }, [workspaces, pickedWorkspaceId, scopedWorkspaceId, allowedWorkspaceIds])
 
-  const submit = async () => {
+  const submitting = createWorkspace.isPending || createProject.isPending
+  const trimmedProjectName = displayName.trim()
+  const mirroredWorkspaceName = resolveMirroredWorkspaceName(
+    trimmedProjectName,
+    newWorkspaceName,
+    newWorkspaceNameOverridden,
+  )
+
+  const handleNewWorkspaceNameChange = (text: string) => {
+    setCreatedWorkspaceId('')
+    // Blank field resumes mirroring the project name as they type.
+    if (text.trim() === '') {
+      setNewWorkspaceNameOverridden(false)
+      setNewWorkspaceName('')
+      return
+    }
+    setNewWorkspaceNameOverridden(true)
+    setNewWorkspaceName(text)
+  }
+
+  /** Both fields can feed the new workspace's name, so either edit invalidates it. */
+  const handleDisplayNameChange = (text: string) => {
+    setCreatedWorkspaceId('')
+    setDisplayName(text)
+  }
+
+  const handleWorkspaceModeChange = (mode: WorkspaceMode) => {
+    setCreatedWorkspaceId('')
+    setWorkspaceMode(mode)
+  }
+
+  const goToTypeStep = () => {
     const errors = validateProjectCreateFields({
-      name: displayName.trim(),
+      name: trimmedProjectName,
       description,
       workspaceMode,
       pickedWorkspaceId,
@@ -411,63 +258,101 @@ export function ProjectCreateSection({
     if (Object.keys(errors).length > 0) return
 
     setApiError(null)
-
-    const trimmedName = displayName.trim()
-    const trimmedDescription = description.trim()
-
-    let workspaceId = pickedWorkspaceId
-    if (workspaceMode === 'new') {
-      const workspaceName = resolveMirroredWorkspaceName(
-    trimmedName,
-        newWorkspaceName,
-        newWorkspaceNameOverridden,
-      )
-      const workspaceResult = await createWorkspace.run({
-        name: workspaceName,
-      })
-      if (!workspaceResult.ok) {
-        setApiError(conflictOrRawError(workspaceResult.error))
-        return
-      }
-      workspaceId = workspaceResult.value.id
-      await workspaceScope?.refreshWorkspaces()
-    } else if (!allowedWorkspaceIds.includes(workspaceId)) {
-      setFieldErrors({ workspaceId: 'Select a user workspace.' })
+    if (preselectedType) {
+      setSelectedType(preselectedType)
+      setStep(stepForType(preselectedType))
       return
     }
+    setStep('type')
+  }
 
-    const result = await createProject.run({
-      type: 'empty',
-      workspaceId,
-      name: trimmedName,
-      ...(trimmedDescription ? { description: trimmedDescription } : {}),
-    })
+  const chooseType = (type: SetupType) => {
+    setSelectedType(type)
+    setSelectedCode('')
+    setApiError(null)
+    setStep(stepForType(type))
+  }
+
+  const goBack = () => {
+    setApiError(null)
+    // `?type=` only skips the type cards on the way forward — Back always walks
+    // through them, so a pinned type is still switchable.
+    setStep(step === 'type' ? 'details' : 'type')
+  }
+
+  /** Resolves the workspace, creating it first when the operator asked for a new one. */
+  const resolveWorkspaceId = async (): Promise<string | null> => {
+    if (workspaceMode !== 'new') {
+      if (!allowedWorkspaceIds.includes(pickedWorkspaceId)) {
+        setFieldErrors({ workspaceId: 'Select a user workspace.' })
+        setStep('details')
+        return null
+      }
+      return pickedWorkspaceId
+    }
+
+    if (createdWorkspaceId) return createdWorkspaceId
+
+    const result = await createWorkspace.run({ name: mirroredWorkspaceName })
     if (!result.ok) {
       setApiError(conflictOrRawError(result.error))
+      return null
+    }
+    setCreatedWorkspaceId(result.value.id)
+    await workspaceScope?.refreshWorkspaces()
+    return result.value.id
+  }
+
+  const create = async () => {
+    if (!selectedType) return
+    setApiError(null)
+
+    let compose: ComposeDocument | undefined
+    if (selectedType === 'docker-compose') {
+      const parsed = parseComposeDraft(composeYaml)
+      if (!parsed.ok) {
+        setApiError(parsed.error)
+        return
+      }
+      // A blank draft sends no options at all, so the project lands with the
+      // same empty compose a bare compose project has always started with.
+      if (!isBlankComposeData(parsed.document.data)) {
+        compose = parsed.document
+      }
+    } else if (!selectedCode) {
+      setApiError(
+        selectedType === 'template'
+          ? 'Choose a template first.'
+          : 'Choose a database engine first.',
+      )
       return
     }
 
-    router.replace(projectSetupHref(orgId, result.value.id) as Href)
-  }
+    const workspaceId = await resolveWorkspaceId()
+    if (!workspaceId) return
 
-  const submitting = createWorkspace.isPending || createProject.isPending
-  const trimmedProjectName = displayName.trim()
-  const mirroredWorkspaceName = resolveMirroredWorkspaceName(
-    trimmedProjectName,
-    newWorkspaceName,
-    newWorkspaceNameOverridden,
-  )
-
-  const handleNewWorkspaceNameChange = (text: string) => {
-    // Blank field resumes mirroring the project name as they type.
-    if (text.trim() === '') {
-      setNewWorkspaceNameOverridden(false)
-      setNewWorkspaceName('')
+    const trimmedDescription = description.trim()
+    const result = await createProject.run({
+      type: selectedType,
+      workspaceId,
+      name: trimmedProjectName,
+      ...(trimmedDescription ? { description: trimmedDescription } : {}),
+      ...(selectedCode ? { code: selectedCode } : {}),
+      ...(compose ? { options: { compose } } : {}),
+    })
+    if (!result.ok) {
+      setApiError(createErrorMessage(result.error))
       return
     }
-    setNewWorkspaceNameOverridden(true)
-    setNewWorkspaceName(text)
+
+    router.replace(projectOverviewHref(orgId, result.value.id) as Href)
   }
+
+  const copy = STEP_COPY[step]
+  const hint =
+    step === 'details'
+      ? `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
+      : copy.hint
 
   return (
     <ScrollView
@@ -475,14 +360,21 @@ export function ProjectCreateSection({
       keyboardShouldPersistTaps="handled"
       style={styles.scroll}
     >
-      <View style={styles.column}>
+      <View
+        style={[
+          styles.column,
+          { maxWidth: step === 'compose' ? COMPOSE_MAX_WIDTH : FORM_MAX_WIDTH },
+        ]}
+      >
         <View style={styles.pageHeader}>
           <Text style={[orgPanelStyles.pageTitle, styles.centeredText]}>
-            New project
+            {stepTitle(step, selectedType)}
           </Text>
-          <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
-            Creates a {defaultEnvironmentName} environment. Choose type next.
-          </Text>
+          {hint ? (
+            <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
+              {hint}
+            </Text>
+          ) : null}
         </View>
 
         <GlassSurface style={styles.panel} intensity="regular">
@@ -502,53 +394,73 @@ export function ProjectCreateSection({
               />
             ) : null}
 
-            <TextField
-              label="Name"
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="My project"
-              autoCapitalize="words"
-              autoFocus
-              accessibilityLabel="Project name"
-              maxLength={DISPLAY_NAME_MAX_LENGTH}
-              error={fieldErrors.name}
-            />
+            {step === 'details' ? (
+              <DetailsStep
+                displayName={displayName}
+                description={description}
+                workspaceMode={workspaceMode}
+                workspaces={workspaces}
+                loadingWorkspaces={loadingWorkspaces}
+                pickedWorkspaceId={pickedWorkspaceId}
+                newWorkspaceNameValue={mirroredWorkspaceName}
+                fieldErrors={fieldErrors}
+                onDisplayNameChange={handleDisplayNameChange}
+                onDescriptionChange={setDescription}
+                onWorkspaceModeChange={handleWorkspaceModeChange}
+                onPickedWorkspaceIdChange={setPickedWorkspaceId}
+                onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
+              />
+            ) : null}
 
-            <TextField
-              label="Description"
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Optional"
-              accessibilityLabel="Project description"
-              maxLength={DESCRIPTION_MAX_LENGTH}
-              multiline
-              numberOfLines={2}
-              textAlignVertical="top"
-              style={styles.descriptionInput}
-              error={fieldErrors.description}
-            />
+            {step === 'type' ? (
+              <ChoiceGrid>
+                {SETUP_TYPE_OPTIONS.map((option) => (
+                  <ChoiceCard
+                    key={option.type}
+                    label={option.label}
+                    description={option.description}
+                    selected={selectedType === option.type}
+                    onPress={() => chooseType(option.type)}
+                  />
+                ))}
+              </ChoiceGrid>
+            ) : null}
 
-            <ProjectWorkspaceFields
-              workspaceMode={workspaceMode}
-              workspaces={workspaces}
-              loadingWorkspaces={loadingWorkspaces}
-              pickedWorkspaceId={pickedWorkspaceId}
-              fieldErrors={fieldErrors}
-              newWorkspaceNameValue={mirroredWorkspaceName}
-              onWorkspaceModeChange={setWorkspaceMode}
-              onPickedWorkspaceIdChange={setPickedWorkspaceId}
-              onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
-            />
+            {step === 'catalog' && selectedType && selectedType !== 'docker-compose' ? (
+              <CatalogStep
+                type={selectedType}
+                catalog={catalogQuery.data?.catalog ?? []}
+                loading={catalogQuery.isLoading}
+                error={
+                  catalogQuery.error instanceof Error
+                    ? catalogQuery.error.message
+                    : null
+                }
+                selectedCode={selectedCode}
+                disabled={submitting}
+                onSelect={setSelectedCode}
+              />
+            ) : null}
 
-            <Button
-              label="Create project"
-              busyLabel="Creating…"
-              variant="primary"
-              busy={submitting}
-              onPress={() => {
-                void submit()
+            {step === 'compose' ? (
+              <ComposeStep
+                yaml={composeYaml}
+                editable={!submitting}
+                onChange={setComposeYaml}
+              />
+            ) : null}
+
+            <StepActions
+              step={step}
+              submitting={submitting}
+              canCreate={
+                selectedType === 'docker-compose' || selectedCode.length > 0
+              }
+              onBack={goBack}
+              onNext={goToTypeStep}
+              onCreate={() => {
+                void create()
               }}
-              accessibilityLabel="Create project"
             />
           </View>
         </GlassSurface>
@@ -568,6 +480,57 @@ export function ProjectCreateSection({
   )
 }
 
+/** Footer buttons: Next on details, Back everywhere after, Create on the last step. */
+function StepActions({
+  step,
+  submitting,
+  canCreate,
+  onBack,
+  onNext,
+  onCreate,
+}: Readonly<{
+  step: Step
+  submitting: boolean
+  canCreate: boolean
+  onBack: () => void
+  onNext: () => void
+  onCreate: () => void
+}>) {
+  if (step === 'details') {
+    return (
+      <Button
+        label="Next"
+        variant="primary"
+        onPress={onNext}
+        accessibilityLabel="Next"
+      />
+    )
+  }
+
+  return (
+    <ButtonRow>
+      <Button
+        label="Back"
+        variant="secondary"
+        disabled={submitting}
+        onPress={onBack}
+        accessibilityLabel="Back"
+      />
+      {step === 'type' ? null : (
+        <Button
+          label="Create project"
+          busyLabel="Creating…"
+          variant="primary"
+          busy={submitting}
+          disabled={!canCreate}
+          onPress={onCreate}
+          accessibilityLabel="Create project"
+        />
+      )}
+    </ButtonRow>
+  )
+}
+
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
@@ -581,7 +544,6 @@ const styles = StyleSheet.create({
   },
   column: {
     width: '100%',
-    maxWidth: FORM_MAX_WIDTH,
     alignSelf: 'center',
     gap: spacing.md,
   },
@@ -601,55 +563,6 @@ const styles = StyleSheet.create({
   panelBody: {
     padding: spacing.lg,
     gap: spacing.md,
-  },
-  fieldBlock: {
-    gap: spacing.xs,
-  },
-  subLabel: {
-    color: colors.textDim,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  descriptionInput: {
-    minHeight: 72,
-    paddingTop: 10,
-    paddingBottom: 10,
-  },
-  workspaceList: {
-    gap: spacing.xs,
-    maxHeight: 160,
-  },
-  workspaceOption: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 40,
-    justifyContent: 'center',
-  },
-  workspaceOptionSelected: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  workspaceOptionText: {
-    color: colors.text,
-    fontSize: 14,
-  },
-  singleWorkspace: {
-    borderWidth: 1,
-    borderColor: colors.borderArea,
-    borderRadius: 8,
-    backgroundColor: colors.bgInset,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 40,
-    justifyContent: 'center',
-  },
-  singleWorkspaceText: {
-    color: colors.textBody,
-    fontSize: 14,
   },
   cancelLink: {
     alignSelf: 'center',
