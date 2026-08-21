@@ -5,10 +5,8 @@ import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
-import {
-  ChoiceCard,
-  ChoiceGrid,
-} from '@/components/org/project-create/choice-card'
+import { ChoiceGrid } from '@/components/org/project-create/choice-card'
+import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
   type SetupType,
@@ -108,10 +106,9 @@ export function ProjectSetupSection() {
 
         <ChoiceGrid>
           {SETUP_TYPE_OPTIONS.map((option) => (
-            <ChoiceCard
+            <SetupTypeChoiceCard
               key={option.type}
-              label={option.label}
-              description={option.description}
+              option={option}
               selected={selectedType === option.type}
               disabled={configureProject.isPending || !canManage}
               onPress={() => {

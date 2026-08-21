@@ -18,25 +18,22 @@ export type SetupTypeOption = {
   description: string
 }
 
-/**
- * Managed copy names the engines on purpose — operators pick this card to stand
- * up a database, so the card has to say which databases it can stand up.
- */
 export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
   {
     type: 'docker-compose',
-    label: 'Docker Compose',
-    description: 'Bring your own compose file. Define a base stack once and override it per environment.',
+    label: 'Compose',
+    description: 'A blank slate for multiple services.',
   },
   {
     type: 'template',
-    label: 'From Template',
+    label: 'Template',
     description: 'Start from a catalog template with sensible defaults already wired up.',
   },
   {
     type: 'managed',
-    label: 'Managed Service',
-    description: 'PostgreSQL, MySQL, or MariaDB — provisioned, pooled, and backed up for you, then bound to services across your projects. Redis and ClickHouse are coming.',
+    label: 'Managed',
+    description:
+      'A service that is automatically set up for you. Provisioning, pooling, backups, and connections are handled.',
   },
 ]
 

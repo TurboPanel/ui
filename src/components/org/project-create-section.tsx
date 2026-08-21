@@ -1,17 +1,14 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
-import {
-  ChoiceCard,
-  ChoiceGrid,
-} from '@/components/org/project-create/choice-card'
-import { parseComposeDraft } from '@/components/org/project-create/compose-draft'
+import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
+import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
   type SetupType,
@@ -24,8 +21,12 @@ import {
   type WorkspaceMode,
 } from '@/components/org/project-create/validation'
 import { Button, ButtonRow } from '@/components/ui'
-import { isBlankComposeData } from '@/lib/compose'
-import type { ComposeDocument } from '@/lib/instance-api'
+import {
+  emptyComposeDocument,
+  isBlankComposeData,
+  normalizeCompose,
+  type ComposeDocument,
+} from '@/lib/compose'
 import {
   useCreateProject,
   useCreateWorkspace,
@@ -102,7 +103,7 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
     hint: 'Pick a type — you can come back and change it before creating.',
   },
   catalog: { title: 'Choose a service', hint: '' },
-  compose: { title: 'Compose file', hint: '' },
+  compose: { title: '', hint: '' },
 }
 
 function stepTitle(step: Step, type: SetupType | null): string {
@@ -132,7 +133,12 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [step, setStep] = useState<Step>('details')
   const [selectedType, setSelectedType] = useState<SetupType | null>(null)
   const [selectedCode, setSelectedCode] = useState('')
-  const [composeYaml, setComposeYaml] = useState('')
+  /** Seed document handed to the editor; edits come back via onDraftChange. */
+  const [composeSeed] = useState(() => emptyComposeDocument())
+  /** Latest editor draft — `null` while the YAML does not parse. */
+  const [composeDraft, setComposeDraft] = useState<ComposeDocument | null>(
+    composeSeed,
+  )
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
@@ -309,15 +315,15 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
     let compose: ComposeDocument | undefined
     if (selectedType === 'docker-compose') {
-      const parsed = parseComposeDraft(composeYaml)
-      if (!parsed.ok) {
-        setApiError(parsed.error)
+      if (!composeDraft) {
+        setApiError('Fix the compose YAML before creating this project.')
         return
       }
+      const normalized = normalizeCompose(composeDraft)
       // A blank draft sends no options at all, so the project lands with the
       // same empty compose a bare compose project has always started with.
-      if (!isBlankComposeData(parsed.document.data)) {
-        compose = parsed.document
+      if (!isBlankComposeData(normalized.data)) {
+        compose = normalized
       }
     } else if (!selectedCode) {
       setApiError(
@@ -349,6 +355,12 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const copy = STEP_COPY[step]
+  // Compose drafting borrows the project's own compose surface, so it gets the
+  // project's name as its heading rather than a wizard-step title.
+  const title =
+    step === 'compose'
+      ? trimmedProjectName || 'New project'
+      : stepTitle(step, selectedType)
   const hint =
     step === 'details'
       ? `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
@@ -368,7 +380,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       >
         <View style={styles.pageHeader}>
           <Text style={[orgPanelStyles.pageTitle, styles.centeredText]}>
-            {stepTitle(step, selectedType)}
+            {title}
           </Text>
           {hint ? (
             <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
@@ -377,8 +389,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           ) : null}
         </View>
 
-        <GlassSurface style={styles.panel} intensity="regular">
-          <View style={styles.panelBody}>
+        <PanelShell plain={step === 'compose'}>
             {apiError ?? loadError ? (
               <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
             ) : null}
@@ -415,10 +426,9 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
             {step === 'type' ? (
               <ChoiceGrid>
                 {SETUP_TYPE_OPTIONS.map((option) => (
-                  <ChoiceCard
+                  <SetupTypeChoiceCard
                     key={option.type}
-                    label={option.label}
-                    description={option.description}
+                    option={option}
                     selected={selectedType === option.type}
                     onPress={() => chooseType(option.type)}
                   />
@@ -444,9 +454,9 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
             {step === 'compose' ? (
               <ComposeStep
-                yaml={composeYaml}
+                document={composeSeed}
                 editable={!submitting}
-                onChange={setComposeYaml}
+                onDraftChange={setComposeDraft}
               />
             ) : null}
 
@@ -454,7 +464,9 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
               step={step}
               submitting={submitting}
               canCreate={
-                selectedType === 'docker-compose' || selectedCode.length > 0
+                selectedType === 'docker-compose'
+                  ? composeDraft != null
+                  : selectedCode.length > 0
               }
               onBack={goBack}
               onNext={goToTypeStep}
@@ -462,8 +474,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
                 void create()
               }}
             />
-          </View>
-        </GlassSurface>
+        </PanelShell>
 
         <Pressable
           style={[styles.cancelLink, webPointer]}
@@ -477,6 +488,25 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
         </Pressable>
       </View>
     </ScrollView>
+  )
+}
+
+/**
+ * Wizard body container. The compose step renders the project's own compose
+ * editor surface, which already draws its own frame — wrapping it in the glass
+ * panel would nest one container inside another.
+ */
+function PanelShell({
+  plain,
+  children,
+}: Readonly<{ plain: boolean; children: ReactNode }>) {
+  if (plain) {
+    return <View style={styles.plainPanelBody}>{children}</View>
+  }
+  return (
+    <GlassSurface style={styles.panel} intensity="regular">
+      <View style={styles.panelBody}>{children}</View>
+    </GlassSurface>
   )
 }
 
@@ -562,6 +592,9 @@ const styles = StyleSheet.create({
   },
   panelBody: {
     padding: spacing.lg,
+    gap: spacing.md,
+  },
+  plainPanelBody: {
     gap: spacing.md,
   },
   cancelLink: {

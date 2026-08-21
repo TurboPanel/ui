@@ -410,6 +410,7 @@ export function ComposeEditorSection({
   sessionKey,
   hideHeader = false,
   hideViewTabs = false,
+  hideSave = false,
   surfaceTabs,
   toolbarLeading,
   toolbarTrailing,
@@ -443,6 +444,11 @@ export function ComposeEditorSection({
    * Overview / Compose / Services navigation).
    */
   hideViewTabs?: boolean
+  /**
+   * Hide the Save action. For surfaces that commit the draft elsewhere (the
+   * create wizard's Create project button), where there is nothing to save yet.
+   */
+  hideSave?: boolean
   /** Surface header tabs (e.g. Overview · Compose · Services). */
   surfaceTabs?: ReactNode
   /** Surface header: Project / environment buttons (right-aligned). */
@@ -913,7 +919,7 @@ export function ComposeEditorSection({
     }
   }, [tab, draft, yaml, baselineYaml])
   // Show Save only when there are unsaved edits (hide for a clean draft).
-  const showSave = isDirty || saving
+  const showSave = !hideSave && (isDirty || saving)
   const canSave = !saving && isDirty
   const serviceCount = useMemo(() => {
     if (hideHeader) return 0

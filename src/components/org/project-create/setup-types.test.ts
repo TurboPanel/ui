@@ -23,12 +23,22 @@ const CATALOG: CatalogSummary[] = [
 ]
 
 describe('SETUP_TYPE_OPTIONS', () => {
-  it('names the managed engines rather than saying "Postgres first"', () => {
+  it('uses short type labels without Docker, From, or Service', () => {
+    expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
+      'Compose',
+      'Template',
+      'Managed',
+    ])
+  })
+
+  it('describes compose as a blank slate and managed as handled for you', () => {
+    const compose = SETUP_TYPE_OPTIONS.find((o) => o.type === 'docker-compose')
     const managed = SETUP_TYPE_OPTIONS.find((o) => o.type === 'managed')
-    expect(managed?.description).toContain('PostgreSQL')
-    expect(managed?.description).toContain('MySQL')
-    expect(managed?.description).toContain('MariaDB')
-    expect(managed?.description).not.toContain('Postgres first')
+    expect(compose?.description.toLowerCase()).toContain('blank slate')
+    expect(managed?.description.toLowerCase()).toContain('automatically set up')
+    expect(managed?.description).not.toContain('Redis')
+    expect(managed?.description).not.toContain('ClickHouse')
+    expect(managed?.description).not.toContain('PostgreSQL')
   })
 })
 

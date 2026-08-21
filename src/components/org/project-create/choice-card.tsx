@@ -21,6 +21,7 @@ export function ChoiceCard({
   selected = false,
   disabled = false,
   badge,
+  icon,
   onPress,
 }: Readonly<{
   label: string
@@ -29,6 +30,8 @@ export function ChoiceCard({
   disabled?: boolean
   /** Trailing note under the description, e.g. "Coming soon". */
   badge?: string
+  /** Leading SVG already colored by the caller. Never emoji. */
+  icon?: ReactNode
   onPress: () => void
 }>) {
   return (
@@ -45,11 +48,24 @@ export function ChoiceCard({
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={label}
     >
-      <Text style={styles.label}>{label}</Text>
-      {description ? (
-        <Text style={styles.description}>{description}</Text>
-      ) : null}
-      {badge ? <Text style={styles.badge}>{badge}</Text> : null}
+      <View style={styles.row}>
+        {icon ? (
+          <View
+            style={styles.icon}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          >
+            {icon}
+          </View>
+        ) : null}
+        <View style={styles.body}>
+          <Text style={styles.label}>{label}</Text>
+          {description ? (
+            <Text style={styles.description}>{description}</Text>
+          ) : null}
+          {badge ? <Text style={styles.badge}>{badge}</Text> : null}
+        </View>
+      </View>
     </Pressable>
   )
 }
@@ -64,6 +80,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.bgSecondary,
     padding: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  icon: {
+    width: 22,
+    height: 22,
+    marginTop: 1,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  body: {
+    flex: 1,
+    minWidth: 0,
     gap: spacing.xs,
   },
   cardSelected: {
