@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Link, type Href } from 'expo-router'
 import {
   ComposeEditorChrome,
   ComposeSurfaceSectionTabs,
@@ -17,69 +16,13 @@ import {
   isBlankComposeData,
   normalizeCompose,
 } from '@/lib/compose'
-import { serviceStatusTone } from '@/lib/container-status'
 import type {
   ContainerRecord,
   ServiceRecord,
 } from '@/lib/instance-api'
-import { projectServiceHref } from '@/lib/project-navigation'
 import { colors, spacing } from '@/lib/theme'
 
 export type OverviewComposeSource = 'proposed' | 'saved'
-
-export function ServicesStatusList({
-  orgId,
-  projectId,
-  services,
-  containersByService,
-}: Readonly<{
-  orgId: string
-  projectId: string
-  services: ServiceRecord[]
-  containersByService: Record<string, ContainerRecord[]>
-}>) {
-  if (services.length === 0) {
-    return <EmptyState title="No services yet." />
-  }
-  return (
-    <View style={styles.list}>
-      {services.map((service) => {
-        const label =
-          service.name?.trim() ||
-          service.composeServiceName ||
-          'Service'
-        const tone = serviceStatusTone(containersByService[service.id] ?? [])
-        return (
-          <Link
-            key={service.id}
-            href={projectServiceHref(orgId, projectId, service.id) as Href}
-            asChild
-          >
-            <Pressable
-              style={StyleSheet.flatten([
-                styles.row,
-                styles.statusRow,
-                webPointer,
-              ])}
-              accessibilityRole="link"
-              accessibilityLabel={`${label}, ${tone.label}`}
-            >
-              <View
-                style={[styles.statusDot, { backgroundColor: tone.color }]}
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-              />
-              <View style={styles.statusTextCol}>
-                <Text style={styles.rowTitle}>{label}</Text>
-                <Text style={styles.rowMeta}>{tone.label}</Text>
-              </View>
-            </Pressable>
-          </Link>
-        )
-      })}
-    </View>
-  )
-}
 
 /**
  * Overview tab: inventory strip + compose topology diagram.
@@ -215,14 +158,6 @@ export function ComposeSavedView({
             Unsaved changes — switch to Saved to compare with the last save.
           </Text>
         ) : null}
-        {showServiceStatus ? (
-          <ServicesStatusList
-            orgId={orgId}
-            projectId={projectId}
-            services={services}
-            containersByService={containersByService}
-          />
-        ) : null}
         {overviewBody}
       </View>
     </ComposeEditorChrome>
@@ -267,33 +202,4 @@ const styles = StyleSheet.create({
   sourceChipTextActive: {
     color: colors.text,
   },
-  list: { gap: spacing.xs },
-  row: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 8,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 52,
-    gap: 2,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
-  statusTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  rowTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  rowMeta: { color: colors.textMuted, fontSize: 13 },
 })

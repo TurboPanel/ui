@@ -46,7 +46,9 @@ export const VISUAL_SERVICE_FIELDS: readonly VisualFieldDef[] = [
     id: 'container_name',
     key: 'container_name',
     label: 'Container name',
-    offerAdd: true,
+    // uuid naming stamps the service UUID; keep rendering when YAML already
+    // has this field so Compose ↔ Services round-trips stay lossless.
+    offerAdd: false,
     defaultValue: '',
   },
   {

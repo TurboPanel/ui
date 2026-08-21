@@ -83,19 +83,18 @@ describe('visual field catalog', () => {
   it('offers only fields with offerAdd when absent', () => {
     expect(addableVisualFields({ image: 'nginx' }).map((f) => f.id)).toEqual([
       'restart',
-      'container_name',
       'build',
     ])
     expect(
       addableVisualFields({ image: 'nginx', restart: 'always' }).map((f) => f.id),
-    ).toEqual(['container_name', 'build'])
+    ).toEqual(['build'])
     expect(
       addableVisualFields({
         image: 'nginx',
         restart: 'always',
         build: { context: '.', dockerfile_inline: 'FROM alpine\n' },
       }).map((f) => f.id),
-    ).toEqual(['container_name'])
+    ).toEqual([])
     expect(
       addableVisualFields({
         image: 'nginx',
@@ -111,6 +110,14 @@ describe('visual field catalog', () => {
     expect(ports?.offerAdd).toBe(false)
     expect(serviceHasVisualField({ ports: ['8080:80'] }, ports!)).toBe(true)
     expect(serviceHasVisualField({ image: 'nginx' }, ports!)).toBe(false)
+    const containerName = VISUAL_SERVICE_FIELDS.find(
+      (f) => f.id === 'container_name',
+    )
+    expect(containerName?.offerAdd).toBe(false)
+    expect(
+      serviceHasVisualField({ container_name: 'adminer' }, containerName!),
+    ).toBe(true)
+    expect(serviceHasVisualField({ image: 'nginx' }, containerName!)).toBe(false)
   })
 
   it('registers the Dockerfile (build) field for add/remove plumbing', () => {

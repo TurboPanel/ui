@@ -23,6 +23,7 @@ import {
   type ProjectDraft,
 } from '@/components/org/project/project-context'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
+import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
 import {
   ComposeSavedView,
   type OverviewComposeSource,
@@ -340,6 +341,7 @@ function ServicesPanelBody({
   isStarted,
   sectionView,
   draft,
+  canMutate,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
 }: Readonly<{
@@ -362,6 +364,7 @@ function ServicesPanelBody({
   /** null = Overview (saved view); editor/visual = Compose/Services tabs. */
   sectionView: ComposeEditorView | null
   draft: ProjectDraft | null
+  canMutate: boolean
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
@@ -383,6 +386,11 @@ function ServicesPanelBody({
   const isDirty = isComposeDraftDirty(liveSnapshot)
   const [overviewSource, setOverviewSource] =
     useState<OverviewComposeSource>('proposed')
+  // Scope key the user chose to start an override in — a blank overlay has
+  // nothing to seed the draft store with, so the intent is tracked here.
+  const [overrideStartedKey, setOverrideStartedKey] = useState<string | null>(
+    null,
+  )
 
   useEffect(() => {
     if (isDirty) {
@@ -483,6 +491,31 @@ function ServicesPanelBody({
   }
 
   if (editing) {
+    const inheriting =
+      resolveComposeOverlayState(selectedEnvironment.options?.compose).blank
+      && !isDirty
+      && overrideStartedKey !== scopeKey
+    if (inheriting) {
+      return (
+        <ComposeInheritedPanel
+          view={editView}
+          projectCompose={project.options?.compose}
+          projectYaml={seedComposeDraftFromDocument(project.options?.compose).yaml}
+          canMutate={canMutate}
+          onCreateOverride={() => setOverrideStartedKey(scopeKey)}
+          onCopyProjectCompose={() => {
+            const seeded = seedComposeDraftFromDocument(project.options?.compose)
+            draftStore.setSnapshot(scopeKey, {
+              draft: seeded.draft,
+              yaml: seeded.yaml,
+              baselineYaml:
+                seedComposeDraftFromDocument(savedDocument).baselineYaml,
+            })
+            setOverrideStartedKey(scopeKey)
+          }}
+        />
+      )
+    }
     return (
       <ComposeEditorPanel
         document={selectedEnvironment.options?.compose}
@@ -670,6 +703,7 @@ export function ComposeServicesTab() {
           isStarted={isStarted}
           sectionView={sectionView}
           draft={draft}
+          canMutate={canManage && projectAllowsMutations}
           onSaveProjectCompose={handleSaveProjectCompose}
           onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
         />
