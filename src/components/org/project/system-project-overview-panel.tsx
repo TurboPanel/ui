@@ -257,7 +257,7 @@ export function SystemProjectOverviewPanel() {
     environmentId ? { environmentId } : undefined,
     {
       enabled: environmentId != null && !baseSelected,
-      refetchInterval: false,
+      observeUntilHostDeployed: true,
     },
   )
 

@@ -20,6 +20,7 @@ export type EnvironmentStatusTone = {
 export {
   hasHostDeployedContainers,
   isActiveContainerStatus,
+  systemContainerObservationInterval,
 } from '@/lib/container-status-guards'
 
 export function serviceStatusTone(containers: ContainerRecord[]): ServiceStatusTone {

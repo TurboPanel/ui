@@ -29,3 +29,18 @@ export function hasHostDeployedContainers(
     )
   })
 }
+
+/**
+ * Poll interval for inspect-only platform inventory (self-host database /
+ * queue / analytics) until `system.reconcile` stamps a Docker id. Empty lists
+ * are still loading — do not poll those. Compose overview must not use this
+ * (`refetchInterval: false` except after a tracked command).
+ */
+export function systemContainerObservationInterval(
+  containers: ContainerRecord[] | undefined,
+  pollMs: number,
+): number | false {
+  if (!containers || containers.length === 0) return false
+  if (hasHostDeployedContainers(containers)) return false
+  return pollMs
+}

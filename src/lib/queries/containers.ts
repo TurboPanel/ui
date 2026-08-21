@@ -1,7 +1,18 @@
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
+import { systemContainerObservationInterval } from '@/lib/container-status-guards'
 import { fetchContainers, type ContainerRecord } from '@/lib/instance-api'
+import { COMMAND_POLL_MS } from '@/lib/queries/commands'
 import { queryKeys, type ContainerListFilters } from '@/lib/query-keys'
+
+function observationRefetchInterval(query: {
+  state: { data?: { containers?: ContainerRecord[] } }
+}): number | false {
+  return systemContainerObservationInterval(
+    query.state.data?.containers,
+    COMMAND_POLL_MS,
+  )
+}
 
 /**
  * Filtered container lists use `keepPreviousData` so chip/filter changes do not
@@ -14,6 +25,11 @@ export function useContainers(
   options?: Readonly<{
     enabled?: boolean
     refetchInterval?: number | false
+    /**
+     * Poll until allocator pins gain a Docker id / post-create status.
+     * Platform (system) projects only — compose overview stays one-shot.
+     */
+    observeUntilHostDeployed?: boolean
     keepPreviousData?: boolean
   }>,
 ) {
@@ -24,25 +40,34 @@ export function useContainers(
     queryKey: queryKeys.org(orgId).containers.list(filters),
     queryFn: () => fetchContainers(filters),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
-    refetchInterval: options?.refetchInterval ?? false,
+    refetchInterval: options?.observeUntilHostDeployed
+      ? observationRefetchInterval
+      : (options?.refetchInterval ?? false),
     ...(useKeepPrevious ? { placeholderData: keepPreviousData } : {}),
   })
 }
 
-/** Per-environment container maps for Overview (no auto-poll). */
+/** Per-environment container maps for Overview (no auto-poll unless observing). */
 export function useContainersByEnvironments(
   orgId: string,
   environmentIds: readonly string[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{
+    enabled?: boolean
+    /** Platform (system) projects: poll until Docker identity is stamped. */
+    observeUntilHostDeployed?: boolean
+  }>,
 ) {
   const queryClient = useQueryClient()
   const enabled = (options?.enabled ?? true) && orgId.length > 0
+  const observeUntilHostDeployed = options?.observeUntilHostDeployed === true
   const queries = useQueries({
     queries: environmentIds.map((environmentId) => ({
       queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
       queryFn: () => fetchContainers({ environmentId }),
       enabled: enabled && environmentId.length > 0,
-      refetchInterval: false as const,
+      refetchInterval: observeUntilHostDeployed
+        ? observationRefetchInterval
+        : false,
     })),
   })
 

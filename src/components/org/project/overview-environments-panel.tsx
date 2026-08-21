@@ -875,6 +875,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     baseSelected,
     setSelectedEnvironmentId,
     invalidateEnvironments,
+    isSystemProject,
     canManage,
     projectAllowsMutations,
   } = useProjectContext()
@@ -901,7 +902,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   )
   const [deployConfirmBusy, setDeployConfirmBusy] = useState(false)
 
-  const containersQuery = useContainersByEnvironments(orgId, environmentIds)
+  const containersQuery = useContainersByEnvironments(orgId, environmentIds, {
+    observeUntilHostDeployed: isSystemProject,
+  })
   const containersByEnv = containersQuery.containersByEnv
   const loading = containersQuery.isLoading
   const canMutateLifecycle = canManage && projectAllowsMutations

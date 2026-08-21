@@ -438,7 +438,9 @@ export function ProjectScopeSelector() {
     () => environments.map((env) => env.id),
     [environments],
   )
-  const containersQuery = useContainersByEnvironments(orgId, environmentIds)
+  const containersQuery = useContainersByEnvironments(orgId, environmentIds, {
+    observeUntilHostDeployed: isSystemProject,
+  })
   const containersByEnv = containersQuery.containersByEnv
 
   const showSettings = !isSystemProject && projectAllowsMutations

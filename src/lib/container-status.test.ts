@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   environmentStatusTone,
   serviceStatusTone,
+  systemContainerObservationInterval,
 } from '@/lib/container-status'
 import type { ContainerRecord } from '@/lib/instance-api'
 import { colors } from '@/lib/theme'
@@ -117,5 +118,32 @@ describe('environmentStatusTone', () => {
     expect(
       environmentStatusTone([container({ status: 'pending' })]),
     ).toEqual({ color: colors.textMuted, label: 'Unknown' })
+  })
+})
+
+describe('systemContainerObservationInterval', () => {
+  const pollMs = 2000
+
+  it('does not poll while the list is empty or still loading', () => {
+    expect(systemContainerObservationInterval(undefined, pollMs)).toBe(false)
+    expect(systemContainerObservationInterval([], pollMs)).toBe(false)
+  })
+
+  it('polls allocator pins until a Docker id is stamped', () => {
+    expect(
+      systemContainerObservationInterval(
+        [container({ status: 'pending', containerId: '' })],
+        pollMs,
+      ),
+    ).toBe(pollMs)
+  })
+
+  it('stops polling once inventory is host-deployed', () => {
+    expect(
+      systemContainerObservationInterval(
+        [container({ status: 'running' })],
+        pollMs,
+      ),
+    ).toBe(false)
   })
 })

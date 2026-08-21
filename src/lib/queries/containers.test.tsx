@@ -63,4 +63,22 @@ describe('containers query hooks', () => {
     expect(result.current.containersByEnv['env-a']).toHaveLength(1)
     expect(result.current.containersByEnv['env-b']).toHaveLength(1)
   })
+
+  it('useContainers accepts observeUntilHostDeployed without changing the fetch', async () => {
+    fetchContainers.mockResolvedValueOnce({
+      containers: [{ id: 'ctr-1', serviceId: 'svc-1', status: 'pending', containerId: '' }],
+    })
+
+    const { result } = renderHook(
+      () =>
+        useContainers(orgId, { environmentId }, { observeUntilHostDeployed: true }),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchContainers).toHaveBeenCalledWith({ environmentId })
+    expect(result.current.data?.containers).toHaveLength(1)
+  })
 })

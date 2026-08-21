@@ -156,7 +156,7 @@ All instance/server state goes through React Query. Do **not** add new `useEffec
 - Sign-out calls `queryClient.clear()` so a second account never sees the previous cache.
 - Show-once secrets (managed root/user passwords, generated variable secrets) stay in component state from the mutation result — **never** `setQueryData` them.
 - Polling uses query `refetchInterval` (function form when conditional): servers list 30 s, **2 s while any listed host is Initializing**; update-status while `status === 'updating'`; commands via `useCommandsBatch` (`COMMAND_POLL_MS` in `src/lib/queries/commands.ts`); managed status only while `provisioning` / `applying`; metrics cadence 1 h/6 h → 60 s, 24 h → 300 s, longer → `false`. An empty fleet is idle (30 s) — do not treat a self-hosted empty org as “waiting for the colocated host.”
-- Containers on Project Overview: `refetchInterval: false` — refresh only on explicit **Refresh** or after a tracked command reaches terminal status.
+- Containers on Project Overview: `refetchInterval: false` — refresh only on explicit **Refresh** or after a tracked command reaches terminal status. **Exception:** inspect-only platform (system) projects poll with `observeUntilHostDeployed` until allocator pins gain a Docker id, because `system.reconcile` is not a user Deploy action.
 - O(1) fleet reads: one `useOrgServers` / one batch update-status query — never per-server queries or `fetchServerCell` with an interval on overview.
 - `useCan` remains a display hint; server 403s remain authoritative via the global forbidden seam.
 - Manage-gated reads that must not sign the user out (e.g. org default environment) catch `isForbiddenError` inside `queryFn` and return a fallback so the global handler is not invoked.
