@@ -14,11 +14,7 @@ import {
 } from '@/components/org/deploy-preview-panel'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import {
-  composeDocumentToYaml,
-  mergeComposeOverlay,
-  stripComposePlacement,
-} from '@/lib/compose'
+import { composePreviewMergedYaml } from '@/lib/compose'
 import { colors, layout, spacing } from '@/lib/theme'
 
 export type ComposePreviewMode = 'merged' | 'prepared'
@@ -34,28 +30,14 @@ const MODE_OPTIONS: readonly {
   {
     id: 'merged',
     label: 'Merged',
-    hint: 'Project base and environment overrides together, including TurboPanel service metadata.',
+    hint: 'Project base and environment overrides together, including TurboPanel service metadata and the environment server pin.',
   },
   {
     id: 'prepared',
     label: 'Prepared',
-    hint: 'Deploy-ready document after variables, naming, and traditional-web split — what the host receives.',
+    hint: 'Deploy-ready document after variables, naming, placement, and traditional-web split — what the host receives.',
   },
 ]
-
-function mergedComposeYaml(
-  projectCompose: unknown,
-  environmentCompose: unknown,
-): string {
-  // Keep per-service `x-turbopanel` in preview so operators can audit
-  // serviceKind / engine / description before deploy. Placement is never
-  // stored in compose — strip it if a stale client still embeds it.
-  return composeDocumentToYaml(
-    stripComposePlacement(
-      mergeComposeOverlay(projectCompose, environmentCompose),
-    ),
-  )
-}
 
 function resolvePreviewSubtitle(
   isConfirm: boolean,
@@ -264,7 +246,11 @@ export function PreviewDeploymentModal({
     visible && mode === 'prepared',
   )
 
-  const mergedYaml = mergedComposeYaml(projectCompose, environmentCompose)
+  const mergedYaml = composePreviewMergedYaml(
+    projectCompose,
+    environmentCompose,
+    placementServerId,
+  )
 
   const handleClose = () => {
     if (deploying) return

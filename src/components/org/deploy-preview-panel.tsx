@@ -11,6 +11,7 @@ import {
   type DeployPreviewServer,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
+import { preparedPerServerCompose } from '@/lib/deploy-preview-display'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
   if (warning.code === 'health_check_missing') {
@@ -119,8 +120,8 @@ function secretPlanLine(entry: DeployPreviewSecretPlanEntry): string {
 function PreparedComposeSnapshot({
   preview,
 }: Readonly<{ preview: DeployPreviewResponse }>) {
-  const runtimeFile = runtimeComposeFile(preview)
-  const servers = preview.servers ?? []
+  const servers = preparedPerServerCompose(preview.servers)
+  const runtimeFile = servers.length > 0 ? undefined : runtimeComposeFile(preview)
   const envFile = preview.envFile?.trim() ?? ''
   const secretPlan = preview.secretPlan ?? []
 
@@ -218,7 +219,9 @@ function preparedPreviewError(
 /**
  * Fetch + gate the server-prepared deploy preview (variables resolved,
  * container/volume names, traditional-web split). Callers control `enabled`
- * so only the active UI mode hits the network (`refetchInterval: false`).
+ * so only the active UI mode hits the network (`refetchInterval: false`,
+ * `staleTime: 0` — default client cache is 5 minutes, which would otherwise
+ * keep a Prepared snapshot from before the last pin/compile change).
  * Placement is not required to fetch — Phase 2 may succeed without an env pin
  * when a default server or fleet exists. A 409 `server_placement_required`
  * is the only client-side “select a server” gate.

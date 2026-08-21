@@ -21,6 +21,7 @@ import {
   listServersWithReportedPrivateAddresses,
   listServersWithReportedPrivateNetworks,
   listServersWithoutMembership,
+  memberAssignEmptyCopy,
   mergeDatacenterOptions,
   pruneSelectedIds,
   reportedCidrForAddress,
@@ -358,7 +359,12 @@ describe('subnetForAddress', () => {
 })
 
 describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => {
-  it('excludes already-pinned addresses and offers both families', () => {
+  const siteSubnets = [
+    subnet({ id: 'v4', cidr: '10.0.0.0/24', version: 4 }),
+    subnet({ id: 'v6', cidr: '2001:db8::/64', version: 6 }),
+  ]
+
+  it('excludes already-pinned addresses and offers both families in site CIDRs', () => {
     const server = {
       id: 'a',
       ips: ips([
@@ -366,16 +372,16 @@ describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => 
         privateIp('2001:db8::5', '2001:db8::/64'),
       ]),
     }
-    expect(candidateMemberNetworks(server, ['10.0.0.5'])).toEqual([
+    expect(candidateMemberNetworks(server, ['10.0.0.5'], siteSubnets)).toEqual([
       {
         address: '2001:db8::5',
         cidr: '2001:db8::/64',
         cidrSource: 'reported',
       },
     ])
-    expect(candidateMemberNetworks(server, []).map((row) => row.address)).toEqual(
-      ['10.0.0.5', '2001:db8::5'],
-    )
+    expect(
+      candidateMemberNetworks(server, [], siteSubnets).map((row) => row.address),
+    ).toEqual(['10.0.0.5', '2001:db8::5'])
     expect(
       listServersWithCandidateAddresses(
         [
@@ -384,8 +390,39 @@ describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => 
           { id: 'c', ips: ips([privateIp('10.0.0.5', '10.0.0.0/24')]) },
         ],
         ['10.0.0.5'],
+        siteSubnets,
       ).map((row) => row.id),
-    ).toEqual(['a', 'b'])
+    ).toEqual(['a'])
+  })
+
+  it("omits reported IPs that fall outside this datacenter's subnets", () => {
+    const server = {
+      id: 'a',
+      ips: ips([
+        privateIp('10.0.0.5', '10.0.0.0/24'),
+        privateIp('10.0.1.9', '10.0.1.0/24'),
+        privateIp('fd00::1', 'fd00::/64'),
+      ]),
+    }
+    expect(
+      candidateMemberNetworks(server, [], [
+        subnet({ id: 'v4', cidr: '10.0.0.0/24', version: 4 }),
+      ]).map((row) => row.address),
+    ).toEqual(['10.0.0.5'])
+    expect(
+      candidateMemberNetworks(server, [], []).map((row) => row.address),
+    ).toEqual([])
+  })
+})
+
+describe('memberAssignEmptyCopy', () => {
+  it('tells operators to add a subnet before pinning when none exist', () => {
+    expect(memberAssignEmptyCopy(0)).toBe(
+      "Add a subnet first. Member IPs must fall inside this datacenter's ranges.",
+    )
+    expect(memberAssignEmptyCopy(2)).toBe(
+      "No unpinned private IPs fall inside this datacenter's subnets.",
+    )
   })
 })
 

@@ -67,6 +67,8 @@ const containerRoleBadgeVariants: Record<
 > = {
   service: null,
   ingress: {
+    // Protocol-neutral: HTTP Traefik and the SQL ProxySQL frontend. Do not
+    // "clarify" this label to Traefik.
     label: 'Ingress',
     badge: {
       borderColor: colors.borderChip,

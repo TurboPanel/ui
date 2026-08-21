@@ -333,7 +333,11 @@ function containerDisplayName(container: ContainerRecord): string {
   return container.containerName || container.composeServiceName || container.id
 }
 
-/** Service rows first (existing ordinal order), then the single ingress row. */
+/**
+ * Service rows first (existing ordinal order), then tenant Traefik `-in`
+ * ingress rows. The ingress partition does not cover ProxySQL — that row
+ * lives on the `managed-ingress` system service.
+ */
 function partitionContainersForDisplay(
   containers: ContainerRecord[],
 ): ContainerRecord[] {

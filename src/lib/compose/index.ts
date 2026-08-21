@@ -9,6 +9,7 @@
  */
 
 import { hideComposeTurbopanelExtensions as hideTurboExtensions } from './hidden-extension'
+import { composeDocumentToYaml } from './convert'
 import {
   composeTagOf,
   isComposeTaggedValue,
@@ -877,13 +878,68 @@ function stripTurbopanelField(
 
 /**
  * Compose document for editor/preview UI: omit `x-turbopanel` placement.
- * Placement lives on `EnvironmentRecord.serverId`, never in compose. This is
- * an input-sanitization path only — it strips any placement a client might
- * still submit embedded in compose before it reaches the editor or save path.
- * Preserves any unrelated `x-turbopanel` fields.
+ * Placement lives on `EnvironmentRecord.serverId`, never in stored compose.
+ * This is an input-sanitization path only — it strips any placement a client
+ * might still submit embedded in compose before it reaches the editor or save
+ * path. Preserves any unrelated `x-turbopanel` fields.
  */
 export function stripComposePlacement(document: ComposeDocument): ComposeDocument {
   return stripTurbopanelField(document, 'placement')
+}
+
+const PLACEMENT_SERVER_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function isPlacementServerId(value: unknown): boolean {
+  return typeof value === 'string' && value.length > 0 && PLACEMENT_SERVER_ID_RE.test(value)
+}
+
+/**
+ * Annotate preview/runtime YAML with the live environment pin. Stored compose
+ * still never holds placement — call this only on merged/prepared snapshots.
+ */
+export function applyComposePlacement(
+  document: ComposeDocument,
+  serverId: string,
+): ComposeDocument {
+  if (!isPlacementServerId(serverId)) return document
+  const normalized = normalizeCompose(document)
+  const existing = normalized.data[TURBOPANEL_EXTENSION_KEY]
+  const rest = isRecord(existing) ? { ...existing } : {}
+  rest.placement = { server_id: serverId }
+
+  const { [TURBOPANEL_EXTENSION_KEY]: _existing, ...restData } = normalized.data
+  const data = { ...restData, [TURBOPANEL_EXTENSION_KEY]: rest }
+  const keyOrder = normalized.presentation.keyOrder.filter(
+    (key) => key !== TURBOPANEL_EXTENSION_KEY,
+  )
+  keyOrder.push(TURBOPANEL_EXTENSION_KEY)
+  return {
+    version: 1,
+    data,
+    presentation: buildPresentation(normalized.presentation, {
+      keyOrder,
+      comments: { ...normalized.presentation.comments },
+    }),
+  }
+}
+
+/**
+ * Merged authoring compose plus the live environment pin for deploy preview.
+ * Stale embedded placement is stripped first so the pin matches the env row.
+ */
+export function composePreviewMergedYaml(
+  projectCompose: unknown,
+  environmentCompose: unknown,
+  placementServerId?: string | null,
+): string {
+  let document = stripComposePlacement(
+    mergeComposeOverlay(projectCompose, environmentCompose),
+  )
+  if (placementServerId) {
+    document = applyComposePlacement(document, placementServerId)
+  }
+  return composeDocumentToYaml(document)
 }
 
 export function readComposeEditorView(

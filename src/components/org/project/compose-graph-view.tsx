@@ -192,6 +192,11 @@ function ServiceNodeOverlay({
   }
 
   const linkLabel = tone ? `${node.name}, ${tone.label}` : node.name
+  // Link asChild → Slot rejects style arrays (expo-router).
+  const pressableStyle = StyleSheet.flatten([
+    webPointer,
+    { position: 'absolute' as const, left: 0, top: 0 },
+  ])
 
   return (
     <Link
@@ -199,7 +204,7 @@ function ServiceNodeOverlay({
       asChild
     >
       <Pressable
-        style={[webPointer, { position: 'absolute', left: 0, top: 0 }]}
+        style={pressableStyle}
         accessibilityRole="link"
         accessibilityLabel={linkLabel}
       >

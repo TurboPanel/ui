@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   COMPOSE_TAG_KEY,
+  applyComposePlacement,
   composeDocumentToRuntimeYaml,
   composeDocumentToYaml,
+  composePreviewMergedYaml,
   composeTagOf,
   emptyComposeDocument,
   hideComposeTurbopanelExtensions,
@@ -152,6 +154,40 @@ x-turbopanel:
     const stripped = stripComposePlacement(source)
     expect(composeDocumentToYaml(stripped)).not.toContain('x-turbopanel')
     expect(composeDocumentToRuntimeYaml(stripped)).not.toContain(projectPin)
+  })
+
+  it('applyComposePlacement annotates the live environment pin', () => {
+    const pin = '11111111-1111-4111-8111-111111111111'
+    const source = yamlToComposeDocument(`services:
+  nginx:
+    image: nginx:alpine
+`)
+    const yaml = composeDocumentToYaml(applyComposePlacement(source, pin))
+    expect(yaml).toContain('x-turbopanel:')
+    expect(yaml).toContain(pin)
+    expect(yaml.lastIndexOf('x-turbopanel:')).toBeGreaterThan(yaml.indexOf('services:'))
+    const runtime = composeDocumentToRuntimeYaml(applyComposePlacement(source, pin))
+    expect(runtime.lastIndexOf('x-turbopanel:')).toBeGreaterThan(
+      runtime.indexOf('services:'),
+    )
+  })
+
+  it('composePreviewMergedYaml annotates the pin after stripping a stale embed', () => {
+    const livePin = '22222222-2222-4222-8222-222222222222'
+    const stalePin = '11111111-1111-4111-8111-111111111111'
+    const yaml = composePreviewMergedYaml(
+      yamlToComposeDocument(`services:
+  nginx:
+    image: nginx:alpine
+x-turbopanel:
+  placement:
+    server_id: ${stalePin}
+`),
+      emptyComposeDocument(),
+      livePin,
+    )
+    expect(yaml).toContain(livePin)
+    expect(yaml).not.toContain(stalePin)
   })
 
   it('stripComposeManagedExtension hides all x-turbopanel from the YAML surface', () => {

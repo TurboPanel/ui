@@ -66,6 +66,7 @@ import {
   candidateMemberNetworks,
   formatDatacenterServerCount,
   listServersWithCandidateAddresses,
+  memberAssignEmptyCopy,
   mergeDatacenterOptions,
   serverIsDatacenterMember,
   sortDatacenterSubnets,
@@ -397,8 +398,7 @@ function SubnetsPanel({
       {!loading && sorted.length === 0 ? (
         <View style={orgPanelStyles.statePanel}>
           <Text style={orgPanelStyles.muted}>
-            No subnets yet — add one or pin a server whose reported prefix
-            creates it.
+            No subnets yet — add one.
           </Text>
         </View>
       ) : null}
@@ -636,7 +636,7 @@ function MemberServersPanel({
     (server) => server.id === assignServerId,
   )
   const candidateNetworks = selectedCandidate
-    ? candidateMemberNetworks(selectedCandidate, pinnedAddresses)
+    ? candidateMemberNetworks(selectedCandidate, pinnedAddresses, subnets)
     : []
   const serverOptions = candidateServers.map((server) => ({
     value: server.id,
@@ -646,13 +646,9 @@ function MemberServersPanel({
     value: network.address,
     label: network.address,
   }))
-  const selectedNetwork = candidateNetworks.find(
+  const addressIsCandidate = candidateNetworks.some(
     (network) => network.address === assignAddress,
   )
-  const newSubnetCidr =
-    selectedNetwork && !subnetForAddress(subnets, selectedNetwork.address)
-      ? selectedNetwork.cidr
-      : null
   const uniqueServerCount = new Set(pins.map((pin) => pin.serverId)).size
   const pinCountByServer = new Map<string, number>()
   for (const pin of pins) {
@@ -666,7 +662,7 @@ function MemberServersPanel({
     onSelectAssign(serverId)
     const next = candidateServers.find((server) => server.id === serverId)
     const networks = next
-      ? candidateMemberNetworks(next, pinnedAddresses)
+      ? candidateMemberNetworks(next, pinnedAddresses, subnets)
       : []
     if (networks.length === 1 && networks[0]) {
       onSelectAddress(networks[0].address)
@@ -744,7 +740,7 @@ function MemberServersPanel({
         <View style={styles.assignBlock}>
           {candidateServers.length === 0 ? (
             <Text style={orgPanelStyles.muted}>
-              No unpinned private addresses on other servers.
+              {memberAssignEmptyCopy(subnets.length)}
             </Text>
           ) : (
             <>
@@ -773,19 +769,22 @@ function MemberServersPanel({
                   />
                 </View>
               ) : null}
-              {newSubnetCidr ? (
-                <Text style={orgPanelStyles.muted}>
-                  Adds a new subnet {newSubnetCidr} to this datacenter.
-                </Text>
-              ) : null}
               <Pressable
                 style={[
                   orgPanelStyles.toolbarBtnPrimary,
-                  (!assignServerId || !assignAddress || pending) &&
+                  (!assignServerId ||
+                    !assignAddress ||
+                    !addressIsCandidate ||
+                    pending) &&
                     styles.buttonDisabled,
                   webPointer,
                 ]}
-                disabled={!assignServerId || !assignAddress || pending}
+                disabled={
+                  !assignServerId ||
+                  !assignAddress ||
+                  !addressIsCandidate ||
+                  pending
+                }
                 onPress={onAssign}
               >
                 <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Add</Text>
@@ -1398,10 +1397,12 @@ export function DatacenterDetailSection({
   )
 
   const candidateServers = useMemo(() => {
-    return listServersWithCandidateAddresses(servers, pinnedAddresses).sort(
-      (a, b) => serverTitle(a).localeCompare(serverTitle(b)),
-    )
-  }, [servers, pinnedAddresses])
+    return listServersWithCandidateAddresses(
+      servers,
+      pinnedAddresses,
+      subnets,
+    ).sort((a, b) => serverTitle(a).localeCompare(serverTitle(b)))
+  }, [servers, pinnedAddresses, subnets])
 
   const serverById = new Map(
     servers.map((server) => [

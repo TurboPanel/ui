@@ -54,6 +54,7 @@ export function useDeployPreview(
       orgId.length > 0 &&
       environmentId.length > 0,
     refetchInterval: false,
+    staleTime: 0,
     retry: (failureCount, error) => {
       if (isServerPlacementRequiredError(error)) return false
       return failureCount < 2

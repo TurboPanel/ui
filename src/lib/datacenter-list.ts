@@ -296,14 +296,21 @@ export function subnetForAddress(
   )
 }
 
+/**
+ * Unpinned daemon-reported private IPs that already fall inside this
+ * datacenter's approved subnets. Addresses outside those CIDRs are omitted
+ * so pinning cannot invent a new subnet from the member picker.
+ */
 export function candidateMemberNetworks(
   server: ServerWithIps,
   pinnedAddresses: readonly string[],
+  subnets: readonly DatacenterSubnetRecord[],
 ): ReportedPrivateNetwork[] {
   const pinned = new Set(pinnedAddresses)
-  return reportedPrivateNetworks(server).filter(
-    (network) => !pinned.has(network.address),
-  )
+  return reportedPrivateNetworks(server).filter((network) => {
+    if (pinned.has(network.address)) return false
+    return subnetForAddress(subnets, network.address) !== null
+  })
 }
 
 export function listServersWithCandidateAddresses<
@@ -311,10 +318,19 @@ export function listServersWithCandidateAddresses<
 >(
   servers: readonly T[],
   pinnedAddresses: readonly string[],
+  subnets: readonly DatacenterSubnetRecord[],
 ): T[] {
   return servers.filter(
-    (server) => candidateMemberNetworks(server, pinnedAddresses).length > 0,
+    (server) =>
+      candidateMemberNetworks(server, pinnedAddresses, subnets).length > 0,
   )
+}
+
+export function memberAssignEmptyCopy(subnetCount: number): string {
+  if (subnetCount === 0) {
+    return "Add a subnet first. Member IPs must fall inside this datacenter's ranges."
+  }
+  return "No unpinned private IPs fall inside this datacenter's subnets."
 }
 
 export function mergeDatacenterOptions(

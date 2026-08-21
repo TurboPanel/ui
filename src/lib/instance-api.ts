@@ -1527,10 +1527,11 @@ export type CaRotationStatus = {
 
 /**
  * Allocator-owned container classifier.
- * - `service` — ordinary workload container
- * - `ingress` — per-service Traefik container (ordinal 1, named `<serviceId>-in`)
- * - `turbopanel` — platform component in the `turbopanel-system` Compose stack
- *   (database / queue / analytics / ProxySQL), inspect-only where applicable
+ * - `service` — ordinary workload/engine replica
+ * - `ingress` — per-service Traefik container or the shared per-server ProxySQL
+ *   managed-ingress frontend (both named `<service.id>-in` at ordinal 1)
+ * - `turbopanel` — platform `turbopanel-system` stack (`database` / `queue` /
+ *   `analytics`) plus Orchestrator (`-ha`)
  */
 export type ContainerRole = 'service' | 'ingress' | 'turbopanel'
 
@@ -1542,10 +1543,11 @@ export type ContainerRecord = {
   containerName: string
   status: string
   /**
-   * Allocator-owned. `service` is an ordinary workload container; `ingress` is
-   * the per-service Traefik container, always ordinal 1, named `<serviceId>-in`;
-   * `turbopanel` is a platform component in the `turbopanel-system` Compose stack
-   * (database / queue / analytics / ProxySQL), inspect-only where applicable.
+   * Allocator-owned. `service` is the ordinary workload/engine replica;
+   * `ingress` is the per-service Traefik container or the shared per-server
+   * ProxySQL managed-ingress frontend (both named `<service.id>-in` at ordinal
+   * 1); `turbopanel` is the platform `turbopanel-system` stack (`database` /
+   * `queue` / `analytics`) plus Orchestrator (`-ha`).
    */
   role: ContainerRole
   composeServiceName: string
@@ -2846,7 +2848,7 @@ export type DeployPreviewResponse = {
    * first participating server.
    */
   composeFiles: DeployPreviewComposeFile[]
-  /** Per-host compiled compose when the scheduler splits services. */
+  /** Per-host compiled compose when the scheduler splits services across hosts. Omitted for a single-server / whole-environment pin. */
   servers?: DeployPreviewServer[]
   projectName: string
   containers: {

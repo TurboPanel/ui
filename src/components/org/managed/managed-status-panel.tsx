@@ -64,7 +64,11 @@ function containerDisplayName(container: ContainerRecord): string {
   return container.containerName || container.composeServiceName || container.id
 }
 
-/** Engine (service) first, then ingress. */
+/**
+ * Engine (service) first, then tenant Traefik ingress rows. The ingress
+ * partition is unreachable here: ProxySQL lives on the `managed-ingress`
+ * system service, so `fetchManagedStatus` never returns it.
+ */
 function partitionContainersForDisplay(
   containers: ContainerRecord[],
 ): ContainerRecord[] {

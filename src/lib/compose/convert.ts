@@ -403,6 +403,21 @@ function retagComposeSentinels(doc: Document): void {
   })
 }
 
+/**
+ * Runtime YAML ignores presentation, so object insertion order is what
+ * operators see. Keep `x-turbopanel` last so the compile-time server pin sits
+ * under `services:` and the rest of the document.
+ */
+const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
+
+function withTurbopanelExtensionLast(
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Object.hasOwn(data, TURBOPANEL_EXTENSION_KEY)) return data
+  const { [TURBOPANEL_EXTENSION_KEY]: extension, ...rest } = data
+  return { ...rest, [TURBOPANEL_EXTENSION_KEY]: extension }
+}
+
 function composeDataToYaml(
   data: Record<string, unknown>,
   presentation?: ComposePresentation,
@@ -436,5 +451,5 @@ export function composeDocumentToYaml(doc: ComposeDocument): string {
  */
 export function composeDocumentToRuntimeYaml(doc: ComposeDocument): string {
   const normalized = normalizeCompose(doc)
-  return composeDataToYaml(normalized.data)
+  return composeDataToYaml(withTurbopanelExtensionLast(normalized.data))
 }
