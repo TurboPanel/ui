@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
+import {
+  nestedScrollDomProps,
+  webNestedScrollStyle,
+} from '@/components/org/logs/nested-scroll'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { SectionPanel } from '@/components/org/section-panel'
 import { EmptyState, LoadingState, SegmentedControl } from '@/components/ui'
@@ -20,6 +24,9 @@ import {
   useEnvironmentDeployments,
 } from '@/lib/queries/execution-logs'
 import { colors, spacing } from '@/lib/theme'
+
+/** Cap the history table so a long run of deploys scrolls inside the panel. */
+const HISTORY_LIST_MAX_HEIGHT = 560
 
 function statusDotStyle(tone: 'success' | 'failed' | 'pending') {
   if (tone === 'success') return styles.dotSuccess
@@ -233,20 +240,29 @@ export function EnvironmentDeploymentHistoryPanel({
       {groups.length > 0 ? (
         <View style={styles.table}>
           <HistoryHeader />
-          {groups.map((group, index) => (
-            <DeploymentRow
-              key={group.id}
-              orgId={orgId}
-              group={group}
-              index={index}
-              expanded={expandedId === group.id}
-              onToggle={() =>
-                setExpandedId((current) =>
-                  current === group.id ? null : group.id,
-                )
-              }
-            />
-          ))}
+          <ScrollView
+            style={[styles.tableBody, webNestedScrollStyle]}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            persistentScrollbar
+            indicatorStyle="white"
+            {...nestedScrollDomProps}
+          >
+            {groups.map((group, index) => (
+              <DeploymentRow
+                key={group.id}
+                orgId={orgId}
+                group={group}
+                index={index}
+                expanded={expandedId === group.id}
+                onToggle={() =>
+                  setExpandedId((current) =>
+                    current === group.id ? null : group.id,
+                  )
+                }
+              />
+            ))}
+          </ScrollView>
         </View>
       ) : null}
     </SectionPanel>
@@ -259,6 +275,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderArea,
     overflow: 'hidden',
+  },
+  tableBody: {
+    maxHeight: HISTORY_LIST_MAX_HEIGHT,
   },
   headerRow: {
     flexDirection: 'row',

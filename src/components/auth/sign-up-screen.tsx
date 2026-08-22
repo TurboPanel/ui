@@ -8,6 +8,10 @@ import {
 } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
+import {
+  AuthPasswordMeter,
+  type PasswordMeterStatus,
+} from '@/components/auth/auth-password-meter'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
@@ -22,7 +26,7 @@ import {
 } from '@/lib/auth-accent'
 import { useSignUp } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { colors } from '@/lib/theme'
 
 type PasswordValidation = {
   isValid: boolean
@@ -59,6 +63,44 @@ function validatePassword(password: string): PasswordValidation {
     noLeadingTrailingWhitespace,
     isValid: hasMinLength && hasNumber && hasSpecialChar && noLeadingTrailingWhitespace,
   }
+}
+
+/**
+ * One nudge at a time, never a checklist — sign-up is the first impression, so
+ * the form asks for the single next thing instead of grading four rules at once.
+ */
+function passwordHint(validation: PasswordValidation): string {
+  if (!validation.hasMinLength) return 'A little longer'
+  if (!validation.hasNumber) return 'Add a number'
+  if (!validation.hasSpecialChar) return 'Add a symbol'
+  if (!validation.noLeadingTrailingWhitespace) {
+    return 'Remove the leading or trailing space'
+  }
+  return ''
+}
+
+/** Map structural policy + HIBP state onto the password meter badge. */
+function resolveMeterStatus(input: {
+  hasPwnedResult: boolean
+  isPwned: boolean | null
+  checking: boolean
+  isValid: boolean
+}): PasswordMeterStatus {
+  if (input.hasPwnedResult && input.isPwned === true) return 'compromised'
+  if (input.checking) return 'checking'
+  if (input.isValid) return 'valid'
+  return 'incomplete'
+}
+
+/** Track fill; never reads full while the password is still rejected. */
+function passwordProgress(validation: PasswordValidation): number {
+  if (validation.isValid) return 1
+  const met = [
+    validation.hasMinLength,
+    validation.hasNumber,
+    validation.hasSpecialChar,
+  ].filter(Boolean).length
+  return Math.min(met / 3, 2 / 3)
 }
 
 async function sha1Hex(password: string): Promise<string> {
@@ -114,19 +156,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
-  requirements: {
-    gap: spacing.xs,
-  },
-  requirement: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  requirementMet: {
-    color: colors.green,
-  },
-  requirementUnmet: {
-    color: colors.textMuted,
-  },
   successTitle: {
     color: colors.text,
     fontSize: 16,
@@ -139,39 +168,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 })
-
-function PasswordRequirements({
-  passwordTouched,
-  validation,
-}: Readonly<{
-  passwordTouched: boolean
-  validation: PasswordValidation
-}>) {
-  if (!passwordTouched) return null
-
-  const rows: readonly (readonly [boolean, string])[] = [
-    [validation.hasMinLength, 'At least 8 characters'],
-    [validation.hasNumber, 'At least 1 number'],
-    [validation.hasSpecialChar, 'At least 1 special character (e.g. $, !, @, %, &)'],
-    [validation.noLeadingTrailingWhitespace, 'No leading or trailing whitespace'],
-  ]
-
-  return (
-    <View style={styles.requirements}>
-      {rows.map(([met, label]) => (
-        <Text
-          key={label}
-          style={[
-            styles.requirement,
-            met ? styles.requirementMet : styles.requirementUnmet,
-          ]}
-        >
-          {met ? '✓' : '○'} {label}
-        </Text>
-      ))}
-    </View>
-  )
-}
 
 function SignupSuccess({
   isEmailVerificationEnabled,
@@ -220,7 +216,6 @@ export function SignUpScreenContent() {
   } = useAuthStatus()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [passwordTouched, setPasswordTouched] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -237,6 +232,19 @@ export function SignUpScreenContent() {
   const tint = useMemo(() => authAccentStyles(accent), [accent])
 
   const validation = validatePassword(password)
+  const hasPwnedResultForCurrent = pwnedCheckedPassword === password
+  const meterStatus = resolveMeterStatus({
+    hasPwnedResult: hasPwnedResultForCurrent,
+    isPwned,
+    checking: pwnedChecking,
+    isValid: validation.isValid,
+  })
+  const meterHint = {
+    incomplete: passwordHint(validation),
+    checking: 'Checking…',
+    valid: 'Looks good',
+    compromised: '',
+  }[meterStatus]
   const isInstallMode = instanceInfo?.isInstallMode === true
   const isSignupDisabled = instanceInfo?.isSignupEnabled === false
   /** Workers omit install fields — sign-up is the bootstrap path when enabled. */
@@ -263,7 +271,6 @@ export function SignUpScreenContent() {
   }, [])
 
   const onPasswordBlur = useCallback(async () => {
-    setPasswordTouched(true)
     if (!password || !validation.isValid) return
     setPwnedChecking(true)
     try {
@@ -412,7 +419,14 @@ export function SignUpScreenContent() {
         />
       </View>
 
-      <PasswordRequirements passwordTouched={passwordTouched} validation={validation} />
+      {password ? (
+        <AuthPasswordMeter
+          status={meterStatus}
+          progress={passwordProgress(validation)}
+          hint={meterHint}
+          accentColor={accent.accent}
+        />
+      ) : null}
 
       {error ? (
         <Text style={authFormStyles.error} accessibilityRole="alert">

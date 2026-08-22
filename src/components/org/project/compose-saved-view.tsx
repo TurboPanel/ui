@@ -65,7 +65,7 @@ export function ComposeSavedView({
    */
   draftSource?: OverviewComposeSource
   onDraftSourceChange?: (source: OverviewComposeSource) => void
-  /** Surface header trailing actions (e.g. Save when dirty). */
+  /** Surface header trailing actions (e.g. Discard / Save when dirty). */
   toolbarTrailing?: ReactNode
 }>) {
   const normalized = normalizeCompose(document)

@@ -9,10 +9,16 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
+import {
+  nestedScrollDomProps,
+  webNestedScrollStyle,
+} from '@/components/org/logs/nested-scroll'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { Button, CopyButton, EmptyState, LoadingState } from '@/components/ui'
 import {
+  collapseRepeatedProgressLines,
   groupTranscriptByPhase,
+  isErrorLine,
   transcriptPlainText,
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
@@ -64,7 +70,8 @@ function TranscriptRow({
   line,
 }: Readonly<{ line: LogTranscriptLine }>) {
   const time = formatLineTime(line.timestamp)
-  const isError = line.stream === 'stderr'
+  // Docker writes progress to stderr too — the stream alone is not a verdict.
+  const isError = isErrorLine(line)
   return (
     <View style={styles.row}>
       {time ? <Text style={styles.rowTime}>{time}</Text> : null}
@@ -191,8 +198,9 @@ function FollowToggle({
 /**
  * Shared command-transcript viewer (deploy, lifecycle, managed apply, engine
  * log tails). Chrome follows `design-system/turbopanel/pages/deploy-logs.md`:
- * `commandCodeBlock` block, per-line stream colouring, phase grouping, and a
- * follow-tail toggle that a manual scroll-up turns off.
+ * `commandCodeBlock` block, per-line stream colouring, phase grouping, a
+ * follow-tail toggle that a manual scroll-up turns off, and a fixed-height
+ * viewport so the nested list actually scrolls (with a visible scrollbar).
  */
 export function LogTranscriptView({
   lines,
@@ -213,7 +221,8 @@ export function LogTranscriptView({
   const listRef = useRef<FlatList<TranscriptItem> | null>(null)
   const [following, setFollowing] = useState(isLiveState(state))
   const live = isLiveState(state)
-  const items = useMemo(() => flattenTranscript(lines), [lines])
+  const visible = useMemo(() => collapseRepeatedProgressLines(lines), [lines])
+  const items = useMemo(() => flattenTranscript(visible), [visible])
 
   useEffect(() => {
     // A transcript opened after it sealed is read, not watched.
@@ -247,7 +256,7 @@ export function LogTranscriptView({
   )
 
   const hasLines = items.length > 0
-  const plainText = hasLines ? transcriptPlainText(lines) : ''
+  const plainText = hasLines ? transcriptPlainText(visible) : ''
 
   return (
     <View style={styles.root}>
@@ -296,24 +305,36 @@ export function LogTranscriptView({
               />
             ) : null}
           </View>
-          <FlatList
-            ref={listRef}
-            data={items}
-            keyExtractor={itemKey}
-            renderItem={renderItem}
-            style={[orgPanelStyles.commandCodeBlock, { maxHeight }]}
-            contentContainerStyle={styles.blockContent}
-            onContentSizeChange={handleContentSizeChange}
-            onScroll={handleScroll}
-            scrollEventThrottle={64}
-            nestedScrollEnabled
-            initialNumToRender={INITIAL_ROWS}
-            maxToRenderPerBatch={INITIAL_ROWS}
-            windowSize={5}
-            // Web reuses DOM nodes differently; clipping there drops selection.
-            removeClippedSubviews={Platform.OS !== 'web'}
-            accessibilityLabel={title ? `${title} output` : 'Command output'}
-          />
+          <View
+            style={[
+              orgPanelStyles.commandCodeBlock,
+              styles.viewport,
+              { height: maxHeight },
+            ]}
+            {...nestedScrollDomProps}
+          >
+            <FlatList
+              ref={listRef}
+              data={items}
+              keyExtractor={itemKey}
+              renderItem={renderItem}
+              style={[styles.list, webNestedScrollStyle]}
+              contentContainerStyle={styles.blockContent}
+              onContentSizeChange={handleContentSizeChange}
+              onScroll={handleScroll}
+              scrollEventThrottle={64}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              persistentScrollbar
+              indicatorStyle="white"
+              initialNumToRender={INITIAL_ROWS}
+              maxToRenderPerBatch={INITIAL_ROWS}
+              windowSize={5}
+              // Web reuses DOM nodes differently; clipping there drops selection.
+              removeClippedSubviews={Platform.OS !== 'web'}
+              accessibilityLabel={title ? `${title} output` : 'Command output'}
+            />
+          </View>
         </>
       ) : (
         <TranscriptPlaceholder state={state} />
@@ -372,7 +393,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
+  viewport: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  list: {
+    flex: 1,
+  },
   blockContent: {
+    padding: spacing.md,
     paddingBottom: spacing.xs,
   },
   phaseHeader: {

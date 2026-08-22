@@ -8,7 +8,6 @@ import {
 import { StyleSheet, Text, View } from 'react-native'
 import { usePathname } from 'expo-router'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button } from '@/components/ui'
 import {
   composeDraftScopeKey,
   composeFullYaml,
@@ -32,6 +31,7 @@ import type { InventoryStripItem } from '@/components/org/project/compose-invent
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import {
+  ComposeDraftActionButtons,
   ComposeEditorChrome,
   ComposeSurfaceSectionTabs,
 } from '@/components/org/compose-editor-section'
@@ -103,28 +103,6 @@ function resolveStorageFilter(
   return null
 }
 
-function OverviewSaveButton({
-  saving,
-  disabled,
-  onSave,
-}: Readonly<{
-  saving: boolean
-  disabled: boolean
-  onSave: () => void
-}>) {
-  return (
-    <Button
-      label="Save"
-      busyLabel="Saving…"
-      variant="primary"
-      size="sm"
-      busy={saving}
-      disabled={disabled}
-      onPress={onSave}
-    />
-  )
-}
-
 /** Prefer reconciled draft when Overview is showing Proposed unsaved changes. */
 function overviewComposeDocument(
   isDirty: boolean,
@@ -140,17 +118,19 @@ function overviewSaveTrailing(
   isDirty: boolean,
   saving: boolean,
   onSave: () => void,
+  onDiscard: () => void,
   draft?: ProjectDraft | null,
 ): ReactNode {
   // The create wizard commits from its own footer button, so the draft surface
-  // shows no Save in the toolbar at all.
+  // shows no Save / Discard in the toolbar at all.
   if (draft) return undefined
   if (!isDirty && !saving) return undefined
   return (
-    <OverviewSaveButton
+    <ComposeDraftActionButtons
       saving={saving}
-      disabled={saving || !isDirty}
+      canSave={!saving && isDirty}
       onSave={onSave}
+      onDiscard={onDiscard}
     />
   )
 }
@@ -203,6 +183,7 @@ function ProjectOverviewCompose({
   proposedDoc,
   saving,
   onSave,
+  onDiscard,
 }: Readonly<{
   projectId: string
   orgId: string
@@ -218,6 +199,7 @@ function ProjectOverviewCompose({
   proposedDoc: unknown
   saving: boolean
   onSave: () => void
+  onDiscard: () => void
 }>) {
   const projectSummary = summarizeComposeDocument(proposedDoc)
   const inventory: InventoryStripItem[] = [
@@ -239,7 +221,13 @@ function ProjectOverviewCompose({
       showServiceStatus={false}
       draftSource={isDirty ? overviewSource : undefined}
       onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
-      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave, draft)}
+      toolbarTrailing={overviewSaveTrailing(
+        isDirty,
+        saving,
+        onSave,
+        onDiscard,
+        draft,
+      )}
     />
   )
 }
@@ -260,6 +248,7 @@ function EnvironmentOverviewCompose({
   liveSnapshot,
   saving,
   onSave,
+  onDiscard,
 }: Readonly<{
   project: ProjectRecord
   selectedEnvironment: EnvironmentRecord
@@ -276,6 +265,7 @@ function EnvironmentOverviewCompose({
   liveSnapshot: ReturnType<typeof resolveComposeDraftSnapshot>
   saving: boolean
   onSave: () => void
+  onDiscard: () => void
 }>) {
   const overlayState = resolveComposeOverlayState(
     selectedEnvironment.options?.compose,
@@ -319,7 +309,7 @@ function EnvironmentOverviewCompose({
       showServiceStatus={isStarted}
       draftSource={isDirty ? overviewSource : undefined}
       onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
-      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave)}
+      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave, onDiscard)}
     />
   )
 }
@@ -434,6 +424,13 @@ function ServicesPanelBody({
     void saveOverviewDraft()
   }
 
+  function discardOverviewDraft(): void {
+    draftStore.setSnapshot(
+      scopeKey,
+      seedComposeDraftFromDocument(savedDocument),
+    )
+  }
+
   if (baseSelected) {
     if (editing) {
       return (
@@ -470,6 +467,7 @@ function ServicesPanelBody({
         )}
         saving={saving}
         onSave={runOverviewSave}
+        onDiscard={discardOverviewDraft}
       />
     )
   }
@@ -544,6 +542,7 @@ function ServicesPanelBody({
       liveSnapshot={liveSnapshot}
       saving={saving}
       onSave={runOverviewSave}
+      onDiscard={discardOverviewDraft}
     />
   )
 }

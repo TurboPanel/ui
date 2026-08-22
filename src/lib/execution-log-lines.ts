@@ -42,6 +42,113 @@ export function stripAnsi(value: string): string {
   return value.replaceAll(ANSI_PATTERN, '').replaceAll('\r', '')
 }
 
+/**
+ * Benign status words Compose / BuildKit print while a deploy runs.
+ *
+ * Docker writes **all** progress to stderr — stdout is reserved for command
+ * results — so a viewer that equates "stderr" with "error" paints an entire
+ * successful image pull red. Recognising these separates a layer download from
+ * a real diagnostic. `Error` and `Warning` are deliberately absent: those stay
+ * flagged. Longest-first so `Pulling fs layer` wins over `Pulling`.
+ */
+const DOCKER_PROGRESS_STATUSES = [
+  'Pulling fs layer',
+  'Verifying Checksum',
+  'Download complete',
+  'Already exists',
+  'Pull complete',
+  'Downloading',
+  'Restarting',
+  'Recreating',
+  'Extracting',
+  'Recreated',
+  'Uploading',
+  'Restarted',
+  'Building',
+  'Creating',
+  'Removing',
+  'Stopping',
+  'Starting',
+  'Skipped',
+  'Waiting',
+  'Healthy',
+  'Running',
+  'Pulling',
+  'Pushing',
+  'Removed',
+  'Stopped',
+  'Started',
+  'Created',
+  'Killing',
+  'Pulled',
+  'Killed',
+  'Pushed',
+  'Exists',
+  'Built',
+].join('|')
+
+/**
+ * `<name…> <Status> [<statusText>]` — Compose's plain-progress writer prints
+ * exactly `id text statusText`, where the id half can be several words
+ * (`Image adminer:latest`, `Container web-1`).
+ */
+const DOCKER_PROGRESS_LINE = new RegExp(
+  String.raw`^\s*\S.*?\s(?:${DOCKER_PROGRESS_STATUSES})(?:\s+\S+)?\s*$`,
+)
+
+/**
+ * Compose prints the byte counter for every event, including the ones that have
+ * no bytes: `Pulling fs layer 0B`, `Download complete 0B`, `Extracting 1B`.
+ * The number is an artefact of the writer, not a size.
+ */
+const EMPTY_PROGRESS_SIZE = /\s+[01]B$/
+
+/** True when a line is ordinary Docker progress rather than a diagnostic. */
+export function isDockerProgressLine(message: string): boolean {
+  return DOCKER_PROGRESS_LINE.test(message)
+}
+
+/**
+ * A row is an error when it came from stderr **and** is not Docker progress.
+ * Never `stream === 'stderr'` on its own — see {@link DOCKER_PROGRESS_STATUSES}.
+ */
+export function isErrorLine(line: LogTranscriptLine): boolean {
+  return line.stream === 'stderr' && !isDockerProgressLine(line.message)
+}
+
+/** Trim trailing space and Compose's meaningless `0B` / `1B` counter. */
+export function normalizeTranscriptMessage(message: string): string {
+  const trimmed = message.trimEnd()
+  if (!isDockerProgressLine(trimmed)) return trimmed
+  return trimmed.replace(EMPTY_PROGRESS_SIZE, '')
+}
+
+/**
+ * Drop consecutive progress rows whose text repeats. Compose emits one line per
+ * tick — `Extracting` four times, `Network … Creating` twice — and overwrites
+ * them in place in its own TTY renderer; a scrolling transcript should not
+ * stutter instead. Only progress rows collapse: repeated build or app output is
+ * real output and stays.
+ */
+export function collapseRepeatedProgressLines(
+  lines: readonly LogTranscriptLine[],
+): LogTranscriptLine[] {
+  const rows: LogTranscriptLine[] = []
+  for (const line of lines) {
+    const previous = rows.at(-1)
+    if (
+      previous?.message === line.message &&
+      previous?.phase === line.phase &&
+      previous?.stream === line.stream &&
+      isDockerProgressLine(line.message)
+    ) {
+      continue
+    }
+    rows.push(line)
+  }
+  return rows
+}
+
 function normalizeStream(value: unknown): LogStream {
   return value === 'stderr' ? 'stderr' : 'stdout'
 }
@@ -75,7 +182,7 @@ function parseEventLine(raw: string): LogTranscriptLine | null {
     timestamp: normalizeOptionalString(event.timestamp),
     stream: normalizeStream(event.stream),
     phase: normalizeOptionalString(event.phase),
-    message: stripAnsi(event.message),
+    message: normalizeTranscriptMessage(stripAnsi(event.message)),
   }
 }
 
@@ -180,7 +287,7 @@ export function transcriptPlainText(
 ): string {
   return lines
     .map((line) => {
-      const prefix = line.stream === 'stderr' ? 'stderr ' : ''
+      const prefix = isErrorLine(line) ? 'stderr ' : ''
       return `${prefix}${line.message}`
     })
     .join('\n')

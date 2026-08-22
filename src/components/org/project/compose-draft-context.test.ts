@@ -43,6 +43,31 @@ services:
     ).toBe(true)
   })
 
+  it('discards yaml edits by reseeding from the saved document', () => {
+    const saved = yamlToComposeDocument(`
+services:
+  web:
+    image: nginx:alpine
+`)
+    const snap = seedComposeDraftFromDocument(saved)
+    const dirty = {
+      ...snap,
+      yaml: composeDocumentToYaml(
+        yamlToComposeDocument(`
+services:
+  api:
+    image: redis:7
+`),
+      ),
+    }
+    expect(isComposeDraftDirty(dirty)).toBe(true)
+    const discarded = seedComposeDraftFromDocument(saved)
+    expect(isComposeDraftDirty(discarded)).toBe(false)
+    expect(reconcileComposeDraft(discarded)?.data.services).toEqual(
+      saved.data.services,
+    )
+  })
+
   it('returns null when YAML is unparseable', () => {
     const snap = seedComposeDraftFromDocument(emptyComposeDocument())
     expect(

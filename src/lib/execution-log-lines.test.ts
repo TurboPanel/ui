@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  collapseRepeatedProgressLines,
   groupTranscriptByPhase,
+  isDockerProgressLine,
+  isErrorLine,
+  normalizeTranscriptMessage,
   mergeTranscriptLines,
   parseCommandLogChunk,
   plainTextTranscriptLines,
@@ -138,6 +142,84 @@ describe('transcriptPlainText', () => {
       { seq: 2, timestamp: null, stream: 'stderr', phase: null, message: 'bad' },
     ])
     expect(text).toBe('ok\nstderr bad')
+  })
+})
+
+describe('docker progress lines', () => {
+  it.each([
+    ' Image adminer:latest Pulling ',
+    ' 6d2dcf61e6fc Pulling fs layer 0B',
+    ' 44dd5065ed48 Downloading 2.097MB',
+    ' 4f4fb700ef54 Already exists 0B',
+    ' 30d32a3eb4a4 Extracting 1B',
+    ' Container adminer Started ',
+    ' Network proj_default Created ',
+  ])('recognises %s as progress', (message) => {
+    expect(isDockerProgressLine(message)).toBe(true)
+  })
+
+  it.each([
+    'Error response from daemon: pull access denied',
+    'ERROR: for adminer  Cannot start service',
+    'WARN[0000] a docker-compose.yml file was found',
+    ' Container adminer Error ',
+    'failed to solve: process did not complete successfully',
+  ])('does not swallow %s', (message) => {
+    expect(isDockerProgressLine(message)).toBe(false)
+  })
+
+  it('flags only non-progress stderr as an error', () => {
+    const progress: LogTranscriptLine = {
+      seq: 1,
+      timestamp: null,
+      stream: 'stderr',
+      phase: 'compose-up',
+      message: ' 6d2dcf61e6fc Pull complete',
+    }
+    expect(isErrorLine(progress)).toBe(false)
+    expect(isErrorLine({ ...progress, seq: 2, message: 'boom' })).toBe(true)
+    expect(isErrorLine({ ...progress, seq: 3, stream: 'stdout' })).toBe(false)
+  })
+})
+
+describe('normalizeTranscriptMessage', () => {
+  it.each([
+    [' 6d2dcf61e6fc Pulling fs layer 0B', ' 6d2dcf61e6fc Pulling fs layer'],
+    [' 30d32a3eb4a4 Extracting 1B', ' 30d32a3eb4a4 Extracting'],
+    [' Image adminer:latest Pulling ', ' Image adminer:latest Pulling'],
+  ])('drops the empty byte counter from %s', (input, expected) => {
+    expect(normalizeTranscriptMessage(input)).toBe(expected)
+  })
+
+  it('keeps a real size', () => {
+    expect(normalizeTranscriptMessage(' 44dd5065ed48 Downloading 2.097MB')).toBe(
+      ' 44dd5065ed48 Downloading 2.097MB',
+    )
+  })
+
+  it('leaves non-progress text alone', () => {
+    expect(normalizeTranscriptMessage('wrote 1B to disk')).toBe('wrote 1B to disk')
+  })
+})
+
+describe('collapseRepeatedProgressLines', () => {
+  it('collapses consecutive identical progress rows', () => {
+    const rows = parseCommandLogChunk(
+      event(1, ' 30d32a3eb4a4 Extracting 1B', { stream: 'stderr' }) +
+        event(2, ' 30d32a3eb4a4 Extracting 1B', { stream: 'stderr' }) +
+        event(3, ' 30d32a3eb4a4 Extracting 1B', { stream: 'stderr' }) +
+        event(4, ' 30d32a3eb4a4 Pull complete 0B', { stream: 'stderr' }),
+    )
+    expect(collapseRepeatedProgressLines(rows).map((row) => row.seq)).toEqual([
+      1, 4,
+    ])
+  })
+
+  it('keeps repeated non-progress output', () => {
+    const rows = parseCommandLogChunk(
+      event(1, 'retrying') + event(2, 'retrying'),
+    )
+    expect(collapseRepeatedProgressLines(rows)).toHaveLength(2)
   })
 })
 

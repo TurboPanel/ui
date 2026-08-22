@@ -226,9 +226,96 @@ function ComposeLintPanel({
 }
 
 const LINT_DEBOUNCE_MS = 150
+/** Compact two-press window — same 6s idle timeout as ConfirmButton. */
+const DISCARD_ARM_MS = 6000
 
 /** Fixed chrome tab row — same height on Overview (no Save) and Compose/Services. */
 const SURFACE_HEADER_HEIGHT = 40
+
+/**
+ * Compact discard for the 40px compose header. First press arms; second
+ * confirms. Stays a single button so ConfirmButton's prompt row cannot grow
+ * the chrome.
+ */
+function DiscardChangesButton({
+  disabled,
+  onDiscard,
+}: Readonly<{
+  disabled: boolean
+  onDiscard: () => void
+}>) {
+  const [armed, setArmed] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!disabled) return
+    setArmed(false)
+    if (timer.current) clearTimeout(timer.current)
+  }, [disabled])
+
+  const arm = () => {
+    setArmed(true)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      setArmed(false)
+    }, DISCARD_ARM_MS)
+  }
+
+  return (
+    <Button
+      label={armed ? 'Discard?' : 'Discard'}
+      accessibilityLabel={
+        armed ? 'Confirm discard changes' : 'Discard changes'
+      }
+      variant={armed ? 'danger' : 'ghost'}
+      size="sm"
+      disabled={disabled}
+      onPress={() => {
+        if (!armed) {
+          arm()
+          return
+        }
+        if (timer.current) clearTimeout(timer.current)
+        setArmed(false)
+        onDiscard()
+      }}
+    />
+  )
+}
+
+/** Discard + Save, shown together while the compose draft is dirty. */
+export function ComposeDraftActionButtons({
+  saving,
+  canSave,
+  onSave,
+  onDiscard,
+}: Readonly<{
+  saving: boolean
+  canSave: boolean
+  onSave: () => void
+  onDiscard: () => void
+}>) {
+  return (
+    <>
+      <DiscardChangesButton disabled={saving} onDiscard={onDiscard} />
+      <Button
+        label="Save"
+        busyLabel="Saving…"
+        variant="primary"
+        size="sm"
+        busy={saving}
+        disabled={!canSave}
+        onPress={onSave}
+      />
+    </>
+  )
+}
 
 /**
  * Compose / Services mode tabs — quiet underline tabs on the surface header.
@@ -480,7 +567,7 @@ export function ComposeEditorSection({
   surfaceTabs?: ReactNode
   /** Surface header: Project / environment buttons (right-aligned). */
   toolbarLeading?: ReactNode
-  /** Surface header: actions left of Save (e.g. Discard Changes). */
+  /** Surface header: extra actions left of Discard / Save. */
   toolbarTrailing?: ReactNode
 }>) {
   const source = normalizeCompose(document)
@@ -785,6 +872,18 @@ export function ComposeEditorSection({
     }
   }
 
+  const handleDiscard = () => {
+    const restored = seedComposeDraftFromDocument(document)
+    setDraft(restored.draft)
+    setYaml(restored.yaml)
+    setBaselineYaml(restored.baselineYaml)
+    setServiceNameDrafts({})
+    setError(null)
+    setShowSaveLint(false)
+    persistSession(restored)
+    onDraftChangeRef.current?.(restored.draft)
+  }
+
   const updateService = (name: string, patch: Record<string, unknown>) => {
     const services = servicesFrom(draft)
     updateDraft({
@@ -1013,14 +1112,11 @@ export function ComposeEditorSection({
             <View style={styles.headerActions}>
               {toolbarTrailing}
               {showSave ? (
-                <Button
-                  label="Save"
-                  busyLabel="Saving…"
-                  variant="primary"
-                  size="sm"
-                  busy={saving}
-                  disabled={!canSave}
-                  onPress={() => void handleSave()}
+                <ComposeDraftActionButtons
+                  saving={saving}
+                  canSave={canSave}
+                  onSave={() => void handleSave()}
+                  onDiscard={handleDiscard}
                 />
               ) : null}
             </View>

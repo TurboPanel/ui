@@ -28,10 +28,19 @@ Do not fork it per surface; add a prop instead.
   colouring is the whole point, and a `TextInput` cannot do it.
 - Density 8: font size 12, line-height 17, `spacing.xs` gaps. Timestamps are
   `textFaint` and are suppressed on narrow viewports before the message is.
-- The block scrolls **inside itself** (`maxHeight` + a vertical **`FlatList`**);
-  wide lines scroll horizontally in their own container. The page body never
-  scrolls horizontally, and this viewer is the one sanctioned nested vertical
-  scroll (it is bounded by `maxHeight`, unlike a page-level nested scroll).
+- The block is a **fixed-height viewport** (`height` = `maxHeight`, default 320)
+  around a vertical **`FlatList`**. `maxHeight` alone does not create a scroll
+  window on web, so the list would grow the page and hide the scrollbar. Wide
+  lines scroll horizontally in their own container. The page body never scrolls
+  horizontally, and this viewer is the one sanctioned nested vertical scroll.
+- Nested panes (this viewer and **Deployment history**) show a **thin themed
+  scrollbar** (`showsVerticalScrollIndicator`, Android `persistentScrollbar`,
+  web `overflow-y: auto` + `scrollbar-width: thin` via `nested-scroll.ts`).
+  Overlay OS bars otherwise make a capped log look clipped with no way to scroll.
+- **Deployment history** caps its row list (`maxHeight` 560) so a long run of
+  deploys scrolls inside the panel; the sticky column header stays put. Expanding
+  a row still opens this viewer (with its own scrollbar) — do not drop the table
+  cap when a transcript is open.
 - Rows are **virtualized**: phase headers and lines are flattened into one
   list data source so a long retained transcript only ever mounts its visible
   window. Never map every line into a `ScrollView`.
@@ -52,6 +61,22 @@ were reserved for exactly this:
 
 Stderr is **never** signalled by colour alone — the row carries a monospace
 `stderr` marker chip, matching the console-wide "no colour-only status" rule.
+
+**The stream is not the verdict.** Docker writes *all* progress to stderr —
+stdout is reserved for command results — so `stream === 'stderr'` alone would
+paint an entire successful image pull red. A row is an error only when it came
+from stderr **and** is not a recognised Compose/BuildKit progress line
+(`isErrorLine` in `src/lib/execution-log-lines.ts`); `Error` and `Warning`
+statuses stay flagged. Two cosmetic passes ride along, both in that module so
+Copy / Download match what is on screen:
+
+- Compose prints its byte counter on events that have no bytes
+  (`Pulling fs layer 0B`, `Extracting 1B`). That counter is stripped at parse
+  time (`normalizeTranscriptMessage`); a real size (`2.097MB`) is kept.
+- Compose emits one line per progress tick and overwrites them in place in its
+  own TTY renderer. Consecutive identical **progress** rows collapse to one
+  (`collapseRepeatedProgressLines`). Repeated build or app output never
+  collapses — that is real output.
 
 ## Phases
 
@@ -126,10 +151,13 @@ colours on an OLED surface and break the contrast floor. Do not add an
 - ❌ A second log panel style (glass card, terminal-window chrome, fake title bar)
 - ❌ `TextInput`-as-log-view (kills per-line colour and selection semantics)
 - ❌ Colour-only stderr
+- ❌ Treating every stderr row as an error (Docker progress lives there)
 - ❌ Hand-rolled `setInterval` / `setTimeout` polling
 - ❌ Polling a sealed transcript, or polling every history row
 - ❌ Auto-scroll that overrides a user who scrolled up
 - ❌ Collapsing `waiting` and `unavailable` into one "no logs" empty state
 - ❌ Rendering ANSI colour codes as literal text, or interpreting them as colour
-- ❌ Nested vertical scroll without a `maxHeight` bound (breaks native)
+- ❌ Nested vertical scroll without a bounded height (breaks native; on web
+  `maxHeight` alone on a `FlatList` does not create a scroll window)
+- ❌ Hiding the nested scrollbar (overlay-only) so a capped log looks clipped
 - ❌ Mounting every transcript row at once (unvirtualized `ScrollView` list)
