@@ -22,7 +22,8 @@ const DRAFT_PROJECT_ID = 'draft'
 /**
  * Compose drafting step — the project's **own** screen, not a wizard-shaped
  * copy of it. Same shell, breadcrumb, width, and Overview · Compose · Services
- * tabs an existing compose project shows. The surface's Save is suppressed
+ * tabs an existing compose project shows (Hosting / Servers wait until the
+ * project exists and has environments). The surface's Save is suppressed
  * because there is no row to patch; the footer's Create project button is the
  * single commit.
  */

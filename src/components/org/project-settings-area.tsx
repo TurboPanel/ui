@@ -1,20 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
-import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
-import { ServerPinSelect } from '@/components/org/project/server-pin-select'
 import { SectionPanel } from '@/components/org/section-panel'
 import { StorageSection } from '@/components/org/storage-section'
 import { Button, ButtonRow, ConfirmButton } from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
 import type {
   EnvironmentRecord,
-  OrgServerRecord,
   ProjectRecord,
   WorkspaceRecord,
 } from '@/lib/instance-api'
@@ -28,20 +24,16 @@ import {
 } from '@/lib/project-options'
 import {
   useDeleteEnvironment,
-  useHostingsByServices,
-  useOrgServers,
   useProjectPrincipals,
-  useServices,
   useStorage,
-  useUpdateEnvironment,
   useUpdateProject,
   useVariables,
 } from '@/lib/queries'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-type ProjectAddKind = 'server' | 'variables' | 'principals'
-type EnvironmentAddKind = 'server' | 'networking' | 'storage'
+type ProjectAddKind = 'variables' | 'principals'
+type EnvironmentAddKind = 'storage'
 
 function openAddKind<K extends string>(
   kind: K,
@@ -62,14 +54,6 @@ function openAddKind<K extends string>(
     ...current,
     [kind]: (current[kind] ?? 0) + 1,
   }))
-}
-
-function serverDisplayLabel(server: OrgServerRecord): string {
-  return (
-    server.name?.trim() ||
-    server.hostname?.trim() ||
-    server.id.slice(0, 8)
-  )
 }
 
 function AddChip({
@@ -268,7 +252,7 @@ function AddToolbarRow<K extends string>({
 /**
  * Project-scope settings body for the scope-chip settings dropdown.
  * Add chips reveal resource sections; workspace, naming, and delete are always
- * available in the panel.
+ * available in the panel. Server placement is the Servers compose tab.
  */
 export function ProjectSettingsPanel({
   onDeleted,
@@ -307,11 +291,9 @@ export function ProjectSettingsPanel({
 
   const canEdit = canManage && projectAllowsMutations
   const canMove = canOwn && projectAllowsMutations
-  const hasServer = Boolean(project.options?.defaultServerId)
   const hasVariables = (variablesQuery.data?.variables?.length ?? 0) > 0
   const hasPrincipals = (principalsQuery.data?.principals?.length ?? 0) > 0
 
-  const showServer = hasServer || opened.has('server')
   const showVariables = hasVariables || opened.has('variables')
   const showPrincipals = hasPrincipals || opened.has('principals')
 
@@ -320,7 +302,6 @@ export function ProjectSettingsPanel({
   }
 
   const pendingAdds: { kind: ProjectAddKind; label: string }[] = []
-  if (!showServer) pendingAdds.push({ kind: 'server', label: 'Add Server' })
   if (!showVariables) {
     pendingAdds.push({ kind: 'variables', label: 'Add Variable' })
   }
@@ -335,16 +316,6 @@ export function ProjectSettingsPanel({
         pendingAdds={pendingAdds}
         onOpen={openKind}
       />
-
-      {showServer ? (
-        <ResourceSection title="Servers" hint={scopeHint}>
-          {canEdit ? (
-            <ProjectServerHeaderControl />
-          ) : (
-            <Text style={orgPanelStyles.muted}>View only</Text>
-          )}
-        </ResourceSection>
-      ) : null}
 
       {showVariables ? (
         <ResourceSection title="Variables" hint={scopeHint}>
@@ -518,58 +489,6 @@ function EnvironmentDeleteControl({
   )
 }
 
-function resolveInheritServerLabel(
-  inheritedServer: OrgServerRecord | undefined,
-  projectDefaultServerId: string | null,
-): string {
-  if (inheritedServer) {
-    return `Inheriting project server: ${serverDisplayLabel(inheritedServer)}`
-  }
-  if (projectDefaultServerId) {
-    return 'Inheriting project server'
-  }
-  return 'No project server set — pick a server for this environment'
-}
-
-function EnvironmentServerPinBody({
-  selectedEnvironment,
-  canEdit,
-  inheritLabel,
-  servers,
-  saving,
-  onSelect,
-  onClear,
-}: Readonly<{
-  selectedEnvironment: EnvironmentRecord
-  canEdit: boolean
-  inheritLabel: string
-  servers: OrgServerRecord[]
-  saving: boolean
-  onSelect: (serverId: string) => void
-  onClear: () => void
-}>) {
-  if (!canEdit) {
-    return <Text style={orgPanelStyles.muted}>View only</Text>
-  }
-  return (
-    <>
-      {!selectedEnvironment.serverId ? (
-        <Text style={orgPanelStyles.muted}>{inheritLabel}</Text>
-      ) : null}
-      <ServerPinSelect
-        label="Server"
-        hint="Pin a server for this environment, or clear to inherit the project default."
-        placementServerId={selectedEnvironment.serverId}
-        servers={servers}
-        saving={saving}
-        allowClear={Boolean(selectedEnvironment.serverId)}
-        onSelect={onSelect}
-        onClear={onClear}
-      />
-    </>
-  )
-}
-
 function readFocusHostingId(
   value: string | string[] | undefined,
 ): string | null {
@@ -583,7 +502,8 @@ function readFocusHostingId(
 
 /**
  * Environment-scope settings body for the scope-chip settings dropdown.
- * Add chips reveal resource sections; delete is always available.
+ * Storage is revealed via an Add chip; delete is always available.
+ * Hosting and Servers live on compose surface tabs, not here.
  */
 export function EnvironmentSettingsPanel({
   selectedEnvironment,
@@ -592,76 +512,20 @@ export function EnvironmentSettingsPanel({
   selectedEnvironment: EnvironmentRecord
   onOpenProjectSettings?: () => void
 }>) {
-  const {
-    orgId,
-    projectId,
-    project,
-    canManage,
-    projectAllowsMutations,
-    setError,
-  } = useProjectContext()
-  const { hostingId: hostingIdParam } = useLocalSearchParams<{
-    hostingId?: string | string[]
-  }>()
-  const focusHostingId = readFocusHostingId(hostingIdParam)
+  const { orgId, project, canManage, projectAllowsMutations } =
+    useProjectContext()
   const [opened, setOpened] = useState<ReadonlySet<EnvironmentAddKind>>(
-    () => new Set(focusHostingId ? (['networking'] as EnvironmentAddKind[]) : []),
+    () => new Set(),
   )
   const [addSeed, setAddSeed] = useState<Partial<Record<EnvironmentAddKind, number>>>(
     {},
   )
-  const serversQuery = useOrgServers(orgId)
-  const servicesQuery = useServices(orgId, selectedEnvironment.id)
-  const serviceIds = useMemo(
-    () => (servicesQuery.data?.services ?? []).map((service) => service.id),
-    [servicesQuery.data?.services],
-  )
-  const hostingsQuery = useHostingsByServices(orgId, serviceIds)
   const storageQuery = useStorage(orgId, {
     environmentId: selectedEnvironment.id,
   })
-  const updateEnvironment = useUpdateEnvironment(
-    orgId,
-    selectedEnvironment.id,
-  )
   const scopeHint = 'This environment only'
   const canEdit = canManage && projectAllowsMutations
-  const servers = serversQuery.data?.servers ?? []
-  const projectDefaultServerId = project?.options?.defaultServerId ?? null
-  const inheritedServer = projectDefaultServerId
-    ? servers.find((server) => server.id === projectDefaultServerId)
-    : undefined
-  const inheritLabel = resolveInheritServerLabel(
-    inheritedServer,
-    projectDefaultServerId,
-  )
-  const hasServer = Boolean(selectedEnvironment.serverId)
-  const hasNetworking = useMemo(
-    () =>
-      Object.values(hostingsQuery.hostingsByService).some(
-        (rows) => rows.length > 0,
-      ),
-    [hostingsQuery.hostingsByService],
-  )
   const hasStorage = (storageQuery.data?.storage?.length ?? 0) > 0
-
-  useEffect(() => {
-    if (!focusHostingId) return
-    setOpened((current) => {
-      if (current.has('networking')) return current
-      const next = new Set(current)
-      next.add('networking')
-      return next
-    })
-  }, [focusHostingId])
-
-  if (!projectAllowsMutations) {
-    return <Text style={orgPanelStyles.muted}>View only</Text>
-  }
-
-  const showServer = hasServer || opened.has('server')
-  const showNetworking =
-    hasNetworking || Boolean(focusHostingId) || opened.has('networking')
   const showStorage = hasStorage || opened.has('storage')
 
   const openKind = (kind: EnvironmentAddKind) => {
@@ -669,12 +533,12 @@ export function EnvironmentSettingsPanel({
   }
 
   const pendingAdds: { kind: EnvironmentAddKind; label: string }[] = []
-  if (!showServer) pendingAdds.push({ kind: 'server', label: 'Add Server' })
-  if (!showNetworking) {
-    pendingAdds.push({ kind: 'networking', label: 'Add Network' })
-  }
   if (!showStorage) {
     pendingAdds.push({ kind: 'storage', label: 'Add Storage' })
+  }
+
+  if (!projectAllowsMutations) {
+    return <Text style={orgPanelStyles.muted}>View only</Text>
   }
 
   return (
@@ -684,50 +548,6 @@ export function EnvironmentSettingsPanel({
         pendingAdds={pendingAdds}
         onOpen={openKind}
       />
-
-      {showServer ? (
-        <ResourceSection title="Server" hint={scopeHint}>
-          <EnvironmentServerPinBody
-            selectedEnvironment={selectedEnvironment}
-            canEdit={canEdit}
-            inheritLabel={inheritLabel}
-            servers={servers}
-            saving={updateEnvironment.isPending}
-            onSelect={(serverId) => {
-              void (async () => {
-                setError(null)
-                const result = await updateEnvironment.run({ serverId })
-                if (!result.ok && updateEnvironment.actionError) {
-                  setError(updateEnvironment.actionError)
-                }
-              })()
-            }}
-            onClear={() => {
-              void (async () => {
-                setError(null)
-                const result = await updateEnvironment.run({
-                  serverId: null,
-                })
-                if (!result.ok && updateEnvironment.actionError) {
-                  setError(updateEnvironment.actionError)
-                }
-              })()
-            }}
-          />
-        </ResourceSection>
-      ) : null}
-
-      {showNetworking ? (
-        <EnvironmentDetailBody
-          orgId={orgId}
-          projectId={projectId}
-          environmentId={selectedEnvironment.id}
-          embedded
-          showComposeOverlay={false}
-          sections={['hosting']}
-          focusHostingId={focusHostingId}
-        />
-      ) : null}
 
       {showStorage ? (
         <ResourceSection title="Storage" hint={scopeHint}>
@@ -764,7 +584,7 @@ export function EnvironmentSettingsPanel({
   )
 }
 
-/** Parse `?hostingId=` for auto-opening environment settings. */
+/** Parse `?hostingId=` for focusing a hosting row on the Hosting tab. */
 export function readHostingIdParam(
   value: string | string[] | undefined,
 ): string | null {

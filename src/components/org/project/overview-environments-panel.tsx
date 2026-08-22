@@ -1658,8 +1658,7 @@ function OverviewEnvironmentsPanelView({
  * Overview lifecycle strip (Deploy / Redeploy / Start / Stop / Refresh /
  * Destroy) and env management. Project / environment / section chips live
  * in the compose editor toolbar via {@link ProjectSectionTabs}.
- * Server placement lives exclusively in project / environment settings
- * (scope-chip gear → ProjectSettingsPanel / EnvironmentSettingsPanel).
+ * Server placement lives on the Servers compose surface tab.
  */
 export function OverviewEnvironmentsPanel() {
   const model = useOverviewEnvironmentsPanelModel()

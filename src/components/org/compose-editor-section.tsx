@@ -6,11 +6,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
 import {
   ComposeEditorIcon,
+  ComposeHostingIcon,
   ComposeOverviewIcon,
+  ComposeServersIcon,
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
@@ -26,6 +28,7 @@ import { useProjectContext } from '@/components/org/project/project-context'
 import {
   COMPOSE_PROJECT_TAB_IDS,
   COMPOSE_PROJECT_TAB_LABELS,
+  DRAFT_COMPOSE_PROJECT_TAB_IDS,
   parseComposeProjectTab,
   parseProjectEnvironmentId,
   projectComposeSectionHref,
@@ -370,9 +373,11 @@ const SURFACE_SECTION_ICONS = {
   overview: ComposeOverviewIcon,
   compose: ComposeEditorIcon,
   services: ComposeVisualIcon,
+  hosting: ComposeHostingIcon,
+  servers: ComposeServersIcon,
 } as const
 
-/** One Overview/Compose/Services tab face — shared by the routed and draft strips. */
+/** One compose surface tab face — shared by the routed and draft strips. */
 function ComposeSectionTabFace({
   tabId,
   active,
@@ -391,9 +396,10 @@ function ComposeSectionTabFace({
 }
 
 /**
- * Overview · Compose · Services — underline tabs inside the compose surface.
- * Path-driven; keeps Project / environment scope when switching tabs. An
- * unsaved wizard draft has no route, so it drives the same tabs from state.
+ * Overview · Compose · Services · Hosting · Servers — underline tabs inside
+ * the compose surface. Path-driven; keeps Project / environment scope when
+ * switching tabs. An unsaved wizard draft has no route (and no environments),
+ * so it drives Overview / Compose / Services from local state.
  */
 export function ComposeSurfaceSectionTabs() {
   const pathname = usePathname()
@@ -402,14 +408,18 @@ export function ComposeSurfaceSectionTabs() {
   const activeTab = draft
     ? draft.section
     : parseComposeProjectTab(pathname, projectId)
+  const tabIds = draft ? DRAFT_COMPOSE_PROJECT_TAB_IDS : COMPOSE_PROJECT_TAB_IDS
 
   return (
-    <View
-      style={styles.surfaceTabList}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.surfaceTabScroll}
+      contentContainerStyle={styles.surfaceTabList}
       accessibilityRole="tablist"
       accessibilityLabel="Compose sections"
     >
-      {COMPOSE_PROJECT_TAB_IDS.map((tabId) => {
+      {tabIds.map((tabId) => {
         const active = activeTab === tabId
         const label = COMPOSE_PROJECT_TAB_LABELS[tabId]
         // Link asChild → Slot rejects style arrays (expo-router).
@@ -454,7 +464,7 @@ export function ComposeSurfaceSectionTabs() {
           </Link>
         )
       })}
-    </View>
+    </ScrollView>
   )
 }
 
@@ -555,7 +565,7 @@ export function ComposeEditorSection({
   hideHeader?: boolean
   /**
    * Hide the embedded Compose/Services toggle (when {@link surfaceTabs} owns
-   * Overview / Compose / Services navigation).
+   * Overview / Compose / Services / Hosting / Servers navigation).
    */
   hideViewTabs?: boolean
   /**
@@ -563,7 +573,7 @@ export function ComposeEditorSection({
    * create wizard's Create project button), where there is nothing to save yet.
    */
   hideSave?: boolean
-  /** Surface header tabs (e.g. Overview · Compose · Services). */
+  /** Surface header tabs (e.g. Overview · Compose · Services · Hosting · Servers). */
   surfaceTabs?: ReactNode
   /** Surface header: Project / environment buttons (right-aligned). */
   toolbarLeading?: ReactNode
@@ -1208,10 +1218,15 @@ const styles = StyleSheet.create({
   editorSurfaceHeaderPadded: {
     paddingLeft: spacing.xs,
   },
+  surfaceTabScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+    height: SURFACE_HEADER_HEIGHT,
+  },
   surfaceTabList: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    flexShrink: 0,
+    flexGrow: 0,
     height: SURFACE_HEADER_HEIGHT,
   },
   surfaceTab: {

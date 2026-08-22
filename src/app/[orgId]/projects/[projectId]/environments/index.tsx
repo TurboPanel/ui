@@ -12,7 +12,7 @@ import { spacing } from '@/lib/theme'
 /**
  * Environments tab index (`/environments`).
  * Managed: list + focus panel. Compose: redirect to Overview (env work lives
- * under Project / environment chips + Networking / Storage).
+ * under Project / environment chips + Hosting / Servers surface tabs).
  */
 export default function ProjectEnvironmentsScreen() {
   const { orgId, projectId, project } = useProjectContext()

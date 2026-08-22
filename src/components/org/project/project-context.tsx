@@ -82,21 +82,20 @@ type ProjectContextValue = {
   selectedEnvironmentId: string | null
   selectedEnvironment: EnvironmentRecord | null
   /**
-   * Environment id from `/environments/:id`, or null on Overview Base and
-   * retired Networking / Storage paths. Unlike {@link selectedEnvironmentId},
+   * Environment id from `/environments/:id`, or null on Overview Base (including
+   * `/hosting` and `/servers`). Unlike {@link selectedEnvironmentId},
    * this is never a sticky remembered id under Project scope.
    */
   pathEnvironmentId: string | null
   /**
-   * True on Overview Base (`/overview`). False when the path is
-   * `/environments/:id` or Networking / Storage (env chip not Project).
+   * True on Overview Base (`/overview`, `/compose`, `/services`, `/hosting`,
+   * `/servers`). False when the path is `/environments/:id`.
    */
   baseSelected: boolean
   /**
-   * True when environment scope is active (`/environments/:id`) or was when
-   * navigating to a retired Networking / Storage path. False on Project
-   * overview and on cold loads of retired routes — never inferred solely from
-   * the first-environment fallback on {@link selectedEnvironmentId}.
+   * True when environment scope is active (`/environments/:id`). False on
+   * Project overview — never inferred solely from the first-environment
+   * fallback on {@link selectedEnvironmentId}.
    */
   environmentScopeActive: boolean
   loading: boolean
@@ -213,8 +212,8 @@ export function ProjectProvider({
   }, [queryClient, orgId, projectId])
 
   useEffect(() => {
-    // Path `/environments/:id` wins; on Overview Base / Networking / Storage
-    // keep a concrete id without flipping the Base highlight.
+    // Path `/environments/:id` wins; on Overview Base keep a concrete id
+    // without flipping the Base highlight.
     setSelectedEnvironmentId((previous) =>
       resolveSelectedEnvironmentId(
         baseSelected ? previous : pathEnvironmentId ?? previous,
@@ -241,9 +240,8 @@ export function ProjectProvider({
       }
       setSelectedEnvironmentId(id)
       // Overview Base and `/environments/:id` keep selection in the path.
-      // Managed Data / Backups (and compose Networking / Storage when using
-      // the shell selector) only update local state — compose env chips navigate
-      // via `projectEnvironmentHref` directly in ProjectSectionTabs.
+      // Managed Data / Backups only update local state — compose env chips
+      // navigate via `projectComposeSectionHref` in ProjectSectionTabs.
       if (baseSelected || pathEnvironmentId != null) {
         router.push(projectEnvironmentHref(orgId, projectId, id) as Href)
       }

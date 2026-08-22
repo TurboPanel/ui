@@ -11,7 +11,7 @@
 
 - Overview: compact workspace **filter** under the page title (defaults to **All workspaces**; expands to equal-height list) + project list (workspace label when viewing all); **setup** badge when type is unset
 - Detail: **Project shell** — breadcrumb title **Projects ›** type glyph (`ProjectTitleIcon`) + project name + compose **Project · environments** scope chips (`ProjectScopeSelector` in the project header). Managed projects keep a header trash for delete; compose projects have **no** header trash — all compose delete (project and environment) lives in the **scope-chip settings gear** (`ProjectSettingsPanel` / `EnvironmentSettingsPanel` → Danger). Section tabs, tab body
-- Compose surface tabs: **Overview · Compose · Services** live *inside* the bordered editor chrome (underline strip), not as a shell strip under the header. Scope chips stay Project · environments; switching Project ↔ environment **keeps the active section tab**. Settings live in a **gear dropdown** on each scope chip (not below compose). **Project gear:** quiet **Add Server / Add Variable / Add System user** chips plus Workspace, **Keep original container names** toggle (default Off = rename; On warns that rolling updates are disabled), and Danger → Delete project. **Environment gear:** **Add Server / Add Network / Add Storage** chips plus Danger → Delete environment. Add Storage creates identity + primary location + optional mount (`pages/storage.md`). Sections reveal when opened or when data already exists. `?hostingId=` auto-opens the environment gear panel.
+- Compose surface tabs: **Overview · Compose · Services · Hosting · Servers** live *inside* the bordered editor chrome (underline strip; horizontal scroll on narrow widths), not as a shell strip under the header. Create-wizard drafts omit Hosting / Servers (no environments yet). Scope chips stay Project · environments; switching Project ↔ environment **keeps the active section tab**. **Hosting** edits hostnames / ports / TLS (`EnvironmentDetailBody` `sections={['hosting']}`): Project scope stacks every environment (heading when more than one); environment scope edits that env only. **Servers** holds placement: Project scope is the default project server plus a pin panel per environment (title = env name); environment scope is that env’s pin (clear inherits the project default). Settings live in a **gear dropdown** on each scope chip (not below compose). **Project gear:** quiet **Add Variable / Add System user** chips plus Workspace, **Keep original container names** toggle (default Off = rename; On warns that rolling updates are disabled), and Danger → Delete project. **Environment gear:** **Add Storage** plus Danger → Delete environment. Add Storage creates identity + primary location + optional mount (`pages/storage.md`). Sections reveal when opened or when data already exists. `?hostingId=` opens the **Hosting** tab (keeps the query so the matching row can focus) — it does not open the settings gear.
 - Scope banner: `ComposeScopeBanner` (`src/components/org/project/compose-scope-banner.tsx`) only when an environment has compose overrides (**Clear overrides**, two-press). Inheriting environments have no banner — the **Compose** tab starts a blank overlay
 - **Preview Deployment** (`PreviewDeploymentModal`): lifecycle **Preview ▾** (inspect: Merged compose / Prepared compose) and **Deploy / Redeploy / Cacheless redeploy** (confirm enqueue). Modal titles **Compose Preview** vs **Confirm Deployment**. **Merged** keeps service-level `x-turbopanel` metadata and annotates the live environment pin (`x-turbopanel.placement`) for review. **Prepared** is the server deploy-preview (no auto-poll); a single-server pin shows one runtime `compose.yaml`, not a duplicate per-server copy. Not shown for project-level compose or Start/Stop.
 - **Overview** (`/overview` or `/environments/:id`): opens on **Project** by default. Inventory strip + topology **diagram only** (no Diagram/YAML toggle; no Edit button). YAML is the Compose tab.
@@ -19,6 +19,8 @@
   - **Diagram** (`ComposeGraphView`, `src/lib/compose/graph.ts`) — Overview body: cross-platform `react-native-svg` node graph (services as cards with a status dot when deployed, networks as pill "bus" connectors, volumes as dashed resource tags), laid out top-to-bottom by `depends_on`, with a color legend and accessibility text fallback (`describeComposeGraph`). Empty when there are no nodes; blank compose shows “No compose defined yet.”
 - **Compose** tab (`/compose`, `/environments/:id/compose`): YAML editor + **Discard** / **Save** inside the same surface (tabs remain in the chrome header). Both actions appear only while unsaved; Discard is two-press (`Discard` → `Discard?`) so the 40px header does not grow a confirm row.
 - **Services** tab (`/services`, `/environments/:id/services`): visual service forms + the same **Discard** / **Save**.
+- **Hosting** tab (`/hosting`, `/environments/:id/hosting`): hostnames / ports / TLS for the active scope.
+- **Servers** tab (`/servers`, `/environments/:id/servers`): project default server and/or environment pin (not a settings-gear dropdown).
 - Lifecycle **Preview ▾ / Deploy / Redeploy ▾ / Start / Stop / Refresh / Destroy** sits below when an environment is selected. After start, service status rows appear on Overview with green / yellow / red dots (mirrored on diagram service nodes).
 - Managed tabs: Overview · Connect · Data · Backups · Environments (shell strip — managed only)
 - Single environment: shell shows name (no chip strip) on managed non-Overview tabs; multi-env: chip selector on those tabs keeps selection in memory (compose scope uses path `/environments/:id`)
@@ -41,7 +43,7 @@
 - Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name. `project.metadata.type === 'system'` is a **display classifier only** — glyph/badge/label selection — and must never be used as the read-only or authorization gate.
 - Platform workspace display name is **TurboPanel**; badge label is **Platform**. Type badge text comes from `projectTypeLabel` → `TURBOPANEL_WORKSPACE_BADGE_LABEL`, not a new literal.
 - `ProjectTitleIcon` (`src/components/org/project/project-title-icon.tsx`) renders `PlatformShieldIcon` from `src/components/org/platform-badge.tsx` for `system`-typed projects instead of the compose cube, with accessible label **Platform project**; colors from `chrome.*` in `src/lib/theme.ts` — no one-off hex, no emoji.
-- System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Networking/Storage chips.
+- System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Hosting/Servers tabs or Storage chips.
 - Overview shows a platform panel (component key, target server, container status + name) plus optional read-only YAML; Restart when `system:operate` permits. Platform panel copy is HTTP/HTTPS Ingress · Database Ingress · Database High-Availability · Self Hosted TurboPanel Instance via `systemComponentLabel()`.
 - Platform badge label is **Platform** (SVG shield/gear + text — never emoji); paired with existing type badge on the TurboPanel workspace project list.
 - All-workspaces scope hides platform projects; they appear only when the TurboPanel workspace is explicitly selected.
@@ -55,16 +57,17 @@
 ## Anti-patterns (page-specific)
 
 - ❌ Giant stacked project detail as primary experience  
-- ❌ Project-level server placement (environment-owned only)  
+- ❌ Storing placement in compose YAML (`x-turbopanel.placement`) — pins live on the Servers tab (project default + environment override)
 - ❌ Showing secret variable values after create  
 - ❌ Managed projects exposing Compose UI  
 - ❌ Auto-polling deploy preview  
 - ❌ Always-on "What will run" / effective-compose panel on the project editor (preview lives in **Preview Deployment** at deploy time only)  
 - ❌ Preview Deployment modal on project-level compose scope or for lifecycle Start/Stop of already-deployed containers  
-- ❌ Separate shell section tabs above the compose surface for Overview / Compose / Services (those belong *inside* the editor chrome)
+- ❌ Separate shell section tabs above the compose surface for Overview / Compose / Services / Hosting / Servers (those belong *inside* the editor chrome)
 - ❌ Diagram / YAML toggle on Overview (diagram = Overview tab; YAML = Compose tab)  
-- ❌ Networking / Storage visible while Project (base) compose is selected  
-- ❌ Reintroducing section chips (Networking / Storage / Servers) in the editor toolbar  
+- ❌ Hosting / Servers as Add chips or dropdowns inside the scope-chip settings gear (those are surface tabs)  
+- ❌ Storage as a compose surface tab (it stays in the environment gear)  
+- ❌ Showing Hosting / Servers on the create-wizard draft (no environments yet)
 - ❌ Putting delete back in the project header for compose projects  
 - ❌ Showing an environment editor with no inheritance / scope statement above it (banner-less editing)  
 - ❌ Stack of empty Settings sections for every resource type (use Add chips inside the gear panel; reveal sections when opened or when data exists)  

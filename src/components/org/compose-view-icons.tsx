@@ -105,3 +105,51 @@ export function ComposeVisualIcon({ size = 16, color }: ComposeViewIconProps) {
     </Svg>
   )
 }
+
+/** Globe — Hosting (hostnames / ports / TLS). */
+export function ComposeHostingIcon({ size = 16, color }: ComposeViewIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M3.6 9h16.8M3.6 15h16.8M12 3c2.4 2.7 3.6 5.7 3.6 9s-1.2 6.3-3.6 9c-2.4-2.7-3.6-5.7-3.6-9S9.6 5.7 12 3Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
+/** Stacked racks — Servers (placement pin). */
+export function ComposeServersIcon({ size = 16, color }: ComposeViewIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M5.25 4.5h13.5A1.5 1.5 0 0 1 20.25 6v3a1.5 1.5 0 0 1-1.5 1.5H5.25A1.5 1.5 0 0 1 3.75 9V6A1.5 1.5 0 0 1 5.25 4.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M5.25 13.5h13.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-3a1.5 1.5 0 0 1 1.5-1.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M7.5 7.5h.008M7.5 16.5h.008"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}

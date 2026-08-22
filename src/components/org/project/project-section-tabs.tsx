@@ -465,11 +465,25 @@ export function ProjectScopeSelector() {
     )
   }
 
-  // Deep link: ?hostingId= on an environment path opens that env’s settings.
+  // Deep link: ?hostingId= on an environment path opens the Hosting tab.
   useEffect(() => {
-    if (!focusHostingId || !pathEnvironmentId || !showSettings) return
-    setSettingsTarget({ environmentId: pathEnvironmentId })
-  }, [focusHostingId, pathEnvironmentId, showSettings])
+    if (!focusHostingId || !pathEnvironmentId) return
+    if (sectionTab === 'hosting') return
+    const href = `${projectComposeSectionHref(
+      orgId,
+      projectId,
+      'hosting',
+      pathEnvironmentId,
+    )}?hostingId=${encodeURIComponent(focusHostingId)}`
+    router.replace(href as Href)
+  }, [
+    focusHostingId,
+    pathEnvironmentId,
+    sectionTab,
+    orgId,
+    projectId,
+    router,
+  ])
 
   const openSettings = (target: SettingsTarget) => {
     if (
@@ -568,7 +582,7 @@ export function ProjectScopeSelector() {
 
 /**
  * Project area nav. Managed projects only — compose Overview / Compose /
- * Services tabs live inside the compose surface chrome.
+ * Services / Hosting / Servers tabs live inside the compose surface chrome.
  */
 export function ProjectSectionTabs() {
   const { project } = useProjectContext()

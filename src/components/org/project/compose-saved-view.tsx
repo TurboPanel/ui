@@ -27,7 +27,7 @@ export type OverviewComposeSource = 'proposed' | 'saved'
 /**
  * Overview tab: inventory strip + compose topology diagram.
  * YAML editing is the Compose tab; form cards are Services.
- * Surface tabs (Overview · Compose · Services) live in the editor chrome.
+ * Surface tabs (Overview · Compose · Services · Hosting · Servers) live in the editor chrome.
  */
 export function ComposeSavedView({
   document,

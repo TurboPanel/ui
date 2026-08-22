@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COMPOSE_PROJECT_TAB_IDS,
+  DRAFT_COMPOSE_PROJECT_TAB_IDS,
   isComposeOrTemplateProject,
   isComposeProject,
   isManagedProject,
@@ -145,6 +147,15 @@ describe('path-based environment selection', () => {
     expect(
       parseComposeEditView('/org/projects/proj/environments/env1', 'proj'),
     ).toBeNull()
+    expect(
+      parseComposeEditView('/org/projects/proj/hosting', 'proj'),
+    ).toBeNull()
+    expect(
+      parseComposeEditView(
+        '/org/projects/proj/environments/env1/hosting',
+        'proj',
+      ),
+    ).toBeNull()
   })
 
   it('parses compose section tab from the path', () => {
@@ -157,6 +168,12 @@ describe('path-based environment selection', () => {
     expect(parseComposeProjectTab('/org/projects/proj/services', 'proj')).toBe(
       'services',
     )
+    expect(parseComposeProjectTab('/org/projects/proj/hosting', 'proj')).toBe(
+      'hosting',
+    )
+    expect(parseComposeProjectTab('/org/projects/proj/servers', 'proj')).toBe(
+      'servers',
+    )
     expect(
       parseComposeProjectTab(
         '/org/projects/proj/environments/env1/services',
@@ -164,8 +181,26 @@ describe('path-based environment selection', () => {
       ),
     ).toBe('services')
     expect(
+      parseComposeProjectTab(
+        '/org/projects/proj/environments/env1/hosting',
+        'proj',
+      ),
+    ).toBe('hosting')
+    expect(
+      parseComposeProjectTab(
+        '/org/projects/proj/environments/env1/servers',
+        'proj',
+      ),
+    ).toBe('servers')
+    expect(
       projectComposeSectionHref('org', 'proj', 'compose', 'env1'),
     ).toBe('/org/projects/proj/environments/env1/compose')
+    expect(
+      projectComposeSectionHref('org', 'proj', 'hosting'),
+    ).toBe('/org/projects/proj/hosting')
+    expect(
+      projectComposeSectionHref('org', 'proj', 'servers', 'env1'),
+    ).toBe('/org/projects/proj/environments/env1/servers')
   })
 
   it('parses environment id from the environments path', () => {
@@ -184,6 +219,33 @@ describe('path-based environment selection', () => {
     expect(
       parseProjectEnvironmentId('/org/projects/proj/overview', 'proj'),
     ).toBeNull()
+    expect(
+      parseProjectEnvironmentId(
+        '/org/projects/proj/environments/env1/hosting',
+        'proj',
+      ),
+    ).toBe('env1')
+    expect(
+      parseProjectEnvironmentId(
+        '/org/projects/proj/environments/env1/servers',
+        'proj',
+      ),
+    ).toBe('env1')
+  })
+
+  it('omits Hosting and Servers from the create-wizard draft tabs', () => {
+    expect([...DRAFT_COMPOSE_PROJECT_TAB_IDS]).toEqual([
+      'overview',
+      'compose',
+      'services',
+    ])
+    expect([...COMPOSE_PROJECT_TAB_IDS]).toEqual([
+      'overview',
+      'compose',
+      'services',
+      'hosting',
+      'servers',
+    ])
   })
 
   it('treats Overview Base path as Base and environments/:id as not Base', () => {
@@ -195,6 +257,12 @@ describe('path-based environment selection', () => {
     )
     expect(
       isProjectOverviewBasePath('/org/projects/proj/services', 'proj'),
+    ).toBe(true)
+    expect(
+      isProjectOverviewBasePath('/org/projects/proj/hosting', 'proj'),
+    ).toBe(true)
+    expect(
+      isProjectOverviewBasePath('/org/projects/proj/servers', 'proj'),
     ).toBe(true)
     expect(resolveBaseComposeSelected('/org/projects/proj/overview', 'proj')).toBe(
       true,
@@ -210,6 +278,9 @@ describe('path-based environment selection', () => {
         '/org/projects/proj/environments/env1/compose',
         'proj',
       ),
+    ).toBe(false)
+    expect(
+      resolveBaseComposeSelected('/org/projects/proj/environments/env1/hosting', 'proj'),
     ).toBe(false)
     expect(
       resolveBaseComposeSelected('/org/projects/proj/networking', 'proj'),

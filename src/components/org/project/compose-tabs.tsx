@@ -24,6 +24,10 @@ import {
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
 import {
+  ComposeHostingTab,
+  ComposeServersTab,
+} from '@/components/org/project/compose-resource-tabs'
+import {
   ComposeSavedView,
   type OverviewComposeSource,
 } from '@/components/org/project/compose-saved-view'
@@ -39,8 +43,6 @@ import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
-import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
-import { StorageSection } from '@/components/org/storage-section'
 import { SystemProjectOverviewPanel } from '@/components/org/project/system-project-overview-panel'
 import {
   blockingComposeLintIssues,
@@ -62,7 +64,11 @@ import {
   type ProjectRecord,
   type ServiceRecord,
 } from '@/lib/instance-api'
-import { parseComposeEditView } from '@/lib/project-navigation'
+import {
+  parseComposeEditView,
+  parseComposeProjectTab,
+  type ComposeProjectTabId,
+} from '@/lib/project-navigation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useContainersByServices, useServices } from '@/lib/queries'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
@@ -81,6 +87,59 @@ function draftSectionView(
   if (section === 'compose') return 'editor'
   if (section === 'services') return 'visual'
   return null
+}
+
+function resolveComposeActiveTab(
+  draft: ProjectDraft | null,
+  pathname: string,
+  projectId: string,
+): ComposeProjectTabId {
+  if (draft) return draft.section
+  return parseComposeProjectTab(pathname, projectId)
+}
+
+function resolveComposeSectionView(
+  draft: ProjectDraft | null,
+  pathname: string,
+  projectId: string,
+): ComposeEditorView | null {
+  if (draft) return draftSectionView(draft.section)
+  return parseComposeEditView(pathname, projectId)
+}
+
+function isComposeServicesQueryEnabled(
+  draft: ProjectDraft | null,
+  selectedEnvironmentId: string | null,
+  baseSelected: boolean,
+  projectAllowsMutations: boolean,
+): boolean {
+  return (
+    !draft &&
+    Boolean(selectedEnvironmentId) &&
+    !baseSelected &&
+    projectAllowsMutations
+  )
+}
+
+function isComposeServicesLoading(
+  queryEnabled: boolean,
+  servicesLoading: boolean,
+  serviceCount: number,
+  containersLoading: boolean,
+): boolean {
+  if (!queryEnabled) return false
+  if (servicesLoading) return true
+  return serviceCount > 0 && containersLoading
+}
+
+/** Hosting / Servers are dedicated surface tabs; everything else is Overview · Compose · Services. */
+function composeSurfaceBody(
+  activeTab: ComposeProjectTabId,
+  overviewBody: ReactNode,
+): ReactNode {
+  if (activeTab === 'hosting') return <ComposeHostingTab />
+  if (activeTab === 'servers') return <ComposeServersTab />
+  return overviewBody
 }
 
 function inventoryItem(
@@ -589,15 +648,15 @@ export function ComposeServicesTab() {
     selectedEnvironmentId ?? '',
   )
   // A draft owns its section in local state — there is no URL to read it from.
-  const sectionView = draft
-    ? draftSectionView(draft.section)
-    : parseComposeEditView(pathname, projectId)
+  const activeTab = resolveComposeActiveTab(draft, pathname, projectId)
+  const sectionView = resolveComposeSectionView(draft, pathname, projectId)
 
-  const servicesEnabled =
-    !draft &&
-    Boolean(selectedEnvironmentId) &&
-    !baseSelected &&
-    projectAllowsMutations
+  const servicesEnabled = isComposeServicesQueryEnabled(
+    draft,
+    selectedEnvironmentId,
+    baseSelected,
+    projectAllowsMutations,
+  )
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
     enabled: servicesEnabled,
   })
@@ -610,10 +669,12 @@ export function ComposeServicesTab() {
     enabled: servicesEnabled && serviceIds.length > 0,
   })
   const containersByService = containersQuery.containersByService
-  const loading =
-    servicesEnabled &&
-    (servicesQuery.isLoading ||
-      (serviceIds.length > 0 && containersQuery.isLoading))
+  const loading = isComposeServicesLoading(
+    servicesEnabled,
+    servicesQuery.isLoading,
+    serviceIds.length,
+    containersQuery.isLoading,
+  )
   const composeSaving =
     persistProjectCompose.isPending || persistEnvironmentCompose.isPending
 
@@ -685,66 +746,33 @@ export function ComposeServicesTab() {
 
       <View style={styles.overviewCompose}>
         <ComposeScopeBanner />
-        <ServicesPanelBody
-          baseSelected={baseSelected}
-          project={project}
-          projectId={projectId}
-          orgId={orgId}
-          selectedEnvironment={selectedEnvironment}
-          environmentsCount={environments.length}
-          projectServerCount={projectServerCount}
-          storageCount={storageCount}
-          bindingsCount={bindingsCount}
-          services={services}
-          containersByService={containersByService}
-          loading={loading}
-          saving={composeSaving}
-          isStarted={isStarted}
-          sectionView={sectionView}
-          draft={draft}
-          canMutate={canManage && projectAllowsMutations}
-          onSaveProjectCompose={handleSaveProjectCompose}
-          onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
-        />
+        {composeSurfaceBody(
+          activeTab,
+          <ServicesPanelBody
+            baseSelected={baseSelected}
+            project={project}
+            projectId={projectId}
+            orgId={orgId}
+            selectedEnvironment={selectedEnvironment}
+            environmentsCount={environments.length}
+            projectServerCount={projectServerCount}
+            storageCount={storageCount}
+            bindingsCount={bindingsCount}
+            services={services}
+            containersByService={containersByService}
+            loading={loading}
+            saving={composeSaving}
+            isStarted={isStarted}
+            sectionView={sectionView}
+            draft={draft}
+            canMutate={canManage && projectAllowsMutations}
+            onSaveProjectCompose={handleSaveProjectCompose}
+            onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
+          />,
+        )}
         {draft ? null : <OverviewEnvironmentsPanel />}
       </View>
     </View>
-  )
-}
-
-export function ComposeNetworkingTab() {
-  const { orgId, projectId, selectedEnvironmentId } = useProjectContext()
-  if (!selectedEnvironmentId) {
-    return <Text style={orgPanelStyles.muted}>Select an environment.</Text>
-  }
-  // Environment detail already owns the hosting panel; reuse it. Standalone
-  // page chrome is retired — routes redirect to the current scope path; this
-  // body is kept for Settings-area parity (hosting only).
-  return (
-    <View style={styles.root}>
-      <EnvironmentDetailBody
-        orgId={orgId}
-        projectId={projectId}
-        environmentId={selectedEnvironmentId}
-        embedded
-        showComposeOverlay={false}
-        sections={['hosting']}
-      />
-    </View>
-  )
-}
-
-export function ComposeStorageTab() {
-  const { orgId, selectedEnvironment } = useProjectContext()
-  if (!selectedEnvironment) {
-    return <Text style={orgPanelStyles.muted}>Select an environment.</Text>
-  }
-  return (
-    <StorageSection
-      orgId={orgId}
-      environmentId={selectedEnvironment.id}
-      defaultServerId={selectedEnvironment.serverId}
-    />
   )
 }
 

@@ -45,16 +45,27 @@ export function projectTypeLabel(project: ProjectRecord): string {
 }
 
 /**
- * Compose project section tabs: Overview (saved view), Compose (YAML), Services
- * (visual forms). Project · environment scope chips stay in the header.
+ * Compose project section tabs inside the editor chrome. Project · environment
+ * scope chips stay in the header; switching scope keeps the active tab.
+ * Hosting and Servers are first-class tabs (not scope-chip settings).
+ * The create-wizard draft only offers Overview / Compose / Services.
  */
 export const COMPOSE_PROJECT_TAB_IDS = [
   'overview',
   'compose',
   'services',
+  'hosting',
+  'servers',
 ] as const
 
 export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
+
+/** Create-wizard draft has no environments, so Hosting / Servers stay hidden. */
+export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
+  'overview',
+  'compose',
+  'services',
+] as const
 
 /** Platform projects never accept mutations from the UI. */
 export function systemProjectAllowsMutations(): boolean {
@@ -65,6 +76,8 @@ export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
   overview: 'Overview',
   compose: 'Compose',
   services: 'Services',
+  hosting: 'Hosting',
+  servers: 'Servers',
 }
 
 export const MANAGED_PROJECT_TAB_IDS = [
@@ -134,6 +147,22 @@ export function projectServicesEditHref(
 }
 
 /**
+ * Hosting (hostnames / ports / TLS) for Project scope.
+ * Path: `/projects/:projectId/hosting`
+ */
+export function projectHostingHref(orgId: string, projectId: string): string {
+  return `${projectHref(orgId, projectId)}/hosting`
+}
+
+/**
+ * Server placement for Project scope (default project server).
+ * Path: `/projects/:projectId/servers`
+ */
+export function projectServersHref(orgId: string, projectId: string): string {
+  return `${projectHref(orgId, projectId)}/servers`
+}
+
+/**
  * Selected environment on Overview (compose overlay / lifecycle).
  * Path: `/projects/:projectId/environments/:environmentId`
  */
@@ -167,6 +196,30 @@ export function projectEnvironmentServicesHref(
   environmentId: string,
 ): string {
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/services`
+}
+
+/**
+ * Hosting editor for an environment.
+ * Path: `/projects/:projectId/environments/:environmentId/hosting`
+ */
+export function projectEnvironmentHostingHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/hosting`
+}
+
+/**
+ * Server pin for an environment.
+ * Path: `/projects/:projectId/environments/:environmentId/servers`
+ */
+export function projectEnvironmentServersHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/servers`
 }
 
 export function projectServiceHref(
@@ -214,7 +267,32 @@ export function parseComposeEditView(
   return null
 }
 
-/** Active compose section tab for the path (Overview when not Compose/Services). */
+/**
+ * Trailing section segment on a compose project path (`compose`, `hosting`, …).
+ * Empty on Overview and on `/environments/:id` with no suffix.
+ */
+function composePathSectionSegment(
+  pathname: string,
+  projectId: string,
+): string {
+  const base = `/projects/${projectId}`
+  const envId = parseProjectEnvironmentId(pathname, projectId)
+  if (envId) {
+    const envMarker = `${base}/environments/`
+    const envIdx = pathname.indexOf(envMarker)
+    if (envIdx < 0) return ''
+    const afterEnv = pathname.slice(envIdx + envMarker.length)
+    const parts = afterEnv.split(/[/?#]/).filter(Boolean)
+    return parts[1] ?? ''
+  }
+  const marker = `${base}/`
+  const idx = pathname.indexOf(marker)
+  if (idx < 0) return ''
+  const rest = pathname.slice(idx + marker.length)
+  return rest.split(/[/?#]/)[0] ?? ''
+}
+
+/** Active compose section tab for the path (Overview when not a named section). */
 export function parseComposeProjectTab(
   pathname: string,
   projectId: string,
@@ -222,6 +300,9 @@ export function parseComposeProjectTab(
   const view = parseComposeEditView(pathname, projectId)
   if (view === 'editor') return 'compose'
   if (view === 'visual') return 'services'
+  const suffix = composePathSectionSegment(pathname, projectId)
+  if (suffix === 'hosting') return 'hosting'
+  if (suffix === 'servers') return 'servers'
   return 'overview'
 }
 
@@ -244,6 +325,16 @@ export function projectComposeSectionHref(
     return environmentId
       ? projectEnvironmentServicesHref(orgId, projectId, environmentId)
       : projectServicesEditHref(orgId, projectId)
+  }
+  if (tab === 'hosting') {
+    return environmentId
+      ? projectEnvironmentHostingHref(orgId, projectId, environmentId)
+      : projectHostingHref(orgId, projectId)
+  }
+  if (tab === 'servers') {
+    return environmentId
+      ? projectEnvironmentServersHref(orgId, projectId, environmentId)
+      : projectServersHref(orgId, projectId)
   }
   return environmentId
     ? projectEnvironmentHref(orgId, projectId, environmentId)
@@ -325,7 +416,7 @@ export function parseProjectEnvironmentId(
   }
 }
 
-/** True on Overview Base (`…/overview`, `/compose`, `/services`, or bare index). */
+/** True on Overview Base (`…/overview`, `/compose`, `/services`, `/hosting`, `/servers`, or bare index). */
 export function isProjectOverviewBasePath(
   pathname: string,
   projectId: string,
@@ -336,6 +427,8 @@ export function isProjectOverviewBasePath(
   if (pathname.includes(`/projects/${projectId}/compose`)) return true
   // Bare `/services` (edit) and `/services/:id` (detail) live under Project scope.
   if (pathname.includes(`/projects/${projectId}/services`)) return true
+  if (pathname.includes(`/projects/${projectId}/hosting`)) return true
+  if (pathname.includes(`/projects/${projectId}/servers`)) return true
   return false
 }
 

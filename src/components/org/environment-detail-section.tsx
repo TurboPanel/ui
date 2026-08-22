@@ -1602,7 +1602,7 @@ function EnvironmentLoadedPanels({
   sections?: readonly EnvironmentDetailSectionId[]
   /** Deploy / placement / merged YAML chrome — off when reusing hosting-only. */
   showEnvironmentChrome?: boolean
-  /** Hosting row id from a `/networking/:id` deep link (`?hostingId=`). */
+  /** Hosting row id from a `?hostingId=` deep link on the Hosting tab. */
   focusHostingId?: string | null
 }>) {
   const showSection = (id: EnvironmentDetailSectionId) => sections.includes(id)
@@ -1892,15 +1892,15 @@ export function EnvironmentDetailBody({
   projectId: string
   environmentId: string
   embedded?: boolean
-  /** Compose overlay editor — off on Networking (edit on Overview / Settings). */
+  /** Compose overlay editor — off on the Hosting tab (edit on Compose / Services). */
   showComposeOverlay?: boolean
   /**
    * Resource panels to render. Default: all four (full environment body).
    * Pass e.g. `['hosting']` to reuse hostnames/ports/TLS without Storage /
-   * Service settings / Containers (Settings Networking).
+   * Service settings / Containers (Hosting tab).
    */
   sections?: readonly EnvironmentDetailSectionId[]
-  /** Hosting row id from a `/networking/:id` deep link (`?hostingId=`). */
+  /** Hosting row id from a `?hostingId=` deep link on the Hosting tab. */
   focusHostingId?: string | null
 }>) {
   const resolvedSections = sections ?? ALL_ENVIRONMENT_DETAIL_SECTIONS

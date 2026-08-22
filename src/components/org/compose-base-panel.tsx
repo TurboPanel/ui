@@ -35,7 +35,7 @@ export function ComposeBasePanel({
   hideHeader?: boolean
   /** When section tabs own Compose/Services, hide the in-editor Compose/Services strip. */
   hideViewTabs?: boolean
-  /** Overview · Compose · Services inside the editor chrome. */
+  /** Overview · Compose · Services · Hosting · Servers inside the editor chrome. */
   showSectionTabs?: boolean
   /** Hide the Save action for surfaces that commit elsewhere (create wizard). */
   hideSave?: boolean
