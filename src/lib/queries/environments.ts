@@ -83,6 +83,11 @@ async function invalidateEnvironmentSubtree(
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).environments.deployPreview(environmentId),
       }),
+      // Deploy history has no interval — a new attempt only shows up because
+      // the enqueueing mutation invalidates this key.
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).environments.deployments(environmentId),
+      }),
     )
   }
   await Promise.all(tasks)

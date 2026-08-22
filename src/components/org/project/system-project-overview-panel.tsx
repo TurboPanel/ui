@@ -19,6 +19,7 @@ import {
 import { serviceStatusTone } from '@/lib/container-status'
 import { useCan, queryKeys } from '@/lib/query-client'
 import {
+  commandStatusById,
   isTerminalCommandStatus,
   useCommandsBatch,
   type TrackedCommandEntry,
@@ -82,10 +83,11 @@ function useSystemRestartPoll(orgId: string) {
     const records = commandsQuery.data
     if (!records || records.length === 0) return
 
-    for (let index = 0; index < pollCommands.length; index += 1) {
-      const entry = pollCommands[index]
-      const record = records[index]
-      if (!entry || !record) continue
+    // Join on command id: unreadable ids are dropped from the batched response.
+    const recordsById = commandStatusById(records)
+    for (const entry of pollCommands) {
+      const record = recordsById.get(entry.commandId)
+      if (!record) continue
       if (!isTerminalCommandStatus(record.status)) continue
       if (processedCommandIdsRef.current.has(entry.commandId)) continue
 
@@ -98,7 +100,7 @@ function useSystemRestartPoll(orgId: string) {
           }),
         })
       } else {
-        setPollError(record.error ?? `Restart ${record.status}`)
+        setPollError(record.errorMessage ?? `Restart ${record.status}`)
       }
       setPollCommands((prev) =>
         prev.filter((item) => item.commandId !== entry.commandId),

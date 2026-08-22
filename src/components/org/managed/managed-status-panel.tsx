@@ -1,15 +1,10 @@
-import { useState } from 'react'
-import {
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useMemo, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import {
   ContainerRoleBadge,
   ContainerStatusBadge,
 } from '@/components/org/managed/container-status-badge'
+import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { Button, EmptyState, SegmentedControl } from '@/components/ui'
@@ -18,6 +13,8 @@ import {
   managedStatusLabel,
   type ManagedStatus,
 } from '@/lib/managed-services'
+import { plainTextTranscriptLines } from '@/lib/execution-log-lines'
+import { useCommandLog } from '@/lib/queries/execution-logs'
 import { useManagedLogs } from '@/lib/queries/managed'
 import { colors, spacing } from '@/lib/theme'
 
@@ -86,6 +83,7 @@ export function ManagedStatusPanel({
   containers,
   version,
   lastError,
+  applyCommand,
 }: Readonly<{
   orgId: string
   environmentId: string
@@ -96,6 +94,13 @@ export function ManagedStatusPanel({
   /** `PostgreSQL 18 · Alpine` from the release catalog; omitted when uncatalogued. */
   version?: string | null
   lastError?: string | null
+  /**
+   * Latest tracked `managed.apply` command, when one has been enqueued in this
+   * session. Its transcript is a distinct sub-section from the on-demand engine
+   * log tail below — one is what TurboPanel did, the other is what the engine
+   * container printed.
+   */
+  applyCommand?: Readonly<{ serverId: string; commandId: string }> | null
 }>) {
   const [tail, setTail] = useState<(typeof TAIL_OPTIONS)[number]>(200)
   const [logs, setLogs] = useState('')
@@ -106,6 +111,18 @@ export function ManagedStatusPanel({
   })
   const loadingLogs = logsQuery.isFetching
   const pill = statusPillStyle(status)
+  // Engine logs are a `docker logs` tail: no per-line stream, phase, or
+  // timestamp, so every row renders as stdout with no phase header.
+  const engineLogLines = useMemo(
+    () => plainTextTranscriptLines(logs),
+    [logs],
+  )
+  const applyLog = useCommandLog(
+    orgId,
+    applyCommand?.serverId ?? null,
+    applyCommand?.commandId ?? null,
+    { enabled: Boolean(applyCommand) },
+  )
 
   const refreshLogs = async () => {
     setError(null)
@@ -168,7 +185,20 @@ export function ManagedStatusPanel({
         ) : null}
       </View>
 
-      <Text style={orgPanelStyles.detailLabel}>Logs</Text>
+      {applyCommand ? (
+        <View style={styles.logSection}>
+          <Text style={orgPanelStyles.detailLabel}>Apply transcript</Text>
+          <LogTranscriptView
+            lines={applyLog.snapshot.lines}
+            state={applyLog.state}
+            title="managed.apply"
+            hint="What TurboPanel ran to converge this cluster."
+            downloadFileName={`managed-apply-${applyCommand.commandId}.log`}
+          />
+        </View>
+      ) : null}
+
+      <Text style={orgPanelStyles.detailLabel}>Engine logs</Text>
       <View style={styles.logControls}>
         <SegmentedControl
           options={TAIL_OPTIONS.map((option) => ({
@@ -193,14 +223,11 @@ export function ManagedStatusPanel({
 
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
 
-      <TextInput
-        editable={false}
-        multiline
-        value={logs || 'Logs load on demand — press Refresh logs.'}
-        style={[
-          Platform.OS === 'web' ? styles.logsWeb : styles.logs,
-        ]}
-        textAlignVertical="top"
+      <LogTranscriptView
+        lines={engineLogLines}
+        state={engineLogLines.length > 0 ? 'sealed' : 'idle'}
+        hint="Engine container output — loads on demand, never on a timer."
+        downloadFileName={`managed-engine-${environmentId}.log`}
       />
     </SectionPanel>
   )
@@ -251,32 +278,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'monospace',
   },
+  logSection: {
+    gap: spacing.sm,
+  },
   logControls: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  logs: {
-    minHeight: 180,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.textBody,
-    padding: spacing.sm,
-    borderRadius: 8,
-    fontFamily: 'monospace',
-    fontSize: 12,
-  },
-  logsWeb: {
-    minHeight: 180,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgInput,
-    color: colors.textBody,
-    padding: spacing.sm,
-    borderRadius: 8,
-    fontFamily: 'monospace',
-    fontSize: 12,
   },
 })

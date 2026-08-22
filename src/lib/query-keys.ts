@@ -1,5 +1,6 @@
 import type {
   AccessScopeKind,
+  ContainerLogStream,
   IpAllocation,
   IpScope,
   NetworkKind,
@@ -36,6 +37,22 @@ export type NetworkListFilters = Readonly<{
   datacenterId?: string
   serverId?: string
   kind?: NetworkKind
+}>
+
+/**
+ * Cache identity for one container-log read — every predicate the closed query
+ * set allows, minus the cursor (pages of one filter share a cache entry).
+ */
+export type ContainerLogQueryKeyFilter = Readonly<{
+  from: string
+  to: string
+  serverId?: string
+  environmentId?: string
+  serviceId?: string
+  containerId?: string
+  stream?: ContainerLogStream
+  search?: string
+  limit?: number
 }>
 
 export type ContainerListFilters = Readonly<{
@@ -175,6 +192,9 @@ export const queryKeys = {
           ['org', orgId, 'environment', environmentId] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
+        /** Deploy history page (no interval — invalidated by deploy mutations). */
+        deployments: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'deployments'] as const,
       },
 
       services: {
@@ -267,6 +287,18 @@ export const queryKeys = {
         },
       },
 
+      containerLogs: {
+        all: ['org', orgId, 'container-logs'] as const,
+        settings: ['org', orgId, 'container-logs', 'settings'] as const,
+        /**
+         * Infinite-query key for one composed filter. The cursor is
+         * deliberately **excluded**: pages of the same window/predicate set
+         * share one cache entry, while changing a filter starts a fresh one.
+         */
+        query: (filter: ContainerLogQueryKeyFilter) =>
+          ['org', orgId, 'container-logs', 'query', filter] as const,
+      },
+
       commands: {
         all: ['org', orgId, 'commands'] as const,
         batch: (entries: readonly { serverId: string; commandId: string }[]) =>
@@ -281,6 +313,9 @@ export const queryKeys = {
           ] as const,
         detail: (serverId: string, commandId: string) =>
           ['org', orgId, 'commands', serverId, commandId] as const,
+        /** Execution-log transcript for one command (cursor-based tail). */
+        log: (serverId: string, commandId: string) =>
+          ['org', orgId, 'commands', serverId, commandId, 'log'] as const,
       },
     }) as const,
 

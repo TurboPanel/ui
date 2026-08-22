@@ -27,6 +27,7 @@ import {
   projectOverviewHref,
 } from '@/lib/project-navigation'
 import {
+  commandStatusById,
   isTerminalCommandStatus,
   useCommandsBatch,
   useDeleteEnvironment,
@@ -36,7 +37,7 @@ import {
 } from '@/lib/queries'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 function EnvironmentSelector() {
   const {
@@ -133,15 +134,24 @@ function ManagedProjectTrashButton({
     setEnvArmed(false)
   }, [selectedEnvironment?.id, environments.length])
 
+  const commandsById = useMemo(
+    () => commandStatusById(commandsQuery.data),
+    [commandsQuery.data],
+  )
+
   useEffect(() => {
     if (!pendingEnvDelete) return
-    const command = commandsQuery.data?.[0]
+    // Join on command id: unreadable ids are dropped from the batched response.
+    const trackedCommandId = trackedDestroy[0]?.commandId
+    const command = trackedCommandId
+      ? commandsById.get(trackedCommandId)
+      : undefined
     if (!command || !isTerminalCommandStatus(command.status)) return
     const environmentId = pendingEnvDelete
     setTrackedDestroy([])
     setPendingEnvDelete(null)
     if (command.status !== 'succeeded') {
-      setError(command.error ?? `Destroy ${command.status}`)
+      setError(command.errorMessage ?? `Destroy ${command.status}`)
       return
     }
     void (async () => {
@@ -163,7 +173,8 @@ function ManagedProjectTrashButton({
       }
     })()
   }, [
-    commandsQuery.data,
+    commandsById,
+    trackedDestroy,
     pendingEnvDelete,
     pathname,
     projectId,

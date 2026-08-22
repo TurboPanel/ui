@@ -2675,6 +2675,315 @@ export async function fetchCommand(serverId: string, commandId: string): Promise
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/${commandId}`)
 }
 
+/**
+ * Lean lifecycle projection returned by the batched status endpoint. Narrower
+ * than {@link CommandRecord} on purpose — no dispatch payload, result summary,
+ * or ping latency breakdown. Use {@link fetchCommand} when those are needed.
+ */
+export type CommandStatusRecord = {
+  id: string
+  serverId: string
+  status: CommandStatus
+  type: string
+  queuedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  /** Whether a retained execution log exists for this command. */
+  hasLog: boolean
+}
+
+/**
+ * One request for many tracked command ids. Ids the session cannot read are
+ * omitted from the response rather than failing the batch.
+ */
+export async function fetchCommandStatuses(
+  ids: readonly string[],
+): Promise<CommandStatusRecord[]> {
+  if (ids.length === 0) return []
+  const body = await apiFetch<{ ok: true; commands: CommandStatusRecord[] }>(
+    `${CLIENT_API}/commands/status`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ ids: [...ids] }),
+    },
+  )
+  return body.commands
+}
+
+/**
+ * One read of a command transcript (`GET /servers/:id/commands/:commandId/log`).
+ *
+ * `exists: false` is the "not started" state — the control plane deliberately
+ * returns an empty body instead of 404 so a poll loop started before the first
+ * daemon chunk does not have to special-case an error status.
+ */
+export type CommandLogResponse = {
+  ok: true
+  /** Transcript bytes decoded as UTF-8 (NDJSON `CommandOutputEvent` lines). */
+  text: string
+  /** Cursor to pass back as `from` on the next poll. */
+  nextSeq: number
+  /** Whether the transcript is final (the command reached a terminal status). */
+  sealed: boolean
+  /** Whether output was dropped after the retained-size cap. */
+  truncated: boolean
+  /** Whether any transcript exists at all. */
+  exists: boolean
+}
+
+/**
+ * Read a transcript from `from` (a chunk sequence, not a byte offset). Poll with
+ * the previous response's `nextSeq`; stop once `sealed` is true.
+ */
+export async function fetchCommandLog(
+  serverId: string,
+  commandId: string,
+  options?: Readonly<{ from?: number; max?: number }>,
+): Promise<CommandLogResponse> {
+  const params = new URLSearchParams()
+  if (typeof options?.from === 'number' && options.from > 0) {
+    params.set('from', String(options.from))
+  }
+  if (typeof options?.max === 'number' && options.max > 0) {
+    params.set('max', String(options.max))
+  }
+  const serialized = params.toString()
+  const query = serialized.length > 0 ? `?${serialized}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/commands/${commandId}/log${query}`,
+  )
+}
+
+/**
+ * Which of a container's two output streams a line came from. Mirrors the
+ * control plane's `ContainerLogStream` (`src/lib/container-logs/types.ts`).
+ */
+export type ContainerLogStream = 'stdout' | 'stderr'
+
+/**
+ * One container log line, fully identified.
+ *
+ * Container output is an **analytics row** stamped with
+ * `organization → server → environment → service → container`, not a keyed
+ * blob like an execution-log transcript. The two are read completely
+ * differently and are deliberately not unified — see the control plane's
+ * `src/lib/container-logs/AGENTS.md`.
+ */
+export type ContainerLogEventRecord = {
+  /** ISO-8601 UTC timestamp of the line (millisecond precision). */
+  timestamp: string
+  organizationId: string
+  serverId: string
+  /** Null for containers outside an environment. */
+  environmentId: string | null
+  /** Null for one-off containers with no compose service. */
+  serviceId: string | null
+  containerId: string
+  stream: ContainerLogStream
+  message: string
+}
+
+/**
+ * The **closed** predicate set `GET /organizations/:id/container-logs` accepts.
+ *
+ * It is simultaneously the store's `ORDER BY` prefix and its partition plan, so
+ * widening it is a storage migration rather than a type change. Never send a
+ * key that is not listed here, and never expose a filter the server cannot
+ * answer. `organizationId` is absent on purpose: it comes from the path, after
+ * the access check, so no query string can widen a read past the authorized
+ * organization.
+ */
+export type ContainerLogQueryFilter = {
+  /** Inclusive lower bound, ISO-8601. */
+  from: string
+  /** Exclusive upper bound, ISO-8601. */
+  to: string
+  serverId?: string
+  environmentId?: string
+  serviceId?: string
+  containerId?: string
+  stream?: ContainerLogStream
+  /** Case-insensitive substring match on the message. */
+  search?: string
+  /** Opaque cursor from the previous page; pass back verbatim. */
+  cursor?: string
+  limit?: number
+}
+
+/** One newest-first page. `nextCursor` is null once the window is exhausted. */
+export type ContainerLogPageResponse = {
+  events: ContainerLogEventRecord[]
+  nextCursor: string | null
+}
+
+/**
+ * Read one newest-first page of container output for an organization.
+ *
+ * A 503 carrying `container_logs_disabled` / `container_logs_unavailable` is a
+ * *state of the feature*, not a transport failure: the control plane refuses to
+ * let "you never turned this on" look like "your containers printed nothing".
+ * `apiFetch` keeps the code in the thrown message; the query layer classifies it
+ * (`classifyContainerLogFailure`) rather than retrying it.
+ */
+export async function fetchContainerLogs(
+  orgId: string,
+  filter: ContainerLogQueryFilter,
+): Promise<ContainerLogPageResponse> {
+  const params = new URLSearchParams()
+  params.set('from', filter.from)
+  params.set('to', filter.to)
+  for (const key of [
+    'serverId',
+    'environmentId',
+    'serviceId',
+    'containerId',
+    'stream',
+    'search',
+    'cursor',
+  ] as const) {
+    const value = filter[key]
+    if (typeof value === 'string' && value.length > 0) params.set(key, value)
+  }
+  if (typeof filter.limit === 'number' && filter.limit > 0) {
+    params.set('limit', String(filter.limit))
+  }
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/container-logs?${params.toString()}`,
+  )
+}
+
+/**
+ * Organization container-log retention switch.
+ *
+ * Deliberately **not** a cascade like host defaults: retention is billed and
+ * stored per tenant, so there is no lower layer that could sensibly override
+ * it. `retentionDays` is the platform-wide window and is read-only here.
+ */
+export type OrgContainerLogSettings = {
+  containerLogsEnabled: boolean
+  retentionDays: number
+}
+
+export async function fetchOrgContainerLogSettings(
+  orgId: string,
+): Promise<OrgContainerLogSettings> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/container-logs-settings`,
+  )
+}
+
+/** `null` clears the option, returning the organization to the platform default (off). */
+export async function saveOrgContainerLogSettings(
+  orgId: string,
+  patch: Readonly<{ containerLogsEnabled: boolean | null }>,
+): Promise<OrgContainerLogSettings & { ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/container-logs-settings`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    },
+  )
+}
+
+/**
+ * One deploy attempt against one server, read from the append-only `command`
+ * table. `id` **is** the command id — pass it to {@link fetchCommandLog} for the
+ * transcript.
+ */
+export type DeploymentHistoryRecord = {
+  id: string
+  /** Alias of {@link DeploymentHistoryRecord.id}, for transcript call sites. */
+  commandId: string
+  generation: number | null
+  desiredHash: string | null
+  /** Per-service replica counts captured at enqueue; null for older rows. */
+  replicaCounts: Record<string, number> | null
+  serverId: string
+  serverName: string | null
+  status: CommandStatus
+  actorEntityType: string
+  actorEntityId: string
+  queuedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  /** Wall-clock duration of the attempt; null while still running. */
+  durationMs: number | null
+  errorCode: string | null
+  errorMessage: string | null
+  /** Whether a retained execution log exists (resolved store-side). */
+  hasLog: boolean
+}
+
+/** Per-server convergence for one generation, read from *current* state. */
+export type DeploymentServerConvergence = {
+  serverId: string
+  serverName: string | null
+  status: CommandStatus
+  appliedGeneration: number | null
+  desiredGeneration: number | null
+  deploymentStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'draining' | null
+  replicaCounts: Record<string, number> | null
+  totalReplicas: number | null
+}
+
+/**
+ * One deploy attempt plus its whole fan-out. `commands[]` holds every
+ * `environment.deploy` command sharing the anchor's generation — one per
+ * participating host, complete and unpaginated.
+ */
+export type DeploymentDetailRecord = {
+  id: string
+  environmentId: string
+  generation: number | null
+  desiredHash: string | null
+  replicaCounts: Record<string, number>
+  totalReplicas: number
+  commands: DeploymentHistoryRecord[]
+  servers: DeploymentServerConvergence[]
+}
+
+export type DeploymentHistoryPage = {
+  ok: true
+  deployments: DeploymentHistoryRecord[]
+  /** Pass back as `before` for the next (older) page; null at the end. */
+  nextCursor: string | null
+}
+
+/**
+ * Deploy history for one environment, newest first. Keyset-paginated by command
+ * id (UUIDv7, so id order matches time order) — never a polling read.
+ */
+export async function fetchEnvironmentDeployments(
+  environmentId: string,
+  options?: Readonly<{ limit?: number; before?: string }>,
+): Promise<DeploymentHistoryPage> {
+  const params = new URLSearchParams()
+  if (typeof options?.limit === 'number' && options.limit > 0) {
+    params.set('limit', String(options.limit))
+  }
+  if (options?.before) {
+    params.set('before', options.before)
+  }
+  const serialized = params.toString()
+  const query = serialized.length > 0 ? `?${serialized}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/deployments${query}`,
+  )
+}
+
+/** One deploy attempt and its multi-server fan-out. `deploymentId` is a command id. */
+export async function fetchEnvironmentDeployment(
+  environmentId: string,
+  deploymentId: string,
+): Promise<{ ok: true; deployment: DeploymentDetailRecord }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/deployments/${deploymentId}`,
+  )
+}
+
 export class DeployHealthCheckMissingError extends Error {
   readonly code = 'health_check_missing'
   readonly required: boolean

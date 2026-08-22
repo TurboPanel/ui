@@ -12,12 +12,13 @@ import { Button, LoadingState, TextField } from '@/components/ui'
 import {
   MANAGED_RUNTIME_PRESENT_ERROR,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
-  type CommandRecord,
+  type CommandStatusRecord,
   type ContainerRecord,
   type EnvironmentRecord,
   type ProjectRecord,
 } from '@/lib/instance-api'
 import {
+  commandStatusById,
   isTerminalCommandStatus,
   useCommandsBatch,
   useContainersByEnvironments,
@@ -391,7 +392,7 @@ function ProjectDeleteActions({
 }
 
 function useSyncTerminalProjectDeleteCommands(input: Readonly<{
-  commands: readonly CommandRecord[] | undefined
+  commands: readonly CommandStatusRecord[] | undefined
   trackedCommands: readonly TrackedCommandEntry[]
   commandEnvById: Record<string, string>
   managedProject: boolean
@@ -415,9 +416,11 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
 
   useEffect(() => {
     if (!commands) return
-    for (const [index, command] of commands.entries()) {
-      const entry = trackedCommands[index]
-      if (!entry) continue
+    // Join on command id: unreadable ids are dropped from the batched response.
+    const commandsById = commandStatusById(commands)
+    for (const entry of trackedCommands) {
+      const command = commandsById.get(entry.commandId)
+      if (!command) continue
       const environmentId = commandEnvById[entry.commandId]
       if (!environmentId || !isTerminalCommandStatus(command.status)) continue
 
@@ -442,7 +445,7 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
           [environmentId]: {
             stopping: false,
             status: null,
-            error: command.error ??
+            error: command.errorMessage ??
               `${managedProject ? 'Destroy' : 'Stop'} ${command.status}`,
             serverId: entry.serverId,
           },

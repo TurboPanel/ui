@@ -339,10 +339,33 @@ export function NotificationsBellIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
+/** Terminal lines — org container logs. */
+export function LogsNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4.5 4.5h15a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V6a1.5 1.5 0 0 1 1.5-1.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="m7 9.5 2.5 2.5L7 14.5M12.5 15h4.5"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 const AREA_ICONS = {
   overview: OverviewNavIcon,
   projects: ProjectsNavIcon,
   managed: ManagedNavIcon,
+  logs: LogsNavIcon,
   servers: ServersNavIcon,
   network: NetworkingNavIcon,
   access: AccessNavIcon,

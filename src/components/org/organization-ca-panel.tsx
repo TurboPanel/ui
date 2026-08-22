@@ -18,7 +18,7 @@ import {
   NO_PENDING_ROTATION_ERROR,
   type CaRotationResult,
   type CaRotationStatus,
-  type CommandRecord,
+  type CommandStatusRecord,
   type OrganizationCaLeafHealth,
   type OrganizationCaRecord,
   type OrgServerRecord,
@@ -120,7 +120,7 @@ function serverLabel(
 
 function liveResultStatus(
   row: CaRotationResult,
-  commandsById: ReadonlyMap<string, CommandRecord>,
+  commandsById: ReadonlyMap<string, CommandStatusRecord>,
 ): string {
   if (!row.commandId) return row.status
   return commandsById.get(row.commandId)?.status ?? row.status
@@ -128,10 +128,10 @@ function liveResultStatus(
 
 function liveResultError(
   row: CaRotationResult,
-  commandsById: ReadonlyMap<string, CommandRecord>,
+  commandsById: ReadonlyMap<string, CommandStatusRecord>,
 ): string | undefined {
   if (!row.commandId) return row.error
-  return commandsById.get(row.commandId)?.error ?? row.error
+  return commandsById.get(row.commandId)?.errorMessage ?? row.error
 }
 
 function isTerminalSuccessStatus(status: string): boolean {
@@ -140,7 +140,7 @@ function isTerminalSuccessStatus(status: string): boolean {
 
 function allResultsTerminalSuccess(
   results: readonly CaRotationResult[],
-  commandsById: ReadonlyMap<string, CommandRecord>,
+  commandsById: ReadonlyMap<string, CommandStatusRecord>,
 ): boolean {
   if (results.length === 0) return false
   return results.every((row) =>
@@ -188,9 +188,9 @@ function serverNameMap(
 }
 
 function commandByIdMap(
-  commands: readonly CommandRecord[] | undefined,
-): Map<string, CommandRecord> {
-  const map = new Map<string, CommandRecord>()
+  commands: readonly CommandStatusRecord[] | undefined,
+): Map<string, CommandStatusRecord> {
+  const map = new Map<string, CommandStatusRecord>()
   for (const command of commands ?? []) {
     map.set(command.id, command)
   }
@@ -288,7 +288,7 @@ function RotationProgressList({
 }: Readonly<{
   results: readonly CaRotationResult[]
   serverNames: ReadonlyMap<string, string>
-  commandsById: ReadonlyMap<string, CommandRecord>
+  commandsById: ReadonlyMap<string, CommandStatusRecord>
 }>) {
   return (
     <View style={styles.progressList}>
@@ -339,7 +339,7 @@ function RotationProgressRow({
 }: Readonly<{
   row: CaRotationResult
   serverNames: ReadonlyMap<string, string>
-  commandsById: ReadonlyMap<string, CommandRecord>
+  commandsById: ReadonlyMap<string, CommandStatusRecord>
 }>) {
   const status = liveResultStatus(row, commandsById)
   const error = liveResultError(row, commandsById)
@@ -456,7 +456,7 @@ function OrganizationCaReady({
   showProgress: boolean
   results: readonly CaRotationResult[]
   serverNames: ReadonlyMap<string, string>
-  commandsById: ReadonlyMap<string, CommandRecord>
+  commandsById: ReadonlyMap<string, CommandStatusRecord>
   showRetire: boolean
   retireEnabled: boolean
   retirePending: boolean

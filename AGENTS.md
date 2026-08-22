@@ -206,7 +206,7 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | Liquid glass | `src/lib/glass.ts` + `src/components/glass/glass-surface.tsx` (frosted chrome; iOS 26+ `expo-glass-effect`) |
 | Shared panel patterns | `src/components/org/org-panel-styles.ts` |
 
-**Page overrides that exist today** (do not invent others): `sign-in.md`, `overview.md`, `manage.md`, `organizations.md`, `servers.md`, `datacenters.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`, `tls.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
+**Page overrides that exist today** (do not invent others): `sign-in.md`, `overview.md`, `manage.md`, `organizations.md`, `servers.md`, `datacenters.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`, `tls.md`, `deploy-logs.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
 
 ### Mandatory first steps
 
@@ -309,7 +309,7 @@ Identifiers for Cloudflare and Expo deployments:
 The UI is never installed as a standalone service tree — the **instance** repo's Caddy serves it, and the **daemon** installs its build output. Two modes (`TURBOPANEL_UI_MODE` on the instance):
 
 - **Development** (`dev`) — `turbopanel-ui.service` runs the Expo web dev server on `:8081` (installed by the daemon `instance-launch` role, running as the **dev user**). Caddy reverse-proxies non-`/api`/`/ws` traffic to **`127.0.0.1:8081`**. The unit sets `NODE_OPTIONS=--dns-result-order=ipv4first` so Node 24 `listen("localhost")` binds IPv4 (default is `[::1]`, which Caddy and Vagrant tunnels never hit — spinner stays on “Starting Expo dev server…”). Dev logs go to **`/var/log/turbopanel/ui`** (dev-user-owned).
-  **Fast Refresh on Vagrant:** host saves on VirtioFS / 9p do not notify guest inotify, so Metro’s Linux `FallbackWatcher` never sees them (a full browser reload still works because Metro re-reads files). `metro.config.js` installs a poll watcher (`scripts/metro-virtfs-poll-watch.cjs`) when `/proc/mounts` shows those types. Override with `TURBOPANEL_METRO_POLL=1` (force) or `=0` (disable). Tamagui style extraction is off in development so Fast Refresh can apply. After changing Metro config, restart `turbopanel-ui`. Open the signed-in console via Caddy (`:8443` / `:8880`); Metro `:8081` is forwarded for native / Expo Go (same-origin cookies still will not work on the Metro origin). Web HMR is `/hot` on the Caddy origin.
+  **Fast Refresh on Vagrant:** host saves on VirtioFS / 9p do not notify guest inotify, so Metro’s Linux `FallbackWatcher` never sees them (a full browser reload still works because Metro re-reads files). `metro.config.js` installs a poll watcher (`scripts/metro-virtfs-poll-watch.cjs`) when `/proc/mounts` shows those types. Override with `TURBOPANEL_METRO_POLL=1` (force) or `=0` (disable). Tamagui style extraction is off in development so Fast Refresh can apply. After changing Metro config, restart `turbopanel-ui`. Metro `blockList` / gitignore `/logs/` apply only to a **repo-root** dump — never `src/components/org/logs/` (that is `LogTranscriptView` source). Open the signed-in console via Caddy (`:8443` / `:8880`); Metro `:8081` is forwarded for native / Expo Go (same-origin cookies still will not work on the Metro origin). Web HMR is `/hot` on the Caddy origin.
 - **Production** (`static`) — `pnpm export` produces the static web bundle; the daemon `ui-build` role publishes it to the FHS path **`/opt/turbopanel/share/ui`** (instance `TURBOPANEL_UI_ROOT` default). Caddy serves those files directly with SPA fallback and `turbopanel-ui.service` is stopped/disabled. Production runs as `tpctrl:tp`.
 
 Both modes route through the single instance Caddy entrypoint; there is no separate `turbopaneld.service` or FHS tree owned by this repo. Canonical paths/units live in `../turbopanel/AGENTS.md` (Caddy + UI env vars) and `../turbopaneld/AGENTS.md` (Filesystem layout & path model).
@@ -606,7 +606,7 @@ When apply returns 422 with `"cert apply is not applicable on this runtime"` (Wo
 
 ## Command Pipeline UI
 
-Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. No hand-rolled `setInterval` per page or per server.
+Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. Each tick is **one** `POST /commands/status` request for every tracked id (via `fetchCommandStatuses`), not one `GET` per command; results are re-aligned to entry order so index-based consumers stay correct, and unreadable ids simply drop out. `useCommandRecordsBatch` is the per-id variant (one `fetchCommand` per entry, full `CommandRecord`) kept for the server-detail Control tab, which renders the ping latency breakdown. No hand-rolled `setInterval` per page or per server.
 
 ### API helpers — `src/lib/instance-api.ts`
 
@@ -614,8 +614,10 @@ Per-server command actions use `src/components/org/server-commands-panel.tsx` on
 - `setServerHostname(serverId, hostname)` → `POST /api/client/v1/servers/:id/hostname` — returns the same `CommandEnqueueResponse` shape: `{ ok: true, commandId, status }`.
 - `rebootServer(serverId)` → `POST /api/client/v1/servers/:id/commands/reboot` — returns `CommandEnqueueResponse`.
 - `fetchCommand(serverId, commandId)` → `GET /api/client/v1/servers/:id/commands/:commandId` — returns `CommandRecord`; for `daemon.ping` commands the response includes optional `latency` (`PingLatencyBreakdown`).
-- Types: `CommandStatus` (string union of all statuses), `PingLatencyBreakdown`, `CommandRecord`, `CommandEnqueueResponse`.
-- The `CommandRecord` shape is flat (all lifecycle timestamps are top-level fields); the instance serializes them from the `metadata` jsonb blob server-side — the UI type and fetch helpers are unchanged.
+- `fetchCommandStatuses(ids)` → `POST /api/client/v1/commands/status` — one request for many tracked ids (max 100, deduped server-side); returns `CommandStatusRecord[]`. Ids the session cannot read are omitted from the response rather than failing the batch. This is the polling path; `fetchCommand` stays for the single-command detail view that needs `latency` / `result`.
+- Types: `CommandStatus` (string union of all statuses), `PingLatencyBreakdown`, `CommandRecord`, `CommandStatusRecord`, `CommandEnqueueResponse`.
+- `CommandStatusRecord` is the lean lifecycle projection — `{ id, serverId, status, type, queuedAt, startedAt, finishedAt, errorCode, errorMessage, hasLog }`. No `payload`, `result`, `attempts`, or `latency`; read `errorMessage` (not `error`) for the failure text.
+- The `CommandRecord` shape is flat (all lifecycle timestamps are top-level fields). The instance serializes it from **real `command` columns** — `status`, `attempts`, `error_code`, `error_message`, `result_summary`, and every granular lifecycle timestamp (`queued_at`…`finished_at`, `expires_at`) are columns, not a jsonb blob. `metadata` is **no longer** the source of those fields: it survives only as the follow-up-chain blob (`pendingStandbyApplies`, `followUpPromote`, `pendingTlsLeaf`, `desiredHash`) and never reaches the UI. `CommandRecord` still **excludes the dispatch payload** — that lives in the separate `dispatch` table and is never serialized to a client. See `turbopanel/src/lib/commands/AGENTS.md` and `turbopanel/src/lib/db/AGENTS.md`.
 
 **Latency breakdown shape** (`CommandRecord.latency` for `daemon.ping`):
 
@@ -631,6 +633,106 @@ PingLatencyBreakdown {
 ```
 
 Segment durations are computed server-side from the flat `CommandRecord` lifecycle fields (`queuedAt`, `dispatchStartedAt`, `sentAt`, `ackedAt`, `finishedAt`) before being exposed on `CommandRecord.latency`.
+
+### Execution logs (command transcripts)
+
+Command stdout/stderr is captured by the daemon, uploaded as redacted NDJSON
+`CommandOutputEvent` lines, and read back through
+`GET /api/client/v1/servers/:id/commands/:commandId/log?from=&max=`
+(`fetchCommandLog` → `CommandLogResponse`). `from` is a **chunk** sequence, not a
+byte offset; poll with the previous response's `nextSeq`. `exists: false` is the
+"not started" state — the route never 404s a poll loop, so "waiting for output"
+and "no transcript retained" stay distinguishable.
+
+- Hook: `useCommandLog(orgId, serverId, commandId)` in
+  `src/lib/queries/execution-logs.ts`. One React Query per open transcript;
+  `refetchInterval` is `COMMAND_LOG_POLL_MS` (1 s) only while the latest read is
+  not `sealed`, then `false`. Pass `poll: false` for an already-terminal command.
+  Chunks accumulate in a ref keyed by `(serverId, commandId)` and are deduped by
+  event sequence, because a read whose byte budget split a chunk replays it with
+  an unchanged `nextSeq`.
+- Parsing lives in `src/lib/execution-log-lines.ts`: NDJSON events become
+  `LogTranscriptLine[]`; plain-text lines (the store's truncation marker, legacy
+  output) degrade to `stdout` rows instead of being dropped. ANSI is **stripped**,
+  never interpreted.
+- Rendering is one shared component,
+  `src/components/org/logs/log-transcript-view.tsx` — used by the Overview deploy
+  transcript, the deployment-history rows, the managed **Apply transcript**, and
+  the managed **Engine logs** tail. Do not fork it per surface; see
+  `design-system/turbopanel/pages/deploy-logs.md`.
+
+### Container logs (fleet-wide container output)
+
+Container output is an **analytics read**, not a keyed transcript: rows stamped
+`organization → server → environment → service → container`, queried over a time
+window. It is deliberately **not** unified with execution logs — different store,
+different route shape, different cache strategy.
+
+- **Manage-gated settings** — `fetchOrgContainerLogSettings(orgId)` /
+  `saveOrgContainerLogSettings(orgId, { containerLogsEnabled })` →
+  `GET`/`PUT /api/client/v1/organizations/:id/container-logs-settings`, returning
+  `OrgContainerLogSettings` (`containerLogsEnabled`, read-only platform-wide
+  `retentionDays`). `null` clears the option back to the platform default (off).
+  This route requires `organization:manage`.
+- **Reads** — `fetchContainerLogs(orgId, filter)` →
+  `GET /api/client/v1/organizations/:id/container-logs`, a newest-first page
+  (`ContainerLogPageResponse`: `events`, `nextCursor`). The route split is
+  intentional: **manage** owns `…/container-logs-settings`, ordinary **read**
+  access owns `…/container-logs`. `ContainerLogQueryFilter` is a **closed**
+  predicate set (`from`/`to`, `serverId`, `environmentId`, `serviceId`,
+  `containerId`, `stream`, `search`, `cursor`, `limit`) — never send a key that is
+  not listed; `organizationId` is absent on purpose because it comes from the
+  authorized path.
+- **Hooks** — `src/lib/queries/container-logs.ts`: `useContainerLogSettings(orgId, enabled)`
+  (pass `enabled` from the manage check), `useSaveContainerLogSettings` (writes the
+  settings cache and invalidates every read so a switched-off org cannot serve a
+  cached page), and
+  `useContainerLogsQuery(orgId, filter, { enabled, live, liveRangeId, now, pollMs })`.
+- **`ContainerLogAvailability`** (`'ok' | 'disabled' | 'unavailable'`) — the control
+  plane answers **503** with `container_logs_disabled` / `container_logs_unavailable`
+  so "you never turned this on" cannot look like "your containers printed nothing".
+  `classifyContainerLogFailure` maps those codes onto local query state (an empty
+  page plus `availability`), exactly like the transcript viewer's `forbidden` —
+  they must **not** go through global auth/error recovery, and React Query must not
+  retry them. Anything else rethrows and keeps normal error behaviour.
+- **Live tail is a query mode, not a component timer.** `live` + `liveRangeId`
+  put the cadence on React Query's `refetchInterval` and re-resolve `[from, to)`
+  inside the query function on **every** fetch — a pinned `to` bound cannot grow,
+  so re-reading the same window would never surface a newer line. The component
+  only toggles the flag and renders the result; it owns no `setInterval`.
+  - Cadence is `CONTAINER_LOG_LIVE_POLL_MS` (5 s), slower than the 1 s
+    command-transcript poll on purpose: this is a fleet-wide columnar scan.
+  - `containerLogLivePollInterval` stops the timer once a read reports
+    `disabled` / `unavailable`. Those arrive as 503s folded into a *successful*
+    empty page, so nothing else would ever stop it, and polling a switched-off
+    feature forever is a scan nobody asked for.
+  - Focus-aware: `refetchIntervalInBackground: false`, and
+    `refetchOnWindowFocus` is on **only** while tailing (outside live mode the
+    window is pinned, so a focus refetch would re-read bytes already paid for).
+    The explorer additionally turns live off when a native app leaves the
+    foreground, and does not auto-resume.
+  - `live` caps the infinite query at `maxPages: 1` (newest page only) with
+    `gcTime: 0` and never sends a cursor, so a tail never replays history.
+  - **Cache key**: normally the filter minus its cursor
+    (`toContainerLogQueryKey`), so pages of one window accumulate in a single
+    entry and changing any predicate starts a fresh one. In live mode it is
+    `toContainerLogLiveQueryKey`, which drops the absolute bounds in favour of
+    the range id — otherwise every tick would allocate a new entry and refetch
+    from scratch.
+- Read helpers: `flattenContainerLogPages` (newest-first flatten) and
+  `containerLogAvailability` (first page decides).
+
+### Deploy history
+
+`GET /api/client/v1/environments/:id/deployments` (`fetchEnvironmentDeployments`)
+reads the append-only `command` table — `deployment` is upsert-per-(environment,
+server) current state and cannot list past deploys. A row's `id` **is** the
+command id, so the same id fetches the transcript. Multi-host deploys arrive as
+several rows sharing one `generation`; the UI groups them client-side
+(`src/lib/deployment-history.ts`) instead of fanning out to
+`/deployments/:deploymentId` per row. `useEnvironmentDeployments` never polls —
+it is invalidated by `invalidateEnvironmentSubtree` (deploy/lifecycle mutations)
+and when a tracked deploy command reaches a terminal status.
 
 ### Ping / hostname / reboot
 

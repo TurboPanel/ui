@@ -14,7 +14,10 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import { useQueryClient } from '@tanstack/react-query'
+import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
 import { TextField } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
@@ -32,10 +35,13 @@ import {
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
   type CommandStatus,
+  type CommandStatusRecord,
   type EnvironmentRecord,
 } from '@/lib/instance-api'
 import {
+  commandStatusById,
   isTerminalCommandStatus,
+  useCommandLog,
   useCommandsBatch,
   useContainersByEnvironments,
   useCreateEnvironment,
@@ -46,6 +52,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { resolveEffectiveServerId } from '@/lib/project-options'
+import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 
 type TrackedCommand = {
@@ -57,6 +64,14 @@ type TrackedCommand = {
 }
 
 type DeployConfirmMode = 'deploy' | 'redeploy' | 'cacheless'
+
+/** The deploy whose transcript the Overview auto-opened. */
+type OpenDeployLog = Readonly<{
+  environmentId: string
+  serverId: string
+  commandId: string
+  label: string
+}>
 
 type PreviewOpenState = {
   purpose: PreviewDeploymentPurpose
@@ -649,6 +664,104 @@ function BarTrailingActions({
   return null
 }
 
+/** Terminal outcome banner for the deploy the transcript belongs to. */
+function DeployOutcomeBanner({
+  status,
+  error,
+}: Readonly<{ status: CommandStatus; error: string | null }>) {
+  if (!isTerminalCommandStatus(status)) return null
+  if (status === 'succeeded') {
+    return (
+      <View style={styles.outcomeSuccess}>
+        <Text style={styles.outcomeSuccessText}>Deploy succeeded</Text>
+      </View>
+    )
+  }
+  return (
+    <View style={orgPanelStyles.calloutWarning}>
+      <Text style={orgPanelStyles.calloutWarningText}>
+        {error ?? `Deploy ${status}`}
+      </Text>
+    </View>
+  )
+}
+
+/**
+ * Live transcript for the deploy this session just enqueued. Opens
+ * automatically on enqueue, can be hidden, and stays reopenable from the same
+ * command id while the deploy is still tracked — including after the operator
+ * looks at another environment, because the command keeps streaming either way.
+ * Only a newer deploy or an explicit close (offered once the command is
+ * terminal) takes it away.
+ */
+function DeployLogSection({
+  orgId,
+  openLog,
+  environmentLabel,
+  status,
+  error,
+  collapsed,
+  onToggle,
+  onDismiss,
+}: Readonly<{
+  orgId: string
+  openLog: OpenDeployLog
+  /** Set only while the transcript belongs to a non-selected environment. */
+  environmentLabel: string | null
+  status: CommandStatus
+  error: string | null
+  collapsed: boolean
+  onToggle: () => void
+  /** Provided once the command is terminal; hidden while it is still running. */
+  onDismiss: (() => void) | null
+}>) {
+  const log = useCommandLog(orgId, openLog.serverId, openLog.commandId, {
+    enabled: !collapsed,
+  })
+
+  return (
+    <View style={styles.logSection}>
+      <View style={styles.logSectionHeader}>
+        <Text style={styles.logSectionTitle}>
+          {environmentLabel
+            ? `${openLog.label} output · ${environmentLabel}`
+            : `${openLog.label} output`}
+        </Text>
+        <View style={styles.barSpacer} />
+        <QuietButton
+          label={collapsed ? 'Show output' : 'Hide output'}
+          accessibilityLabel={
+            collapsed ? 'Show deploy output' : 'Hide deploy output'
+          }
+          onPress={onToggle}
+        />
+        {onDismiss ? (
+          <QuietButton
+            label="Close"
+            accessibilityLabel="Close deploy output"
+            onPress={onDismiss}
+          />
+        ) : null}
+      </View>
+      <DeployOutcomeBanner status={status} error={error} />
+      {collapsed ? null : (
+        <LogTranscriptView
+          lines={log.snapshot.lines}
+          state={log.state}
+          downloadFileName={`deploy-${openLog.commandId}.log`}
+        />
+      )}
+    </View>
+  )
+}
+
+/** Labels whose commands produce a deploy transcript worth auto-opening. */
+const DEPLOY_COMMAND_LABELS = new Set<string>([
+  'Deploy',
+  'Redeploy',
+  'Cacheless redeploy',
+])
+
 function deployModeLabel(mode: DeployConfirmMode): string {
   if (mode === 'cacheless') return 'Cacheless redeploy'
   if (mode === 'redeploy') return 'Redeploy'
@@ -745,7 +858,7 @@ function patchTrackedCommandMeta(
 
 type TrackedCommandBatchRecord = Readonly<{
   status: CommandStatus
-  error?: string | null
+  errorMessage?: string | null
 }>
 
 function applyTrackedCommandRecordUpdate(
@@ -761,7 +874,7 @@ function applyTrackedCommandRecordUpdate(
   if (!meta || isTerminalCommandStatus(meta.status)) return
 
   const nextStatus = record.status
-  const nextError = record.error ?? null
+  const nextError = record.errorMessage ?? null
   if (meta.status !== nextStatus || meta.error !== nextError) {
     setCommandMeta((current) =>
       patchTrackedCommandMeta(current, entry.commandId, nextStatus, nextError),
@@ -779,8 +892,9 @@ function applyTrackedCommandRecordUpdate(
   )
 }
 
+/** Rows are joined by command id — unreadable ids drop out of the batch. */
 function syncTrackedCommandBatch(
-  records: readonly TrackedCommandBatchRecord[] | undefined,
+  records: readonly CommandStatusRecord[] | undefined,
   trackedEntries: readonly TrackedCommandEntry[],
   metaById: Record<string, TrackedCommand>,
   setCommandMeta: Dispatch<SetStateAction<Record<string, TrackedCommand>>>,
@@ -790,9 +904,10 @@ function syncTrackedCommandBatch(
 ): void {
   if (!records || trackedEntries.length === 0) return
 
-  for (const [index, record] of records.entries()) {
-    const entry = trackedEntries[index]
-    if (!entry) continue
+  const recordsById = commandStatusById(records)
+  for (const entry of trackedEntries) {
+    const record = recordsById.get(entry.commandId)
+    if (!record) continue
     applyTrackedCommandRecordUpdate(
       entry,
       record,
@@ -850,6 +965,14 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   deployConfirmBusy: boolean
   effectiveServerId: string | null
   placementServerLabel: string | null
+  openDeployLog: OpenDeployLog | null
+  deployLogCollapsed: boolean
+  deployLogStatus: CommandStatus
+  /** Owning environment name while the transcript is not the selected one. */
+  deployLogEnvironmentLabel: string | null
+  deployLogError: string | null
+  toggleDeployLog: () => void
+  dismissDeployLog: (() => void) | null
   openComposeInspect: (mode: ComposePreviewMode) => void
   openDeployConfirm: (confirm: DeployConfirmMode) => void
   runLifecycleStart: () => Promise<void>
@@ -903,6 +1026,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     null,
   )
   const [deployConfirmBusy, setDeployConfirmBusy] = useState(false)
+  const [openDeployLog, setOpenDeployLog] = useState<OpenDeployLog | null>(null)
+  const [deployLogCollapsed, setDeployLogCollapsed] = useState(false)
+  const queryClient = useQueryClient()
 
   const containersQuery = useContainersByEnvironments(orgId, environmentIds, {
     observeUntilHostDeployed: isSystemProject,
@@ -951,6 +1077,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   )
 
   useEffect(() => {
+    // The open transcript is keyed to the tracked command, not to the current
+    // selection: `trackedEntries` keeps polling it in the background, and the
+    // history list has no interval of its own, so clearing it here would strand
+    // an in-flight deploy until it finished.
     setDestroyArmed(false)
     setActionError(null)
     setPreviewOpen(null)
@@ -1021,6 +1151,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       serverId,
       label,
     })
+    if (DEPLOY_COMMAND_LABELS.has(label)) {
+      setOpenDeployLog({ environmentId, serverId, commandId: response.commandId, label })
+      setDeployLogCollapsed(false)
+    }
   }
 
   const runLifecycleStart = async () => {
@@ -1159,6 +1293,32 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       : latestCommandForEnv(commands, selectedEnvironment.id)
   const commandError = resolveCommandError(selectedCommand)
 
+  const deployLogMeta = openDeployLog
+    ? (commands[openDeployLog.commandId] ?? null)
+    : null
+  const deployLogStatus: CommandStatus = deployLogMeta?.status ?? 'queued'
+  const deployLogTerminal = isTerminalCommandStatus(deployLogStatus)
+  const deployLogEnvironmentId = openDeployLog?.environmentId ?? null
+  const deployLogEnvironmentLabel = useMemo(() => {
+    if (!deployLogEnvironmentId) return null
+    if (deployLogEnvironmentId === selectedEnvironmentId) return null
+    const owner = environments.find((row) => row.id === deployLogEnvironmentId)
+    return owner?.name?.trim() || 'another environment'
+  }, [deployLogEnvironmentId, selectedEnvironmentId, environments])
+
+  useEffect(() => {
+    // A finished deploy is a new history row (and a settled duration on an
+    // existing one) — the history list has no interval of its own.
+    if (!deployLogTerminal || !deployLogEnvironmentId) return
+    ignorePromise(
+      queryClient.invalidateQueries({
+        queryKey: queryKeys
+          .org(orgId)
+          .environments.deployments(deployLogEnvironmentId),
+      }),
+    )
+  }, [deployLogTerminal, deployLogEnvironmentId, orgId, queryClient])
+
   const containers = selectedEnvironment
     ? (containersByEnv[selectedEnvironment.id] ?? [])
     : []
@@ -1205,6 +1365,20 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     deployConfirmBusy,
     effectiveServerId,
     placementServerLabel,
+    openDeployLog,
+    deployLogCollapsed,
+    deployLogStatus,
+    deployLogEnvironmentLabel,
+    deployLogError: deployLogMeta?.error ?? null,
+    toggleDeployLog: () => setDeployLogCollapsed((current) => !current),
+    // Dismissal is only offered once the deploy is terminal — a live transcript
+    // is never taken away from under the operator.
+    dismissDeployLog: deployLogTerminal
+      ? () => {
+          setOpenDeployLog(null)
+          setDeployLogCollapsed(false)
+        }
+      : null,
     openComposeInspect,
     openDeployConfirm,
     runLifecycleStart,
@@ -1220,6 +1394,96 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setPreviewOpen,
     refetchAllContainers: containersQuery.refetchAll,
   }
+}
+
+/** The three independent panel-level error lines. */
+function PanelErrorMessages({
+  containerError,
+  actionError,
+  commandError,
+}: Pick<
+  OverviewEnvironmentsPanelModel,
+  'containerError' | 'actionError' | 'commandError'
+>) {
+  return (
+    <>
+      {containerError ? (
+        <Text style={orgPanelStyles.error}>{containerError}</Text>
+      ) : null}
+      {actionError ? <Text style={orgPanelStyles.error}>{actionError}</Text> : null}
+      {commandError ? (
+        <Text style={orgPanelStyles.error}>{commandError}</Text>
+      ) : null}
+    </>
+  )
+}
+
+/** Deployment history and the compose preview — both need a real environment. */
+function EnvironmentDetailSections({
+  orgId,
+  project,
+  selectedEnvironment,
+  baseSelected,
+  canMutateLifecycle,
+  previewOpen,
+  deployConfirmBusy,
+  effectiveServerId,
+  placementServerLabel,
+  runDeployFromPreview,
+  setPreviewOpen,
+}: Pick<
+  OverviewEnvironmentsPanelModel,
+  | 'orgId'
+  | 'project'
+  | 'selectedEnvironment'
+  | 'baseSelected'
+  | 'canMutateLifecycle'
+  | 'previewOpen'
+  | 'deployConfirmBusy'
+  | 'effectiveServerId'
+  | 'placementServerLabel'
+  | 'runDeployFromPreview'
+  | 'setPreviewOpen'
+>) {
+  if (!selectedEnvironment || baseSelected) return null
+  return (
+    <>
+      <EnvironmentDeploymentHistoryPanel
+        orgId={orgId}
+        environmentId={selectedEnvironment.id}
+      />
+      <PreviewDeploymentModal
+        visible={previewOpen != null}
+        orgId={orgId}
+        environmentId={selectedEnvironment.id}
+        environmentLabel={selectedEnvironment.name?.trim() || 'this environment'}
+        canManage={canMutateLifecycle}
+        placementServerId={effectiveServerId}
+        placementServerLabel={placementServerLabel}
+        projectCompose={project?.options?.compose}
+        environmentCompose={selectedEnvironment.options?.compose}
+        deploying={deployConfirmBusy}
+        purpose={previewOpen?.purpose ?? 'inspect'}
+        initialMode={previewOpen?.mode ?? 'merged'}
+        confirmLabel={
+          previewOpen?.purpose === 'confirm' && previewOpen.confirm
+            ? deployModeLabel(previewOpen.confirm)
+            : 'Deploy'
+        }
+        onCancel={() => {
+          if (deployConfirmBusy) return
+          setPreviewOpen(null)
+        }}
+        onConfirm={
+          previewOpen?.purpose === 'confirm'
+            ? () => {
+                ignorePromise(runDeployFromPreview())
+              }
+            : undefined
+        }
+      />
+    </>
+  )
 }
 
 function OverviewEnvironmentsPanelView({
@@ -1250,6 +1514,13 @@ function OverviewEnvironmentsPanelView({
   deployConfirmBusy,
   effectiveServerId,
   placementServerLabel,
+  openDeployLog,
+  deployLogCollapsed,
+  deployLogStatus,
+  deployLogEnvironmentLabel,
+  deployLogError,
+  toggleDeployLog,
+  dismissDeployLog,
   openComposeInspect,
   openDeployConfirm,
   runLifecycleStart,
@@ -1347,48 +1618,38 @@ function OverviewEnvironmentsPanelView({
         </Text>
       ) : null}
 
-      {containerError ? (
-        <Text style={orgPanelStyles.error}>{containerError}</Text>
-      ) : null}
-      {actionError ? <Text style={orgPanelStyles.error}>{actionError}</Text> : null}
-      {commandError ? (
-        <Text style={orgPanelStyles.error}>{commandError}</Text>
-      ) : null}
+      <PanelErrorMessages
+        containerError={containerError}
+        actionError={actionError}
+        commandError={commandError}
+      />
 
-      {selectedEnvironment && !baseSelected ? (
-        <PreviewDeploymentModal
-          visible={previewOpen != null}
+      {openDeployLog ? (
+        <DeployLogSection
           orgId={orgId}
-          environmentId={selectedEnvironment.id}
-          environmentLabel={
-            selectedEnvironment.name?.trim() || 'this environment'
-          }
-          canManage={canMutateLifecycle}
-          placementServerId={effectiveServerId}
-          placementServerLabel={placementServerLabel}
-          projectCompose={project?.options?.compose}
-          environmentCompose={selectedEnvironment.options?.compose}
-          deploying={deployConfirmBusy}
-          purpose={previewOpen?.purpose ?? 'inspect'}
-          initialMode={previewOpen?.mode ?? 'merged'}
-          confirmLabel={
-            previewOpen?.purpose === 'confirm' && previewOpen.confirm
-              ? deployModeLabel(previewOpen.confirm)
-              : 'Deploy'
-          }
-          onCancel={() => {
-            if (deployConfirmBusy) return
-            setPreviewOpen(null)
-          }}
-          onConfirm={
-            previewOpen?.purpose === 'confirm'
-              ? () => {
-                  ignorePromise(runDeployFromPreview())
-                }
-              : undefined
-          }
+          openLog={openDeployLog}
+          environmentLabel={deployLogEnvironmentLabel}
+          status={deployLogStatus}
+          error={deployLogError}
+          collapsed={deployLogCollapsed}
+          onToggle={toggleDeployLog}
+          onDismiss={dismissDeployLog}
         />
       ) : null}
+
+      <EnvironmentDetailSections
+        orgId={orgId}
+        project={project}
+        selectedEnvironment={selectedEnvironment}
+        baseSelected={baseSelected}
+        canMutateLifecycle={canMutateLifecycle}
+        previewOpen={previewOpen}
+        deployConfirmBusy={deployConfirmBusy}
+        effectiveServerId={effectiveServerId}
+        placementServerLabel={placementServerLabel}
+        runDeployFromPreview={runDeployFromPreview}
+        setPreviewOpen={setPreviewOpen}
+      />
     </View>
   )
 }
@@ -1408,6 +1669,40 @@ export function OverviewEnvironmentsPanel() {
 const styles = StyleSheet.create({
   root: {
     gap: spacing.sm,
+  },
+  logSection: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgArea,
+  },
+  logSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  logSectionTitle: {
+    color: colors.textTitle,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  outcomeSuccess: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
+    borderLeftWidth: 3,
+    borderLeftColor: chrome.accent,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  outcomeSuccessText: {
+    color: chrome.accent,
+    fontSize: 13,
+    fontWeight: '600',
   },
   bar: {
     flexDirection: 'row',

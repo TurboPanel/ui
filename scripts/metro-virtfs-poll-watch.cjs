@@ -25,7 +25,6 @@ const SKIP_DIR_NAMES = new Set([
   'design-system',
   'dist',
   'ios',
-  'logs',
   'node_modules',
 ])
 const WATCH_EXTENSIONS = new Set([

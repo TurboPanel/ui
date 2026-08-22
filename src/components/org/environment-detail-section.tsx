@@ -44,7 +44,7 @@ import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { VariablesSection } from '@/components/org/variables-section'
 import {
   DeployHealthCheckMissingError,
-  type CommandRecord,
+  type CommandStatusRecord,
   type ComposeDocument,
   type ContainerRecord,
   type EnvironmentRecord,
@@ -55,6 +55,7 @@ import {
   type TlsRecord,
 } from '@/lib/instance-api'
 import {
+  commandStatusById,
   isTerminalCommandStatus,
   useCommandsBatch,
   type TrackedCommandEntry,
@@ -388,11 +389,11 @@ function upsertServiceById(
   return copy
 }
 
-function deployStatusMessage(command: CommandRecord): string {
+function deployStatusMessage(command: CommandStatusRecord): string {
   if (command.status === 'succeeded') {
     return 'Deployment completed.'
   }
-  return command.error ?? `Deployment ${command.status}.`
+  return command.errorMessage ?? `Deployment ${command.status}.`
 }
 
 function deployErrorMessage(err: unknown): string {
@@ -1735,17 +1736,19 @@ function seedHostingEditors(
  * active deploy command and has reached a terminal status.
  */
 function findTerminalDeployEntry(
-  data: readonly CommandRecord[],
+  data: readonly CommandStatusRecord[],
   entries: readonly TrackedCommandEntry[],
   activeDeployCommandId: string | null,
-): { entry: TrackedCommandEntry; record: CommandRecord } | null {
+): { entry: TrackedCommandEntry; record: CommandStatusRecord } | null {
   if (!activeDeployCommandId) return null
-  const index = entries.findIndex(
-    (entry) => entry.commandId === activeDeployCommandId,
+  const entry = entries.find(
+    (row) => row.commandId === activeDeployCommandId,
   )
-  const record = index === -1 ? undefined : data[index]
+  if (!entry) return null
+  // Join on command id: unreadable ids are dropped from the batched response.
+  const record = commandStatusById(data).get(entry.commandId)
   if (!record || !isTerminalCommandStatus(record.status)) return null
-  return { entry: entries[index], record }
+  return { entry, record }
 }
 
 type PostDeployRefreshOptions = Readonly<{

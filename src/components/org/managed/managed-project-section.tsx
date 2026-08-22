@@ -38,6 +38,7 @@ import {
 } from '@/lib/managed-services'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import {
+    commandStatusById,
     isTerminalCommandStatus,
     useCommandsBatch,
     type TrackedCommandEntry,
@@ -442,6 +443,14 @@ function ManagedEnvironmentReadyPanels({
 }>) {
   const queryClient = useQueryClient()
   const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
+  /**
+   * Latest `managed.apply` enqueued in this session. Kept beside the tracked
+   * entries (which are pruned on terminal) so the Apply transcript stays
+   * readable after the command finishes.
+   */
+  const [applyCommand, setApplyCommand] = useState<TrackedCommandEntry | null>(
+    null,
+  )
   const { showOverview, showConnect, showData, showBackups, showSettings, showLifecycle } =
     managedFocusVisibility(focus)
 
@@ -490,17 +499,22 @@ function ManagedEnvironmentReadyPanels({
     invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
   }, [queryClient, orgId, environmentId])
 
-  const registerCommand = (commandId: string, _label: string, commandServerId?: string) => {
+  const registerCommand = (commandId: string, label: string, commandServerId?: string) => {
     const resolvedServerId = commandServerId ?? serverId
     if (!resolvedServerId) return
     setTrackedEntries((current) => [...current, { serverId: resolvedServerId, commandId }])
+    if (label === 'Apply' || label === 'Apply settings') {
+      setApplyCommand({ serverId: resolvedServerId, commandId })
+    }
   }
 
   useEffect(() => {
     if (!commandsQuery.data) return
-    for (const [index, record] of commandsQuery.data.entries()) {
-      const entry = trackedEntries[index]
-      if (!entry || !isTerminalCommandStatus(record.status)) continue
+    // Join on command id: unreadable ids are dropped from the batched response.
+    const recordsById = commandStatusById(commandsQuery.data)
+    for (const entry of trackedEntries) {
+      const record = recordsById.get(entry.commandId)
+      if (!record || !isTerminalCommandStatus(record.status)) continue
       if (record.status === 'succeeded') {
         invalidateManagedData()
       }
@@ -653,6 +667,7 @@ function ManagedEnvironmentReadyPanels({
         <ManagedStatusPanel
           orgId={orgId}
           environmentId={environmentId}
+          applyCommand={applyCommand}
           status={status?.status ?? managed.status}
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}

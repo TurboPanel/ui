@@ -17,7 +17,8 @@ expo-env.d.ts
 .cache/
 .local/
 .config/
-logs/
+# Expo / Metro dump at the repo root — not src/components/org/logs/
+/logs/
 
 # Native
 .kotlin/

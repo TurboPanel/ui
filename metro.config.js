@@ -1,3 +1,4 @@
+const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
 const {
   installMetroPollWatch,
@@ -11,13 +12,20 @@ installMetroPollWatch(__dirname);
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
+function escapeRegExp(value) {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
 // Co-located dev runs Expo with HOME under /var/lib/turbopanel/ui/.local
-// (see turbopanel-ui.service). Build caches (.expo) may still live in the
-// checkout; Metro's fallback watcher crashes (ENOENT) on ephemeral temp dirs.
+// (see turbopanel-ui.service). Build caches (.expo) and a repo-root `logs/`
+// dump may still live in the checkout; Metro's fallback watcher crashes
+// (ENOENT) on ephemeral temp dirs. Do **not** block `src/components/org/logs/`
+// — that is source (LogTranscriptView), not a cache.
+const projectRootLogs = path.resolve(__dirname, 'logs');
 config.resolver.blockList = [
   ...config.resolver.blockList,
   /(^|[/\\])\.local([/\\].*)?$/,
-  /(^|[/\\])logs([/\\].*)?$/,
+  new RegExp(String.raw`^${escapeRegExp(projectRootLogs)}(?:[/\\].*)?$`),
 ];
 
 // react-native-gifted-charts' shared LinearGradient helper does a

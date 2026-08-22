@@ -71,6 +71,20 @@ export const ORG_AREAS = [
     ],
   },
   {
+    id: 'logs',
+    label: 'Logs',
+    pathSegment: 'logs',
+    hint: 'Searchable container output across the fleet',
+    subRoutes: [
+      {
+        id: 'settings',
+        label: 'Settings',
+        pathSegment: 'settings',
+        hint: 'Retention for container output',
+      },
+    ],
+  },
+  {
     id: 'network',
     label: 'Network',
     pathSegment: 'network',
@@ -300,6 +314,18 @@ export function datacenterNewHref(
   orgId: string,
 ): `/${string}/servers/datacenters/new` {
   return `/${orgId}/servers/datacenters/new`
+}
+
+/** Organization container-log explorer. */
+export function containerLogsHref(orgId: string): `/${string}/logs` {
+  return `/${orgId}/logs`
+}
+
+/** Manage-gated retention switch for container output. */
+export function containerLogsSettingsHref(
+  orgId: string,
+): `/${string}/logs/settings` {
+  return `/${orgId}/logs/settings`
 }
 
 export function networkFabricHref(

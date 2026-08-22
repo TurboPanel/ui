@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   collectSnapshotChanges,
@@ -11,6 +14,11 @@ import {
   watcherCoversProject,
   WATCHER_SPECS,
 } from '../../scripts/metro-virtfs-poll-watch.cjs'
+
+const METRO_CONFIG = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../../metro.config.js'),
+  'utf8',
+)
 
 const VIRTIOFS_MOUNTS = [
   'tmpfs / tmpfs rw 0 0',
@@ -97,12 +105,22 @@ describe('watch filters', () => {
   it('skips bind-mounted and generated trees', () => {
     expect(shouldSkipDirName('node_modules')).toBe(true)
     expect(shouldSkipDirName('src')).toBe(false)
+    // Source lives at src/components/org/logs — do not treat the name as cache.
+    expect(shouldSkipDirName('logs')).toBe(false)
   })
 
   it('watches source and config extensions', () => {
     expect(isWatchedFileName('form-select.tsx')).toBe(true)
     expect(isWatchedFileName('metro.config.js')).toBe(true)
     expect(isWatchedFileName('logo.png')).toBe(false)
+  })
+})
+
+describe('metro.config.js blockList', () => {
+  it('does not treat src/components/org/logs as a cache directory', () => {
+    expect(METRO_CONFIG).not.toContain(String.raw`/(^|[/\\])logs([/\\].*)?$/`)
+    expect(METRO_CONFIG).toContain("path.resolve(__dirname, 'logs')")
+    expect(METRO_CONFIG).toContain('src/components/org/logs')
   })
 })
 

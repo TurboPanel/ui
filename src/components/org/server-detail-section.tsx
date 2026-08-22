@@ -64,7 +64,7 @@ import {
   type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { useCommandsBatch } from '@/lib/queries/commands'
+import { useCommandRecordsBatch } from '@/lib/queries/commands'
 import {
   useDeleteServer,
   usePingDaemon,
@@ -597,7 +597,7 @@ export function ServerDetailSection({
     [pollCommands, serverId],
   )
 
-  const commandsQuery = useCommandsBatch(orgId, commandBatchEntries)
+  const commandsQuery = useCommandRecordsBatch(orgId, commandBatchEntries)
   const processedCommandIdsRef = useRef<Set<string>>(new Set())
 
   const invalidateServer = useCallback(() => {
