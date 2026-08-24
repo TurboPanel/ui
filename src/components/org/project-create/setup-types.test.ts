@@ -28,7 +28,7 @@ describe('SETUP_TYPE_OPTIONS', () => {
     expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
       'Compose',
       'Services',
-      'Git repository',
+      'Repository',
       'Template',
       'Managed',
     ])

@@ -3202,6 +3202,38 @@ export async function fetchSources(): Promise<{ sources: SourceRecord[] }> {
   return await apiFetch(`${CLIENT_API}/sources`)
 }
 
+/** One probed file, as `GET /sources/:id/inspect` reports it. */
+export type RepositoryProbedFile = {
+  path: string
+  found: boolean
+  content?: string
+  bytes?: number
+  reason?: 'not_found' | 'too_large' | 'not_a_file' | 'binary'
+}
+
+export type RepositoryInspection = {
+  commitSha: string
+  /** Which lane answered — provider REST, or a clone on a connected server. */
+  via: 'provider' | 'daemon'
+  files: RepositoryProbedFile[]
+  entries: { path: string; kind: 'file' | 'dir'; bytes?: number }[]
+}
+
+/**
+ * Read a connected repository so the wizard can see what is in it.
+ *
+ * The probe set is fixed server-side, not passed from here: a caller-supplied
+ * path list would widen what a compromised session can learn from "do these
+ * filenames exist" to "read any file in any connected repository".
+ */
+export async function inspectSource(
+  sourceId: string,
+  ref?: string,
+): Promise<RepositoryInspection> {
+  const query = ref && ref.length > 0 ? `?ref=${encodeURIComponent(ref)}` : ''
+  return await apiFetch(`${CLIENT_API}/sources/${sourceId}/inspect${query}`)
+}
+
 /**
  * One source plus the instance-wide webhook facts folded onto the read.
  *

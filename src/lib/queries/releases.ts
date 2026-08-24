@@ -1,5 +1,6 @@
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import {
+  inspectSource,
   createGitlabDeployKey,
   createSource,
   deleteSource,
@@ -121,6 +122,33 @@ export function useSourceDetail(
     queryFn: () => fetchSource(sourceId),
     enabled:
       (options?.enabled ?? false) && orgId.length > 0 && sourceId.length > 0,
+  })
+}
+
+/**
+ * What is actually in a connected repository, at a ref.
+ *
+ * **Off by default.** Reading a repository costs a provider round-trip or a
+ * clone on a connected server, so it must never fire from merely rendering a
+ * picker — the wizard opts in once the operator has chosen a repository and
+ * pressed Continue. Keyed by `(sourceId, ref)` so stepping back and forth in
+ * the wizard reuses the answer instead of re-reading.
+ */
+export function useSourceInspection(
+  orgId: string,
+  sourceId: string,
+  ref: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: [...queryKeys.org(orgId).sources.detail(sourceId), 'inspect', ref],
+    queryFn: () => inspectSource(sourceId, ref),
+    enabled:
+      (options?.enabled ?? false) && orgId.length > 0 && sourceId.length > 0,
+    // Commit-addressed content; re-reading on a window focus would spend a
+    // provider call to learn nothing.
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   })
 }
 

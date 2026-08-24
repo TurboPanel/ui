@@ -103,3 +103,21 @@ export function detectedComposePath(
 ): string | undefined {
   return firstPresent(files, COMPOSE_FILENAMES)
 }
+
+/**
+ * Document root a repository's own layout implies.
+ *
+ * `public` and `dist` are the two conventions worth honouring; anything else is
+ * the operator's call, and `public` stays the default because that is what the
+ * daemon assumes when a site names none.
+ */
+export function rootFromEntries(
+  entries: readonly { path: string; kind: 'file' | 'dir' }[],
+): string | undefined {
+  for (const candidate of ['public', 'dist']) {
+    if (entries.some((e) => e.kind === 'dir' && e.path === candidate)) {
+      return candidate
+    }
+  }
+  return undefined
+}

@@ -10,9 +10,10 @@
 ## Flow
 
 1. **Details** (`/projects/new`) — name, optional description, workspace (existing or create). Nothing is written yet.
-2. **Type** — **Compose** / **Services** / **Git repository** / **Template** / **Managed** (not “Docker Compose”, “From Template”, or “Managed Service”)
-3. **Repository picker** — only for **Git repository**: pick a connected repo and, optionally, a branch, then **Continue**
-4. **Catalog or compose draft** — template or managed engine pick, or a compose draft; **Create project** writes the project with its final type
+2. **Type** — **Compose** / **Services** / **Repository** / **Template** / **Managed** (not “Docker Compose”, “From Template”, or “Managed Service”)
+3. **Repository picker** — only for **Repository**: pick a connected repo and, optionally, a branch, then **Continue**
+4. **Lane step** — only for **Repository**: TurboPanel reads the repo and asks what to run it as, showing the evidence for each answer
+5. **Catalog or compose draft** — template or managed engine pick, or a compose draft; **Create project** writes the project with its final type
 
 Progress: wizard steps inside one screen — no numbered step chips. Back walks the wizard; a **Cancel** text link under the panel always returns to projects.
 
@@ -49,7 +50,7 @@ Leading outline SVG (never emoji) beside each label, accent when selected, and
 **vertically centered against the whole card** — not top-aligned to the label
 line, which leaves it floating when the description wraps to two lines.
 
-Order is fixed: **Compose, Services, Git repository, Template, Managed** — the
+Order is fixed: **Compose, Services, Repository, Template, Managed** — the
 three compose lenses, then the two catalog cards. **Compose must stay first:**
 `parsePreselectedChoice` resolves a bare `?type=docker-compose` to the first
 card offering that type, and that link has always meant the blank YAML slate.
@@ -58,7 +59,7 @@ card offering that type, and that link has always meant the blank YAML slate.
 |--------|--------------|-------|------|----------|------|
 | `compose` | `docker-compose` | Compose | Feather / quill | Compose tab | A blank slate. You define the whole stack in YAML. |
 | `services` | `docker-compose` | Services | Compose surface's own Services glyph (2×2 squares) | Services tab | The same stack, defined with service cards instead of YAML. |
-| `repository` | `docker-compose` | Git repository | Branch line with two commit nodes | Services tab (after the picker) | One service, bound to a repository you already connected. Pick the repo and branch. |
+| `repository` | `docker-compose` | Repository | Branch line with two commit nodes | Lane step, then the compose surface | Read a repository you've connected — its compose file, a site, or an app. Pick the repo and branch. |
 | `template` | `template` | Template | Page layout blocks | Overview | A ready-made stack from the catalog. |
 | `managed` | `managed` | Managed | Database cylinder | Overview | Fully configured on your own servers — provisioning, backups, and connections included. |
 
@@ -80,7 +81,7 @@ that implies our infrastructure is in the path.
 `choice` is the React key for these cards. Compose and Services deliberately
 share a `type`, so keying off `type` produces duplicate keys.
 
-**Compose, Services, and Git repository are one project type.** They differ only
+**Compose, Services, and Repository are one project type.** They differ only
 in what the draft starts as and which tab of the compose surface opens — someone
 who thinks in service cards, or in repositories, never has to meet raw YAML to
 start. The Services card reuses the section tab's own glyph so the card and the
@@ -114,19 +115,50 @@ that flow has exactly one home, the Sources page. With nothing connected this
 step is an `InlineNotice` linking to `projectSourcesHref(orgId)`; it never grows
 a second connect surface that would have to stay in sync with the first.
 
-**What Continue seeds.** One service, keyed by the slugged repository name,
-carrying `x-turbopanel.source.sourceId` (plus `branch` when one was typed) and
-`serviceKind: node`. The kind is not decoration: a service needs `image` or
-`build` unless it is host-native or Railpack-built, so a bare binding would be
-rejected on Create with `compose_invalid`. `node` is the lane a Git binding
-already means — check out, build, promote a release on the host — and it leaves
-`buildKind` omitted, which *is* the native default. Everything about it is one
-tab away on Services.
+Footer on both repository steps is **Back** / **Continue**. Back from the lane
+step returns to the picker; Back from the compose surface returns to the lane
+step, so a changed answer does not mean re-choosing the repository blind.
 
-**This slice only binds.** No build or deploy behaviour, no ref-directed
-deploys, no new command types — the binding is inert until the instance turns
-`PREPARE_HONORS_SOURCE_SELECTION` on, and the compose linter already says so as
-a non-blocking advisory.
+## Lane step
+
+**Detect, then confirm — never one or the other.** Pure detection is wrong: a
+repository can hold a `Dockerfile` *and* a `package.json` *and* a
+`public/index.html`, and the operator's intent is not in the files. Pure asking
+is also wrong: once the repository has been read, hiding what was found is
+perverse.
+
+So: four cards, always all four, in a **fixed order** (Compose, PHP site, App,
+Static site) that does not reshuffle as the read lands. The detected lane is
+preselected and badged **Detected**; every card carries the evidence that did or
+did not choose it — `docker-compose.yml`, `composer.json`, `no package.json
+found`. That evidence line is the point of the screen: it is what turns an
+override into an informed act rather than a guess between four blank options.
+
+| Lane | Seeds | Detected by |
+|------|-------|-------------|
+| Compose | the repository's **own** compose document, unchanged | any `docker-compose.yml` / `compose.yaml` |
+| PHP site | `serviceKind: site` + engine + `php.version` | `composer.json` or `index.php` |
+| App | `serviceKind: node` + source binding | `package.json` / `deno.json` / `pyproject.toml` |
+| Static site | `serviceKind: site`, no PHP | `index.html`, `public/`, `dist/` |
+
+**The compose lane seeds no `x-turbopanel` at all.** What the operator authored
+upstream must not silently acquire TurboPanel metadata on import. Every other
+lane is host-native (`site` / `node`) because a compose service needs `image` or
+`build` unless it is host-native or Railpack-built — a bare binding would be
+rejected on Create with `compose_invalid`.
+
+**A failed read is not a dead end.** The step shows an `InlineNotice` and drops
+the evidence badges, but every lane stays selectable: blocking a project over a
+provider hiccup would be worse than asking. Likewise the Compose lane falls back
+to Static when the repository's YAML will not parse — TurboPanel did not write
+that file, so it can be anything.
+
+**Reading is opt-in and commit-addressed.** `GET /sources/:id/inspect` fires
+once, on Continue from the picker — never from rendering it — and is cached by
+`(sourceId, ref)` so stepping back and forth reuses the answer. The probe set is
+fixed server-side: a caller-supplied path list would widen what a compromised
+session can learn from "do these filenames exist" to "read any file in any
+connected repository".
 
 **Resumable setup does not offer this card.** `/[projectId]/setup` configures an
 existing row through `configureProject` (`{ type, code }`, no `options.compose`)
@@ -176,12 +208,17 @@ repository on the service itself.
 - ❌ Hiding the Overview tab, the project header, or the full content width during the compose step
 - ❌ Putting the compose step's Create button in the editor toolbar instead of the bottom-right footer
 - ❌ Opening the compose step on Overview when the operator chose Compose or Services
-- ❌ Treating Services or Git repository as their own project type — both are `docker-compose`, one with a different landing tab, one with a picker before it
+- ❌ Treating Services or Repository as their own project type — both are `docker-compose`, one with a different landing tab, one with a picker and a lane step before it
 - ❌ A connect-a-repository flow inside the wizard — connecting is an organization act and lives on Sources
-- ❌ A provider logo on the Git repository card — it is a branch glyph; the card is provider-agnostic
-- ❌ Putting Git repository before Compose in the card order — a bare `?type=docker-compose` resolves to the first card offering the type
-- ❌ Offering the Git repository card in resumable setup, where nothing can carry the binding
-- ❌ Promising a build or a deploy on the repository card — the binding is inert in this slice
+- ❌ A provider logo on the Repository card — it is a branch glyph; the card is provider-agnostic
+- ❌ Putting Repository before Compose in the card order — a bare `?type=docker-compose` resolves to the first card offering the type
+- ❌ Offering the Repository card in resumable setup, where nothing can carry the binding
+- ❌ Adopting the repository's compose as a read-only document the operator cannot edit — the compose step **is** the project screen
+- ❌ Choosing a lane without showing the evidence that chose it
+- ❌ Reshuffling the lane cards as the read lands — the order is fixed; "Detected" says which one won
+- ❌ Reading the repository on every keystroke — `/inspect` fires once, on Continue, keyed by `(sourceId, ref)`
+- ❌ Offering a lane whose daemon path does not exist yet
+- ❌ Passing a caller-supplied path list to `/inspect` — the probe set is fixed server-side
 - ❌ Keying the type cards off `option.type` — Compose and Services share it; key off `option.choice`
 - ❌ Copy implying TurboPanel hosts or runs anything ("we run it", "we host it") — it is self-hosted
 - ❌ Calling Managed "a database" — it is whatever the catalog offers, described by its treatment

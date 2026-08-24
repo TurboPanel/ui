@@ -8,7 +8,18 @@ import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
-import { seedComposeForLane } from '@/components/org/project-create/repository-seed'
+import {
+  parseRepositoryCompose,
+  seedComposeForLane,
+} from '@/components/org/project-create/repository-seed'
+import { LaneStep } from '@/components/org/project-create/lane-step'
+import {
+  detectedComposePath,
+  rankRepositoryLanes,
+  recommendedLane,
+  rootFromEntries,
+  type RepositoryLane,
+} from '@/lib/compose/repository-lane'
 import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
@@ -32,6 +43,7 @@ import {
   type ComposeDocument,
 } from '@/lib/compose'
 import {
+  useSourceInspection,
   useCreateProject,
   useCreateWorkspace,
   useProjectCatalog,
@@ -52,7 +64,7 @@ const FORM_MAX_WIDTH = 440
  * Wizard position. Nothing is persisted until the final step's Create button,
  * so every step is freely reversible.
  */
-type Step = 'details' | 'type' | 'repository' | 'catalog' | 'compose'
+type Step = 'details' | 'type' | 'repository' | 'lane' | 'catalog' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
@@ -123,6 +135,10 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   repository: {
     title: 'Link a repository',
     hint: 'Pick one you have already connected. Nothing is created yet.',
+  },
+  lane: {
+    title: 'How should it run?',
+    hint: 'Read from the repository. Change it if that is not what you want.',
   },
   catalog: { title: 'Choose a service', hint: '' },
   compose: { title: '', hint: '' },
@@ -206,6 +222,16 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
    * source the org no longer has.
    */
   const sourcesQuery = useSources(orgId, { enabled: step === 'repository' })
+  const [selectedLane, setSelectedLane] = useState<RepositoryLane | null>(null)
+  // Reading a repository costs a provider round-trip or a clone on a connected
+  // server, so it only fires once the operator has actually chosen one and
+  // moved on — never from rendering the picker.
+  const inspection = useSourceInspection(
+    orgId,
+    selectedSourceId,
+    repositoryBranch.trim(),
+    { enabled: step === 'lane' && selectedSourceId.length > 0 },
+  )
   const selectedSource = useMemo(
     () =>
       (sourcesQuery.data?.sources ?? []).find(
@@ -341,19 +367,57 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     setStep(stepForOption(option))
   }
 
-  /** Seeds the compose draft from the picked repository and opens the surface. */
+  // Preselect what the repository points at, once the read lands. Detection
+  // that does not move the selection is decoration; the cards still show every
+  // alternative with its evidence, so this is a default, not a decision.
+  useEffect(() => {
+    if (step !== 'lane' || selectedLane !== null) return
+    if (!inspection.isSuccess || !inspection.data) return
+    const detected = recommendedLane(
+      rankRepositoryLanes(inspection.data.files, inspection.data.entries),
+    )
+    if (detected) setSelectedLane(detected)
+  }, [step, selectedLane, inspection.isSuccess, inspection.data])
+
+  /** Repository picked — go read it, then ask what to do with it. */
   const continueFromRepository = () => {
     if (!selectedSource) return
     setApiError(null)
-    const seedKey = `${selectedSource.id}@${repositoryBranch.trim()}`
+    // Clear a lane chosen for a different repository; the evidence that picked
+    // it does not apply to this one.
+    setSelectedLane(null)
+    setStep('lane')
+  }
+
+  /** Seeds the compose draft for the chosen lane and opens the surface. */
+  const continueFromLane = () => {
+    if (!selectedSource || !selectedLane) return
+    setApiError(null)
+    const seedKey =
+      `${selectedSource.id}@${repositoryBranch.trim()}#${selectedLane}`
     if (seedKey !== seededRepositoryKey) {
+      const files = inspection.data?.files ?? []
+      const composePath = detectedComposePath(files)
+      const composeFile = composePath
+        ? files.find((file) => file.path === composePath && file.found)
+        : undefined
+      // The compose lane uses the repository's own document. Parsing can fail
+      // on YAML we did not write, so fall back to the static lane's shape
+      // rather than seeding a draft the operator cannot create from.
+      const repositoryCompose = composeFile?.content
+        ? parseRepositoryCompose(composeFile.content)
+        : undefined
       setComposeDoc(
-        // Lane defaults to `app` until the lane step lands; that is the shape
-        // the wizard has always produced, now expressed through one seeder.
         seedComposeForLane({
           source: selectedSource,
           branch: repositoryBranch,
-          lane: 'app',
+          lane: selectedLane === 'compose' && !repositoryCompose
+            ? 'static'
+            : selectedLane,
+          ...(repositoryCompose ? { repositoryCompose } : {}),
+          ...(rootFromEntries(inspection.data?.entries ?? [])
+            ? { root: rootFromEntries(inspection.data?.entries ?? []) }
+            : {}),
         }),
       )
       setSeededRepositoryKey(seedKey)
@@ -370,6 +434,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     // A seeded draft steps back to the picker it came from, so the repository
     // and branch are still there to change rather than being re-chosen blind.
     if (step === 'compose' && selectedChoice === 'repository') {
+      setStep('lane')
+      return
+    }
+    if (step === 'lane') {
       setStep('repository')
       return
     }
@@ -537,6 +605,17 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           />
         ) : null}
 
+        {step === 'lane' ? (
+          <LaneStep
+            inspection={inspection.data}
+            loading={inspection.isLoading}
+            error={inspection.error instanceof Error ? inspection.error : null}
+            selectedLane={selectedLane}
+            onSelectLane={setSelectedLane}
+            disabled={submitting}
+          />
+        ) : null}
+
         {step === 'type' ? (
           <ChoiceGrid>
             {SETUP_TYPE_OPTIONS.map((option) => (
@@ -572,10 +651,14 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           step={step}
           submitting={submitting}
           canCreate={selectedCode.length > 0}
-          canContinue={selectedSource != null}
+          canContinue={step === 'lane'
+            ? selectedLane != null
+            : selectedSource != null}
           onBack={goBack}
           onNext={goToTypeStep}
-          onContinue={continueFromRepository}
+          onContinue={step === 'lane'
+            ? continueFromLane
+            : continueFromRepository}
           onCreate={() => {
             void create()
           }}
@@ -640,7 +723,7 @@ function StepActions({
     )
   }
 
-  if (step === 'repository') {
+  if (step === 'repository' || step === 'lane') {
     return (
       <ButtonRow>
         <Button

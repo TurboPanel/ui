@@ -59,9 +59,11 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     // card offering that type, and that has always meant the blank YAML slate.
     choice: 'repository',
     type: 'docker-compose',
-    label: 'Git repository',
+    // "Git" is dropped: the org has already connected it, and the provider is
+    // irrelevant to what happens next.
+    label: 'Repository',
     description:
-      'One service, bound to a repository you already connected. Pick the repo and branch.',
+      "Read a repository you've connected — its compose file, a site, or an app. Pick the repo and branch.",
     section: 'overview',
   },
   {

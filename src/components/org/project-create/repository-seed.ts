@@ -6,6 +6,7 @@
  */
 
 import type { ComposeDocument } from '@/lib/compose'
+import { yamlToComposeDocument } from '@/lib/compose/convert'
 import {
   DEFAULT_PHP_SERIES,
   DEFAULT_SITE_ENGINE,
@@ -104,5 +105,25 @@ export function seedComposeForLane(params: {
     version: 1,
     data: { services: { [repositoryServiceName(source)]: service } },
     presentation: { keyOrder: ['services'], comments: {} },
+  }
+}
+
+/**
+ * Parse a repository's own compose file into a document.
+ *
+ * Returns `undefined` rather than throwing: this is YAML TurboPanel did not
+ * write, so it can be anything. The caller falls back to a lane it can actually
+ * seed instead of handing the operator a draft that cannot be created.
+ */
+export function parseRepositoryCompose(
+  content: string,
+): ComposeDocument | undefined {
+  try {
+    const document = yamlToComposeDocument(content)
+    const services = document.data.services
+    if (typeof services !== 'object' || services === null) return undefined
+    return document
+  } catch {
+    return undefined
   }
 }

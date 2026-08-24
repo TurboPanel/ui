@@ -3,6 +3,7 @@ import {
   detectedComposePath,
   rankRepositoryLanes,
   recommendedLane,
+  rootFromEntries,
 } from './repository-lane'
 
 const files = (...present: string[]) =>
@@ -65,5 +66,27 @@ describe('detectedComposePath', () => {
   it('names the compose file the repository actually has', () => {
     expect(detectedComposePath(files('compose.yaml'))).toBe('compose.yaml')
     expect(detectedComposePath(files())).toBeUndefined()
+  })
+})
+
+describe('rootFromEntries', () => {
+  it('honours the two document-root conventions, preferring public', () => {
+    expect(
+      rootFromEntries([
+        { path: 'dist', kind: 'dir' },
+        { path: 'public', kind: 'dir' },
+      ]),
+    ).toBe('public')
+    expect(rootFromEntries([{ path: 'dist', kind: 'dir' }])).toBe('dist')
+  })
+
+  it('ignores files that merely share the name', () => {
+    // `public` as a FILE is not a document root; seeding one would point the
+    // engine at something it cannot serve.
+    expect(rootFromEntries([{ path: 'public', kind: 'file' }])).toBeUndefined()
+  })
+
+  it('returns undefined so the caller keeps the daemon default', () => {
+    expect(rootFromEntries([])).toBeUndefined()
   })
 })

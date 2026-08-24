@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   repositoryServiceName,
+  parseRepositoryCompose,
   seedComposeForLane,
 } from '@/components/org/project-create/repository-seed'
 import { lintComposeYaml, composeDocumentToYaml } from '@/lib/compose'
@@ -176,5 +177,24 @@ describe('seedComposeForLane produces a valid document for every lane', () => {
       seedComposeForLane({ source: source(), branch: '', lane: 'static' }),
     ).service['x-turbopanel'] as Record<string, unknown>
     expect(staticSite.php).toBeUndefined()
+  })
+})
+
+describe('parseRepositoryCompose', () => {
+  it('parses a repository compose file into a document', () => {
+    const document = parseRepositoryCompose('services:\n  web:\n    image: nginx\n')
+    expect(document).toBeDefined()
+    expect(Object.keys(document!.data.services as Record<string, unknown>)).toEqual(['web'])
+  })
+
+  it('returns undefined rather than throwing on YAML we did not write', () => {
+    // The caller falls back to a lane it can actually seed; throwing here would
+    // strand the operator on a wizard step with no way forward.
+    expect(parseRepositoryCompose('this: [is: not: valid')).toBeUndefined()
+  })
+
+  it('rejects a compose file with no services mapping', () => {
+    expect(parseRepositoryCompose('name: just-a-name\n')).toBeUndefined()
+    expect(parseRepositoryCompose('')).toBeUndefined()
   })
 })
