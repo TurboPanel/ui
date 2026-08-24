@@ -129,7 +129,7 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 **Before adding a nav list, check whether the things in it are actually peers.** Usually they are not: some are representations of one artifact, and the rest are properties of an object on screen. A flat list of destinations is the generic dev-tool layout, and it forces the operator to leave the thing they are looking at in order to configure it.
 
-- **Representations of one artifact** → a short **lens** switch (segmented control), fixed in size. Document · Map · Code on the project editor is the reference.
+- **Representations of one artifact** → a short **lens** switch (segmented control), fixed in size. Overview · Compose · Services on the project editor is the reference.
 - **Properties of an object** → hang them off that object and expand **inline** — a gutter fact on the row, not a page. See `ComposeDocumentView`.
 - **Properties of a scope** → one gear on the scope strip.
 - `SectionNav` (`src/components/ui/section-nav.tsx`) remains for genuinely short in-surface mode toggles. It is horizontal-only: **there is no rail variant**, and a side list of destinations is not an option in this product.

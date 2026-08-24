@@ -113,7 +113,7 @@ describe('path-based environment selection', () => {
     expect(projectEnvironmentServicesHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1/services',
     )
-    // The visual editor is the Document lens, which lives on the overview path.
+    // The visual editor is the Services lens, which lives on the overview path.
     expect(
       projectComposeEditHref('org', 'proj', { view: 'visual' }),
     ).toBe('/org/projects/proj/overview')
@@ -169,7 +169,7 @@ describe('path-based environment selection', () => {
     expect(parseComposeProjectTab('/org/projects/proj/compose', 'proj')).toBe(
       'compose',
     )
-    // Retired `/services` resolves to the Document lens.
+    // Retired `/services` resolves to the Services lens.
     expect(parseComposeProjectTab('/org/projects/proj/services', 'proj')).toBe(
       'overview',
     )
@@ -263,14 +263,14 @@ describe('path-based environment selection', () => {
   it('offers every lens on the create-wizard draft', () => {
     // A draft has no environments and no row to configure — lenses only.
     expect([...DRAFT_COMPOSE_PROJECT_TAB_IDS]).toEqual([
-      'overview',
       'map',
       'compose',
+      'overview',
     ])
     expect([...COMPOSE_PROJECT_TAB_IDS]).toEqual([
-      'overview',
       'map',
       'compose',
+      'overview',
       'hosting',
       'servers',
       'storage',
@@ -282,9 +282,9 @@ describe('path-based environment selection', () => {
     // The lens bar is three items however much the project grows; Hosting is
     // neither, because it is reached from a service's gutter fact.
     expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual([
-      'overview',
       'map',
       'compose',
+      'overview',
     ])
     expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual([
       'servers',

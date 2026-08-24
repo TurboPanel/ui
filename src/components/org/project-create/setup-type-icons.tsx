@@ -1,4 +1,4 @@
-import Svg, { Path, Rect } from 'react-native-svg'
+import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import { ComposeVisualIcon } from '@/components/org/compose-view-icons'
 import { ChoiceCard } from '@/components/org/project-create/choice-card'
 import type {
@@ -34,6 +34,36 @@ function ComposeFeatherGlyph({ size = 22, color }: IconProps) {
         stroke={color}
         strokeWidth={1.75}
         strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
+/**
+ * Branch line with two commit nodes — the stack starts from a Git repository.
+ *
+ * Deliberately a *branch*, not a provider mark: the card offers whatever the
+ * organization has connected (GitHub, GitLab, a deploy key), so stamping one
+ * vendor's logo on it would promise the wrong thing.
+ */
+function RepositoryBranchGlyph({ size = 22, color }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6.75 8.25v10"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+      <Circle cx="6.75" cy="5.25" r="2.5" stroke={color} strokeWidth={1.75} />
+      <Circle cx="17.25" cy="5.25" r="2.5" stroke={color} strokeWidth={1.75} />
+      <Circle cx="6.75" cy="18.75" r="2.5" stroke={color} strokeWidth={1.75} />
+      <Path
+        d="M17.25 7.75v2.5a5 5 0 0 1-5 5H9.25"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </Svg>
   )
@@ -112,6 +142,9 @@ function SetupTypeGlyph({
   }
   if (choice === 'template') {
     return <TemplateLayoutGlyph size={size} color={color} />
+  }
+  if (choice === 'repository') {
+    return <RepositoryBranchGlyph size={size} color={color} />
   }
   // Services reuses the compose surface's own Services tab glyph, so the card
   // and the tab it lands on read as the same thing.

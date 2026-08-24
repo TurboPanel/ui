@@ -121,7 +121,7 @@ function draftSectionView(
   section: ProjectDraft['section'],
 ): ComposeEditorView | null {
   if (section === 'compose') return 'editor'
-  // Document lens — the annotated compose file.
+  // Services lens — the compose services as a list.
   if (section === 'overview') return 'visual'
   return null
 }
@@ -136,9 +136,9 @@ function resolveComposeActiveTab(
 }
 
 /**
- * Which lens the surface renders: `visual` is the Document lens (annotated
- * compose), `editor` is Code, and `null` is Map (the topology diagram, which
- * is a read-only view rather than an editor).
+ * Which lens the surface renders: `visual` is the Services lens (the service
+ * list), `editor` is Compose (YAML), and `null` is Overview (the topology
+ * diagram, which is a read-only view rather than an editor).
  */
 function resolveComposeSectionView(
   draft: ProjectDraft | null,
@@ -285,7 +285,7 @@ function ComposeEditorPanel({
       showSectionTabs
       {...(onDraftChange ? { onDraftChange } : {})}
       hideSave={hideSave}
-      // `visual` is the Document lens on the project surface.
+      // `visual` is the Services lens on the project surface.
       visualMode="document"
       {...(documentFacts ? { documentFacts } : {})}
       {...(onOpenScopeConfig ? { onOpenScopeConfig } : {})}
@@ -520,7 +520,7 @@ function ServicesPanelBody({
   loading: boolean
   saving: boolean
   isStarted: boolean
-  /** null = Map lens (diagram); `visual` = Document, `editor` = Code. */
+  /** null = Overview lens (diagram); `visual` = Services, `editor` = Compose. */
   sectionView: ComposeEditorView | null
   draft: ProjectDraft | null
   canMutate: boolean
@@ -1011,7 +1011,7 @@ function storageLabelsByVolume(
 }
 
 /**
- * Live facts drawn in the Document lens gutter.
+ * Live facts drawn in the Services lens gutter.
  *
  * Everything here is already fetched for the surface — status from containers,
  * hostnames from the hosting rows, placement from the effective server pin. At

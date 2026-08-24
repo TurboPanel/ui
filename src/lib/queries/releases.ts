@@ -2,9 +2,11 @@ import { useQueryClient, useQuery } from '@tanstack/react-query'
 import {
   createGitlabDeployKey,
   createSource,
+  deleteSource,
   fetchGitInstallations,
   fetchInstallationRepositories,
   fetchServiceReleases,
+  fetchSource,
   fetchSources,
   rollbackEnvironment,
   updateSource,
@@ -102,6 +104,27 @@ export function useSources(orgId: string, options?: Readonly<{ enabled?: boolean
 }
 
 /**
+ * One source with the instance's webhook reachability note folded on.
+ *
+ * `GET /sources/:id` resolves the instance public-URL list on every call to
+ * produce that note, so this is **off by default**: a list of ten repositories
+ * must not fan out ten of those reads just to render rows that never show the
+ * note. Callers opt in per row when one is actually expanded.
+ */
+export function useSourceDetail(
+  orgId: string,
+  sourceId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).sources.detail(sourceId),
+    queryFn: () => fetchSource(sourceId),
+    enabled:
+      (options?.enabled ?? false) && orgId.length > 0 && sourceId.length > 0,
+  })
+}
+
+/**
  * Provider connections this organization can read repositories through —
  * GitHub App installations and connected GitLab accounts alike. Callers that
  * render one provider's picker filter on `provider` themselves.
@@ -195,6 +218,26 @@ export function useUpdateSource(orgId: string) {
       patch: Parameters<typeof updateSource>[1]
     }) => updateSource(vars.sourceId, vars.patch),
     fallbackError: 'Failed to update source',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).sources.all,
+      })
+    },
+  })
+}
+
+/**
+ * Disconnect a repository from the organization.
+ *
+ * The instance refuses (**409** `source_referenced_by_compose`) while a stored
+ * compose document still names the source, so the caller renders that code as
+ * "detach it from the service first" rather than as a failure to retry.
+ */
+export function useDeleteSource(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (sourceId: string) => deleteSource(sourceId),
+    fallbackError: 'Failed to disconnect repository',
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).sources.all,

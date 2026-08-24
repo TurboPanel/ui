@@ -1,6 +1,6 @@
 /**
  * Renderable model of a Compose document — the shape the project editor's
- * Document lens draws.
+ * Services lens draws.
  *
  * The editor's home surface *is* the compose file: each service is a block of
  * YAML-shaped lines with the live facts (hostname, ports, storage, placement)
@@ -232,7 +232,7 @@ function resourceDetail(entry: Record<string, unknown>): string | null {
 }
 
 /**
- * Parse a Compose document into the blocks the Document lens renders.
+ * Parse a Compose document into the blocks the Services lens renders.
  * Definition order is preserved — the file's order is the operator's order.
  */
 export function buildComposeDocModel(document: unknown): ComposeDocModel {

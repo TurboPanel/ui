@@ -7,7 +7,7 @@ import {
 } from '@/lib/project-navigation'
 
 /**
- * Map lens — compose topology for Project scope
+ * Overview lens — compose topology for Project scope
  * (`/projects/:projectId/map`).
  */
 export default function ProjectMapScreen() {

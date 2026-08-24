@@ -5,13 +5,11 @@ import { webPointer } from '@/components/org/org-panel-styles'
 import { EmptyState } from '@/components/ui'
 import {
   buildComposeDocModel,
-  type ComposeDocLine,
-  type ComposeDocResourceBlock,
   type ComposeDocServiceBlock,
 } from '@/lib/compose/document-model'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-/** Which editor a service block has expanded, if any. */
+/** Which editor a service row has expanded, if any. */
 export type ComposeDocFacet = 'compose' | 'hosting' | 'releases'
 
 export type ComposeDocServiceFacts = Readonly<{
@@ -38,27 +36,10 @@ export type ComposeDocFacts = Readonly<{
   storageByVolume?: Readonly<Record<string, string>>
 }>
 
-function DocLine({ line }: Readonly<{ line: ComposeDocLine }>) {
-  return (
-    <View style={[styles.line, { paddingLeft: spacing.md * line.depth }]}>
-      <Text style={styles.lineText} numberOfLines={1}>
-        {line.listItem ? <Text style={styles.punct}>- </Text> : null}
-        <Text style={line.listItem ? styles.scalar : styles.key}>
-          {line.text}
-        </Text>
-        {line.listItem ? null : <Text style={styles.punct}>:</Text>}
-        {line.value ? (
-          <Text style={styles.scalar}> {line.value}</Text>
-        ) : null}
-      </Text>
-    </View>
-  )
-}
-
 /**
- * A live fact hanging off a document block. Reads as data, presses as an
- * editor — the point of the surface is that you never leave the file to change
- * the thing you are looking at.
+ * A live fact hanging off a service row. Reads as data, presses as an editor —
+ * the point of the surface is that you never leave the list to change the
+ * thing you are looking at.
  */
 function Fact({
   label,
@@ -116,8 +97,8 @@ function renderExpansion(
   return renderers.renderReleasesPanel?.(composeServiceName)
 }
 
-/** Collapsed header row: status dot, service name, and the facet chips. */
-function ServiceHeader({
+/** Status dot, name, image / build source, then the facts gutter. */
+function ServiceRowHeader({
   block,
   facts,
   expandedFacet,
@@ -135,30 +116,36 @@ function ServiceHeader({
   const hostingLabel = facts.hostname?.trim()
 
   return (
-    <Pressable
-      style={[styles.blockHeader, webPointer]}
-      onPress={() => onToggleFacet('compose')}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: expandedFacet === 'compose' }}
-      accessibilityLabel={
-        facts.statusLabel ? `${block.name}, ${facts.statusLabel}` : block.name
-      }
-    >
-      <View
-        style={[
-          styles.statusDot,
-          {
-            backgroundColor: facts.statusColor ?? 'transparent',
-            borderColor: facts.statusColor ?? colors.borderChip,
-          },
-        ]}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
-      <Text style={styles.serviceName} numberOfLines={1}>
-        {block.name}
-        <Text style={styles.punct}>:</Text>
-      </Text>
+    <View style={[styles.row, expandedFacet === 'compose' && styles.rowActive]}>
+      <Pressable
+        style={[styles.rowMain, webPointer]}
+        onPress={() => onToggleFacet('compose')}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: expandedFacet === 'compose' }}
+        accessibilityLabel={
+          facts.statusLabel ? `${block.name}, ${facts.statusLabel}` : block.name
+        }
+      >
+        <View
+          style={[
+            styles.statusDot,
+            {
+              backgroundColor: facts.statusColor ?? 'transparent',
+              borderColor: facts.statusColor ?? colors.borderChip,
+            },
+          ]}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+        <Text style={styles.serviceName} numberOfLines={1}>
+          {block.name}
+        </Text>
+        {block.source ? (
+          <Text style={styles.serviceSource} numberOfLines={1}>
+            {block.source}
+          </Text>
+        ) : null}
+      </Pressable>
       <View style={styles.gutter}>
         {block.ports.length > 0 ? (
           <Fact label={block.ports.join(', ')} />
@@ -182,11 +169,11 @@ function ServiceHeader({
           />
         ) : null}
       </View>
-    </Pressable>
+    </View>
   )
 }
 
-function ServiceBlock({
+function ServiceRow({
   block,
   facts,
   expandedFacet,
@@ -207,12 +194,12 @@ function ServiceBlock({
 }>) {
   // The releases fact only exists where a release can exist: a Git-backed
   // service, on a surface that can actually render the panel (the environment
-  // scope — a project-scope document has no environment to read releases for).
+  // scope — a project-scope list has no environment to read releases for).
   const showReleases = block.sourceBound && renderReleasesPanel !== undefined
 
   return (
-    <View style={styles.block}>
-      <ServiceHeader
+    <View>
+      <ServiceRowHeader
         block={block}
         facts={facts}
         expandedFacet={expandedFacet}
@@ -220,17 +207,6 @@ function ServiceBlock({
         canMutate={canMutate}
         showReleases={showReleases}
       />
-
-      {block.lines.map((line, index) => (
-        <DocLine key={`${block.name}-${String(index)}-${line.text}`} line={line} />
-      ))}
-      {block.otherKeyCount > 0 ? (
-        <View style={[styles.line, { paddingLeft: spacing.md }]}>
-          <Text style={styles.moreText}>
-            + {block.otherKeyCount} more {plural(block.otherKeyCount, 'key')}
-          </Text>
-        </View>
-      ) : null}
       {expandedFacet ? (
         <View style={styles.expansion}>
           {renderExpansion(expandedFacet, block.name, {
@@ -244,42 +220,7 @@ function ServiceBlock({
   )
 }
 
-function ResourceBlock({
-  block,
-  detail,
-}: Readonly<{ block: ComposeDocResourceBlock; detail?: string }>) {
-  const usage =
-    block.usedBy.length > 0 ? `used by ${block.usedBy.join(', ')}` : 'unused'
-  return (
-    <View style={styles.resourceRow}>
-      <Text style={styles.resourceName} numberOfLines={1}>
-        {block.name}
-        <Text style={styles.punct}>:</Text>
-        {block.detail ? (
-          <Text style={styles.scalar}> {block.detail}</Text>
-        ) : null}
-      </Text>
-      <View style={styles.gutter}>
-        {detail ? <Fact label={detail} /> : null}
-        <Fact label={usage} tone={block.usedBy.length > 0 ? 'default' : 'empty'} />
-      </View>
-    </View>
-  )
-}
-
-/**
- * The compose file as the editor's home surface.
- *
- * Each service is a block of YAML-shaped lines with its live facts — status,
- * hostname, published ports — in a right gutter; pressing the block opens its
- * compose fields inline, pressing a fact opens that fact's editor inline.
- * Nothing here is a navigation destination: the operator edits the thing they
- * are already looking at, in the file they already understand.
- *
- * Only scanned keys get lines (image/build, ports, volumes, depends_on); the
- * rest is counted, because the verbatim text is one lens away in Code.
- */
-/** `key` / `keys` — the noun alone, pluralized for `count`. */
+/** `service` / `services` — the noun alone, pluralized for `count`. */
 function plural(count: number, noun: string): string {
   return count === 1 ? noun : `${noun}s`
 }
@@ -289,6 +230,17 @@ function pluralCount(count: number, noun: string): string {
   return `${String(count)} ${plural(count, noun)}`
 }
 
+/**
+ * The Services lens — one row per service in the compose document, with its
+ * live facts (status, published ports, hostname, releases) in a right gutter.
+ * Pressing a row opens that service's fields inline; pressing a fact opens
+ * that fact's editor inline.
+ *
+ * Deliberately **not** a rendering of the file. The compose text is one lens
+ * away, so this stays a list of the things that run: no YAML lines, no
+ * `volumes:` / `networks:` blocks, nothing that turns it back into an editor
+ * with worse ergonomics than the real one.
+ */
 export function ComposeDocumentView({
   document,
   facts,
@@ -308,7 +260,7 @@ export function ComposeDocumentView({
   renderHostingEditor?: (composeServiceName: string) => ReactNode
   /**
    * Inline releases + rollback for one Git-backed service. Omitted on scopes
-   * with no environment to read releases for (the project-level document).
+   * with no environment to read releases for (the project-level list).
    */
   renderReleasesPanel?: (composeServiceName: string) => ReactNode
 }>) {
@@ -326,14 +278,6 @@ export function ComposeDocumentView({
     )
   }
 
-  const counts = [
-    pluralCount(model.services.length, 'service'),
-    model.volumes.length > 0 ? pluralCount(model.volumes.length, 'volume') : null,
-    model.networks.length > 0
-      ? pluralCount(model.networks.length, 'network')
-      : null,
-  ].filter(Boolean) as string[]
-
   return (
     <View style={styles.doc}>
       <View style={styles.scopeStrip}>
@@ -345,7 +289,9 @@ export function ComposeDocumentView({
               <Text style={styles.scopeLabel}> · </Text>
             </>
           ) : null}
-          <Text style={styles.scopeLabel}>{counts.join(' · ')}</Text>
+          <Text style={styles.scopeLabel}>
+            {pluralCount(model.services.length, 'service')}
+          </Text>
         </Text>
         {onOpenScopeConfig ? (
           <Pressable
@@ -359,66 +305,31 @@ export function ComposeDocumentView({
         ) : null}
       </View>
 
-      {model.isEmpty ? (
+      {model.services.length === 0 ? (
         <View style={styles.emptyWrap}>
           <EmptyState
-            title="No compose defined yet."
-            hint="Switch to Code to write one, or add a service."
+            title="No services yet."
+            hint="Add a service, or switch to Compose to write one."
             panel
           />
         </View>
-      ) : null}
-
-      {model.services.length > 0 ? (
-        <>
-          <Text style={styles.groupKey}>
-            services<Text style={styles.punct}>:</Text>
-          </Text>
-          {model.services.map((block) => (
-            <ServiceBlock
-              key={block.name}
-              block={block}
-              facts={facts.byService[block.name] ?? {}}
-              expandedFacet={
-                expanded?.service === block.name ? expanded.facet : null
-              }
-              onToggleFacet={(facet) => toggleFacet(block.name, facet)}
-              canMutate={canMutate}
-              renderServiceEditor={renderServiceEditor}
-              renderHostingEditor={renderHostingEditor}
-              renderReleasesPanel={renderReleasesPanel}
-            />
-          ))}
-        </>
-      ) : null}
-
-      {model.volumes.length > 0 ? (
-        <>
-          <Text style={styles.groupKey}>
-            volumes<Text style={styles.punct}>:</Text>
-          </Text>
-          {model.volumes.map((block) => (
-            <ResourceBlock
-              key={block.name}
-              block={block}
-              {...(facts.storageByVolume?.[block.name]
-                ? { detail: facts.storageByVolume[block.name] }
-                : {})}
-            />
-          ))}
-        </>
-      ) : null}
-
-      {model.networks.length > 0 ? (
-        <>
-          <Text style={styles.groupKey}>
-            networks<Text style={styles.punct}>:</Text>
-          </Text>
-          {model.networks.map((block) => (
-            <ResourceBlock key={block.name} block={block} />
-          ))}
-        </>
-      ) : null}
+      ) : (
+        model.services.map((block) => (
+          <ServiceRow
+            key={block.name}
+            block={block}
+            facts={facts.byService[block.name] ?? {}}
+            expandedFacet={
+              expanded?.service === block.name ? expanded.facet : null
+            }
+            onToggleFacet={(facet) => toggleFacet(block.name, facet)}
+            canMutate={canMutate}
+            renderServiceEditor={renderServiceEditor}
+            renderHostingEditor={renderHostingEditor}
+            renderReleasesPanel={renderReleasesPanel}
+          />
+        ))
+      )}
     </View>
   )
 }
@@ -464,25 +375,24 @@ const styles = StyleSheet.create({
   emptyWrap: {
     padding: spacing.md,
   },
-  groupKey: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontFamily: MONO,
-    fontWeight: '700',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: 2,
-  },
-  block: {
-    paddingBottom: spacing.xs,
-  },
-  blockHeader: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 32,
+    minHeight: 34,
     paddingLeft: spacing.md,
     paddingRight: spacing.sm,
+  },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
+    minHeight: 34,
+  },
+  rowActive: {
+    backgroundColor: chrome.bgActive,
   },
   statusDot: {
     width: 7,
@@ -496,15 +406,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     fontFamily: MONO,
+    flexShrink: 0,
+  },
+  serviceSource: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontFamily: MONO,
     flexShrink: 1,
+    minWidth: 0,
   },
   gutter: {
-    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
     alignItems: 'center',
     gap: spacing.xs,
+    flexShrink: 1,
     minWidth: 0,
   },
   fact: {
@@ -530,46 +447,6 @@ const styles = StyleSheet.create({
   },
   factTextActive: {
     color: chrome.accent,
-  },
-  line: {
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    minHeight: 20,
-    justifyContent: 'center',
-  },
-  lineText: {
-    fontSize: 12.5,
-    fontFamily: MONO,
-    lineHeight: 20,
-  },
-  key: {
-    color: colors.command,
-  },
-  scalar: {
-    color: colors.textBody,
-  },
-  punct: {
-    color: colors.textDim,
-  },
-  moreText: {
-    color: colors.textFaint,
-    fontSize: 11,
-    fontFamily: MONO,
-    lineHeight: 20,
-  },
-  resourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 28,
-    paddingLeft: spacing.md + spacing.md,
-    paddingRight: spacing.sm,
-  },
-  resourceName: {
-    color: colors.textChip,
-    fontSize: 12.5,
-    fontFamily: MONO,
-    flexShrink: 1,
   },
   expansion: {
     marginTop: spacing.xs,

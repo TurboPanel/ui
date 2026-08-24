@@ -1,6 +1,5 @@
 import { createElement, useEffect, useState, type CSSProperties } from 'react'
 import {
-  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -8,8 +7,11 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { useRouter, type Href } from 'expo-router'
 import { DockerfileEditor } from '@/components/org/dockerfile-editor'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { repositoryLabel } from '@/components/org/sources/connect-repository-panel'
+import { Button, InlineNotice, LoadingState } from '@/components/ui'
 import {
   clearComposeBuildInline,
   DEFAULT_INLINE_DOCKERFILE,
@@ -51,19 +53,12 @@ import {
   type TraditionalWebEngine,
 } from '@/lib/compose/service-kind'
 import {
-  gitlabOauthConnectUrl,
   SOURCE_AUTO_DEPLOY_OPTIONS,
-  SOURCE_PROVIDER_OPTIONS,
   type SourceAutoDeploy,
-  type SourceProvider,
-  type SourceRecord,
 } from '@/lib/instance-api'
 import { getActiveOrganizationId } from '@/lib/org-context'
+import { projectSourcesHref } from '@/lib/org-navigation'
 import {
-  useCreateGitlabDeployKey,
-  useCreateSource,
-  useGitInstallations,
-  useInstallationRepositories,
   useSources,
   useUpdateSource,
 } from '@/lib/queries/releases'
@@ -747,402 +742,76 @@ function DeploymentModeBlock({
   )
 }
 
-/** `https://github.com/owner/repo(.git)` → `owner/repo`, else the URL itself. */
-function repositoryLabel(row: SourceRecord): string {
-  const trimmed = row.repositoryUrl.replace(/\.git$/, '')
-  const segments = trimmed.split(/[/:]/).filter((part) => part.length > 0)
-  if (segments.length < 2) return row.repositoryUrl
-  return `${segments.at(-2)}/${segments.at(-1)}`
-}
-
 /**
- * Pick an already-registered source, or connect a new repository.
- *
- * Connecting is two writes on purpose: the `source` row is org-owned (several
- * services may share one repository, and the auto-deploy policy lives on it),
- * while the compose binding stores only its id. Creating the row here and then
- * writing `sourceId` into `x-turbopanel.source` keeps that ownership honest
- * rather than inventing a per-service copy of the repository.
- *
- * The provider chooses the sub-flow, because the three are genuinely different
- * shapes rather than one form with different labels:
- *
- * - **GitHub App** — pick an installation, then a repository it can already
- *   read. Nothing is typed.
- * - **GitLab** — either the same picker against an OAuth-connected account, or
- *   paste a project URL and mint a read-only deploy key for it.
- * - **Other Git host** — a clone URL plus a deploy key. No provider API exists
- *   to enumerate anything.
+ * Unbound source control. Loading and fetch failure are not an empty
+ * repository list — the empty notice is only for a successful zero-length
+ * response, and Open Sources is only on that path.
  */
-function ConnectRepositoryControl({
-  orgId,
+function UnboundSourcePicker({
+  sourcesQuery,
   disabled,
-  onConnect,
+  onSelect,
+  onOpenSources,
 }: Readonly<{
-  orgId: string
+  sourcesQuery: ReturnType<typeof useSources>
   disabled: boolean
-  onConnect: (sourceId: string) => void
+  onSelect: (sourceId: string) => void
+  onOpenSources: () => void
 }>) {
-  const [provider, setProvider] = useState<SourceProvider>('github')
-
-  return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.label}>Git provider</Text>
-      <OptionSelect
-        value={provider}
-        options={SOURCE_PROVIDER_OPTIONS.map((option) => ({
-          value: option.value,
-          label: option.label,
-        }))}
-        disabled={disabled}
-        onChange={(next) => setProvider(next as SourceProvider)}
-      />
-      <Text style={styles.hint}>
-        {SOURCE_PROVIDER_OPTIONS.find((option) => option.value === provider)?.hint}
-      </Text>
-
-      {provider === 'git' ? (
-        <DeployKeyRepositoryControl
-          orgId={orgId}
-          provider="git"
-          disabled={disabled}
-          onConnect={onConnect}
-        />
-      ) : (
-        <InstallationRepositoryControl
-          orgId={orgId}
-          provider={provider}
-          disabled={disabled}
-          onConnect={onConnect}
-        />
-      )}
-    </View>
-  )
-}
-
-/**
- * The picker flow: choose a connection, then a repository it can already read.
- *
- * Shared by GitHub and by an OAuth-connected GitLab account — the repository
- * list is the same shape for both, because the instance narrows each provider's
- * payload to it before answering.
- */
-function InstallationRepositoryControl({
-  orgId,
-  provider,
-  disabled,
-  onConnect,
-}: Readonly<{
-  orgId: string
-  provider: 'github' | 'gitlab'
-  disabled: boolean
-  onConnect: (sourceId: string) => void
-}>) {
-  const [installationId, setInstallationId] = useState('')
-  const [useDeployKey, setUseDeployKey] = useState(false)
-  const installationsQuery = useGitInstallations(orgId)
-  const repositoriesQuery = useInstallationRepositories(orgId, installationId, {
-    // Every read mints a short-lived provider credential on the instance — do
-    // not spend one until a connection has actually been chosen.
-    enabled: installationId.length > 0,
-  })
-  const createSourceMutation = useCreateSource(orgId)
-
-  const installations = (installationsQuery.data?.installations ?? []).filter(
-    (row) => row.provider === provider,
-  )
-  const repositories = repositoriesQuery.data?.repositories ?? []
-  const providerLabel = provider === 'github' ? 'GitHub' : 'GitLab'
-
-  // A GitLab project can also be reached with a deploy key instead of a
-  // connection, so an organization with no OAuth grant is not a dead end there.
-  if (useDeployKey) {
+  // Default `data.sources` is `[]`, so length checks cannot tell "still
+  // fetching" or "the list failed" from "the org has no repositories".
+  if (sourcesQuery.isError) {
     return (
-      <DeployKeyRepositoryControl
-        orgId={orgId}
-        provider="gitlab"
-        disabled={disabled}
-        onConnect={onConnect}
-        onBack={() => setUseDeployKey(false)}
+      <InlineNotice
+        title="Couldn't load repositories"
+        body={
+          sourcesQuery.error instanceof Error
+            ? sourcesQuery.error.message
+            : 'Failed to load connected repositories'
+        }
+        tone="warning"
       />
     )
   }
 
-  if (installationsQuery.isLoading) {
-    return <Text style={styles.hint}>Loading {providerLabel} connections…</Text>
+  if (!sourcesQuery.isSuccess) {
+    return <LoadingState label="Loading repositories…" />
   }
 
-  if (installations.length === 0) {
-    if (provider === 'github') {
-      return (
-        <Text style={styles.hint}>
-          No GitHub App installation for this organization yet. Install it from
-          Sources, then come back to connect a repository.
-        </Text>
-      )
-    }
+  const sources = sourcesQuery.data.sources
+  if (sources.length > 0) {
     return (
-      <View style={styles.fieldBlock}>
-        <Text style={styles.hint}>
-          No GitLab account connected to this organization yet.
-        </Text>
-        <Pressable
-          style={styles.convertChip}
-          disabled={disabled}
-          accessibilityRole="link"
-          onPress={() => {
-            // A 302 to GitLab's authorize page: the operator has to land there
-            // to approve the grant, so this navigates rather than fetches.
-            Linking.openURL(gitlabOauthConnectUrl()).catch(() => {
-              // Ignore failures opening the provider consent page.
-            })
-          }}
-        >
-          <Text style={styles.convertChipText}>Connect a GitLab account</Text>
-        </Pressable>
-        <Pressable
-          style={styles.convertChip}
-          disabled={disabled}
-          onPress={() => setUseDeployKey(true)}
-        >
-          <Text style={styles.convertChipText}>Use a deploy key instead</Text>
-        </Pressable>
-      </View>
-    )
-  }
-
-  const connect = async (repositoryUrl: string, defaultBranch: string | null) => {
-    const repo = repositories.find(
-      (row) => repositoryCloneUrl(row, provider) === repositoryUrl,
-    )
-    const created = await createSourceMutation.run({
-      provider,
-      repositoryUrl,
-      installationId,
-      defaultBranch,
-      // The provider-side id is what webhook matching keys on: a repository can
-      // be renamed or moved, and only the id survives it.
-      ...(repo?.id ? { repositoryExternalId: repo.id } : {}),
-    })
-    if (!created.ok) return
-    onConnect(created.value.id)
-  }
-
-  return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.label}>{providerLabel} connection</Text>
       <OptionSelect
-        value={installationId}
+        value=""
         options={[
-          { value: '', label: 'Select a connection…' },
-          ...installations.map((row) => ({
-            value: row.id,
-            label: row.suspended
-              ? `${row.accountLogin ?? row.externalInstallationId} (suspended)`
-              : (row.accountLogin ?? row.externalInstallationId),
+          { value: '', label: 'Select a repository…' },
+          ...sources.map((entry) => ({
+            value: entry.id,
+            label: repositoryLabel(entry),
           })),
         ]}
         disabled={disabled}
-        onChange={setInstallationId}
+        onChange={(sourceId) => {
+          if (sourceId.length === 0) return
+          onSelect(sourceId)
+        }}
       />
-      {installationId.length === 0 ? null : (
-        <>
-          <Text style={styles.label}>Repository</Text>
-          {repositoriesQuery.isLoading ? (
-            <Text style={styles.hint}>Loading repositories…</Text>
-          ) : (
-            <OptionSelect
-              value=""
-              options={[
-                { value: '', label: 'Select a repository…' },
-                ...repositories.map((repo) => ({
-                  value: repositoryCloneUrl(repo, provider),
-                  label: repo.private ? `${repo.fullName} (private)` : repo.fullName,
-                })),
-              ]}
-              disabled={disabled || createSourceMutation.isPending}
-              onChange={(cloneUrl) => {
-                if (cloneUrl.length === 0) return
-                const repo = repositories.find(
-                  (row) => repositoryCloneUrl(row, provider) === cloneUrl,
-                )
-                void connect(cloneUrl, repo?.defaultBranch ?? null)
-              }}
-            />
-          )}
-        </>
-      )}
-      {provider === 'gitlab' ? (
-        <Pressable
-          style={styles.convertChip}
-          disabled={disabled}
-          onPress={() => setUseDeployKey(true)}
-        >
-          <Text style={styles.convertChipText}>Use a deploy key instead</Text>
-        </Pressable>
-      ) : null}
-      {createSourceMutation.actionError ? (
-        <Text style={styles.hintWarn}>{createSourceMutation.actionError}</Text>
-      ) : null}
-    </View>
-  )
-}
-
-/** A provider that answered no clone URL still has a conventional one. */
-function repositoryCloneUrl(
-  repo: Readonly<{ fullName: string; cloneUrl: string | null }>,
-  provider: 'github' | 'gitlab',
-): string {
-  if (repo.cloneUrl) return repo.cloneUrl
-  const host = provider === 'github' ? 'github.com' : 'gitlab.com'
-  return `https://${host}/${repo.fullName}`
-}
-
-/**
- * The deploy-key flow: paste a clone URL, mint a key, add it to the project.
- *
- * Two steps, and the order is the point. The key is generated **first**, so the
- * public half is on screen before the source exists — an operator who creates
- * the source first would have a binding that cannot clone until they go and
- * find the key again, and the public half is only ever returned once.
- *
- * A generated key is also the recommended path over pasting one: it belongs to
- * the project rather than to a person, so nobody leaving the organization
- * breaks its deploys, and the private half never exists outside the instance.
- */
-function DeployKeyRepositoryControl({
-  orgId,
-  provider,
-  disabled,
-  onConnect,
-  onBack,
-}: Readonly<{
-  orgId: string
-  provider: 'gitlab' | 'git'
-  disabled: boolean
-  onConnect: (sourceId: string) => void
-  onBack?: () => void
-}>) {
-  const [repositoryUrl, setRepositoryUrl] = useState('')
-  const [defaultBranch, setDefaultBranch] = useState('')
-  const [deployKey, setDeployKey] = useState<
-    { credentialId: string; publicKey: string } | null
-  >(null)
-  const createDeployKeyMutation = useCreateGitlabDeployKey(orgId)
-  const createSourceMutation = useCreateSource(orgId)
-
-  const trimmedUrl = repositoryUrl.trim()
-  const busy = disabled || createDeployKeyMutation.isPending ||
-    createSourceMutation.isPending
-
-  const generate = async () => {
-    if (trimmedUrl.length === 0) return
-    const created = await createDeployKeyMutation.run({ name: trimmedUrl })
-    if (!created.ok) return
-    setDeployKey({
-      credentialId: created.value.credentialId,
-      publicKey: created.value.publicKey,
-    })
-  }
-
-  const connect = async () => {
-    if (!deployKey || trimmedUrl.length === 0) return
-    const created = await createSourceMutation.run({
-      provider,
-      repositoryUrl: trimmedUrl,
-      credentialId: deployKey.credentialId,
-      defaultBranch: defaultBranch.trim().length > 0 ? defaultBranch.trim() : null,
-    })
-    if (!created.ok) return
-    onConnect(created.value.id)
+    )
   }
 
   return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.label}>Clone URL</Text>
-      <TextInput
-        value={repositoryUrl}
-        onChangeText={setRepositoryUrl}
-        editable={!busy && deployKey === null}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="git@gitlab.com:group/app.git"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
-      />
-      <Text style={styles.hint}>
-        An https or ssh URL. An ssh URL needs the deploy key below; an https URL
-        works without one only for a public repository.
-      </Text>
-
-      <Text style={styles.label}>Default branch</Text>
-      <TextInput
-        value={defaultBranch}
-        onChangeText={setDefaultBranch}
-        editable={!busy}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="main"
-        placeholderTextColor={colors.textDim}
-        style={styles.input}
-      />
-      <Text style={styles.hint}>
-        Leave empty to watch every branch this repository pushes.
-      </Text>
-
-      {deployKey === null ? (
-        <Pressable
-          style={styles.convertChip}
-          disabled={busy || trimmedUrl.length === 0}
-          onPress={() => void generate()}
-        >
-          <Text style={styles.convertChipText}>
-            {createDeployKeyMutation.isPending
-              ? 'Generating deploy key…'
-              : 'Generate a read-only deploy key'}
-          </Text>
-        </Pressable>
-      ) : (
-        <>
-          <Text style={styles.label}>Deploy key (public half)</Text>
-          <TextInput
-            value={deployKey.publicKey}
-            editable={false}
-            multiline
-            style={[styles.input, styles.descriptionInput]}
-          />
-          <Text style={styles.hintWarn}>
-            Add this to the project as a <Text>read-only</Text> Deploy Key before
-            connecting — it is shown once and cannot be retrieved again. The
-            private half never leaves this instance.
-          </Text>
-          <Pressable
-            style={styles.convertChip}
-            disabled={busy}
-            onPress={() => void connect()}
-          >
-            <Text style={styles.convertChipText}>
-              {createSourceMutation.isPending
-                ? 'Connecting…'
-                : 'I have added the key — connect'}
-            </Text>
-          </Pressable>
-        </>
-      )}
-
-      {onBack ? (
-        <Pressable style={styles.convertChip} disabled={busy} onPress={onBack}>
-          <Text style={styles.convertChipText}>Back to connected accounts</Text>
-        </Pressable>
-      ) : null}
-
-      {createDeployKeyMutation.actionError ? (
-        <Text style={styles.hintWarn}>{createDeployKeyMutation.actionError}</Text>
-      ) : null}
-      {createSourceMutation.actionError ? (
-        <Text style={styles.hintWarn}>{createSourceMutation.actionError}</Text>
-      ) : null}
-    </View>
+    <InlineNotice
+      title="No repositories connected yet"
+      body="Connect a repository on the organization's Sources page, then bind it to this service."
+      actions={
+        <Button
+          label="Open Sources"
+          size="sm"
+          disabled={disabled}
+          onPress={onOpenSources}
+        />
+      }
+    />
   )
 }
 
@@ -1177,6 +846,7 @@ function SourceSection({
   onDisconnect: () => void
 }>) {
   const orgId = getActiveOrganizationId() ?? ''
+  const router = useRouter()
   const sourcesQuery = useSources(orgId)
   const updateSourceMutation = useUpdateSource(orgId)
 
@@ -1217,6 +887,15 @@ function SourceSection({
       patch: { autoDeploy: value as SourceAutoDeploy },
     })
   }
+
+  const unboundPicker = (
+    <UnboundSourcePicker
+      sourcesQuery={sourcesQuery}
+      disabled={disabled}
+      onSelect={(sourceId) => onChange({ sourceId })}
+      onOpenSources={() => router.push(projectSourcesHref(orgId) as Href)}
+    />
+  )
 
   return (
     <View style={styles.fieldBlock}>
@@ -1375,11 +1054,7 @@ function SourceSection({
           ) : null}
         </>
       ) : (
-        <ConnectRepositoryControl
-          orgId={orgId}
-          disabled={disabled}
-          onConnect={(sourceId) => onChange({ sourceId })}
-        />
+        unboundPicker
       )}
     </View>
   )

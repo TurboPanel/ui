@@ -19,6 +19,21 @@ import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { spacing } from '@/lib/theme'
 
 /**
+ * Cards resumable setup can honour.
+ *
+ * **Git repository is filtered out on purpose.** This flow configures a row
+ * that already exists through `configureProject`, whose body is `{ type, code }`
+ * — there is no `options.compose` on it, so a repository binding has nowhere to
+ * go, and this surface has no compose draft step to put one in. Offering the
+ * card would set the project to `docker-compose` and silently drop the
+ * repository, which is worse than not offering it: an operator who lands here
+ * picks Compose or Services and binds the repository on the service itself.
+ */
+const RESUMABLE_SETUP_OPTIONS = SETUP_TYPE_OPTIONS.filter(
+  (option) => option.choice !== 'repository',
+)
+
+/**
  * Resumable setup for projects that exist without a type — the create wizard
  * now picks the type before the project is written, so this only serves
  * projects created empty earlier (or left mid-setup). Selection is local until
@@ -122,7 +137,7 @@ export function ProjectSetupSection() {
         ) : null}
 
         <ChoiceGrid>
-          {SETUP_TYPE_OPTIONS.map((option) => (
+          {RESUMABLE_SETUP_OPTIONS.map((option) => (
             <SetupTypeChoiceCard
               key={option.choice}
               option={option}

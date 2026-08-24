@@ -15,11 +15,17 @@ import type { ComposeProjectTabId } from '@/lib/project-navigation'
 export type SetupType = 'docker-compose' | 'template' | 'managed'
 
 /**
- * Card the operator picks. Compose and Services are the *same* project type —
- * they differ only in which tab of the compose surface you land on, so someone
- * who thinks in service cards never has to meet raw YAML first.
+ * Card the operator picks. Compose, Services, and Git repository are the *same*
+ * project type — they differ only in what the compose draft starts as and which
+ * tab of the compose surface you land on, so someone who thinks in service
+ * cards (or in repositories) never has to meet raw YAML first.
  */
-export type SetupChoice = 'compose' | 'services' | 'template' | 'managed'
+export type SetupChoice =
+  | 'compose'
+  | 'services'
+  | 'repository'
+  | 'template'
+  | 'managed'
 
 export type SetupTypeOption = {
   choice: SetupChoice
@@ -43,6 +49,19 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     type: 'docker-compose',
     label: 'Services',
     description: 'The same stack, defined with service cards instead of YAML.',
+    section: 'overview',
+  },
+  {
+    // Third `docker-compose` card. Linking a repository is a create-time act,
+    // not something to discover later inside a service form, so it sits with
+    // the other two compose lenses rather than after the catalog cards. It must
+    // stay *after* Compose: a bare `?type=docker-compose` resolves to the first
+    // card offering that type, and that has always meant the blank YAML slate.
+    choice: 'repository',
+    type: 'docker-compose',
+    label: 'Git repository',
+    description:
+      'One service, bound to a repository you already connected. Pick the repo and branch.',
     section: 'overview',
   },
   {

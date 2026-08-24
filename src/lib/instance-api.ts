@@ -94,6 +94,7 @@ export const CA_ROTATION_IN_PROGRESS_ERROR = 'ca_rotation_in_progress'
 export const NO_PENDING_ROTATION_ERROR = 'no_pending_rotation'
 export const CA_ROTATION_NOT_CONVERGED_ERROR = 'ca_rotation_not_converged'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
+export const SOURCE_REFERENCED_BY_COMPOSE_ERROR = 'source_referenced_by_compose'
 
 const CLIENT_API = '/api/client/v1'
 const INSTALL_API = '/api/install/v1'
@@ -2591,6 +2592,109 @@ export async function saveSignupSettings(enabled: boolean): Promise<SignupSettin
   })
 }
 
+/**
+ * Webhook ingress paths, mirrored by hand from the control plane's
+ * `GITHUB_WEBHOOK_PATH` / `GITLAB_WEBHOOK_PATH` in `turbopanel/src/surfaces.ts`.
+ * That module is a different repo and runtime, so it cannot be imported here —
+ * keep these two literals in step with it.
+ */
+export const GITHUB_WEBHOOK_PATH = '/api/git/v1/github/webhook'
+export const GITLAB_WEBHOOK_PATH = '/api/git/v1/gitlab/webhook'
+
+/**
+ * Instance-wide GitHub App credentials as the admin API reports them.
+ * Presence-only: the sealed private key and webhook secret never leave the
+ * control plane, so the read shape carries `hasPrivateKey` / `hasWebhookSecret`
+ * instead of a (masked or otherwise) value.
+ */
+export type GithubAppSettingsSummary = {
+  appId: string | null
+  appSlug: string | null
+  clientId: string | null
+  hasPrivateKey: boolean
+  hasWebhookSecret: boolean
+}
+
+/**
+ * Partial write patch — omitted keys keep their stored value, so a save that
+ * did not touch the private key must leave `privateKeyPem` out entirely rather
+ * than send `''`. `appSlug` / `clientId` / `webhookSecret` accept an explicit
+ * `null` to clear; `appId` and `privateKeyPem` reject empty strings server-side.
+ */
+export type GithubAppSettingsUpdate = {
+  appId?: string
+  appSlug?: string | null
+  clientId?: string | null
+  privateKeyPem?: string
+  webhookSecret?: string | null
+}
+
+const ADMIN_GITHUB_APP_URL = `${ADMIN_API}/instance/github-app`
+
+export async function fetchGithubAppSettings(): Promise<GithubAppSettingsSummary> {
+  const raw = await apiFetch<{ githubApp: GithubAppSettingsSummary }>(
+    ADMIN_GITHUB_APP_URL
+  )
+  return raw.githubApp
+}
+
+export async function saveGithubAppSettings(
+  updates: GithubAppSettingsUpdate
+): Promise<GithubAppSettingsSummary> {
+  const raw = await apiFetch<{ githubApp: GithubAppSettingsSummary }>(
+    ADMIN_GITHUB_APP_URL,
+    {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    }
+  )
+  return raw.githubApp
+}
+
+/**
+ * Instance-wide GitLab OAuth application. Same presence-only contract as the
+ * GitHub App summary; `baseUrl` is always resolved (defaults to
+ * `https://gitlab.com` when the operator never set one).
+ */
+export type GitlabOauthSettingsSummary = {
+  clientId: string | null
+  redirectUri: string | null
+  baseUrl: string
+  hasClientSecret: boolean
+  hasWebhookSecret: boolean
+}
+
+/** Partial write patch; see {@link GithubAppSettingsUpdate} for the semantics. */
+export type GitlabOauthSettingsUpdate = {
+  clientId?: string
+  clientSecret?: string
+  redirectUri?: string | null
+  baseUrl?: string | null
+  webhookSecret?: string | null
+}
+
+const ADMIN_GITLAB_OAUTH_URL = `${ADMIN_API}/instance/gitlab-oauth`
+
+export async function fetchGitlabOauthSettings(): Promise<GitlabOauthSettingsSummary> {
+  const raw = await apiFetch<{ gitlabOauth: GitlabOauthSettingsSummary }>(
+    ADMIN_GITLAB_OAUTH_URL
+  )
+  return raw.gitlabOauth
+}
+
+export async function saveGitlabOauthSettings(
+  updates: GitlabOauthSettingsUpdate
+): Promise<GitlabOauthSettingsSummary> {
+  const raw = await apiFetch<{ gitlabOauth: GitlabOauthSettingsSummary }>(
+    ADMIN_GITLAB_OAUTH_URL,
+    {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    }
+  )
+  return raw.gitlabOauth
+}
+
 export type CommandStatus =
   | 'queued'
   | 'dispatching'
@@ -3098,6 +3202,35 @@ export async function fetchSources(): Promise<{ sources: SourceRecord[] }> {
   return await apiFetch(`${CLIENT_API}/sources`)
 }
 
+/**
+ * One source plus the instance-wide webhook facts folded onto the read.
+ *
+ * The three extra fields are properties of the *instance*, not of the row, so
+ * `GET /sources` deliberately omits them — repeating an identical pair on every
+ * entry would say nothing per row. They are also only attached for `github` and
+ * `gitlab`: a generic `git` source has no provider webhook to point anywhere,
+ * which is why each one is optional here rather than nullable.
+ *
+ * `reachabilityNote` is non-null exactly when this instance looks unreachable
+ * from the public internet, and is the only one of the three this org-facing
+ * page renders — the address itself belongs to the admin Git-providers surface,
+ * which is where an operator can actually act on it.
+ */
+export type SourceDetailRecord = SourceRecord & {
+  /** Address to paste into the provider's webhook settings (github/gitlab only). */
+  webhookUrl?: string | null
+  /** Whether a provider could deliver to {@link SourceDetailRecord.webhookUrl}. */
+  webhookReachable?: boolean
+  /** Why deliveries cannot arrive, when they cannot. Null when they can. */
+  reachabilityNote?: string | null
+}
+
+export async function fetchSource(
+  sourceId: string
+): Promise<{ source: SourceDetailRecord }> {
+  return await apiFetch(`${CLIENT_API}/sources/${sourceId}`)
+}
+
 export async function fetchGitInstallations(): Promise<{
   installations: GitInstallationRecord[]
 }> {
@@ -3152,6 +3285,33 @@ export async function updateSource(
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+}
+
+/**
+ * Disconnect a repository from the organization.
+ *
+ * Answers **409** {@link SOURCE_REFERENCED_BY_COMPOSE_ERROR} while any stored
+ * compose document still names the source in `x-turbopanel.source.sourceId` —
+ * the row is what a bound service clones through, so dropping it would leave a
+ * service that cannot build. Detach it from the service first.
+ */
+export async function deleteSource(sourceId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/sources/${sourceId}`, {
+    method: 'DELETE',
+  })
+}
+
+/**
+ * Where to send the browser to install the GitHub App on an account.
+ *
+ * Deliberately a URL rather than a fetch, exactly like
+ * {@link gitlabOauthConnectUrl}: the endpoint answers `302` to GitHub's
+ * installation page carrying a signed `state`, and the operator has to *land*
+ * there to choose an account and pick repositories. Following it with `fetch`
+ * would consume the redirect and show nothing.
+ */
+export function githubAppInstallUrl(): string {
+  return controlPlaneUrl(`${CLIENT_API}/sources/github/install`)
 }
 
 /**

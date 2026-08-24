@@ -81,7 +81,7 @@ function NavItem({
  * Deliberately horizontal-only and deliberately short. A growing list of
  * destinations does not belong here (and emphatically not in a side rail):
  * reach configuration from the object it belongs to, the way the project
- * editor's Document lens hangs it off each service.
+ * editor's Services lens hangs it off each service.
  */
 export function SectionNav({
   items,

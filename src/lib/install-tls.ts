@@ -39,7 +39,13 @@ function isPrivateOrLoopbackIpv4(octets: number[]): boolean {
   return false
 }
 
-function isLoopbackOrPrivateHostname(hostname: string): boolean {
+/**
+ * True when a hostname can only be reached from inside the operator's network
+ * — loopback, RFC1918 / link-local / ULA addresses, or a local-only TLD.
+ * Shared with the Git webhook reachability hint, which asks the same question
+ * of the instance's configured public URLs.
+ */
+export function isLoopbackOrPrivateHostname(hostname: string): boolean {
   const host = stripIpv6Brackets(hostname).toLowerCase()
   if (!host) return true
   if (host === 'localhost' || host.endsWith('.localhost')) return true

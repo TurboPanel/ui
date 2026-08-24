@@ -365,7 +365,7 @@ function SurfaceToolbarEnd({
 /**
  * Shared editor chrome: the bordered compose surface.
  *
- * `nav` is the lens bar (Document · Map · Code) and `tabs` the embedded
+ * `nav` is the lens bar (Overview · Compose · Services) and `tabs` the embedded
  * Compose/Services toggle; both sit in the header strip beside the toolbar
  * actions. There is deliberately **no** side rail — the project editor has no
  * section nav to hold, and a rail of destinations is the thing this layout
@@ -504,9 +504,9 @@ function editorChromeTrailing({
 }
 
 /**
- * `document` visual mode — the compose file annotated with live facts, plus the
- * Add service footer. Optional render slots stay omitted rather than passed as
- * `undefined` (exactOptionalPropertyTypes).
+ * `document` visual mode — the Services lens: the compose services as a list
+ * with live facts, plus the Add service footer. Optional render slots stay
+ * omitted rather than passed as `undefined` (exactOptionalPropertyTypes).
  */
 function ComposeDocumentBody({
   draft,

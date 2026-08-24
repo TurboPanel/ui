@@ -1605,7 +1605,7 @@ function EnvironmentLoadedPanels({
   /** Hosting row id from a `?hostingId=` deep link on the Hosting tab. */
   focusHostingId?: string | null
   /**
-   * Narrow the rendered rows to these compose services. The Document lens
+   * Narrow the rendered rows to these compose services. The Services lens
    * expands hosting for the one service the operator clicked, rather than
    * sending them to a page listing every service.
    */
@@ -1910,7 +1910,7 @@ export function EnvironmentDetailBody({
   /** Hosting row id from a `?hostingId=` deep link on the Hosting tab. */
   focusHostingId?: string | null
   /**
-   * Narrow the rendered rows to these compose services. The Document lens
+   * Narrow the rendered rows to these compose services. The Services lens
    * expands hosting for the one service the operator clicked, rather than
    * sending them to a page listing every service.
    */

@@ -3,7 +3,7 @@ import { useProjectContext } from '@/components/org/project/project-context'
 import { projectOverviewHref } from '@/lib/project-navigation'
 
 /**
- * Retired route — service cards are now blocks in the Document lens.
+ * Retired route — service cards are now blocks in the Services lens.
  * Service detail stays at `/services/:serviceId`.
  */
 export default function ProjectServicesScreen() {

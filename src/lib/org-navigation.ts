@@ -17,6 +17,12 @@ export const ORG_AREAS = [
     hint: 'Projects filtered by the workspace switcher',
     subRoutes: [
       {
+        id: 'sources',
+        label: 'Sources',
+        pathSegment: 'sources',
+        hint: 'Connected Git accounts and repositories',
+      },
+      {
         id: 'settings',
         label: 'Settings',
         pathSegment: 'settings',
@@ -289,6 +295,13 @@ export function serverDetailHref(
   serverId: string,
 ): `/${string}/servers/${string}` {
   return `/${orgId}/servers/${serverId}`
+}
+
+/** Connected Git accounts and repositories for the organization. */
+export function projectSourcesHref(
+  orgId: string,
+): `/${string}/projects/sources` {
+  return `/${orgId}/projects/sources`
 }
 
 export function serversDatacentersHref(

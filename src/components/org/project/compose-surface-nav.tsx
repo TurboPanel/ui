@@ -19,13 +19,13 @@ import {
 import { chrome, colors } from '@/lib/theme'
 
 /**
- * Icon per lens. Document reuses the service-cards glyph because that is what
- * it renders — the compose file as blocks, not a diagram.
+ * Icon per lens. Services reuses the service-cards glyph because that is what
+ * it renders — the compose services as rows, not a diagram.
  */
 const LENS_ICONS = {
-  overview: ComposeVisualIcon,
   map: ComposeOverviewIcon,
   compose: ComposeEditorIcon,
+  overview: ComposeVisualIcon,
 } as const satisfies Partial<
   Record<ComposeProjectTabId, typeof ComposeEditorIcon>
 >
@@ -52,12 +52,12 @@ function LensFace({
 }
 
 /**
- * Lens bar: **Document · Map · Code** — three representations of one compose
- * artifact, not a list of places.
+ * Lens bar: **Overview · Compose · Services** — three representations of one
+ * compose artifact, not a list of places.
  *
  * The project editor deliberately has no section nav. Hosting, Storage,
  * Servers, and Settings are reached from the object they belong to (a
- * service's gutter fact in the Document lens, or the scope-strip gear), which
+ * service's gutter fact in the Services lens, or the scope-strip gear), which
  * is why this bar stays three items wide however much the project grows.
  */
 export function ComposeSurfaceNav() {
@@ -75,8 +75,8 @@ export function ComposeSurfaceNav() {
     <View style={styles.bar}>
       <View style={[orgPanelStyles.segmentGroup, styles.group]}>
         {lensIds.filter(isLens).map((tabId) => {
-          // A non-lens route (Storage, Settings, …) keeps Document lit: those
-          // are configuration reached from the document, not a fourth lens.
+          // A non-lens route (Storage, Settings, …) keeps Services lit: those
+          // are configuration reached from a service row, not a fourth lens.
           const active = isLens(activeTab)
             ? activeTab === tabId
             : tabId === 'overview'

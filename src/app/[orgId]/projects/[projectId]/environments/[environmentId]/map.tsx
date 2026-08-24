@@ -8,7 +8,7 @@ import {
 } from '@/lib/project-navigation'
 
 /**
- * Map lens — compose topology for one environment
+ * Overview lens — compose topology for one environment
  * (`/environments/:environmentId/map`).
  */
 export default function ProjectEnvironmentMapScreen() {

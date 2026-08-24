@@ -26,6 +26,8 @@ import {
   fetchDatacenters,
   fetchDeployPreview,
   fetchEnvironment,
+  fetchGithubAppSettings,
+  fetchGitlabOauthSettings,
   fetchLicenses,
   fetchOrgHostDefaults,
   fetchOrganization,
@@ -52,6 +54,8 @@ import {
   retireOrganizationCa,
   rotateOrganizationCa,
   runEnvironmentLifecycle,
+  saveGithubAppSettings,
+  saveGitlabOauthSettings,
   saveOrgFabric,
   saveOrgHostDefaults,
   setServerHostname,
@@ -740,5 +744,59 @@ describe('instance-api fetch wrappers', () => {
     })
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/tls/ca/retire')
+  })
+
+  it('unwraps the GitHub App summary and PUTs only the supplied patch keys', async () => {
+    const summary = {
+      appId: '123456',
+      appSlug: 'my-turbopanel',
+      clientId: null,
+      hasPrivateKey: true,
+      hasWebhookSecret: false,
+    }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, githubApp: summary }))
+    await expect(fetchGithubAppSettings()).resolves.toEqual(summary)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/admin/v1/instance/github-app',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, githubApp: summary }))
+    await expect(
+      saveGithubAppSettings({ appId: '123456', clientId: null }),
+    ).resolves.toEqual(summary)
+    const [, init] = fetchMock.mock.calls[1] ?? []
+    expect((init as RequestInit).method).toBe('PUT')
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      appId: '123456',
+      clientId: null,
+    })
+  })
+
+  it('unwraps the GitLab OAuth summary and PUTs the patch', async () => {
+    const summary = {
+      clientId: 'app-1',
+      redirectUri: null,
+      baseUrl: 'https://gitlab.com',
+      hasClientSecret: true,
+      hasWebhookSecret: true,
+    }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, gitlabOauth: summary }))
+    await expect(fetchGitlabOauthSettings()).resolves.toEqual(summary)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/admin/v1/instance/gitlab-oauth',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, gitlabOauth: summary }))
+    await expect(
+      saveGitlabOauthSettings({ clientId: 'app-1', baseUrl: null }),
+    ).resolves.toEqual(summary)
+    const [, init] = fetchMock.mock.calls[1] ?? []
+    expect((init as RequestInit).method).toBe('PUT')
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      clientId: 'app-1',
+      baseUrl: null,
+    })
   })
 })

@@ -24,13 +24,43 @@ const CATALOG: CatalogSummary[] = [
 ]
 
 describe('SETUP_TYPE_OPTIONS', () => {
-  it('offers Services second, between Compose and Template', () => {
+  it('groups the three compose lenses before the two catalog cards', () => {
     expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
       'Compose',
       'Services',
+      'Git repository',
       'Template',
       'Managed',
     ])
+  })
+
+  /**
+   * `?type=docker-compose` predates the extra compose cards and has always
+   * meant the blank YAML slate. `parsePreselectedChoice` resolves a bare
+   * project type to the first card offering it, so Compose has to stay first.
+   */
+  it('keeps Compose the first card offering docker-compose', () => {
+    const first = SETUP_TYPE_OPTIONS.find(
+      (option) => option.type === 'docker-compose',
+    )
+    expect(first?.choice).toBe('compose')
+  })
+
+  it('lands the repository card on the compose surface as docker-compose', () => {
+    const repository = setupOptionForChoice('repository')
+    expect(repository?.type).toBe('docker-compose')
+    expect(repository?.section).toBe('overview')
+  })
+
+  /**
+   * The operator's own servers check out and build the repository. Nothing is
+   * fetched, built, or hosted by TurboPanel on their behalf.
+   */
+  it('keeps remote build/host promises off the repository card', () => {
+    const repository = setupOptionForChoice('repository')
+    expect(repository?.description).not.toMatch(
+      /\bwe (build|deploy|host|run)\b|\bour (servers|infrastructure|cloud)\b/i,
+    )
   })
 
   it('gives every card a unique choice id — React keys off it, and two cards share a type', () => {
@@ -45,7 +75,7 @@ describe('SETUP_TYPE_OPTIONS', () => {
     const services = setupOptionForChoice('services')
     expect(compose?.type).toBe('docker-compose')
     expect(services?.type).toBe('docker-compose')
-    // Code lens vs the Document lens (annotated compose, on the overview path).
+    // Compose lens vs the Services lens (service list, on the overview path).
     expect(compose?.section).toBe('compose')
     expect(services?.section).toBe('overview')
   })

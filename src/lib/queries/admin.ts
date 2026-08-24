@@ -3,10 +3,14 @@ import {
   applyPublicUrls,
   applyReencryptSecrets,
   fetchEmailSettings,
+  fetchGithubAppSettings,
+  fetchGitlabOauthSettings,
   fetchPublicUrls,
   fetchSignupSettings,
   isForbiddenError,
   saveEmailSettings,
+  saveGithubAppSettings,
+  saveGitlabOauthSettings,
   savePublicUrls,
   saveSignupSettings,
 } from '@/lib/instance-api'
@@ -105,6 +109,42 @@ export function useSaveEmailSettings() {
     mutationFn: saveEmailSettings,
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.admin.email, data)
+    },
+  })
+}
+
+export function useGithubAppSettings(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.gitGithubApp,
+    queryFn: fetchGithubAppSettings,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveGithubAppSettings() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveGithubAppSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.admin.gitGithubApp, data)
+    },
+  })
+}
+
+export function useGitlabOauthSettings(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.gitGitlabOauth,
+    queryFn: fetchGitlabOauthSettings,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveGitlabOauthSettings() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveGitlabOauthSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.admin.gitGitlabOauth, data)
     },
   })
 }

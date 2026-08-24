@@ -9,7 +9,7 @@ function firstParam(value: string | string[] | undefined): string {
 }
 
 /**
- * Retired route — service cards are now blocks in the Document lens.
+ * Retired route — service cards are now blocks in the Services lens.
  * (`/environments/:environmentId/services`).
  */
 export default function ProjectEnvironmentServicesScreen() {

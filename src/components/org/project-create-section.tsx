@@ -8,6 +8,8 @@ import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
+import { seedRepositoryCompose } from '@/components/org/project-create/repository-seed'
+import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
@@ -34,6 +36,7 @@ import {
   useCreateWorkspace,
   useProjectCatalog,
   useProjects,
+  useSources,
   useWorkspaces,
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
@@ -49,7 +52,7 @@ const FORM_MAX_WIDTH = 440
  * Wizard position. Nothing is persisted until the final step's Create button,
  * so every step is freely reversible.
  */
-type Step = 'details' | 'type' | 'catalog' | 'compose'
+type Step = 'details' | 'type' | 'repository' | 'catalog' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
@@ -75,16 +78,22 @@ function resolveLoadError(
 
 /**
  * `?type=managed` from the managed overview CTA jumps past the type cards.
- * Accepts either a card id (`services`) or a project type (`docker-compose`);
- * a bare project type resolves to the first card offering it.
+ * Accepts either a card id (`services`, `repository`) or a project type
+ * (`docker-compose`); a bare project type resolves to the first card offering
+ * it.
+ *
+ * Card ids are matched first and separately. Three cards are `docker-compose`
+ * now, and a bare `?type=docker-compose` has always meant the blank YAML slate
+ * — resolving it by card order alone would let whichever compose card happens
+ * to sit first quietly take over every existing link.
  */
 function parsePreselectedChoice(
   value: string | string[] | undefined,
 ): SetupChoice | null {
-  const found = SETUP_TYPE_OPTIONS.find(
-    (option) => option.choice === value || option.type === value,
-  )
-  return found?.choice ?? null
+  const byChoice = SETUP_TYPE_OPTIONS.find((option) => option.choice === value)
+  if (byChoice) return byChoice.choice
+  const byType = SETUP_TYPE_OPTIONS.find((option) => option.type === value)
+  return byType?.choice ?? null
 }
 
 /** `compose_invalid` is the control plane's machine code — say it in English. */
@@ -96,6 +105,9 @@ function createErrorMessage(error: string | null | undefined): string | null {
 }
 
 function stepForOption(option: SetupTypeOption): Step {
+  // Routed off `choice`, never `type`: three cards are `docker-compose`, and
+  // the repository one needs its picker before the compose surface opens.
+  if (option.choice === 'repository') return 'repository'
   return option.type === 'docker-compose' ? 'compose' : 'catalog'
 }
 
@@ -107,6 +119,10 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   type: {
     title: 'How does it run?',
     hint: 'Pick a type — you can come back and change it before creating.',
+  },
+  repository: {
+    title: 'Link a repository',
+    hint: 'Pick one you have already connected. Nothing is created yet.',
   },
   catalog: { title: 'Choose a service', hint: '' },
   compose: { title: '', hint: '' },
@@ -143,6 +159,15 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     null,
   )
   const [selectedCode, setSelectedCode] = useState('')
+  /** Repository card: the picked source id and ref, until they seed the draft. */
+  const [selectedSourceId, setSelectedSourceId] = useState('')
+  const [repositoryBranch, setRepositoryBranch] = useState('')
+  /**
+   * `sourceId@branch` the current draft was seeded from. Re-seeding on every
+   * Continue would discard whatever the operator did on the compose surface
+   * after a Back that changed neither.
+   */
+  const [seededRepositoryKey, setSeededRepositoryKey] = useState('')
   /** Seed document handed to the editor; edits come back via onDraftChange. */
   const [composeDoc, setComposeDoc] = useState<ComposeDocument>(() =>
     emptyComposeDocument(),
@@ -172,6 +197,22 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const catalogQuery = useProjectCatalog(orgId, {
     enabled: step === 'catalog',
   })
+
+  /**
+   * Same query the repository step renders from — one key, one cache entry, so
+   * holding it here costs no extra fetch. Only the id lives in wizard state and
+   * the record is resolved from *this* list, so a repository disconnected while
+   * the wizard was open disables Continue instead of seeding a draft bound to a
+   * source the org no longer has.
+   */
+  const sourcesQuery = useSources(orgId, { enabled: step === 'repository' })
+  const selectedSource = useMemo(
+    () =>
+      (sourcesQuery.data?.sources ?? []).find(
+        (source) => source.id === selectedSourceId,
+      ) ?? null,
+    [sourcesQuery.data?.sources, selectedSourceId],
+  )
 
   const workspaces = useMemo(
     () =>
@@ -291,14 +332,42 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     setSelectedChoice(option.choice)
     setSelectedCode('')
     setApiError(null)
+    // Leaving the repository card drops the draft it seeded: Compose promises a
+    // blank slate, and a service still bound to a repository is not one.
+    if (option.choice !== 'repository' && seededRepositoryKey) {
+      setComposeDoc(emptyComposeDocument())
+      setSeededRepositoryKey('')
+    }
     setStep(stepForOption(option))
+  }
+
+  /** Seeds the compose draft from the picked repository and opens the surface. */
+  const continueFromRepository = () => {
+    if (!selectedSource) return
+    setApiError(null)
+    const seedKey = `${selectedSource.id}@${repositoryBranch.trim()}`
+    if (seedKey !== seededRepositoryKey) {
+      setComposeDoc(seedRepositoryCompose(selectedSource, repositoryBranch))
+      setSeededRepositoryKey(seedKey)
+    }
+    setStep('compose')
   }
 
   const goBack = () => {
     setApiError(null)
+    if (step === 'type') {
+      setStep('details')
+      return
+    }
+    // A seeded draft steps back to the picker it came from, so the repository
+    // and branch are still there to change rather than being re-chosen blind.
+    if (step === 'compose' && selectedChoice === 'repository') {
+      setStep('repository')
+      return
+    }
     // `?type=` only skips the type cards on the way forward — Back always walks
     // through them, so a pinned type is still switchable.
-    setStep(step === 'type' ? 'details' : 'type')
+    setStep('type')
   }
 
   /** Resolves the workspace, creating it first when the operator asked for a new one. */
@@ -449,6 +518,17 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           />
         ) : null}
 
+        {step === 'repository' ? (
+          <RepositoryStep
+            orgId={orgId}
+            selectedSourceId={selectedSourceId}
+            branch={repositoryBranch}
+            disabled={submitting}
+            onSelectSourceId={setSelectedSourceId}
+            onBranchChange={setRepositoryBranch}
+          />
+        ) : null}
+
         {step === 'type' ? (
           <ChoiceGrid>
             {SETUP_TYPE_OPTIONS.map((option) => (
@@ -484,8 +564,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           step={step}
           submitting={submitting}
           canCreate={selectedCode.length > 0}
+          canContinue={selectedSource != null}
           onBack={goBack}
           onNext={goToTypeStep}
+          onContinue={continueFromRepository}
           onCreate={() => {
             void create()
           }}
@@ -515,20 +597,28 @@ function PanelShell({ children }: Readonly<{ children: ReactNode }>) {
   )
 }
 
-/** Footer buttons: Next on details, Back everywhere after, Create on the last step. */
+/**
+ * Footer buttons: Next on details, Back everywhere after, Create on the last
+ * step. The repository step ends in Continue instead — the compose surface it
+ * opens owns the single Create.
+ */
 function StepActions({
   step,
   submitting,
   canCreate,
+  canContinue,
   onBack,
   onNext,
+  onContinue,
   onCreate,
 }: Readonly<{
   step: Step
   submitting: boolean
   canCreate: boolean
+  canContinue: boolean
   onBack: () => void
   onNext: () => void
+  onContinue: () => void
   onCreate: () => void
 }>) {
   if (step === 'details') {
@@ -539,6 +629,27 @@ function StepActions({
         onPress={onNext}
         accessibilityLabel="Next"
       />
+    )
+  }
+
+  if (step === 'repository') {
+    return (
+      <ButtonRow>
+        <Button
+          label="Back"
+          variant="secondary"
+          disabled={submitting}
+          onPress={onBack}
+          accessibilityLabel="Back"
+        />
+        <Button
+          label="Continue"
+          variant="primary"
+          disabled={!canContinue}
+          onPress={onContinue}
+          accessibilityLabel="Continue"
+        />
+      </ButtonRow>
     )
   }
 

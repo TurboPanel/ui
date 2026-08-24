@@ -215,6 +215,8 @@ export const queryKeys = {
       sources: {
         all: ['org', orgId, 'sources'] as const,
         list: ['org', orgId, 'sources'] as const,
+        detail: (sourceId: string) =>
+          ['org', orgId, 'sources', 'detail', sourceId] as const,
         installations: ['org', orgId, 'sources', 'installations'] as const,
         repositories: (installationId: string) =>
           ['org', orgId, 'sources', 'installations', installationId, 'repositories'] as const,
@@ -347,6 +349,8 @@ export const queryKeys = {
     publicUrls: ['admin', 'public-urls'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
     email: ['admin', 'settings', 'email'] as const,
+    gitGithubApp: ['admin', 'settings', 'git', 'github-app'] as const,
+    gitGitlabOauth: ['admin', 'settings', 'git', 'gitlab-oauth'] as const,
   },
 } as const
 

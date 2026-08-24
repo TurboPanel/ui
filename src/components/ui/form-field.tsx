@@ -12,14 +12,19 @@ import { chrome, colors, spacing } from '@/lib/theme'
  * Visible label + control + hint/error (MASTER: never placeholder-only
  * labels; errors adjacent to the field). Wrap any control, or use
  * {@link TextField} for the standard text input.
+ *
+ * `labelRight` sits on the label line — for state that belongs to the field
+ * rather than to its value, such as a sealed secret's Configured badge.
  */
 export function FormField({
   label,
+  labelRight,
   hint,
   error,
   children,
 }: Readonly<{
   label: string
+  labelRight?: ReactNode
   hint?: string
   error?: string | null
   children: ReactNode
@@ -32,7 +37,10 @@ export function FormField({
   }
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {labelRight}
+      </View>
       {children}
       {caption}
     </View>
@@ -45,6 +53,7 @@ export function FormField({
  */
 export function TextField({
   label,
+  labelRight,
   hint,
   error,
   mono = false,
@@ -53,6 +62,7 @@ export function TextField({
 }: Readonly<
   {
     label: string
+    labelRight?: ReactNode
     hint?: string
     error?: string | null
     mono?: boolean
@@ -60,7 +70,7 @@ export function TextField({
 >) {
   const [focused, setFocused] = useState(false)
   return (
-    <FormField label={label} hint={hint} error={error}>
+    <FormField label={label} labelRight={labelRight} hint={hint} error={error}>
       <TextInput
         {...inputProps}
         placeholderTextColor={colors.textDim}
@@ -89,6 +99,12 @@ export function TextField({
 const styles = StyleSheet.create({
   field: {
     gap: spacing.xs,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   label: {
     color: colors.textBody,

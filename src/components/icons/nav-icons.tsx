@@ -287,6 +287,28 @@ export function SignupNavIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
+/** Branch fork — Git providers. */
+export function GitNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6.75 8.25v7.5M6.75 15.75a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5ZM6.75 3.75a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5ZM17.25 8.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M17.25 8.25v1.5a3.75 3.75 0 0 1-3.75 3.75h-3a3.75 3.75 0 0 0-3.75 3.75"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 /** Lock — Secrets admin. */
 export function SecretsNavIcon({ size = 16, color }: NavIconProps) {
   return (
@@ -374,6 +396,7 @@ const AREA_ICONS = {
 const ADMIN_AREA_ICONS = {
   networking: NetworkingNavIcon,
   email: EmailNavIcon,
+  git: GitNavIcon,
   signup: SignupNavIcon,
   secrets: SecretsNavIcon,
 } as const satisfies Record<AdminAreaId, (props: NavIconProps) => ReactElement>

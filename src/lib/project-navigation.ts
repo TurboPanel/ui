@@ -47,15 +47,15 @@ export function projectTypeLabel(project: ProjectRecord): string {
 /**
  * Compose project section tabs inside the editor chrome. Project · environment
  * scope chips stay in the header; switching scope keeps the active tab.
- * `overview` (Document), `map`, and `compose` (Code) are **lenses** on one
- * artifact and live in the surface lens bar. Hosting / Servers / Storage /
- * Settings are configuration routes reached from the document itself (a
- * service's gutter fact) or the scope-strip gear — never a nav list.
+ * `map` (Overview), `compose` (Compose), and `overview` (Services) are
+ * **lenses** on one artifact and live in the surface lens bar, in that order.
+ * Hosting / Servers / Storage / Settings are configuration routes reached from
+ * a service row or the scope-strip gear — never a nav list.
  */
 export const COMPOSE_PROJECT_TAB_IDS = [
-  'overview',
   'map',
   'compose',
+  'overview',
   'hosting',
   'servers',
   'storage',
@@ -66,9 +66,9 @@ export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
 
 /** Create-wizard draft has no environments and no row to configure — lenses only. */
 export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
-  'overview',
   'map',
   'compose',
+  'overview',
 ] as const
 
 /** Platform projects never accept mutations from the UI. */
@@ -77,9 +77,9 @@ export function systemProjectAllowsMutations(): boolean {
 }
 
 export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
-  overview: 'Document',
-  map: 'Map',
-  compose: 'Code',
+  map: 'Overview',
+  compose: 'Compose',
+  overview: 'Services',
   hosting: 'Hosting',
   servers: 'Servers',
   storage: 'Storage',
@@ -87,7 +87,7 @@ export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
 }
 
 /** The three lenses on the compose artifact, in lens-bar order. */
-export const COMPOSE_PROJECT_LENS_IDS = ['overview', 'map', 'compose'] as const
+export const COMPOSE_PROJECT_LENS_IDS = ['map', 'compose', 'overview'] as const
 
 export function isComposeProjectLens(
   tabId: ComposeProjectTabId,
@@ -384,7 +384,7 @@ export function parseComposeProjectTab(
 ): ComposeProjectTabId {
   const view = parseComposeEditView(pathname, projectId)
   if (view === 'editor') return 'compose'
-  // The visual editor is the Document lens, which lives on the overview path.
+  // The visual editor is the Services lens, which lives on the overview path.
   if (view === 'visual') return 'overview'
   const suffix = composePathSectionSegment(pathname, projectId)
   if (suffix === 'map') return 'map'
