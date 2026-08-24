@@ -425,6 +425,57 @@ export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
  */
 export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
 
+/**
+ * Extensions installed on every PHP series whether or not a site asks.
+ *
+ * Deliberately **not** offered as choices: presenting `bcmath` as something to
+ * "add" when it is always present would be misleading. Mirrors
+ * `baselineExtensions` in the daemon's runtime registry.
+ */
+export const BASELINE_PHP_EXTENSIONS: readonly string[] = [
+  'bcmath',
+  'curl',
+  'gd',
+  'mbstring',
+  'mysql',
+  'opcache',
+  'sqlite3',
+  'xml',
+  'zip',
+]
+
+/**
+ * Extensions a site may opt into.
+ *
+ * Host-global per series: `extension=` is `PHP_INI_SYSTEM` and there is no
+ * per-pool loading, so opting in loads it for **every** site on that series.
+ * The form has to say so rather than implying per-site isolation.
+ */
+export const OPTIONAL_PHP_EXTENSIONS: readonly string[] = [
+  'apcu',
+  'bz2',
+  'gmp',
+  'igbinary',
+  'imagick',
+  'intl',
+  'ldap',
+  'memcached',
+  'msgpack',
+  'pgsql',
+  'redis',
+  'snmp',
+  'soap',
+  'tidy',
+  'yaml',
+  'zstd',
+]
+
+/** Everything a site may name. Mirrors the instance's own union. */
+export const ALLOWED_PHP_EXTENSIONS: readonly string[] = [
+  ...BASELINE_PHP_EXTENSIONS,
+  ...OPTIONAL_PHP_EXTENSIONS,
+]
+
 /** Series a PHP site gets when it names none. Mirrors the instance default. */
 export const DEFAULT_PHP_SERIES = '8.4' 
 

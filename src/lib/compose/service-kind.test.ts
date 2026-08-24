@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ALLOWED_PHP_EXTENSIONS,
+  BASELINE_PHP_EXTENSIONS,
+  DEFAULT_PHP_SERIES,
+  OPTIONAL_PHP_EXTENSIONS,
+  SUPPORTED_PHP_SERIES,
   isHostNativeServiceKind,
   isNodeComposeService,
   parseServiceTurbopanelExtension,
@@ -202,5 +207,35 @@ describe('buildKind normalization across a service-kind switch', () => {
         branch: 'main',
       },
     })
+  })
+})
+
+describe('PHP extension lists', () => {
+  it('keeps baseline and optional disjoint', () => {
+    // A name in both would render as an opt-in chip for something already
+    // installed, which tells the operator the wrong thing about what their
+    // choice does.
+    const overlap = BASELINE_PHP_EXTENSIONS.filter((name) =>
+      OPTIONAL_PHP_EXTENSIONS.includes(name)
+    )
+    expect(overlap).toEqual([])
+  })
+
+  it('exposes ALLOWED as exactly the union', () => {
+    expect([...ALLOWED_PHP_EXTENSIONS].sort()).toEqual(
+      [...BASELINE_PHP_EXTENSIONS, ...OPTIONAL_PHP_EXTENSIONS].sort(),
+    )
+  })
+
+  it('excludes the extensions that are refused on purpose', () => {
+    // xdebug leaks source and is a severe perf cost; ffi and pcntl change what
+    // a pool can do to the host. Adding one needs a reason written down.
+    for (const refused of ['xdebug', 'ffi', 'pcntl']) {
+      expect(ALLOWED_PHP_EXTENSIONS).not.toContain(refused)
+    }
+  })
+
+  it('offers only series the instance supports', () => {
+    expect(SUPPORTED_PHP_SERIES).toContain(DEFAULT_PHP_SERIES)
   })
 })

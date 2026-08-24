@@ -37,6 +37,8 @@ import {
   type VisualFieldDef,
 } from '@/lib/compose/visual-fields'
 import {
+  BASELINE_PHP_EXTENSIONS,
+  OPTIONAL_PHP_EXTENSIONS,
   SUPPORTED_PHP_SERIES,
   type ComposeServicePhpExtension,
   DEFAULT_SITE_ENGINE,
@@ -129,6 +131,31 @@ function siteEngineHint(
   return 'Files are served from the host document root via nginx; PHP runs in a per-site php-fpm pool over fastcgi_pass. web.env is written to hosting.env but not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
 }
 
+/** Settings the form surfaces directly; the rest stay reachable in YAML. */
+const PHP_SETTING_FIELDS: readonly {
+  key: string
+  label: string
+  placeholder: string
+  numeric?: boolean
+}[] = [
+  { key: 'memory_limit', label: 'Memory limit', placeholder: '256M' },
+  { key: 'upload_max_filesize', label: 'Max upload size', placeholder: '32M' },
+  { key: 'post_max_size', label: 'Max POST size', placeholder: '32M' },
+  {
+    key: 'max_execution_time',
+    label: 'Max execution time (seconds)',
+    placeholder: '30',
+    numeric: true,
+  },
+  {
+    key: 'max_input_vars',
+    label: 'Max input vars',
+    placeholder: '1000',
+    numeric: true,
+  },
+  { key: 'date.timezone', label: 'Timezone', placeholder: 'UTC' },
+]
+
 /**
  * PHP configuration for a site, edited where it lives.
  *
@@ -136,9 +163,9 @@ function siteEngineHint(
  * keyed by (environment, compose service), so several hostings on one service
  * silently last-wins merged into one pool. It belongs to the service.
  *
- * Version, memory limit, and max execution time are the fields that existed
- * before; the wider surface (extensions, pool tuning, the rest of the settings
- * table) is deliberately not crammed in here.
+ * Values are validated on save by the instance's settings table, which
+ * validates then *drops* — so a refused value shows up as a lint issue in the
+ * editor rather than being silently escaped into a config file.
  */
 function PhpFields({
   php,
@@ -151,70 +178,161 @@ function PhpFields({
   disabled: boolean
   onChange: (php: ComposeServicePhpExtension | undefined) => void
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const settings = php?.settings ?? {}
-  const patch = (
-    next: Partial<ComposeServicePhpExtension>,
-    nextSettings?: Record<string, string | number>,
+  const pool = php?.pool ?? {}
+  const extensions = php?.extensions ?? []
+
+  const emit = (next: ComposeServicePhpExtension) => {
+    for (const field of ['settings', 'pool'] as const) {
+      const block = next[field]
+      if (block && Object.keys(block).length === 0) delete next[field]
+    }
+    if (next.extensions && next.extensions.length === 0) delete next.extensions
+    onChange(Object.keys(next).length > 0 ? next : undefined)
+  }
+  const setBlockValue = (
+    field: 'settings' | 'pool',
+    key: string,
+    raw: string,
   ) => {
-    const merged: ComposeServicePhpExtension = {
-      ...php,
-      ...next,
-      ...(nextSettings ? { settings: nextSettings } : {}),
-    }
-    if (merged.settings && Object.keys(merged.settings).length === 0) {
-      delete merged.settings
-    }
-    onChange(Object.keys(merged).length > 0 ? merged : undefined)
-  }
-  const setSetting = (key: string, raw: string) => {
-    const next = { ...settings }
+    const block = { ...(php?.[field] ?? {}) }
     const trimmed = raw.trim()
-    if (trimmed === '') delete next[key]
-    else next[key] = trimmed
-    patch({}, next)
+    if (trimmed === '') delete block[key]
+    else block[key] = trimmed
+    emit({ ...php, [field]: block })
   }
+  const toggleExtension = (name: string) => {
+    const next = extensions.includes(name)
+      ? extensions.filter((entry) => entry !== name)
+      : [...extensions, name].sort()
+    emit({ ...php, extensions: next })
+  }
+
   const mechanism = engine === 'openlitespeed'
     ? 'a per-vhost LSAPI process under suEXEC'
     : 'a per-site php-fpm pool'
+  const enabled = php !== undefined && Object.keys(php).length > 0
+
   return (
     <View style={styles.fieldBlock}>
       <Text style={styles.label}>PHP</Text>
       <OptionSelect
         value={php?.version ?? ''}
         options={[
-          { value: '', label: 'Host default' },
+          { value: '', label: enabled ? 'Host default' : 'Off — serve files only' },
           ...SUPPORTED_PHP_SERIES.map((series) => ({
             value: series,
             label: `PHP ${series}`,
           })),
         ]}
         disabled={disabled}
-        onChange={(version) => patch({ version: version || undefined })}
+        onChange={(version) => emit({ ...php, version: version || undefined })}
       />
       <Text style={styles.hint}>
         Leave every field blank to serve this site as static files. Setting any
         of them turns PHP on, running in {mechanism}.
       </Text>
-      <TextInput
-        value={String(settings.memory_limit ?? '')}
-        onChangeText={(value) => setSetting('memory_limit', value)}
-        editable={!disabled}
-        placeholder="Memory limit, e.g. 256M"
-        placeholderTextColor={colors.textDim}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.input}
-      />
-      <TextInput
-        value={String(settings.max_execution_time ?? '')}
-        onChangeText={(value) => setSetting('max_execution_time', value)}
-        editable={!disabled}
-        placeholder="Max execution time in seconds, e.g. 30"
-        placeholderTextColor={colors.textDim}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.input}
-      />
+
+      {PHP_SETTING_FIELDS.slice(0, 4).map((field) => (
+        <TextInput
+          key={field.key}
+          value={String(settings[field.key] ?? '')}
+          onChangeText={(value) => setBlockValue('settings', field.key, value)}
+          editable={!disabled}
+          placeholder={`${field.label}, e.g. ${field.placeholder}`}
+          placeholderTextColor={colors.textDim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType={field.numeric ? 'number-pad' : 'default'}
+          style={styles.input}
+        />
+      ))}
+
+      <Pressable
+        onPress={() => setShowAdvanced((open) => !open)}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={showAdvanced ? 'Hide PHP advanced' : 'Show PHP advanced'}
+      >
+        <Text style={styles.hint}>
+          {showAdvanced ? '− Advanced' : '+ Advanced — extensions, limits, workers'}
+        </Text>
+      </Pressable>
+
+      {showAdvanced ? (
+        <>
+          {PHP_SETTING_FIELDS.slice(4).map((field) => (
+            <TextInput
+              key={field.key}
+              value={String(settings[field.key] ?? '')}
+              onChangeText={(value) => setBlockValue('settings', field.key, value)}
+              editable={!disabled}
+              placeholder={`${field.label}, e.g. ${field.placeholder}`}
+              placeholderTextColor={colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType={field.numeric ? 'number-pad' : 'default'}
+              style={styles.input}
+            />
+          ))}
+
+          <Text style={styles.label}>Extensions</Text>
+          <Text style={styles.hint}>
+            {BASELINE_PHP_EXTENSIONS.join(', ')} are always installed. Anything
+            you add here is loaded for every site on this PHP version on the
+            same server — PHP has no per-site extension loading.
+          </Text>
+          <View style={styles.extensionRow}>
+            {OPTIONAL_PHP_EXTENSIONS.map((name: string) => {
+              const on = extensions.includes(name)
+              return (
+                <Pressable
+                  key={name}
+                  onPress={() => toggleExtension(name)}
+                  disabled={disabled}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on, disabled }}
+                  accessibilityLabel={name}
+                  style={[styles.extensionChip, on && styles.extensionChipOn]}
+                >
+                  <Text style={on ? styles.extensionTextOn : styles.extensionText}>
+                    {name}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+
+          <Text style={styles.label}>Workers</Text>
+          <OptionSelect
+            value={String(pool.pm ?? '')}
+            options={[
+              { value: '', label: 'On demand (default)' },
+              { value: 'ondemand', label: 'On demand' },
+              { value: 'dynamic', label: 'Dynamic' },
+              { value: 'static', label: 'Static' },
+            ]}
+            disabled={disabled}
+            onChange={(value) => setBlockValue('pool', 'pm', value)}
+          />
+          <TextInput
+            value={String(pool['pm.max_children'] ?? '')}
+            onChangeText={(value) => setBlockValue('pool', 'pm.max_children', value)}
+            editable={!disabled}
+            placeholder="Max worker processes, e.g. 20"
+            placeholderTextColor={colors.textDim}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+          <Text style={styles.hint}>
+            OpenLiteSpeed maps these onto its own LSAPI limits rather than an
+            FPM pool.
+          </Text>
+        </>
+      ) : null}
     </View>
   )
 }
@@ -1692,4 +1810,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   addChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  extensionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  extensionChip: {
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  extensionChipOn: {
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
+  },
+  extensionText: { color: colors.textMuted, fontSize: 12 },
+  extensionTextOn: { color: colors.text, fontSize: 12, fontWeight: '600' },
 })
