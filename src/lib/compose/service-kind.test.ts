@@ -77,7 +77,7 @@ describe('serviceKind: node', () => {
   it('recognizes node as a host-native kind that needs no image or build', () => {
     expect(isNodeComposeService({ 'x-turbopanel': { serviceKind: 'node' } })).toBe(true)
     expect(isHostNativeServiceKind('node')).toBe(true)
-    expect(isHostNativeServiceKind('traditional-web')).toBe(true)
+    expect(isHostNativeServiceKind('site')).toBe(true)
     expect(isHostNativeServiceKind('container')).toBe(false)
   })
 })
@@ -161,14 +161,14 @@ describe('buildKind normalization across a service-kind switch', () => {
     })
   })
 
-  it('clears railpack when the service becomes traditional-web', () => {
+  it('clears railpack when the service becomes site', () => {
     const next = patchServiceTurbopanelExtension(RAILPACK_CONTAINER, {
-      serviceKind: 'traditional-web',
+      serviceKind: 'site',
       engine: 'nginx',
       root: 'public',
     })
     expect(next['x-turbopanel']).toEqual({
-      serviceKind: 'traditional-web',
+      serviceKind: 'site',
       engine: 'nginx',
       root: 'public',
       source: {

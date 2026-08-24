@@ -194,7 +194,7 @@ x-turbopanel:
     const source = yamlToComposeDocument(`services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
   nginx:
     image: nginx:alpine
@@ -216,7 +216,7 @@ x-turbopanel:
     expect(
       (source.data.services as Record<string, unknown>).site,
     ).toMatchObject({
-      'x-turbopanel': { serviceKind: 'traditional-web', engine: 'nginx' },
+      'x-turbopanel': { serviceKind: 'site', engine: 'nginx' },
     })
   })
 

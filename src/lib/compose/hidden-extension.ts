@@ -205,7 +205,7 @@ function overlayHiddenPresentation<T>(
 /**
  * Remove every `x-turbopanel` node (top-level and per-service) plus matching
  * presentation entries into a shadow. Service keys stay even when empty
- * (traditional-web often has no other compose fields).
+ * (site often has no other compose fields).
  */
 export function hideComposeTurbopanelExtensions(
   document: ComposeDocument,
@@ -289,12 +289,12 @@ export function restoreComposeTurbopanelExtensions(
 
 /**
  * Service names whose stashed extension declares a **host-native** kind
- * (`traditional-web` or `node`). Used by the UI linter when the visible YAML no
+ * (`site` or `node`). Used by the UI linter when the visible YAML no
  * longer carries `serviceKind`: neither kind declares `image`/`build`, so
  * without this list the hidden extension would make the editor flag every one
  * of them.
  */
-export function hiddenTraditionalWebServiceNames(
+export function hiddenSiteServiceNames(
   hidden: ComposeHiddenExtensions,
 ): string[] {
   const names: string[] = []

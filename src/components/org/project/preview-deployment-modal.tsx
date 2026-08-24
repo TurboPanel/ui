@@ -35,7 +35,7 @@ const MODE_OPTIONS: readonly {
   {
     id: 'prepared',
     label: 'Prepared',
-    hint: 'Deploy-ready document after variables, naming, placement, and traditional-web split — what the host receives.',
+    hint: 'Deploy-ready document after variables, naming, placement, and site split — what the host receives.',
   },
 ]
 

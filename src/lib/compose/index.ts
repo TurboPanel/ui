@@ -69,7 +69,7 @@ export {
 export type { ComposeHiddenExtensions } from './hidden-extension'
 export {
   hideComposeTurbopanelExtensions,
-  hiddenTraditionalWebServiceNames,
+  hiddenSiteServiceNames,
   restoreComposeTurbopanelExtensions,
 } from './hidden-extension'
 export type {
@@ -80,12 +80,12 @@ export type {
   ComposeSourceBuildKind,
   NativeRuntimeFramework,
   SourceIdResolver,
-  TraditionalWebEngine,
+  SiteEngine,
 } from './service-kind'
 export {
   isHostNativeServiceKind,
   isNodeComposeService,
-  isTraditionalWebComposeService,
+  isSiteComposeService,
   parseServiceSourceExtension,
   parseServiceTurbopanelExtension,
   readServiceSourceExtension,
@@ -107,7 +107,7 @@ export {
   hostingWebEnvSectionCopy,
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
-  traditionalWebEnvKeyForService,
+  siteEnvKeyForService,
 } from './hosting-service-context'
 export type { ComposeImageRef } from './image-ref'
 export {

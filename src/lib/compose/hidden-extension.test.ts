@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   composeDocumentToYaml,
   hideComposeTurbopanelExtensions,
-  hiddenTraditionalWebServiceNames,
+  hiddenSiteServiceNames,
   restoreComposeTurbopanelExtensions,
   yamlToComposeDocument,
 } from './index'
@@ -12,7 +12,7 @@ describe('hideComposeTurbopanelExtensions', () => {
     const full = yamlToComposeDocument(`services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
       root: public
       description: Landing
@@ -35,7 +35,7 @@ x-turbopanel:
       placement: { server_id: '11111111-1111-4111-8111-111111111111' },
     })
     expect(hidden.services.site).toMatchObject({
-      serviceKind: 'traditional-web',
+      serviceKind: 'site',
       engine: 'nginx',
       root: 'public',
       description: 'Landing',
@@ -48,7 +48,7 @@ x-turbopanel:
   site:
     image: ignored:for-tw
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: apache
       root: www
       description: Docs
@@ -66,7 +66,7 @@ x-turbopanel:
     const site = (restored.data.services as Record<string, Record<string, unknown>>)
       .site
     expect(site['x-turbopanel']).toEqual({
-      serviceKind: 'traditional-web',
+      serviceKind: 'site',
       engine: 'apache',
       root: 'www',
       description: 'Docs',
@@ -79,7 +79,7 @@ x-turbopanel:
     const full = yamlToComposeDocument(`services:
   gone:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
   stay:
     image: nginx:alpine
@@ -98,25 +98,25 @@ x-turbopanel:
     expect(composeDocumentToYaml(visible)).toContain('gone:')
   })
 
-  it('keeps a traditional-web service key with no other compose fields', () => {
+  it('keeps a site service key with no other compose fields', () => {
     const full = yamlToComposeDocument(`services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
 `)
     const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
     const yaml = composeDocumentToYaml(visible)
     expect(yaml).toContain('site:')
     expect(yaml).not.toContain('x-turbopanel')
-    expect(hiddenTraditionalWebServiceNames(hidden)).toEqual(['site'])
+    expect(hiddenSiteServiceNames(hidden)).toEqual(['site'])
   })
 
   it('stashes presentation comments and blank lines on extension paths', () => {
     const full = yamlToComposeDocument(`services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
   web:
     image: nginx
@@ -192,16 +192,16 @@ x-turbopanel:
     })
   })
 
-  it('filters non-traditional-web services from hiddenTraditionalWebServiceNames', () => {
+  it('filters non-site services from hiddenSiteServiceNames', () => {
     const hidden = {
       services: {
-        site: { serviceKind: 'traditional-web', engine: 'nginx' },
+        site: { serviceKind: 'site', engine: 'nginx' },
         api: { serviceKind: 'container' },
         broken: 'not-an-object',
       },
       comments: {},
       blankLines: {},
     }
-    expect(hiddenTraditionalWebServiceNames(hidden)).toEqual(['site'])
+    expect(hiddenSiteServiceNames(hidden)).toEqual(['site'])
   })
 })

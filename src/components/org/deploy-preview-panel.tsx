@@ -255,7 +255,7 @@ function preparedPreviewError(
 
 /**
  * Fetch + gate the server-prepared deploy preview (variables resolved,
- * container/volume names, traditional-web split). Callers control `enabled`
+ * container/volume names, site split). Callers control `enabled`
  * so only the active UI mode hits the network (`refetchInterval: false`,
  * `staleTime: 0` — default client cache is 5 minutes, which would otherwise
  * keep a Prepared snapshot from before the last pin/compile change).

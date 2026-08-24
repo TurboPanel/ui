@@ -355,7 +355,7 @@ function PreviewSplitButton({
         {
           title: 'Prepared compose',
           subtitle:
-            'Deploy-ready document after variables, naming, and traditional-web split',
+            'Deploy-ready document after variables, naming, and site split',
           accessibilityLabel: 'Preview prepared compose',
           onPress: onPreviewPrepared,
         },

@@ -147,7 +147,7 @@ function ServiceNodeOverlay({
   showStatus: boolean
 }>) {
   const tone = showStatus ? serviceStatusTone(containers) : null
-  const subtitle = node.image ?? (node.serviceKind === 'traditional-web' ? 'Traditional web' : null)
+  const subtitle = node.image ?? (node.serviceKind === 'site' ? 'Site' : null)
   const ports = joinPorts(node.ports)
 
   const content = (

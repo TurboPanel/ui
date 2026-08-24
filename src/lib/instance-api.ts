@@ -3578,7 +3578,7 @@ export type DeployPreviewWarning = {
     | 'docker_external_network_unregistered'
     | 'fabric_reconcile_failed'
     | 'fabric_reconcile_pending'
-    | 'traditional_web_principal_ambiguous'
+    | 'site_principal_ambiguous'
   message: string
   details?: Record<string, unknown>
 }

@@ -33,7 +33,7 @@ import {
   blockingComposeLintIssues,
   composeDocumentToYaml,
   hideComposeTurbopanelExtensions,
-  hiddenTraditionalWebServiceNames,
+  hiddenSiteServiceNames,
   lintComposeYaml,
   normalizeCompose,
   readComposeEditorView,
@@ -1047,14 +1047,14 @@ export function ComposeEditorSection({
   }
 
   const lintIssues = useMemo<ComposeLintIssue[]>(() => {
-    // Lint the *visible* text so line numbers match the textarea. Traditional-
-    // web service kinds live only on the full draft shadow when hidden.
+    // Lint the *visible* text so line numbers match the textarea. Site
+    // service kinds live only on the full draft shadow when hidden.
     const lintSource = tab === 'visual' ? visibleYaml(draft) : lintYaml
-    const traditionalWebServices = hiddenTraditionalWebServiceNames(
+    const siteServices = hiddenSiteServiceNames(
       hideComposeTurbopanelExtensions(draft).hidden,
     )
     return lintComposeYaml(lintSource, {
-      traditionalWebServices,
+      siteServices,
       managedExtensionHidden: true,
     })
   }, [tab, lintYaml, draft])

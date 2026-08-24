@@ -37,20 +37,23 @@ import {
   type VisualFieldDef,
 } from '@/lib/compose/visual-fields'
 import {
+  SUPPORTED_PHP_SERIES,
+  type ComposeServicePhpExtension,
+  DEFAULT_SITE_ENGINE,
   isHostNativeServiceKind,
-  isTraditionalWebComposeService,
+  isSiteComposeService,
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
   SERVICE_DESCRIPTION_MAX_LENGTH,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
-  TRADITIONAL_WEB_ENGINE_OPTIONS,
+  SITE_ENGINE_OPTIONS,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
   type ComposeServiceKind,
   type ComposeServiceSourceExtension,
   type ComposeSourceBuildKind,
   type NativeRuntimeFramework,
-  type TraditionalWebEngine,
+  type SiteEngine,
 } from '@/lib/compose/service-kind'
 import {
   SOURCE_AUTO_DEPLOY_OPTIONS,
@@ -89,9 +92,34 @@ function servicePorts(value: unknown): string {
   return Array.isArray(value) ? value.map(String).join(', ') : ''
 }
 
-function traditionalWebEngineHint(
-  engine: TraditionalWebEngine | undefined,
+/**
+ * The request path, in one line, for every lane.
+ *
+ * Containers and sites are peers here on purpose: a container is not more
+ * modern than an FPM pool, it is a different way to serve a request. Naming
+ * both the same way is what lets an operator compare them without the UI
+ * implying one is a concession.
+ */
+export function servingPathLine(
+  kind: 'container' | 'site' | 'node',
+  engine: SiteEngine | undefined,
 ): string {
+  if (kind === 'container') return 'Docker → Traefik → Caddy → :443'
+  if (kind === 'node') return 'Node → Caddy → :443'
+  const resolved = engine ?? DEFAULT_SITE_ENGINE
+  // A Caddy site is served by the site Caddy, still behind the edge one.
+  if (resolved === 'caddy') return 'Caddy → Caddy → :443'
+  if (resolved === 'apache') return 'Apache → Caddy → :443'
+  if (resolved === 'openlitespeed') return 'OpenLiteSpeed → Caddy → :443'
+  return 'nginx → Caddy → :443'
+}
+
+function siteEngineHint(
+  engine: SiteEngine | undefined,
+): string {
+  if (engine === 'caddy') {
+    return 'Files are served from the host document root by the per-site Caddy; PHP runs in a per-site php-fpm pool over php_fastcgi, and web.env is injected into it. The edge Caddy terminates TLS.'
+  }
   if (engine === 'openlitespeed') {
     return 'Files are served from the host document root via OpenLiteSpeed; PHP runs as a per-vhost LSAPI process under suEXEC. web.env is not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
   }
@@ -99,6 +127,96 @@ function traditionalWebEngineHint(
     return 'Files are served from the host document root via Apache; PHP runs in a per-site php-fpm pool over mod_proxy_fcgi (never mod_php), and web.env is applied as SetEnv. Hosting Caddy terminates TLS.'
   }
   return 'Files are served from the host document root via nginx; PHP runs in a per-site php-fpm pool over fastcgi_pass. web.env is written to hosting.env but not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
+}
+
+/**
+ * PHP configuration for a site, edited where it lives.
+ *
+ * This used to be on the hosting row, which could not work: an FPM pool is
+ * keyed by (environment, compose service), so several hostings on one service
+ * silently last-wins merged into one pool. It belongs to the service.
+ *
+ * Version, memory limit, and max execution time are the fields that existed
+ * before; the wider surface (extensions, pool tuning, the rest of the settings
+ * table) is deliberately not crammed in here.
+ */
+function PhpFields({
+  php,
+  engine,
+  disabled,
+  onChange,
+}: {
+  php: ComposeServicePhpExtension | undefined
+  engine: SiteEngine
+  disabled: boolean
+  onChange: (php: ComposeServicePhpExtension | undefined) => void
+}) {
+  const settings = php?.settings ?? {}
+  const patch = (
+    next: Partial<ComposeServicePhpExtension>,
+    nextSettings?: Record<string, string | number>,
+  ) => {
+    const merged: ComposeServicePhpExtension = {
+      ...php,
+      ...next,
+      ...(nextSettings ? { settings: nextSettings } : {}),
+    }
+    if (merged.settings && Object.keys(merged.settings).length === 0) {
+      delete merged.settings
+    }
+    onChange(Object.keys(merged).length > 0 ? merged : undefined)
+  }
+  const setSetting = (key: string, raw: string) => {
+    const next = { ...settings }
+    const trimmed = raw.trim()
+    if (trimmed === '') delete next[key]
+    else next[key] = trimmed
+    patch({}, next)
+  }
+  const mechanism = engine === 'openlitespeed'
+    ? 'a per-vhost LSAPI process under suEXEC'
+    : 'a per-site php-fpm pool'
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>PHP</Text>
+      <OptionSelect
+        value={php?.version ?? ''}
+        options={[
+          { value: '', label: 'Host default' },
+          ...SUPPORTED_PHP_SERIES.map((series) => ({
+            value: series,
+            label: `PHP ${series}`,
+          })),
+        ]}
+        disabled={disabled}
+        onChange={(version) => patch({ version: version || undefined })}
+      />
+      <Text style={styles.hint}>
+        Leave every field blank to serve this site as static files. Setting any
+        of them turns PHP on, running in {mechanism}.
+      </Text>
+      <TextInput
+        value={String(settings.memory_limit ?? '')}
+        onChangeText={(value) => setSetting('memory_limit', value)}
+        editable={!disabled}
+        placeholder="Memory limit, e.g. 256M"
+        placeholderTextColor={colors.textDim}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.input}
+      />
+      <TextInput
+        value={String(settings.max_execution_time ?? '')}
+        onChangeText={(value) => setSetting('max_execution_time', value)}
+        editable={!disabled}
+        placeholder="Max execution time in seconds, e.g. 30"
+        placeholderTextColor={colors.textDim}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.input}
+      />
+    </View>
+  )
 }
 
 function OptionSelect({
@@ -543,7 +661,7 @@ function deploymentModeLabel(
   kind: ComposeServiceKind | undefined,
   framework: NativeRuntimeFramework | undefined,
 ): string {
-  if (kind === 'traditional-web') return 'Host web server (nginx / Apache / OLS)'
+  if (kind === 'site') return 'Host web engine (Caddy, nginx, Apache, OpenLiteSpeed)'
   if (kind === 'node') {
     if (framework === 'next') return 'Native Node — Next.js'
     if (framework === 'node') return 'Native Node — plain server'
@@ -569,7 +687,7 @@ const RESERVED_DEPLOYMENT_MODES: readonly { label: string; hint: string }[] = [
  * is why it lives beside the build / start command rather than in the
  * Deployment mode chips above: the same container service can be built either
  * way without changing what it *is*. `railpack` is offered only for a container
- * service — `traditional-web` and `node` already have their own build and
+ * service — `site` and `node` already have their own build and
  * runtime lanes, and the instance rejects the combination on save rather than
  * quietly ignoring it.
  */
@@ -662,7 +780,7 @@ function DeploymentModeBlock({
   onNodeVersionChange: (nodeVersion: string) => void
 }>) {
   const native = kind === 'node'
-  // `traditional-web` is its own runtime, chosen by the Service kind selector —
+  // `site` is its own runtime, chosen by the Service kind selector —
   // neither the container nor a native chip describes it, so none is active.
   const containerActive = kind === undefined || kind === 'container'
   const activeFramework = framework ?? 'auto'
@@ -819,7 +937,7 @@ function UnboundSourcePicker({
  * `x-turbopanel.source` — which repository builds this service, and how.
  *
  * Shown for **every** service kind: a Git-backed release is orthogonal to
- * container / traditional-web / node. What the kind decides is how the promoted
+ * container / site / node. What the kind decides is how the promoted
  * release is *run*, which the Deployment mode block above states.
  *
  * The auto-deploy policy is the one field here that does not live in compose:
@@ -1061,11 +1179,11 @@ function SourceSection({
 }
 
 /**
- * `hostNative` covers both host-run kinds — `traditional-web` and `node`.
+ * `hostNative` covers both host-run kinds — `site` and `node`.
  *
  * Neither is a Docker service, so image, build, ports, restart policy, and
  * container name are all fields the deploy engine will never read for it.
- * Keying this on "is it traditional-web" alone would leave a native Node
+ * Keying this on "is it site" alone would leave a native Node
  * service showing an image field that does nothing.
  */
 function containerVisualFlags(
@@ -1137,7 +1255,7 @@ export function ComposeVisualServiceCard({
     }
   }, [service.image])
 
-  const traditional = isTraditionalWebComposeService(service)
+  const isSite = isSiteComposeService(service)
   const extension = readServiceTurbopanelExtension(service) ?? {}
   const hostNative = isHostNativeServiceKind(extension.serviceKind)
   const {
@@ -1188,10 +1306,10 @@ export function ComposeVisualServiceCard({
   }
 
   const applyKind = (serviceKind: ComposeServiceKind) => {
-    if (serviceKind === 'traditional-web') {
+    if (serviceKind === 'site') {
       applyExtension({
-        serviceKind: 'traditional-web',
-        engine: extension.engine ?? 'nginx',
+        serviceKind: 'site',
+        engine: extension.engine ?? DEFAULT_SITE_ENGINE,
         root: extension.root ?? 'public',
       })
       onClearField('image')
@@ -1292,8 +1410,8 @@ export function ComposeVisualServiceCard({
           options={[
             { value: 'container', label: 'Container (Docker)' },
             {
-              value: 'traditional-web',
-              label: 'Traditional web (host nginx/Apache/OLS)',
+              value: 'site',
+              label: 'Site (served by a web engine on the host)',
             },
             { value: 'node', label: 'Native Node (host process)' },
           ]}
@@ -1301,13 +1419,22 @@ export function ComposeVisualServiceCard({
           onChange={(value) => {
             if (
               value === 'container' ||
-              value === 'traditional-web' ||
+              value === 'site' ||
               value === 'node'
             ) {
               applyKind(value)
             }
           }}
         />
+        <Text style={styles.hint}>
+          {servingPathLine(
+            (extension.serviceKind ?? 'container') as
+              | 'container'
+              | 'site'
+              | 'node',
+            extension.engine,
+          )}
+        </Text>
       </View>
 
       <DeploymentModeBlock
@@ -1328,28 +1455,28 @@ export function ComposeVisualServiceCard({
         onDisconnect={() => applyExtension({ source: null })}
       />
 
-      {traditional ? (
+      {isSite ? (
         <>
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Web engine</Text>
             <OptionSelect
-              value={extension.engine ?? 'nginx'}
-              options={TRADITIONAL_WEB_ENGINE_OPTIONS.map((entry) => ({
+              value={extension.engine ?? DEFAULT_SITE_ENGINE}
+              options={SITE_ENGINE_OPTIONS.map((entry) => ({
                 value: entry.value,
                 label: entry.label,
               }))}
               disabled={saving}
               onChange={(value) => {
-                const engine = value as TraditionalWebEngine
+                const engine = value as SiteEngine
                 applyExtension({
-                  serviceKind: 'traditional-web',
+                  serviceKind: 'site',
                   engine,
                   root: extension.root ?? 'public',
                 })
               }}
             />
             <Text style={styles.hint}>
-              {traditionalWebEngineHint(extension.engine)}
+              {siteEngineHint(extension.engine)}
             </Text>
           </View>
           <View style={styles.fieldBlock}>
@@ -1358,8 +1485,8 @@ export function ComposeVisualServiceCard({
               value={extension.root ?? 'public'}
               onChangeText={(root) =>
                 applyExtension({
-                  serviceKind: 'traditional-web',
-                  engine: extension.engine ?? 'nginx',
+                  serviceKind: 'site',
+                  engine: extension.engine ?? DEFAULT_SITE_ENGINE,
                   root: root.trim() || 'public',
                 })
               }
@@ -1375,6 +1502,18 @@ export function ComposeVisualServiceCard({
               public).
             </Text>
           </View>
+          <PhpFields
+            php={extension.php}
+            engine={extension.engine ?? DEFAULT_SITE_ENGINE}
+            disabled={saving}
+            onChange={(php) =>
+              applyExtension({
+                serviceKind: 'site',
+                engine: extension.engine ?? DEFAULT_SITE_ENGINE,
+                root: extension.root ?? 'public',
+                php,
+              })}
+          />
         </>
       ) : null}
 

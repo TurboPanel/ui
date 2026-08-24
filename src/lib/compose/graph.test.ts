@@ -160,13 +160,13 @@ describe('buildComposeGraph', () => {
       doc({
         services: {
           site: {
-            'x-turbopanel': { serviceKind: 'traditional-web', engine: 'nginx' },
+            'x-turbopanel': { serviceKind: 'site', engine: 'nginx' },
           },
         },
       }),
     )
     expect(graph.nodes.find((n) => n.id === 'service:site')?.serviceKind).toBe(
-      'traditional-web',
+      'site',
     )
   })
 })

@@ -46,11 +46,11 @@ describe('lintComposeYaml', () => {
     expect(missing?.message).toContain('build')
   })
 
-  it('allows traditional-web services without image or build', () => {
+  it('allows site services without image or build', () => {
     const source = `services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
 `
     expect(lintComposeYaml(source)).toEqual([])
@@ -127,21 +127,21 @@ describe('lintComposeYaml', () => {
     expect(unknown?.message).toContain('did you mean "services"')
   })
 
-  it('allows traditional-web services without image or build when listed via options', () => {
+  it('allows site services without image or build when listed via options', () => {
     const source = `services:
   site: {}
 `
     expect(
-      lintComposeYaml(source, { traditionalWebServices: ['site'] }),
+      lintComposeYaml(source, { siteServices: ['site'] }),
     ).toEqual([])
   })
 
-  it('still errors for missing image when traditionalWebServices omits the service', () => {
+  it('still errors for missing image when siteServices omits the service', () => {
     const source = `services:
   site: {}
 `
     const issues = lintComposeYaml(source, {
-      traditionalWebServices: ['other'],
+      siteServices: ['other'],
     })
     expect(
       issues.some(
@@ -173,11 +173,11 @@ x-turbopanel:
     expect(rootExt?.line).toBe(6)
   })
 
-  it('still errors for missing image when author types traditional-web under managedExtensionHidden', () => {
+  it('still errors for missing image when author types site under managedExtensionHidden', () => {
     const source = `services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
 `
     const issues = lintComposeYaml(source, { managedExtensionHidden: true })

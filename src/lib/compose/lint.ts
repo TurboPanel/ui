@@ -34,11 +34,11 @@ export type ComposeLintIssue = {
  */
 export type ComposeLintOptions = {
   /**
-   * Service names to treat as host-native (`traditional-web` / `node`) when the
+   * Service names to treat as host-native (`site` / `node`) when the
    * visible text no longer carries `x-turbopanel.serviceKind` (hidden by the
    * YAML surface). Neither kind declares `image`/`build`.
    */
-  traditionalWebServices?: readonly string[]
+  siteServices?: readonly string[]
   /**
    * When true, warn on any author-typed `x-turbopanel` key — the block is
    * managed by TurboPanel and ignored/restored from the platform shadow.
@@ -273,10 +273,10 @@ function isComposeTagNode(node: Node | null | undefined): boolean {
 
 /**
  * `image` / `build` is required only of Docker services — mirrors the instance
- * rule: traditional-web sites are served by a host engine and `node` apps are
+ * rule: sites are served by a host engine and `node` apps are
  * supervised from a Git release.
  */
-const HOST_NATIVE_SERVICE_KINDS = new Set(['traditional-web', 'node'])
+const HOST_NATIVE_SERVICE_KINDS = new Set(['site', 'node'])
 
 /**
  * Value of the first entry in `map` keyed `key`, or `undefined` when the key is
@@ -380,7 +380,7 @@ function isHostNativeForLint(
   valueNode: YAMLMap,
   options?: ComposeLintOptions,
 ): boolean {
-  if (options?.traditionalWebServices?.includes(name)) return true
+  if (options?.siteServices?.includes(name)) return true
   if (options?.managedExtensionHidden) return false
   return serviceIsHostNative(valueNode)
 }
@@ -734,7 +734,7 @@ function compareLintIssues(a: ComposeLintIssue, b: ComposeLintIssue): number {
  * the full Compose Specification.
  *
  * Zero-arg signature mirrors instance `lintComposeYaml`. Optional `options` are
- * UI-editor-only (hidden traditional-web services + managed-extension warnings).
+ * UI-editor-only (hidden site services + managed-extension warnings).
  */
 export function lintComposeYaml(
   source: string,

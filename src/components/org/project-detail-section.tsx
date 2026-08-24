@@ -270,7 +270,7 @@ export function ProjectPrincipalsSection({
   return (
     <SectionPanel
       title="Project principals"
-      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — traditional-web sites use that principal for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one principal per traditional-web service."
+      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — sites use that principal for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one principal per site service."
     >
       {body}
     </SectionPanel>

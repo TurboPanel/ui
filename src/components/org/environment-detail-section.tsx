@@ -81,7 +81,6 @@ import { coversAllHostnames } from '@/lib/tls-match'
 import {
   hostingDockerBridgeHint,
   hostingPathPrefixHint,
-  hostingPhpSectionCopy,
   hostingServiceKindLabel,
   hostingWebEnvSectionCopy,
   mergeComposeOverlay,
@@ -117,9 +116,6 @@ type HostingEditorState = {
   ports: string
   /** Multiline KEY=VALUE for options.web.env (HTTP hostings). */
   webEnvLines: string
-  phpVersion: string
-  phpMemoryLimit: string
-  phpMaxExecutionTime: string
 }
 
 function formatWebEnvLines(web: unknown): string {
@@ -147,29 +143,10 @@ function parseWebEnvLines(text: string): Record<string, string> | undefined {
 
 function readWebOptions(optionsRecord: Record<string, unknown> | null): {
   webEnvLines: string
-  phpVersion: string
-  phpMemoryLimit: string
-  phpMaxExecutionTime: string
 } {
-  const web = optionsRecord?.web
-  const php =
-    web && typeof web === 'object' && !Array.isArray(web)
-      ? (web as { php?: unknown }).php
-      : undefined
-  const phpRecord =
-    php && typeof php === 'object' && !Array.isArray(php)
-      ? (php as Record<string, unknown>)
-      : undefined
-  return {
-    webEnvLines: formatWebEnvLines(web),
-    phpVersion: typeof phpRecord?.version === 'string' ? phpRecord.version : '',
-    phpMemoryLimit:
-      typeof phpRecord?.memoryLimit === 'string' ? phpRecord.memoryLimit : '',
-    phpMaxExecutionTime:
-      typeof phpRecord?.maxExecutionTime === 'number'
-        ? String(phpRecord.maxExecutionTime)
-        : '',
-  }
+  // `web.php` is deliberately not read: PHP config lives on the compose
+  // service now. A stale value on an old hosting row is inert.
+  return { webEnvLines: formatWebEnvLines(optionsRecord?.web) }
 }
 
 function readHostingProtocol(
@@ -291,19 +268,8 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
     options.targetPort = port
   }
   const staticEnv = parseWebEnvLines(editor.webEnvLines)
-  const phpVersion = editor.phpVersion.trim()
-  const phpMemoryLimit = editor.phpMemoryLimit.trim()
-  const phpMaxRaw = editor.phpMaxExecutionTime.trim()
-  const phpMax = phpMaxRaw ? Number.parseInt(phpMaxRaw, 10) : Number.NaN
-  const php: Record<string, string | number> = {}
-  if (phpVersion) php.version = phpVersion
-  if (phpMemoryLimit) php.memoryLimit = phpMemoryLimit
-  if (Number.isInteger(phpMax) && phpMax > 0) php.maxExecutionTime = phpMax
-  if (staticEnv || Object.keys(php).length > 0) {
-    options.web = {
-      ...(staticEnv ? { env: staticEnv } : {}),
-      ...(Object.keys(php).length > 0 ? { php } : {}),
-    }
+  if (staticEnv) {
+    options.web = { env: staticEnv }
   }
   return options
 }
@@ -463,7 +429,7 @@ const webSelectStyle: CSSProperties = {
   minHeight: 44,
 }
 
-function HostingWebEnvAndPhpFields({
+function HostingWebEnvFields({
   serviceContext,
   editor,
   onChange,
@@ -472,17 +438,8 @@ function HostingWebEnvAndPhpFields({
   editor: HostingEditorState
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
-  const phpCopy = hostingPhpSectionCopy(serviceContext)
   const webEnvCopy = hostingWebEnvSectionCopy(serviceContext)
-  const hasPhpValues =
-    editor.phpVersion.trim().length > 0 ||
-    editor.phpMemoryLimit.trim().length > 0 ||
-    editor.phpMaxExecutionTime.trim().length > 0
   const hasWebEnvValues = editor.webEnvLines.trim().length > 0
-  const showPhpFields = shouldRevealOptionalHostingFields(
-    phpCopy.showFields,
-    hasPhpValues,
-  )
   const showWebEnvFields = shouldRevealOptionalHostingFields(
     webEnvCopy.showFields,
     hasWebEnvValues,
@@ -516,42 +473,19 @@ function HostingWebEnvAndPhpFields({
         </>
       )}
 
-      <Text style={styles.fieldLabel}>{phpCopy.title}</Text>
-      <Text style={orgPanelStyles.muted}>{phpCopy.hint}</Text>
-      {showPhpFields ? (
-        <>
-          {!phpCopy.showFields && hasPhpValues ? (
-            <Text style={styles.staleFieldWarn}>
-              Stored PHP values are ignored for this engine — clear them
-              before save if you no longer need them.
-            </Text>
-          ) : null}
-          <TextField
-            label="PHP version"
-            value={editor.phpVersion}
-            onChangeText={(value) => onChange({ phpVersion: value })}
-            placeholder="8.4"
-            mono
-            autoCapitalize="none"
-          />
-          <TextField
-            label="Memory limit"
-            value={editor.phpMemoryLimit}
-            onChangeText={(value) => onChange({ phpMemoryLimit: value })}
-            placeholder="256M"
-            mono
-            autoCapitalize="none"
-          />
-          <TextField
-            label="Max execution time (seconds)"
-            value={editor.phpMaxExecutionTime}
-            onChangeText={(value) => onChange({ phpMaxExecutionTime: value })}
-            placeholder="30"
-            mono
-            keyboardType="number-pad"
-          />
-        </>
-      ) : null}
+      {/*
+        PHP moved to the compose service's `x-turbopanel.php` (Services tab).
+        It could never work here: an FPM pool is keyed by (environment, compose
+        service), so several hostings on one service silently last-wins merged
+        into a single pool. Leaving the fields would let an operator set a
+        memory limit that never reaches the host.
+      */}
+      <Text style={styles.fieldLabel}>PHP</Text>
+      <Text style={orgPanelStyles.muted}>
+        PHP version, limits, and extensions are configured on the service
+        itself, under Services — one PHP process pool belongs to one service,
+        not to each hostname pointed at it.
+      </Text>
     </>
   )
 }
@@ -873,7 +807,7 @@ function HostingPanelRow({
             keyboardType="number-pad"
           />
 
-          <HostingWebEnvAndPhpFields
+          <HostingWebEnvFields
             serviceContext={serviceContext}
             editor={editor}
             onChange={onChange}
@@ -1324,7 +1258,7 @@ function EnvironmentDeployChromePanels({
               <Text style={styles.menuItemTitle}>Prepared compose</Text>
               <Text style={styles.menuItemSub}>
                 Deploy-ready document after variables, naming, and
-                traditional-web split
+                site split
               </Text>
             </Pressable>
           </View>

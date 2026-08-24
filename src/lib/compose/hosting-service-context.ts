@@ -1,20 +1,22 @@
 /**
  * Hosting-panel context derived from merged compose services.
- * Surfaces traditional-web engine rules the deploy path already enforces
+ * Surfaces site engine rules the deploy path already enforces
  * (PHP on all three engines, by different mechanisms; Apache-only SetEnv;
  * Docker bridge env injection).
  */
 
 import {
-  isTraditionalWebComposeService,
+  DEFAULT_SITE_ENGINE,
+  isSiteComposeService,
   readServiceTurbopanelExtension,
-  type TraditionalWebEngine,
+  type SiteEngine,
 } from './service-kind'
 import type { ComposeDocument } from './types'
 
 export type HostingPhpApplicability = 'applicable' | 'not_applicable'
 
 export type HostingWebEnvMode =
+  | 'caddy_env'
   | 'apache_setenv'
   | 'file_only'
   | 'ignored'
@@ -22,10 +24,10 @@ export type HostingWebEnvMode =
 
 export type HostingServiceContext = {
   composeServiceName: string
-  kind: 'container' | 'traditional-web'
-  engine: TraditionalWebEngine | undefined
-  /** Other traditional-web compose service names in the same document. */
-  traditionalSiblingNames: string[]
+  kind: 'container' | 'site'
+  engine: SiteEngine | undefined
+  /** Other site compose service names in the same document. */
+  siteSiblingNames: string[]
   phpApplicability: HostingPhpApplicability
   webEnvMode: HostingWebEnvMode
 }
@@ -49,37 +51,41 @@ export function readComposeServiceMap(
 }
 
 /** Sanitize compose service name the same way the daemon builds bridge env keys. */
-export function traditionalWebEnvKeyForService(composeServiceName: string): string {
+export function siteEnvKeyForService(composeServiceName: string): string {
   let sanitized = composeServiceName.replaceAll(/\W/g, '_')
   if (/^\d/.test(sanitized)) {
     sanitized = `_${sanitized}`
   }
-  return `TURBOPANEL_TRADITIONAL_WEB_${sanitized.toUpperCase()}_URL`
+  return `TURBOPANEL_SITE_${sanitized.toUpperCase()}_URL`
 }
 
-function engineLabel(engine: TraditionalWebEngine | undefined): string {
+function engineLabel(engine: SiteEngine | undefined): string {
+  if (engine === 'caddy') return 'Caddy'
   if (engine === 'apache') return 'Apache'
   if (engine === 'openlitespeed') return 'OpenLiteSpeed'
   if (engine === 'nginx') return 'nginx'
-  return 'traditional-web'
+  return 'site'
 }
 
 /**
- * Every traditional-web engine runs PHP — only the mechanism differs (per-site
+ * Every site engine runs PHP — only the mechanism differs (per-site
  * php-fpm pool for nginx/Apache, per-vhost LSAPI process for OpenLiteSpeed), and
  * that is a deploy-path detail, not a reason to hide the fields.
  */
 function phpApplicabilityFor(
   kind: HostingServiceContext['kind'],
 ): HostingPhpApplicability {
-  return kind === 'traditional-web' ? 'applicable' : 'not_applicable'
+  return kind === 'site' ? 'applicable' : 'not_applicable'
 }
 
 function webEnvModeFor(
   kind: HostingServiceContext['kind'],
-  engine: TraditionalWebEngine | undefined,
+  engine: SiteEngine | undefined,
 ): HostingWebEnvMode {
-  if (kind !== 'traditional-web') return 'container_variables'
+  if (kind !== 'site') return 'container_variables'
+  // Caddy's `php_fastcgi` takes an `env` subdirective, so web.env reaches the
+  // PHP process — the same guarantee Apache's SetEnv gives, which nginx cannot.
+  if (engine === 'caddy') return 'caddy_env'
   if (engine === 'apache') return 'apache_setenv'
   if (engine === 'openlitespeed') return 'ignored'
   return 'file_only'
@@ -91,11 +97,11 @@ export function resolveHostingServiceContext(
 ): HostingServiceContext {
   const services = readComposeServiceMap(document)
   const service = services[composeServiceName]
-  const traditionalSiblingNames = Object.keys(services)
+  const siteSiblingNames = Object.keys(services)
     .filter(
       (name) =>
         name !== composeServiceName &&
-        isTraditionalWebComposeService(services[name] ?? {}),
+        isSiteComposeService(services[name] ?? {}),
     )
     .sort((a, b) => a.localeCompare(b))
 
@@ -104,30 +110,30 @@ export function resolveHostingServiceContext(
       composeServiceName,
       kind: 'container',
       engine: undefined,
-      traditionalSiblingNames,
+      siteSiblingNames,
       phpApplicability: 'not_applicable',
       webEnvMode: 'container_variables',
     }
   }
 
-  const traditional = isTraditionalWebComposeService(service)
+  const isSite = isSiteComposeService(service)
   const extension = readServiceTurbopanelExtension(service) ?? {}
-  const engine = traditional ? extension.engine ?? 'nginx' : undefined
-  const kind = traditional ? 'traditional-web' : 'container'
+  const engine = isSite ? extension.engine ?? DEFAULT_SITE_ENGINE : undefined
+  const kind = isSite ? 'site' : 'container'
 
   return {
     composeServiceName,
     kind,
     engine,
-    traditionalSiblingNames,
+    siteSiblingNames,
     phpApplicability: phpApplicabilityFor(kind),
     webEnvMode: webEnvModeFor(kind, engine),
   }
 }
 
 export function hostingServiceKindLabel(context: HostingServiceContext): string {
-  if (context.kind === 'traditional-web') {
-    return `Traditional web · ${engineLabel(context.engine)}`
+  if (context.kind === 'site') {
+    return `Site · ${engineLabel(context.engine)}`
   }
   return 'Container'
 }
@@ -138,7 +144,7 @@ export function hostingServiceKindLabel(context: HostingServiceContext): string 
  * lsphp process per vhost — and because the isolation story differs: OpenLiteSpeed's
  * suEXEC identity is the process itself, where nginx/Apache get it from the pool.
  */
-function phpRuntimeCopy(engine: TraditionalWebEngine | undefined): {
+function phpRuntimeCopy(engine: SiteEngine | undefined): {
   title: string
   hint: string
 } {
@@ -168,7 +174,7 @@ export function hostingPhpSectionCopy(context: HostingServiceContext): {
   return {
     title: 'PHP settings',
     hint:
-      'PHP options apply only to traditional-web services. Containers use their image runtime; host PHP packages are not installed from this panel.',
+      'PHP options apply only to site services. Containers use their image runtime; host PHP packages are not installed from this panel.',
     showFields: false,
   }
 }
@@ -178,6 +184,14 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
   hint: string
   showFields: boolean
 } {
+  if (context.webEnvMode === 'caddy_env') {
+    return {
+      title: 'Web environment',
+      hint:
+        'Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and injects entries into PHP through the php_fastcgi env directive. Hosting variables marked for runtime merge first; static lines here win on collision. Values containing braces or quotes are dropped — Caddy would reinterpret them.',
+      showFields: true,
+    }
+  }
   if (context.webEnvMode === 'apache_setenv') {
     return {
       title: 'Web environment',
@@ -190,7 +204,7 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
     return {
       title: 'Web environment',
       hint:
-        'Static KEY=VALUE pairs are written to .turbopanel/hosting.env under the site directory. nginx does not inject them into the process — use them from your app/scripts, or prefer Apache traditional-web for SetEnv.',
+        'Static KEY=VALUE pairs are written to .turbopanel/hosting.env under the site directory. nginx does not inject them into the process — use them from your app/scripts, or use Caddy or Apache, which inject them into PHP.',
       showFields: true,
     }
   }
@@ -198,22 +212,22 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
     return {
       title: 'Web environment (not applied)',
       hint:
-        'OpenLiteSpeed does not inject web env into the serving process — these hints are not applied. Prefer hosting-scoped variables, or use Apache traditional-web for SetEnv. (PHP hints above do apply.)',
+        'OpenLiteSpeed does not inject web env into the serving process — these hints are not applied. Prefer hosting-scoped variables, or use Apache site for SetEnv. (PHP hints above do apply.)',
       showFields: false,
     }
   }
   return {
     title: 'Web environment',
     hint:
-      'Static web.env is for traditional-web host stacks. For this container service, prefer Hosting variables below (forRuntime) — they inject into compose at deploy.',
+      'Static web.env is for site host stacks. For this container service, prefer Hosting variables below (forRuntime) — they inject into compose at deploy.',
     showFields: false,
   }
 }
 
 export function hostingPathPrefixHint(context: HostingServiceContext): string {
-  if (context.traditionalSiblingNames.length > 0) {
-    const siblings = context.traditionalSiblingNames.join(', ')
-    return `Optional. Same hostname on another hosting can use a different prefix (e.g. / for the marketing site, /app for the application). Other traditional-web services in this environment: ${siblings}.`
+  if (context.siteSiblingNames.length > 0) {
+    const siblings = context.siteSiblingNames.join(', ')
+    return `Optional. Same hostname on another hosting can use a different prefix (e.g. / for the marketing site, /app for the application). Other site services in this environment: ${siblings}.`
   }
   return 'Optional. Same hostname on another hosting can use a different prefix (e.g. / for the marketing site, /app for the application).'
 }
@@ -221,13 +235,13 @@ export function hostingPathPrefixHint(context: HostingServiceContext): string {
 export function hostingDockerBridgeHint(
   context: HostingServiceContext,
 ): string | null {
-  if (context.kind !== 'container' || context.traditionalSiblingNames.length === 0) {
+  if (context.kind !== 'container' || context.siteSiblingNames.length === 0) {
     return null
   }
-  const exampleKey = traditionalWebEnvKeyForService(
-    context.traditionalSiblingNames[0] ?? 'site',
+  const exampleKey = siteEnvKeyForService(
+    context.siteSiblingNames[0] ?? 'site',
   )
-  return `This environment also has traditional-web services. On deploy, containers receive ${exampleKey} (and TURBOPANEL_TRADITIONAL_WEB_ENDPOINTS JSON) pointing at http://host.docker.internal:<listenPort> so apps can call host-native sites.`
+  return `This environment also has site services. On deploy, containers receive ${exampleKey} (and TURBOPANEL_SITE_ENDPOINTS JSON) pointing at http://host.docker.internal:<listenPort> so apps can call host-native sites.`
 }
 
 /** When PHP/env fields are hidden, still reveal them if the editor already has values so operators can clear stale data. */

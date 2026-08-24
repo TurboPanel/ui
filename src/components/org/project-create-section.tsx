@@ -8,7 +8,7 @@ import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
-import { seedRepositoryCompose } from '@/components/org/project-create/repository-seed'
+import { seedComposeForLane } from '@/components/org/project-create/repository-seed'
 import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
@@ -347,7 +347,15 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     setApiError(null)
     const seedKey = `${selectedSource.id}@${repositoryBranch.trim()}`
     if (seedKey !== seededRepositoryKey) {
-      setComposeDoc(seedRepositoryCompose(selectedSource, repositoryBranch))
+      setComposeDoc(
+        // Lane defaults to `app` until the lane step lands; that is the shape
+        // the wizard has always produced, now expressed through one seeder.
+        seedComposeForLane({
+          source: selectedSource,
+          branch: repositoryBranch,
+          lane: 'app',
+        }),
+      )
       setSeededRepositoryKey(seedKey)
     }
     setStep('compose')

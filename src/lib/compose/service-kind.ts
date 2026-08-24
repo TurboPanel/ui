@@ -2,9 +2,9 @@
 
 export const TURBOPANEL_SERVICE_EXTENSION_KEY = 'x-turbopanel'
 
-export type ComposeServiceKind = 'container' | 'traditional-web' | 'node'
+export type ComposeServiceKind = 'container' | 'site' | 'node'
 
-export type TraditionalWebEngine = 'apache' | 'nginx' | 'openlitespeed'
+export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'openlitespeed'
 
 /**
  * Runtime family for a `serviceKind: node` service. Mirrors the instance type.
@@ -55,7 +55,7 @@ export type ComposeServiceSourceExtension = {
   /**
    * Which build backend produces the release. Omitted means `native`.
    *
-   * `railpack` is only meaningful on a container service — `traditional-web`
+   * `railpack` is only meaningful on a container service — `site`
    * and `node` already have their own build and runtime lanes — and the
    * instance rejects the combination on save.
    */
@@ -67,14 +67,14 @@ export type SourceIdResolver = (sourceId: string) => boolean
 
 export type ComposeServiceTurbopanelExtension = {
   serviceKind?: ComposeServiceKind
-  engine?: TraditionalWebEngine
+  engine?: SiteEngine
   /** Native runtime family for `serviceKind: node`. Omitted means `auto`. */
   framework?: NativeRuntimeFramework
   /** Pinned Node series for `serviceKind: node` (`24`, `24.17`, `24.17.0`). */
   nodeVersion?: string
   /**
    * Document-root segment under the daemon site directory (relative only).
-   * Default `public` when omitted for traditional-web.
+   * Default `public` when omitted for site.
    */
   root?: string
   /**
@@ -87,11 +87,35 @@ export type ComposeServiceTurbopanelExtension = {
    * It does **not** yet decide document roots or process supervision.
    */
   source?: ComposeServiceSourceExtension
+  /**
+   * PHP configuration for a `site` service. Mirrors the instance type.
+   *
+   * Lives on the service, not the hosting row: an FPM pool is keyed by
+   * (environment, compose service), so several hostings on one service used to
+   * silently last-wins merge into one pool.
+   */
+  php?: ComposeServicePhpExtension
 }
 
-const SERVICE_KINDS = new Set<ComposeServiceKind>(['container', 'traditional-web', 'node'])
+export type ComposeServicePhpExtension = {
+  /** Series (`8.4`). Omitted means the host default. */
+  version?: string
+  /** Opt-in extensions on top of the always-installed baseline. */
+  extensions?: string[]
+  /** `php_admin_value` directives, validated by the instance settings table. */
+  settings?: Record<string, string | number>
+  /** php-fpm pool tuning (`pm`, `pm.max_children`, …). */
+  pool?: Record<string, string | number>
+}
+
+const SERVICE_KINDS = new Set<ComposeServiceKind>(['container', 'site', 'node'])
 const NATIVE_RUNTIME_FRAMEWORKS = new Set<NativeRuntimeFramework>(['auto', 'node', 'next'])
-const TRADITIONAL_WEB_ENGINES = new Set<TraditionalWebEngine>(['apache', 'nginx', 'openlitespeed'])
+const SITE_ENGINES = new Set<SiteEngine>([
+  'caddy',
+  'apache',
+  'nginx',
+  'openlitespeed',
+])
 const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
 
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
@@ -105,11 +129,11 @@ function readServiceKind(value: unknown): ComposeServiceKind | undefined {
   return trimmed as ComposeServiceKind
 }
 
-function readTraditionalWebEngine(value: unknown): TraditionalWebEngine | undefined {
+function readSiteEngine(value: unknown): SiteEngine | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
-  if (!TRADITIONAL_WEB_ENGINES.has(trimmed as TraditionalWebEngine)) return undefined
-  return trimmed as TraditionalWebEngine
+  if (!SITE_ENGINES.has(trimmed as SiteEngine)) return undefined
+  return trimmed as SiteEngine
 }
 
 function readNativeRuntimeFramework(value: unknown): NativeRuntimeFramework | undefined {
@@ -219,13 +243,44 @@ export function parseServiceTurbopanelExtension(
   // included, so the source key needs no guard of its own.
   return withoutEmptyFields<ComposeServiceTurbopanelExtension>({
     serviceKind: readServiceKind(value.serviceKind),
-    engine: readTraditionalWebEngine(value.engine),
+    engine: readSiteEngine(value.engine),
     framework: readNativeRuntimeFramework(value.framework),
     nodeVersion: readNodeVersion(value.nodeVersion),
     root: readBoundedString(value.root, Number.POSITIVE_INFINITY),
     description: readBoundedString(value.description, SERVICE_DESCRIPTION_MAX_LENGTH),
     source: parseServiceSourceExtension(value.source) ?? undefined,
+    php: parseServicePhpExtension(value.php) ?? undefined,
   })
+}
+
+/**
+ * Shape-only read; the instance's `php-settings.ts` table is what validates
+ * values, and its linter is what tells the operator why one was refused.
+ */
+function parseServicePhpExtension(
+  value: unknown
+): ComposeServicePhpExtension | null {
+  if (!isPlainMapping(value)) return null
+  const php: ComposeServicePhpExtension = {}
+  const version = readBoundedString(value.version, 16)
+  if (version) php.version = version
+  if (Array.isArray(value.extensions)) {
+    const names = value.extensions
+      .filter((name): name is string => typeof name === 'string')
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name.length > 0)
+    if (names.length > 0) php.extensions = [...new Set(names)].sort()
+  }
+  for (const field of ['settings', 'pool'] as const) {
+    const raw = value[field]
+    if (!isPlainMapping(raw)) continue
+    const kept: Record<string, string | number> = {}
+    for (const [key, entry] of Object.entries(raw)) {
+      if (typeof entry === 'string' || typeof entry === 'number') kept[key] = entry
+    }
+    if (Object.keys(kept).length > 0) php[field] = kept
+  }
+  return Object.keys(php).length > 0 ? php : null
 }
 
 export function readServiceTurbopanelExtension(
@@ -235,10 +290,10 @@ export function readServiceTurbopanelExtension(
   return parseServiceTurbopanelExtension(service[TURBOPANEL_SERVICE_EXTENSION_KEY])
 }
 
-export function isTraditionalWebComposeService(service: Record<string, unknown>): boolean {
+export function isSiteComposeService(service: Record<string, unknown>): boolean {
   const extension = readServiceTurbopanelExtension(service)
   if (extension === null) return false
-  return extension.serviceKind === 'traditional-web'
+  return extension.serviceKind === 'site'
 }
 
 /** True for `serviceKind: node` — a host-supervised Git-backed process. */
@@ -250,7 +305,7 @@ export function isNodeComposeService(service: Record<string, unknown>): boolean 
 
 /** Kinds that are not Docker services and therefore need no `image`/`build`. */
 export function isHostNativeServiceKind(kind: ComposeServiceKind | undefined): boolean {
-  return kind === 'traditional-web' || kind === 'node'
+  return kind === 'site' || kind === 'node'
 }
 
 /**
@@ -270,7 +325,7 @@ export type ComposeServiceTurbopanelExtensionPatch = Omit<
  * Clear the fields that belong to a `serviceKind` other than the one now set.
  *
  * `railpack` goes with them: it is a container-only build backend —
- * `traditional-web` and `node` have their own build and runtime lanes, and the
+ * `site` and `node` have their own build and runtime lanes, and the
  * instance rejects the combination on save. The Services form stops *offering*
  * the option once the kind moves off container, which is not the same as
  * clearing it: without this a service that was switched away from container
@@ -281,9 +336,11 @@ export type ComposeServiceTurbopanelExtensionPatch = Omit<
 function dropFieldsForOtherKinds(
   next: ComposeServiceTurbopanelExtensionPatch
 ): void {
-  if (next.serviceKind !== 'traditional-web') {
+  if (next.serviceKind !== 'site') {
     delete next.engine
     delete next.root
+    // PHP belongs to a site; a container's runtime comes from its image.
+    delete next.php
   }
   if (next.serviceKind !== 'node') {
     delete next.framework
@@ -332,6 +389,11 @@ export function patchServiceTurbopanelExtension(
   if (next.nodeVersion) cleaned.nodeVersion = next.nodeVersion
   if (next.description) cleaned.description = next.description
   if (next.source) cleaned.source = { ...next.source }
+  // Whitelisted like every other field: a key missing from this list is
+  // silently dropped on every patch, which is how `php` was being lost.
+  if (next.php && Object.keys(next.php).length > 0) {
+    cleaned.php = { ...next.php }
+  }
 
   if (Object.keys(cleaned).length === 0) {
     const { [TURBOPANEL_SERVICE_EXTENSION_KEY]: _removed, ...rest } = service
@@ -344,16 +406,50 @@ export function patchServiceTurbopanelExtension(
   }
 }
 
-export const TRADITIONAL_WEB_ENGINE_OPTIONS: readonly {
-  value: TraditionalWebEngine
+/**
+ * Engine a site gets when its compose block does not name one. Mirrors
+ * `DEFAULT_SITE_ENGINE` in the instance's `lib/compose/site.ts`, which is where
+ * the default is actually resolved.
+ */
+export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
+
+/**
+ * PHP series TurboPanel supports. Mirrors `SUPPORTED_PHP_SERIES` on the
+ * instance, which mirrors the daemon's runtime registry.
+ *
+ * This is the *supported* list, not the *installed* list: a project's
+ * environments can span servers, so "installed here" is not well defined in a
+ * compose editor. Picking an unsupported series is a hard error at prepare;
+ * picking a supported one the target host lacks is a warning, because the
+ * deploy installs it.
+ */
+export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
+
+/** Series a PHP site gets when it names none. Mirrors the instance default. */
+export const DEFAULT_PHP_SERIES = '8.4' 
+
+export const SITE_ENGINE_OPTIONS: readonly {
+  value: SiteEngine
   label: string
   deployable: boolean
 }[] = [
-  { value: 'nginx', label: 'nginx (static / reverse proxy)', deployable: true },
-  { value: 'apache', label: 'Apache (mod_php)', deployable: true },
+  {
+    value: 'caddy',
+    label: 'Caddy — static and PHP, nothing to configure',
+    deployable: true,
+  },
+  { value: 'nginx', label: 'nginx — static and PHP-FPM', deployable: true },
+  {
+    value: 'apache',
+    // Never mod_php: Apache reaches php-fpm over mod_proxy_fcgi. `.htaccess`
+    // is real and worth naming — the vhost already emits `AllowOverride All`.
+    label: 'Apache — static and PHP-FPM, .htaccess support',
+    deployable: true,
+  },
   {
     value: 'openlitespeed',
-    label: 'OpenLiteSpeed (static)',
+    // Not static-only: OLS runs PHP through a per-vhost LSAPI processor.
+    label: 'OpenLiteSpeed — static and PHP via LSAPI',
     deployable: true,
   },
 ]

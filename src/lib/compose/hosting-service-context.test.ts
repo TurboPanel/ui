@@ -9,57 +9,57 @@ import {
   readComposeServiceMap,
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
-  traditionalWebEnvKeyForService,
+  siteEnvKeyForService,
 } from './hosting-service-context'
 import type { ComposeDocument } from './types'
 
-describe('traditionalWebEnvKeyForService', () => {
+describe('siteEnvKeyForService', () => {
   it('sanitizes compose service names like the daemon', () => {
-    expect(traditionalWebEnvKeyForService('my-app')).toBe(
-      'TURBOPANEL_TRADITIONAL_WEB_MY_APP_URL',
+    expect(siteEnvKeyForService('my-app')).toBe(
+      'TURBOPANEL_SITE_MY_APP_URL',
     )
-    expect(traditionalWebEnvKeyForService('2web')).toBe(
-      'TURBOPANEL_TRADITIONAL_WEB__2WEB_URL',
+    expect(siteEnvKeyForService('2web')).toBe(
+      'TURBOPANEL_SITE__2WEB_URL',
     )
   })
 })
 
 describe('resolveHostingServiceContext', () => {
-  it('detects Apache traditional-web and PHP applicability', () => {
+  it('detects Apache site and PHP applicability', () => {
     const document = yamlToComposeDocument(`services:
   api:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: apache
       root: public
   static:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
       root: public
 `)
 
     const apache = resolveHostingServiceContext(document, 'api')
-    expect(apache.kind).toBe('traditional-web')
+    expect(apache.kind).toBe('site')
     expect(apache.engine).toBe('apache')
     expect(apache.phpApplicability).toBe('applicable')
     expect(apache.webEnvMode).toBe('apache_setenv')
-    expect(apache.traditionalSiblingNames).toEqual(['static'])
-    expect(hostingServiceKindLabel(apache)).toBe('Traditional web · Apache')
+    expect(apache.siteSiblingNames).toEqual(['static'])
+    expect(hostingServiceKindLabel(apache)).toBe('Site · Apache')
     expect(hostingPhpSectionCopy(apache).showFields).toBe(true)
     expect(hostingPhpSectionCopy(apache).hint).toContain('mod_proxy_fcgi')
     expect(hostingWebEnvSectionCopy(apache).showFields).toBe(true)
   })
 
-  it('offers PHP on every traditional-web engine, naming each mechanism', () => {
+  it('offers PHP on every site engine, naming each mechanism', () => {
     const document = yamlToComposeDocument(`services:
   static:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: openlitespeed
 `)
 
@@ -80,13 +80,13 @@ describe('resolveHostingServiceContext', () => {
     expect(hostingWebEnvSectionCopy(ols).showFields).toBe(false)
   })
 
-  it('surfaces docker bridge env hint for containers next to traditional-web', () => {
+  it('surfaces docker bridge env hint for containers next to site', () => {
     const document = yamlToComposeDocument(`services:
   app:
     image: node:22
   php:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: apache
 `)
 
@@ -95,8 +95,8 @@ describe('resolveHostingServiceContext', () => {
     expect(container.phpApplicability).toBe('not_applicable')
     expect(container.webEnvMode).toBe('container_variables')
     const hint = hostingDockerBridgeHint(container)
-    expect(hint).toContain('TURBOPANEL_TRADITIONAL_WEB_PHP_URL')
-    expect(hint).toContain('TURBOPANEL_TRADITIONAL_WEB_ENDPOINTS')
+    expect(hint).toContain('TURBOPANEL_SITE_PHP_URL')
+    expect(hint).toContain('TURBOPANEL_SITE_ENDPOINTS')
     expect(hostingDockerBridgeHint(resolveHostingServiceContext(document, 'php'))).toBeNull()
   })
 })
@@ -137,24 +137,26 @@ describe('resolveHostingServiceContext edge cases', () => {
     const missing = resolveHostingServiceContext(document, 'missing')
     expect(missing.kind).toBe('container')
     expect(missing.engine).toBeUndefined()
-    expect(missing.traditionalSiblingNames).toEqual([])
+    expect(missing.siteSiblingNames).toEqual([])
     expect(hostingServiceKindLabel(missing)).toBe('Container')
     expect(hostingPhpSectionCopy(missing).showFields).toBe(false)
     expect(hostingWebEnvSectionCopy(missing).showFields).toBe(false)
     expect(hostingDockerBridgeHint(missing)).toBeNull()
   })
 
-  it('uses nginx defaults for traditional-web without an explicit engine', () => {
+  it('defaults a site without an explicit engine to caddy', () => {
+    // Mirrors DEFAULT_SITE_ENGINE in the instance's lib/compose/site.ts, which
+    // is where the default is actually resolved before the wire.
     const document = yamlToComposeDocument(`services:
   site:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       root: public
 `)
     const nginx = resolveHostingServiceContext(document, 'site')
-    expect(nginx.engine).toBe('nginx')
-    expect(nginx.webEnvMode).toBe('file_only')
-    expect(hostingServiceKindLabel(nginx)).toBe('Traditional web · nginx')
+    expect(nginx.engine).toBe('caddy')
+    expect(nginx.webEnvMode).toBe('caddy_env')
+    expect(hostingServiceKindLabel(nginx)).toBe('Site · Caddy')
     expect(hostingPhpSectionCopy(nginx).showFields).toBe(true)
     expect(hostingWebEnvSectionCopy(nginx).showFields).toBe(true)
   })
@@ -166,11 +168,11 @@ describe('hosting copy helpers', () => {
       yamlToComposeDocument(`services:
   api:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: apache
   static:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: nginx
 `),
       'api',
@@ -182,12 +184,12 @@ describe('hosting copy helpers', () => {
       yamlToComposeDocument(`services:
   api:
     x-turbopanel:
-      serviceKind: traditional-web
+      serviceKind: site
       engine: apache
 `),
       'api',
     )
-    expect(hostingPathPrefixHint(alone)).not.toContain('Other traditional-web')
+    expect(hostingPathPrefixHint(alone)).not.toContain('Other site')
   })
 
   it('covers container PHP and web-env copy branches', () => {
@@ -201,5 +203,32 @@ describe('hosting copy helpers', () => {
     expect(hostingPhpSectionCopy(container).title).toBe('PHP settings')
     expect(hostingPhpSectionCopy(container).hint).toContain('Containers use their image runtime')
     expect(hostingWebEnvSectionCopy(container).hint).toContain('Hosting variables')
+  })
+})
+
+describe('caddy site engine', () => {
+  it('labels a caddy site and keeps PHP applicable', () => {
+    const doc = yamlToComposeDocument(`services:
+  web:
+    x-turbopanel:
+      serviceKind: site
+      engine: caddy
+`)
+    const ctx = resolveHostingServiceContext(doc, 'web')
+    expect(ctx.kind).toBe('site')
+    expect(ctx.engine).toBe('caddy')
+    expect(hostingServiceKindLabel(ctx)).toBe('Site · Caddy')
+  })
+
+  it('defaults a site with no engine to caddy', () => {
+    // `engine` is optional; the instance resolves the same default at the
+    // split so the wire always carries an explicit engine.
+    const doc = yamlToComposeDocument(`services:
+  web:
+    x-turbopanel:
+      serviceKind: site
+`)
+    const ctx = resolveHostingServiceContext(doc, 'web')
+    expect(ctx.engine).toBe('caddy')
   })
 })
