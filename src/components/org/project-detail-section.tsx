@@ -21,6 +21,7 @@ import {
   useProject,
   useProjectPrincipals,
   useUpdateProject,
+  useUpdateProjectPrincipal,
   useUpdateProjectPrincipalAssignments,
 } from '@/lib/queries/projects'
 import { useEnvironments } from '@/lib/queries/environments'
@@ -70,6 +71,10 @@ export function ProjectPrincipalsSection({
   const createPrincipal = useCreateProjectPrincipal(orgId, projectId)
   const deletePrincipal = useDeleteProjectPrincipal(orgId, projectId)
   const updateAssignments = useUpdateProjectPrincipalAssignments(orgId, projectId)
+  const updatePrincipal = useUpdateProjectPrincipal(orgId, projectId)
+  const [savingEntitlements, setSavingEntitlements] = useState<Set<string>>(
+    new Set(),
+  )
 
   const principals = principalsQuery.data?.principals ?? []
   const serviceOptions = useMemo(() => {
@@ -127,6 +132,48 @@ export function ProjectPrincipalsSection({
       setError(updateAssignments.actionError)
     }
     setSavingAssignments((current) => {
+      const copy = new Set(current)
+      copy.delete(principalId)
+      return copy
+    })
+  }
+
+  /**
+   * Grant or revoke one runtime series.
+   *
+   * Sends `entitlements` only — never `serviceIds` — because the API reads an
+   * absent field as "leave them alone". Including an empty steward list here
+   * would silently unassign every service.
+   */
+  const toggleEntitlement = async (
+    principalId: string,
+    runtime: string,
+    series: string,
+  ) => {
+    const row = principals.find((p) => p.id === principalId)
+    if (!row) return
+    const held = row.entitlements.some(
+      (entry) => entry.runtime === runtime && entry.series === series,
+    )
+    const next = held
+      ? row.entitlements.filter(
+        (entry) => !(entry.runtime === runtime && entry.series === series),
+      )
+      : [...row.entitlements, { runtime, series, grantedBy: 'operator' as const }]
+
+    setSavingEntitlements((current) => new Set(current).add(principalId))
+    setError(null)
+    const result = await updatePrincipal.run({
+      principalId,
+      entitlements: next.map(({ runtime: r, series: v }) => ({
+        runtime: r,
+        series: v,
+      })),
+    })
+    if (!result.ok && updatePrincipal.actionError) {
+      setError(updatePrincipal.actionError)
+    }
+    setSavingEntitlements((current) => {
       const copy = new Set(current)
       copy.delete(principalId)
       return copy
@@ -219,6 +266,62 @@ export function ProjectPrincipalsSection({
                 ) : null}
               </View>
             ) : null}
+            <View style={styles.serviceAssignRow}>
+              <Text style={orgPanelStyles.muted}>
+                Runtimes this user may execute. Without a grant its processes
+                cannot start the interpreter at all — the check is the kernel&apos;s,
+                not ours.
+              </Text>
+              <View style={styles.serviceChipRow}>
+                {RUNTIME_GRANTS.map((grant: RuntimeGrant) => {
+                  const held = row.entitlements.find(
+                    (entry) =>
+                      entry.runtime === grant.runtime &&
+                      entry.series === grant.series,
+                  )
+                  const disabled =
+                    !canManage || savingEntitlements.has(row.id)
+                  return (
+                    <Pressable
+                      key={`${grant.runtime}-${grant.series}`}
+                      disabled={disabled}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: held != null, disabled }}
+                      accessibilityLabel={grant.label}
+                      style={[
+                        styles.serviceChip,
+                        held && styles.serviceChipOn,
+                        disabled && styles.buttonDisabled,
+                      ]}
+                      onPress={() => {
+                        void toggleEntitlement(
+                          row.id,
+                          grant.runtime,
+                          grant.series,
+                        )
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.serviceChipText,
+                          held && styles.serviceChipTextOn,
+                        ]}
+                      >
+                        {/* A deploy-inserted grant is still a real, revocable
+                            grant — the marker says why it is there, not that
+                            it is different. */}
+                        {held?.grantedBy === 'deploy'
+                          ? `${grant.label} · from a service`
+                          : grant.label}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+              {savingEntitlements.has(row.id) ? (
+                <Text style={orgPanelStyles.muted}>Saving runtimes…</Text>
+              ) : null}
+            </View>
             {canManage ? (
               <View style={styles.principalDeleteRow}>
                 <Button
@@ -276,6 +379,23 @@ export function ProjectPrincipalsSection({
     </SectionPanel>
   )
 }
+
+type RuntimeGrant = { runtime: string; series: string; label: string }
+
+/**
+ * Runtime grants an operator can hand out.
+ *
+ * Per `(runtime, series)`, not per runtime: co-installed PHP versions are
+ * distinct binaries, so granting 8.4 must not also grant 8.3 with whatever CVEs
+ * another tenant's pinned app is carrying. Mirrors the daemon's runtime
+ * registry, which stays the authority on what a given host can offer.
+ */
+const RUNTIME_GRANTS: readonly RuntimeGrant[] = [
+  { runtime: 'php', series: '8.3', label: 'PHP 8.3' },
+  { runtime: 'php', series: '8.4', label: 'PHP 8.4' },
+  { runtime: 'node', series: '22', label: 'Node 22' },
+  { runtime: 'node', series: '24', label: 'Node 24' },
+]
 
 function projectTypeBadge(project: ProjectRecord) {
   const type = project.metadata?.type

@@ -3875,8 +3875,21 @@ export type ProjectPrincipalRecord = {
   metadata: { uid?: number; gid?: number; home?: string } | null
   options: Record<string, unknown> | null
   serviceIds: string[]
+  /**
+   * Runtime series this principal may execute on the host, each becoming a
+   * unix group membership. `grantedBy` says whether an operator granted it or
+   * a deploy inserted it because a service declared the runtime — both are
+   * real, revocable grants; the distinction exists so the UI can say why.
+   */
+  entitlements: PrincipalEntitlement[]
   createdAt: string
   updatedAt: string
+}
+
+export type PrincipalEntitlement = {
+  runtime: string
+  series: string
+  grantedBy: 'operator' | 'deploy'
 }
 
 export async function fetchProjectPrincipals(
@@ -3887,7 +3900,12 @@ export async function fetchProjectPrincipals(
 
 export async function createProjectPrincipal(
   projectId: string,
-  body: { username: string; serviceIds?: string[]; options?: Record<string, unknown> }
+  body: {
+    username: string
+    serviceIds?: string[]
+    entitlements?: { runtime: string; series: string }[]
+    options?: Record<string, unknown>
+  }
 ): Promise<{ ok: true; id: string; uid: number; gid: number; serviceIds?: string[] }> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`, {
     method: 'POST',
@@ -3895,15 +3913,35 @@ export async function createProjectPrincipal(
   })
 }
 
+/**
+ * Patch a principal's stewards and/or its runtime entitlements.
+ *
+ * Each field is **omitted when undefined** and sent when present, because the
+ * API distinguishes the two: absent means "leave them alone", `[]` means
+ * "revoke everything". Collapsing them would make a steward-only edit silently
+ * strip every entitlement.
+ */
+export async function updateProjectPrincipal(
+  projectId: string,
+  principalId: string,
+  patch: {
+    serviceIds?: string[]
+    entitlements?: { runtime: string; series: string }[]
+  }
+): Promise<{ ok: true; serviceIds?: string[] }> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+/** @deprecated Use {@link updateProjectPrincipal}. */
 export async function updateProjectPrincipalAssignments(
   projectId: string,
   principalId: string,
   serviceIds: string[]
-): Promise<{ ok: true; serviceIds: string[] }> {
-  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ serviceIds }),
-  })
+): Promise<{ ok: true; serviceIds?: string[] }> {
+  return await updateProjectPrincipal(projectId, principalId, { serviceIds })
 }
 
 export async function deleteProjectPrincipal(projectId: string, id: string): Promise<{ ok: true }> {

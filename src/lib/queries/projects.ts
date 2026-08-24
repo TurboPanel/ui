@@ -10,6 +10,7 @@ import {
   fetchProjectPrincipals,
   fetchVisibleProjects,
   updateProject,
+  updateProjectPrincipal,
   updateProjectPrincipalAssignments,
   type ConfigureProjectBody,
 } from '@/lib/instance-api'
@@ -147,15 +148,24 @@ export function useCreateProjectPrincipal(orgId: string, projectId: string) {
   })
 }
 
-export function useUpdateProjectPrincipal(
-  orgId: string,
-  projectId: string,
-  principalId: string,
-) {
+/**
+ * Patch a principal's stewards and/or its runtime entitlements.
+ *
+ * Both fields are optional and forwarded only when present: the API reads
+ * absent as "leave them alone" and `[]` as "revoke everything", so a
+ * steward-only edit must not carry an empty entitlement list.
+ */
+export function useUpdateProjectPrincipal(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (serviceIds: string[]) =>
-      updateProjectPrincipalAssignments(projectId, principalId, serviceIds),
+    mutationFn: ({
+      principalId,
+      ...patch
+    }: {
+      principalId: string
+      serviceIds?: string[]
+      entitlements?: { runtime: string; series: string }[]
+    }) => updateProjectPrincipal(projectId, principalId, patch),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
