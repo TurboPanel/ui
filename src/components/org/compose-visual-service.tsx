@@ -772,23 +772,6 @@ type ContainerVisualFlags = {
 }
 
 /**
- * Runtime the deploy engine will pick for this service, from what the compose
- * says once the mode below has been chosen.
- */
-function deploymentModeLabel(
-  kind: ComposeServiceKind | undefined,
-  framework: NativeRuntimeFramework | undefined,
-): string {
-  if (kind === 'site') return 'Host web engine (Caddy, nginx, Apache, OpenLiteSpeed)'
-  if (kind === 'node') {
-    if (framework === 'next') return 'Native Node — Next.js'
-    if (framework === 'node') return 'Native Node — plain server'
-    return 'Native Node — detected at build (Next standalone, static export, or plain server)'
-  }
-  return 'Container (Docker build or pulled image)'
-}
-
-/**
  * Build lanes that exist as concepts but have no wiring behind them yet.
  *
  * Rendered disabled rather than omitted so the surface tells the truth about
@@ -880,54 +863,38 @@ const NATIVE_FRAMEWORK_MODES: readonly {
  * meaningless outside this lane — it pins the series the host runs the service
  * under, and the patch layer drops it the moment the mode is not native.
  */
-function DeploymentModeBlock({
-  kind,
+/**
+ * Framework and version for a `node` app.
+ *
+ * This used to be a "Deployment mode" chip row that also chose *container vs
+ * native* — a third control for a decision the serving picker already makes,
+ * and one whose own chips could not describe a site. It now covers only what is
+ * genuinely a sub-choice of the Node lane.
+ */
+function NodeRuntimeBlock({
   framework,
   nodeVersion,
   disabled,
-  onSelectContainer,
   onSelectNative,
   onNodeVersionChange,
 }: Readonly<{
-  kind: ComposeServiceKind | undefined
   framework: NativeRuntimeFramework | undefined
   nodeVersion: string | undefined
   disabled: boolean
-  onSelectContainer: () => void
   onSelectNative: (framework: NativeRuntimeFramework) => void
   onNodeVersionChange: (nodeVersion: string) => void
 }>) {
-  const native = kind === 'node'
-  // `site` is its own runtime, chosen by the Service kind selector —
-  // neither the container nor a native chip describes it, so none is active.
-  const containerActive = kind === undefined || kind === 'container'
   const activeFramework = framework ?? 'auto'
-  const activeHint = native
-    ? NATIVE_FRAMEWORK_MODES.find((mode) => mode.value === activeFramework)?.hint
-    : undefined
+  const activeHint = NATIVE_FRAMEWORK_MODES.find(
+    (mode) => mode.value === activeFramework,
+  )?.hint
 
   return (
     <View style={styles.fieldBlock}>
-      <Text style={styles.label}>Deployment mode</Text>
+      <Text style={styles.label}>Framework</Text>
       <View style={styles.modeRow}>
-        <Pressable
-          style={[styles.optionChip, containerActive && styles.optionChipActive]}
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityState={{ selected: containerActive, disabled }}
-          onPress={onSelectContainer}
-        >
-          <Text
-            style={[
-              styles.optionChipText,
-              containerActive && styles.optionChipTextActive,
-            ]}
-          >
-            Container image
-          </Text>
-        </Pressable>
         {NATIVE_FRAMEWORK_MODES.map((mode) => {
-          const selected = native && activeFramework === mode.value
+          const selected = activeFramework === mode.value
           return (
             <Pressable
               key={mode.value}
@@ -949,31 +916,32 @@ function DeploymentModeBlock({
           )
         })}
         {RESERVED_DEPLOYMENT_MODES.map((mode) => (
-          <View key={mode.label} style={[styles.optionChip, styles.optionChipDisabled]}>
+          <View
+            key={mode.label}
+            style={[styles.optionChip, styles.optionChipDisabled]}
+          >
             <Text style={styles.optionChipTextDisabled}>{mode.label}</Text>
           </View>
         ))}
       </View>
-      <Text style={styles.hint}>{activeHint ?? deploymentModeLabel(kind, framework)}</Text>
-      {native ? (
-        <View style={styles.nativeFieldBlock}>
-          <Text style={styles.label}>Node version</Text>
-          <TextInput
-            value={nodeVersion ?? ''}
-            onChangeText={onNodeVersionChange}
-            editable={!disabled}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="24"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.hint}>
-            Optional. A pinned series the host runs this service under (24,
-            24.17, or 24.17.0). Leave empty to use the server default.
-          </Text>
-        </View>
-      ) : null}
+      {activeHint ? <Text style={styles.hint}>{activeHint}</Text> : null}
+      <View style={styles.nativeFieldBlock}>
+        <Text style={styles.label}>Node version</Text>
+        <TextInput
+          value={nodeVersion ?? ''}
+          onChangeText={onNodeVersionChange}
+          editable={!disabled}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="24"
+          placeholderTextColor={colors.textDim}
+          style={styles.input}
+        />
+        <Text style={styles.hint}>
+          Optional. A pinned series the host runs this service under (24, 24.17,
+          or 24.17.0). Leave empty to use the server default.
+        </Text>
+      </View>
     </View>
   )
 }
@@ -1423,6 +1391,29 @@ export function ComposeVisualServiceCard({
     onClearField('image')
   }
 
+  /**
+   * One picker answers "how is this served?" — the kind and, for a site, the
+   * engine.
+   *
+   * These were three controls (Service kind, Deployment mode chips, Web engine)
+   * for one decision, and the chip row admitted it: no chip described a site.
+   * Collapsing them needs no schema change — a container has no document root
+   * and Traefik is not swappable, so `engine` stays a site-only field and
+   * `container` stays its own kind.
+   */
+  const applyServing = (value: string) => {
+    if (value === 'container' || value === 'node') {
+      applyKind(value)
+      return
+    }
+    applyExtension({
+      serviceKind: 'site',
+      engine: value as SiteEngine,
+      root: extension.root ?? 'public',
+    })
+    onClearField('image')
+  }
+
   const applyKind = (serviceKind: ComposeServiceKind) => {
     if (serviceKind === 'site') {
       applyExtension({
@@ -1522,27 +1513,21 @@ export function ComposeVisualServiceCard({
       </View>
 
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Service kind</Text>
+        <Text style={styles.label}>How is this served?</Text>
         <OptionSelect
-          value={extension.serviceKind ?? 'container'}
+          value={extension.serviceKind === 'site'
+            ? (extension.engine ?? DEFAULT_SITE_ENGINE)
+            : (extension.serviceKind ?? 'container')}
           options={[
-            { value: 'container', label: 'Container (Docker)' },
-            {
-              value: 'site',
-              label: 'Site (served by a web engine on the host)',
-            },
-            { value: 'node', label: 'Native Node (host process)' },
+            { value: 'container', label: 'Container image' },
+            ...SITE_ENGINE_OPTIONS.map((entry) => ({
+              value: entry.value,
+              label: entry.label,
+            })),
+            { value: 'node', label: 'Node app' },
           ]}
           disabled={saving}
-          onChange={(value) => {
-            if (
-              value === 'container' ||
-              value === 'site' ||
-              value === 'node'
-            ) {
-              applyKind(value)
-            }
-          }}
+          onChange={applyServing}
         />
         <Text style={styles.hint}>
           {servingPathLine(
@@ -1555,15 +1540,15 @@ export function ComposeVisualServiceCard({
         </Text>
       </View>
 
-      <DeploymentModeBlock
-        kind={extension.serviceKind}
-        framework={extension.framework}
-        nodeVersion={extension.nodeVersion}
-        disabled={saving}
-        onSelectContainer={() => applyKind('container')}
-        onSelectNative={applyNativeFramework}
-        onNodeVersionChange={applyNodeVersion}
-      />
+      {extension.serviceKind === 'node' ? (
+        <NodeRuntimeBlock
+          framework={extension.framework}
+          nodeVersion={extension.nodeVersion}
+          disabled={saving}
+          onSelectNative={applyNativeFramework}
+          onNodeVersionChange={applyNodeVersion}
+        />
+      ) : null}
 
       <SourceSection
         binding={extension.source}
@@ -1575,28 +1560,7 @@ export function ComposeVisualServiceCard({
 
       {isSite ? (
         <>
-          <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Web engine</Text>
-            <OptionSelect
-              value={extension.engine ?? DEFAULT_SITE_ENGINE}
-              options={SITE_ENGINE_OPTIONS.map((entry) => ({
-                value: entry.value,
-                label: entry.label,
-              }))}
-              disabled={saving}
-              onChange={(value) => {
-                const engine = value as SiteEngine
-                applyExtension({
-                  serviceKind: 'site',
-                  engine,
-                  root: extension.root ?? 'public',
-                })
-              }}
-            />
-            <Text style={styles.hint}>
-              {siteEngineHint(extension.engine)}
-            </Text>
-          </View>
+          <Text style={styles.hint}>{siteEngineHint(extension.engine)}</Text>
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Document root</Text>
             <TextInput
