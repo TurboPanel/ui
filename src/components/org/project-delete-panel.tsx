@@ -21,7 +21,7 @@ import {
   commandStatusById,
   isTerminalCommandStatus,
   useCommandsBatch,
-  useContainersByEnvironments,
+  useContainersByProject,
   useDeleteEnvironmentManagedMutation,
   useDeleteProject,
   useEnvironments,
@@ -492,8 +492,9 @@ export function ProjectDeletePanel({
     () => environments.map((env) => env.id),
     [environments],
   )
-  const containersQuery = useContainersByEnvironments(orgId, environmentIds, {
+  const containersQuery = useContainersByProject(orgId, project.id, {
     enabled: !managedProject && environmentIds.length > 0,
+    environmentIds,
   })
   const orgManagedQuery = useOrganizationManaged(orgId, {
     enabled: managedProject,

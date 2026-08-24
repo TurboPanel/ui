@@ -1,5 +1,6 @@
 import { createElement, useEffect, useState, type CSSProperties } from 'react'
 import {
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -34,14 +35,38 @@ import {
   type VisualFieldDef,
 } from '@/lib/compose/visual-fields'
 import {
+  isHostNativeServiceKind,
   isTraditionalWebComposeService,
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
   SERVICE_DESCRIPTION_MAX_LENGTH,
+  SOURCE_BRANCH_MAX_LENGTH,
+  SOURCE_COMMAND_MAX_LENGTH,
   TRADITIONAL_WEB_ENGINE_OPTIONS,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
+  type ComposeServiceKind,
+  type ComposeServiceSourceExtension,
+  type ComposeSourceBuildKind,
+  type NativeRuntimeFramework,
   type TraditionalWebEngine,
 } from '@/lib/compose/service-kind'
+import {
+  gitlabOauthConnectUrl,
+  SOURCE_AUTO_DEPLOY_OPTIONS,
+  SOURCE_PROVIDER_OPTIONS,
+  type SourceAutoDeploy,
+  type SourceProvider,
+  type SourceRecord,
+} from '@/lib/instance-api'
+import { getActiveOrganizationId } from '@/lib/org-context'
+import {
+  useCreateGitlabDeployKey,
+  useCreateSource,
+  useGitInstallations,
+  useInstallationRepositories,
+  useSources,
+  useUpdateSource,
+} from '@/lib/queries/releases'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const webSelectStyle: CSSProperties = {
@@ -73,12 +98,12 @@ function traditionalWebEngineHint(
   engine: TraditionalWebEngine | undefined,
 ): string {
   if (engine === 'openlitespeed') {
-    return 'Files are served from the host document root via OpenLiteSpeed (static only — no PHP or web-env injection); hosting Caddy terminates TLS. Pair with Apache on a path prefix when you need PHP.'
+    return 'Files are served from the host document root via OpenLiteSpeed; PHP runs as a per-vhost LSAPI process under suEXEC. web.env is not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
   }
   if (engine === 'apache') {
-    return 'Files are served from the host document root via Apache (mod_php + SetEnv when hosting PHP/web.env options are set); hosting Caddy terminates TLS.'
+    return 'Files are served from the host document root via Apache; PHP runs in a per-site php-fpm pool over mod_proxy_fcgi (never mod_php), and web.env is applied as SetEnv. Hosting Caddy terminates TLS.'
   }
-  return 'Files are served from the host document root via nginx (static; PHP settings ignored — use Apache for mod_php); hosting Caddy terminates TLS.'
+  return 'Files are served from the host document root via nginx; PHP runs in a per-site php-fpm pool over fastcgi_pass. web.env is written to hosting.env but not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
 }
 
 function OptionSelect({
@@ -515,12 +540,865 @@ type ContainerVisualFlags = {
   hasAddChips: boolean
 }
 
+/**
+ * Runtime the deploy engine will pick for this service, from what the compose
+ * says once the mode below has been chosen.
+ */
+function deploymentModeLabel(
+  kind: ComposeServiceKind | undefined,
+  framework: NativeRuntimeFramework | undefined,
+): string {
+  if (kind === 'traditional-web') return 'Host web server (nginx / Apache / OLS)'
+  if (kind === 'node') {
+    if (framework === 'next') return 'Native Node — Next.js'
+    if (framework === 'node') return 'Native Node — plain server'
+    return 'Native Node — detected at build (Next standalone, static export, or plain server)'
+  }
+  return 'Container (Docker build or pulled image)'
+}
+
+/**
+ * Build lanes that exist as concepts but have no wiring behind them yet.
+ *
+ * Rendered disabled rather than omitted so the surface tells the truth about
+ * what is coming without pretending it works today.
+ */
+const RESERVED_DEPLOYMENT_MODES: readonly { label: string; hint: string }[] = [
+  { label: 'Dockerfile', hint: 'Build the repository\'s Dockerfile — not wired up yet.' },
+]
+
+/**
+ * How a connected repository is turned into something runnable.
+ *
+ * This is a property of the **source binding**, not of the service kind, which
+ * is why it lives beside the build / start command rather than in the
+ * Deployment mode chips above: the same container service can be built either
+ * way without changing what it *is*. `railpack` is offered only for a container
+ * service — `traditional-web` and `node` already have their own build and
+ * runtime lanes, and the instance rejects the combination on save rather than
+ * quietly ignoring it.
+ */
+const SOURCE_BUILD_KIND_OPTIONS: readonly {
+  value: ComposeSourceBuildKind
+  label: string
+  hint: string
+  containerOnly: boolean
+}[] = [
+  {
+    value: 'native',
+    label: 'Automatic',
+    hint:
+      'Builds the repository and publishes the result as a release on the host.',
+    containerOnly: false,
+  },
+  {
+    value: 'railpack',
+    label: 'Railpack — build an isolated OCI image automatically',
+    hint:
+      'Detects the language and builds a container image from the repository — no Dockerfile needed. The service then runs from that image like any other container.',
+    containerOnly: true,
+  },
+]
+
+/**
+ * The native (`serviceKind: node`) lane, as chosen rather than as detected.
+ *
+ * `auto` is the default and stays the recommended answer — the daemon decides
+ * between a Next standalone tree, a static export, and a plain server from the
+ * build output. The explicit values exist for the case detection cannot cover:
+ * a repository whose build emits something the heuristic reads wrong, where the
+ * operator has to be able to say which lane it is.
+ */
+const NATIVE_FRAMEWORK_MODES: readonly {
+  value: NativeRuntimeFramework
+  label: string
+  hint: string
+}[] = [
+  {
+    value: 'auto',
+    label: 'Native Node — automatic',
+    hint:
+      'Builds from the connected repository and detects the runtime from the build output.',
+  },
+  {
+    value: 'next',
+    label: 'Native Node — Next.js',
+    hint:
+      'Serves a Next.js build: a standalone tree is supervised, a static export is served as files.',
+  },
+  {
+    value: 'node',
+    label: 'Native Node — plain server',
+    hint:
+      'Supervises the start command as a host process. Set a start command on the repository below.',
+  },
+]
+
+/**
+ * Deployment mode — the editor for the native lane.
+ *
+ * Picking any of the native modes writes `x-turbopanel.serviceKind: 'node'`
+ * together with its `framework`, which is what moves a Git-backed service onto
+ * the host-supervised release lane instead of leaving it a container. `Container`
+ * writes the kind back and the patch layer drops the native-only fields with it,
+ * so the two can never disagree. The reserved image lanes stay visible and
+ * disabled: they are real plans, and hiding them would make the surface look
+ * like it had already decided against them.
+ *
+ * Node version is here rather than in a section of its own because it is
+ * meaningless outside this lane — it pins the series the host runs the service
+ * under, and the patch layer drops it the moment the mode is not native.
+ */
+function DeploymentModeBlock({
+  kind,
+  framework,
+  nodeVersion,
+  disabled,
+  onSelectContainer,
+  onSelectNative,
+  onNodeVersionChange,
+}: Readonly<{
+  kind: ComposeServiceKind | undefined
+  framework: NativeRuntimeFramework | undefined
+  nodeVersion: string | undefined
+  disabled: boolean
+  onSelectContainer: () => void
+  onSelectNative: (framework: NativeRuntimeFramework) => void
+  onNodeVersionChange: (nodeVersion: string) => void
+}>) {
+  const native = kind === 'node'
+  // `traditional-web` is its own runtime, chosen by the Service kind selector —
+  // neither the container nor a native chip describes it, so none is active.
+  const containerActive = kind === undefined || kind === 'container'
+  const activeFramework = framework ?? 'auto'
+  const activeHint = native
+    ? NATIVE_FRAMEWORK_MODES.find((mode) => mode.value === activeFramework)?.hint
+    : undefined
+
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>Deployment mode</Text>
+      <View style={styles.modeRow}>
+        <Pressable
+          style={[styles.optionChip, containerActive && styles.optionChipActive]}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityState={{ selected: containerActive, disabled }}
+          onPress={onSelectContainer}
+        >
+          <Text
+            style={[
+              styles.optionChipText,
+              containerActive && styles.optionChipTextActive,
+            ]}
+          >
+            Container image
+          </Text>
+        </Pressable>
+        {NATIVE_FRAMEWORK_MODES.map((mode) => {
+          const selected = native && activeFramework === mode.value
+          return (
+            <Pressable
+              key={mode.value}
+              style={[styles.optionChip, selected && styles.optionChipActive]}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityState={{ selected, disabled }}
+              onPress={() => onSelectNative(mode.value)}
+            >
+              <Text
+                style={[
+                  styles.optionChipText,
+                  selected && styles.optionChipTextActive,
+                ]}
+              >
+                {mode.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+        {RESERVED_DEPLOYMENT_MODES.map((mode) => (
+          <View key={mode.label} style={[styles.optionChip, styles.optionChipDisabled]}>
+            <Text style={styles.optionChipTextDisabled}>{mode.label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.hint}>{activeHint ?? deploymentModeLabel(kind, framework)}</Text>
+      {native ? (
+        <View style={styles.nativeFieldBlock}>
+          <Text style={styles.label}>Node version</Text>
+          <TextInput
+            value={nodeVersion ?? ''}
+            onChangeText={onNodeVersionChange}
+            editable={!disabled}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="24"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <Text style={styles.hint}>
+            Optional. A pinned series the host runs this service under (24,
+            24.17, or 24.17.0). Leave empty to use the server default.
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+/** `https://github.com/owner/repo(.git)` → `owner/repo`, else the URL itself. */
+function repositoryLabel(row: SourceRecord): string {
+  const trimmed = row.repositoryUrl.replace(/\.git$/, '')
+  const segments = trimmed.split(/[/:]/).filter((part) => part.length > 0)
+  if (segments.length < 2) return row.repositoryUrl
+  return `${segments.at(-2)}/${segments.at(-1)}`
+}
+
+/**
+ * Pick an already-registered source, or connect a new repository.
+ *
+ * Connecting is two writes on purpose: the `source` row is org-owned (several
+ * services may share one repository, and the auto-deploy policy lives on it),
+ * while the compose binding stores only its id. Creating the row here and then
+ * writing `sourceId` into `x-turbopanel.source` keeps that ownership honest
+ * rather than inventing a per-service copy of the repository.
+ *
+ * The provider chooses the sub-flow, because the three are genuinely different
+ * shapes rather than one form with different labels:
+ *
+ * - **GitHub App** — pick an installation, then a repository it can already
+ *   read. Nothing is typed.
+ * - **GitLab** — either the same picker against an OAuth-connected account, or
+ *   paste a project URL and mint a read-only deploy key for it.
+ * - **Other Git host** — a clone URL plus a deploy key. No provider API exists
+ *   to enumerate anything.
+ */
+function ConnectRepositoryControl({
+  orgId,
+  disabled,
+  onConnect,
+}: Readonly<{
+  orgId: string
+  disabled: boolean
+  onConnect: (sourceId: string) => void
+}>) {
+  const [provider, setProvider] = useState<SourceProvider>('github')
+
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>Git provider</Text>
+      <OptionSelect
+        value={provider}
+        options={SOURCE_PROVIDER_OPTIONS.map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))}
+        disabled={disabled}
+        onChange={(next) => setProvider(next as SourceProvider)}
+      />
+      <Text style={styles.hint}>
+        {SOURCE_PROVIDER_OPTIONS.find((option) => option.value === provider)?.hint}
+      </Text>
+
+      {provider === 'git' ? (
+        <DeployKeyRepositoryControl
+          orgId={orgId}
+          provider="git"
+          disabled={disabled}
+          onConnect={onConnect}
+        />
+      ) : (
+        <InstallationRepositoryControl
+          orgId={orgId}
+          provider={provider}
+          disabled={disabled}
+          onConnect={onConnect}
+        />
+      )}
+    </View>
+  )
+}
+
+/**
+ * The picker flow: choose a connection, then a repository it can already read.
+ *
+ * Shared by GitHub and by an OAuth-connected GitLab account — the repository
+ * list is the same shape for both, because the instance narrows each provider's
+ * payload to it before answering.
+ */
+function InstallationRepositoryControl({
+  orgId,
+  provider,
+  disabled,
+  onConnect,
+}: Readonly<{
+  orgId: string
+  provider: 'github' | 'gitlab'
+  disabled: boolean
+  onConnect: (sourceId: string) => void
+}>) {
+  const [installationId, setInstallationId] = useState('')
+  const [useDeployKey, setUseDeployKey] = useState(false)
+  const installationsQuery = useGitInstallations(orgId)
+  const repositoriesQuery = useInstallationRepositories(orgId, installationId, {
+    // Every read mints a short-lived provider credential on the instance — do
+    // not spend one until a connection has actually been chosen.
+    enabled: installationId.length > 0,
+  })
+  const createSourceMutation = useCreateSource(orgId)
+
+  const installations = (installationsQuery.data?.installations ?? []).filter(
+    (row) => row.provider === provider,
+  )
+  const repositories = repositoriesQuery.data?.repositories ?? []
+  const providerLabel = provider === 'github' ? 'GitHub' : 'GitLab'
+
+  // A GitLab project can also be reached with a deploy key instead of a
+  // connection, so an organization with no OAuth grant is not a dead end there.
+  if (useDeployKey) {
+    return (
+      <DeployKeyRepositoryControl
+        orgId={orgId}
+        provider="gitlab"
+        disabled={disabled}
+        onConnect={onConnect}
+        onBack={() => setUseDeployKey(false)}
+      />
+    )
+  }
+
+  if (installationsQuery.isLoading) {
+    return <Text style={styles.hint}>Loading {providerLabel} connections…</Text>
+  }
+
+  if (installations.length === 0) {
+    if (provider === 'github') {
+      return (
+        <Text style={styles.hint}>
+          No GitHub App installation for this organization yet. Install it from
+          Sources, then come back to connect a repository.
+        </Text>
+      )
+    }
+    return (
+      <View style={styles.fieldBlock}>
+        <Text style={styles.hint}>
+          No GitLab account connected to this organization yet.
+        </Text>
+        <Pressable
+          style={styles.convertChip}
+          disabled={disabled}
+          accessibilityRole="link"
+          onPress={() => {
+            // A 302 to GitLab's authorize page: the operator has to land there
+            // to approve the grant, so this navigates rather than fetches.
+            Linking.openURL(gitlabOauthConnectUrl()).catch(() => {
+              // Ignore failures opening the provider consent page.
+            })
+          }}
+        >
+          <Text style={styles.convertChipText}>Connect a GitLab account</Text>
+        </Pressable>
+        <Pressable
+          style={styles.convertChip}
+          disabled={disabled}
+          onPress={() => setUseDeployKey(true)}
+        >
+          <Text style={styles.convertChipText}>Use a deploy key instead</Text>
+        </Pressable>
+      </View>
+    )
+  }
+
+  const connect = async (repositoryUrl: string, defaultBranch: string | null) => {
+    const repo = repositories.find(
+      (row) => repositoryCloneUrl(row, provider) === repositoryUrl,
+    )
+    const created = await createSourceMutation.run({
+      provider,
+      repositoryUrl,
+      installationId,
+      defaultBranch,
+      // The provider-side id is what webhook matching keys on: a repository can
+      // be renamed or moved, and only the id survives it.
+      ...(repo?.id ? { repositoryExternalId: repo.id } : {}),
+    })
+    if (!created.ok) return
+    onConnect(created.value.id)
+  }
+
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>{providerLabel} connection</Text>
+      <OptionSelect
+        value={installationId}
+        options={[
+          { value: '', label: 'Select a connection…' },
+          ...installations.map((row) => ({
+            value: row.id,
+            label: row.suspended
+              ? `${row.accountLogin ?? row.externalInstallationId} (suspended)`
+              : (row.accountLogin ?? row.externalInstallationId),
+          })),
+        ]}
+        disabled={disabled}
+        onChange={setInstallationId}
+      />
+      {installationId.length === 0 ? null : (
+        <>
+          <Text style={styles.label}>Repository</Text>
+          {repositoriesQuery.isLoading ? (
+            <Text style={styles.hint}>Loading repositories…</Text>
+          ) : (
+            <OptionSelect
+              value=""
+              options={[
+                { value: '', label: 'Select a repository…' },
+                ...repositories.map((repo) => ({
+                  value: repositoryCloneUrl(repo, provider),
+                  label: repo.private ? `${repo.fullName} (private)` : repo.fullName,
+                })),
+              ]}
+              disabled={disabled || createSourceMutation.isPending}
+              onChange={(cloneUrl) => {
+                if (cloneUrl.length === 0) return
+                const repo = repositories.find(
+                  (row) => repositoryCloneUrl(row, provider) === cloneUrl,
+                )
+                void connect(cloneUrl, repo?.defaultBranch ?? null)
+              }}
+            />
+          )}
+        </>
+      )}
+      {provider === 'gitlab' ? (
+        <Pressable
+          style={styles.convertChip}
+          disabled={disabled}
+          onPress={() => setUseDeployKey(true)}
+        >
+          <Text style={styles.convertChipText}>Use a deploy key instead</Text>
+        </Pressable>
+      ) : null}
+      {createSourceMutation.actionError ? (
+        <Text style={styles.hintWarn}>{createSourceMutation.actionError}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/** A provider that answered no clone URL still has a conventional one. */
+function repositoryCloneUrl(
+  repo: Readonly<{ fullName: string; cloneUrl: string | null }>,
+  provider: 'github' | 'gitlab',
+): string {
+  if (repo.cloneUrl) return repo.cloneUrl
+  const host = provider === 'github' ? 'github.com' : 'gitlab.com'
+  return `https://${host}/${repo.fullName}`
+}
+
+/**
+ * The deploy-key flow: paste a clone URL, mint a key, add it to the project.
+ *
+ * Two steps, and the order is the point. The key is generated **first**, so the
+ * public half is on screen before the source exists — an operator who creates
+ * the source first would have a binding that cannot clone until they go and
+ * find the key again, and the public half is only ever returned once.
+ *
+ * A generated key is also the recommended path over pasting one: it belongs to
+ * the project rather than to a person, so nobody leaving the organization
+ * breaks its deploys, and the private half never exists outside the instance.
+ */
+function DeployKeyRepositoryControl({
+  orgId,
+  provider,
+  disabled,
+  onConnect,
+  onBack,
+}: Readonly<{
+  orgId: string
+  provider: 'gitlab' | 'git'
+  disabled: boolean
+  onConnect: (sourceId: string) => void
+  onBack?: () => void
+}>) {
+  const [repositoryUrl, setRepositoryUrl] = useState('')
+  const [defaultBranch, setDefaultBranch] = useState('')
+  const [deployKey, setDeployKey] = useState<
+    { credentialId: string; publicKey: string } | null
+  >(null)
+  const createDeployKeyMutation = useCreateGitlabDeployKey(orgId)
+  const createSourceMutation = useCreateSource(orgId)
+
+  const trimmedUrl = repositoryUrl.trim()
+  const busy = disabled || createDeployKeyMutation.isPending ||
+    createSourceMutation.isPending
+
+  const generate = async () => {
+    if (trimmedUrl.length === 0) return
+    const created = await createDeployKeyMutation.run({ name: trimmedUrl })
+    if (!created.ok) return
+    setDeployKey({
+      credentialId: created.value.credentialId,
+      publicKey: created.value.publicKey,
+    })
+  }
+
+  const connect = async () => {
+    if (!deployKey || trimmedUrl.length === 0) return
+    const created = await createSourceMutation.run({
+      provider,
+      repositoryUrl: trimmedUrl,
+      credentialId: deployKey.credentialId,
+      defaultBranch: defaultBranch.trim().length > 0 ? defaultBranch.trim() : null,
+    })
+    if (!created.ok) return
+    onConnect(created.value.id)
+  }
+
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>Clone URL</Text>
+      <TextInput
+        value={repositoryUrl}
+        onChangeText={setRepositoryUrl}
+        editable={!busy && deployKey === null}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="git@gitlab.com:group/app.git"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>
+        An https or ssh URL. An ssh URL needs the deploy key below; an https URL
+        works without one only for a public repository.
+      </Text>
+
+      <Text style={styles.label}>Default branch</Text>
+      <TextInput
+        value={defaultBranch}
+        onChangeText={setDefaultBranch}
+        editable={!busy}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="main"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>
+        Leave empty to watch every branch this repository pushes.
+      </Text>
+
+      {deployKey === null ? (
+        <Pressable
+          style={styles.convertChip}
+          disabled={busy || trimmedUrl.length === 0}
+          onPress={() => void generate()}
+        >
+          <Text style={styles.convertChipText}>
+            {createDeployKeyMutation.isPending
+              ? 'Generating deploy key…'
+              : 'Generate a read-only deploy key'}
+          </Text>
+        </Pressable>
+      ) : (
+        <>
+          <Text style={styles.label}>Deploy key (public half)</Text>
+          <TextInput
+            value={deployKey.publicKey}
+            editable={false}
+            multiline
+            style={[styles.input, styles.descriptionInput]}
+          />
+          <Text style={styles.hintWarn}>
+            Add this to the project as a <Text>read-only</Text> Deploy Key before
+            connecting — it is shown once and cannot be retrieved again. The
+            private half never leaves this instance.
+          </Text>
+          <Pressable
+            style={styles.convertChip}
+            disabled={busy}
+            onPress={() => void connect()}
+          >
+            <Text style={styles.convertChipText}>
+              {createSourceMutation.isPending
+                ? 'Connecting…'
+                : 'I have added the key — connect'}
+            </Text>
+          </Pressable>
+        </>
+      )}
+
+      {onBack ? (
+        <Pressable style={styles.convertChip} disabled={busy} onPress={onBack}>
+          <Text style={styles.convertChipText}>Back to connected accounts</Text>
+        </Pressable>
+      ) : null}
+
+      {createDeployKeyMutation.actionError ? (
+        <Text style={styles.hintWarn}>{createDeployKeyMutation.actionError}</Text>
+      ) : null}
+      {createSourceMutation.actionError ? (
+        <Text style={styles.hintWarn}>{createSourceMutation.actionError}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * `x-turbopanel.source` — which repository builds this service, and how.
+ *
+ * Shown for **every** service kind: a Git-backed release is orthogonal to
+ * container / traditional-web / node. What the kind decides is how the promoted
+ * release is *run*, which the Deployment mode block above states.
+ *
+ * The auto-deploy policy is the one field here that does not live in compose:
+ * it is a column on the org-owned `source` row, because one repository
+ * connected to several services has one policy and the webhook surface reads it
+ * from there. Editing it therefore takes effect immediately and for every
+ * service bound to that repository — which the hint says out loud.
+ *
+ * `serviceKind` is passed in only to decide which build modes are offerable:
+ * Railpack produces an image, which is something only a container service can
+ * run.
+ */
+function SourceSection({
+  binding,
+  serviceKind,
+  disabled,
+  onChange,
+  onDisconnect,
+}: Readonly<{
+  binding: ComposeServiceSourceExtension | undefined
+  serviceKind: ComposeServiceKind | undefined
+  disabled: boolean
+  onChange: (source: ComposeServiceSourceExtension) => void
+  onDisconnect: () => void
+}>) {
+  const orgId = getActiveOrganizationId() ?? ''
+  const sourcesQuery = useSources(orgId)
+  const updateSourceMutation = useUpdateSource(orgId)
+
+  const sources = sourcesQuery.data?.sources ?? []
+  const row = binding ? sources.find((entry) => entry.id === binding.sourceId) : undefined
+  // Omitted means `native` — the same default the compose parser applies, so
+  // an untouched binding reads the same here as it does on the instance.
+  const buildKind: ComposeSourceBuildKind = binding?.buildKind ?? 'native'
+  const containerKind = serviceKind === undefined || serviceKind === 'container'
+  const buildKindOptions = SOURCE_BUILD_KIND_OPTIONS.filter(
+    (option) => containerKind || !option.containerOnly,
+  )
+  const railpack = buildKind === 'railpack'
+
+  const commit = (patch: Partial<ComposeServiceSourceExtension>) => {
+    if (!binding) return
+    const next: ComposeServiceSourceExtension = { ...binding, ...patch }
+    for (const key of [
+      'branch',
+      'subdirectory',
+      'buildCommand',
+      'startCommand',
+      'outputDirectory',
+    ] as const) {
+      const value = next[key]
+      if (typeof value === 'string' && value.trim().length === 0) delete next[key]
+    }
+    // `native` is the default, so writing it out would add a key that says
+    // nothing. Dropping it keeps a plain binding free of TurboPanel noise.
+    if (next.buildKind === 'native') delete next.buildKind
+    onChange(next)
+  }
+
+  const setAutoDeploy = (value: string) => {
+    if (!row) return
+    void updateSourceMutation.run({
+      sourceId: row.id,
+      patch: { autoDeploy: value as SourceAutoDeploy },
+    })
+  }
+
+  return (
+    <View style={styles.fieldBlock}>
+      <View style={styles.fieldHeader}>
+        <Text style={styles.label}>Source</Text>
+        {binding ? (
+          <Pressable
+            onPress={onDisconnect}
+            disabled={disabled}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Disconnect repository"
+          >
+            <Text style={styles.removeFieldText}>Disconnect</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {binding ? (
+        <>
+          <OptionSelect
+            value={binding.sourceId}
+            options={
+              sources.length > 0
+                ? sources.map((entry) => ({
+                    value: entry.id,
+                    label: repositoryLabel(entry),
+                  }))
+                : [{ value: binding.sourceId, label: binding.sourceId }]
+            }
+            disabled={disabled}
+            onChange={(sourceId) => commit({ sourceId })}
+          />
+
+          <Text style={styles.label}>Deployment mode</Text>
+          <OptionSelect
+            value={buildKind}
+            options={buildKindOptions.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            disabled={disabled}
+            onChange={(value) =>
+              commit({ buildKind: value as ComposeSourceBuildKind })
+            }
+          />
+          <Text style={styles.hint}>
+            {SOURCE_BUILD_KIND_OPTIONS.find(
+              (option) => option.value === buildKind,
+            )?.hint ?? ''}
+          </Text>
+
+          <Text style={styles.label}>Branch</Text>
+          <TextInput
+            value={binding.branch ?? ''}
+            onChangeText={(branch) => commit({ branch })}
+            editable={!disabled}
+            maxLength={SOURCE_BRANCH_MAX_LENGTH}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder={row?.defaultBranch ?? 'main'}
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <Text style={styles.hint}>
+            Leave empty to build the default branch of the connected repository
+            {row?.defaultBranch ? ` (${row.defaultBranch})` : ''}.
+          </Text>
+
+          <Text style={styles.label}>Subdirectory</Text>
+          <TextInput
+            value={binding.subdirectory ?? ''}
+            onChangeText={(subdirectory) => commit({ subdirectory })}
+            editable={!disabled}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="apps/web"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <Text style={styles.hint}>
+            Relative path inside the repository to build from — for a monorepo.
+          </Text>
+
+          <Text style={styles.label}>Build command</Text>
+          <TextInput
+            value={binding.buildCommand ?? ''}
+            onChangeText={(buildCommand) => commit({ buildCommand })}
+            editable={!disabled}
+            maxLength={SOURCE_COMMAND_MAX_LENGTH}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="npm run build"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          {railpack ? (
+            <Text style={styles.hint}>
+              Optional under Railpack — it detects a build command on its own,
+              and only uses this one where the language it detected has a slot
+              for it.
+            </Text>
+          ) : null}
+
+          <Text style={styles.label}>Start command</Text>
+          <TextInput
+            value={binding.startCommand ?? ''}
+            onChangeText={(startCommand) => commit({ startCommand })}
+            editable={!disabled}
+            maxLength={SOURCE_COMMAND_MAX_LENGTH}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="node server.js"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <Text style={styles.hint}>
+            {railpack
+              ? 'Overrides the start command Railpack detected for the image. Leave empty to use its own.'
+              : 'Only a native (node) service runs a start command; other kinds ignore it.'}
+          </Text>
+
+          <Text style={styles.label}>Output directory</Text>
+          <TextInput
+            value={binding.outputDirectory ?? ''}
+            onChangeText={(outputDirectory) => commit({ outputDirectory })}
+            editable={!disabled}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="dist"
+            placeholderTextColor={colors.textDim}
+            style={styles.input}
+          />
+          <Text style={styles.hint}>
+            {railpack
+              ? 'Not used under Railpack — the release is an image, not a directory. The value is kept but ignored, so switching modes back restores it.'
+              : 'Publishes this directory as the release instead of the whole checkout. Setting it turns off framework detection.'}
+          </Text>
+
+          <Text style={styles.label}>Auto-deploy</Text>
+          <OptionSelect
+            value={row?.autoDeploy ?? 'disabled'}
+            options={SOURCE_AUTO_DEPLOY_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            disabled={disabled || !row || updateSourceMutation.isPending}
+            onChange={setAutoDeploy}
+          />
+          <Text style={styles.hint}>
+            Saved on the repository, not in compose — it applies to every
+            service connected to it, and takes effect immediately.
+          </Text>
+          {updateSourceMutation.actionError ? (
+            <Text style={styles.hintWarn}>{updateSourceMutation.actionError}</Text>
+          ) : null}
+        </>
+      ) : (
+        <ConnectRepositoryControl
+          orgId={orgId}
+          disabled={disabled}
+          onConnect={(sourceId) => onChange({ sourceId })}
+        />
+      )}
+    </View>
+  )
+}
+
+/**
+ * `hostNative` covers both host-run kinds — `traditional-web` and `node`.
+ *
+ * Neither is a Docker service, so image, build, ports, restart policy, and
+ * container name are all fields the deploy engine will never read for it.
+ * Keying this on "is it traditional-web" alone would leave a native Node
+ * service showing an image field that does nothing.
+ */
 function containerVisualFlags(
   service: Record<string, unknown>,
-  traditional: boolean,
+  hostNative: boolean,
   registryOpen: boolean,
 ): ContainerVisualFlags {
-  if (traditional) {
+  if (hostNative) {
     return {
       addable: [],
       showRestart: false,
@@ -586,6 +1464,7 @@ export function ComposeVisualServiceCard({
 
   const traditional = isTraditionalWebComposeService(service)
   const extension = readServiceTurbopanelExtension(service) ?? {}
+  const hostNative = isHostNativeServiceKind(extension.serviceKind)
   const {
     addable,
     showRestart,
@@ -595,7 +1474,7 @@ export function ComposeVisualServiceCard({
     showImageFields,
     showRegistryAdd,
     hasAddChips,
-  } = containerVisualFlags(service, traditional, registryOpen)
+  } = containerVisualFlags(service, hostNative, registryOpen)
 
   const applyExtension = (
     patch: Parameters<typeof patchServiceTurbopanelExtension>[1],
@@ -609,7 +1488,31 @@ export function ComposeVisualServiceCard({
     onPatchService({ [TURBOPANEL_SERVICE_EXTENSION_KEY]: extensionValue })
   }
 
-  const applyKind = (serviceKind: 'container' | 'traditional-web') => {
+  /**
+   * Move the service onto the native release lane.
+   *
+   * `framework` travels with `serviceKind` in one patch because the extension
+   * writer drops `framework` / `nodeVersion` whenever the kind is not `node` —
+   * writing them in two calls would land the kind first and see the framework
+   * stripped straight back off. `nodeVersion` is carried over so switching
+   * between native frameworks does not silently unpin the Node series.
+   *
+   * A native service is host-supervised, not a container, so `image` goes with
+   * it: leaving one behind would keep an inert field in the compose that the
+   * deploy engine never reads.
+   */
+  const applyNativeFramework = (framework: NativeRuntimeFramework) => {
+    applyExtension({
+      serviceKind: 'node',
+      framework,
+      ...(extension.nodeVersion === undefined
+        ? {}
+        : { nodeVersion: extension.nodeVersion }),
+    })
+    onClearField('image')
+  }
+
+  const applyKind = (serviceKind: ComposeServiceKind) => {
     if (serviceKind === 'traditional-web') {
       applyExtension({
         serviceKind: 'traditional-web',
@@ -617,6 +1520,10 @@ export function ComposeVisualServiceCard({
         root: extension.root ?? 'public',
       })
       onClearField('image')
+      return
+    }
+    if (serviceKind === 'node') {
+      applyNativeFramework(extension.framework ?? 'auto')
       return
     }
     applyExtension({ serviceKind: 'container' })
@@ -627,6 +1534,23 @@ export function ComposeVisualServiceCard({
     ) {
       onPatchService({ image: 'nginx:alpine' })
     }
+  }
+
+  /**
+   * Pin (or clear) the Node series.
+   *
+   * An empty box means "server default", so it clears the field rather than
+   * persisting a blank. A partially-typed version (`24.`) is kept in the patch
+   * and dropped by the extension parser, which is the same forgiving behavior
+   * every other free-text field here has while it is being typed.
+   */
+  const applyNodeVersion = (nodeVersion: string) => {
+    const trimmed = nodeVersion.trim()
+    applyExtension({
+      serviceKind: 'node',
+      framework: extension.framework ?? 'auto',
+      ...(trimmed.length === 0 ? {} : { nodeVersion: trimmed }),
+    })
   }
 
   return (
@@ -689,22 +1613,45 @@ export function ComposeVisualServiceCard({
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Service kind</Text>
         <OptionSelect
-          value={traditional ? 'traditional-web' : 'container'}
+          value={extension.serviceKind ?? 'container'}
           options={[
             { value: 'container', label: 'Container (Docker)' },
             {
               value: 'traditional-web',
               label: 'Traditional web (host nginx/Apache/OLS)',
             },
+            { value: 'node', label: 'Native Node (host process)' },
           ]}
           disabled={saving}
           onChange={(value) => {
-            if (value === 'container' || value === 'traditional-web') {
+            if (
+              value === 'container' ||
+              value === 'traditional-web' ||
+              value === 'node'
+            ) {
               applyKind(value)
             }
           }}
         />
       </View>
+
+      <DeploymentModeBlock
+        kind={extension.serviceKind}
+        framework={extension.framework}
+        nodeVersion={extension.nodeVersion}
+        disabled={saving}
+        onSelectContainer={() => applyKind('container')}
+        onSelectNative={applyNativeFramework}
+        onNodeVersionChange={applyNodeVersion}
+      />
+
+      <SourceSection
+        binding={extension.source}
+        serviceKind={extension.serviceKind}
+        disabled={saving}
+        onChange={(source) => applyExtension({ source })}
+        onDisconnect={() => applyExtension({ source: null })}
+      />
 
       {traditional ? (
         <>
@@ -892,6 +1839,17 @@ const styles = StyleSheet.create({
   },
   optionChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   optionChipTextActive: { color: chrome.accent },
+  optionChipDisabled: {
+    borderStyle: 'dashed',
+    opacity: 0.5,
+  },
+  optionChipTextDisabled: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  nativeFieldBlock: { gap: 4, marginTop: 4 },
   convertChip: {
     alignSelf: 'flex-start',
     borderWidth: 1,

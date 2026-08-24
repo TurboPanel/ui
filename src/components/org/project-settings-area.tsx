@@ -6,7 +6,6 @@ import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { SectionPanel } from '@/components/org/section-panel'
-import { StorageSection } from '@/components/org/storage-section'
 import { Button, ButtonRow, ConfirmButton } from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
 import type {
@@ -18,14 +17,10 @@ import {
   parseProjectEnvironmentId,
   projectOverviewHref,
 } from '@/lib/project-navigation'
-import {
-  buildProjectOptionsPatch,
-  resolveEffectiveServerId,
-} from '@/lib/project-options'
+import { buildProjectOptionsPatch } from '@/lib/project-options'
 import {
   useDeleteEnvironment,
   useProjectPrincipals,
-  useStorage,
   useUpdateProject,
   useVariables,
 } from '@/lib/queries'
@@ -33,7 +28,7 @@ import { userWorkspaces } from '@/lib/system-inventory'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 type ProjectAddKind = 'variables' | 'principals'
-type EnvironmentAddKind = 'storage'
+type EnvironmentAddKind = 'variables'
 
 function openAddKind<K extends string>(
   kind: K,
@@ -250,9 +245,9 @@ function AddToolbarRow<K extends string>({
 }
 
 /**
- * Project-scope settings body for the scope-chip settings dropdown.
+ * Project-scope settings body for the Settings tab.
  * Add chips reveal resource sections; workspace, naming, and delete are always
- * available in the panel. Server placement is the Servers compose tab.
+ * available. Server placement is the Servers tab; storage is the Storage tab.
  */
 export function ProjectSettingsPanel({
   onDeleted,
@@ -449,7 +444,7 @@ function EnvironmentDeleteControl({
           accessibilityLabel="Open Project settings to delete the project"
         >
           <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
-            Only environment — delete the project under Project settings (gear)
+            Only environment — delete the project from Project → Settings
           </Text>
         </Pressable>
       </ButtonRow>
@@ -501,9 +496,9 @@ function readFocusHostingId(
 }
 
 /**
- * Environment-scope settings body for the scope-chip settings dropdown.
- * Storage is revealed via an Add chip; delete is always available.
- * Hosting and Servers live on compose surface tabs, not here.
+ * Environment-scope settings body for the Settings tab.
+ * Storage, Hosting, and Servers are their own surface tabs; what is left is
+ * what only this environment owns — its variable overrides, and deleting it.
  */
 export function EnvironmentSettingsPanel({
   selectedEnvironment,
@@ -512,33 +507,28 @@ export function EnvironmentSettingsPanel({
   selectedEnvironment: EnvironmentRecord
   onOpenProjectSettings?: () => void
 }>) {
-  const { orgId, project, canManage, projectAllowsMutations } =
-    useProjectContext()
+  const { orgId, canManage, projectAllowsMutations } = useProjectContext()
+  const variablesQuery = useVariables(orgId, {
+    environmentId: selectedEnvironment.id,
+  })
   const [opened, setOpened] = useState<ReadonlySet<EnvironmentAddKind>>(
     () => new Set(),
   )
-  const [addSeed, setAddSeed] = useState<Partial<Record<EnvironmentAddKind, number>>>(
-    {},
-  )
-  const storageQuery = useStorage(orgId, {
-    environmentId: selectedEnvironment.id,
-  })
+  const [addSeed, setAddSeed] = useState<
+    Partial<Record<EnvironmentAddKind, number>>
+  >({})
   const scopeHint = 'This environment only'
   const canEdit = canManage && projectAllowsMutations
-  const hasStorage = (storageQuery.data?.storage?.length ?? 0) > 0
-  const showStorage = hasStorage || opened.has('storage')
-
-  const openKind = (kind: EnvironmentAddKind) => {
-    openAddKind(kind, setOpened, setAddSeed)
-  }
-
-  const pendingAdds: { kind: EnvironmentAddKind; label: string }[] = []
-  if (!showStorage) {
-    pendingAdds.push({ kind: 'storage', label: 'Add Storage' })
-  }
+  const hasVariables = (variablesQuery.data?.variables?.length ?? 0) > 0
+  const showVariables = hasVariables || opened.has('variables')
 
   if (!projectAllowsMutations) {
     return <Text style={orgPanelStyles.muted}>View only</Text>
+  }
+
+  const pendingAdds: { kind: EnvironmentAddKind; label: string }[] = []
+  if (!showVariables) {
+    pendingAdds.push({ kind: 'variables', label: 'Add Variable' })
   }
 
   return (
@@ -546,26 +536,21 @@ export function EnvironmentSettingsPanel({
       <AddToolbarRow
         canEdit={canEdit}
         pendingAdds={pendingAdds}
-        onOpen={openKind}
+        onOpen={(kind) => {
+          openAddKind(kind, setOpened, setAddSeed)
+        }}
       />
 
-      {showStorage ? (
-        <ResourceSection title="Storage" hint={scopeHint}>
-          {canEdit ? (
-            <StorageSection
-              key={`storage-${addSeed.storage ?? 0}`}
-              orgId={orgId}
-              environmentId={selectedEnvironment.id}
-              defaultServerId={resolveEffectiveServerId(
-                selectedEnvironment.serverId,
-                project?.options?.defaultServerId,
-              )}
-              embedded
-              initialShowAdd={opened.has('storage') && !hasStorage}
-            />
-          ) : (
-            <Text style={orgPanelStyles.muted}>View only</Text>
-          )}
+      {showVariables ? (
+        <ResourceSection title="Variables" hint={scopeHint}>
+          <VariablesSection
+            key={`variables-${addSeed.variables ?? 0}`}
+            orgId={orgId}
+            parentField={{ environmentId: selectedEnvironment.id }}
+            embedded
+            showPresets
+            initialShowAdd={opened.has('variables') && !hasVariables}
+          />
         </ResourceSection>
       ) : null}
 

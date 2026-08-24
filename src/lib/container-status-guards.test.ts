@@ -11,6 +11,7 @@ function row(
   return {
     id: 'row-1',
     serviceId: 'svc-1',
+    environmentId: 'env-1',
     serverId: 'srv-1',
     containerId: '',
     containerName: 'web',

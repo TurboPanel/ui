@@ -1,36 +1,32 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
-import {
-  ComposeEditorChrome,
-  ComposeSurfaceSectionTabs,
-} from '@/components/org/compose-editor-section'
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
+import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
+import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
-import { readHostingIdParam } from '@/components/org/project-settings-area'
+import {
+  EnvironmentSettingsPanel,
+  ProjectSettingsPanel,
+  readHostingIdParam,
+} from '@/components/org/project-settings-area'
 import { SectionPanel } from '@/components/org/section-panel'
 import { EmptyState } from '@/components/ui'
 import type { EnvironmentRecord, OrgServerRecord } from '@/lib/instance-api'
+import { projectComposeSectionHref } from '@/lib/project-navigation'
+import { serverDisplayName } from '@/lib/resource-labels'
 import { useOrgServers, useUpdateEnvironment } from '@/lib/queries'
 import { spacing } from '@/lib/theme'
-
-function serverDisplayLabel(server: OrgServerRecord): string {
-  return (
-    server.name?.trim() ||
-    server.hostname?.trim() ||
-    server.id.slice(0, 8)
-  )
-}
 
 function resolveInheritServerLabel(
   inheritedServer: OrgServerRecord | undefined,
   projectDefaultServerId: string | null,
 ): string {
   if (inheritedServer) {
-    return `Inheriting project server: ${serverDisplayLabel(inheritedServer)}`
+    return `Inheriting project server: ${serverDisplayName(inheritedServer)}`
   }
   if (projectDefaultServerId) {
     return 'Inheriting project server'
@@ -42,7 +38,7 @@ function ResourceTabChrome({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <ComposeEditorChrome tabs={<ComposeSurfaceSectionTabs />}>
+    <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
       <View style={styles.body}>{children}</View>
     </ComposeEditorChrome>
   )
@@ -312,9 +308,162 @@ export function ComposeServersTab() {
   )
 }
 
+/**
+ * Storage panel for one environment. Storage always belongs to an environment
+ * (it is provisioned on that environment's server), so Project scope stacks
+ * one panel per environment rather than inventing a project-level store.
+ */
+function EnvironmentStoragePanel({
+  orgId,
+  projectId,
+  environmentId,
+  heading,
+}: Readonly<{
+  orgId: string
+  projectId: string
+  environmentId: string
+  heading?: string
+}>) {
+  return (
+    <View style={styles.envBlock}>
+      {heading ? (
+        <Text style={orgPanelStyles.detailTitle}>{heading}</Text>
+      ) : null}
+      <EnvironmentDetailBody
+        orgId={orgId}
+        projectId={projectId}
+        environmentId={environmentId}
+        embedded
+        showComposeOverlay={false}
+        sections={['storage']}
+      />
+    </View>
+  )
+}
+
+/**
+ * Storage tab: persistent volumes for the active scope. Project scope lists
+ * every environment; environment scope edits that environment only.
+ */
+export function ComposeStorageTab() {
+  const {
+    orgId,
+    projectId,
+    environments,
+    selectedEnvironment,
+    baseSelected,
+    draft,
+  } = useProjectContext()
+
+  if (draft) {
+    return (
+      <ResourceTabChrome>
+        <EmptyState title="Create the project to add storage." />
+      </ResourceTabChrome>
+    )
+  }
+
+  if (baseSelected) {
+    if (environments.length === 0) {
+      return (
+        <ResourceTabChrome>
+          <EmptyState title="Add an environment to provision storage." />
+        </ResourceTabChrome>
+      )
+    }
+    const showHeadings = environments.length > 1
+    return (
+      <ResourceTabChrome>
+        {environments.map((environment) => (
+          <EnvironmentStoragePanel
+            key={environment.id}
+            orgId={orgId}
+            projectId={projectId}
+            environmentId={environment.id}
+            heading={
+              showHeadings
+                ? environment.name?.trim() || 'Environment'
+                : undefined
+            }
+          />
+        ))}
+      </ResourceTabChrome>
+    )
+  }
+
+  if (!selectedEnvironment) {
+    return (
+      <ResourceTabChrome>
+        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+      </ResourceTabChrome>
+    )
+  }
+
+  return (
+    <ResourceTabChrome>
+      <EnvironmentStoragePanel
+        orgId={orgId}
+        projectId={projectId}
+        environmentId={selectedEnvironment.id}
+      />
+    </ResourceTabChrome>
+  )
+}
+
+/**
+ * Settings tab: everything that configures the active scope — variables,
+ * system users, workspace, container naming, and Danger. Replaces the old
+ * per-scope settings gear dropdown, so there is one place to look on every
+ * screen size instead of a modal.
+ */
+export function ComposeSettingsTab() {
+  const router = useRouter()
+  const { orgId, projectId, selectedEnvironment, baseSelected, draft } =
+    useProjectContext()
+
+  if (draft) {
+    return (
+      <ResourceTabChrome>
+        <EmptyState title="Create the project to change its settings." />
+      </ResourceTabChrome>
+    )
+  }
+
+  if (baseSelected) {
+    return (
+      <ResourceTabChrome>
+        <ProjectSettingsPanel />
+      </ResourceTabChrome>
+    )
+  }
+
+  if (!selectedEnvironment) {
+    return (
+      <ResourceTabChrome>
+        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+      </ResourceTabChrome>
+    )
+  }
+
+  return (
+    <ResourceTabChrome>
+      <EnvironmentSettingsPanel
+        key={selectedEnvironment.id}
+        selectedEnvironment={selectedEnvironment}
+        onOpenProjectSettings={() => {
+          router.push(
+            projectComposeSectionHref(orgId, projectId, 'settings') as Href,
+          )
+        }}
+      />
+    </ResourceTabChrome>
+  )
+}
+
 const styles = StyleSheet.create({
   body: {
     width: '100%',
+    padding: spacing.md,
     gap: spacing.md,
   },
   envBlock: {

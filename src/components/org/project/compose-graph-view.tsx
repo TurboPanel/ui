@@ -238,25 +238,31 @@ function ResourceNodeOverlay({
   )
 }
 
+const LEGEND_ENTRIES = [
+  { key: 'service', label: 'Service', swatch: 'legendSwatchService' },
+  { key: 'network', label: 'Network', swatch: 'legendSwatchNetwork' },
+  { key: 'volume', label: 'Volume', swatch: 'legendSwatchVolume' },
+  { key: 'depends', label: 'Depends on', swatch: 'legendLineDependsOn' },
+] as const
+
+/**
+ * Diagram key as one quiet hairline pill under the canvas — chrome for the
+ * diagram, not a second content block. Node shapes carry their own kind label,
+ * so this stays small and muted rather than competing with them.
+ */
 function GraphLegend() {
   return (
-    <View style={styles.legend} accessibilityElementsHidden importantForAccessibility="no">
-      <View style={styles.legendItem}>
-        <View style={styles.legendSwatchService} />
-        <Text style={styles.legendText}>Service</Text>
-      </View>
-      <View style={styles.legendItem}>
-        <View style={styles.legendSwatchNetwork} />
-        <Text style={styles.legendText}>Network</Text>
-      </View>
-      <View style={styles.legendItem}>
-        <View style={styles.legendSwatchVolume} />
-        <Text style={styles.legendText}>Volume</Text>
-      </View>
-      <View style={styles.legendItem}>
-        <View style={styles.legendLineDependsOn} />
-        <Text style={styles.legendText}>Depends on</Text>
-      </View>
+    <View
+      style={styles.legend}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+    >
+      {LEGEND_ENTRIES.map((entry) => (
+        <View key={entry.key} style={styles.legendItem}>
+          <View style={styles[entry.swatch]} />
+          <Text style={styles.legendText}>{entry.label}</Text>
+        </View>
+      ))}
     </View>
   )
 }
@@ -297,13 +303,16 @@ export function ComposeGraphView({
         horizontal
         showsHorizontalScrollIndicator
         style={styles.hScroll}
-        contentContainerStyle={{ minWidth: totalWidth }}
+        contentContainerStyle={[styles.hScrollContent, { minWidth: totalWidth }]}
         accessibilityLabel={`Compose diagram. ${accessibilityLabel}`}
       >
         <ScrollView
           nestedScrollEnabled
           style={{ maxHeight: Math.min(totalHeight, DIAGRAM_MAX_HEIGHT) }}
-          contentContainerStyle={{ minHeight: totalHeight }}
+          contentContainerStyle={[
+            styles.vScrollContent,
+            { minHeight: totalHeight },
+          ]}
         >
           <View style={{ width: totalWidth, height: totalHeight }}>
             <Svg
@@ -342,8 +351,11 @@ export function ComposeGraphView({
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.sm },
+  wrap: { flex: 1, justifyContent: 'center', gap: spacing.sm },
   hScroll: { maxWidth: '100%' },
+  // Centre a diagram narrower than the surface instead of pinning it left.
+  hScrollContent: { flexGrow: 1, justifyContent: 'center' },
+  vScrollContent: { flexGrow: 1, justifyContent: 'center' },
   serviceNode: {
     position: 'absolute',
     borderRadius: 10,
@@ -432,47 +444,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
+    alignSelf: 'flex-end',
     gap: spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgInset,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   legendSwatchService: {
-    width: 12,
-    height: 8,
-    borderRadius: 3,
+    width: 10,
+    height: 7,
+    borderRadius: 2,
     borderWidth: 1,
     borderColor: colors.borderChip,
     backgroundColor: colors.bgSecondary,
   },
   legendSwatchNetwork: {
-    width: 12,
-    height: 8,
+    width: 10,
+    height: 7,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.command,
     backgroundColor: colors.bgInset,
   },
   legendSwatchVolume: {
-    width: 12,
-    height: 8,
-    borderRadius: 3,
+    width: 10,
+    height: 7,
+    borderRadius: 2,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.textDim,
     backgroundColor: colors.bgInset,
   },
   legendLineDependsOn: {
-    width: 16,
+    width: 14,
     height: 0,
     borderTopWidth: 1.5,
     borderColor: colors.command,
   },
   legendText: {
-    color: colors.textFaint,
-    fontSize: 11,
-    fontWeight: '500',
+    color: colors.textDim,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
 })

@@ -7,6 +7,7 @@
  */
 
 import {
+  isHostNativeServiceKind,
   parseServiceTurbopanelExtension,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
 } from './service-kind'
@@ -287,8 +288,11 @@ export function restoreComposeTurbopanelExtensions(
 }
 
 /**
- * Service names whose stashed extension is `serviceKind: traditional-web`.
- * Used by the UI linter when the visible YAML no longer carries that field.
+ * Service names whose stashed extension declares a **host-native** kind
+ * (`traditional-web` or `node`). Used by the UI linter when the visible YAML no
+ * longer carries `serviceKind`: neither kind declares `image`/`build`, so
+ * without this list the hidden extension would make the editor flag every one
+ * of them.
  */
 export function hiddenTraditionalWebServiceNames(
   hidden: ComposeHiddenExtensions,
@@ -296,7 +300,7 @@ export function hiddenTraditionalWebServiceNames(
   const names: string[] = []
   for (const [name, raw] of Object.entries(hidden.services)) {
     const parsed = parseServiceTurbopanelExtension(raw)
-    if (parsed?.serviceKind === 'traditional-web') {
+    if (isHostNativeServiceKind(parsed?.serviceKind)) {
       names.push(name)
     }
   }

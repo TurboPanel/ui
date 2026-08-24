@@ -3,18 +3,11 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { EmptyState } from '@/components/ui'
 import type { OrgServerRecord } from '@/lib/instance-api'
+import { serverDisplayName } from '@/lib/resource-labels'
 import { colors, spacing } from '@/lib/theme'
 
-function serverLabel(server: OrgServerRecord): string {
-  return (
-    server.name?.trim() ||
-    server.hostname?.trim() ||
-    server.id.slice(0, 8)
-  )
-}
-
 function serverOptionLabel(server: OrgServerRecord): string {
-  const base = serverLabel(server)
+  const base = serverDisplayName(server)
   return server.connected ? base : `${base} (offline)`
 }
 

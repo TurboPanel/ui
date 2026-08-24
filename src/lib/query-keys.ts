@@ -58,6 +58,7 @@ export type ContainerLogQueryKeyFilter = Readonly<{
 export type ContainerListFilters = Readonly<{
   serviceId?: string
   environmentId?: string
+  projectId?: string
   serverId?: string
   status?: string
 }>
@@ -195,6 +196,28 @@ export const queryKeys = {
         /** Deploy history page (no interval — invalidated by deploy mutations). */
         deployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments'] as const,
+        /**
+         * Git-backed releases for one compose service (or the whole
+         * environment when unscoped). No interval, like deploy history — the
+         * list changes only when a deploy or rollback command finishes.
+         */
+        releases: (environmentId: string, composeServiceName?: string) =>
+          [
+            'org',
+            orgId,
+            'environment',
+            environmentId,
+            'releases',
+            composeServiceName ?? 'all',
+          ] as const,
+      },
+
+      sources: {
+        all: ['org', orgId, 'sources'] as const,
+        list: ['org', orgId, 'sources'] as const,
+        installations: ['org', orgId, 'sources', 'installations'] as const,
+        repositories: (installationId: string) =>
+          ['org', orgId, 'sources', 'installations', installationId, 'repositories'] as const,
       },
 
       services: {

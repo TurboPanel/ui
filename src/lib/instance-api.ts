@@ -4,46 +4,50 @@ import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
 import { formatFetchFailureDetail, isHttpStatusError } from '@/lib/fetch-error-detail'
 import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 import type {
-    ManagedBackupRecord,
-    ManagedConnectionRole,
-    ManagedDetailResponse,
-    ManagedEnvironmentRecord,
-    ManagedListRecord,
-    ManagedMemberRecord,
-    ManagedServiceEngine,
-    ManagedSettings,
-    ManagedSqlAccessScope,
-    ManagedUserRecord,
+  ManagedBackupRecord,
+  ManagedConnectionRole,
+  ManagedDetailResponse,
+  ManagedEnvironmentRecord,
+  ManagedListRecord,
+  ManagedMemberRecord,
+  ManagedServiceEngine,
+  ManagedSettings,
+  ManagedSqlAccessScope,
+  ManagedUserRecord,
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 export {
-    isForbiddenError,
-    isHttpStatusError,
-    isServerPlacementRequiredError
+  isForbiddenError,
+  isHttpStatusError,
+  isServerPlacementRequiredError,
 } from '@/lib/fetch-error-detail'
 
 export type { ComposeDocument } from '@/lib/compose'
 export type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 export type {
-    ManagedAccessEndpoint, ManagedBackupRecord,
-    ManagedBindScope,
-    ManagedConnectionInfo,
-    ManagedConnectionRole,
-    ManagedDetailResponse,
-    ManagedEngineAvailability,
-    ManagedEnvironmentRecord,
-    ManagedListRecord,
-    ManagedMemberRecord,
-    ManagedMemberRole, ManagedMemberTransport,
-    ManagedReleaseView,
-    ManagedReplicaClass,
-    ManagedReplicationHealth,
-    ManagedServerSummary,
-    ManagedServiceEngine,
-    ManagedSettings, ManagedSqlAccessScope, ManagedSslView,
-    ManagedStatus,
-    ManagedUserRecord
+  ManagedAccessEndpoint,
+  ManagedBackupRecord,
+  ManagedBindScope,
+  ManagedConnectionInfo,
+  ManagedConnectionRole,
+  ManagedDetailResponse,
+  ManagedEngineAvailability,
+  ManagedEnvironmentRecord,
+  ManagedListRecord,
+  ManagedMemberRecord,
+  ManagedMemberRole,
+  ManagedMemberTransport,
+  ManagedReleaseView,
+  ManagedReplicaClass,
+  ManagedReplicationHealth,
+  ManagedServerSummary,
+  ManagedServiceEngine,
+  ManagedSettings,
+  ManagedSqlAccessScope,
+  ManagedSslView,
+  ManagedStatus,
+  ManagedUserRecord,
 } from '@/lib/managed-services'
 export type { ManagedSslMode } from '@/lib/managed-ssl'
 
@@ -620,12 +624,7 @@ export type OrgFabricRecord = {
 export type RelayRole = 'gateway' | 'member'
 
 export type FabricRelayPathKind =
-  | 'direct_lan'
-  | 'direct_public'
-  | 'direct_nat'
-  | 'gateway'
-  | 'relay'
-  | 'unreachable'
+  'direct_lan' | 'direct_public' | 'direct_nat' | 'gateway' | 'relay' | 'unreachable'
 
 export type FabricRelayPathState = {
   peerServerId: string
@@ -1548,6 +1547,12 @@ export type ContainerRole = 'service' | 'ingress' | 'turbopanel'
 export type ContainerRecord = {
   id: string
   serviceId: string
+  /**
+   * Denormalized `service.environmentId` from the control plane, so a
+   * project-wide list can be grouped by environment without one request per
+   * environment.
+   */
+  environmentId: string
   serverId: string
   containerId: string
   containerName: string
@@ -1975,13 +1980,15 @@ export async function deleteTlsCertificate(id: string): Promise<{ ok: true }> {
 }
 
 export async function fetchContainers(
-  serviceIdOrOptions?: string | { serviceId?: string; environmentId?: string }
+  serviceIdOrOptions?: string | { serviceId?: string; environmentId?: string; projectId?: string }
 ): Promise<{ containers: ContainerRecord[] }> {
   const options =
     typeof serviceIdOrOptions === 'string' ? { serviceId: serviceIdOrOptions } : serviceIdOrOptions
   const params = new URLSearchParams()
   if (options?.serviceId) params.set('serviceId', options.serviceId)
   if (options?.environmentId) params.set('environmentId', options.environmentId)
+  // Whole-project scope in one call — never fan out per environment.
+  if (options?.projectId) params.set('projectId', options.projectId)
   const query = params.toString()
   const suffix = query ? `?${query}` : ''
   return await apiFetch(`${CLIENT_API}/containers${suffix}`)
@@ -2698,16 +2705,14 @@ export type CommandStatusRecord = {
  * One request for many tracked command ids. Ids the session cannot read are
  * omitted from the response rather than failing the batch.
  */
-export async function fetchCommandStatuses(
-  ids: readonly string[],
-): Promise<CommandStatusRecord[]> {
+export async function fetchCommandStatuses(ids: readonly string[]): Promise<CommandStatusRecord[]> {
   if (ids.length === 0) return []
   const body = await apiFetch<{ ok: true; commands: CommandStatusRecord[] }>(
     `${CLIENT_API}/commands/status`,
     {
       method: 'POST',
       body: JSON.stringify({ ids: [...ids] }),
-    },
+    }
   )
   return body.commands
 }
@@ -2740,7 +2745,7 @@ export type CommandLogResponse = {
 export async function fetchCommandLog(
   serverId: string,
   commandId: string,
-  options?: Readonly<{ from?: number; max?: number }>,
+  options?: Readonly<{ from?: number; max?: number }>
 ): Promise<CommandLogResponse> {
   const params = new URLSearchParams()
   if (typeof options?.from === 'number' && options.from > 0) {
@@ -2751,9 +2756,7 @@ export async function fetchCommandLog(
   }
   const serialized = params.toString()
   const query = serialized.length > 0 ? `?${serialized}` : ''
-  return await apiFetch(
-    `${CLIENT_API}/servers/${serverId}/commands/${commandId}/log${query}`,
-  )
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/commands/${commandId}/log${query}`)
 }
 
 /**
@@ -2829,7 +2832,7 @@ export type ContainerLogPageResponse = {
  */
 export async function fetchContainerLogs(
   orgId: string,
-  filter: ContainerLogQueryFilter,
+  filter: ContainerLogQueryFilter
 ): Promise<ContainerLogPageResponse> {
   const params = new URLSearchParams()
   params.set('from', filter.from)
@@ -2849,9 +2852,7 @@ export async function fetchContainerLogs(
   if (typeof filter.limit === 'number' && filter.limit > 0) {
     params.set('limit', String(filter.limit))
   }
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/container-logs?${params.toString()}`,
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/container-logs?${params.toString()}`)
 }
 
 /**
@@ -2867,25 +2868,20 @@ export type OrgContainerLogSettings = {
 }
 
 export async function fetchOrgContainerLogSettings(
-  orgId: string,
+  orgId: string
 ): Promise<OrgContainerLogSettings> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/container-logs-settings`,
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/container-logs-settings`)
 }
 
 /** `null` clears the option, returning the organization to the platform default (off). */
 export async function saveOrgContainerLogSettings(
   orgId: string,
-  patch: Readonly<{ containerLogsEnabled: boolean | null }>,
+  patch: Readonly<{ containerLogsEnabled: boolean | null }>
 ): Promise<OrgContainerLogSettings & { ok: true }> {
-  return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/container-logs-settings`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    },
-  )
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/container-logs-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
 }
 
 /**
@@ -2958,7 +2954,7 @@ export type DeploymentHistoryPage = {
  */
 export async function fetchEnvironmentDeployments(
   environmentId: string,
-  options?: Readonly<{ limit?: number; before?: string }>,
+  options?: Readonly<{ limit?: number; before?: string }>
 ): Promise<DeploymentHistoryPage> {
   const params = new URLSearchParams()
   if (typeof options?.limit === 'number' && options.limit > 0) {
@@ -2969,19 +2965,337 @@ export async function fetchEnvironmentDeployments(
   }
   const serialized = params.toString()
   const query = serialized.length > 0 ? `?${serialized}` : ''
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/deployments${query}`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deployments${query}`)
 }
 
 /** One deploy attempt and its multi-server fan-out. `deploymentId` is a command id. */
 export async function fetchEnvironmentDeployment(
   environmentId: string,
-  deploymentId: string,
+  deploymentId: string
 ): Promise<{ ok: true; deployment: DeploymentDetailRecord }> {
-  return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/deployments/${deploymentId}`,
-  )
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deployments/${deploymentId}`)
+}
+
+/**
+ * How a push to a source's repository becomes a deploy.
+ *
+ * `immediate` deploys on push; `checks_passed` parks the SHA until the provider
+ * reports an all-green result for it — a GitHub check **suite**, or a GitLab
+ * **pipeline**; `disabled` leaves the source wired up but unarmed. This is a property of the `source` row, not of the
+ * compose binding — one repository connected to several services has one
+ * policy, and the webhook surface reads it from the row.
+ */
+export type SourceAutoDeploy = 'immediate' | 'checks_passed' | 'disabled'
+
+export const SOURCE_AUTO_DEPLOY_OPTIONS: readonly {
+  value: SourceAutoDeploy
+  label: string
+  hint: string
+}[] = [
+  {
+    value: 'immediate',
+    label: 'Immediately after push',
+    hint: 'Every push to the tracked branch deploys.',
+  },
+  {
+    value: 'checks_passed',
+    label: 'Only after CI passes',
+    hint:
+      'A pushed commit waits for a green GitHub check suite (or GitLab pipeline) ' +
+      'before it deploys.',
+  },
+  {
+    value: 'disabled',
+    label: 'Disabled',
+    hint: 'The repository stays connected; deploys are manual only.',
+  },
+]
+
+/**
+ * Which provider backs a source, and therefore which connect flow created it.
+ *
+ * `git` is the generic SSH/HTTPS lane: a clone URL plus a deploy key, no
+ * provider API behind it. `gitlab` can be *either* — an OAuth connection or a
+ * deploy key — which is why the create form asks.
+ */
+export const SOURCE_PROVIDERS = ['github', 'gitlab', 'git'] as const
+export type SourceProvider = (typeof SOURCE_PROVIDERS)[number]
+
+export const SOURCE_PROVIDER_OPTIONS: readonly {
+  value: SourceProvider
+  label: string
+  hint: string
+}[] = [
+  {
+    value: 'github',
+    label: 'GitHub App',
+    hint: 'Pick a repository the installed GitHub App can already read.',
+  },
+  {
+    value: 'gitlab',
+    label: 'GitLab',
+    hint:
+      'Connect a GitLab account over OAuth, or paste a project URL and use a ' +
+      'generated read-only deploy key.',
+  },
+  {
+    value: 'git',
+    label: 'Other Git host',
+    hint: 'Any https or ssh clone URL, authorized by a deploy key.',
+  },
+]
+
+/** An org-owned Git repository binding services attach to by `sourceId`. */
+export type SourceRecord = {
+  id: string
+  organizationId: string
+  installationId: string | null
+  serviceId: string | null
+  environmentId: string | null
+  credentialId: string | null
+  provider: SourceProvider
+  repositoryUrl: string
+  repositoryExternalId: string | null
+  defaultBranch: string | null
+  subdirectory: string | null
+  autoDeploy: SourceAutoDeploy
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * A provider connection this organization can read repositories through.
+ *
+ * GitHub calls it an App installation; GitLab has no per-repository install, so
+ * the row records the OAuth-connected account instead. `provider` is what tells
+ * the two apart in a picker that lists both.
+ */
+export type GitInstallationRecord = {
+  id: string
+  organizationId: string
+  provider: string
+  externalInstallationId: string
+  accountLogin: string | null
+  accountType: string | null
+  suspendedAt: string | null
+  suspended: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/** Narrow repository summary the connect-repository picker renders. */
+export type GitRepositorySummary = {
+  id: string
+  fullName: string
+  defaultBranch: string | null
+  private: boolean
+  cloneUrl: string | null
+}
+
+export async function fetchSources(): Promise<{ sources: SourceRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/sources`)
+}
+
+export async function fetchGitInstallations(): Promise<{
+  installations: GitInstallationRecord[]
+}> {
+  return await apiFetch(`${CLIENT_API}/sources/installations`)
+}
+
+export async function fetchInstallationRepositories(
+  installationId: string
+): Promise<{ repositories: GitRepositorySummary[] }> {
+  return await apiFetch(`${CLIENT_API}/sources/installations/${installationId}/repositories`)
+}
+
+/**
+ * Register a repository as an org-owned source a compose service can bind to.
+ *
+ * `installationId` is what makes a GitHub source cloneable — the instance mints
+ * a short-lived installation token per deploy from it, so a source created
+ * without one cannot be built. A GitLab source is cloneable through either an
+ * `installationId` (its OAuth connection) or a `credentialId` (a generated
+ * deploy key); `git` sources only ever use the latter.
+ */
+export async function createSource(
+  body: Readonly<{
+    provider: SourceProvider
+    repositoryUrl: string
+    installationId?: string | null
+    /**
+     * Deploy key from {@link createGitlabDeployKey}. For `gitlab`, supply
+     * exactly one of this or `installationId` — the instance rejects both.
+     */
+    credentialId?: string | null
+    repositoryExternalId?: string | null
+    defaultBranch?: string | null
+    autoDeploy?: SourceAutoDeploy
+  }>
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/sources`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateSource(
+  sourceId: string,
+  patch: Readonly<{
+    autoDeploy?: SourceAutoDeploy
+    defaultBranch?: string | null
+    subdirectory?: string | null
+  }>
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/sources/${sourceId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+/**
+ * Where to send the browser to connect a GitLab account.
+ *
+ * Deliberately a URL rather than a fetch: the endpoint answers `302` to
+ * GitLab's authorize page, and the operator has to *land* there to approve the
+ * grant. Following it with `fetch` would consume the redirect and show nothing.
+ */
+export function gitlabOauthConnectUrl(): string {
+  return controlPlaneUrl(`${CLIENT_API}/sources/gitlab/oauth`)
+}
+
+/** What the deploy-key endpoint hands back — the public half, exactly once. */
+export type GitDeployKey = {
+  ok: true
+  /** Pass as `credentialId` when creating the source. */
+  credentialId: string
+  /** `ssh-ed25519 …` line to add to the project as a **read-only** Deploy Key. */
+  publicKey: string
+  fingerprint: string
+}
+
+/**
+ * Mint a read-only deploy keypair for a GitLab source that will not use OAuth.
+ *
+ * The private half never leaves the instance unsealed; the public half comes
+ * back **once**, here, and is not retrievable afterwards — so a caller that
+ * drops it has to mint a new key. This is the recommended non-human path: the
+ * key belongs to the project, so no individual leaving the organization breaks
+ * its deploys.
+ */
+export async function createGitlabDeployKey(
+  body: Readonly<{ name: string }>
+): Promise<GitDeployKey> {
+  return await apiFetch(`${CLIENT_API}/sources/gitlab/deploy-keys`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * One Git-backed release of one compose service.
+ *
+ * Read from the append-only `command` history (`command.context.releases[]`),
+ * not from `deployment` — a release exists *per service*, while a deployment
+ * row is per `(environment, server)` and is overwritten on every redeploy. The
+ * `commandId` is the deploy that published it, so it fetches the build
+ * transcript through {@link fetchCommandLog} exactly like a history row does.
+ */
+/** One host's attempt at a release — the fan-out row behind a folded record. */
+export type ReleaseAttempt = {
+  commandId: string
+  serverId: string
+  status: CommandStatus
+}
+
+export type ReleaseRecord = {
+  /** Representative attempt's command — the transcript this row opens. */
+  commandId: string
+  /** Representative attempt's server. See {@link ReleaseRecord.attempts}. */
+  serverId: string
+  /**
+   * Every host this release was dispatched to.
+   *
+   * A release belongs to the *environment*, not to a server: one deploy fans out
+   * to every participating host under a single release id, and the row's
+   * `status` is the aggregate over all of them — `succeeded` only when every
+   * host published it, which is the condition a rollback needs.
+   */
+  attempts: ReleaseAttempt[]
+  composeServiceName: string
+  releaseId: string
+  sourceId: string
+  commitSha: string
+  /** Commit subject / author, when the source provider resolved them. */
+  commitMessage?: string
+  commitAuthor?: string
+  /**
+   * Railpack lane only: the OCI image this release resolved to, and the pinned
+   * build inputs that produced it.
+   *
+   * A Railpack release publishes no directory — the image tag *is* its identity,
+   * and rolling one back redeploys that tag rather than re-pointing `current`.
+   * Absent on every native (directory) release, which is how the two lanes are
+   * told apart in the list.
+   */
+  imageTag?: string
+  railpackFrontendVersion?: string
+  railpackPlanVersion?: string
+  /** Aggregate status across every host in {@link ReleaseRecord.attempts}. */
+  status: CommandStatus
+  queuedAt: string | null
+  finishedAt: string | null
+  /**
+   * The release this service is currently believed to be running: the newest
+   * *succeeded* release for it. History-derived — the daemon does not report
+   * its on-host `current` symlink back over the wire — but correct for every
+   * change that went through this control plane, rollbacks included.
+   */
+  isLive: boolean
+  /** Set when this row is itself a rollback: the release it re-promoted. */
+  rollbackToReleaseId?: string
+}
+
+export type ServiceReleasesResponse = {
+  ok: true
+  releases: ReleaseRecord[]
+}
+
+/**
+ * Releases for one environment, newest first. Pass `composeServiceName` to
+ * narrow to a single service (the rollback picker always does).
+ */
+export async function fetchServiceReleases(
+  environmentId: string,
+  composeServiceName?: string,
+  options?: Readonly<{ limit?: number }>
+): Promise<ServiceReleasesResponse> {
+  const params = new URLSearchParams()
+  if (composeServiceName) params.set('composeServiceName', composeServiceName)
+  if (typeof options?.limit === 'number' && options.limit > 0) {
+    params.set('limit', String(options.limit))
+  }
+  const serialized = params.toString()
+  const query = serialized.length > 0 ? `?${serialized}` : ''
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/releases${query}`)
+}
+
+/**
+ * Re-promote an already-published release for one service.
+ *
+ * Enqueues an ordinary `environment.deploy` — the control plane does not fork a
+ * second command type for rollback — so the returned `commandId` is tracked and
+ * transcript-read exactly like a deploy's.
+ */
+export async function rollbackEnvironment(
+  environmentId: string,
+  body: Readonly<{ composeServiceName: string; releaseId: string }>
+): Promise<CommandEnqueueResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export class DeployHealthCheckMissingError extends Error {
@@ -3150,6 +3464,26 @@ export type DeployPreviewServer = {
 }
 
 /** Compiled Compose standalone secret (paths only — never values). */
+/**
+ * What one Git-backed service would check out and build, from the prepare
+ * layer's already-resolved `sourceMaterial[]`.
+ *
+ * Preview never mints a token or seals a credential, so this is shape only —
+ * and deliberately only the non-secret half: which source, which ref, which
+ * commit, and the release id the deploy would publish under.
+ */
+export type DeployPreviewSource = {
+  composeServiceName: string
+  sourceId: string
+  provider: 'github' | 'git'
+  /** Credential-free by contract on both wire parsers. */
+  cloneUrl: string
+  ref: string
+  commitSha: string
+  releaseId: string
+  subdirectory?: string
+}
+
 export type DeployPreviewSecretPlanEntry = {
   key: string
   composeServiceName: string
@@ -3169,6 +3503,8 @@ export type DeployPreviewResponse = {
   composeFiles: DeployPreviewComposeFile[]
   /** Per-host compiled compose when the scheduler splits services across hosts. Omitted for a single-server / whole-environment pin. */
   servers?: DeployPreviewServer[]
+  /** Git-backed services this deploy would build. Omitted when there are none. */
+  sources?: DeployPreviewSource[]
   projectName: string
   containers: {
     serviceId: string
@@ -3203,13 +3539,7 @@ export type StorageRetention = 'retain' | 'delete'
 export type LocationProvider = 'docker' | 'path'
 export type LocationRole = 'primary' | 'replica' | 'scratch' | 'archive'
 export type LocationState =
-  | 'pending'
-  | 'materializing'
-  | 'ready'
-  | 'syncing'
-  | 'stale'
-  | 'failed'
-  | 'retiring'
+  'pending' | 'materializing' | 'ready' | 'syncing' | 'stale' | 'failed' | 'retiring'
 
 export type StorageLocationRecord = {
   id: string
@@ -4056,9 +4386,7 @@ export async function promoteManagedDisasterRecovery(
 }
 
 export type BindingListFilter =
-  | { serviceId: string }
-  | { environmentId: string }
-  | { managedEnvironmentId: string }
+  { serviceId: string } | { environmentId: string } | { managedEnvironmentId: string }
 
 function bindingListQueryParams(filter: BindingListFilter): URLSearchParams {
   if ('serviceId' in filter) {

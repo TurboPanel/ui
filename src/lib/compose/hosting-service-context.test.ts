@@ -47,21 +47,36 @@ describe('resolveHostingServiceContext', () => {
     expect(apache.traditionalSiblingNames).toEqual(['static'])
     expect(hostingServiceKindLabel(apache)).toBe('Traditional web · Apache')
     expect(hostingPhpSectionCopy(apache).showFields).toBe(true)
+    expect(hostingPhpSectionCopy(apache).hint).toContain('mod_proxy_fcgi')
     expect(hostingWebEnvSectionCopy(apache).showFields).toBe(true)
   })
 
-  it('marks OpenLiteSpeed PHP and web env as ignored', () => {
+  it('offers PHP on every traditional-web engine, naming each mechanism', () => {
     const document = yamlToComposeDocument(`services:
+  static:
+    x-turbopanel:
+      serviceKind: traditional-web
+      engine: nginx
   site:
     x-turbopanel:
       serviceKind: traditional-web
       engine: openlitespeed
 `)
 
+    const nginx = resolveHostingServiceContext(document, 'static')
+    expect(nginx.phpApplicability).toBe('applicable')
+    expect(hostingPhpSectionCopy(nginx).showFields).toBe(true)
+    expect(hostingPhpSectionCopy(nginx).title).toBe('PHP settings (nginx php-fpm)')
+    expect(hostingPhpSectionCopy(nginx).hint).toContain('fastcgi_pass')
+
     const ols = resolveHostingServiceContext(document, 'site')
-    expect(ols.phpApplicability).toBe('ignored')
+    expect(ols.phpApplicability).toBe('applicable')
+    expect(hostingPhpSectionCopy(ols).showFields).toBe(true)
+    expect(hostingPhpSectionCopy(ols).title).toBe('PHP settings (OpenLiteSpeed LSAPI)')
+    expect(hostingPhpSectionCopy(ols).hint).toContain('suEXEC')
+
+    // web.env stays Apache-only — PHP parity did not change SetEnv support.
     expect(ols.webEnvMode).toBe('ignored')
-    expect(hostingPhpSectionCopy(ols).showFields).toBe(false)
     expect(hostingWebEnvSectionCopy(ols).showFields).toBe(false)
   })
 
@@ -140,7 +155,7 @@ describe('resolveHostingServiceContext edge cases', () => {
     expect(nginx.engine).toBe('nginx')
     expect(nginx.webEnvMode).toBe('file_only')
     expect(hostingServiceKindLabel(nginx)).toBe('Traditional web · nginx')
-    expect(hostingPhpSectionCopy(nginx).showFields).toBe(false)
+    expect(hostingPhpSectionCopy(nginx).showFields).toBe(true)
     expect(hostingWebEnvSectionCopy(nginx).showFields).toBe(true)
   })
 })
@@ -161,6 +176,7 @@ describe('hosting copy helpers', () => {
       'api',
     )
     expect(hostingPathPrefixHint(withSiblings)).toContain('static')
+    expect(hostingPathPrefixHint(withSiblings)).not.toContain('static nginx')
 
     const alone = resolveHostingServiceContext(
       yamlToComposeDocument(`services:

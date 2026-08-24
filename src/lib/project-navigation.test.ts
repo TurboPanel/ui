@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COMPOSE_PROJECT_CONFIG_TAB_IDS,
+  COMPOSE_PROJECT_LENS_IDS,
   COMPOSE_PROJECT_TAB_IDS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
   isComposeOrTemplateProject,
   isComposeProject,
   isManagedProject,
+  isComposeProjectLens,
   isProjectOverviewBasePath,
   isSystemProject,
   parseComposeEditView,
@@ -110,9 +113,10 @@ describe('path-based environment selection', () => {
     expect(projectEnvironmentServicesHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1/services',
     )
+    // The visual editor is the Document lens, which lives on the overview path.
     expect(
       projectComposeEditHref('org', 'proj', { view: 'visual' }),
-    ).toBe('/org/projects/proj/services')
+    ).toBe('/org/projects/proj/overview')
     expect(
       projectComposeEditHref('org', 'proj', {
         environmentId: 'env1',
@@ -165,21 +169,44 @@ describe('path-based environment selection', () => {
     expect(parseComposeProjectTab('/org/projects/proj/compose', 'proj')).toBe(
       'compose',
     )
+    // Retired `/services` resolves to the Document lens.
     expect(parseComposeProjectTab('/org/projects/proj/services', 'proj')).toBe(
-      'services',
+      'overview',
     )
+    expect(parseComposeProjectTab('/org/projects/proj/map', 'proj')).toBe('map')
     expect(parseComposeProjectTab('/org/projects/proj/hosting', 'proj')).toBe(
       'hosting',
     )
     expect(parseComposeProjectTab('/org/projects/proj/servers', 'proj')).toBe(
       'servers',
     )
+    expect(parseComposeProjectTab('/org/projects/proj/storage', 'proj')).toBe(
+      'storage',
+    )
+    expect(parseComposeProjectTab('/org/projects/proj/settings', 'proj')).toBe(
+      'settings',
+    )
+    expect(
+      parseComposeProjectTab(
+        '/org/projects/proj/environments/env1/storage',
+        'proj',
+      ),
+    ).toBe('storage')
+    expect(
+      parseComposeProjectTab(
+        '/org/projects/proj/environments/env1/settings',
+        'proj',
+      ),
+    ).toBe('settings')
     expect(
       parseComposeProjectTab(
         '/org/projects/proj/environments/env1/services',
         'proj',
       ),
-    ).toBe('services')
+    ).toBe('overview')
+    expect(
+      parseComposeProjectTab('/org/projects/proj/environments/env1/map', 'proj'),
+    ).toBe('map')
     expect(
       parseComposeProjectTab(
         '/org/projects/proj/environments/env1/hosting',
@@ -233,19 +260,45 @@ describe('path-based environment selection', () => {
     ).toBe('env1')
   })
 
-  it('omits Hosting and Servers from the create-wizard draft tabs', () => {
+  it('offers every lens on the create-wizard draft', () => {
+    // A draft has no environments and no row to configure — lenses only.
     expect([...DRAFT_COMPOSE_PROJECT_TAB_IDS]).toEqual([
       'overview',
+      'map',
       'compose',
-      'services',
     ])
     expect([...COMPOSE_PROJECT_TAB_IDS]).toEqual([
       'overview',
+      'map',
       'compose',
-      'services',
       'hosting',
       'servers',
+      'storage',
+      'settings',
     ])
+  })
+
+  it('splits lenses from scope configuration', () => {
+    // The lens bar is three items however much the project grows; Hosting is
+    // neither, because it is reached from a service's gutter fact.
+    expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual([
+      'overview',
+      'map',
+      'compose',
+    ])
+    expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual([
+      'servers',
+      'storage',
+      'settings',
+    ])
+    for (const tabId of COMPOSE_PROJECT_LENS_IDS) {
+      expect(isComposeProjectLens(tabId)).toBe(true)
+      expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
+    }
+    for (const tabId of COMPOSE_PROJECT_CONFIG_TAB_IDS) {
+      expect(isComposeProjectLens(tabId)).toBe(false)
+      expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
+    }
   })
 
   it('treats Overview Base path as Base and environments/:id as not Base', () => {
@@ -263,6 +316,15 @@ describe('path-based environment selection', () => {
     ).toBe(true)
     expect(
       isProjectOverviewBasePath('/org/projects/proj/servers', 'proj'),
+    ).toBe(true)
+    expect(isProjectOverviewBasePath('/org/projects/proj/map', 'proj')).toBe(
+      true,
+    )
+    expect(
+      isProjectOverviewBasePath('/org/projects/proj/storage', 'proj'),
+    ).toBe(true)
+    expect(
+      isProjectOverviewBasePath('/org/projects/proj/settings', 'proj'),
     ).toBe(true)
     expect(resolveBaseComposeSelected('/org/projects/proj/overview', 'proj')).toBe(
       true,

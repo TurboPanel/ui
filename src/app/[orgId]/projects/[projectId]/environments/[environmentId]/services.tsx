@@ -1,26 +1,32 @@
 import { Redirect, type Href } from 'expo-router'
-import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
-import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  isManagedProject,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
+import { projectComposeSectionHref } from '@/lib/project-navigation'
+import { useLocalSearchParams } from 'expo-router'
+
+function firstParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return value ?? ''
+}
 
 /**
- * Environment-scope Services (visual) editor
+ * Retired route — service cards are now blocks in the Document lens.
  * (`/environments/:environmentId/services`).
  */
 export default function ProjectEnvironmentServicesScreen() {
-  const { orgId, projectId, project, isSystemProject } = useProjectContext()
-
-  if (isSystemProject) {
-    return (
-      <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
-    )
-  }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
-  return <ProjectOverviewTab />
+  const { orgId, projectId } = useProjectContext()
+  const { environmentId } = useLocalSearchParams<{
+    environmentId: string | string[]
+  }>()
+  return (
+    <Redirect
+      href={
+        projectComposeSectionHref(
+          orgId,
+          projectId,
+          'overview',
+          firstParam(environmentId) || null,
+        ) as Href
+      }
+    />
+  )
 }

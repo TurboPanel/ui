@@ -43,7 +43,7 @@ import {
   isTerminalCommandStatus,
   useCommandLog,
   useCommandsBatch,
-  useContainersByEnvironments,
+  useContainersByProject,
   useCreateEnvironment,
   useDeployEnvironment,
   useOrgServers,
@@ -52,6 +52,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { resolveEffectiveServerId } from '@/lib/project-options'
+import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 
@@ -920,16 +921,6 @@ function syncTrackedCommandBatch(
   }
 }
 
-function resolvePlacementServerLabel(
-  effectiveServerId: string | null,
-  servers: readonly { id: string; name?: string | null; hostname?: string | null }[] | undefined,
-): string | null {
-  if (!effectiveServerId) return null
-  const server = servers?.find((row) => row.id === effectiveServerId)
-  if (!server) return effectiveServerId
-  return server.name?.trim() || server.hostname || server.id
-}
-
 /** Fire-and-forget without the `void` operator (typescript:S3735). */
 function ignorePromise(promise: Promise<unknown>): void {
   promise.catch(() => {
@@ -1030,7 +1021,8 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const [deployLogCollapsed, setDeployLogCollapsed] = useState(false)
   const queryClient = useQueryClient()
 
-  const containersQuery = useContainersByEnvironments(orgId, environmentIds, {
+  const containersQuery = useContainersByProject(orgId, projectId, {
+    environmentIds,
     observeUntilHostDeployed: isSystemProject,
   })
   const containersByEnv = containersQuery.containersByEnv
@@ -1101,7 +1093,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   })
   const placementServerLabel = useMemo(
     () =>
-      resolvePlacementServerLabel(
+      resolveServerLabel(
         effectiveServerId,
         serversQuery.data?.servers,
       ),

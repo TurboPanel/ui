@@ -1,12 +1,10 @@
 import { useMemo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import {
-  ComposeEditorChrome,
-  ComposeSurfaceSectionTabs,
-} from '@/components/org/compose-editor-section'
+import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
+import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, InlineNotice } from '@/components/ui'
 import {
   ComposeInventoryStrip,
   type InventoryStripItem,
@@ -53,6 +51,7 @@ export function ComposeSavedView({
   summaryDocument?: unknown
   /** Quantitative rollup (environments / servers / services / storage / bindings, …). */
   inventory: InventoryStripItem[]
+  /** Scope statement shown above the tiles, e.g. inheriting project compose. */
   inheritedCaption?: string | null
   orgId: string
   projectId: string
@@ -100,7 +99,7 @@ export function ComposeSavedView({
 
   return (
     <ComposeEditorChrome
-      tabs={<ComposeSurfaceSectionTabs />}
+      nav={<ComposeSurfaceNav />}
       trailing={
         showSourceToggle || toolbarTrailing ? (
           <View style={styles.headerTrailing}>
@@ -149,10 +148,8 @@ export function ComposeSavedView({
       }
     >
       <View style={styles.body}>
+        {inheritedCaption ? <InlineNotice title={inheritedCaption} /> : null}
         <ComposeInventoryStrip items={inventory} />
-        {inheritedCaption ? (
-          <Text style={orgPanelStyles.muted}>{inheritedCaption}</Text>
-        ) : null}
         {showSourceToggle && draftSource === 'proposed' ? (
           <Text style={orgPanelStyles.muted}>
             Unsaved changes — switch to Saved to compare with the last save.
@@ -166,6 +163,7 @@ export function ComposeSavedView({
 
 const styles = StyleSheet.create({
   body: {
+    padding: spacing.md,
     gap: spacing.md,
   },
   headerTrailing: {

@@ -305,3 +305,37 @@ services:
     ).toBe(false)
   })
 })
+
+describe('railpack-built services', () => {
+  const railpackService = `services:
+  api:
+    x-turbopanel:
+      serviceKind: container
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+        buildKind: railpack
+`
+
+  it('does not require image or build — the daemon mints the image', () => {
+    const issues = lintComposeYaml(railpackService)
+    expect(
+      issues.some((issue) => issue.message.includes('must define "image"')),
+    ).toBe(false)
+    expect(blockingComposeLintIssues(issues)).toEqual([])
+  })
+
+  it('still requires image or build for a native-built source', () => {
+    const source = `services:
+  api:
+    x-turbopanel:
+      serviceKind: container
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+`
+    expect(
+      lintComposeYaml(source).some((issue) =>
+        issue.message.includes('must define "image"'),
+      ),
+    ).toBe(true)
+  })
+})

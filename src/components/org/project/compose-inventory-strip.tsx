@@ -1,10 +1,9 @@
-import { Fragment } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
-import { colors, spacing } from '@/lib/theme'
+import { StatTiles, type StatTileIcon, type StatTileItem } from '@/components/ui'
 
 export type InventoryStripItem = {
   key: string
   value: number
+  icon: StatTileIcon
   /** Singular noun, e.g. "server" — pluralized automatically. */
   noun: string
   /** Override the plural form when it isn't just `${noun}s`. */
@@ -17,56 +16,33 @@ function pluralize(item: InventoryStripItem): string {
 }
 
 /**
- * "x servers · x storage · x bindings" quantitative rollup for compose
- * Overview (inline value·label, not the servers overview stat boxes).
+ * Icon count tiles for the compose Overview rollup (environments / servers /
+ * services / networks / volumes / storage / bindings at the active scope).
+ * Renders the shared {@link StatTiles} so the tile language matches the rest
+ * of the console.
  */
 export function ComposeInventoryStrip({
   items,
 }: Readonly<{ items: InventoryStripItem[] }>) {
   if (items.length === 0) return null
-  const accessibilityLabel = items
-    .map((item) => `${item.value} ${pluralize(item)}`)
-    .join(', ')
+
+  const tiles: StatTileItem[] = items.map((item) => {
+    const noun = pluralize(item)
+    return {
+      key: item.key,
+      icon: item.icon,
+      value: item.value,
+      label: noun,
+      accessibilityLabel: `${item.value} ${noun}`,
+    }
+  })
 
   return (
-    <View style={styles.strip} accessibilityLabel={accessibilityLabel}>
-      {items.map((item, index) => (
-        <Fragment key={item.key}>
-          {index > 0 ? <Text style={styles.sep}>·</Text> : null}
-          <Text style={styles.item}>
-            <Text style={styles.value}>{item.value}</Text>
-            <Text style={styles.label}> {pluralize(item)}</Text>
-          </Text>
-        </Fragment>
-      ))}
-    </View>
+    <StatTiles
+      items={tiles}
+      accessibilityLabel={tiles
+        .map((tile) => tile.accessibilityLabel)
+        .join(', ')}
+    />
   )
 }
-
-const styles = StyleSheet.create({
-  strip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  value: {
-    color: colors.textTitle,
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  sep: {
-    color: colors.textFaint,
-    fontSize: 13,
-  },
-})

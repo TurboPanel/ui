@@ -74,13 +74,24 @@ export {
 } from './hidden-extension'
 export type {
   ComposeServiceKind,
+  ComposeServiceSourceExtension,
   ComposeServiceTurbopanelExtension,
+  ComposeServiceTurbopanelExtensionPatch,
+  ComposeSourceBuildKind,
+  NativeRuntimeFramework,
+  SourceIdResolver,
   TraditionalWebEngine,
 } from './service-kind'
 export {
+  isHostNativeServiceKind,
+  isNodeComposeService,
   isTraditionalWebComposeService,
+  parseServiceSourceExtension,
   parseServiceTurbopanelExtension,
+  readServiceSourceExtension,
   readServiceTurbopanelExtension,
+  SOURCE_BRANCH_MAX_LENGTH,
+  SOURCE_COMMAND_MAX_LENGTH,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
 } from './service-kind'
 export type {

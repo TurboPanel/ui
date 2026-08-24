@@ -153,3 +153,50 @@ export function ComposeServersIcon({ size = 16, color }: ComposeViewIconProps) {
     </Svg>
   )
 }
+
+/** Stacked disk platters — Storage (persistent volumes for the scope). */
+export function ComposeStorageIcon({ size = 16, color }: ComposeViewIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 7.5c3.728 0 6.75-1.007 6.75-2.25S15.728 3 12 3 5.25 4.007 5.25 5.25 8.272 7.5 12 7.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M18.75 5.25v13.5c0 1.243-3.022 2.25-6.75 2.25s-6.75-1.007-6.75-2.25V5.25"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M18.75 12c0 1.243-3.022 2.25-6.75 2.25S5.25 13.243 5.25 12"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
+/** Horizontal sliders — Settings for the active scope. */
+export function ComposeSettingsIcon({ size = 16, color }: ComposeViewIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3.75 7.5h4.5M12.75 7.5h7.5M3.75 16.5h7.5M15.75 16.5h4.5"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M10.5 7.5a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0ZM18 16.5a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}

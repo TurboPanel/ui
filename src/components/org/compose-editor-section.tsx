@@ -6,16 +6,17 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
 import {
+  ComposeDocumentView,
+  type ComposeDocFacts,
+} from '@/components/org/project/compose-document-view'
+import {
   ComposeEditorIcon,
-  ComposeHostingIcon,
-  ComposeOverviewIcon,
-  ComposeServersIcon,
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
   composeFullYaml,
   composeVisibleYaml,
@@ -23,17 +24,6 @@ import {
   useOptionalComposeDraftStore,
   type ComposeDraftSnapshot,
 } from '@/components/org/project/compose-draft-context'
-import { Link, usePathname, type Href } from 'expo-router'
-import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  COMPOSE_PROJECT_TAB_IDS,
-  COMPOSE_PROJECT_TAB_LABELS,
-  DRAFT_COMPOSE_PROJECT_TAB_IDS,
-  parseComposeProjectTab,
-  parseProjectEnvironmentId,
-  projectComposeSectionHref,
-  type ComposeProjectTabId,
-} from '@/lib/project-navigation'
 import { ComposeYamlEditor } from '@/components/org/compose-yaml-editor'
 import type {
   ComposeYamlEditorHandle,
@@ -63,8 +53,8 @@ import {
   formatComposeYamlOnLineChange,
   lineIndexAtOffset,
 } from '@/lib/compose/yaml-indent'
-import { Button } from '@/components/ui'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { Button, SectionNav } from '@/components/ui'
+import { colors, spacing } from '@/lib/theme'
 
 type EditorTab = ComposeEditorView
 
@@ -321,8 +311,11 @@ export function ComposeDraftActionButtons({
 }
 
 /**
- * Compose / Services mode tabs — quiet underline tabs on the surface header.
- * Used by embedded editors (environment detail, etc.) that are not URL-tabbed.
+ * Compose / Services mode toggle for embedded editors (environment detail,
+ * etc.) that are not URL-tabbed. Always a row — a two-entry rail would read as
+ * a sidebar next to a panel it does not own. The routed project surface uses
+ * {@link import('./project/compose-surface-nav').ComposeSurfaceNav} instead.
+ *
  * Internal view id remains `visual` (form cards); leave the word "Visual"
  * free for a future canvas/topology tab.
  */
@@ -334,158 +327,68 @@ export function ComposeEditorViewTabs({
   onChange: (view: ComposeEditorView) => void
 }>) {
   return (
-    <View style={styles.surfaceTabList} accessibilityRole="tablist">
-      {([
-        ['editor', 'Compose', ComposeEditorIcon],
-        ['visual', 'Services', ComposeVisualIcon],
-      ] as const).map(([entry, label, Icon]) => {
-        const active = value === entry
-        const tone = active ? colors.text : colors.textMuted
-        return (
-          <Pressable
-            key={entry}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            style={[styles.surfaceTab, active && styles.surfaceTabActive]}
-            onPress={() => {
-              onChange(entry)
-            }}
-          >
-            <View style={styles.surfaceTabInner}>
-              <Icon size={15} color={tone} />
-              <Text
-                style={[
-                  styles.surfaceTabText,
-                  active && styles.surfaceTabTextActive,
-                ]}
-              >
-                {label}
-              </Text>
-            </View>
-          </Pressable>
-        )
-      })}
-    </View>
+    <SectionNav
+      activeId={value}
+      accessibilityLabel="Compose editor view"
+      items={[
+        {
+          id: 'editor',
+          label: 'Compose',
+          icon: ComposeEditorIcon,
+          onPress: () => onChange('editor'),
+        },
+        {
+          id: 'visual',
+          label: 'Services',
+          icon: ComposeVisualIcon,
+          onPress: () => onChange('visual'),
+        },
+      ]}
+    />
   )
 }
 
-const SURFACE_SECTION_ICONS = {
-  overview: ComposeOverviewIcon,
-  compose: ComposeEditorIcon,
-  services: ComposeVisualIcon,
-  hosting: ComposeHostingIcon,
-  servers: ComposeServersIcon,
-} as const
-
-/** One compose surface tab face — shared by the routed and draft strips. */
-function ComposeSectionTabFace({
-  tabId,
-  active,
-}: Readonly<{ tabId: ComposeProjectTabId; active: boolean }>) {
-  const Icon = SURFACE_SECTION_ICONS[tabId]
+/** Save / Discard / scope actions, right-aligned in the surface toolbar. */
+function SurfaceToolbarEnd({
+  leading,
+  trailing,
+}: Readonly<{ leading?: ReactNode; trailing?: ReactNode }>) {
+  if (!leading && !trailing) return null
   return (
-    <View style={styles.surfaceTabInner}>
-      <Icon size={15} color={active ? colors.text : colors.textMuted} />
-      <Text
-        style={[styles.surfaceTabText, active && styles.surfaceTabTextActive]}
-      >
-        {COMPOSE_PROJECT_TAB_LABELS[tabId]}
-      </Text>
+    <View style={styles.toolbarEnd}>
+      {trailing ? <View style={styles.toolbarTrailing}>{trailing}</View> : null}
+      {leading ? <View style={styles.toolbarLeading}>{leading}</View> : null}
     </View>
   )
 }
 
 /**
- * Overview · Compose · Services · Hosting · Servers — underline tabs inside
- * the compose surface. Path-driven; keeps Project / environment scope when
- * switching tabs. An unsaved wizard draft has no route (and no environments),
- * so it drives Overview / Compose / Services from local state.
- */
-export function ComposeSurfaceSectionTabs() {
-  const pathname = usePathname()
-  const { orgId, projectId, draft } = useProjectContext()
-  const pathEnvironmentId = parseProjectEnvironmentId(pathname, projectId)
-  const activeTab = draft
-    ? draft.section
-    : parseComposeProjectTab(pathname, projectId)
-  const tabIds = draft ? DRAFT_COMPOSE_PROJECT_TAB_IDS : COMPOSE_PROJECT_TAB_IDS
-
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.surfaceTabScroll}
-      contentContainerStyle={styles.surfaceTabList}
-      accessibilityRole="tablist"
-      accessibilityLabel="Compose sections"
-    >
-      {tabIds.map((tabId) => {
-        const active = activeTab === tabId
-        const label = COMPOSE_PROJECT_TAB_LABELS[tabId]
-        // Link asChild → Slot rejects style arrays (expo-router).
-        const tabStyle = StyleSheet.flatten([
-          styles.surfaceTab,
-          active && styles.surfaceTabActive,
-          webPointer,
-        ])
-
-        // A draft has no route to navigate to — same tabs, local state.
-        if (draft) {
-          return (
-            <Pressable
-              key={tabId}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={label}
-              style={tabStyle}
-              onPress={() => draft.setSection(tabId)}
-            >
-              <ComposeSectionTabFace tabId={tabId} active={active} />
-            </Pressable>
-          )
-        }
-
-        const href = projectComposeSectionHref(
-          orgId,
-          projectId,
-          tabId,
-          pathEnvironmentId,
-        ) as Href
-        return (
-          <Link key={tabId} href={href} asChild>
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={label}
-              style={tabStyle}
-            >
-              <ComposeSectionTabFace tabId={tabId} active={active} />
-            </Pressable>
-          </Link>
-        )
-      })}
-    </ScrollView>
-  )
-}
-
-/**
- * Shared editor chrome: bordered compose surface with an optional header row
- * (Compose/Services tabs + Project/env buttons) and the editor body.
- * Used by the compose editor and the started-status shell.
+ * Shared editor chrome: the bordered compose surface.
+ *
+ * `nav` is the lens bar (Document · Map · Code) and `tabs` the embedded
+ * Compose/Services toggle; both sit in the header strip beside the toolbar
+ * actions. There is deliberately **no** side rail — the project editor has no
+ * section nav to hold, and a rail of destinations is the thing this layout
+ * exists to avoid.
  */
 export function ComposeEditorChrome({
   leading,
   trailing,
   tabs,
+  nav,
   children,
 }: Readonly<{
   leading?: ReactNode
   trailing?: ReactNode
   tabs?: ReactNode
+  /** Lens bar for the routed compose surface. */
+  nav?: ReactNode
   children: ReactNode
 }>) {
-  const hasSurfaceHeader = Boolean(tabs || leading || trailing)
-  if (!hasSurfaceHeader) {
+  const headerNav = nav ?? tabs
+  const hasEnd = Boolean(trailing || leading)
+
+  if (!headerNav && !hasEnd) {
     return (
       <View style={styles.editorShell}>
         <View style={styles.editorBody}>{children}</View>
@@ -493,32 +396,159 @@ export function ComposeEditorChrome({
     )
   }
 
-  const hasEnd = Boolean(trailing || leading)
-
   return (
     <View style={styles.editorShell}>
       <View style={styles.editorSurface}>
         <View
           style={[
             styles.editorSurfaceHeader,
-            !tabs && styles.editorSurfaceHeaderPadded,
+            !headerNav && styles.editorSurfaceHeaderPadded,
           ]}
         >
-          {tabs}
-          {hasEnd ? (
-            <View style={styles.toolbarEnd}>
-              {trailing ? (
-                <View style={styles.toolbarTrailing}>{trailing}</View>
-              ) : null}
-              {leading ? (
-                <View style={styles.toolbarLeading}>{leading}</View>
-              ) : null}
-            </View>
-          ) : null}
+          {headerNav}
+          <SurfaceToolbarEnd leading={leading} trailing={trailing} />
         </View>
         <View style={styles.editorBody}>{children}</View>
       </View>
     </View>
+  )
+}
+
+/**
+ * The full document behind the YAML tab: the visible text re-joined with the
+ * platform shadow the tab never showed. `null` when the text will not parse.
+ */
+function draftFromYaml(
+  yamlText: string,
+  draft: ComposeDocument,
+): ComposeDocument | null {
+  try {
+    return restoreComposeTurbopanelExtensions(
+      yamlToComposeDocument(yamlText),
+      hideComposeTurbopanelExtensions(draft).hidden,
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
+ * True when the editor still holds exactly what was last saved, so a refreshed
+ * server `document` can replace it without dropping an in-progress keystroke.
+ *
+ * Falls back to comparing the raw text when the YAML does not parse — a draft
+ * mid-edit is unparseable far more often than it is stale.
+ */
+function editorMatchesBaseline(
+  yamlText: string,
+  draft: ComposeDocument,
+  baselineYaml: string,
+): boolean {
+  const reconciled = draftFromYaml(yamlText, draft)
+  if (reconciled) return fullYaml(reconciled) === baselineYaml
+  return yamlText === visibleYaml(draft) && fullYaml(draft) === baselineYaml
+}
+
+/** Title + service count above the chrome; absent on shared-header surfaces. */
+function ComposeEditorHeader({
+  hidden,
+  title,
+  serviceCount,
+}: Readonly<{ hidden: boolean; title: string; serviceCount: number }>) {
+  if (hidden) return null
+  return (
+    <View style={styles.header}>
+      <View style={styles.headerTitleRow}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.serviceCount}>
+          {serviceCountLabel(serviceCount)}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+/**
+ * Chrome trailing slot: surface actions plus Save / Discard. `undefined` (not
+ * an empty row) when there is nothing to show, so the chrome drops the slot.
+ */
+function editorChromeTrailing({
+  showSave,
+  saving,
+  canSave,
+  toolbarTrailing,
+  onSave,
+  onDiscard,
+}: Readonly<{
+  showSave: boolean
+  saving: boolean
+  canSave: boolean
+  toolbarTrailing: ReactNode
+  onSave: () => void
+  onDiscard: () => void
+}>): ReactNode | undefined {
+  if (!showSave && !toolbarTrailing) return undefined
+  return (
+    <View style={styles.headerActions}>
+      {toolbarTrailing}
+      {showSave ? (
+        <ComposeDraftActionButtons
+          saving={saving}
+          canSave={canSave}
+          onSave={onSave}
+          onDiscard={onDiscard}
+        />
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * `document` visual mode — the compose file annotated with live facts, plus the
+ * Add service footer. Optional render slots stay omitted rather than passed as
+ * `undefined` (exactOptionalPropertyTypes).
+ */
+function ComposeDocumentBody({
+  draft,
+  saving,
+  hideSave,
+  documentFacts,
+  serviceCard,
+  onAddService,
+  onOpenScopeConfig,
+  renderHostingEditor,
+  renderReleasesPanel,
+}: Readonly<{
+  draft: ComposeDocument
+  saving: boolean
+  hideSave: boolean
+  documentFacts: ComposeDocFacts | undefined
+  serviceCard: (name: string) => ReactNode
+  onAddService: () => void
+  onOpenScopeConfig: (() => void) | undefined
+  renderHostingEditor: ((composeServiceName: string) => ReactNode) | undefined
+  renderReleasesPanel: ((composeServiceName: string) => ReactNode) | undefined
+}>) {
+  return (
+    <>
+      <ComposeDocumentView
+        document={draft}
+        facts={documentFacts ?? { byService: {} }}
+        canMutate={!hideSave}
+        {...(onOpenScopeConfig ? { onOpenScopeConfig } : {})}
+        renderServiceEditor={serviceCard}
+        {...(renderHostingEditor ? { renderHostingEditor } : {})}
+        {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
+      />
+      <View style={styles.documentFooter}>
+        <Button
+          label="Add service"
+          size="sm"
+          disabled={saving}
+          onPress={onAddService}
+        />
+      </View>
+    </>
   )
 }
 
@@ -538,6 +568,11 @@ export function ComposeEditorSection({
   surfaceTabs,
   toolbarLeading,
   toolbarTrailing,
+  visualMode = 'cards',
+  documentFacts,
+  onOpenScopeConfig,
+  renderHostingEditor,
+  renderReleasesPanel,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -579,6 +614,20 @@ export function ComposeEditorSection({
   toolbarLeading?: ReactNode
   /** Surface header: extra actions left of Discard / Save. */
   toolbarTrailing?: ReactNode
+  /**
+   * How the `visual` view draws the services. `document` is the project
+   * editor's home lens — the compose file annotated with live facts; `cards`
+   * is the plain form list embedded editors use.
+   */
+  visualMode?: 'cards' | 'document'
+  /** Live facts drawn in the document gutter (status, hostnames, placement). */
+  documentFacts?: ComposeDocFacts
+  /** Document scope strip gear — servers / storage / settings for this scope. */
+  onOpenScopeConfig?: () => void
+  /** Inline hosting editor for one service, expanded from its gutter fact. */
+  renderHostingEditor?: (composeServiceName: string) => ReactNode
+  /** Inline releases + rollback for one Git-backed service, same gutter. */
+  renderReleasesPanel?: (composeServiceName: string) => ReactNode
 }>) {
   const source = normalizeCompose(document)
   const draftStore = useOptionalComposeDraftStore()
@@ -666,20 +715,12 @@ export function ComposeEditorSection({
     const full = stripComposePlacement(normalizeCompose(document))
     const savedYaml = fullYaml(full)
     // Keep in-progress edits when server `document` refreshes (query/cache).
-    try {
-      const reconciled = restoreComposeTurbopanelExtensions(
-        yamlToComposeDocument(yamlRef.current),
-        hideComposeTurbopanelExtensions(draftRef.current).hidden,
-      )
-      if (fullYaml(reconciled) !== baselineRef.current) return
-    } catch {
-      if (
-        yamlRef.current !== visibleYaml(draftRef.current)
-        || fullYaml(draftRef.current) !== baselineRef.current
-      ) {
-        return
-      }
-    }
+    const unedited = editorMatchesBaseline(
+      yamlRef.current,
+      draftRef.current,
+      baselineRef.current,
+    )
+    if (!unedited) return
     // Already matches last save (or post-save document catch-up).
     if (savedYaml === baselineRef.current) return
     setDraft(full)
@@ -696,16 +737,7 @@ export function ComposeEditorSection({
     }
     const timer = globalThis.setTimeout(() => {
       setLintYaml(yaml)
-      try {
-        onDraftChangeRef.current?.(
-          restoreComposeTurbopanelExtensions(
-            yamlToComposeDocument(yaml),
-            hideComposeTurbopanelExtensions(draft).hidden,
-          ),
-        )
-      } catch {
-        onDraftChangeRef.current?.(null)
-      }
+      onDraftChangeRef.current?.(draftFromYaml(yaml, draft))
     }, LINT_DEBOUNCE_MS)
     return () => {
       globalThis.clearTimeout(timer)
@@ -1069,8 +1101,30 @@ export function ComposeEditorSection({
     }
   }, [hideHeader, tab, yaml, draft])
 
-  const editorBody =
-    tab === 'editor' ? (
+  /** One service's compose fields — shared by the card list and the document. */
+  const serviceCard = (name: string) => {
+    const service = servicesFrom(draft)[name]
+    if (!service) return null
+    return (
+      <ComposeVisualServiceCard
+        service={service}
+        nameDraft={serviceNameDrafts[name] ?? name}
+        saving={saving}
+        onNameDraftChange={(value) =>
+          setServiceNameDrafts((current) => ({ ...current, [name]: value }))
+        }
+        onRename={(nextName) => renameService(name, nextName)}
+        onRemoveService={() => removeService(name)}
+        onPatchService={(patch) => updateService(name, patch)}
+        onClearField={(key) => clearServiceField(name, key)}
+        onAddField={(field) => addServiceField(name, field)}
+      />
+    )
+  }
+
+  let editorBody: ReactNode
+  if (tab === 'editor') {
+    editorBody = (
       <ComposeYamlEditor
         ref={editorRef}
         value={yaml}
@@ -1080,63 +1134,55 @@ export function ComposeEditorSection({
         onSelectionChange={handleYamlSelectionChange}
         embedded
       />
-    ) : (
+    )
+  } else if (visualMode === 'document') {
+    editorBody = (
+      <ComposeDocumentBody
+        draft={draft}
+        saving={saving}
+        hideSave={hideSave}
+        documentFacts={documentFacts}
+        serviceCard={serviceCard}
+        onAddService={addService}
+        onOpenScopeConfig={onOpenScopeConfig}
+        renderHostingEditor={renderHostingEditor}
+        renderReleasesPanel={renderReleasesPanel}
+      />
+    )
+  } else {
+    editorBody = (
       <View style={[styles.serviceList, styles.visualBody]}>
-        {Object.entries(servicesFrom(draft)).map(([name, service]) => (
-          <ComposeVisualServiceCard
-            key={name}
-            service={service}
-            nameDraft={serviceNameDrafts[name] ?? name}
-            saving={saving}
-            onNameDraftChange={(value) =>
-              setServiceNameDrafts((current) => ({ ...current, [name]: value }))
-            }
-            onRename={(nextName) => renameService(name, nextName)}
-            onRemoveService={() => removeService(name)}
-            onPatchService={(patch) => updateService(name, patch)}
-            onClearField={(key) => clearServiceField(name, key)}
-            onAddField={(field) => addServiceField(name, field)}
-          />
+        {Object.keys(servicesFrom(draft)).map((name) => (
+          <View key={name}>{serviceCard(name)}</View>
         ))}
         <Button label="Add service" size="sm" disabled={saving} onPress={addService} />
       </View>
     )
+  }
 
   return (
     <View style={styles.root}>
-      {hideHeader ? null : (
-        <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.serviceCount}>
-              {serviceCountLabel(serviceCount)}
-            </Text>
-          </View>
-        </View>
-      )}
+      <ComposeEditorHeader
+        hidden={hideHeader}
+        title={title}
+        serviceCount={serviceCount}
+      />
 
       <ComposeEditorChrome
         leading={toolbarLeading}
-        trailing={
-          showSave || toolbarTrailing ? (
-            <View style={styles.headerActions}>
-              {toolbarTrailing}
-              {showSave ? (
-                <ComposeDraftActionButtons
-                  saving={saving}
-                  canSave={canSave}
-                  onSave={() => void handleSave()}
-                  onDiscard={handleDiscard}
-                />
-              ) : null}
-            </View>
-          ) : undefined
-        }
+        trailing={editorChromeTrailing({
+          showSave,
+          saving,
+          canSave,
+          toolbarTrailing,
+          onSave: () => void handleSave(),
+          onDiscard: handleDiscard,
+        })}
+        nav={surfaceTabs}
         tabs={
-          surfaceTabs ??
-          (hideViewTabs ? undefined : (
+          surfaceTabs || hideViewTabs ? undefined : (
             <ComposeEditorViewTabs value={tab} onChange={requestView} />
-          ))
+          )
         }
       >
         {editorBody}
@@ -1218,44 +1264,6 @@ const styles = StyleSheet.create({
   editorSurfaceHeaderPadded: {
     paddingLeft: spacing.xs,
   },
-  surfaceTabScroll: {
-    flexGrow: 0,
-    flexShrink: 1,
-    height: SURFACE_HEADER_HEIGHT,
-  },
-  surfaceTabList: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    flexGrow: 0,
-    height: SURFACE_HEADER_HEIGHT,
-  },
-  surfaceTab: {
-    paddingHorizontal: 12,
-    height: SURFACE_HEADER_HEIGHT,
-    justifyContent: 'center',
-    marginBottom: -1,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  surfaceTabActive: {
-    borderBottomColor: chrome.accent,
-  },
-  surfaceTabInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  surfaceTabText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-  surfaceTabTextActive: {
-    color: colors.text,
-    // Keep weight constant so tab layout does not reflow (use color alone for active).
-    fontWeight: '600',
-  },
   editorBody: {
     minHeight: 120,
   },
@@ -1293,5 +1301,11 @@ const styles = StyleSheet.create({
   serviceList: { gap: spacing.sm },
   visualBody: {
     padding: spacing.sm,
+  },
+  documentFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    paddingTop: spacing.xs,
   },
 })

@@ -1,7 +1,8 @@
 /**
  * Hosting-panel context derived from merged compose services.
  * Surfaces traditional-web engine rules the deploy path already enforces
- * (Apache mod_php + SetEnv; nginx/OLS static; Docker bridge env injection).
+ * (PHP on all three engines, by different mechanisms; Apache-only SetEnv;
+ * Docker bridge env injection).
  */
 
 import {
@@ -11,7 +12,7 @@ import {
 } from './service-kind'
 import type { ComposeDocument } from './types'
 
-export type HostingPhpApplicability = 'applicable' | 'ignored' | 'not_applicable'
+export type HostingPhpApplicability = 'applicable' | 'not_applicable'
 
 export type HostingWebEnvMode =
   | 'apache_setenv'
@@ -63,13 +64,15 @@ function engineLabel(engine: TraditionalWebEngine | undefined): string {
   return 'traditional-web'
 }
 
+/**
+ * Every traditional-web engine runs PHP — only the mechanism differs (per-site
+ * php-fpm pool for nginx/Apache, per-vhost LSAPI process for OpenLiteSpeed), and
+ * that is a deploy-path detail, not a reason to hide the fields.
+ */
 function phpApplicabilityFor(
   kind: HostingServiceContext['kind'],
-  engine: TraditionalWebEngine | undefined,
 ): HostingPhpApplicability {
-  if (kind !== 'traditional-web') return 'not_applicable'
-  if (engine === 'apache') return 'applicable'
-  return 'ignored'
+  return kind === 'traditional-web' ? 'applicable' : 'not_applicable'
 }
 
 function webEnvModeFor(
@@ -117,7 +120,7 @@ export function resolveHostingServiceContext(
     kind,
     engine,
     traditionalSiblingNames,
-    phpApplicability: phpApplicabilityFor(kind, engine),
+    phpApplicability: phpApplicabilityFor(kind),
     webEnvMode: webEnvModeFor(kind, engine),
   }
 }
@@ -129,30 +132,43 @@ export function hostingServiceKindLabel(context: HostingServiceContext): string 
   return 'Container'
 }
 
+/**
+ * How this engine actually runs PHP. The hint names the real mechanism because
+ * it is what an operator sees on the host — a pool process per site, or an
+ * lsphp process per vhost — and because the isolation story differs: OpenLiteSpeed's
+ * suEXEC identity is the process itself, where nginx/Apache get it from the pool.
+ */
+function phpRuntimeCopy(engine: TraditionalWebEngine | undefined): {
+  title: string
+  hint: string
+} {
+  if (engine === 'openlitespeed') {
+    return {
+      title: 'PHP settings (OpenLiteSpeed LSAPI)',
+      hint:
+        'Deploy gives this vhost its own lsphp LSAPI process under suEXEC (running as the assigned principal) and applies memory_limit / max_execution_time as phpIniOverride php_admin_value.',
+    }
+  }
+  const label = engineLabel(engine)
+  const handler = engine === 'apache' ? 'mod_proxy_fcgi' : 'fastcgi_pass'
+  return {
+    title: `PHP settings (${label} php-fpm)`,
+    hint: `Deploy installs a per-site php-fpm pool, points ${label} at its unix socket via ${handler}, and applies memory_limit / max_execution_time as pool php_admin_value.`,
+  }
+}
+
 export function hostingPhpSectionCopy(context: HostingServiceContext): {
   title: string
   hint: string
   showFields: boolean
 } {
   if (context.phpApplicability === 'applicable') {
-    return {
-      title: 'PHP settings (Apache mod_php)',
-      hint:
-        'Deploy installs libapache2-mod-php<version> when set and applies memory_limit / max_execution_time as vhost php_admin_value.',
-      showFields: true,
-    }
-  }
-  if (context.phpApplicability === 'ignored') {
-    return {
-      title: 'PHP settings (not used)',
-      hint: `${engineLabel(context.engine)} traditional-web is static-only — PHP hints are ignored. Use an Apache traditional-web service for mod_php, or share a hostname with path prefixes (e.g. / for static, /php for Apache).`,
-      showFields: false,
-    }
+    return { ...phpRuntimeCopy(context.engine), showFields: true }
   }
   return {
     title: 'PHP settings',
     hint:
-      'PHP options apply only to Apache traditional-web services. Containers use their image runtime; host PHP packages are not installed from this panel.',
+      'PHP options apply only to traditional-web services. Containers use their image runtime; host PHP packages are not installed from this panel.',
     showFields: false,
   }
 }
@@ -182,7 +198,7 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
     return {
       title: 'Web environment (not applied)',
       hint:
-        'OpenLiteSpeed traditional-web is static-only — web env hints are not applied to the process. Prefer hosting-scoped variables only when you later switch engines, or use Apache for SetEnv.',
+        'OpenLiteSpeed does not inject web env into the serving process — these hints are not applied. Prefer hosting-scoped variables, or use Apache traditional-web for SetEnv. (PHP hints above do apply.)',
       showFields: false,
     }
   }
@@ -197,9 +213,9 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
 export function hostingPathPrefixHint(context: HostingServiceContext): string {
   if (context.traditionalSiblingNames.length > 0) {
     const siblings = context.traditionalSiblingNames.join(', ')
-    return `Optional. Same hostname on another hosting can use a different prefix (e.g. / for static nginx, /php for Apache). Other traditional-web services in this environment: ${siblings}.`
+    return `Optional. Same hostname on another hosting can use a different prefix (e.g. / for the marketing site, /app for the application). Other traditional-web services in this environment: ${siblings}.`
   }
-  return 'Optional. Same hostname on another hosting can use a different prefix (e.g. / for static nginx, /php for a PHP site).'
+  return 'Optional. Same hostname on another hosting can use a different prefix (e.g. / for the marketing site, /app for the application).'
 }
 
 export function hostingDockerBridgeHint(

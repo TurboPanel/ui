@@ -9,6 +9,7 @@ import {
   type DeployPreviewComposeFile,
   type DeployPreviewResponse,
   type DeployPreviewSecretPlanEntry,
+  type DeployPreviewSource,
   type DeployPreviewServer,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
@@ -118,6 +119,22 @@ function secretPlanLine(entry: DeployPreviewSecretPlanEntry): string {
   return `${entry.composeServiceName} ${entry.key} → /run/secrets/${entry.target}${flagSuffix}`
 }
 
+/**
+ * `owner/repo@ref (commit) → release` for one Git-backed service.
+ *
+ * Preview resolves source shape without minting a token, so the commit shown
+ * for a GitHub source is the resolved head and for a generic source is the ref
+ * itself — see `deploy-sources.ts`. The release id is what this deploy *would*
+ * publish under, which is also the id a later rollback would name.
+ */
+function previewSourceLine(entry: DeployPreviewSource): string {
+  const repo = entry.cloneUrl.replace(/\.git$/, '')
+  const commit =
+    entry.commitSha.length > 7 ? entry.commitSha.slice(0, 7) : entry.commitSha
+  const where = entry.subdirectory ? ` [${entry.subdirectory}]` : ''
+  return `${entry.composeServiceName} ← ${repo}@${entry.ref}${where} (${commit}) → release ${entry.releaseId}`
+}
+
 function PreparedComposeSnapshot({
   preview,
 }: Readonly<{ preview: DeployPreviewResponse }>) {
@@ -125,6 +142,7 @@ function PreparedComposeSnapshot({
   const runtimeFile = servers.length > 0 ? undefined : runtimeComposeFile(preview)
   const envFile = preview.envFile?.trim() ?? ''
   const secretPlan = preview.secretPlan ?? []
+  const sources = preview.sources ?? []
 
   return (
     <View style={styles.layersList}>
@@ -160,6 +178,24 @@ function PreparedComposeSnapshot({
               style={orgPanelStyles.muted}
             >
               {secretPlanLine(entry)}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      {sources.length > 0 ? (
+        <View style={styles.layerSection}>
+          <View style={styles.layerHeader}>
+            <Text style={styles.layerFilename}>sources</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>Git</Text>
+            </View>
+          </View>
+          {sources.map((entry) => (
+            <Text
+              key={`${entry.composeServiceName}:${entry.releaseId}`}
+              style={orgPanelStyles.muted}
+            >
+              {previewSourceLine(entry)}
             </Text>
           ))}
         </View>

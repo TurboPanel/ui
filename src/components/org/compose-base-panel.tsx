@@ -1,9 +1,8 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import {
-  ComposeEditorSection,
-  ComposeSurfaceSectionTabs,
-} from '@/components/org/compose-editor-section'
+import { ComposeEditorSection } from '@/components/org/compose-editor-section'
+import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
+import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import type { ComposeDocument, ComposeEditorView } from '@/lib/compose'
 import { spacing } from '@/lib/theme'
 
@@ -22,6 +21,11 @@ export function ComposeBasePanel({
   hideSave = false,
   toolbarLeading,
   toolbarTrailing,
+  visualMode,
+  documentFacts,
+  onOpenScopeConfig,
+  renderHostingEditor,
+  renderReleasesPanel,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -41,6 +45,13 @@ export function ComposeBasePanel({
   hideSave?: boolean
   toolbarLeading?: ReactNode
   toolbarTrailing?: ReactNode
+  /** `document` draws the annotated compose file instead of form cards. */
+  visualMode?: 'cards' | 'document'
+  documentFacts?: ComposeDocFacts
+  onOpenScopeConfig?: () => void
+  renderHostingEditor?: (composeServiceName: string) => ReactNode
+  /** Inline releases + rollback for one Git-backed service (document lens). */
+  renderReleasesPanel?: (composeServiceName: string) => ReactNode
 }>) {
   return (
     <View style={styles.root}>
@@ -57,9 +68,14 @@ export function ComposeBasePanel({
         hideHeader={hideHeader}
         hideViewTabs={hideViewTabs || showSectionTabs}
         hideSave={hideSave}
-        surfaceTabs={showSectionTabs ? <ComposeSurfaceSectionTabs /> : undefined}
+        surfaceTabs={showSectionTabs ? <ComposeSurfaceNav /> : undefined}
         toolbarLeading={toolbarLeading}
         toolbarTrailing={toolbarTrailing}
+        {...(visualMode ? { visualMode } : {})}
+        {...(documentFacts ? { documentFacts } : {})}
+        {...(onOpenScopeConfig ? { onOpenScopeConfig } : {})}
+        {...(renderHostingEditor ? { renderHostingEditor } : {})}
+        {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
       />
     </View>
   )

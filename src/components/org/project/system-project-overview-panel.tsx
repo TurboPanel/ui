@@ -24,7 +24,8 @@ import {
   useCommandsBatch,
   type TrackedCommandEntry,
 } from '@/lib/queries/commands'
-import { useContainers, useServices } from '@/lib/queries'
+import { useContainers, useOrgServers, useServices } from '@/lib/queries'
+import { resolveServerLabel } from '@/lib/resource-labels'
 import { useRestartSystemComponent } from '@/lib/queries/system'
 import {
   composeDocumentToYaml,
@@ -259,6 +260,9 @@ export function SystemProjectOverviewPanel() {
 
   const services = servicesQuery.data?.services ?? []
   const containers = containersQuery.data?.containers ?? []
+  const serversQuery = useOrgServers(orgId)
+  // Falls back to the id itself while the fleet loads — never a blank target.
+  const serverLabel = resolveServerLabel(serverId, serversQuery.data?.servers)
   const restart = useRestartSystemComponent(orgId, serverId ?? '')
   const [localError, setLocalError] = useState<string | null>(null)
   const { pollError, setPollError, restartInFlight, registerRestart } =
@@ -321,10 +325,10 @@ export function SystemProjectOverviewPanel() {
           <MonoText>{systemComponentLabel(componentKey)}</MonoText>
         </Text>
 
-        {serverId ? (
+        {serverLabel ? (
           <Text style={orgPanelStyles.detailLine}>
             <Text style={orgPanelStyles.detailLabel}>Target server: </Text>
-            <MonoText>{serverId}</MonoText>
+            <MonoText>{serverLabel}</MonoText>
           </Text>
         ) : (
           <Text style={orgPanelStyles.muted}>

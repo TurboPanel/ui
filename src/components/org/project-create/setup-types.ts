@@ -43,7 +43,7 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     type: 'docker-compose',
     label: 'Services',
     description: 'The same stack, defined with service cards instead of YAML.',
-    section: 'services',
+    section: 'overview',
   },
   {
     choice: 'template',

@@ -40,19 +40,20 @@ describe('SETUP_TYPE_OPTIONS', () => {
     expect(new Set(types).size).toBeLessThan(types.length)
   })
 
-  it('makes Compose and Services the same project type, differing only by tab', () => {
+  it('makes Compose and Services the same project type, differing only by lens', () => {
     const compose = setupOptionForChoice('compose')
     const services = setupOptionForChoice('services')
     expect(compose?.type).toBe('docker-compose')
     expect(services?.type).toBe('docker-compose')
+    // Code lens vs the Document lens (annotated compose, on the overview path).
     expect(compose?.section).toBe('compose')
-    expect(services?.section).toBe('services')
+    expect(services?.section).toBe('overview')
   })
 
-  it('never opens a compose draft on Overview — the operator picked a surface', () => {
+  it('opens every compose draft on a lens the operator picked', () => {
     for (const option of SETUP_TYPE_OPTIONS) {
       if (option.type !== 'docker-compose') continue
-      expect(option.section).not.toBe('overview')
+      expect(['compose', 'overview']).toContain(option.section)
     }
   })
 

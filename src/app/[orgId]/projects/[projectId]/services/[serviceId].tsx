@@ -1,6 +1,7 @@
 import { Redirect, type Href, useLocalSearchParams } from 'expo-router'
 import { Text, View } from 'react-native'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
+import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -60,6 +61,18 @@ export default function ProjectServiceDetailScreen() {
           canManage={canManage && projectAllowsMutations}
         />
       </SectionPanel>
+      {selectedEnvironmentId ? (
+        // Only Git-backed services have releases, and the panel knows that
+        // better than this screen does: it hides itself when the service has
+        // never published one, so a container service shows no empty section.
+        <ServiceReleasesPanel
+          orgId={orgId}
+          environmentId={selectedEnvironmentId}
+          composeServiceName={composeName}
+          canManage={canManage && projectAllowsMutations}
+          hideWhenEmpty
+        />
+      ) : null}
     </View>
   )
 }

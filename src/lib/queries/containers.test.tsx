@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 import {
   useContainers,
-  useContainersByEnvironments,
+  useContainersByProject,
 } from '@/lib/queries/containers'
 
 const { fetchContainers } = vi.hoisted(() => ({
@@ -47,21 +47,50 @@ describe('containers query hooks', () => {
     expect(result.current.data?.containers).toHaveLength(1)
   })
 
-  it('useContainersByEnvironments maps per-environment results', async () => {
-    fetchContainers
-      .mockResolvedValueOnce({ containers: [{ id: 'ctr-a' }] })
-      .mockResolvedValueOnce({ containers: [{ id: 'ctr-b' }] })
+  it('useContainersByProject groups one project fetch by environment', async () => {
+    fetchContainers.mockResolvedValueOnce({
+      containers: [
+        { id: 'ctr-a', environmentId: 'env-a' },
+        { id: 'ctr-b', environmentId: 'env-b' },
+        { id: 'ctr-c', environmentId: 'env-b' },
+      ],
+    })
 
     const { result } = renderHook(
-      () => useContainersByEnvironments(orgId, ['env-a', 'env-b']),
+      () =>
+        useContainersByProject(orgId, 'proj-1', {
+          environmentIds: ['env-a', 'env-b', 'env-empty'],
+        }),
       { wrapper: createWrapper() },
     )
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)
     })
+    // One request for the whole project, never one per environment.
+    expect(fetchContainers).toHaveBeenCalledTimes(1)
+    expect(fetchContainers).toHaveBeenCalledWith({ projectId: 'proj-1' })
     expect(result.current.containersByEnv['env-a']).toHaveLength(1)
-    expect(result.current.containersByEnv['env-b']).toHaveLength(1)
+    expect(result.current.containersByEnv['env-b']).toHaveLength(2)
+    // Environments with nothing running still get a bucket to read.
+    expect(result.current.containersByEnv['env-empty']).toEqual([])
+  })
+
+  it('useContainersByProject buckets an environment absent from the id list', async () => {
+    fetchContainers.mockResolvedValueOnce({
+      containers: [{ id: 'ctr-new', environmentId: 'env-created-since' }],
+    })
+
+    const { result } = renderHook(
+      () =>
+        useContainersByProject(orgId, 'proj-1', { environmentIds: ['env-a'] }),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    expect(result.current.containersByEnv['env-created-since']).toHaveLength(1)
   })
 
   it('useContainers accepts observeUntilHostDeployed without changing the fetch', async () => {

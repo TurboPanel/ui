@@ -1604,6 +1604,12 @@ function EnvironmentLoadedPanels({
   showEnvironmentChrome?: boolean
   /** Hosting row id from a `?hostingId=` deep link on the Hosting tab. */
   focusHostingId?: string | null
+  /**
+   * Narrow the rendered rows to these compose services. The Document lens
+   * expands hosting for the one service the operator clicked, rather than
+   * sending them to a page listing every service.
+   */
+  filterServiceNames?: readonly string[]
 }>) {
   const showSection = (id: EnvironmentDetailSectionId) => sections.includes(id)
 
@@ -1887,6 +1893,7 @@ export function EnvironmentDetailBody({
   showComposeOverlay = true,
   sections,
   focusHostingId = null,
+  filterServiceNames,
 }: Readonly<{
   orgId: string
   projectId: string
@@ -1902,6 +1909,12 @@ export function EnvironmentDetailBody({
   sections?: readonly EnvironmentDetailSectionId[]
   /** Hosting row id from a `?hostingId=` deep link on the Hosting tab. */
   focusHostingId?: string | null
+  /**
+   * Narrow the rendered rows to these compose services. The Document lens
+   * expands hosting for the one service the operator clicked, rather than
+   * sending them to a page listing every service.
+   */
+  filterServiceNames?: readonly string[]
 }>) {
   const resolvedSections = sections ?? ALL_ENVIRONMENT_DETAIL_SECTIONS
   const showEnvironmentChrome = sections == null
@@ -2066,10 +2079,12 @@ export function EnvironmentDetailBody({
       ),
     [environment?.options?.compose, projectCompose],
   )
-  const serviceNames = useMemo(
-    () => composeServiceNames(mergedCompose),
-    [mergedCompose],
-  )
+  const serviceNames = useMemo(() => {
+    const all = composeServiceNames(mergedCompose)
+    if (!filterServiceNames) return all
+    const keep = new Set(filterServiceNames)
+    return all.filter((name) => keep.has(name))
+  }, [mergedCompose, filterServiceNames])
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
     [allServers, placementServerId],

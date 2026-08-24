@@ -47,68 +47,78 @@ export function useContainers(
   })
 }
 
-/** Per-environment container maps for Overview (no auto-poll unless observing). */
-export function useContainersByEnvironments(
+/**
+ * Every container in a project, grouped by environment.
+ *
+ * **One** request, not one per environment: `GET /containers?projectId=` stamps
+ * `environmentId` on each row so the grouping happens here. Platform projects
+ * place one environment per server, so the old per-environment fan-out scaled
+ * with the fleet — and with `observeUntilHostDeployed` it polled that way too.
+ *
+ * Pass `environmentIds` so environments with no containers still get an empty
+ * bucket (callers read `containersByEnv[id]` for status).
+ */
+export function useContainersByProject(
   orgId: string,
-  environmentIds: readonly string[],
+  projectId: string,
   options?: Readonly<{
     enabled?: boolean
+    /** Environments to guarantee a bucket for; memoize at the call site. */
+    environmentIds?: readonly string[]
     /** Platform (system) projects: poll until Docker identity is stamped. */
     observeUntilHostDeployed?: boolean
   }>,
 ) {
   const queryClient = useQueryClient()
-  const enabled = (options?.enabled ?? true) && orgId.length > 0
+  const enabled =
+    (options?.enabled ?? true) && orgId.length > 0 && projectId.length > 0
   const observeUntilHostDeployed = options?.observeUntilHostDeployed === true
-  const queries = useQueries({
-    queries: environmentIds.map((environmentId) => ({
-      queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
-      queryFn: () => fetchContainers({ environmentId }),
-      enabled: enabled && environmentId.length > 0,
-      refetchInterval: observeUntilHostDeployed
-        ? observationRefetchInterval
-        : false,
-    })),
+  const environmentIds = options?.environmentIds
+
+  const query = useQuery({
+    queryKey: queryKeys.org(orgId).containers.list({ projectId }),
+    queryFn: () => fetchContainers({ projectId }),
+    enabled,
+    refetchInterval: observeUntilHostDeployed
+      ? observationRefetchInterval
+      : false,
   })
 
-  const containersDataKey = queries
-    .map((query) => query.dataUpdatedAt)
-    .join(':')
+  const containers = query.data?.containers
 
   const containersByEnv = useMemo(() => {
     const map: Record<string, ContainerRecord[]> = {}
-    for (let index = 0; index < environmentIds.length; index++) {
-      const environmentId = environmentIds[index]
-      if (!environmentId) continue
-      map[environmentId] = queries[index]?.data?.containers ?? []
+    for (const environmentId of environmentIds ?? []) {
+      if (environmentId.length > 0) map[environmentId] = []
+    }
+    for (const row of containers ?? []) {
+      // An environment added since the caller's list was built has no bucket.
+      const bucket = (map[row.environmentId] ??= [])
+      bucket.push(row)
     }
     return map
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- containersDataKey tracks query data identity
-  }, [environmentIds, containersDataKey])
-
-  const isLoading =
-    enabled && environmentIds.length > 0 && queries.some((query) => query.isLoading)
+  }, [containers, environmentIds])
 
   const refetchAll = useCallback(async () => {
-    await Promise.all(
-      environmentIds.map((environmentId) =>
-        queryClient.refetchQueries({
-          queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
-        }),
-      ),
-    )
-  }, [environmentIds, orgId, queryClient])
+    await queryClient.refetchQueries({
+      queryKey: queryKeys.org(orgId).containers.list({ projectId }),
+    })
+  }, [orgId, projectId, queryClient])
 
+  // The project list is one query — refreshing "one" environment refreshes it.
   const refetchOne = useCallback(
-    async (environmentId: string) => {
-      await queryClient.refetchQueries({
-        queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
-      })
+    async (_environmentId: string) => {
+      await refetchAll()
     },
-    [orgId, queryClient],
+    [refetchAll],
   )
 
-  return { containersByEnv, isLoading, refetchAll, refetchOne }
+  return {
+    containersByEnv,
+    isLoading: enabled && query.isLoading,
+    refetchAll,
+    refetchOne,
+  }
 }
 
 /** Per-service container maps (no auto-poll). */

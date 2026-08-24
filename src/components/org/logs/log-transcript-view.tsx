@@ -34,7 +34,9 @@ const INITIAL_ROWS = 60
 const PHASE_LABELS: Readonly<Record<string, string>> = {
   prepare: 'Prepare',
   pull: 'Pull',
+  fetch: 'Fetch source',
   build: 'Build',
+  'release-promote': 'Promote release',
   'pre-deploy': 'Pre-deploy hooks',
   'compose-up': 'Compose up',
   health: 'Health check',

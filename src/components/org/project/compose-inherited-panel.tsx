@@ -1,11 +1,9 @@
 import { type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import {
-  ComposeEditorChrome,
-  ComposeSurfaceSectionTabs,
-} from '@/components/org/compose-editor-section'
+import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
+import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button } from '@/components/ui'
+import { Button, InlineNotice } from '@/components/ui'
 import {
   formatComposeImageRef,
   normalizeCompose,
@@ -27,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** Compact read-only rows for the Services backdrop: name, image/build, ports. */
+/** Compact read-only rows for the Services preview: name, image/build, ports. */
 function inheritedServices(document: unknown): InheritedService[] {
   const services = normalizeCompose(document).data.services
   if (!isRecord(services)) return []
@@ -50,24 +48,23 @@ function inheritedServices(document: unknown): InheritedService[] {
   })
 }
 
-function InheritedYamlBackdrop({ yaml }: Readonly<{ yaml: string }>) {
+function InheritedYamlPreview({ yaml }: Readonly<{ yaml: string }>) {
   return (
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={styles.scrollContent}
       nestedScrollEnabled
-      pointerEvents="none"
       accessibilityRole="text"
-      accessibilityLabel="Project compose (inherited, read only)"
+      accessibilityLabel="Project compose, read only"
     >
-      <Text style={styles.yamlText} selectable={false}>
+      <Text style={styles.yamlText} selectable>
         {yaml}
       </Text>
     </ScrollView>
   )
 }
 
-function InheritedServicesBackdrop({
+function InheritedServicesPreview({
   services,
 }: Readonly<{ services: InheritedService[] }>) {
   return (
@@ -75,8 +72,7 @@ function InheritedServicesBackdrop({
       style={styles.scroll}
       contentContainerStyle={styles.serviceList}
       nestedScrollEnabled
-      pointerEvents="none"
-      accessibilityLabel="Project services (inherited, read only)"
+      accessibilityLabel="Project services, read only"
     >
       {services.map((service) => (
         <View key={service.name} style={styles.serviceRow}>
@@ -93,10 +89,29 @@ function InheritedServicesBackdrop({
   )
 }
 
+/** What the environment actually deploys today, and how to stop inheriting it. */
+function inheritedDescription(
+  view: ComposeEditorView,
+  hasBase: boolean,
+): string {
+  if (!hasBase) {
+    return view === 'visual'
+      ? 'The project defines no services yet. Add an override to give this environment services of its own.'
+      : 'The project compose is empty. Add an override to give this environment compose of its own.'
+  }
+  return view === 'visual'
+    ? 'These services come from the project. Add an override to change only the ones this environment needs.'
+    : 'This environment deploys the project compose shown below. Add an override to change only the keys it needs.'
+}
+
 /**
- * Compose / Services tab for an environment with no overlay of its own: the
- * project base is rendered dimmed (what actually deploys) behind a card
- * explaining the inheritance and offering the two ways into an override.
+ * Compose / Services tab for an environment with no overlay of its own.
+ *
+ * The inheritance is stated in an inline notice at the top of the surface and
+ * the project compose is rendered plainly beneath it — readable, selectable,
+ * and labelled read-only. It is deliberately **not** a card over a dimmed
+ * backdrop: the whole point of the screen is to read what currently deploys,
+ * and a scrim made that unreadable.
  */
 export function ComposeInheritedPanel({
   view,
@@ -106,7 +121,7 @@ export function ComposeInheritedPanel({
   onCreateOverride,
   onCopyProjectCompose,
 }: Readonly<{
-  /** Which tab the panel stands in for — picks the backdrop. */
+  /** Which tab the panel stands in for — picks the preview shape. */
   view: ComposeEditorView
   projectCompose: unknown
   /** Visible (native Compose) YAML of the project base document. */
@@ -119,58 +134,45 @@ export function ComposeInheritedPanel({
   const hasBase =
     view === 'visual' ? services.length > 0 : projectYaml.trim().length > 0
 
-  let backdrop: ReactNode = <View style={styles.emptyBackdrop} />
-  if (hasBase) {
-    backdrop =
-      view === 'visual' ? (
-        <InheritedServicesBackdrop services={services} />
-      ) : (
-        <InheritedYamlBackdrop yaml={projectYaml} />
-      )
-  }
-
-  let description: string
-  if (!hasBase) {
-    description =
-      view === 'visual'
-        ? 'This environment has no compose of its own, and the project defines no services. Add an override to define services for this environment only.'
-        : 'This environment has no compose of its own, and the project compose is empty. Add an override to define services for this environment only.'
-  } else {
-    description =
-      view === 'visual'
-        ? 'These services come from the project compose — this environment adds nothing of its own. Add an override to change only the services this environment needs.'
-        : 'This environment has no compose of its own — it deploys the project compose shown behind this card. Add an override to change only the keys this environment needs.'
+  let actions: ReactNode = <Text style={orgPanelStyles.muted}>View only</Text>
+  if (canMutate) {
+    actions = (
+      <>
+        <Button
+          label="Create override"
+          variant="primary"
+          size="sm"
+          onPress={onCreateOverride}
+        />
+        {hasBase ? (
+          <Button
+            label="Start from project compose"
+            size="sm"
+            onPress={onCopyProjectCompose}
+          />
+        ) : null}
+      </>
+    )
   }
 
   return (
-    <ComposeEditorChrome tabs={<ComposeSurfaceSectionTabs />}>
+    <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
       <View style={styles.body}>
-        {backdrop}
-        <View style={styles.overlay} pointerEvents="box-none">
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Inherited from project compose</Text>
-            <Text style={styles.cardBody}>{description}</Text>
-            {canMutate ? (
-              <View style={styles.cardActions}>
-                <Button
-                  label="Create override"
-                  variant="primary"
-                  size="sm"
-                  onPress={onCreateOverride}
-                />
-                {hasBase ? (
-                  <Button
-                    label="Start from project compose"
-                    size="sm"
-                    onPress={onCopyProjectCompose}
-                  />
-                ) : null}
-              </View>
+        <InlineNotice
+          title="Inheriting project compose"
+          body={inheritedDescription(view, hasBase)}
+          actions={actions}
+        />
+        {hasBase ? (
+          <View style={styles.preview}>
+            <Text style={styles.previewLabel}>Project compose · read only</Text>
+            {view === 'visual' ? (
+              <InheritedServicesPreview services={services} />
             ) : (
-              <Text style={orgPanelStyles.muted}>View only</Text>
+              <InheritedYamlPreview yaml={projectYaml} />
             )}
           </View>
-        </View>
+        ) : null}
       </View>
     </ComposeEditorChrome>
   )
@@ -178,8 +180,24 @@ export function ComposeInheritedPanel({
 
 const styles = StyleSheet.create({
   body: {
-    position: 'relative',
-    minHeight: 240,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  preview: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgInset,
+    overflow: 'hidden',
+  },
+  previewLabel: {
+    color: colors.textLabel,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
   },
   scroll: {
     maxHeight: 420,
@@ -187,11 +205,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.sm,
   },
-  emptyBackdrop: {
-    minHeight: 240,
-  },
   yamlText: {
-    color: colors.textFaint,
+    color: colors.textBody,
     fontFamily: 'monospace',
     fontSize: 13,
     lineHeight: YAML_LINE_HEIGHT,
@@ -207,56 +222,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 8,
-    backgroundColor: colors.bgInset,
+    backgroundColor: colors.bgArea,
     paddingHorizontal: spacing.sm,
     paddingVertical: 10,
   },
   serviceName: {
-    color: colors.textDim,
+    color: colors.textChip,
     fontSize: 13,
     fontWeight: '700',
     flexShrink: 0,
   },
   serviceMeta: {
-    color: colors.textFaint,
+    color: colors.textMuted,
     fontFamily: 'monospace',
     fontSize: 12,
     flexShrink: 1,
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-    backgroundColor: 'rgba(0, 0, 0, 0.62)',
-  },
-  card: {
-    maxWidth: 460,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.md,
-  },
-  cardTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  cardBody: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.xs,
   },
 })

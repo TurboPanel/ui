@@ -23,6 +23,7 @@ function container(
   return {
     id: 'c1',
     serviceId: 's1',
+    environmentId: 'e1',
     serverId: 'srv1',
     containerId: 'abc123',
     containerName: 'name',

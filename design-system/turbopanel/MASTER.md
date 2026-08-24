@@ -125,6 +125,39 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 
 Default: **no decorative cards**. Use bordered panels only when they group an interaction (forms, expand rows, wizards). Background = `bgPanel` / `bgSecondary`, border = `borderSubtle`. Avoid shadow + radius + fill stacks that read as generic SaaS cards.
 
+### Navigation inside a surface
+
+**Before adding a nav list, check whether the things in it are actually peers.** Usually they are not: some are representations of one artifact, and the rest are properties of an object on screen. A flat list of destinations is the generic dev-tool layout, and it forces the operator to leave the thing they are looking at in order to configure it.
+
+- **Representations of one artifact** → a short **lens** switch (segmented control), fixed in size. Document · Map · Code on the project editor is the reference.
+- **Properties of an object** → hang them off that object and expand **inline** — a gutter fact on the row, not a page. See `ComposeDocumentView`.
+- **Properties of a scope** → one gear on the scope strip.
+- `SectionNav` (`src/components/ui/section-nav.tsx`) remains for genuinely short in-surface mode toggles. It is horizontal-only: **there is no rail variant**, and a side list of destinations is not an option in this product.
+- Counts belong on the item or in the gutter, never as a separate legend row.
+
+### Inline notices (state statements)
+
+- `InlineNotice` (`src/components/ui/inline-notice.tsx`) — left accent bar, title, optional body, optional actions. Info uses `colors.command`; warning uses `colors.pending`.
+- A message that explains the content beneath it belongs **in the flow**, above that content. Do not use a modal or a scrim for it: the dialog hides the thing being explained and demands a dismissal the user never asked for. Reserve modals for choices that must be made before anything else can happen.
+- Read-only content being explained should stay genuinely readable — recessed background, a `… · READ ONLY` micro-label, normal body contrast. Never dim it to illegibility to signal "not editable".
+
+### Selectors that grow
+
+- A fixed set (≤5) is a chip strip / segmented control. A list that grows with the fleet or the org gets a **searchable picker**: a trigger reading as the current selection, an anchored menu on desktop, a bottom sheet on compact, and a filter field once the list is long enough to scan (see `ProjectScopePicker`, `OrganizationSwitcherList`).
+- Never solve growth by letting a horizontal strip scroll — options then hide off-screen with no affordance.
+- Never label every row with the same string. If the natural name repeats (one resource per server), label by what differs (`src/lib/resource-labels.ts`).
+
+### Count tiles
+
+- **Inside a surface:** `StatTiles` (`src/components/ui/stat-tiles.tsx`) — icon + mono value + uppercase caption, fill-only (no border, so it does not read as a card inside a card), auto-fit grid. A zero count **dims**, it does not disappear: the set of resource types is itself information.
+- **Page level:** `StatusStatBoxes` (`src/components/org/status-stat-boxes.tsx`) — wider bordered label-first tiles for fleet / org glance numbers.
+- Never render counts as a run of `2 environments · 1 server · 3 services` text.
+
+### Diagram keys / legends
+
+- One quiet hairline pill, right-aligned under the canvas — chrome for the diagram, not a content block. Micro uppercase labels, `textDim`, small swatches that match the node shapes exactly.
+- Prefer labelling the node itself over growing the key.
+
 ### Tables / lists (Servers, Projects)
 
 - Dense rows, scannable status column (Online + optional flag / Offline)  

@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { usePathname } from 'expo-router'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import {
   composeDraftScopeKey,
@@ -26,23 +26,43 @@ import { ComposeInheritedPanel } from '@/components/org/project/compose-inherite
 import {
   ComposeHostingTab,
   ComposeServersTab,
+  ComposeSettingsTab,
+  ComposeStorageTab,
 } from '@/components/org/project/compose-resource-tabs'
 import {
   ComposeSavedView,
   type OverviewComposeSource,
 } from '@/components/org/project/compose-saved-view'
 import type { InventoryStripItem } from '@/components/org/project/compose-inventory-strip'
+import {
+  ComposeServersIcon,
+  ComposeVisualIcon,
+  ComposeStorageIcon,
+} from '@/components/org/compose-view-icons'
+import {
+  BindingResourceIcon,
+  EnvironmentResourceIcon,
+  NetworkResourceIcon,
+  VolumeResourceIcon,
+} from '@/components/icons/resource-icons'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
+import type {
+  ComposeDocFacts,
+  ComposeDocServiceFacts,
+} from '@/components/org/project/compose-document-view'
 import {
   ComposeDraftActionButtons,
   ComposeEditorChrome,
-  ComposeSurfaceSectionTabs,
 } from '@/components/org/compose-editor-section'
+import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
+import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
+import { useServiceReleases } from '@/lib/queries/releases'
 import { SystemProjectOverviewPanel } from '@/components/org/project/system-project-overview-panel'
 import {
   blockingComposeLintIssues,
@@ -61,31 +81,48 @@ import {
 import {
   type ContainerRecord,
   type EnvironmentRecord,
+  type HostingRecord,
   type ProjectRecord,
+  type ReleaseRecord,
   type ServiceRecord,
+  type StorageRecord,
 } from '@/lib/instance-api'
 import {
   parseComposeEditView,
   parseComposeProjectTab,
+  projectComposeSectionHref,
   type ComposeProjectTabId,
 } from '@/lib/project-navigation'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import { useContainersByServices, useServices } from '@/lib/queries'
+import {
+  useContainersByServices,
+  useHostingsByServices,
+  useOrgServers,
+  useServices,
+} from '@/lib/queries'
+import {
+  serverDisplayName,
+  type ServerNameSource,
+} from '@/lib/resource-labels'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
 import { useStorage } from '@/lib/queries/storage'
-import { isActiveContainerStatus } from '@/lib/container-status'
+import { isActiveContainerStatus, serviceStatusTone } from '@/lib/container-status'
 import {
   countDistinctProjectServers,
   resolveEffectiveServerId,
 } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
 
+/** Stable empty list so the facts memo does not thrash on every render. */
+const EMPTY_STORAGE: readonly StorageRecord[] = []
+
 /** Draft section tab → the editor view the compose surface renders. */
 function draftSectionView(
   section: ProjectDraft['section'],
 ): ComposeEditorView | null {
   if (section === 'compose') return 'editor'
-  if (section === 'services') return 'visual'
+  // Document lens — the annotated compose file.
+  if (section === 'overview') return 'visual'
   return null
 }
 
@@ -98,12 +135,21 @@ function resolveComposeActiveTab(
   return parseComposeProjectTab(pathname, projectId)
 }
 
+/**
+ * Which lens the surface renders: `visual` is the Document lens (annotated
+ * compose), `editor` is Code, and `null` is Map (the topology diagram, which
+ * is a read-only view rather than an editor).
+ */
 function resolveComposeSectionView(
   draft: ProjectDraft | null,
   pathname: string,
   projectId: string,
 ): ComposeEditorView | null {
   if (draft) return draftSectionView(draft.section)
+  const tab = parseComposeProjectTab(pathname, projectId)
+  if (tab === 'map') return null
+  if (tab === 'compose') return 'editor'
+  if (tab === 'overview') return 'visual'
   return parseComposeEditView(pathname, projectId)
 }
 
@@ -132,23 +178,31 @@ function isComposeServicesLoading(
   return serviceCount > 0 && containersLoading
 }
 
-/** Hosting / Servers are dedicated surface tabs; everything else is Overview · Compose · Services. */
+/**
+ * Hosting / Servers / Storage / Settings are dedicated surface tabs;
+ * everything else is Overview · Compose · Services.
+ */
 function composeSurfaceBody(
   activeTab: ComposeProjectTabId,
   overviewBody: ReactNode,
 ): ReactNode {
   if (activeTab === 'hosting') return <ComposeHostingTab />
   if (activeTab === 'servers') return <ComposeServersTab />
+  if (activeTab === 'storage') return <ComposeStorageTab />
+  if (activeTab === 'settings') return <ComposeSettingsTab />
   return overviewBody
 }
 
 function inventoryItem(
   key: string,
+  icon: InventoryStripItem['icon'],
   value: number,
   noun: string,
   pluralNoun?: string,
 ): InventoryStripItem {
-  return pluralNoun ? { key, value, noun, pluralNoun } : { key, value, noun }
+  return pluralNoun
+    ? { key, icon, value, noun, pluralNoun }
+    : { key, icon, value, noun }
 }
 
 /** Project scope counts project-wide storage; environment scope narrows to it. */
@@ -202,6 +256,10 @@ function ComposeEditorPanel({
   sessionKey,
   hideSave = false,
   onDraftChange,
+  documentFacts,
+  onOpenScopeConfig,
+  renderHostingEditor,
+  renderReleasesPanel,
 }: Readonly<{
   document: unknown
   onSave: (compose: ComposeDocument) => Promise<void>
@@ -210,6 +268,10 @@ function ComposeEditorPanel({
   sessionKey: string
   hideSave?: boolean
   onDraftChange?: (compose: ComposeDocument | null) => void
+  documentFacts?: ComposeDocFacts
+  onOpenScopeConfig?: () => void
+  renderHostingEditor?: (composeServiceName: string) => ReactNode
+  renderReleasesPanel?: (composeServiceName: string) => ReactNode
 }>) {
   return (
     <ComposeBasePanel
@@ -223,6 +285,12 @@ function ComposeEditorPanel({
       showSectionTabs
       {...(onDraftChange ? { onDraftChange } : {})}
       hideSave={hideSave}
+      // `visual` is the Document lens on the project surface.
+      visualMode="document"
+      {...(documentFacts ? { documentFacts } : {})}
+      {...(onOpenScopeConfig ? { onOpenScopeConfig } : {})}
+      {...(renderHostingEditor ? { renderHostingEditor } : {})}
+      {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
     />
   )
 }
@@ -262,12 +330,38 @@ function ProjectOverviewCompose({
 }>) {
   const projectSummary = summarizeComposeDocument(proposedDoc)
   const inventory: InventoryStripItem[] = [
-    inventoryItem('environments', environmentsCount, 'environment'),
-    inventoryItem('servers', projectServerCount, 'server'),
-    inventoryItem('services', projectSummary.services, 'service'),
-    inventoryItem('networks', projectSummary.networks, 'network'),
-    inventoryItem('volumes', projectSummary.volumes, 'volume'),
-    inventoryItem('storage', storageCount, 'storage volume', 'storage volumes'),
+    inventoryItem(
+      'environments',
+      EnvironmentResourceIcon,
+      environmentsCount,
+      'environment',
+    ),
+    inventoryItem('servers', ComposeServersIcon, projectServerCount, 'server'),
+    inventoryItem(
+      'services',
+      ComposeVisualIcon,
+      projectSummary.services,
+      'service',
+    ),
+    inventoryItem(
+      'networks',
+      NetworkResourceIcon,
+      projectSummary.networks,
+      'network',
+    ),
+    inventoryItem(
+      'volumes',
+      VolumeResourceIcon,
+      projectSummary.volumes,
+      'volume',
+    ),
+    inventoryItem(
+      'storage',
+      ComposeStorageIcon,
+      storageCount,
+      'storage volume',
+      'storage volumes',
+    ),
   ]
   return (
     <ComposeSavedView
@@ -346,21 +440,35 @@ function EnvironmentOverviewCompose({
     : isBlankComposeData(normalizeCompose(proposedOverlay).data)
   const envSummary = summarizeComposeDocument(merged)
   const inventory: InventoryStripItem[] = [
-    inventoryItem('servers', effectiveServerId ? 1 : 0, 'server'),
-    inventoryItem('services', envSummary.services, 'service'),
-    inventoryItem('networks', envSummary.networks, 'network'),
-    inventoryItem('volumes', envSummary.volumes, 'volume'),
-    inventoryItem('storage', storageCount, 'storage volume', 'storage volumes'),
-    inventoryItem('bindings', bindingsCount, 'binding'),
+    inventoryItem(
+      'servers',
+      ComposeServersIcon,
+      effectiveServerId ? 1 : 0,
+      'server',
+    ),
+    inventoryItem('services', ComposeVisualIcon, envSummary.services, 'service'),
+    inventoryItem(
+      'networks',
+      NetworkResourceIcon,
+      envSummary.networks,
+      'network',
+    ),
+    inventoryItem('volumes', VolumeResourceIcon, envSummary.volumes, 'volume'),
+    inventoryItem(
+      'storage',
+      ComposeStorageIcon,
+      storageCount,
+      'storage volume',
+      'storage volumes',
+    ),
+    inventoryItem('bindings', BindingResourceIcon, bindingsCount, 'binding'),
   ]
   return (
     <ComposeSavedView
       document={inheriting ? merged : proposedOverlay}
       summaryDocument={merged}
       inventory={inventory}
-      inheritedCaption={
-        inheriting ? 'Inherited from project compose' : null
-      }
+      inheritedCaption={inheriting ? 'Inheriting project compose' : null}
       orgId={orgId}
       projectId={projectId}
       services={services}
@@ -391,6 +499,8 @@ function ServicesPanelBody({
   sectionView,
   draft,
   canMutate,
+  documentFacts,
+  onOpenScopeConfig,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
 }: Readonly<{
@@ -410,10 +520,12 @@ function ServicesPanelBody({
   loading: boolean
   saving: boolean
   isStarted: boolean
-  /** null = Overview (saved view); editor/visual = Compose/Services tabs. */
+  /** null = Map lens (diagram); `visual` = Document, `editor` = Code. */
   sectionView: ComposeEditorView | null
   draft: ProjectDraft | null
   canMutate: boolean
+  documentFacts: ComposeDocFacts
+  onOpenScopeConfig: () => void
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
@@ -499,6 +611,8 @@ function ServicesPanelBody({
           saving={saving}
           editView={editView}
           sessionKey={scopeKey}
+          documentFacts={documentFacts}
+          onOpenScopeConfig={onOpenScopeConfig}
           {...(draft
             ? { hideSave: true, onDraftChange: draft.onDraftChange }
             : {})}
@@ -533,7 +647,7 @@ function ServicesPanelBody({
 
   if (!selectedEnvironment) {
     return (
-      <ComposeEditorChrome tabs={<ComposeSurfaceSectionTabs />}>
+      <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
         <Text style={orgPanelStyles.muted}>Select an environment.</Text>
       </ComposeEditorChrome>
     )
@@ -541,7 +655,7 @@ function ServicesPanelBody({
 
   if (loading) {
     return (
-      <ComposeEditorChrome tabs={<ComposeSurfaceSectionTabs />}>
+      <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
         <Text style={orgPanelStyles.muted}>Loading…</Text>
       </ComposeEditorChrome>
     )
@@ -580,6 +694,31 @@ function ServicesPanelBody({
         saving={saving}
         editView={editView}
         sessionKey={scopeKey}
+        documentFacts={documentFacts}
+        onOpenScopeConfig={onOpenScopeConfig}
+        renderHostingEditor={(composeServiceName) => (
+          <EnvironmentDetailBody
+            orgId={orgId}
+            projectId={projectId}
+            environmentId={selectedEnvironment.id}
+            embedded
+            showComposeOverlay={false}
+            sections={['hosting']}
+            filterServiceNames={[composeServiceName]}
+          />
+        )}
+        // Releases only exist per environment, so the fact is only offered on
+        // the environment scope — the project document has no environment to
+        // read a release list for.
+        renderReleasesPanel={(composeServiceName) => (
+          <ServiceReleasesPanel
+            orgId={orgId}
+            environmentId={selectedEnvironment.id}
+            composeServiceName={composeServiceName}
+            canManage={canMutate}
+            collapsible={false}
+          />
+        )}
       />
     )
   }
@@ -608,6 +747,7 @@ function ServicesPanelBody({
 
 export function ComposeServicesTab() {
   const pathname = usePathname()
+  const router = useRouter()
   const {
     orgId,
     projectId,
@@ -669,6 +809,9 @@ export function ComposeServicesTab() {
     enabled: servicesEnabled && serviceIds.length > 0,
   })
   const containersByService = containersQuery.containersByService
+  const hostingsQuery = useHostingsByServices(orgId, serviceIds, {
+    enabled: servicesEnabled && serviceIds.length > 0,
+  })
   const loading = isComposeServicesLoading(
     servicesEnabled,
     servicesQuery.isLoading,
@@ -677,6 +820,30 @@ export function ComposeServicesTab() {
   )
   const composeSaving =
     persistProjectCompose.isPending || persistEnvironmentCompose.isPending
+
+  const documentFacts = useComposeDocumentFacts({
+    orgId,
+    project,
+    selectedEnvironment,
+    baseSelected,
+    services,
+    containersByService,
+    hostingsByService: hostingsQuery.hostingsByService,
+    storage: storageQuery.data?.storage ?? EMPTY_STORAGE,
+    // Project scope is the shared compose, not a deployment — no status dots.
+    showStatus: !baseSelected,
+  })
+
+  const openScopeConfig = useCallback(() => {
+    router.push(
+      projectComposeSectionHref(
+        orgId,
+        projectId,
+        'settings',
+        baseSelected ? null : selectedEnvironmentId,
+      ) as Href,
+    )
+  }, [router, orgId, projectId, baseSelected, selectedEnvironmentId])
 
   const handleSaveProjectCompose = useCallback(
     async (compose: ComposeDocument) => {
@@ -766,6 +933,8 @@ export function ComposeServicesTab() {
             sectionView={sectionView}
             draft={draft}
             canMutate={canManage && projectAllowsMutations}
+            documentFacts={documentFacts}
+            onOpenScopeConfig={openScopeConfig}
             onSaveProjectCompose={handleSaveProjectCompose}
             onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
           />,
@@ -780,3 +949,143 @@ const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
   overviewCompose: { width: '100%', gap: spacing.md },
 })
+
+/** Short live commit per compose service, from the one unscoped releases read. */
+function liveCommitsByService(
+  releases: readonly ReleaseRecord[] | undefined,
+): Map<string, string> {
+  const byService = new Map<string, string>()
+  for (const release of releases ?? []) {
+    if (!release.isLive) continue
+    byService.set(release.composeServiceName, release.commitSha.slice(0, 7))
+  }
+  return byService
+}
+
+/** Gutter facts per compose service name — status, hostname, live release. */
+function serviceFactsByName(
+  params: Readonly<{
+    services: readonly ServiceRecord[]
+    containersByService: Record<string, ContainerRecord[]>
+    hostingsByService: Record<string, HostingRecord[]>
+    liveCommitByService: ReadonlyMap<string, string>
+    showStatus: boolean
+  }>,
+): Record<string, ComposeDocServiceFacts> {
+  const byService: Record<string, ComposeDocServiceFacts> = {}
+  for (const service of params.services) {
+    const name = service.composeServiceName
+    if (!name) continue
+    const tone = serviceStatusTone(params.containersByService[service.id] ?? [])
+    const liveCommit = params.liveCommitByService.get(name)
+    byService[name] = {
+      serviceId: service.id,
+      hostname: params.hostingsByService[service.id]?.[0]?.name ?? null,
+      ...(liveCommit ? { releaseLabel: `${liveCommit} live` } : {}),
+      ...(params.showStatus
+        ? { statusColor: tone.color, statusLabel: tone.label }
+        : {}),
+    }
+  }
+  return byService
+}
+
+/** Where each volume lives: its location server's label, else the provider name. */
+function storageLabelsByVolume(
+  storage: readonly StorageRecord[],
+  servers: readonly ServerNameSource[] | undefined,
+): Record<string, string> {
+  const byVolume: Record<string, string> = {}
+  for (const row of storage) {
+    const location = row.locations[0]
+    const locationServer = location?.serverId
+      ? servers?.find((server) => server.id === location.serverId)
+      : undefined
+    const where =
+      (locationServer ? serverDisplayName(locationServer) : null) ??
+      location?.provider ??
+      null
+    if (where) byVolume[row.name] = where
+  }
+  return byVolume
+}
+
+/**
+ * Live facts drawn in the Document lens gutter.
+ *
+ * Everything here is already fetched for the surface — status from containers,
+ * hostnames from the hosting rows, placement from the effective server pin. At
+ * Project scope there are no service rows (nothing is deployed there), so the
+ * document falls back to compose-only facts, which is the honest reading.
+ */
+function useComposeDocumentFacts({
+  orgId,
+  project,
+  selectedEnvironment,
+  baseSelected,
+  services,
+  containersByService,
+  hostingsByService,
+  storage,
+  showStatus,
+}: Readonly<{
+  orgId: string
+  project: ProjectRecord | null
+  selectedEnvironment: EnvironmentRecord | null
+  baseSelected: boolean
+  services: ServiceRecord[]
+  containersByService: Record<string, ContainerRecord[]>
+  hostingsByService: Record<string, HostingRecord[]>
+  storage: readonly StorageRecord[]
+  showStatus: boolean
+}>): ComposeDocFacts {
+  const serversQuery = useOrgServers(orgId)
+  const servers = serversQuery.data?.servers
+  // One unscoped read for the whole environment rather than one per service:
+  // the releases endpoint already returns every Git-backed service, and the
+  // gutter only needs the live row of each.
+  const releasesQuery = useServiceReleases(
+    orgId,
+    selectedEnvironment?.id ?? '',
+    undefined,
+    { enabled: Boolean(selectedEnvironment) },
+  )
+  const releases = releasesQuery.data?.releases
+
+  return useMemo(() => {
+    const effectiveServerId = baseSelected
+      ? project?.options?.defaultServerId ?? null
+      : resolveEffectiveServerId(
+          selectedEnvironment?.serverId ?? null,
+          project?.options?.defaultServerId,
+        )
+    const placementServer = effectiveServerId
+      ? servers?.find((row) => row.id === effectiveServerId)
+      : undefined
+
+    return {
+      byService: serviceFactsByName({
+        services,
+        containersByService,
+        hostingsByService,
+        liveCommitByService: liveCommitsByService(releases),
+        showStatus,
+      }),
+      placementLabel: placementServer
+        ? serverDisplayName(placementServer)
+        : null,
+      storageByVolume: storageLabelsByVolume(storage, servers),
+    }
+  }, [
+    services,
+    containersByService,
+    hostingsByService,
+    storage,
+    showStatus,
+    baseSelected,
+    project?.options?.defaultServerId,
+    selectedEnvironment?.serverId,
+    servers,
+    releases,
+  ])
+}
