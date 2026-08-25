@@ -24,11 +24,12 @@ const CATALOG: CatalogSummary[] = [
 ]
 
 describe('SETUP_TYPE_OPTIONS', () => {
-  it('groups the three compose lenses before the two catalog cards', () => {
+  it('groups the four compose lenses before the two catalog cards', () => {
     expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
       'Compose',
       'Services',
       'Repository',
+      'Hosting',
       'Template',
       'Managed',
     ])
@@ -147,5 +148,37 @@ describe('isCatalogEntrySelectable', () => {
 
   it('leaves templates always selectable', () => {
     expect(isCatalogEntrySelectable(entry('redis', 'template'), 'template')).toBe(true)
+  })
+})
+
+describe('the Hosting card', () => {
+  it('lands on the compose surface as docker-compose', () => {
+    // A site *is* a compose service — the format just declares almost nothing
+    // for it. A second creation path would need a second service writer, a
+    // second deploy-prepare, and second read paths.
+    const hosting = setupOptionForChoice('hosting')
+    expect(hosting?.type).toBe('docker-compose')
+    expect(hosting?.section).toBe('overview')
+  })
+
+  it('does not sit ahead of Compose', () => {
+    const labels = SETUP_TYPE_OPTIONS.map((option) => option.label)
+    expect(labels.indexOf('Hosting')).toBeGreaterThan(labels.indexOf('Compose'))
+  })
+
+  it('describes the capability without disparaging it', () => {
+    // PHP and WordPress hosting is a market to serve on purpose, not a legacy
+    // tail to tolerate. "traditional" / "legacy" / "classic" tell that audience
+    // they are a concession.
+    const text =
+      `${setupOptionForChoice('hosting')?.label} ${setupOptionForChoice('hosting')?.description}`
+        .toLowerCase()
+    for (const word of ['traditional', 'legacy', 'classic', 'old-school', 'still']) {
+      expect(text).not.toContain(word)
+    }
+  })
+
+  it('promises SFTP, which the access subsystem now delivers', () => {
+    expect(setupOptionForChoice('hosting')?.description).toContain('SFTP')
   })
 })

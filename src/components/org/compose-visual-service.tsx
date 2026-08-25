@@ -172,12 +172,12 @@ function PhpFields({
   engine,
   disabled,
   onChange,
-}: {
+}: Readonly<{
   php: ComposeServicePhpExtension | undefined
   engine: SiteEngine
   disabled: boolean
   onChange: (php: ComposeServicePhpExtension | undefined) => void
-}) {
+}>) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const settings = php?.settings ?? {}
   const pool = php?.pool ?? {}
@@ -188,7 +188,7 @@ function PhpFields({
       const block = next[field]
       if (block && Object.keys(block).length === 0) delete next[field]
     }
-    if (next.extensions && next.extensions.length === 0) delete next.extensions
+    if (next.extensions?.length === 0) delete next.extensions
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
   const setBlockValue = (
@@ -196,7 +196,7 @@ function PhpFields({
     key: string,
     raw: string,
   ) => {
-    const block = { ...(php?.[field] ?? {}) }
+    const block = { ...php?.[field] }
     const trimmed = raw.trim()
     if (trimmed === '') delete block[key]
     else block[key] = trimmed
@@ -205,7 +205,7 @@ function PhpFields({
   const toggleExtension = (name: string) => {
     const next = extensions.includes(name)
       ? extensions.filter((entry) => entry !== name)
-      : [...extensions, name].sort()
+      : [...extensions, name].sort((a, b) => a.localeCompare(b))
     emit({ ...php, extensions: next })
   }
 

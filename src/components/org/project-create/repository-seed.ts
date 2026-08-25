@@ -127,3 +127,50 @@ export function parseRepositoryCompose(
     return undefined
   }
 }
+
+/**
+ * Seed the compose draft for the **Hosting** card: one site, no repository.
+ *
+ * Deliberately not a separate creation path. Every deployable in TurboPanel
+ * resolves through `environment → service → hosting`, and `service` rows are
+ * written only by `reconcileServicesFromCompose` — a non-compose entry point
+ * would need a second writer, a second deploy-prepare, and second read paths,
+ * which is a parallel product that will drift. A site already *is* "a directory
+ * and an account"; compose is just the declaration format, and for a site it
+ * declares almost nothing.
+ *
+ * `sourceKind: 'managed-directory'` is what makes the webroot the principal's
+ * rather than a release tree the daemon publishes into. It names the trade
+ * explicitly — the tree the engine executes is writable by the account running
+ * it — which is right for an application that writes to itself and wrong for a
+ * built one. Connecting a repository later flips this one field.
+ *
+ * Caddy by default: a static site then needs no engine choice, no PHP pool, and
+ * no vhost tuning at all. PHP is one field away on the Services tab.
+ */
+export function seedHostingCompose(params: {
+  serviceName?: string
+  root?: string
+  engine?: 'caddy' | 'nginx' | 'apache' | 'openlitespeed'
+  /** Turn PHP on with the default series. Omit for a static site. */
+  php?: boolean
+}): ComposeDocument {
+  const service = patchServiceTurbopanelExtension(
+    {},
+    {
+      serviceKind: 'site',
+      engine: params.engine ?? DEFAULT_SITE_ENGINE,
+      root: params.root ?? 'public',
+      sourceKind: 'managed-directory',
+      // An empty `php: {}` is a no-op twice over — the extension parser drops an
+      // empty block and the daemon's `siteNeedsPhp` requires a non-empty one —
+      // so naming the default series is what actually turns PHP on.
+      ...(params.php ? { php: { version: DEFAULT_PHP_SERIES } } : {}),
+    },
+  )
+  return {
+    version: 1,
+    data: { services: { [params.serviceName ?? 'site']: service } },
+    presentation: { keyOrder: ['services'], comments: {} },
+  }
+}

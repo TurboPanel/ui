@@ -24,6 +24,7 @@ export type SetupChoice =
   | 'compose'
   | 'services'
   | 'repository'
+  | 'hosting'
   | 'template'
   | 'managed'
 
@@ -64,6 +65,24 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     label: 'Repository',
     description:
       "Read a repository you've connected — its compose file, a site, or an app. Pick the repo and branch.",
+    section: 'overview',
+  },
+  {
+    // Fourth `docker-compose` card, and the one an operator moving a WordPress
+    // or plain-PHP site reaches for. It sits with the other compose lenses
+    // rather than off on its own, because a site *is* a compose service — the
+    // format just declares almost nothing for it.
+    //
+    // Still after Compose, for the same reason Repository is: a bare
+    // `?type=docker-compose` resolves to the first card offering that type, and
+    // that has always meant the blank YAML slate.
+    choice: 'hosting',
+    type: 'docker-compose',
+    label: 'Hosting',
+    // No mention of "traditional", "legacy", or "classic". This describes a
+    // capability, and it is one a very large share of the web actually uses.
+    description:
+      'A directory and an account. Upload over SFTP and serve it — static, PHP, or WordPress.',
     section: 'overview',
   },
   {

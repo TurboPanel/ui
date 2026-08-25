@@ -3,9 +3,13 @@ import {
   repositoryServiceName,
   parseRepositoryCompose,
   seedComposeForLane,
+  seedHostingCompose,
 } from '@/components/org/project-create/repository-seed'
 import { lintComposeYaml, composeDocumentToYaml } from '@/lib/compose'
-import { readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
+import {
+  DEFAULT_PHP_SERIES,
+  readServiceTurbopanelExtension,
+} from '@/lib/compose/service-kind'
 import type { SourceRecord } from '@/lib/instance-api'
 
 const SOURCE_ID = '11111111-2222-4333-8444-555555555555'
@@ -196,5 +200,55 @@ describe('parseRepositoryCompose', () => {
   it('rejects a compose file with no services mapping', () => {
     expect(parseRepositoryCompose('name: just-a-name\n')).toBeUndefined()
     expect(parseRepositoryCompose('')).toBeUndefined()
+  })
+})
+
+describe('seedHostingCompose', () => {
+  it('seeds one uploaded-directory site with no repository binding', () => {
+    const document = seedHostingCompose({})
+    const services = document.data.services as Record<string, Record<string, unknown>>
+    const names = Object.keys(services)
+    expect(names).toEqual(['site'])
+
+    const extension = readServiceTurbopanelExtension(services.site!)
+    expect(extension?.serviceKind).toBe('site')
+    expect(extension?.sourceKind).toBe('managed-directory')
+    expect(extension?.engine).toBe('caddy')
+    expect(extension?.root).toBe('public')
+    // No repository: a site with one serves its published release, and the
+    // control plane rejects the combination at save.
+    expect(extension?.source).toBeUndefined()
+  })
+
+  it('turns PHP on by naming a series, never with an empty block', () => {
+    // `php: {}` is a no-op twice over — the extension parser drops an empty
+    // block and the daemon's `siteNeedsPhp` requires a non-empty one.
+    const extension = readServiceTurbopanelExtension(
+      (seedHostingCompose({ php: true }).data.services as Record<
+        string,
+        Record<string, unknown>
+      >).site!,
+    )
+    expect(extension?.php?.version).toBe(DEFAULT_PHP_SERIES)
+
+    const staticSite = readServiceTurbopanelExtension(
+      (seedHostingCompose({}).data.services as Record<
+        string,
+        Record<string, unknown>
+      >).site!,
+    )
+    expect(staticSite?.php).toBeUndefined()
+  })
+
+  it('honours an explicit engine, root, and service name', () => {
+    const document = seedHostingCompose({
+      serviceName: 'blog',
+      engine: 'apache',
+      root: 'www',
+    })
+    const services = document.data.services as Record<string, Record<string, unknown>>
+    const extension = readServiceTurbopanelExtension(services.blog!)
+    expect(extension?.engine).toBe('apache')
+    expect(extension?.root).toBe('www')
   })
 })

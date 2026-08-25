@@ -224,3 +224,41 @@ repository on the service itself.
 - ❌ Calling Managed "a database" — it is whatever the catalog offers, described by its treatment
 - ❌ Separate draft/runtime status field
 - ❌ Naming Redis / ClickHouse as coming on the Managed type card
+
+## The Hosting card
+
+Fourth `docker-compose` card, after Repository. It seeds one site with
+`sourceKind: managed-directory` — a webroot the account fills over SFTP — and
+opens straight on the compose surface. Not a separate creation path: every
+deployable resolves through `environment → service → hosting` and `service` rows
+are written only by `reconcileServicesFromCompose`, so a non-compose entry point
+would need a second writer, a second deploy-prepare, and second read paths. A
+site already *is* "a directory and an account"; compose is just the declaration
+format, and for a site it declares almost nothing.
+
+Caddy by default, static by default: PHP is one field away on the Services tab,
+and an empty `php: {}` block would be a no-op twice over, so turning it on means
+naming a series.
+
+**Copy rules.** Describe the capability, never the vintage. No "traditional",
+"legacy", "classic", or "still" — PHP and WordPress hosting is a market to serve
+on purpose, and those words tell that audience they are a concession. A test
+asserts the card's text carries none of them.
+
+The card may now promise SFTP, because the access subsystem landed first. That
+ordering was the point: without it the card would ship a webroot nobody could
+put a file into.
+
+**The account is the missing half, and the UI says so before Deploy does.** A
+managed-directory site needs a project principal stewarding its service, and
+service rows do not exist until deploy-prepare — so a freshly created Hosting
+project always starts unowned. The principals section renders an
+`InlineNotice` naming the sites that have no account yet
+(`unownedManagedDirectorySites`), which is where the fix is one control away.
+Deploy-prepare still refuses the combination
+(`site_managed_directory_unowned`), but that is the moment the operator presses
+Deploy, not the moment they can still act.
+
+❌ Do not add a second, non-compose "create a website" flow.
+❌ Do not seed `php: {}`.
+❌ Do not let the card imply TurboPanel hosts or builds anything remotely.

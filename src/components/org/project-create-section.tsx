@@ -11,6 +11,7 @@ import { DetailsStep } from '@/components/org/project-create/details-step'
 import {
   parseRepositoryCompose,
   seedComposeForLane,
+  seedHostingCompose,
 } from '@/components/org/project-create/repository-seed'
 import { LaneStep } from '@/components/org/project-create/lane-step'
 import {
@@ -53,6 +54,10 @@ import {
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectOverviewHref } from '@/lib/project-navigation'
+import type {
+  RepositoryInspection,
+  SourceRecord,
+} from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
@@ -151,6 +156,37 @@ function stepTitle(step: Step, option: SetupTypeOption | null): string {
       : 'Choose a database'
   }
   return STEP_COPY[step].title
+}
+
+/**
+ * Compose seed for the chosen lane, built from what the repository read found.
+ *
+ * The compose lane uses the repository's own document. Parsing can fail on YAML
+ * we did not write, so it falls back to the static lane's shape rather than
+ * seeding a draft the operator cannot create from.
+ */
+function seedForRepositoryLane(
+  source: SourceRecord,
+  branch: string,
+  lane: RepositoryLane,
+  inspection: RepositoryInspection | undefined,
+): ComposeDocument {
+  const files = inspection?.files ?? []
+  const composePath = detectedComposePath(files)
+  const composeFile = files.find(
+    (file) => file.path === composePath && file.found,
+  )
+  const repositoryCompose = composeFile?.content
+    ? parseRepositoryCompose(composeFile.content)
+    : undefined
+  const root = rootFromEntries(inspection?.entries ?? [])
+  return seedComposeForLane({
+    source,
+    branch,
+    lane: lane === 'compose' && !repositoryCompose ? 'static' : lane,
+    ...(repositoryCompose ? { repositoryCompose } : {}),
+    ...(root ? { root } : {}),
+  })
 }
 
 /**
@@ -364,6 +400,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
       setComposeDoc(emptyComposeDocument())
       setSeededRepositoryKey('')
     }
+    // Hosting opens on a draft rather than a blank slate: the whole card is
+    // "one site, already declared", and making the operator write four lines of
+    // `x-turbopanel` by hand would be the opposite of what it offers.
+    if (option.choice === 'hosting') setComposeDoc(seedHostingCompose({}))
     setStep(stepForOption(option))
   }
 
@@ -396,29 +436,13 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     const seedKey =
       `${selectedSource.id}@${repositoryBranch.trim()}#${selectedLane}`
     if (seedKey !== seededRepositoryKey) {
-      const files = inspection.data?.files ?? []
-      const composePath = detectedComposePath(files)
-      const composeFile = composePath
-        ? files.find((file) => file.path === composePath && file.found)
-        : undefined
-      // The compose lane uses the repository's own document. Parsing can fail
-      // on YAML we did not write, so fall back to the static lane's shape
-      // rather than seeding a draft the operator cannot create from.
-      const repositoryCompose = composeFile?.content
-        ? parseRepositoryCompose(composeFile.content)
-        : undefined
       setComposeDoc(
-        seedComposeForLane({
-          source: selectedSource,
-          branch: repositoryBranch,
-          lane: selectedLane === 'compose' && !repositoryCompose
-            ? 'static'
-            : selectedLane,
-          ...(repositoryCompose ? { repositoryCompose } : {}),
-          ...(rootFromEntries(inspection.data?.entries ?? [])
-            ? { root: rootFromEntries(inspection.data?.entries ?? []) }
-            : {}),
-        }),
+        seedForRepositoryLane(
+          selectedSource,
+          repositoryBranch,
+          selectedLane,
+          inspection.data,
+        ),
       )
       setSeededRepositoryKey(seedKey)
     }

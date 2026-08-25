@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View, type TextStyle } from 'react-native'
-import { Badge, Button, EmptyState, LoadingState, TextField } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  EmptyState,
+  InlineNotice,
+  LoadingState,
+  TextField,
+} from '@/components/ui'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
@@ -9,6 +16,7 @@ import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { usePersistProjectCompose } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
+import { unownedManagedDirectorySites } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
   type EnvironmentRecord,
@@ -63,6 +71,7 @@ export function ProjectPrincipalsSection({
   embedded?: boolean
 }>) {
   const principalsQuery = useProjectPrincipals(orgId, projectId)
+  const projectQuery = useProject(orgId, projectId)
   const environmentsQuery = useEnvironments(orgId, projectId)
   const environments = orEmptyArray(environmentsQuery.data?.environments)
   const environmentIds = useMemo(
@@ -79,7 +88,12 @@ export function ProjectPrincipalsSection({
   )
   const [savingAccess, setSavingAccess] = useState<Set<string>>(new Set())
 
-  const principals = principalsQuery.data?.principals ?? []
+  // Memoized because the `?? []` fallback is a fresh array on every render,
+  // and `unownedSites` below depends on it.
+  const principals = useMemo(
+    () => principalsQuery.data?.principals ?? [],
+    [principalsQuery.data],
+  )
   const serviceOptions = useMemo(() => {
     const flat: ProjectServiceOption[] = []
     for (const env of environments) {
@@ -100,6 +114,31 @@ export function ProjectPrincipalsSection({
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
   const [savingAssignments, setSavingAssignments] = useState<Set<string>>(
     () => new Set(),
+  )
+
+  /**
+   * Uploaded-directory sites with no account to own them.
+   *
+   * Deploy-prepare already refuses this, but that is the moment the operator
+   * presses Deploy — this says it while the fix is one control away. Before the
+   * first deploy there are no service rows at all, so a freshly created Hosting
+   * project lands here by construction, which is exactly when it is useful.
+   */
+  const unownedSites = useMemo(
+    () =>
+      unownedManagedDirectorySites({
+        document: projectQuery.data?.project?.options?.compose,
+        services: environments.flatMap(
+          (env) => servicesByEnvQuery.servicesByEnv[env.id] ?? [],
+        ),
+        principals,
+      }),
+    [
+      projectQuery.data,
+      environments,
+      servicesByEnvQuery.servicesByEnv,
+      principals,
+    ],
   )
 
   const loading =
@@ -244,6 +283,19 @@ export function ProjectPrincipalsSection({
   const body = (
     <>
       {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {unownedSites.length > 0 ? (
+        <InlineNotice
+          tone="warning"
+          title={
+            unownedSites.length === 1
+              ? `"${unownedSites[0]}" has no account yet`
+              : `${unownedSites.length} sites have no account yet`
+          }
+          body={`An uploaded-directory site is a directory and an account — the webroot belongs to the account, and without one there is nobody to upload as. Add a system user below and assign it to ${
+            unownedSites.length === 1 ? 'that service' : 'those services'
+          }.`}
+        />
+      ) : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
       {!loading && principals.length === 0 ? (
         <EmptyState title="No principals yet." />

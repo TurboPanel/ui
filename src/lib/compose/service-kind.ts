@@ -78,6 +78,22 @@ export type ComposeServiceTurbopanelExtension = {
    */
   root?: string
   /**
+   * Where a `site` service's content comes from. Omitted means `release`.
+   *
+   * `release` is a Git-backed immutable tree the daemon publishes and only ever
+   * asserts. `managed-directory` is a principal-writable `webroot/` the tenant
+   * fills over SFTP — "a directory and a principal", which is what a WordPress
+   * or plain-PHP site actually wants.
+   *
+   * An explicit field rather than an inference from whether `source` is set,
+   * because the two differ in a property worth stating out loud: a managed
+   * directory gives up the immutable-release guarantee, so the tree the engine
+   * executes is writable by the account running it. That is the right trade for
+   * an application that writes to itself by design and the wrong one for a
+   * built application.
+   */
+  sourceKind?: SiteSourceKind
+  /**
    * Optional human description (TurboPanel-only metadata; not used by Docker).
    */
   description?: string
@@ -117,6 +133,21 @@ const SITE_ENGINES = new Set<SiteEngine>([
   'openlitespeed',
 ])
 const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
+
+/** Where a site's content comes from. Omitted means `release`. */
+export type SiteSourceKind = 'release' | 'managed-directory'
+
+export const SITE_SOURCE_KINDS = new Set<SiteSourceKind>([
+  'release',
+  'managed-directory',
+])
+
+function readSiteSourceKind(value: unknown): SiteSourceKind | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!SITE_SOURCE_KINDS.has(trimmed as SiteSourceKind)) return undefined
+  return trimmed as SiteSourceKind
+}
 
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -247,6 +278,7 @@ export function parseServiceTurbopanelExtension(
     framework: readNativeRuntimeFramework(value.framework),
     nodeVersion: readNodeVersion(value.nodeVersion),
     root: readBoundedString(value.root, Number.POSITIVE_INFINITY),
+    sourceKind: readSiteSourceKind(value.sourceKind),
     description: readBoundedString(value.description, SERVICE_DESCRIPTION_MAX_LENGTH),
     source: parseServiceSourceExtension(value.source) ?? undefined,
     php: parseServicePhpExtension(value.php) ?? undefined,
@@ -341,6 +373,9 @@ function dropFieldsForOtherKinds(
     delete next.root
     // PHP belongs to a site; a container's runtime comes from its image.
     delete next.php
+    // Where content comes from is a site question: a container's comes from its
+    // image, and a node app's from its release.
+    delete next.sourceKind
   }
   if (next.serviceKind !== 'node') {
     delete next.framework
@@ -385,6 +420,9 @@ export function patchServiceTurbopanelExtension(
   if (next.serviceKind) cleaned.serviceKind = next.serviceKind
   if (next.engine) cleaned.engine = next.engine
   if (next.root) cleaned.root = next.root
+  // Whitelisted like every other field — a key missing from this list is
+  // silently dropped on every patch, which is how `php` was once being lost.
+  if (next.sourceKind) cleaned.sourceKind = next.sourceKind
   if (next.framework) cleaned.framework = next.framework
   if (next.nodeVersion) cleaned.nodeVersion = next.nodeVersion
   if (next.description) cleaned.description = next.description
