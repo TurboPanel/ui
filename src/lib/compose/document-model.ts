@@ -91,6 +91,13 @@ function mapEntries(value: unknown): [string, Record<string, unknown>][] {
   ])
 }
 
+/** Compose scalars arrive as strings or numbers; anything else is not a value. */
+function scalarText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((entry): entry is string => typeof entry === 'string')
@@ -116,9 +123,9 @@ function portStrings(value: unknown): string[] {
       continue
     }
     if (isMap(entry)) {
-      const published = entry.published ?? ''
-      const target = entry.target ?? ''
-      const text = published ? `${String(published)}:${String(target)}` : String(target)
+      const published = scalarText(entry.published)
+      const target = scalarText(entry.target)
+      const text = published ? `${published}:${target}` : target
       if (text.length > 0 && text !== ':') out.push(text)
     }
   }

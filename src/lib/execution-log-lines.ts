@@ -49,7 +49,8 @@ export function stripAnsi(value: string): string {
  * results — so a viewer that equates "stderr" with "error" paints an entire
  * successful image pull red. Recognising these separates a layer download from
  * a real diagnostic. `Error` and `Warning` are deliberately absent: those stay
- * flagged. Longest-first so `Pulling fs layer` wins over `Pulling`.
+ * flagged. Matched as whole phrases, so a multi-word status is never mistaken
+ * for its first word.
  */
 const DOCKER_PROGRESS_STATUSES = [
   'Pulling fs layer',
@@ -85,15 +86,14 @@ const DOCKER_PROGRESS_STATUSES = [
   'Pushed',
   'Exists',
   'Built',
-].join('|')
+]
 
-/**
- * `<name…> <Status> [<statusText>]` — Compose's plain-progress writer prints
- * exactly `id text statusText`, where the id half can be several words
- * (`Image adminer:latest`, `Container web-1`).
- */
-const DOCKER_PROGRESS_LINE = new RegExp(
-  String.raw`^\s*\S.*?\s(?:${DOCKER_PROGRESS_STATUSES})(?:\s+\S+)?\s*$`,
+/** Lookup for {@link DOCKER_PROGRESS_STATUSES}, keyed by the status phrase. */
+const DOCKER_PROGRESS_STATUS_SET = new Set(DOCKER_PROGRESS_STATUSES)
+
+/** Longest status phrase, in words — `Pulling fs layer`. */
+const DOCKER_PROGRESS_STATUS_WORDS = Math.max(
+  ...DOCKER_PROGRESS_STATUSES.map((status) => status.split(' ').length),
 )
 
 /**
@@ -103,9 +103,30 @@ const DOCKER_PROGRESS_LINE = new RegExp(
  */
 const EMPTY_PROGRESS_SIZE = /\s+[01]B$/
 
-/** True when a line is ordinary Docker progress rather than a diagnostic. */
+/**
+ * True when a line is ordinary Docker progress rather than a diagnostic.
+ *
+ * `<name…> <Status> [<statusText>]` — Compose's plain-progress writer prints
+ * exactly `id text statusText`, where the id half can be several words
+ * (`Image adminer:latest`, `Container web-1`). Matched by scanning the tail
+ * tokens rather than with one regex: the id half is unbounded, so a pattern
+ * that lets it swallow spaces backtracks over the whole line on every miss.
+ */
 export function isDockerProgressLine(message: string): boolean {
-  return DOCKER_PROGRESS_LINE.test(message)
+  const words = message.split(/\s+/).filter((word) => word.length > 0)
+  // The status never opens the line — an id always precedes it …
+  for (let trailing = 0; trailing <= 1; trailing++) {
+    // … and at most one word of `statusText` may follow it.
+    const end = words.length - trailing
+    for (let size = 1; size <= DOCKER_PROGRESS_STATUS_WORDS; size++) {
+      const start = end - size
+      if (start < 1) break
+      if (DOCKER_PROGRESS_STATUS_SET.has(words.slice(start, end).join(' '))) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 /**
