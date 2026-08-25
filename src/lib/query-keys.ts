@@ -183,6 +183,16 @@ export const queryKeys = {
         catalog: ['org', orgId, 'project-catalog'] as const,
         principals: (projectId: string) =>
           ['org', orgId, 'project', projectId, 'principals'] as const,
+        principalSshKeys: (projectId: string, principalId: string) =>
+          [
+            'org',
+            orgId,
+            'project',
+            projectId,
+            'principals',
+            principalId,
+            'ssh-keys',
+          ] as const,
       },
 
       environments: {

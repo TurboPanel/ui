@@ -1,10 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  addPrincipalSshKey,
   configureProject,
   createProject,
   createProjectPrincipal,
+  deletePrincipalSshKey,
   deleteProject,
   deleteProjectPrincipal,
+  fetchPrincipalSshKeys,
   fetchProject,
   fetchProjectCatalog,
   fetchProjectPrincipals,
@@ -13,6 +16,7 @@ import {
   updateProjectPrincipal,
   updateProjectPrincipalAssignments,
   type ConfigureProjectBody,
+  type PrincipalAccessLevel,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
@@ -149,9 +153,9 @@ export function useCreateProjectPrincipal(orgId: string, projectId: string) {
 }
 
 /**
- * Patch a principal's stewards and/or its runtime entitlements.
+ * Patch a principal's stewards, runtime entitlements, and/or SSH access.
  *
- * Both fields are optional and forwarded only when present: the API reads
+ * Every field is optional and forwarded only when present: the API reads
  * absent as "leave them alone" and `[]` as "revoke everything", so a
  * steward-only edit must not carry an empty entitlement list.
  */
@@ -165,6 +169,7 @@ export function useUpdateProjectPrincipal(orgId: string, projectId: string) {
       principalId: string
       serviceIds?: string[]
       entitlements?: { runtime: string; series: string }[]
+      access?: PrincipalAccessLevel
     }) => updateProjectPrincipal(projectId, principalId, patch),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -205,5 +210,81 @@ export function useDeleteProjectPrincipal(orgId: string, projectId: string) {
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
       })
     },
+  })
+}
+
+/**
+ * Keys that may authenticate as one principal.
+ *
+ * Keyed per principal rather than folded into the principals list: a key list
+ * is opened for one account at a time, and refetching every account's keys
+ * because one changed would be work nobody asked for.
+ */
+export function usePrincipalSshKeys(
+  orgId: string,
+  projectId: string,
+  principalId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).projects.principalSshKeys(
+      projectId,
+      principalId,
+    ),
+    queryFn: () => fetchPrincipalSshKeys(projectId, principalId),
+    enabled: enabled && Boolean(orgId && projectId && principalId),
+  })
+}
+
+/**
+ * Both key mutations invalidate the principals list as well as the key list:
+ * the list carries `sshKeyCount`, and an account's *effective* access depends
+ * on whether it holds any key at all. Refreshing only the keys would leave the
+ * row still reading "No access" after the first key was added.
+ */
+export function useAddPrincipalSshKey(
+  orgId: string,
+  projectId: string,
+  principalId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: { name: string; publicKey: string }) =>
+      addPrincipalSshKey(projectId, principalId, body),
+    onSuccess: async () => {
+      await invalidatePrincipalKeys(queryClient, orgId, projectId, principalId)
+    },
+  })
+}
+
+export function useDeletePrincipalSshKey(
+  orgId: string,
+  projectId: string,
+  principalId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (keyId: string) =>
+      deletePrincipalSshKey(projectId, principalId, keyId),
+    onSuccess: async () => {
+      await invalidatePrincipalKeys(queryClient, orgId, projectId, principalId)
+    },
+  })
+}
+
+async function invalidatePrincipalKeys(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  projectId: string,
+  principalId: string,
+): Promise<void> {
+  await queryClient.invalidateQueries({
+    queryKey: queryKeys.org(orgId).projects.principalSshKeys(
+      projectId,
+      principalId,
+    ),
+  })
+  await queryClient.invalidateQueries({
+    queryKey: queryKeys.org(orgId).projects.principals(projectId),
   })
 }

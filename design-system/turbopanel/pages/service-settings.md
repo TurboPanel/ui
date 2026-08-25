@@ -28,6 +28,16 @@ Storage registry: logical `storage` + physical `location` + service `mount` (`/a
 
 Project principals: `principal.project_id` + `/api/client/v1/projects/:id/principals`; list/create return `serviceIds[]` from `steward`; `PATCH …/principals/:id` replaces bindings. UID/GID from org `options.nextPrincipalUid` starting at 10001. Deploy includes assigned principals in `principalMaterial[]` (`ensureSystemPrincipals` on the daemon).
 
+**Principal access + SSH keys** (`src/components/org/principal-access-panel.tsx`, hung off the principal row — a property of that object, not a page of its own):
+
+- **Access** is a three-option segmented control — *No access · Files only · Shell*. There is deliberately **no shell field**: the shell is how the level is stored, and offering a filesystem path would put an arbitrary executable into a security control. `PATCH …/principals/:id` takes `access`, never a path.
+- *No access* exists so an account can be suspended **without deleting its keys**. "Revoke access" and "throw away the credential" are different acts; a model with only the second pushes operators into destroying keys they meant to keep.
+- **Effective access needs both halves.** An account holds keys or it does not, and password sign-in is off for all of them — so *Shell with zero keys* is not the same state as *No access*, and the panel says so with an inline warning rather than letting the row read as working. `sshKeyCount` on the list row is what makes that renderable without a second fetch.
+- Keys are listed by **fingerprint** (`SHA256:…`, byte-identical to `ssh-keygen -lf`) so an operator can compare against their own agent — never by key body. The pasted line is parsed, re-rendered, and stored canonically; nothing an operator typed reaches the host.
+- The panel says plainly that keys are managed here and not in the account's `~/.ssh`. That is a real constraint, not a detail: the file on the host is root-owned, which is what makes removing a key here actually remove it there.
+- Add/remove invalidate **both** the key list and the principals list, because the latter carries `sshKeyCount` and therefore the effective-access reading.
+- ❌ Do not offer a shell path picker. ❌ Do not show the key body where the fingerprint belongs. ❌ Do not collapse "no keys yet" into "no access".
+
 Resource limits: `organization.options.resourceLimits` and `server.options.resourceLimits`; validated at deploy in `deploy-prepare.ts`.
 
 **Deploy preview:** shown in the **Preview Deployment** modal when deploying / redeploying an environment (`GET …/deploy-preview`). Fetch on modal open only — never auto-poll. Prepare gates appear as warnings so the preview still renders.

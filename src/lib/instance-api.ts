@@ -3882,6 +3882,20 @@ export type ProjectPrincipalRecord = {
    * real, revocable grants; the distinction exists so the UI can say why.
    */
   entitlements: PrincipalEntitlement[]
+  /**
+   * How this account may log in, as the operator set it.
+   *
+   * Derived server-side from `options.shell` rather than stored separately —
+   * the shell *is* the access level, and two independent fields could disagree
+   * in a way nobody would notice until someone could not log in.
+   *
+   * What actually happens also depends on {@link sshKeyCount}: with no keys
+   * there is nothing to authenticate with, because password authentication is
+   * off for these accounts. Render both.
+   */
+  access: PrincipalAccessLevel
+  /** Keys on file. Zero means no login is possible at any access level. */
+  sshKeyCount: number
   createdAt: string
   updatedAt: string
 }
@@ -3890,6 +3904,65 @@ export type PrincipalEntitlement = {
   runtime: string
   series: string
   grantedBy: 'operator' | 'deploy'
+}
+
+export type PrincipalAccessLevel = 'none' | 'sftp' | 'shell'
+
+export type PrincipalSshKey = {
+  id: string
+  name: string
+  keyType: string
+  /** Canonical `<type> <base64>`; never what the operator pasted. */
+  publicKey: string
+  /** `SHA256:…`, comparable against `ssh-keygen -lf`. */
+  fingerprint: string
+  comment: string | null
+  bits: number | null
+  createdAt: string
+}
+
+/**
+ * Servers a key change was pushed to.
+ *
+ * Reported rather than swallowed because adding or removing a key only takes
+ * effect once the server it reaches has reconciled. A `failedServerIds` entry
+ * means the row changed here but the host has not caught up — which for a
+ * removal is the difference between "revoked" and "still works".
+ */
+export type PrincipalsReconcileOutcome = {
+  queuedServerIds: string[]
+  failedServerIds: string[]
+}
+
+export async function fetchPrincipalSshKeys(
+  projectId: string,
+  principalId: string
+): Promise<{ keys: PrincipalSshKey[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys`
+  )
+}
+
+export async function addPrincipalSshKey(
+  projectId: string,
+  principalId: string,
+  body: { name: string; publicKey: string }
+): Promise<{ key: PrincipalSshKey; reconciled: PrincipalsReconcileOutcome }> {
+  return await apiFetch(
+    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys`,
+    { method: 'POST', body: JSON.stringify(body) }
+  )
+}
+
+export async function deletePrincipalSshKey(
+  projectId: string,
+  principalId: string,
+  keyId: string
+): Promise<{ ok: true; reconciled: PrincipalsReconcileOutcome }> {
+  return await apiFetch(
+    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys/${keyId}`,
+    { method: 'DELETE' }
+  )
 }
 
 export async function fetchProjectPrincipals(
@@ -3904,6 +3977,7 @@ export async function createProjectPrincipal(
     username: string
     serviceIds?: string[]
     entitlements?: { runtime: string; series: string }[]
+    access?: PrincipalAccessLevel
     options?: Record<string, unknown>
   }
 ): Promise<{ ok: true; id: string; uid: number; gid: number; serviceIds?: string[] }> {
@@ -3914,12 +3988,16 @@ export async function createProjectPrincipal(
 }
 
 /**
- * Patch a principal's stewards and/or its runtime entitlements.
+ * Patch a principal's stewards, runtime entitlements, and/or SSH access.
  *
  * Each field is **omitted when undefined** and sent when present, because the
  * API distinguishes the two: absent means "leave them alone", `[]` means
  * "revoke everything". Collapsing them would make a steward-only edit silently
  * strip every entitlement.
+ *
+ * `reconciled` reports which servers the change was pushed to. Entitlements and
+ * access are enforced on the host as unix group membership, so a change that
+ * only landed in the database has not actually happened yet.
  */
 export async function updateProjectPrincipal(
   projectId: string,
@@ -3927,8 +4005,13 @@ export async function updateProjectPrincipal(
   patch: {
     serviceIds?: string[]
     entitlements?: { runtime: string; series: string }[]
+    access?: PrincipalAccessLevel
   }
-): Promise<{ ok: true; serviceIds?: string[] }> {
+): Promise<{
+  ok: true
+  serviceIds?: string[]
+  reconciled?: PrincipalsReconcileOutcome
+}> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),

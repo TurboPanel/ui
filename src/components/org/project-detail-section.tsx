@@ -8,9 +8,11 @@ import { ProjectEnvironmentsSection } from '@/components/org/project-environment
 import { SectionPanel } from '@/components/org/section-panel'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
 import { usePersistProjectCompose } from '@/components/org/compose-persistence'
+import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import {
   type ComposeDocument,
   type EnvironmentRecord,
+  type PrincipalAccessLevel,
   type ProjectRecord,
   type ServiceRecord,
   type WorkspaceRecord,
@@ -75,6 +77,7 @@ export function ProjectPrincipalsSection({
   const [savingEntitlements, setSavingEntitlements] = useState<Set<string>>(
     new Set(),
   )
+  const [savingAccess, setSavingAccess] = useState<Set<string>>(new Set())
 
   const principals = principalsQuery.data?.principals ?? []
   const serviceOptions = useMemo(() => {
@@ -174,6 +177,31 @@ export function ProjectPrincipalsSection({
       setError(updatePrincipal.actionError)
     }
     setSavingEntitlements((current) => {
+      const copy = new Set(current)
+      copy.delete(principalId)
+      return copy
+    })
+  }
+
+  /**
+   * Set how an account may sign in.
+   *
+   * Sends `access` only, for the same reason `toggleEntitlement` sends only
+   * `entitlements`: the API reads an absent field as "leave it alone", so
+   * including an empty steward or entitlement list here would silently revoke
+   * something the operator never touched.
+   */
+  const changeAccess = async (
+    principalId: string,
+    access: PrincipalAccessLevel,
+  ) => {
+    setSavingAccess((current) => new Set(current).add(principalId))
+    setError(null)
+    const result = await updatePrincipal.run({ principalId, access })
+    if (!result.ok && updatePrincipal.actionError) {
+      setError(updatePrincipal.actionError)
+    }
+    setSavingAccess((current) => {
       const copy = new Set(current)
       copy.delete(principalId)
       return copy
@@ -321,6 +349,20 @@ export function ProjectPrincipalsSection({
               {savingEntitlements.has(row.id) ? (
                 <Text style={orgPanelStyles.muted}>Saving runtimes…</Text>
               ) : null}
+            </View>
+            <View style={styles.serviceAssignRow}>
+              <PrincipalAccessPanel
+                orgId={orgId}
+                projectId={projectId}
+                principalId={row.id}
+                username={row.username}
+                access={row.access}
+                canManage={canManage}
+                savingAccess={savingAccess.has(row.id)}
+                onChangeAccess={(next) => {
+                  void changeAccess(row.id, next)
+                }}
+              />
             </View>
             {canManage ? (
               <View style={styles.principalDeleteRow}>
