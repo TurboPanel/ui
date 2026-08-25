@@ -1,6 +1,5 @@
-// @vitest-environment happy-dom
 import { ORG_AREAS } from './org-navigation'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   ALL_WORKSPACES_SCOPE,
   clearStoredWorkspaceScopeId,
@@ -164,9 +163,35 @@ describe('workspaceName', () => {
   })
 })
 
+function createLocalStorage() {
+  const memory = new Map<string, string>()
+  return {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      memory.set(key, value)
+    },
+    removeItem: (key: string) => {
+      memory.delete(key)
+    },
+    clear: () => {
+      memory.clear()
+    },
+  }
+}
+
 describe('workspace scope persistence', () => {
+  let localStorageMock: ReturnType<typeof createLocalStorage>
+
+  beforeEach(() => {
+    localStorageMock = createLocalStorage()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: localStorageMock,
+    })
+  })
+
   afterEach(() => {
-    clearStoredWorkspaceScopeId('org-1')
+    Reflect.deleteProperty(globalThis, 'localStorage')
   })
 
   it('stores, reads, and clears the remembered scope id', () => {
@@ -174,6 +199,19 @@ describe('workspace scope persistence', () => {
     setStoredWorkspaceScopeId('org-1', 'ws-a')
     expect(getStoredWorkspaceScopeId('org-1')).toBe('ws-a')
     clearStoredWorkspaceScopeId('org-1')
+    expect(getStoredWorkspaceScopeId('org-1')).toBeNull()
+  })
+
+  it('ignores blank stored values', () => {
+    localStorageMock.setItem('turbopanel.lastWorkspaceScope:org-1', '   ')
+    expect(getStoredWorkspaceScopeId('org-1')).toBeNull()
+  })
+
+  it('no-ops when localStorage is missing', () => {
+    Reflect.deleteProperty(globalThis, 'localStorage')
+    expect(getStoredWorkspaceScopeId('org-1')).toBeNull()
+    expect(() => setStoredWorkspaceScopeId('org-1', 'ws-a')).not.toThrow()
+    expect(() => clearStoredWorkspaceScopeId('org-1')).not.toThrow()
     expect(getStoredWorkspaceScopeId('org-1')).toBeNull()
   })
 
