@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
+import { CronFields } from '@/components/org/compose-cron-fields'
 import { DockerfileEditor } from '@/components/org/dockerfile-editor'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { repositoryLabel } from '@/components/org/sources/connect-repository-panel'
@@ -1594,6 +1595,17 @@ export function ComposeVisualServiceCard({
                 engine: extension.engine ?? DEFAULT_SITE_ENGINE,
                 root: extension.root ?? 'public',
                 php,
+              })}
+          />
+          <CronFields
+            jobs={extension.cron}
+            disabled={saving}
+            onChange={(cron) =>
+              applyExtension({
+                serviceKind: 'site',
+                engine: extension.engine ?? DEFAULT_SITE_ENGINE,
+                root: extension.root ?? 'public',
+                cron,
               })}
           />
         </>

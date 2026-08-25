@@ -111,6 +111,41 @@ export type ComposeServiceTurbopanelExtension = {
    * silently last-wins merge into one pool.
    */
   php?: ComposeServicePhpExtension
+  /**
+   * Scheduled jobs for a `site` or `node` service.
+   *
+   * Rendered by the daemon as a systemd timer per entry, with `User=` set to
+   * the service's principal. That is what makes this the cleanest proof
+   * entitlement had to be an OS grant: `ExecStart` reaches `execve` **after**
+   * systemd has dropped privileges, so `/usr/bin/php8.4` succeeds or fails
+   * purely on the account's group membership. Nothing in the generated unit
+   * grants anything.
+   */
+  cron?: ComposeServiceCronJob[]
+}
+
+/**
+ * One scheduled job.
+ *
+ * `schedule` is a 5-field cron expression (or a `@daily`-style shorthand) as the
+ * operator authored it — cron is what operators know, and `OnCalendar` is not
+ * something to make anyone learn. It is translated once, control-plane side, by
+ * `lib/cron.ts`; see that module for the day-of-month / day-of-week rule it
+ * refuses rather than approximates.
+ *
+ * `command` is argv, not a shell line. systemd runs it directly, so `>>`, `|`,
+ * and globs are inert text rather than syntax — the linter rejects them instead
+ * of letting a line that looks like it redirects output silently pass `>>` to
+ * the script as an argument. Output goes to the log viewer through journald,
+ * which is where it was wanted anyway.
+ */
+export type ComposeServiceCronJob = {
+  /** Unit-name segment: lowercase, `[a-z0-9-]`, unique within the service. */
+  name: string
+  /** Cron expression as authored. */
+  schedule: string
+  /** Command line, split to argv at deploy. */
+  command: string
 }
 
 export type ComposeServicePhpExtension = {
@@ -141,6 +176,25 @@ export const SITE_SOURCE_KINDS = new Set<SiteSourceKind>([
   'release',
   'managed-directory',
 ])
+
+/**
+ * Shape-only read; the instance's `lib/cron.ts` is what validates the schedule
+ * and the command, and its linter is what tells the operator why one was
+ * refused.
+ */
+function parseServiceCronJobs(value: unknown): ComposeServiceCronJob[] | null {
+  if (!Array.isArray(value)) return null
+  const jobs: ComposeServiceCronJob[] = []
+  for (const raw of value) {
+    if (!isPlainMapping(raw)) continue
+    const name = readBoundedString(raw.name, 64)
+    const schedule = readBoundedString(raw.schedule, 200)
+    const command = readBoundedString(raw.command, 1000)
+    if (!name || !schedule || !command) continue
+    jobs.push({ name, schedule, command })
+  }
+  return jobs.length > 0 ? jobs : null
+}
 
 function readSiteSourceKind(value: unknown): SiteSourceKind | undefined {
   if (typeof value !== 'string') return undefined
@@ -279,6 +333,7 @@ export function parseServiceTurbopanelExtension(
     nodeVersion: readNodeVersion(value.nodeVersion),
     root: readBoundedString(value.root, Number.POSITIVE_INFINITY),
     sourceKind: readSiteSourceKind(value.sourceKind),
+    cron: parseServiceCronJobs(value.cron) ?? undefined,
     description: readBoundedString(value.description, SERVICE_DESCRIPTION_MAX_LENGTH),
     source: parseServiceSourceExtension(value.source) ?? undefined,
     php: parseServicePhpExtension(value.php) ?? undefined,
@@ -381,6 +436,9 @@ function dropFieldsForOtherKinds(
     delete next.framework
     delete next.nodeVersion
   }
+  // A container has no principal to run as and no tree to run in; both
+  // host-native kinds have exactly one of each.
+  if (!isHostNativeServiceKind(next.serviceKind)) delete next.cron
   if (isHostNativeServiceKind(next.serviceKind) && next.source) {
     const { buildKind: _railpackNotApplicable, ...source } = next.source
     next.source = source
@@ -431,6 +489,9 @@ export function patchServiceTurbopanelExtension(
   // silently dropped on every patch, which is how `php` was being lost.
   if (next.php && Object.keys(next.php).length > 0) {
     cleaned.php = { ...next.php }
+  }
+  if (next.cron && next.cron.length > 0) {
+    cleaned.cron = next.cron.map((job) => ({ ...job }))
   }
 
   if (Object.keys(cleaned).length === 0) {

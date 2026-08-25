@@ -43,3 +43,41 @@ Resource limits: `organization.options.resourceLimits` and `server.options.resou
 **Deploy preview:** shown in the **Preview Deployment** modal when deploying / redeploying an environment (`GET …/deploy-preview`). Fetch on modal open only — never auto-poll. Prepare gates appear as warnings so the preview still renders.
 
 **Container naming:** project settings expose `options.containerNaming` (`uuid` default vs `custom`) via segment chips; gated by manage as a display hint.
+
+## Scheduled jobs
+
+`CronFields` (`src/components/org/compose-cron-fields.tsx`) hangs off a site or
+node service, beside its PHP settings — a property of that service, not a page.
+
+Each job becomes a systemd timer whose service sets `User=` to the service's
+principal, which is why the copy says the account decides what the job can run:
+`ExecStart` reaches `execve` after privileges drop, so a job can only use a
+runtime that account was granted. That also means a service with jobs and no
+principal is refused (`site_cron_unowned`) — a timer with no account would run
+as root.
+
+**Cron syntax in, `OnCalendar` out.** Operators know cron; nobody should have to
+learn systemd calendar events. The instance's `lib/cron.ts` does the
+translation and is authoritative. `src/lib/compose/cron.ts` is a **partial**
+client-side mirror covering only the two mistakes worth catching under the
+cursor:
+
+- Restricting **both** day-of-month and day-of-week. Cron runs the job when
+  either matches; a timer needs both. `0 0 13 * 5` means "the 13th or any
+  Friday" to cron and "Friday the 13th" to systemd — a monthly job that quietly
+  stops being monthly. This is the one rule worth duplicating.
+- Shell syntax in the command. systemd runs it directly, so a line that looks
+  like it redirects output silently passes `>>` to the script as an argument.
+
+Field ranges and step arithmetic are deliberately **not** mirrored: the server
+checks them anyway, and two half-implementations of one grammar is how they
+drift.
+
+Copy tells the operator output is captured, because that is what makes refusing
+`>>` reasonable rather than arbitrary. `php` is named as the one bare command
+that resolves — everything else needs an absolute path, since systemd does not
+search PATH.
+
+❌ Do not offer a "shell command" field. ❌ Do not re-implement the schedule
+translator client-side. ❌ Do not show a job as valid when it has no account to
+run as.
