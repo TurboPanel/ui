@@ -23,6 +23,19 @@ const FALLBACK_SERVICE_NAME = 'app'
 /** Docker keeps service keys short; this is well past anything readable. */
 const SERVICE_NAME_MAX_LENGTH = 63
 
+/** Strip leading and trailing dashes without a backtracking regex. */
+function trimDashes(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && value.charAt(start) === '-') {
+    start += 1
+  }
+  while (end > start && value.charAt(end - 1) === '-') {
+    end -= 1
+  }
+  return value.slice(start, end)
+}
+
 /**
  * Repository name from a clone URL — the last path segment, `.git` dropped.
  *
@@ -41,12 +54,10 @@ function repositoryName(repositoryUrl: string): string {
  * something else; this only has to be valid and recognisable.
  */
 export function repositoryServiceName(source: SourceRecord): string {
-  const slug = repositoryName(source.repositoryUrl)
+  const collapsed = repositoryName(source.repositoryUrl)
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '')
-    .slice(0, SERVICE_NAME_MAX_LENGTH)
-    .replaceAll(/-+$/g, '')
+  const slug = trimDashes(trimDashes(collapsed).slice(0, SERVICE_NAME_MAX_LENGTH))
   return slug.length > 0 ? slug : FALLBACK_SERVICE_NAME
 }
 

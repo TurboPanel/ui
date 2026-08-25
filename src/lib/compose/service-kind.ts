@@ -340,6 +340,29 @@ export function parseServiceTurbopanelExtension(
   })
 }
 
+function parsePhpExtensionNames(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const names = value
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => name.trim().toLowerCase())
+    .filter((name) => name.length > 0)
+  if (names.length === 0) return undefined
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b))
+}
+
+function parsePhpStringNumberMap(
+  value: unknown,
+): Record<string, string | number> | undefined {
+  if (!isPlainMapping(value)) return undefined
+  const kept: Record<string, string | number> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string' || typeof entry === 'number') {
+      kept[key] = entry
+    }
+  }
+  return Object.keys(kept).length > 0 ? kept : undefined
+}
+
 /**
  * Shape-only read; the instance's `php-settings.ts` table is what validates
  * values, and its linter is what tells the operator why one was refused.
@@ -351,21 +374,11 @@ function parseServicePhpExtension(
   const php: ComposeServicePhpExtension = {}
   const version = readBoundedString(value.version, 16)
   if (version) php.version = version
-  if (Array.isArray(value.extensions)) {
-    const names = value.extensions
-      .filter((name): name is string => typeof name === 'string')
-      .map((name) => name.trim().toLowerCase())
-      .filter((name) => name.length > 0)
-    if (names.length > 0) php.extensions = [...new Set(names)].sort()
-  }
+  const extensions = parsePhpExtensionNames(value.extensions)
+  if (extensions) php.extensions = extensions
   for (const field of ['settings', 'pool'] as const) {
-    const raw = value[field]
-    if (!isPlainMapping(raw)) continue
-    const kept: Record<string, string | number> = {}
-    for (const [key, entry] of Object.entries(raw)) {
-      if (typeof entry === 'string' || typeof entry === 'number') kept[key] = entry
-    }
-    if (Object.keys(kept).length > 0) php[field] = kept
+    const mapped = parsePhpStringNumberMap(value[field])
+    if (mapped) php[field] = mapped
   }
   return Object.keys(php).length > 0 ? php : null
 }

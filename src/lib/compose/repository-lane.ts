@@ -78,7 +78,7 @@ export function rankRepositoryLanes(
     missing: string,
   ): LaneCandidate => ({
     lane,
-    evidence: found ? found : `no ${missing} found`,
+    evidence: found ?? `no ${missing} found`,
     recommended: lane === winner,
   })
 

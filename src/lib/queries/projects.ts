@@ -14,7 +14,6 @@ import {
   fetchVisibleProjects,
   updateProject,
   updateProjectPrincipal,
-  updateProjectPrincipalAssignments,
   type ConfigureProjectBody,
   type PrincipalAccessLevel,
 } from '@/lib/instance-api'
@@ -179,6 +178,7 @@ export function useUpdateProjectPrincipal(orgId: string, projectId: string) {
   })
 }
 
+/** Steward-only patch — wraps {@link updateProjectPrincipal} with `serviceIds`. */
 export function useUpdateProjectPrincipalAssignments(
   orgId: string,
   projectId: string,
@@ -191,7 +191,7 @@ export function useUpdateProjectPrincipalAssignments(
     }: {
       principalId: string
       serviceIds: string[]
-    }) => updateProjectPrincipalAssignments(projectId, principalId, serviceIds),
+    }) => updateProjectPrincipal(projectId, principalId, { serviceIds }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),

@@ -101,7 +101,13 @@ const DOCKER_PROGRESS_STATUS_WORDS = Math.max(
  * no bytes: `Pulling fs layer 0B`, `Download complete 0B`, `Extracting 1B`.
  * The number is an artefact of the writer, not a size.
  */
-const EMPTY_PROGRESS_SIZE = /\s+[01]B$/
+function stripEmptyProgressSize(message: string): string {
+  if (!message.endsWith('0B') && !message.endsWith('1B')) return message
+  const withoutCounter = message.slice(0, -2)
+  const trimmed = withoutCounter.trimEnd()
+  if (trimmed.length === withoutCounter.length) return message
+  return trimmed
+}
 
 /**
  * True when a line is ordinary Docker progress rather than a diagnostic.
@@ -141,7 +147,7 @@ export function isErrorLine(line: LogTranscriptLine): boolean {
 export function normalizeTranscriptMessage(message: string): string {
   const trimmed = message.trimEnd()
   if (!isDockerProgressLine(trimmed)) return trimmed
-  return trimmed.replace(EMPTY_PROGRESS_SIZE, '')
+  return stripEmptyProgressSize(trimmed)
 }
 
 /**

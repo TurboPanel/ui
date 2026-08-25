@@ -158,6 +158,59 @@ function stepTitle(step: Step, option: SetupTypeOption | null): string {
   return STEP_COPY[step].title
 }
 
+function resolveSelectedOption(
+  choice: SetupChoice | null,
+): SetupTypeOption | null {
+  if (!choice) return null
+  return setupOptionForChoice(choice) ?? null
+}
+
+function wizardHint(
+  step: Step,
+  defaultEnvironmentName: string,
+  fallback: string,
+): string {
+  if (step === 'details') {
+    return `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
+  }
+  return fallback
+}
+
+function asError(error: unknown): Error | null {
+  return error instanceof Error ? error : null
+}
+
+function isCatalogStep(
+  step: Step,
+  option: SetupTypeOption | null,
+): option is SetupTypeOption & {
+  type: Exclude<SetupTypeOption['type'], 'docker-compose'>
+} {
+  return step === 'catalog' && option != null && option.type !== 'docker-compose'
+}
+
+function canContinueFromStep(
+  step: Step,
+  selectedLane: RepositoryLane | null,
+  selectedSource: SourceRecord | null,
+): boolean {
+  if (step === 'lane') return selectedLane != null
+  return selectedSource != null
+}
+
+function sourceInspectionEnabled(step: Step, sourceId: string): boolean {
+  return step === 'lane' && sourceId.length > 0
+}
+
+function continueFromWizardStep(
+  step: Step,
+  fromLane: () => void,
+  fromRepository: () => void,
+): () => void {
+  if (step === 'lane') return fromLane
+  return fromRepository
+}
+
 /**
  * Compose seed for the chosen lane, built from what the repository read found.
  *
@@ -242,9 +295,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [apiError, setApiError] = useState<string | null>(null)
 
   const preselectedChoice = parsePreselectedChoice(params.type)
-  const selectedOption = selectedChoice
-    ? setupOptionForChoice(selectedChoice) ?? null
-    : null
+  const selectedOption = resolveSelectedOption(selectedChoice)
 
   const catalogQuery = useProjectCatalog(orgId, {
     enabled: step === 'catalog',
@@ -266,7 +317,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     orgId,
     selectedSourceId,
     repositoryBranch.trim(),
-    { enabled: step === 'lane' && selectedSourceId.length > 0 },
+    { enabled: sourceInspectionEnabled(step, selectedSourceId) },
   )
   const selectedSource = useMemo(
     () =>
@@ -291,7 +342,8 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     () => (projectsQuery.data?.projects ?? []).map((row) => row.name),
     [projectsQuery.data?.projects],
   )
-  const loadingWorkspaces = workspacesQuery.isLoading || projectsQuery.isLoading
+  const loadingWorkspaces = [workspacesQuery.isLoading, projectsQuery.isLoading]
+    .some(Boolean)
 
   const scopedWorkspaceId = resolveScopedWorkspaceId(
     params.workspaceId,
@@ -566,10 +618,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const copy = STEP_COPY[step]
   const title = stepTitle(step, selectedOption)
-  const hint =
-    step === 'details'
-      ? `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
-      : copy.hint
+  const hint = wizardHint(step, defaultEnvironmentName, copy.hint)
 
   return (
     <View style={styles.column}>
@@ -633,7 +682,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           <LaneStep
             inspection={inspection.data}
             loading={inspection.isLoading}
-            error={inspection.error instanceof Error ? inspection.error : null}
+            error={asError(inspection.error)}
             selectedLane={selectedLane}
             onSelectLane={setSelectedLane}
             disabled={submitting}
@@ -653,18 +702,12 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           </ChoiceGrid>
         ) : null}
 
-        {step === 'catalog' &&
-        selectedOption &&
-        selectedOption.type !== 'docker-compose' ? (
+        {isCatalogStep(step, selectedOption) ? (
           <CatalogStep
             type={selectedOption.type}
             catalog={catalogQuery.data?.catalog ?? []}
             loading={catalogQuery.isLoading}
-            error={
-              catalogQuery.error instanceof Error
-                ? catalogQuery.error.message
-                : null
-            }
+            error={asError(catalogQuery.error)?.message ?? null}
             selectedCode={selectedCode}
             disabled={submitting}
             onSelect={setSelectedCode}
@@ -675,14 +718,14 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
           step={step}
           submitting={submitting}
           canCreate={selectedCode.length > 0}
-          canContinue={step === 'lane'
-            ? selectedLane != null
-            : selectedSource != null}
+          canContinue={canContinueFromStep(step, selectedLane, selectedSource)}
           onBack={goBack}
           onNext={goToTypeStep}
-          onContinue={step === 'lane'
-            ? continueFromLane
-            : continueFromRepository}
+          onContinue={continueFromWizardStep(
+            step,
+            continueFromLane,
+            continueFromRepository,
+          )}
           onCreate={() => {
             void create()
           }}
