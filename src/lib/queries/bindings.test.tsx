@@ -2,26 +2,33 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAppQueryClient } from '@/lib/query-client'
+import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import {
   useCreateBinding,
+  useDeleteBinding,
   useEnvironmentBindings,
+  useManagedEnvironmentBindings,
   useServiceBindings,
+  useUpdateBinding,
 } from '@/lib/queries/bindings'
 
 const {
   fetchBindings,
   createBinding,
+  updateBinding,
+  deleteBinding,
 } = vi.hoisted(() => ({
   fetchBindings: vi.fn(),
   createBinding: vi.fn(),
+  updateBinding: vi.fn(),
+  deleteBinding: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', () => ({
   fetchBindings,
   createBinding,
-  updateBinding: vi.fn(),
-  deleteBinding: vi.fn(),
+  updateBinding,
+  deleteBinding,
 }))
 
 function createWrapper(client = createAppQueryClient()) {
@@ -87,6 +94,86 @@ describe('bindings query hooks', () => {
       serviceId,
       principalId: 'principal-1',
       databaseName: 'app',
+    })
+  })
+
+  it('useManagedEnvironmentBindings loads managed-cluster bindings', async () => {
+    fetchBindings.mockResolvedValueOnce({ bindings: [] })
+
+    const { result } = renderHook(
+      () => useManagedEnvironmentBindings(orgId, environmentId),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchBindings).toHaveBeenCalledWith({
+      managedEnvironmentId: environmentId,
+    })
+  })
+
+  it('useManagedEnvironmentBindings stays idle without managed environment id', () => {
+    const { result } = renderHook(
+      () => useManagedEnvironmentBindings(orgId, ''),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchBindings).not.toHaveBeenCalled()
+  })
+
+  it('useUpdateBinding updates binding and invalidates scoped lists', async () => {
+    updateBinding.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUpdateBinding(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        id: 'bind-1',
+        serviceId,
+        environmentId,
+        body: { databaseName: 'analytics' },
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(updateBinding).toHaveBeenCalledWith('bind-1', {
+      databaseName: 'analytics',
+    })
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).bindings.list({ serviceId }),
+      })
+    })
+  })
+
+  it('useDeleteBinding deletes binding and invalidates scoped lists', async () => {
+    deleteBinding.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useDeleteBinding(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        id: 'bind-1',
+        serviceId,
+        managedEnvironmentId: environmentId,
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(deleteBinding).toHaveBeenCalledWith('bind-1')
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).bindings.list({
+          managedEnvironmentId: environmentId,
+        }),
+      })
     })
   })
 })

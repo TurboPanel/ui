@@ -2,29 +2,35 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAppQueryClient } from '@/lib/query-client'
+import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import {
   useCreateStorage,
   useDeleteStorage,
   useStorage,
+  useUpdateStorage,
+  useUpdateStorageMount,
 } from '@/lib/queries/storage'
 
 const {
   fetchStorage,
   createStorage,
   deleteStorage,
+  updateStorage,
+  updateStorageMount,
 } = vi.hoisted(() => ({
   fetchStorage: vi.fn(),
   createStorage: vi.fn(),
   deleteStorage: vi.fn(),
+  updateStorage: vi.fn(),
+  updateStorageMount: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', () => ({
   fetchStorage,
   createStorage,
   deleteStorage,
-  updateStorage: vi.fn(),
-  updateStorageMount: vi.fn(),
+  updateStorage,
+  updateStorageMount,
 }))
 
 function createWrapper(client = createAppQueryClient()) {
@@ -81,6 +87,57 @@ describe('storage query hooks', () => {
 
     await expect(result.current.run('stor-1')).resolves.toMatchObject({
       ok: true,
+    })
+  })
+
+  it('useUpdateStorage updates storage row', async () => {
+    updateStorage.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUpdateStorage(orgId, filter), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        storageId: 'stor-1',
+        body: { name: 'Renamed' },
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(updateStorage).toHaveBeenCalledWith('stor-1', { name: 'Renamed' })
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).storage.list(filter),
+      })
+    })
+  })
+
+  it('useUpdateStorageMount updates mount row', async () => {
+    updateStorageMount.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUpdateStorageMount(orgId, filter), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        storageId: 'stor-1',
+        mountId: 'mount-1',
+        body: { destinationPath: '/data' },
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(updateStorageMount).toHaveBeenCalledWith('stor-1', 'mount-1', {
+      destinationPath: '/data',
+    })
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).storage.list(filter),
+      })
     })
   })
 })

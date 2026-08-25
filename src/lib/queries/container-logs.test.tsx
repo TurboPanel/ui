@@ -13,13 +13,19 @@ import {
   containerLogAvailability,
   containerLogLivePollInterval,
   flattenContainerLogPages,
+  useContainerLogSettings,
   useContainerLogsQuery,
   useSaveContainerLogSettings,
 } from './container-logs'
 
-const { fetchContainerLogs, saveOrgContainerLogSettings } = vi.hoisted(() => ({
+const {
+  fetchContainerLogs,
+  saveOrgContainerLogSettings,
+  fetchOrgContainerLogSettings,
+} = vi.hoisted(() => ({
   fetchContainerLogs: vi.fn(),
   saveOrgContainerLogSettings: vi.fn(),
+  fetchOrgContainerLogSettings: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -28,6 +34,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     ...actual,
     fetchContainerLogs,
     saveOrgContainerLogSettings,
+    fetchOrgContainerLogSettings,
   }
 })
 
@@ -90,6 +97,52 @@ describe('classifyContainerLogFailure', () => {
   })
 })
 
+describe('flattenContainerLogPages / containerLogAvailability', () => {
+  it('returns an empty list and default ok when pages are missing', () => {
+    expect(flattenContainerLogPages(undefined)).toEqual([])
+    expect(containerLogAvailability(undefined)).toBe('ok')
+  })
+
+  it('reads availability from the first page only', () => {
+    expect(
+      containerLogAvailability([
+        { events: [], nextCursor: null, availability: 'unavailable' },
+        { events: [], nextCursor: null, availability: 'ok' },
+      ]),
+    ).toBe('unavailable')
+  })
+})
+
+describe('useContainerLogSettings', () => {
+  it('loads settings when enabled', async () => {
+    fetchOrgContainerLogSettings.mockResolvedValueOnce({
+      containerLogsEnabled: true,
+      retentionDays: 14,
+    })
+
+    const { result } = renderHook(() => useContainerLogSettings('org-1', true), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(fetchOrgContainerLogSettings).toHaveBeenCalledWith('org-1')
+    expect(result.current.data?.retentionDays).toBe(14)
+  })
+
+  it('stays idle when disabled or org id is empty', () => {
+    const disabled = renderHook(
+      () => useContainerLogSettings('org-1', false),
+      { wrapper: createWrapper() },
+    )
+    const empty = renderHook(() => useContainerLogSettings('', true), {
+      wrapper: createWrapper(),
+    })
+    expect(disabled.result.current.fetchStatus).toBe('idle')
+    expect(empty.result.current.fetchStatus).toBe('idle')
+    expect(fetchOrgContainerLogSettings).not.toHaveBeenCalled()
+  })
+})
+
 describe('useContainerLogsQuery', () => {
   it('folds a disabled 503 into local state instead of erroring or retrying', async () => {
     fetchContainerLogs.mockRejectedValue(
@@ -108,6 +161,46 @@ describe('useContainerLogsQuery', () => {
     expect(fetchContainerLogs).toHaveBeenCalledTimes(1)
   })
 
+  it('folds an unavailable 503 into local state', async () => {
+    fetchContainerLogs.mockRejectedValue(
+      new Error('/container-logs failed: HTTP 503: container_logs_unavailable'),
+    )
+    const { result } = renderHook(
+      () => useContainerLogsQuery('org-1', FILTER),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(containerLogAvailability(result.current.data?.pages)).toBe(
+      'unavailable',
+    )
+  })
+
+  it('rethrows non-availability failures as query errors', async () => {
+    fetchContainerLogs.mockRejectedValue(new Error('HTTP 500: boom'))
+    const client = createAppQueryClient()
+    client.setDefaultOptions({ queries: { retry: false } })
+    const { result } = renderHook(
+      () => useContainerLogsQuery('org-1', FILTER),
+      { wrapper: createWrapper(client) },
+    )
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    if (!(result.current.error instanceof Error)) {
+      throw new TypeError('expected Error')
+    }
+    expect(result.current.error.message).toContain('HTTP 500')
+  })
+
+  it('stays idle when enabled is false', () => {
+    const { result } = renderHook(
+      () => useContainerLogsQuery('org-1', FILTER, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchContainerLogs).not.toHaveBeenCalled()
+  })
+
   it('accumulates pages newest-first across a cursor fetch', async () => {
     fetchContainerLogs
       .mockResolvedValueOnce(
@@ -123,11 +216,12 @@ describe('useContainerLogsQuery', () => {
     expect(result.current.hasNextPage).toBe(true)
 
     await result.current.fetchNextPage()
-    await waitFor(() =>
-      expect(flattenContainerLogPages(result.current.data?.pages)).toHaveLength(
-        2,
-      ),
-    )
+    await waitFor(() => {
+      expect(result.current.isFetchingNextPage).toBe(false)
+      expect(
+        flattenContainerLogPages(result.current.data?.pages),
+      ).toHaveLength(2)
+    })
     expect(
       flattenContainerLogPages(result.current.data?.pages).map(
         (row) => row.message,
@@ -179,6 +273,19 @@ describe('useSaveContainerLogSettings', () => {
     const outcome = await result.current.run({ containerLogsEnabled: false })
     expect(outcome).toEqual({ ok: false, error: 'nope' })
     await waitFor(() => expect(onFailure).toHaveBeenCalledWith('nope'))
+  })
+
+  it('uses the fallback message when the rejection is not an Error', async () => {
+    saveOrgContainerLogSettings.mockRejectedValue('offline')
+    const onFailure = vi.fn()
+
+    const { result } = renderHook(
+      () => useSaveContainerLogSettings('org-1', onFailure, 'fallback'),
+      { wrapper: createWrapper() },
+    )
+
+    await result.current.run({ containerLogsEnabled: null })
+    await waitFor(() => expect(onFailure).toHaveBeenCalledWith('fallback'))
   })
 })
 

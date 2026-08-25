@@ -9,13 +9,16 @@ import {
   commandStatusById,
   hasInFlightCommands,
   hasPendingTrackedCommands,
+  isTerminalCommandStatus,
   mergeTrackedCommandEntries,
+  useCommandRecordsBatch,
   useCommandsBatch,
   type TrackedCommandEntry,
 } from './commands'
 
-const { fetchCommandStatuses } = vi.hoisted(() => ({
+const { fetchCommandStatuses, fetchCommand } = vi.hoisted(() => ({
   fetchCommandStatuses: vi.fn(),
+  fetchCommand: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -23,6 +26,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
   return {
     ...actual,
     fetchCommandStatuses,
+    fetchCommand,
   }
 })
 
@@ -54,6 +58,17 @@ function command(
     hasLog: false,
   }
 }
+
+describe('isTerminalCommandStatus', () => {
+  it('recognizes every terminal status and rejects in-flight ones', () => {
+    expect(isTerminalCommandStatus('succeeded')).toBe(true)
+    expect(isTerminalCommandStatus('failed')).toBe(true)
+    expect(isTerminalCommandStatus('timed_out')).toBe(true)
+    expect(isTerminalCommandStatus('cancelled')).toBe(true)
+    expect(isTerminalCommandStatus('queued')).toBe(false)
+    expect(isTerminalCommandStatus('running')).toBe(false)
+  })
+})
 
 describe('hasPendingTrackedCommands', () => {
   it('is idle when nothing is tracked', () => {
@@ -123,6 +138,17 @@ describe('mergeTrackedCommandEntries', () => {
       { serverId: 'srv-b', commandId: 'cmd-2' },
     ])
   })
+
+  it('returns current unchanged when next adds nothing new', () => {
+    const current: TrackedCommandEntry[] = [
+      { serverId: 'srv-a', commandId: 'cmd-1' },
+    ]
+    expect(
+      mergeTrackedCommandEntries(current, [
+        { serverId: 'srv-a', commandId: 'cmd-1' },
+      ]),
+    ).toEqual(current)
+  })
 })
 
 describe('useCommandsBatch', () => {
@@ -191,6 +217,71 @@ describe('useCommandsBatch', () => {
     })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchCommandStatuses).not.toHaveBeenCalled()
+  })
+
+  it('stays idle when enabled is false or org id is empty', () => {
+    const entries: TrackedCommandEntry[] = [
+      { serverId: 'srv-a', commandId: 'cmd-1' },
+    ]
+    const disabled = renderHook(
+      () => useCommandsBatch(orgId, entries, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    const emptyOrg = renderHook(() => useCommandsBatch('', entries), {
+      wrapper: createWrapper(),
+    })
+    expect(disabled.result.current.fetchStatus).toBe('idle')
+    expect(emptyOrg.result.current.fetchStatus).toBe('idle')
+    expect(fetchCommandStatuses).not.toHaveBeenCalled()
+  })
+})
+
+describe('useCommandRecordsBatch', () => {
+  const orgId = 'org-1'
+
+  it('fetches a full record per tracked entry', async () => {
+    fetchCommand
+      .mockResolvedValueOnce({
+        id: 'cmd-1',
+        serverId: 'srv-a',
+        status: 'succeeded',
+        type: 'daemon.ping',
+      })
+      .mockResolvedValueOnce({
+        id: 'cmd-2',
+        serverId: 'srv-b',
+        status: 'running',
+        type: 'daemon.ping',
+      })
+
+    const entries: TrackedCommandEntry[] = [
+      { serverId: 'srv-a', commandId: 'cmd-1' },
+      { serverId: 'srv-b', commandId: 'cmd-2' },
+    ]
+
+    const { result } = renderHook(
+      () => useCommandRecordsBatch(orgId, entries),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchCommand).toHaveBeenCalledTimes(2)
+    expect(fetchCommand).toHaveBeenNthCalledWith(1, 'srv-a', 'cmd-1')
+    expect(fetchCommand).toHaveBeenNthCalledWith(2, 'srv-b', 'cmd-2')
+    expect(result.current.data?.map((row) => row.id)).toEqual([
+      'cmd-1',
+      'cmd-2',
+    ])
+  })
+
+  it('stays idle without entries', () => {
+    const { result } = renderHook(() => useCommandRecordsBatch(orgId, []), {
+      wrapper: createWrapper(),
+    })
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchCommand).not.toHaveBeenCalled()
   })
 })
 

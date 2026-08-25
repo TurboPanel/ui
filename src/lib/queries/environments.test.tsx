@@ -2,12 +2,18 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAppQueryClient } from '@/lib/query-client'
+import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import {
+  useCreateEnvironment,
+  useDeleteEnvironment,
   useDeployEnvironment,
   useDeployPreview,
+  useEnvironment,
   useEnvironments,
   useRunEnvironmentLifecycle,
+  useStopEnvironment,
+  useStopEnvironmentMutation,
+  useUpdateEnvironment,
 } from '@/lib/queries/environments'
 
 const {
@@ -15,11 +21,21 @@ const {
   fetchDeployPreview,
   deployEnvironment,
   runEnvironmentLifecycle,
+  fetchEnvironment,
+  createEnvironment,
+  updateEnvironment,
+  deleteEnvironment,
+  stopEnvironment,
 } = vi.hoisted(() => ({
   fetchVisibleEnvironments: vi.fn(),
   fetchDeployPreview: vi.fn(),
   deployEnvironment: vi.fn(),
   runEnvironmentLifecycle: vi.fn(),
+  fetchEnvironment: vi.fn(),
+  createEnvironment: vi.fn(),
+  updateEnvironment: vi.fn(),
+  deleteEnvironment: vi.fn(),
+  stopEnvironment: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -30,11 +46,11 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchDeployPreview,
     deployEnvironment,
     runEnvironmentLifecycle,
-    fetchEnvironment: vi.fn(),
-    createEnvironment: vi.fn(),
-    updateEnvironment: vi.fn(),
-    deleteEnvironment: vi.fn(),
-    stopEnvironment: vi.fn(),
+    fetchEnvironment,
+    createEnvironment,
+    updateEnvironment,
+    deleteEnvironment,
+    stopEnvironment,
   }
 })
 
@@ -84,6 +100,46 @@ describe('environments query hooks', () => {
     expect(fetchDeployPreview).toHaveBeenCalledTimes(1)
   })
 
+  it('useDeployPreview loads prepared compose', async () => {
+    fetchDeployPreview.mockResolvedValueOnce({
+      composeYaml: 'services:\n  web:\n    image: nginx',
+    })
+
+    const { result } = renderHook(
+      () => useDeployPreview(orgId, environmentId),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchDeployPreview).toHaveBeenCalledWith(environmentId)
+  })
+
+  it('useDeployPreview stays idle when environmentId is empty', () => {
+    const { result } = renderHook(() => useDeployPreview(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchDeployPreview).not.toHaveBeenCalled()
+  })
+
+  it('useEnvironment loads one environment', async () => {
+    fetchEnvironment.mockResolvedValueOnce({
+      environment: { id: environmentId, name: 'Production' },
+    })
+
+    const { result } = renderHook(
+      () => useEnvironment(orgId, environmentId),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchEnvironment).toHaveBeenCalledWith(environmentId)
+  })
+
   it('useDeployEnvironment enqueues deploy', async () => {
     deployEnvironment.mockResolvedValueOnce({
       ok: true,
@@ -120,5 +176,110 @@ describe('environments query hooks', () => {
       ok: true,
     })
     expect(runEnvironmentLifecycle).toHaveBeenCalledWith(environmentId, 'restart')
+  })
+
+  it('useCreateEnvironment invalidates environment lists', async () => {
+    createEnvironment.mockResolvedValueOnce({ ok: true, id: 'env-2' })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useCreateEnvironment(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        projectId,
+        name: 'Staging',
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).environments.all,
+      })
+    })
+  })
+
+  it('useUpdateEnvironment invalidates environment subtree', async () => {
+    updateEnvironment.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useUpdateEnvironment(orgId, environmentId),
+      { wrapper: createWrapper(client) },
+    )
+
+    await expect(
+      result.current.run({ name: 'Renamed' }),
+    ).resolves.toMatchObject({ ok: true })
+
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).environments.detail(environmentId),
+      })
+    })
+  })
+
+  it('useDeleteEnvironment invalidates environment subtree', async () => {
+    deleteEnvironment.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useDeleteEnvironment(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+      ok: true,
+    })
+
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).environments.all,
+      })
+    })
+  })
+
+  it('useStopEnvironment enqueues destructive stop', async () => {
+    stopEnvironment.mockResolvedValueOnce({
+      ok: true,
+      commandId: 'cmd-3',
+      serverId: 'srv-1',
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useStopEnvironment(orgId, environmentId),
+      { wrapper: createWrapper(client) },
+    )
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(stopEnvironment).toHaveBeenCalledWith(environmentId)
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).commands.all,
+      })
+    })
+  })
+
+  it('useStopEnvironmentMutation stops any environment by id', async () => {
+    stopEnvironment.mockResolvedValueOnce({
+      ok: true,
+      commandId: 'cmd-4',
+      serverId: 'srv-1',
+    })
+
+    const { result } = renderHook(
+      () => useStopEnvironmentMutation(orgId),
+      { wrapper: createWrapper() },
+    )
+
+    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(stopEnvironment.mock.calls[0]?.[0]).toBe(environmentId)
   })
 })

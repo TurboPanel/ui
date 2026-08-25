@@ -257,8 +257,15 @@ describe('classifyCommandLogFailure', () => {
   it('leaves transient failures to the query retry path', () => {
     expect(classifyCommandLogFailure(new Error('HTTP 500'))).toBeNull()
     expect(classifyCommandLogFailure(new Error('HTTP 429'))).toBeNull()
+    expect(classifyCommandLogFailure(new Error('HTTP 408'))).toBeNull()
+    expect(classifyCommandLogFailure(new Error('HTTP 425'))).toBeNull()
     expect(classifyCommandLogFailure(new Error('network request failed'))).toBeNull()
     expect(classifyCommandLogFailure('nope')).toBeNull()
+  })
+
+  it('treats other 4xx statuses as unavailable', () => {
+    expect(classifyCommandLogFailure(new Error('HTTP 410'))).toBe('unavailable')
+    expect(classifyCommandLogFailure(new Error('HTTP 422'))).toBe('unavailable')
   })
 })
 
@@ -364,6 +371,42 @@ describe('useCommandLog', () => {
     })
     expect(fetchCommandLog).toHaveBeenCalledTimes(1)
   })
+
+  it('resets the accumulator when the viewer is disabled', async () => {
+    fetchCommandLog.mockResolvedValue(
+      response({ text: logEvent(1, 'a'), nextSeq: 1 }),
+    )
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useCommandLog('org-1', 'srv-a', 'cmd-1', { enabled, poll: false }),
+      {
+        wrapper: createWrapper(),
+        initialProps: { enabled: true },
+      },
+    )
+    await waitFor(() => {
+      expect(result.current.snapshot.lines).toHaveLength(1)
+    })
+
+    rerender({ enabled: false })
+    await waitFor(() => {
+      expect(result.current.state).toBe('idle')
+    })
+  })
+
+  it('rethrows transient failures as query errors', async () => {
+    fetchCommandLog.mockRejectedValue(new Error('HTTP 500: boom'))
+    const client = createAppQueryClient()
+    client.setDefaultOptions({ queries: { retry: false } })
+    const { result } = renderHook(
+      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
+      { wrapper: createWrapper(client) },
+    )
+    await waitFor(() => {
+      expect(result.current.error).not.toBeNull()
+    })
+    expect(result.current.state).toBe('unavailable')
+  })
 })
 
 describe('useEnvironmentDeployments', () => {
@@ -383,10 +426,36 @@ describe('useEnvironmentDeployments', () => {
     expect(fetchEnvironmentDeployments).toHaveBeenCalledWith('env-1', {})
   })
 
+  it('passes an explicit limit through to the fetch', async () => {
+    fetchEnvironmentDeployments.mockResolvedValue({
+      ok: true,
+      deployments: [],
+      nextCursor: null,
+    })
+    const { result } = renderHook(
+      () => useEnvironmentDeployments('org-1', 'env-1', { limit: 25 }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchEnvironmentDeployments).toHaveBeenCalledWith('env-1', {
+      limit: 25,
+    })
+  })
+
   it('stays disabled without an environment', () => {
     renderHook(() => useEnvironmentDeployments('org-1', ''), {
       wrapper: createWrapper(),
     })
+    expect(fetchEnvironmentDeployments).not.toHaveBeenCalled()
+  })
+
+  it('stays disabled when enabled is false', () => {
+    renderHook(
+      () => useEnvironmentDeployments('org-1', 'env-1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
     expect(fetchEnvironmentDeployments).not.toHaveBeenCalled()
   })
 })
