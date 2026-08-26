@@ -13,10 +13,20 @@ import {
   MonoText,
 } from '@/components/ui'
 import { gitWebhookHint } from '@/lib/git-webhook-url'
-import { githubAppInstallUrl, gitlabOauthConnectUrl, type GitAppSummary } from '@/lib/instance-api'
+import {
+  githubAppInstallUrl,
+  gitlabOauthConnectUrl,
+  type GitAppSummary,
+  type GitInstallationRecord,
+} from '@/lib/instance-api'
 import { usePublicUrlsOptional, useGitApps, useSyncGitApp } from '@/lib/queries/admin'
 import { useGitInstallations } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
+
+export type { GitAppSummary } from '@/lib/instance-api'
+
+/** Whatever the panels have to say back to the page header. */
+type ReportMessage = (message: string | null) => void
 
 /** Consumed once by the operator's browser after a provider redirect. */
 function returnNotice(
@@ -51,13 +61,168 @@ function returnNotice(
   return null
 }
 
+/** One connected account. */
+function InstallationRow({ row }: Readonly<{ row: GitInstallationRecord }>) {
+  return (
+    <View style={styles.account}>
+      <MonoText>{row.accountLogin ?? row.externalInstallationId}</MonoText>
+      {row.accountType ? <Badge label={row.accountType} tone="muted" /> : null}
+      {row.suspended ? <Badge label="Suspended" tone="danger" /> : null}
+    </View>
+  )
+}
+
 /**
- * One registered application: what it is, where its deliveries arrive, and —
- * when it has no connected accounts yet — the step that is still missing.
+ * The connected accounts, and — when there are none — the step that is still
+ * missing.
  *
  * Registering an App and *installing* it are two different acts on GitHub's
  * side, and an App with no installation looks fully set up while being unable
- * to see a single repository. That gap is what the empty state below names.
+ * to see a single repository. That gap is what the empty state names.
+ */
+function RepositoryAccessPanel({
+  app,
+  installations,
+  loading,
+  onError,
+}: Readonly<{
+  app: GitAppSummary
+  installations: readonly GitInstallationRecord[]
+  loading: boolean
+  onError: ReportMessage
+}>) {
+  const isGithub = app.provider === 'github'
+  const connectUrl = isGithub ? githubAppInstallUrl : gitlabOauthConnectUrl
+  const openProvider = () => {
+    void Linking.openURL(connectUrl(app.id)).catch(() => {
+      onError('Could not open the provider consent page.')
+    })
+  }
+
+  return (
+    <SectionPanel
+      title="Repository access"
+      hint="Which accounts this application can read repositories from"
+    >
+      {loading ? <LoadingState /> : null}
+
+      {!loading && installations.length === 0 ? (
+        <InlineNotice
+          title="Complete GitHub installation"
+          body="Repository access has not been installed yet. Complete this step before attaching the source to an application."
+          actions={
+            <Button
+              label={isGithub ? 'Install repositories' : 'Connect a GitLab account'}
+              variant="primary"
+              size="sm"
+              disabled={isGithub && !app.appSlug}
+              onPress={openProvider}
+            />
+          }
+        />
+      ) : null}
+
+      {installations.map((row) => (
+        <InstallationRow key={row.id} row={row} />
+      ))}
+
+      {installations.length > 0 ? (
+        <ButtonRow align="end">
+          <Button
+            label={isGithub ? 'Add another account' : 'Connect another account'}
+            variant="secondary"
+            size="sm"
+            onPress={openProvider}
+          />
+        </ButtonRow>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
+/** Where this application's deliveries arrive, and whether they can reach us. */
+function WebhookPanel({ app }: Readonly<{ app: GitAppSummary }>) {
+  const publicUrls = usePublicUrlsOptional()
+  const unreachable =
+    publicUrls.data && app.webhookUrl
+      ? gitWebhookHint(publicUrls.data.urls, app.provider, app.webhookRef, app.baseUrl).note
+      : null
+
+  return (
+    <SectionPanel title="Webhook" hint="Where this application's deliveries arrive">
+      {app.webhookUrl ? (
+        <View style={styles.webhookRow}>
+          <MonoText style={styles.webhookUrl} numberOfLines={1}>
+            {app.webhookUrl}
+          </MonoText>
+          <CopyButton value={app.webhookUrl} />
+        </View>
+      ) : (
+        <InlineNotice
+          tone="warning"
+          title="No public URL configured"
+          body="Set an instance public URL before pointing a provider at this application."
+        />
+      )}
+      {unreachable ? (
+        <InlineNotice
+          tone="warning"
+          title="Deliveries may not reach this instance"
+          body={unreachable}
+        />
+      ) : null}
+    </SectionPanel>
+  )
+}
+
+/** Re-read what GitHub holds, because a rename there never reaches us. */
+function ProviderRecordPanel({
+  app,
+  scope,
+  onError,
+  onSynced,
+}: Readonly<{
+  app: GitAppSummary
+  scope: 'admin' | 'org'
+  onError: ReportMessage
+  onSynced: ReportMessage
+}>) {
+  const sync = useSyncGitApp(scope)
+
+  return (
+    <SectionPanel title="Provider record" hint="What GitHub currently holds for this application">
+      <Text style={styles.muted}>
+        An operator can rename the App on GitHub and nothing tells us. The slug also builds the
+        install link, so a rename quietly stops new accounts connecting until this runs.
+      </Text>
+      <ButtonRow align="end">
+        <Button
+          label="Sync from GitHub"
+          busyLabel="Syncing…"
+          variant="secondary"
+          size="sm"
+          busy={sync.isPending}
+          onPress={() => {
+            onError(null)
+            onSynced(null)
+            sync.mutate(app.id, {
+              onSuccess: (data) => {
+                onSynced(`Synced. GitHub calls this app "${data.app.name}".`)
+              },
+              onError: (err) => {
+                onError(err instanceof Error ? err.message : 'Sync failed')
+              },
+            })
+          }}
+        />
+      </ButtonRow>
+    </SectionPanel>
+  )
+}
+
+/**
+ * One registered application: what it is, where its deliveries arrive, and —
+ * when it has no connected accounts yet — the step that is still missing.
  */
 export function GitAppDetailSection({
   orgId,
@@ -66,8 +231,6 @@ export function GitAppDetailSection({
 }: Readonly<{ orgId: string; appId: string; scope?: 'admin' | 'org' }>) {
   const appsQuery = useGitApps(scope)
   const installationsQuery = useGitInstallations(orgId, { enabled: orgId.length > 0 })
-  const publicUrls = usePublicUrlsOptional()
-  const sync = useSyncGitApp(scope)
   const params = useLocalSearchParams<{ installed?: string; error?: string }>()
   const [error, setError] = useState<string | null>(null)
   const [synced, setSynced] = useState<string | null>(null)
@@ -89,10 +252,6 @@ export function GitAppDetailSection({
     )
   }
 
-  const connectUrl = app.provider === 'github' ? githubAppInstallUrl : gitlabOauthConnectUrl
-  const installLabel =
-    app.provider === 'github' ? 'Install repositories' : 'Connect a GitLab account'
-
   return (
     <View style={styles.root}>
       <Text style={orgPanelStyles.pageTitle}>{app.name}</Text>
@@ -110,130 +269,22 @@ export function GitAppDetailSection({
         another organization's.
       */}
       {orgId ? (
-        <SectionPanel
-          title="Repository access"
-          hint="Which accounts this application can read repositories from"
-        >
-          {installationsQuery.isLoading ? <LoadingState /> : null}
-
-          {!installationsQuery.isLoading && installations.length === 0 ? (
-            <InlineNotice
-              title="Complete GitHub installation"
-              body="Repository access has not been installed yet. Complete this step before attaching the source to an application."
-              actions={
-                <Button
-                  label={installLabel}
-                  variant="primary"
-                  size="sm"
-                  disabled={app.provider === 'github' && !app.appSlug}
-                  onPress={() => {
-                    void Linking.openURL(connectUrl(app.id)).catch(() => {
-                      setError('Could not open the provider consent page.')
-                    })
-                  }}
-                />
-              }
-            />
-          ) : null}
-
-          {installations.map((row) => (
-            <View key={row.id} style={styles.account}>
-              <MonoText>{row.accountLogin ?? row.externalInstallationId}</MonoText>
-              {row.accountType ? <Badge label={row.accountType} tone="muted" /> : null}
-              {row.suspended ? <Badge label="Suspended" tone="danger" /> : null}
-            </View>
-          ))}
-
-          {installations.length > 0 ? (
-            <ButtonRow align="end">
-              <Button
-                label={
-                  app.provider === 'github' ? 'Add another account' : 'Connect another account'
-                }
-                variant="secondary"
-                size="sm"
-                onPress={() => {
-                  void Linking.openURL(connectUrl(app.id)).catch(() => {
-                    setError('Could not open the provider consent page.')
-                  })
-                }}
-              />
-            </ButtonRow>
-          ) : null}
-        </SectionPanel>
+        <RepositoryAccessPanel
+          app={app}
+          installations={installations}
+          loading={installationsQuery.isLoading}
+          onError={setError}
+        />
       ) : null}
 
-      <SectionPanel title="Webhook" hint="Where this application's deliveries arrive">
-        {app.webhookUrl ? (
-          <View style={styles.webhookRow}>
-            <MonoText style={styles.webhookUrl} numberOfLines={1}>
-              {app.webhookUrl}
-            </MonoText>
-            <CopyButton value={app.webhookUrl} />
-          </View>
-        ) : (
-          <InlineNotice
-            tone="warning"
-            title="No public URL configured"
-            body="Set an instance public URL before pointing a provider at this application."
-          />
-        )}
-        {publicUrls.data && app.webhookUrl
-          ? (() => {
-              const hint = gitWebhookHint(
-                publicUrls.data.urls,
-                app.provider,
-                app.webhookRef,
-                app.baseUrl
-              )
-              return hint.note ? (
-                <InlineNotice
-                  tone="warning"
-                  title="Deliveries may not reach this instance"
-                  body={hint.note}
-                />
-              ) : null
-            })()
-          : null}
-      </SectionPanel>
+      <WebhookPanel app={app} />
 
       {app.provider === 'github' && !app.readOnly ? (
-        <SectionPanel
-          title="Provider record"
-          hint="What GitHub currently holds for this application"
-        >
-          <Text style={styles.muted}>
-            An operator can rename the App on GitHub and nothing tells us. The slug also builds the
-            install link, so a rename quietly stops new accounts connecting until this runs.
-          </Text>
-          <ButtonRow align="end">
-            <Button
-              label="Sync from GitHub"
-              busyLabel="Syncing…"
-              variant="secondary"
-              size="sm"
-              busy={sync.isPending}
-              onPress={() => {
-                setError(null)
-                setSynced(null)
-                sync.mutate(app.id, {
-                  onSuccess: (data) => {
-                    setSynced(`Synced. GitHub calls this app "${data.app.name}".`)
-                  },
-                  onError: (err) => {
-                    setError(err instanceof Error ? err.message : 'Sync failed')
-                  },
-                })
-              }}
-            />
-          </ButtonRow>
-        </SectionPanel>
+        <ProviderRecordPanel app={app} scope={scope} onError={setError} onSynced={setSynced} />
       ) : null}
     </View>
   )
 }
-
-export type { GitAppSummary }
 
 const styles = StyleSheet.create({
   root: {

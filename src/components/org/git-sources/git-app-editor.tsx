@@ -94,6 +94,163 @@ function editorFrom(app: GitAppSummary): EditorState {
 }
 
 /**
+ * Every string that differs between the two providers, in one table.
+ *
+ * The fields themselves are the same shape either way — only the words change —
+ * and spelling that as a ternary per label, placeholder and hint made the form
+ * mostly branching. Adding a provider is now a third entry here.
+ */
+const PROVIDER_COPY: Record<Provider, {
+  namePlaceholder: string
+  appIdLabel: string
+  appIdPlaceholder: string
+  appIdHint: string
+  appIdRequired: string
+  originLabel: string
+  originHint: string
+  clientIdLabel: string
+  clientIdPlaceholder: string
+  clientIdHint: string
+  webhookLabel: string
+  webhookHint: string
+}> = {
+  github: {
+    namePlaceholder: 'TurboPanel',
+    appIdLabel: 'App ID',
+    appIdPlaceholder: '123456',
+    appIdHint: "Numeric ID from the App's settings page. Also how a delivery names this App.",
+    appIdRequired: 'App ID is required.',
+    originLabel: 'GitHub origin',
+    originHint: 'GitHub Enterprise Server origin, or github.com.',
+    clientIdLabel: 'Client ID',
+    clientIdPlaceholder: 'Iv1.0123456789abcdef',
+    clientIdHint: 'Needed for the user OAuth flow; leave empty to clear.',
+    webhookLabel: 'Webhook secret',
+    webhookHint:
+      "Signs GitHub's deliveries. Leave empty to keep the stored one; clear it after typing to remove it.",
+  },
+  gitlab: {
+    namePlaceholder: 'TurboPanel (GitLab)',
+    appIdLabel: 'Application ID',
+    appIdPlaceholder: '0123abcd…',
+    appIdHint: 'Application ID from the GitLab OAuth application.',
+    appIdRequired: 'Application ID is required.',
+    originLabel: 'GitLab origin',
+    originHint:
+      'Self-managed GitLab origin, or gitlab.com. Apps on different origins stay isolated.',
+    clientIdLabel: 'Application ID (OAuth)',
+    clientIdPlaceholder: '0123abcd…',
+    clientIdHint: 'Client ID used for the authorization-code grant.',
+    webhookLabel: 'Webhook token',
+    webhookHint:
+      'GitLab does not sign deliveries, so this token is the whole credential. Use at least 24 characters.',
+  },
+}
+
+/** What the operator still has to fill in; `null` once the form can be sent. */
+function validationError(form: EditorState, provider: Provider): string | null {
+  if (!form.name.trim()) return 'Name is required.'
+  if (!form.externalAppId.trim()) return PROVIDER_COPY[provider].appIdRequired
+  return null
+}
+
+/**
+ * The fields to send.
+ *
+ * The three write-only secrets are included only when the operator actually
+ * typed into one, so an edit that renames an app keeps its sealed private key
+ * rather than clearing it. A private key has no "clear" verb worth offering, so
+ * an emptied one is left out too.
+ */
+function payloadFrom(
+  form: EditorState,
+  touched: Record<string, boolean>,
+  provider: Provider,
+): GitAppUpdate {
+  const secrets: GitAppUpdate = {}
+  if (touched.privateKeyPem && form.privateKeyPem.trim() !== '') {
+    secrets.privateKeyPem = form.privateKeyPem
+  }
+  if (touched.clientSecret) secrets.clientSecret = nullable(form.clientSecret)
+  if (touched.webhookSecret) secrets.webhookSecret = nullable(form.webhookSecret)
+
+  return {
+    name: form.name.trim(),
+    baseUrl: form.baseUrl.trim() || PROVIDER_DEFAULT_ORIGIN[provider],
+    externalAppId: form.externalAppId.trim(),
+    appSlug: nullable(form.appSlug),
+    clientId: nullable(form.clientId),
+    redirectUri: nullable(form.redirectUri),
+    ...secrets,
+  }
+}
+
+/** The credentials the provider issues — a signing key, or a secret plus callback. */
+function CredentialFields({
+  isGithub,
+  existing,
+  form,
+  set,
+  busy,
+}: Readonly<{
+  isGithub: boolean
+  existing?: GitAppSummary
+  form: EditorState
+  set: (key: keyof EditorState) => (text: string) => void
+  busy: boolean
+}>) {
+  if (isGithub) {
+    return (
+      <TextField
+        label="Private key"
+        labelRight={<SealedBadge configured={existing?.hasPrivateKey === true} />}
+        value={form.privateKeyPem}
+        onChangeText={set('privateKeyPem')}
+        placeholder={'-----BEGIN RSA PRIVATE KEY-----'}
+        hint={
+          existing?.hasPrivateKey
+            ? 'A key is stored and is never shown. Paste a new .pem to replace it; leave empty to keep it.'
+            : 'Paste the .pem downloaded when the App key was generated.'
+        }
+        multiline
+        mono
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        editable={!busy}
+      />
+    )
+  }
+
+  return (
+    <>
+      <TextField
+        label="Application secret"
+        labelRight={<SealedBadge configured={existing?.hasClientSecret === true} />}
+        value={form.clientSecret}
+        onChangeText={set('clientSecret')}
+        hint="Secret from the GitLab OAuth application. Leave empty to keep the stored one."
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        editable={!busy}
+      />
+      <TextField
+        label="Redirect URI"
+        value={form.redirectUri}
+        onChangeText={set('redirectUri')}
+        placeholder="https://panel.example.com/api/client/v1/sources/gitlab/callback"
+        hint="Must match the callback registered on the GitLab application, byte for byte."
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!busy}
+      />
+    </>
+  )
+}
+
+/**
  * Create / edit form for one app.
  *
  * `existing` decides the verb. The three secret fields are write-only and are
@@ -130,46 +287,20 @@ export function GitAppEditor({
   }
 
   const isGithub = provider === 'github'
+  const copy = PROVIDER_COPY[provider]
 
   const onSave = () => {
-    setError(null)
-    if (!form.name.trim()) {
-      setError('Name is required.')
-      return
-    }
-    if (!form.externalAppId.trim()) {
-      setError(isGithub ? 'App ID is required.' : 'Application ID is required.')
-      return
-    }
+    const invalid = validationError(form, provider)
+    setError(invalid)
+    if (invalid) return
 
-    const secrets: Partial<GitAppUpdate> = {}
-    // A private key has no "clear" verb worth offering — send it only when a
-    // new one was pasted.
-    if (touched.privateKeyPem && form.privateKeyPem.trim() !== '') {
-      secrets.privateKeyPem = form.privateKeyPem
-    }
-    if (touched.clientSecret) secrets.clientSecret = nullable(form.clientSecret)
-    if (touched.webhookSecret) secrets.webhookSecret = nullable(form.webhookSecret)
-
-    const shared = {
-      name: form.name.trim(),
-      baseUrl: form.baseUrl.trim() || PROVIDER_DEFAULT_ORIGIN[provider],
-      externalAppId: form.externalAppId.trim(),
-      appSlug: nullable(form.appSlug),
-      clientId: nullable(form.clientId),
-      redirectUri: nullable(form.redirectUri),
-      ...secrets,
-    }
-
+    const shared = payloadFrom(form, touched, provider)
     const onError = (err: unknown) => {
       setError(errorMessage(err, 'Failed to save the application'))
     }
 
     if (existing) {
-      update.mutate(
-        { id: existing.id, updates: shared },
-        { onSuccess: onDone, onError },
-      )
+      update.mutate({ id: existing.id, updates: shared }, { onSuccess: onDone, onError })
     } else {
       create.mutate({ provider, ...shared } as GitAppCreate, {
         onSuccess: onDone,
@@ -186,7 +317,7 @@ export function GitAppEditor({
         label="Name"
         value={form.name}
         onChangeText={set('name')}
-        placeholder={isGithub ? 'TurboPanel' : 'TurboPanel (GitLab)'}
+        placeholder={copy.namePlaceholder}
         hint="Shown when choosing which application to connect through."
         autoCapitalize="none"
         autoCorrect={false}
@@ -194,30 +325,22 @@ export function GitAppEditor({
       />
 
       <TextField
-        label={isGithub ? 'App ID' : 'Application ID'}
+        label={copy.appIdLabel}
         value={form.externalAppId}
         onChangeText={set('externalAppId')}
-        placeholder={isGithub ? '123456' : '0123abcd…'}
-        hint={
-          isGithub
-            ? "Numeric ID from the App's settings page. Also how a delivery names this App."
-            : 'Application ID from the GitLab OAuth application.'
-        }
+        placeholder={copy.appIdPlaceholder}
+        hint={copy.appIdHint}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!busy}
       />
 
       <TextField
-        label={isGithub ? 'GitHub origin' : 'GitLab origin'}
+        label={copy.originLabel}
         value={form.baseUrl}
         onChangeText={set('baseUrl')}
         placeholder={PROVIDER_DEFAULT_ORIGIN[provider]}
-        hint={
-          isGithub
-            ? 'GitHub Enterprise Server origin, or github.com.'
-            : 'Self-managed GitLab origin, or gitlab.com. Apps on different origins stay isolated.'
-        }
+        hint={copy.originHint}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!busy}
@@ -237,76 +360,30 @@ export function GitAppEditor({
       ) : null}
 
       <TextField
-        label={isGithub ? 'Client ID' : 'Application ID (OAuth)'}
+        label={copy.clientIdLabel}
         value={form.clientId}
         onChangeText={set('clientId')}
-        placeholder={isGithub ? 'Iv1.0123456789abcdef' : '0123abcd…'}
-        hint={
-          isGithub
-            ? 'Needed for the user OAuth flow; leave empty to clear.'
-            : 'Client ID used for the authorization-code grant.'
-        }
+        placeholder={copy.clientIdPlaceholder}
+        hint={copy.clientIdHint}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!busy}
       />
 
-      {isGithub ? (
-        <TextField
-          label="Private key"
-          labelRight={<SealedBadge configured={existing?.hasPrivateKey === true} />}
-          value={form.privateKeyPem}
-          onChangeText={set('privateKeyPem')}
-          placeholder={'-----BEGIN RSA PRIVATE KEY-----'}
-          hint={
-            existing?.hasPrivateKey
-              ? 'A key is stored and is never shown. Paste a new .pem to replace it; leave empty to keep it.'
-              : 'Paste the .pem downloaded when the App key was generated.'
-          }
-          multiline
-          mono
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="off"
-          editable={!busy}
-        />
-      ) : (
-        <>
-          <TextField
-            label="Application secret"
-            labelRight={<SealedBadge configured={existing?.hasClientSecret === true} />}
-            value={form.clientSecret}
-            onChangeText={set('clientSecret')}
-            hint="Secret from the GitLab OAuth application. Leave empty to keep the stored one."
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            editable={!busy}
-          />
-          <TextField
-            label="Redirect URI"
-            value={form.redirectUri}
-            onChangeText={set('redirectUri')}
-            placeholder="https://panel.example.com/api/client/v1/sources/gitlab/callback"
-            hint="Must match the callback registered on the GitLab application, byte for byte."
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!busy}
-          />
-        </>
-      )}
+      <CredentialFields
+        isGithub={isGithub}
+        existing={existing}
+        form={form}
+        set={set}
+        busy={busy}
+      />
 
       <TextField
-        label={isGithub ? 'Webhook secret' : 'Webhook token'}
+        label={copy.webhookLabel}
         labelRight={<SealedBadge configured={existing?.hasWebhookSecret === true} />}
         value={form.webhookSecret}
         onChangeText={set('webhookSecret')}
-        hint={
-          isGithub
-            ? "Signs GitHub's deliveries. Leave empty to keep the stored one; clear it after typing to remove it."
-            : 'GitLab does not sign deliveries, so this token is the whole credential. Use at least 24 characters.'
-        }
+        hint={copy.webhookHint}
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}

@@ -24,6 +24,14 @@ function tailState(input: {
   return input.hasData ? 'sealed' : 'idle'
 }
 
+function logsButtonAccessibilityLabel(canTail: boolean, open: boolean): string {
+  if (!canTail) {
+    return 'Container logs unavailable until Docker identity is reported'
+  }
+  if (open) return 'Hide container logs'
+  return 'Show container logs'
+}
+
 /**
  * On-demand `docker container logs` snapshot from a containers-panel row.
  * Follow is a client refetch cadence — the host never `--follow`s.
@@ -79,13 +87,7 @@ export function ContainerLogTail({
             if (open) setFollow(false)
             setOpen((current) => !current)
           }}
-          accessibilityLabel={
-            canTail
-              ? open
-                ? 'Hide container logs'
-                : 'Show container logs'
-              : 'Container logs unavailable until Docker identity is reported'
-          }
+          accessibilityLabel={logsButtonAccessibilityLabel(canTail, open)}
         />
         {open && canTail ? (
           <Button
