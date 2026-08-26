@@ -17,10 +17,10 @@ describe('gitWebhookHint', () => {
 
   it('uses each provider ingress path', () => {
     expect(gitWebhookHint(['https://panel.example.com'], 'github').webhookUrl).toBe(
-      'https://panel.example.com/api/git/v1/github/webhook',
+      'https://panel.example.com/webhook/github',
     )
     expect(gitWebhookHint(['https://panel.example.com'], 'gitlab').webhookUrl).toBe(
-      'https://panel.example.com/api/git/v1/gitlab/webhook',
+      'https://panel.example.com/webhook/gitlab',
     )
   })
 
@@ -30,7 +30,7 @@ describe('gitWebhookHint', () => {
       'github',
     )
     expect(hint).toEqual({
-      webhookUrl: 'https://panel.example.com/api/git/v1/github/webhook',
+      webhookUrl: 'https://panel.example.com/webhook/github',
       reachable: true,
       note: null,
     })
@@ -47,36 +47,53 @@ describe('gitWebhookHint', () => {
       expect(hint.reachable).toBe(false)
       expect(hint.note).toBe(LAN_WEBHOOK_NOTE)
       expect(hint.webhookUrl).toBe(
-        `${origin.replace(/\/$/, '')}/api/git/v1/gitlab/webhook`,
+        `${origin.replace(/\/$/, '')}/webhook/gitlab`,
       )
     }
   })
 
-  it('scopes the path to one app when given a webhook ref', () => {
+  it('scopes the path to one app on a self-hosted origin', () => {
     const hint = gitWebhookHint(
       ['https://panel.example.com'],
       'github',
       'ref-abc',
+      'https://github.acme.test',
     )
-    // The ref is what lets a delivery name its app before any secret is
-    // consulted, so it has to survive into the URL the operator copies.
+    // GitHub Enterprise ships on its own cadence, so the App-id header is not a
+    // safe single point of failure — the ref survives into the copied URL.
     expect(hint.webhookUrl).toBe(
-      'https://panel.example.com/api/git/v1/github/webhook/ref-abc',
+      'https://panel.example.com/webhook/github/ref-abc',
     )
     expect(hint.reachable).toBe(true)
+  })
+
+  it('keeps the hosted path clean even when a ref exists', () => {
+    const hint = gitWebhookHint(
+      ['https://panel.example.com'],
+      'github',
+      'ref-abc',
+      'https://github.com',
+    )
+    // Nothing internal belongs in a URL the operator pastes into github.com.
+    expect(hint.webhookUrl).toBe('https://panel.example.com/webhook/github')
   })
 
   it('falls back to the bare path when no ref is given', () => {
     const hint = gitWebhookHint(['https://panel.example.com'], 'gitlab')
     expect(hint.webhookUrl).toBe(
-      'https://panel.example.com/api/git/v1/gitlab/webhook',
+      'https://panel.example.com/webhook/gitlab',
     )
   })
 
   it('escapes a ref so it cannot break out of its path segment', () => {
-    const hint = gitWebhookHint(['https://panel.example.com'], 'github', 'a/b')
+    const hint = gitWebhookHint(
+      ['https://panel.example.com'],
+      'github',
+      'a/b',
+      'https://github.acme.test',
+    )
     expect(hint.webhookUrl).toBe(
-      'https://panel.example.com/api/git/v1/github/webhook/a%2Fb',
+      'https://panel.example.com/webhook/github/a%2Fb',
     )
   })
 })

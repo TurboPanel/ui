@@ -30,9 +30,6 @@ export type ManagedStatus =
   | 'stopped'
   | 'failed'
 
-/** @deprecated Use {@link ManagedSqlAccessScope} — legacy alias for one-release reads. */
-export type ManagedBindScope = ManagedSqlAccessScope
-
 export type { ManagedSqlAccessScope }
 
 /**

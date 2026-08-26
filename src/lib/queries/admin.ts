@@ -14,7 +14,9 @@ import {
   saveEmailSettings,
   savePublicUrls,
   saveSignupSettings,
+  type GithubManifestStartInput,
   startGithubAppManifest,
+  syncGitApp,
   updateGitApp,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -192,10 +194,24 @@ export function useDeleteGitApp(scope: 'admin' | 'org') {
  */
 export function useStartGithubAppManifest(scope: 'admin' | 'org') {
   return useApiMutation({
-    mutationFn: (input: {
-      name?: string
-      baseUrl?: string
-      organizationLogin?: string | null
-    }) => startGithubAppManifest(scope, input),
+    mutationFn: (input: GithubManifestStartInput) =>
+      startGithubAppManifest(scope, input),
+  })
+}
+
+/**
+ * Reconcile one app against the provider's record of it.
+ *
+ * Invalidates the list because the name and slug it returns are what the list
+ * renders — the whole point is that they may have changed on the provider's
+ * side without anything telling us.
+ */
+export function useSyncGitApp(scope: 'admin' | 'org') {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (id: string) => syncGitApp(scope, id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
+    },
   })
 }

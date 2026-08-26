@@ -308,6 +308,35 @@ export function plainTextTranscriptLines(text: string): LogTranscriptLine[] {
   return rows
 }
 
+/** RFC3339Nano prefix from `docker container logs --timestamps`. */
+const DOCKER_TIMESTAMP_RE =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))\s(.*)$/
+
+/**
+ * Adapt a `docker container logs --timestamps` snapshot to transcript rows.
+ * Lines without a leading RFC3339 stamp degrade like {@link plainTextTranscriptLines}.
+ */
+export function dockerTimestampTranscriptLines(
+  text: string,
+): LogTranscriptLine[] {
+  const rows: LogTranscriptLine[] = []
+  let seq = 0
+  for (const raw of text.split('\n')) {
+    const stripped = stripAnsi(raw)
+    if (stripped.trim().length === 0) continue
+    seq += 1
+    const match = DOCKER_TIMESTAMP_RE.exec(stripped)
+    rows.push({
+      seq,
+      timestamp: match?.[1] ?? null,
+      stream: 'stdout',
+      phase: null,
+      message: match?.[2] ?? stripped,
+    })
+  }
+  return rows
+}
+
 /** Plain text for Copy / Download — what the viewer shows, minus the chrome. */
 export function transcriptPlainText(
   lines: readonly LogTranscriptLine[],

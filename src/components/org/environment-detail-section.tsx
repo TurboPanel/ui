@@ -33,6 +33,7 @@ import {
   type ComposePreviewMode,
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
+import { ContainerLogTail } from '@/components/org/logs/container-log-tail'
 import {
   ContainerRoleBadge,
   ContainerStatusBadge,
@@ -1403,10 +1404,12 @@ function EnvironmentServiceSettingsSectionPanel({
 }
 
 function EnvironmentContainersSectionPanel({
+  orgId,
   services,
   containersByService,
   allServers,
 }: Readonly<{
+  orgId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   allServers: OrgServerRecord[]
@@ -1452,6 +1455,7 @@ function EnvironmentContainersSectionPanel({
                       <Text style={orgPanelStyles.detailLabel}>Host: </Text>
                       {containerHostLabel(container, allServers)}
                     </Text>
+                    <ContainerLogTail orgId={orgId} container={container} />
                   </View>
                 ))}
               </View>
@@ -1614,6 +1618,7 @@ function EnvironmentLoadedPanels({
 
       {showSection('containers') ? (
         <EnvironmentContainersSectionPanel
+          orgId={orgId}
           services={services}
           containersByService={containersByService}
           allServers={allServers}

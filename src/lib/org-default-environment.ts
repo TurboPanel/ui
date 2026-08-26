@@ -8,10 +8,6 @@ import { queryKeys } from '@/lib/query-keys'
 /** Platform fallback when the org has no custom default (or the manage-gated read fails). */
 export const PLATFORM_DEFAULT_ENVIRONMENT_NAME = 'Production'
 
-/** @deprecated Prefer {@link queryKeys.org(orgId).settings.defaultEnvironment}. */
-export const orgDefaultEnvironmentQueryKey = (orgId: string) =>
-  queryKeys.org(orgId).settings.defaultEnvironment
-
 /**
  * Resolved org default environment name for auto-provision paths.
  *

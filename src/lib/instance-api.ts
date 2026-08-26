@@ -28,7 +28,6 @@ export type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 export type {
   ManagedAccessEndpoint,
   ManagedBackupRecord,
-  ManagedBindScope,
   ManagedConnectionInfo,
   ManagedConnectionRole,
   ManagedDetailResponse,
@@ -1999,6 +1998,15 @@ export async function fetchContainer(id: string): Promise<{ container: Container
   return await apiFetch(`${CLIENT_API}/containers/${id}`)
 }
 
+/** Bounded on-demand `docker container logs` snapshot — never stored. */
+export async function fetchContainerLogTail(
+  containerId: string,
+  tail?: number
+): Promise<{ logs: string }> {
+  const query = typeof tail === 'number' ? `?tail=${encodeURIComponent(String(tail))}` : ''
+  return await apiFetch(`${CLIENT_API}/containers/${containerId}/logs${query}`)
+}
+
 export async function createContainer(body: {
   serviceId: string
   serverId: string
@@ -2598,8 +2606,8 @@ export async function saveSignupSettings(enabled: boolean): Promise<SignupSettin
  * That module is a different repo and runtime, so it cannot be imported here —
  * keep these two literals in step with it.
  */
-export const GITHUB_WEBHOOK_PATH = '/api/git/v1/github/webhook'
-export const GITLAB_WEBHOOK_PATH = '/api/git/v1/gitlab/webhook'
+export const GITHUB_WEBHOOK_PATH = '/webhook/github'
+export const GITLAB_WEBHOOK_PATH = '/webhook/gitlab'
 
 /**
  * A registered Git provider application, as either git-app surface reports it.
@@ -2736,9 +2744,31 @@ export type GithubManifestStart = {
  * webhook URL, so the App is created self-identifying — nothing to copy by hand
  * afterwards.
  */
+/**
+ * Everything the wizard collects, in one shot.
+ *
+ * All of it is **creation-only** on GitHub's side — the name, the origin, the
+ * webhook URL, the permission set are baked into the App and cannot be changed
+ * from here afterwards. That is why the wizard asks rather than defaulting.
+ */
+export type GithubManifestStartInput = {
+  name: string
+  /** GitHub Enterprise origin; omit for github.com. */
+  baseUrl?: string
+  apiUrl?: string | null
+  /** Blank means the acting user's personal account. */
+  organizationLogin?: string | null
+  /** Which published instance URL this App should deliver to. */
+  webhookOrigin?: string | null
+  /** `write` also subscribes the App to `pull_request`. */
+  pullRequestAccess?: 'read' | 'write'
+  customGitUser?: string | null
+  customGitPort?: number | null
+}
+
 export async function startGithubAppManifest(
   scope: GitAppScope,
-  input: { name?: string; baseUrl?: string; organizationLogin?: string | null } = {}
+  input: GithubManifestStartInput
 ): Promise<GithubManifestStart> {
   return await apiFetch<GithubManifestStart>(
     gitAppsUrl(scope, '/github/manifest'),
@@ -2746,6 +2776,29 @@ export async function startGithubAppManifest(
       method: 'POST',
       body: JSON.stringify(input),
     }
+  )
+}
+
+/** What the provider currently holds for an app, as of a sync. */
+export type GitAppProviderSnapshot = {
+  permissions: Record<string, string>
+  events: string[]
+}
+
+/**
+ * Reconcile an app against the provider's own record of it.
+ *
+ * An operator can rename an App on GitHub and nothing announces it. Worse, the
+ * slug builds the install URL — so a renamed App silently loses the ability to
+ * connect new accounts until this runs.
+ */
+export async function syncGitApp(
+  scope: GitAppScope,
+  id: string
+): Promise<{ app: GitAppSummary; provider: GitAppProviderSnapshot }> {
+  return await apiFetch<{ app: GitAppSummary; provider: GitAppProviderSnapshot }>(
+    gitAppsUrl(scope, `/${encodeURIComponent(id)}/sync`),
+    { method: 'POST' }
   )
 }
 
@@ -2947,102 +3000,6 @@ export type ContainerLogEventRecord = {
 }
 
 /**
- * The **closed** predicate set `GET /organizations/:id/container-logs` accepts.
- *
- * It is simultaneously the store's `ORDER BY` prefix and its partition plan, so
- * widening it is a storage migration rather than a type change. Never send a
- * key that is not listed here, and never expose a filter the server cannot
- * answer. `organizationId` is absent on purpose: it comes from the path, after
- * the access check, so no query string can widen a read past the authorized
- * organization.
- */
-export type ContainerLogQueryFilter = {
-  /** Inclusive lower bound, ISO-8601. */
-  from: string
-  /** Exclusive upper bound, ISO-8601. */
-  to: string
-  serverId?: string
-  environmentId?: string
-  serviceId?: string
-  containerId?: string
-  stream?: ContainerLogStream
-  /** Case-insensitive substring match on the message. */
-  search?: string
-  /** Opaque cursor from the previous page; pass back verbatim. */
-  cursor?: string
-  limit?: number
-}
-
-/** One newest-first page. `nextCursor` is null once the window is exhausted. */
-export type ContainerLogPageResponse = {
-  events: ContainerLogEventRecord[]
-  nextCursor: string | null
-}
-
-/**
- * Read one newest-first page of container output for an organization.
- *
- * A 503 carrying `container_logs_disabled` / `container_logs_unavailable` is a
- * *state of the feature*, not a transport failure: the control plane refuses to
- * let "you never turned this on" look like "your containers printed nothing".
- * `apiFetch` keeps the code in the thrown message; the query layer classifies it
- * (`classifyContainerLogFailure`) rather than retrying it.
- */
-export async function fetchContainerLogs(
-  orgId: string,
-  filter: ContainerLogQueryFilter
-): Promise<ContainerLogPageResponse> {
-  const params = new URLSearchParams()
-  params.set('from', filter.from)
-  params.set('to', filter.to)
-  for (const key of [
-    'serverId',
-    'environmentId',
-    'serviceId',
-    'containerId',
-    'stream',
-    'search',
-    'cursor',
-  ] as const) {
-    const value = filter[key]
-    if (typeof value === 'string' && value.length > 0) params.set(key, value)
-  }
-  if (typeof filter.limit === 'number' && filter.limit > 0) {
-    params.set('limit', String(filter.limit))
-  }
-  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/container-logs?${params.toString()}`)
-}
-
-/**
- * Organization container-log retention switch.
- *
- * Deliberately **not** a cascade like host defaults: retention is billed and
- * stored per tenant, so there is no lower layer that could sensibly override
- * it. `retentionDays` is the platform-wide window and is read-only here.
- */
-export type OrgContainerLogSettings = {
-  containerLogsEnabled: boolean
-  retentionDays: number
-}
-
-export async function fetchOrgContainerLogSettings(
-  orgId: string
-): Promise<OrgContainerLogSettings> {
-  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/container-logs-settings`)
-}
-
-/** `null` clears the option, returning the organization to the platform default (off). */
-export async function saveOrgContainerLogSettings(
-  orgId: string,
-  patch: Readonly<{ containerLogsEnabled: boolean | null }>
-): Promise<OrgContainerLogSettings & { ok: true }> {
-  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/container-logs-settings`, {
-    method: 'PUT',
-    body: JSON.stringify(patch),
-  })
-}
-
-/**
  * One deploy attempt against one server, read from the append-only `command`
  * table. `id` **is** the command id — pass it to {@link fetchCommandLog} for the
  * transcript.
@@ -3233,6 +3190,13 @@ export type SourceRecord = {
 export type GitInstallationRecord = {
   id: string
   organizationId: string
+  /**
+   * The registered app this connection was granted through.
+   *
+   * What lets the repository picker group connections under their app, which is
+   * the top level of the app -> account -> repository hierarchy.
+   */
+  appId: string
   provider: string
   externalInstallationId: string
   accountLogin: string | null
@@ -3327,6 +3291,35 @@ export async function fetchInstallationRepositories(
   installationId: string
 ): Promise<{ repositories: GitRepositorySummary[] }> {
   return await apiFetch(`${CLIENT_API}/sources/installations/${installationId}/repositories`)
+}
+
+/**
+ * Bind a repository to this organization, reusing the binding if it exists.
+ *
+ * This is how a repository gets attached now: the operator picks
+ * **app -> account -> repository** while creating or editing a project, and
+ * this resolves that to a `source` row underneath. The row itself never appears
+ * in the console as a thing to manage.
+ *
+ * **Idempotent.** Two projects on the same repository share one row rather than
+ * making two — which matters because auto-deploy and the default branch live on
+ * the row, so duplicates would let one repository hold two different policies
+ * while a single push fanned out to both.
+ *
+ * Must resolve *before* the project save that references it: an unknown
+ * `sourceId` fails the compose lint.
+ */
+export async function attachSource(input: {
+  installationId: string
+  repositoryExternalId: string
+  repositoryUrl: string
+  defaultBranch?: string | null
+}): Promise<{ id: string; reused: boolean }> {
+  const raw = await apiFetch<{ id: string; reused: boolean }>(
+    `${CLIENT_API}/sources/attach`,
+    { method: 'POST', body: JSON.stringify(input) }
+  )
+  return { id: raw.id, reused: raw.reused }
 }
 
 /**
@@ -4087,15 +4080,6 @@ export async function updateProjectPrincipal(
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
-}
-
-/** @deprecated Use {@link updateProjectPrincipal}. */
-export async function updateProjectPrincipalAssignments(
-  projectId: string,
-  principalId: string,
-  serviceIds: string[]
-): Promise<{ ok: true; serviceIds?: string[] }> {
-  return await updateProjectPrincipal(projectId, principalId, { serviceIds })
 }
 
 export async function deleteProjectPrincipal(projectId: string, id: string): Promise<{ ok: true }> {

@@ -88,8 +88,9 @@ function fanOutDuration(
 
 /**
  * Group list rows into deploys. Rows sharing a non-null `generation` are one
- * fan-out; rows with a null generation (legacy attempts) stand alone. Group
- * order follows the incoming row order, which the API returns newest first.
+ * fan-out; a row whose command recorded no generation in its context bag
+ * stands alone. Group order follows the incoming row order, which the API
+ * returns newest first.
  */
 export function groupDeploymentsByGeneration(
   rows: readonly DeploymentHistoryRecord[],

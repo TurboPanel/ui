@@ -8,6 +8,7 @@ import {
   CopyButton,
   LoadingState,
   TextField,
+  WizardSteps,
 } from '@/components/ui'
 import { validateDisplayName } from '@/lib/display-name'
 import {
@@ -46,52 +47,6 @@ const WIZARD_STEPS: readonly { id: WizardStep; label: string }[] = [
   { id: 'waiting', label: 'Connect' },
 ]
 
-function WizardStepIndicator({ step }: Readonly<{ step: WizardStep }>) {
-  const activeIndex = WIZARD_STEPS.findIndex((entry) => entry.id === step)
-
-  return (
-    <View style={styles.stepRow}>
-      {WIZARD_STEPS.map((entry, index) => {
-        const done = index < activeIndex
-        const active = entry.id === step
-        return (
-          <View key={entry.id} style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepDot,
-                done && styles.stepDotDone,
-                active && styles.stepDotActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.stepDotText,
-                  done && styles.stepDotTextDone,
-                  active && styles.stepDotTextActive,
-                ]}
-              >
-                {index + 1}
-              </Text>
-            </View>
-            <Text
-              style={[styles.stepLabel, active && styles.stepLabelActive]}
-            >
-              {entry.label}
-            </Text>
-            {index < WIZARD_STEPS.length - 1 ? (
-              <View
-                style={[
-                  styles.stepConnector,
-                  index < activeIndex && styles.stepConnectorDone,
-                ]}
-              />
-            ) : null}
-          </View>
-        )
-      })}
-    </View>
-  )
-}
 
 type AddServerWizardProps = Readonly<{
   orgId: string
@@ -579,7 +534,7 @@ export function AddServerWizard({
 
   const body = (
     <>
-      <WizardStepIndicator step={step} />
+      <WizardSteps steps={WIZARD_STEPS} current={step} />
       {step === 'create' ? (
         <CreateStep
           name={displayName}
@@ -653,69 +608,6 @@ const styles = StyleSheet.create({
     color: colors.textChip,
     fontSize: 13,
     fontWeight: '700',
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderArea,
-  },
-  stepItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minWidth: 0,
-  },
-  stepDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepDotActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  stepDotDone: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.accent,
-  },
-  stepDotText: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  stepDotTextActive: {
-    color: chrome.accent,
-  },
-  stepDotTextDone: {
-    color: colors.buttonText,
-  },
-  stepLabel: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  stepLabelActive: {
-    color: colors.text,
-  },
-  stepConnector: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.borderArea,
-    marginHorizontal: 2,
-  },
-  stepConnectorDone: {
-    backgroundColor: chrome.accent,
   },
   successRow: {
     flexDirection: 'row',

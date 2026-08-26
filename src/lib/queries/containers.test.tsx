@@ -4,17 +4,20 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 import {
+  useContainerLogTail,
   useContainers,
   useContainersByProject,
   useContainersByServices,
 } from '@/lib/queries/containers'
 
-const { fetchContainers } = vi.hoisted(() => ({
+const { fetchContainers, fetchContainerLogTail } = vi.hoisted(() => ({
   fetchContainers: vi.fn(),
+  fetchContainerLogTail: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', () => ({
   fetchContainers,
+  fetchContainerLogTail,
 }))
 
 function createWrapper(client = createAppQueryClient()) {
@@ -165,5 +168,38 @@ describe('containers query hooks', () => {
     expect(fetchContainers).toHaveBeenCalledWith({ serviceId: 'svc-a' })
     expect(result.current.containersByService['svc-a']).toHaveLength(1)
     expect(result.current.containersByService['']).toBeUndefined()
+  })
+
+  it('useContainerLogTail stays disabled unless explicitly enabled', () => {
+    const { result } = renderHook(
+      () => useContainerLogTail(orgId, 'ctr-1'),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchContainerLogTail).not.toHaveBeenCalled()
+  })
+
+  it('useContainerLogTail fetches when enabled and passes tail', async () => {
+    fetchContainerLogTail.mockResolvedValueOnce({ logs: 'line\n' })
+
+    const { result } = renderHook(
+      () => useContainerLogTail(orgId, 'ctr-1', { enabled: true, tail: 50 }),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchContainerLogTail).toHaveBeenCalledWith('ctr-1', 50)
+    expect(result.current.data?.logs).toBe('line\n')
+  })
+
+  it('useContainerLogTail stays idle with empty ids even when enabled', () => {
+    const { result } = renderHook(
+      () => useContainerLogTail('', 'ctr-1', { enabled: true }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchContainerLogTail).not.toHaveBeenCalled()
   })
 })

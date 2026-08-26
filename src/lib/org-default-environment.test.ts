@@ -24,17 +24,6 @@ describe('PLATFORM_DEFAULT_ENVIRONMENT_NAME', () => {
   })
 })
 
-describe('orgDefaultEnvironmentQueryKey', () => {
-  it('matches the org settings query key factory', async () => {
-    const { orgDefaultEnvironmentQueryKey } = await import(
-      '@/lib/org-default-environment'
-    )
-    expect(orgDefaultEnvironmentQueryKey('org-1')).toEqual(
-      queryKeys.org('org-1').settings.defaultEnvironment,
-    )
-  })
-})
-
 describe('useOrgDefaultEnvironmentName', () => {
   beforeEach(() => {
     useQueryMock.mockReset()

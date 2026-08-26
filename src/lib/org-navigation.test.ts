@@ -11,8 +11,6 @@ import {
   organizationsHref,
   orgRouteHref,
   orgTabHref,
-  containerLogsHref,
-  containerLogsSettingsHref,
   datacenterHref,
   datacenterNewHref,
   networkAddressesHref,
@@ -24,11 +22,11 @@ import {
   serverMetricsHref,
   serversDatacentersHref,
   serversPendingKeysHref,
-  projectSourcesHref,
+  projectGitSourcesHref,
 } from './org-navigation'
 
 describe('orgAreaFromPathname', () => {
-  it('does not treat retired Links paths as a Network sub-route', () => {
+  it('resolves an unknown sub-segment to the area with no sub-route', () => {
     const resolved = orgAreaFromPathname('/org/network/links/vpn-id')
     expect(resolved).not.toBeNull()
     expect(resolved?.area.id).toBe('network')
@@ -255,7 +253,7 @@ describe('serversDatacentersHref', () => {
 })
 
 describe('remaining org href builders', () => {
-  it('builds server, sources, fabric, logs, and nested area paths', () => {
+  it('builds server, sources, fabric, and nested area paths', () => {
     expect(serverDetailHref('org-1', 'srv-9')).toBe('/org-1/servers/srv-9')
     expect(serverMetricsHref('org-1', 'srv-9')).toBe(
       '/org-1/servers/srv-9/metrics',
@@ -263,10 +261,8 @@ describe('remaining org href builders', () => {
     expect(serverDetailTabHref('org-1', 'srv-9', 'control')).toBe(
       '/org-1/servers/srv-9?tab=control',
     )
-    expect(projectSourcesHref('org-1')).toBe('/org-1/projects/sources')
+    expect(projectGitSourcesHref('org-1')).toBe('/org-1/projects/git-sources')
     expect(networkFabricHref('org-1')).toBe('/org-1/network/fabric')
-    expect(containerLogsHref('org-1')).toBe('/org-1/logs')
-    expect(containerLogsSettingsHref('org-1')).toBe('/org-1/logs/settings')
     expect(orgRouteHref('org-1', 'network', 'addresses')).toBe(
       '/org-1/network/addresses',
     )

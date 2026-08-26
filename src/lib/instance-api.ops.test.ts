@@ -12,14 +12,13 @@ import {
   deleteStorage,
   fetchCommandLog,
   fetchCommandStatuses,
-  fetchContainerLogs,
+  fetchContainerLogTail,
   fetchEmailSettings,
   fetchEnvironmentDeployment,
   fetchEnvironmentDeployments,
   fetchFleetMetricsLatest,
   fetchGitInstallations,
   fetchInstallationRepositories,
-  fetchOrgContainerLogSettings,
   fetchOrgResourceLimits,
   fetchPrincipalSshKeys,
   fetchProjectPrincipals,
@@ -38,7 +37,6 @@ import {
   restartSystemComponent,
   rollbackEnvironment,
   saveEmailSettings,
-  saveOrgContainerLogSettings,
   saveOrgResourceLimits,
   saveServerResourceLimits,
   saveSignupSettings,
@@ -47,7 +45,6 @@ import {
   triggerAllServerUpdates,
   triggerServerUpdate,
   updateProjectPrincipal,
-  updateProjectPrincipalAssignments,
   updateSource,
   updateStorage,
   updateStorageMount,
@@ -286,95 +283,6 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
       sealed: true,
     })
     expect(String(fetchMock.mock.calls[1]?.[0])).not.toContain('?')
-  })
-
-  it('container log reads and settings proxy organization routes', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        events: [],
-        nextCursor: null,
-      }),
-    )
-    await expect(
-      fetchContainerLogs('org-1', {
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-01-02T00:00:00.000Z',
-        serverId: 'srv-1',
-        environmentId: 'env-1',
-        serviceId: 'svc-1',
-        containerId: 'ctr-1',
-        stream: 'stdout',
-        search: 'error',
-        cursor: 'cur-next',
-        limit: 50,
-      }),
-    ).resolves.toEqual({ events: [], nextCursor: null })
-    const logsUrl = String(fetchMock.mock.calls[0]?.[0])
-    expect(logsUrl).toContain('/organizations/org-1/container-logs')
-    expect(logsUrl).toContain('from=2026-01-01T00%3A00%3A00.000Z')
-    expect(logsUrl).toContain('serverId=srv-1')
-    expect(logsUrl).toContain('environmentId=env-1')
-    expect(logsUrl).toContain('serviceId=svc-1')
-    expect(logsUrl).toContain('containerId=ctr-1')
-    expect(logsUrl).toContain('stream=stdout')
-    expect(logsUrl).toContain('search=error')
-    expect(logsUrl).toContain('cursor=cur-next')
-    expect(logsUrl).toContain('limit=50')
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'container_logs_disabled' },
-        503,
-      ),
-    )
-    await expect(
-      fetchContainerLogs('org-1', {
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-01-02T00:00:00.000Z',
-      }),
-    ).rejects.toThrow(/container_logs_disabled/)
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'container_logs_unavailable' },
-        503,
-      ),
-    )
-    await expect(
-      fetchContainerLogs('org-1', {
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-01-02T00:00:00.000Z',
-      }),
-    ).rejects.toThrow(/container_logs_unavailable/)
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        containerLogsEnabled: false,
-        retentionDays: 7,
-      }),
-    )
-    await expect(fetchOrgContainerLogSettings('org-1')).resolves.toMatchObject({
-      containerLogsEnabled: false,
-      retentionDays: 7,
-    })
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      '/container-logs-settings',
-    )
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        ok: true,
-        containerLogsEnabled: true,
-        retentionDays: 7,
-      }),
-    )
-    await expect(
-      saveOrgContainerLogSettings('org-1', { containerLogsEnabled: true }),
-    ).resolves.toMatchObject({ ok: true, containerLogsEnabled: true })
-    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'PUT' })
-    expect(JSON.parse(String(fetchMock.mock.calls[4]?.[1]?.body))).toEqual({
-      containerLogsEnabled: true,
-    })
   })
 
   it('environment deployment history and detail routes', async () => {
@@ -671,7 +579,7 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
       jsonResponse({ ok: true, serviceIds: ['svc-1'] }),
     )
     await expect(
-      updateProjectPrincipalAssignments('proj-1', 'principal-1', ['svc-1']),
+      updateProjectPrincipal('proj-1', 'principal-1', { serviceIds: ['svc-1'] }),
     ).resolves.toMatchObject({ serviceIds: ['svc-1'] })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
@@ -775,5 +683,15 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
     await expect(fetchFleetMetricsLatest()).rejects.toThrow(
       /metrics\/latest failed: HTTP 403: forbidden/,
     )
+  })
+
+  it('fetchContainerLogTail hits the on-demand logs route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ logs: 'line\n' }))
+    await expect(fetchContainerLogTail('ctr-1', 50)).resolves.toEqual({
+      logs: 'line\n',
+    })
+    const url = String(fetchMock.mock.calls[0]?.[0])
+    expect(url).toContain('/containers/ctr-1/logs')
+    expect(url).toContain('tail=50')
   })
 })

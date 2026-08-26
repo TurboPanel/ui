@@ -32,8 +32,9 @@ export type ComposePresentation = {
   documentComment?: string
   /**
    * Compose (`editor`) | Services form-cards (`visual`) tab preference —
-   * presentation only, never written to compose YAML. Id `visual` is legacy;
-   * UI label is Services so "Visual" can later mean a topology/canvas tab.
+   * presentation only, never written to compose YAML. The id stays `visual`
+   * while the UI label is Services, so "Visual" can later mean a
+   * topology/canvas tab without renaming stored preferences.
    */
   editorView?: ComposeEditorView
 }

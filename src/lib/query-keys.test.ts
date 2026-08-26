@@ -197,6 +197,14 @@ describe('queryKeys.org(…).variables / storage / containers / commands', () =>
       'containers',
       { environmentId: 'e1' },
     ])
+    expect(org.containers.logs('ctr-1', 50)).toEqual([
+      'org',
+      'org-1',
+      'container',
+      'ctr-1',
+      'logs',
+      50,
+    ])
     expect(
       org.commands.batch([
         { serverId: 'b', commandId: '2' },
@@ -313,20 +321,8 @@ describe('queryKeys.org(…) remaining factories', () => {
     ])
   })
 
-  it('builds container-log, command, and server metric keys', () => {
+  it('builds command and server metric keys', () => {
     const org = queryKeys.org('org-1')
-    const logFilter = {
-      from: '2026-01-01T00:00:00.000Z',
-      to: '2026-01-01T01:00:00.000Z',
-      serverId: 'srv-1',
-    }
-    expect(org.containerLogs.query(logFilter)).toEqual([
-      'org',
-      'org-1',
-      'container-logs',
-      'query',
-      logFilter,
-    ])
     expect(org.commands.detail('srv-1', 'cmd-1')).toEqual([
       'org',
       'org-1',

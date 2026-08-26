@@ -1,14 +1,14 @@
 import { StyleSheet, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
-import { SourcesOverviewSection } from '@/components/org/sources/sources-overview-section'
+import { GitSourcesSection } from '@/components/org/git-sources/git-sources-section'
 import { spacing } from '@/lib/theme'
 
-export default function ProjectSourcesScreen() {
+export default function ProjectGitSourcesScreen() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
 
   return (
     <View style={styles.root}>
-      <SourcesOverviewSection orgId={orgId ?? ''} />
+      <GitSourcesSection scope="org" orgId={orgId ?? ''} />
     </View>
   )
 }

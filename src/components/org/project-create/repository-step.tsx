@@ -1,34 +1,28 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { FormSelect } from '@/components/org/form-select'
-import { repositoryLabel } from '@/components/org/sources/connect-repository-panel'
-import {
-  Button,
-  FormField,
-  InlineNotice,
-  LoadingState,
-  TextField,
-} from '@/components/ui'
+import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
+import { Button, MonoText, TextField } from '@/components/ui'
 import { SOURCE_BRANCH_MAX_LENGTH } from '@/lib/compose/service-kind'
-import { projectSourcesHref } from '@/lib/org-navigation'
+import { projectGitSourcesHref } from '@/lib/org-navigation'
 import { useSources } from '@/lib/queries'
-import { spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 /**
- * Wizard step for the **Git repository** card: pick one of the organization's
- * connected repositories and, optionally, the ref to build.
+ * Wizard step for the **Git repository** card: pick the repository this project
+ * builds from, and optionally the ref.
  *
- * Connecting a repository is deliberately *not* offered here. A `source` row is
- * org-owned — several services share one, and the auto-deploy policy lives on
- * the row — so that flow has exactly one home, the Sources page. With nothing
- * connected this step says so and links there rather than growing a second
- * connect surface that would have to stay in sync with the first.
+ * The picker is hierarchical — **application → account → repository** — and
+ * attaching is what creates the underlying `source` row. That is the change
+ * from the previous flow, where a repository had to be connected on a separate
+ * org-level page first and this step could only choose from what was already
+ * there. Bindings are no longer something an operator manages on their own; one
+ * is made here, on demand, and reused if the same repository is picked again.
  *
- * The step commits nothing: the caller turns the selection into a compose draft
- * (`repository-seed.ts`) and hands it to `ComposeStep`, where the single Create
- * writes the project.
+ * The step still commits nothing itself: the caller turns the selection into a
+ * compose draft (`repository-seed.ts`) and hands it to `ComposeStep`, where the
+ * single Create writes the project.
  */
 export function RepositoryStep({
   orgId,
@@ -47,76 +41,50 @@ export function RepositoryStep({
 }>) {
   const router = useRouter()
   const sourcesQuery = useSources(orgId)
+  const [pickedLabel, setPickedLabel] = useState('')
 
   const sources = useMemo(
     () => sourcesQuery.data?.sources ?? [],
     [sourcesQuery.data?.sources],
   )
-  const selected =
-    sources.find((source) => source.id === selectedSourceId) ?? null
+  const selected = sources.find((source) => source.id === selectedSourceId) ?? null
 
-  // The selection follows the live list. A repository disconnected while the
-  // wizard sat here is dropped as soon as the query says so, which is what
-  // keeps Continue from seeding a draft bound to a source the org no longer
-  // has. Only a *successful* query clears: a failed refetch is no evidence the
-  // repository went away.
-  //
-  // A sole connected repository needs no picking — same courtesy the details
-  // step extends to a sole workspace.
-  useEffect(() => {
-    if (!sourcesQuery.isSuccess) return
-    if (
-      selectedSourceId &&
-      !sources.some((source) => source.id === selectedSourceId)
-    ) {
-      onSelectSourceId('')
-      return
-    }
-    if (selectedSourceId || sources.length !== 1) return
-    onSelectSourceId(sources[0]?.id ?? '')
-  }, [selectedSourceId, sources, sourcesQuery.isSuccess, onSelectSourceId])
-
-  if (sourcesQuery.isLoading) {
-    return <LoadingState label="Loading repositories…" />
-  }
-
-  if (sourcesQuery.error instanceof Error) {
-    return <Text style={orgPanelStyles.error}>{sourcesQuery.error.message}</Text>
-  }
-
-  if (sources.length === 0) {
+  if (!selectedSourceId) {
     return (
-      <InlineNotice
-        title="No repositories connected yet"
-        body="Connect one on the organization's Sources page, then come back and pick it here."
-        actions={
-          <Button
-            label="Open Sources"
-            size="sm"
-            disabled={disabled}
-            onPress={() => router.push(projectSourcesHref(orgId) as Href)}
-            accessibilityLabel="Open Sources"
-          />
-        }
-      />
+      <View style={styles.root}>
+        <RepositoryPicker
+          orgId={orgId}
+          disabled={disabled}
+          onPick={(sourceId, repository) => {
+            setPickedLabel(repository?.fullName ?? '')
+            onSelectSourceId(sourceId)
+          }}
+          onNeedsApp={() => router.push(projectGitSourcesHref(orgId) as Href)}
+        />
+      </View>
     )
   }
 
+  const label = pickedLabel || selected?.repositoryUrl || 'Selected repository'
+
   return (
     <View style={styles.root}>
-      <FormField label="Repository">
-        <FormSelect
-          value={selectedSourceId}
-          options={sources.map((source) => ({
-            value: source.id,
-            label: repositoryLabel(source),
-          }))}
-          placeholder="Select a repository…"
-          disabled={disabled}
-          accessibilityLabel="Repository"
-          onChange={onSelectSourceId}
-        />
-      </FormField>
+      <View style={styles.picked}>
+        <Text style={styles.pickedLabel}>Repository</Text>
+        <View style={styles.pickedRow}>
+          <MonoText style={styles.pickedName} numberOfLines={1}>{label}</MonoText>
+          <Button
+            label="Change"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            onPress={() => {
+              setPickedLabel('')
+              onSelectSourceId('')
+            }}
+          />
+        </View>
+      </View>
 
       <TextField
         label="Branch"
@@ -128,11 +96,9 @@ export function RepositoryStep({
         autoCorrect={false}
         placeholder={selected?.defaultBranch ?? 'main'}
         accessibilityLabel="Branch"
-        hint={
-          selected?.defaultBranch
-            ? `Leave empty to use the repository's default branch (${selected.defaultBranch}).`
-            : "Leave empty to use the repository's default branch."
-        }
+        hint={selected?.defaultBranch
+          ? `Leave empty to use the repository's default branch (${selected.defaultBranch}).`
+          : "Leave empty to use the repository's default branch."}
       />
 
       <Text style={orgPanelStyles.muted}>
@@ -146,5 +112,29 @@ export function RepositoryStep({
 const styles = StyleSheet.create({
   root: {
     gap: spacing.md,
+  },
+  picked: {
+    gap: spacing.xs,
+  },
+  pickedLabel: {
+    color: colors.textBody,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pickedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 8,
+    backgroundColor: colors.bgInset,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  pickedName: {
+    flex: 1,
+    minWidth: 0,
   },
 })

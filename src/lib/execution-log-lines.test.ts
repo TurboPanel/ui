@@ -7,6 +7,7 @@ import {
   normalizeTranscriptMessage,
   mergeTranscriptLines,
   parseCommandLogChunk,
+  dockerTimestampTranscriptLines,
   plainTextTranscriptLines,
   stripAnsi,
   transcriptLineKey,
@@ -207,6 +208,30 @@ describe('plainTextTranscriptLines', () => {
     expect(rows.map((row) => row.message)).toEqual(['one', 'two'])
     expect(rows.every((row) => row.stream === 'stdout')).toBe(true)
     expect(rows.every((row) => row.phase === null)).toBe(true)
+  })
+})
+
+describe('dockerTimestampTranscriptLines', () => {
+  it('splits docker --timestamps prefixes onto the time column', () => {
+    const rows = dockerTimestampTranscriptLines(
+      '2026-01-01T00:00:01.000000000Z hello\nno-stamp line\n\n',
+    )
+    expect(rows).toEqual([
+      {
+        seq: 1,
+        timestamp: '2026-01-01T00:00:01.000000000Z',
+        stream: 'stdout',
+        phase: null,
+        message: 'hello',
+      },
+      {
+        seq: 2,
+        timestamp: null,
+        stream: 'stdout',
+        phase: null,
+        message: 'no-stamp line',
+      },
+    ])
   })
 })
 

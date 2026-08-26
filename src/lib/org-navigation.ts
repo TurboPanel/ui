@@ -17,15 +17,9 @@ export const ORG_AREAS = [
     hint: 'Projects filtered by the workspace switcher',
     subRoutes: [
       {
-        id: 'sources',
-        label: 'Sources',
-        pathSegment: 'sources',
-        hint: 'Connected Git accounts and repositories',
-      },
-      {
-        id: 'git-apps',
-        label: 'Git providers',
-        pathSegment: 'git-apps',
+        id: 'git-sources',
+        label: 'Git sources',
+        pathSegment: 'git-sources',
         hint: 'GitHub Apps and GitLab applications this organization connects through',
       },
       {
@@ -79,20 +73,6 @@ export const ORG_AREAS = [
         label: 'TLS',
         pathSegment: 'tls',
         hint: 'Organization certificate library',
-      },
-    ],
-  },
-  {
-    id: 'logs',
-    label: 'Logs',
-    pathSegment: 'logs',
-    hint: 'Searchable container output across the fleet',
-    subRoutes: [
-      {
-        id: 'settings',
-        label: 'Settings',
-        pathSegment: 'settings',
-        hint: 'Retention for container output',
       },
     ],
   },
@@ -304,11 +284,21 @@ export function serverDetailHref(
 }
 
 /** Connected Git accounts and repositories for the organization. */
-export function projectSourcesHref(
+/**
+ * Where Git applications are managed.
+ *
+ * Replaces the old `projects/sources` and `projects/git-apps` pair. There is no
+ * repository list any more: a repository binding is created when it is attached
+ * to a project, and is never managed on its own.
+ */
+export function projectGitSourcesHref(
   orgId: string,
-): `/${string}/projects/sources` {
-  return `/${orgId}/projects/sources`
+): `/${string}/projects/git-sources` {
+  return `/${orgId}/projects/git-sources`
 }
+
+/** Organization-owned GitHub Apps and GitLab applications. */
+
 
 export function serversDatacentersHref(
   orgId: string,
@@ -333,18 +323,6 @@ export function datacenterNewHref(
   orgId: string,
 ): `/${string}/servers/datacenters/new` {
   return `/${orgId}/servers/datacenters/new`
-}
-
-/** Organization container-log explorer. */
-export function containerLogsHref(orgId: string): `/${string}/logs` {
-  return `/${orgId}/logs`
-}
-
-/** Manage-gated retention switch for container output. */
-export function containerLogsSettingsHref(
-  orgId: string,
-): `/${string}/logs/settings` {
-  return `/${orgId}/logs/settings`
 }
 
 export function networkFabricHref(

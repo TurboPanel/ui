@@ -1,6 +1,5 @@
 import type {
   AccessScopeKind,
-  ContainerLogStream,
   IpAllocation,
   IpScope,
   NetworkKind,
@@ -37,22 +36,6 @@ export type NetworkListFilters = Readonly<{
   datacenterId?: string
   serverId?: string
   kind?: NetworkKind
-}>
-
-/**
- * Cache identity for one container-log read — every predicate the closed query
- * set allows, minus the cursor (pages of one filter share a cache entry).
- */
-export type ContainerLogQueryKeyFilter = Readonly<{
-  from: string
-  to: string
-  serverId?: string
-  environmentId?: string
-  serviceId?: string
-  containerId?: string
-  stream?: ContainerLogStream
-  search?: string
-  limit?: number
 }>
 
 export type ContainerListFilters = Readonly<{
@@ -260,6 +243,8 @@ export const queryKeys = {
           ['org', orgId, 'containers', filters ?? {}] as const,
         detail: (containerId: string) =>
           ['org', orgId, 'container', containerId] as const,
+        logs: (containerId: string, tail?: number) =>
+          ['org', orgId, 'container', containerId, 'logs', tail ?? 200] as const,
       },
 
       variables: {
@@ -330,18 +315,6 @@ export const queryKeys = {
             filter.environmentId,
           ] as const
         },
-      },
-
-      containerLogs: {
-        all: ['org', orgId, 'container-logs'] as const,
-        settings: ['org', orgId, 'container-logs', 'settings'] as const,
-        /**
-         * Infinite-query key for one composed filter. The cursor is
-         * deliberately **excluded**: pages of the same window/predicate set
-         * share one cache entry, while changing a filter starts a fresh one.
-         */
-        query: (filter: ContainerLogQueryKeyFilter) =>
-          ['org', orgId, 'container-logs', 'query', filter] as const,
       },
 
       commands: {

@@ -29,3 +29,4 @@ export {
   type StatTileItem,
 } from '@/components/ui/stat-tiles'
 export { EmptyState, LoadingState } from '@/components/ui/state-views'
+export { WizardSteps, type WizardStepItem } from '@/components/ui/wizard-steps'

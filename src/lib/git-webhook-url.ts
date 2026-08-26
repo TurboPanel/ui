@@ -74,20 +74,36 @@ function webhookUrlFor(origin: string, path: string): string {
   return `${origin.replace(/\/$/, '')}${path}`
 }
 
+/** The origins whose deliveries resolve without a ref in the path. */
+const HOSTED_PROVIDER_ORIGINS: Record<GitWebhookProvider, string> = {
+  github: 'https://github.com',
+  gitlab: 'https://gitlab.com',
+}
+
 /**
  * The ingress path for one app.
  *
- * With a `webhookRef` this is that app's own scoped path — the URL a registered
- * app is actually pointed at, and what lets a delivery name its app before any
- * secret is consulted. Without one the caller gets the bare path, which still
- * resolves by header (GitHub) or token digest (GitLab).
+ * Hosted providers get the clean path: github.com stamps the App id on every
+ * delivery and gitlab.com echoes a token the control plane can digest, so the
+ * app is identifiable from the request alone and nothing internal needs to
+ * appear in the URL. A **self-hosted** origin gets the app's `webhookRef`
+ * appended, because GitHub Enterprise Server and self-managed GitLab ship on
+ * their own cadence and the header is not a safe single point of failure there.
+ *
+ * Mirrors `webhookPathFor` in the control plane's
+ * `lib/git/webhook-reachability.ts` — a different repo and runtime, so the rule
+ * is reproduced rather than imported. Keep the two in step.
  */
 export function webhookPathFor(
   provider: GitWebhookProvider,
   webhookRef?: string | null,
+  baseUrl?: string | null,
 ): string {
   const base = WEBHOOK_PATH_BY_PROVIDER[provider]
-  return webhookRef ? `${base}/${encodeURIComponent(webhookRef)}` : base
+  if (!webhookRef || !baseUrl) return base
+  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  if (normalized === HOSTED_PROVIDER_ORIGINS[provider]) return base
+  return `${base}/${encodeURIComponent(webhookRef)}`
 }
 
 /**
@@ -106,8 +122,9 @@ export function gitWebhookHint(
   origins: readonly string[],
   provider: GitWebhookProvider,
   webhookRef?: string | null,
+  baseUrl?: string | null,
 ): GitWebhookHint {
-  const path = webhookPathFor(provider, webhookRef)
+  const path = webhookPathFor(provider, webhookRef, baseUrl)
   const usable = origins
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)

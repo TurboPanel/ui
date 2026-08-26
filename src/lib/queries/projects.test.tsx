@@ -59,7 +59,6 @@ vi.mock('@/lib/instance-api', () => ({
   addPrincipalSshKey: vi.fn(),
   deletePrincipalSshKey: vi.fn(),
   fetchPrincipalSshKeys: vi.fn(),
-  updateProjectPrincipalAssignments: vi.fn(),
 }))
 
 function createWrapper(client = createAppQueryClient()) {

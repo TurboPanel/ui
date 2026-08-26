@@ -1,7 +1,11 @@
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import { systemContainerObservationInterval } from '@/lib/container-status-guards'
-import { fetchContainers, type ContainerRecord } from '@/lib/instance-api'
+import {
+  fetchContainerLogTail,
+  fetchContainers,
+  type ContainerRecord,
+} from '@/lib/instance-api'
 import { COMMAND_POLL_MS } from '@/lib/queries/commands'
 import { queryKeys, type ContainerListFilters } from '@/lib/query-keys'
 
@@ -160,6 +164,36 @@ export function useContainersByServices(
   }
 
   return { containersByService, isLoading, refetchAll }
+}
+
+/** Follow cadence for an open tail — slower than command transcripts on purpose. */
+export const CONTAINER_LOG_TAIL_POLL_MS = 5_000
+
+/**
+ * On-demand `docker container logs` snapshot. Disabled by default; callers
+ * opt in. Follow is a refetch interval, not `--follow` on the host.
+ */
+export function useContainerLogTail(
+  orgId: string,
+  containerId: string,
+  options?: Readonly<{
+    enabled?: boolean
+    tail?: number
+    follow?: boolean
+  }>,
+) {
+  const follow = options?.follow === true
+  return useQuery({
+    queryKey: queryKeys.org(orgId).containers.logs(containerId, options?.tail),
+    queryFn: () => fetchContainerLogTail(containerId, options?.tail),
+    enabled:
+      (options?.enabled ?? false) &&
+      orgId.length > 0 &&
+      containerId.length > 0,
+    refetchInterval: follow ? CONTAINER_LOG_TAIL_POLL_MS : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: follow,
+  })
 }
 
 export type { ContainerListFilters }

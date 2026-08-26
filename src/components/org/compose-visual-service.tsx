@@ -11,8 +11,8 @@ import { useRouter, type Href } from 'expo-router'
 import { CronFields } from '@/components/org/compose-cron-fields'
 import { DockerfileEditor } from '@/components/org/dockerfile-editor'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { repositoryLabel } from '@/components/org/sources/connect-repository-panel'
-import { Button, InlineNotice, LoadingState } from '@/components/ui'
+import { repositoryLabel } from '@/lib/repository-label'
+import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
 import {
   clearComposeBuildInline,
   DEFAULT_INLINE_DOCKERFILE,
@@ -63,7 +63,7 @@ import {
   type SourceAutoDeploy,
 } from '@/lib/instance-api'
 import { getActiveOrganizationId } from '@/lib/org-context'
-import { projectSourcesHref } from '@/lib/org-navigation'
+import { projectGitSourcesHref } from '@/lib/org-navigation'
 import {
   useSources,
   useUpdateSource,
@@ -952,70 +952,32 @@ function NodeRuntimeBlock({
  * repository list — the empty notice is only for a successful zero-length
  * response, and Open Sources is only on that path.
  */
+/**
+ * Bind a repository to a service that has none.
+ *
+ * Uses the same **application → account → repository** picker as project
+ * creation, and attaching is what creates the underlying binding. Previously
+ * this offered a flat list of whatever the organization had already connected
+ * elsewhere, which meant a service could only be bound to a repository someone
+ * had thought to connect in advance.
+ */
 function UnboundSourcePicker({
-  sourcesQuery,
+  orgId,
   disabled,
   onSelect,
   onOpenSources,
 }: Readonly<{
-  sourcesQuery: ReturnType<typeof useSources>
+  orgId: string
   disabled: boolean
   onSelect: (sourceId: string) => void
   onOpenSources: () => void
 }>) {
-  // Default `data.sources` is `[]`, so length checks cannot tell "still
-  // fetching" or "the list failed" from "the org has no repositories".
-  if (sourcesQuery.isError) {
-    return (
-      <InlineNotice
-        title="Couldn't load repositories"
-        body={
-          sourcesQuery.error instanceof Error
-            ? sourcesQuery.error.message
-            : 'Failed to load connected repositories'
-        }
-        tone="warning"
-      />
-    )
-  }
-
-  if (!sourcesQuery.isSuccess) {
-    return <LoadingState label="Loading repositories…" />
-  }
-
-  const sources = sourcesQuery.data.sources
-  if (sources.length > 0) {
-    return (
-      <OptionSelect
-        value=""
-        options={[
-          { value: '', label: 'Select a repository…' },
-          ...sources.map((entry) => ({
-            value: entry.id,
-            label: repositoryLabel(entry),
-          })),
-        ]}
-        disabled={disabled}
-        onChange={(sourceId) => {
-          if (sourceId.length === 0) return
-          onSelect(sourceId)
-        }}
-      />
-    )
-  }
-
   return (
-    <InlineNotice
-      title="No repositories connected yet"
-      body="Connect a repository on the organization's Sources page, then bind it to this service."
-      actions={
-        <Button
-          label="Open Sources"
-          size="sm"
-          disabled={disabled}
-          onPress={onOpenSources}
-        />
-      }
+    <RepositoryPicker
+      orgId={orgId}
+      disabled={disabled}
+      onPick={(sourceId) => onSelect(sourceId)}
+      onNeedsApp={onOpenSources}
     />
   )
 }
@@ -1095,10 +1057,10 @@ function SourceSection({
 
   const unboundPicker = (
     <UnboundSourcePicker
-      sourcesQuery={sourcesQuery}
+      orgId={orgId}
       disabled={disabled}
       onSelect={(sourceId) => onChange({ sourceId })}
-      onOpenSources={() => router.push(projectSourcesHref(orgId) as Href)}
+      onOpenSources={() => router.push(projectGitSourcesHref(orgId) as Href)}
     />
   )
 

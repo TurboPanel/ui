@@ -37,7 +37,6 @@ vi.mock('@/lib/instance-api', () => ({
   fetchProjectPrincipals: vi.fn(),
   fetchVisibleProjects: vi.fn(),
   updateProject: vi.fn(),
-  updateProjectPrincipalAssignments: vi.fn(),
 }))
 
 function createWrapper(client = createAppQueryClient()) {

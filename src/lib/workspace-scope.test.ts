@@ -57,7 +57,6 @@ describe('ORG_AREAS navigation', () => {
       'projects',
       'managed',
       'servers',
-      'logs',
       'network',
       'access',
     ])
