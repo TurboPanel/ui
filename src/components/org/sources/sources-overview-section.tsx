@@ -27,10 +27,12 @@ import {
   gitlabOauthConnectUrl,
   SOURCE_AUTO_DEPLOY_OPTIONS,
   SOURCE_REFERENCED_BY_COMPOSE_ERROR,
+  type GitAppSummary,
   type GitInstallationRecord,
   type SourceAutoDeploy,
   type SourceRecord,
 } from '@/lib/instance-api'
+import { useGitApps } from '@/lib/queries/admin'
 import {
   useDeleteSource,
   useGitInstallations,
@@ -84,6 +86,78 @@ function disconnectFailureCopy(message: string): string {
  * an account is connected, so the empty state here is the explanation for the
  * empty state below.
  */
+/**
+ * Connect button that first has to know *which* application to connect through.
+ *
+ * One app → straight to the provider. Several → expand a chooser, because
+ * silently picking one would connect the operator's account to an application
+ * they did not choose. None → the button is disabled and the empty state below
+ * explains what is missing.
+ */
+function ConnectProviderButton({
+  label,
+  apps,
+  disabled,
+  toUrl,
+}: Readonly<{
+  label: string
+  apps: readonly GitAppSummary[]
+  disabled: boolean
+  toUrl: (appId: string) => string
+}>) {
+  const [choosing, setChoosing] = useState(false)
+
+  if (apps.length === 0) {
+    return <Button label={label} size="sm" disabled onPress={() => {}} />
+  }
+
+  if (apps.length === 1) {
+    return (
+      <Button
+        label={label}
+        size="sm"
+        disabled={disabled}
+        onPress={() => openProviderConsent(toUrl(apps[0]!.id))}
+      />
+    )
+  }
+
+  if (!choosing) {
+    return (
+      <Button
+        label={label}
+        size="sm"
+        disabled={disabled}
+        onPress={() => setChoosing(true)}
+      />
+    )
+  }
+
+  return (
+    <ButtonRow align="end">
+      {apps.map((app) => (
+        <Button
+          key={app.id}
+          label={app.name}
+          size="sm"
+          variant="secondary"
+          disabled={disabled}
+          onPress={() => {
+            setChoosing(false)
+            openProviderConsent(toUrl(app.id))
+          }}
+        />
+      ))}
+      <Button
+        label="Cancel"
+        size="sm"
+        variant="ghost"
+        onPress={() => setChoosing(false)}
+      />
+    </ButtonRow>
+  )
+}
+
 function ConnectedAccountsPanel({
   orgId,
   canManage,
@@ -91,6 +165,7 @@ function ConnectedAccountsPanel({
   const { session } = useAuth()
   const router = useRouter()
   const installationsQuery = useGitInstallations(orgId)
+  const appsQuery = useGitApps('org')
 
   const installations = installationsQuery.data?.installations ?? []
   const loadError = queryErrorMessage(
@@ -98,23 +173,30 @@ function ConnectedAccountsPanel({
     'Failed to load connected accounts',
   )
 
+  // An instance may hold several apps per provider, so the connect button has
+  // to name one. With exactly one the choice is made for the operator; with
+  // several they pick, and with none there is nothing to connect through yet.
+  const apps = appsQuery.data ?? []
+  const githubApps = apps.filter((app) => app.provider === 'github')
+  const gitlabApps = apps.filter((app) => app.provider === 'gitlab')
+
   return (
     <SectionPanel
       title="Connected accounts"
       hint="Provider connections this organization reads repositories through"
       headerRight={
         <ButtonRow align="end">
-          <Button
+          <ConnectProviderButton
             label="Connect GitHub account"
-            size="sm"
+            apps={githubApps}
             disabled={!canManage}
-            onPress={() => openProviderConsent(githubAppInstallUrl())}
+            toUrl={githubAppInstallUrl}
           />
-          <Button
+          <ConnectProviderButton
             label="Connect GitLab account"
-            size="sm"
+            apps={gitlabApps}
             disabled={!canManage}
-            onPress={() => openProviderConsent(gitlabOauthConnectUrl())}
+            toUrl={gitlabOauthConnectUrl}
           />
         </ButtonRow>
       }
@@ -128,15 +210,28 @@ function ConnectedAccountsPanel({
       {!installationsQuery.isLoading && installations.length === 0 ? (
         <InlineNotice
           title="No Git accounts connected yet"
-          body="Connect an account above. GitHub only offers the App when an instance administrator has registered it first — if the install page reports the App does not exist, that registration is the missing step."
+          body={
+            apps.length === 0
+              ? 'No Git application is registered yet. Register a GitHub App or GitLab OAuth application for this organization, or ask an instance administrator to share one, then connect an account through it.'
+              : 'Connect an account above, through one of the registered applications.'
+          }
           actions={
-            isAdminSession(session) ? (
+            <ButtonRow align="end">
               <Button
-                label="Open Git providers"
+                label="Git providers"
                 size="sm"
-                onPress={() => router.push(adminAreaHref('git') as Href)}
+                onPress={() =>
+                  router.push(`/${orgId}/projects/git-apps` as Href)}
               />
-            ) : null
+              {isAdminSession(session) ? (
+                <Button
+                  label="Instance-wide"
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => router.push(adminAreaHref('git') as Href)}
+                />
+              ) : null}
+            </ButtonRow>
           }
         />
       ) : null}

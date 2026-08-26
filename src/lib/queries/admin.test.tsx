@@ -8,13 +8,12 @@ import {
   useApplyPublicUrls,
   useApplyReencryptSecrets,
   useEmailSettings,
-  useGithubAppSettings,
-  useGitlabOauthSettings,
+  useCreateGitApp,
+  useDeleteGitApp,
+  useGitApps,
   usePublicUrls,
   usePublicUrlsOptional,
   useSaveEmailSettings,
-  useSaveGithubAppSettings,
-  useSaveGitlabOauthSettings,
   useSavePublicUrls,
   useSaveSignupSettings,
   useSignupSettings,
@@ -29,10 +28,9 @@ const {
   fetchEmailSettings,
   saveEmailSettings,
   applyReencryptSecrets,
-  fetchGithubAppSettings,
-  saveGithubAppSettings,
-  fetchGitlabOauthSettings,
-  saveGitlabOauthSettings,
+  fetchGitApps,
+  createGitApp,
+  deleteGitApp,
 } = vi.hoisted(() => ({
   fetchPublicUrls: vi.fn(),
   fetchSignupSettings: vi.fn(),
@@ -42,10 +40,9 @@ const {
   fetchEmailSettings: vi.fn(),
   saveEmailSettings: vi.fn(),
   applyReencryptSecrets: vi.fn(),
-  fetchGithubAppSettings: vi.fn(),
-  saveGithubAppSettings: vi.fn(),
-  fetchGitlabOauthSettings: vi.fn(),
-  saveGitlabOauthSettings: vi.fn(),
+  fetchGitApps: vi.fn(),
+  createGitApp: vi.fn(),
+  deleteGitApp: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -60,10 +57,9 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchEmailSettings,
     saveEmailSettings,
     applyReencryptSecrets,
-    fetchGithubAppSettings,
-    saveGithubAppSettings,
-    fetchGitlabOauthSettings,
-    saveGitlabOauthSettings,
+    fetchGitApps,
+    createGitApp,
+    deleteGitApp,
   }
 })
 
@@ -224,69 +220,76 @@ describe('admin query hooks', () => {
     expect(applyReencryptSecrets).toHaveBeenCalled()
   })
 
-  it('useGithubAppSettings loads GitHub App settings', async () => {
-    fetchGithubAppSettings.mockResolvedValueOnce({ appId: '123' })
+  it('useGitApps loads the collection for its scope', async () => {
+    fetchGitApps.mockResolvedValueOnce([{ id: 'app-1' }])
 
-    const { result } = renderHook(() => useGithubAppSettings(), {
+    const { result } = renderHook(() => useGitApps('admin'), {
       wrapper: createWrapper(),
     })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchGithubAppSettings).toHaveBeenCalled()
+    expect(fetchGitApps).toHaveBeenCalledWith('admin')
   })
 
-  it('useSaveGithubAppSettings updates GitHub App cache', async () => {
-    const payload = { appId: '456' }
-    saveGithubAppSettings.mockResolvedValueOnce(payload)
+  it('useGitApps keys admin and org separately, and org by organization', async () => {
+    // The org list contains instance-wide apps too, and its readOnly flags and
+    // webhook URLs differ per org — so it must not share a cache entry with
+    // the admin list, nor with another organization's list.
+    fetchGitApps.mockResolvedValue([])
     const client = createAppQueryClient()
 
-    const { result } = renderHook(() => useSaveGithubAppSettings(), {
+    renderHook(() => useGitApps('admin'), { wrapper: createWrapper(client) })
+    renderHook(() => useGitApps('org'), { wrapper: createWrapper(client) })
+
+    await waitFor(() => {
+      expect(client.getQueryData(queryKeys.admin.gitApps)).toBeDefined()
+    })
+    expect(queryKeys.admin.gitApps).not.toEqual(queryKeys.org('org-1').gitApps)
+    expect(queryKeys.org('org-1').gitApps).not.toEqual(
+      queryKeys.org('org-2').gitApps,
+    )
+  })
+
+  it('useCreateGitApp invalidates its scope', async () => {
+    createGitApp.mockResolvedValueOnce({ id: 'app-1' })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useCreateGitApp('org'), {
       wrapper: createWrapper(client),
     })
 
     await expect(
-      result.current.run({ appId: '456' }),
+      result.current.run({
+        provider: 'github',
+        name: 'TurboPanel',
+        externalAppId: '123',
+      }),
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
-      expect(client.getQueryData(queryKeys.admin.gitGithubApp)).toEqual(payload)
+      expect(invalidate).toHaveBeenCalled()
     })
   })
 
-  it('useGitlabOauthSettings loads GitLab OAuth settings', async () => {
-    fetchGitlabOauthSettings.mockResolvedValueOnce({
-      baseUrl: 'https://gitlab.com',
-    })
-
-    const { result } = renderHook(() => useGitlabOauthSettings(), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
-    expect(fetchGitlabOauthSettings).toHaveBeenCalled()
-  })
-
-  it('useSaveGitlabOauthSettings updates GitLab OAuth cache', async () => {
-    const payload = { baseUrl: 'https://gitlab.example.com' }
-    saveGitlabOauthSettings.mockResolvedValueOnce(payload)
+  it('useDeleteGitApp invalidates its scope', async () => {
+    deleteGitApp.mockResolvedValueOnce(undefined)
     const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(() => useSaveGitlabOauthSettings(), {
+    const { result } = renderHook(() => useDeleteGitApp('admin'), {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ baseUrl: 'https://gitlab.example.com' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run('app-1')).resolves.toMatchObject({ ok: true })
+    expect(deleteGitApp).toHaveBeenCalledWith('admin', 'app-1')
 
     await waitFor(() => {
-      expect(client.getQueryData(queryKeys.admin.gitGitlabOauth)).toEqual(
-        payload,
-      )
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.admin.gitApps,
+      })
     })
   })
 })

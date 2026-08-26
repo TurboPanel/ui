@@ -23,6 +23,12 @@ export const ORG_AREAS = [
         hint: 'Connected Git accounts and repositories',
       },
       {
+        id: 'git-apps',
+        label: 'Git providers',
+        pathSegment: 'git-apps',
+        hint: 'GitHub Apps and GitLab applications this organization connects through',
+      },
+      {
         id: 'settings',
         label: 'Settings',
         pathSegment: 'settings',

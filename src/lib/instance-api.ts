@@ -2602,97 +2602,151 @@ export const GITHUB_WEBHOOK_PATH = '/api/git/v1/github/webhook'
 export const GITLAB_WEBHOOK_PATH = '/api/git/v1/gitlab/webhook'
 
 /**
- * Instance-wide GitHub App credentials as the admin API reports them.
- * Presence-only: the sealed private key and webhook secret never leave the
- * control plane, so the read shape carries `hasPrivateKey` / `hasWebhookSecret`
- * instead of a (masked or otherwise) value.
+ * A registered Git provider application, as either git-app surface reports it.
+ *
+ * Presence-only: the sealed private key, OAuth client secret, and webhook
+ * secret never leave the control plane, so the read shape carries
+ * `hasPrivateKey` / `hasClientSecret` / `hasWebhookSecret` instead of a (masked
+ * or otherwise) value.
+ *
+ * `organizationId === null` means the app is **instance-wide** — registered
+ * once by an operator and usable by every organization. `readOnly` says whether
+ * *this* viewer may edit it: an organization sees instance-wide apps so it can
+ * connect through them, but only an instance admin can change one.
  */
-export type GithubAppSettingsSummary = {
-  appId: string | null
+export type GitAppSummary = {
+  id: string
+  organizationId: string | null
+  provider: 'github' | 'gitlab'
+  name: string
+  baseUrl: string
+  apiUrl: string | null
+  externalAppId: string
   appSlug: string | null
   clientId: string | null
+  redirectUri: string | null
+  /** Opaque routing token in this app's webhook URL. */
+  webhookRef: string
+  webhookPath: string
+  /** Absolute delivery URL; null when no public origin is configured. */
+  webhookUrl: string | null
+  readOnly: boolean
   hasPrivateKey: boolean
+  hasClientSecret: boolean
   hasWebhookSecret: boolean
+}
+
+export type GitAppCreate = {
+  provider: 'github' | 'gitlab'
+  name: string
+  externalAppId: string
+  baseUrl?: string
+  apiUrl?: string | null
+  appSlug?: string | null
+  clientId?: string | null
+  redirectUri?: string | null
+  privateKeyPem?: string | null
+  clientSecret?: string | null
+  webhookSecret?: string | null
 }
 
 /**
  * Partial write patch — omitted keys keep their stored value, so a save that
  * did not touch the private key must leave `privateKeyPem` out entirely rather
- * than send `''`. `appSlug` / `clientId` / `webhookSecret` accept an explicit
- * `null` to clear; `appId` and `privateKeyPem` reject empty strings server-side.
+ * than send `''`. Nullable fields accept an explicit `null` to clear.
+ * `provider` is immutable.
  */
-export type GithubAppSettingsUpdate = {
-  appId?: string
+export type GitAppUpdate = {
+  name?: string
+  externalAppId?: string
+  baseUrl?: string
+  apiUrl?: string | null
   appSlug?: string | null
   clientId?: string | null
-  privateKeyPem?: string
+  redirectUri?: string | null
+  privateKeyPem?: string | null
+  clientSecret?: string | null
   webhookSecret?: string | null
-}
-
-const ADMIN_GITHUB_APP_URL = `${ADMIN_API}/instance/github-app`
-
-export async function fetchGithubAppSettings(): Promise<GithubAppSettingsSummary> {
-  const raw = await apiFetch<{ githubApp: GithubAppSettingsSummary }>(
-    ADMIN_GITHUB_APP_URL
-  )
-  return raw.githubApp
-}
-
-export async function saveGithubAppSettings(
-  updates: GithubAppSettingsUpdate
-): Promise<GithubAppSettingsSummary> {
-  const raw = await apiFetch<{ githubApp: GithubAppSettingsSummary }>(
-    ADMIN_GITHUB_APP_URL,
-    {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    }
-  )
-  return raw.githubApp
 }
 
 /**
- * Instance-wide GitLab OAuth application. Same presence-only contract as the
- * GitHub App summary; `baseUrl` is always resolved (defaults to
- * `https://gitlab.com` when the operator never set one).
+ * Which collection to talk to.
+ *
+ * The two surfaces expose the same resource and differ only in scope: `admin`
+ * manages instance-wide apps and is role-gated, `org` manages the current
+ * organization's own and is gated on `organization:manage`. Everything below
+ * takes the scope rather than duplicating the client.
  */
-export type GitlabOauthSettingsSummary = {
-  clientId: string | null
-  redirectUri: string | null
-  baseUrl: string
-  hasClientSecret: boolean
-  hasWebhookSecret: boolean
+export type GitAppScope = 'admin' | 'org'
+
+function gitAppsUrl(scope: GitAppScope, suffix = ''): string {
+  const base = scope === 'admin' ? `${ADMIN_API}/git/apps` : `${CLIENT_API}/git/apps`
+  return `${base}${suffix}`
 }
 
-/** Partial write patch; see {@link GithubAppSettingsUpdate} for the semantics. */
-export type GitlabOauthSettingsUpdate = {
-  clientId?: string
-  clientSecret?: string
-  redirectUri?: string | null
-  baseUrl?: string | null
-  webhookSecret?: string | null
+export async function fetchGitApps(scope: GitAppScope): Promise<GitAppSummary[]> {
+  const raw = await apiFetch<{ apps: GitAppSummary[] }>(gitAppsUrl(scope))
+  return raw.apps
 }
 
-const ADMIN_GITLAB_OAUTH_URL = `${ADMIN_API}/instance/gitlab-oauth`
-
-export async function fetchGitlabOauthSettings(): Promise<GitlabOauthSettingsSummary> {
-  const raw = await apiFetch<{ gitlabOauth: GitlabOauthSettingsSummary }>(
-    ADMIN_GITLAB_OAUTH_URL
-  )
-  return raw.gitlabOauth
+export async function createGitApp(
+  scope: GitAppScope,
+  input: GitAppCreate
+): Promise<GitAppSummary> {
+  const raw = await apiFetch<{ app: GitAppSummary }>(gitAppsUrl(scope), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return raw.app
 }
 
-export async function saveGitlabOauthSettings(
-  updates: GitlabOauthSettingsUpdate
-): Promise<GitlabOauthSettingsSummary> {
-  const raw = await apiFetch<{ gitlabOauth: GitlabOauthSettingsSummary }>(
-    ADMIN_GITLAB_OAUTH_URL,
+export async function updateGitApp(
+  scope: GitAppScope,
+  id: string,
+  updates: GitAppUpdate
+): Promise<GitAppSummary> {
+  const raw = await apiFetch<{ app: GitAppSummary }>(
+    gitAppsUrl(scope, `/${encodeURIComponent(id)}`),
     {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(updates),
     }
   )
-  return raw.gitlabOauth
+  return raw.app
+}
+
+export async function deleteGitApp(scope: GitAppScope, id: string): Promise<void> {
+  await apiFetch<void>(gitAppsUrl(scope, `/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+  })
+}
+
+/** What the manifest flow needs to hand GitHub. */
+export type GithubManifestStart = {
+  manifest: Record<string, unknown>
+  /** Where the browser POSTs the manifest. */
+  createUrl: string
+  state: string
+}
+
+/**
+ * Ask the control plane for a GitHub App manifest.
+ *
+ * The returned manifest already points GitHub at the new app's own scoped
+ * webhook URL, so the App is created self-identifying — nothing to copy by hand
+ * afterwards.
+ */
+export async function startGithubAppManifest(
+  scope: GitAppScope,
+  input: { name?: string; baseUrl?: string; organizationLogin?: string | null } = {}
+): Promise<GithubManifestStart> {
+  return await apiFetch<GithubManifestStart>(
+    gitAppsUrl(scope, '/github/manifest'),
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }
+  )
 }
 
 export type CommandStatus =
@@ -3334,7 +3388,24 @@ export async function deleteSource(sourceId: string): Promise<{ ok: true }> {
 }
 
 /**
- * Where to send the browser to install the GitHub App on an account.
+ * Query string for a connect redirect.
+ *
+ * `appId` names which registered application to connect through — an instance
+ * may hold several per provider. `organizationId` is there because these are
+ * **top-level browser navigations**, and a navigation carries no
+ * `X-Turbopanel-Organization-Id`; the control plane accepts the query param as
+ * the header's equivalent. Neither value is a credential: the session cookie
+ * and the signed `state` are what authorize the flow.
+ */
+function connectQuery(appId: string): string {
+  const params = new URLSearchParams({ appId })
+  const organizationId = getActiveOrganizationId()
+  if (organizationId) params.set('organizationId', organizationId)
+  return params.toString()
+}
+
+/**
+ * Where to send the browser to install a GitHub App on an account.
  *
  * Deliberately a URL rather than a fetch, exactly like
  * {@link gitlabOauthConnectUrl}: the endpoint answers `302` to GitHub's
@@ -3342,8 +3413,8 @@ export async function deleteSource(sourceId: string): Promise<{ ok: true }> {
  * there to choose an account and pick repositories. Following it with `fetch`
  * would consume the redirect and show nothing.
  */
-export function githubAppInstallUrl(): string {
-  return controlPlaneUrl(`${CLIENT_API}/sources/github/install`)
+export function githubAppInstallUrl(appId: string): string {
+  return controlPlaneUrl(`${CLIENT_API}/sources/github/install?${connectQuery(appId)}`)
 }
 
 /**
@@ -3353,8 +3424,8 @@ export function githubAppInstallUrl(): string {
  * GitLab's authorize page, and the operator has to *land* there to approve the
  * grant. Following it with `fetch` would consume the redirect and show nothing.
  */
-export function gitlabOauthConnectUrl(): string {
-  return controlPlaneUrl(`${CLIENT_API}/sources/gitlab/oauth`)
+export function gitlabOauthConnectUrl(appId: string): string {
+  return controlPlaneUrl(`${CLIENT_API}/sources/gitlab/oauth?${connectQuery(appId)}`)
 }
 
 /** What the deploy-key endpoint hands back — the public half, exactly once. */

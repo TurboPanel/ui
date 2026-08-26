@@ -25,6 +25,7 @@ import {
   useGitInstallations,
   useInstallationRepositories,
 } from '@/lib/queries/releases'
+import { useGitApps } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
 
 /** `https://github.com/owner/repo(.git)` → `owner/repo`, else the URL itself. */
@@ -273,20 +274,41 @@ function NoConnectionState({
   disabled: boolean
   onUseDeployKey: () => void
 }>) {
+  const appsQuery = useGitApps('org')
+  const apps = (appsQuery.data ?? []).filter((app) => app.provider === provider)
+  // Connecting now names an application. Exactly one is unambiguous, so go
+  // straight there; anything else belongs on the Connected accounts panel,
+  // which has the chooser and the registration entry point.
+  const only = apps.length === 1 ? apps[0] : undefined
+  const connectUrl = provider === 'github' ? githubAppInstallUrl : gitlabOauthConnectUrl
+
+  const connectButton = (
+    <Button
+      label={provider === 'github' ? 'Connect GitHub account' : 'Connect GitLab account'}
+      variant="primary"
+      size="sm"
+      disabled={disabled || !only}
+      onPress={() => {
+        if (only) openProviderConsent(connectUrl(only.id))
+      }}
+    />
+  )
+
+  const noAppsHint = apps.length === 0
+    ? ' No application is registered for this provider yet — register one under Git providers first.'
+    : apps.length > 1
+    ? ' Several applications are registered; choose one from Connected accounts above.'
+    : ''
+
   if (provider === 'github') {
     return (
       <InlineNotice
         title="No GitHub account connected yet"
-        body="Install the GitHub App on the account or organization that owns the repository, then pick it here."
-        actions={
-          <Button
-            label="Connect GitHub account"
-            variant="primary"
-            size="sm"
-            disabled={disabled}
-            onPress={() => openProviderConsent(githubAppInstallUrl())}
-          />
+        body={
+          'Install the GitHub App on the account or organization that owns the repository, then pick it here.' +
+          noAppsHint
         }
+        actions={connectButton}
       />
     )
   }
@@ -294,16 +316,13 @@ function NoConnectionState({
   return (
     <InlineNotice
       title="No GitLab account connected yet"
-      body="Connect an account over OAuth, or skip it and authorize a single project with a generated read-only deploy key."
+      body={
+        'Connect an account over OAuth, or skip it and authorize a single project with a generated read-only deploy key.' +
+        noAppsHint
+      }
       actions={
         <ButtonRow>
-          <Button
-            label="Connect GitLab account"
-            variant="primary"
-            size="sm"
-            disabled={disabled}
-            onPress={() => openProviderConsent(gitlabOauthConnectUrl())}
-          />
+          {connectButton}
           <Button
             label="Use a deploy key instead"
             size="sm"

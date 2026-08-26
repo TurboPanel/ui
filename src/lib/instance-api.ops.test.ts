@@ -491,8 +491,16 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
   })
 
   it('githubAppInstallUrl and gitlabOauthConnectUrl build browser navigation targets', () => {
-    expect(githubAppInstallUrl()).toContain('/api/client/v1/sources/github/install')
-    expect(gitlabOauthConnectUrl()).toContain('/api/client/v1/sources/gitlab/oauth')
+    const github = githubAppInstallUrl('app-1')
+    expect(github).toContain('/api/client/v1/sources/github/install')
+    // The app is named on the redirect: an instance may hold several, and the
+    // callback binds the resulting installation to whichever one was chosen.
+    expect(github).toContain('appId=app-1')
+
+    // Escaped so an id can never inject another parameter or path segment.
+    const gitlab = gitlabOauthConnectUrl('a&b=c/d')
+    expect(gitlab).toContain('/api/client/v1/sources/gitlab/oauth')
+    expect(gitlab).toContain('appId=a%26b%3Dc%2Fd')
   })
 
   it('createGitlabDeployKey POSTs the deploy-key route', async () => {

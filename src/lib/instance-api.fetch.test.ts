@@ -26,8 +26,7 @@ import {
   fetchDatacenters,
   fetchDeployPreview,
   fetchEnvironment,
-  fetchGithubAppSettings,
-  fetchGitlabOauthSettings,
+  fetchGitApps,
   fetchLicenses,
   fetchOrgHostDefaults,
   fetchOrganization,
@@ -54,8 +53,8 @@ import {
   retireOrganizationCa,
   rotateOrganizationCa,
   runEnvironmentLifecycle,
-  saveGithubAppSettings,
-  saveGitlabOauthSettings,
+  createGitApp,
+  updateGitApp,
   saveOrgFabric,
   saveOrgHostDefaults,
   setServerHostname,
@@ -746,57 +745,62 @@ describe('instance-api fetch wrappers', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/tls/ca/retire')
   })
 
-  it('unwraps the GitHub App summary and PUTs only the supplied patch keys', async () => {
-    const summary = {
-      appId: '123456',
+  it('lists git apps from the scope-appropriate collection', async () => {
+    const app = {
+      id: 'app-1',
+      organizationId: null,
+      provider: 'github' as const,
+      name: 'TurboPanel',
+      baseUrl: 'https://github.com',
+      apiUrl: null,
+      externalAppId: '123456',
       appSlug: 'my-turbopanel',
       clientId: null,
+      redirectUri: null,
+      webhookRef: 'ref-1',
+      webhookPath: '/api/git/v1/github/webhook/ref-1',
+      webhookUrl: 'https://panel.example.com/api/git/v1/github/webhook/ref-1',
+      readOnly: false,
       hasPrivateKey: true,
+      hasClientSecret: false,
       hasWebhookSecret: false,
     }
 
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, githubApp: summary }))
-    await expect(fetchGithubAppSettings()).resolves.toEqual(summary)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/api/admin/v1/instance/github-app',
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ apps: [app] }))
+    await expect(fetchGitApps('admin')).resolves.toEqual([app])
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/git/apps')
 
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, githubApp: summary }))
-    await expect(
-      saveGithubAppSettings({ appId: '123456', clientId: null }),
-    ).resolves.toEqual(summary)
-    const [, init] = fetchMock.mock.calls[1] ?? []
-    expect((init as RequestInit).method).toBe('PUT')
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      appId: '123456',
-      clientId: null,
-    })
+    // The org surface is a different collection, not the same one filtered.
+    fetchMock.mockResolvedValueOnce(jsonResponse({ apps: [] }))
+    await expect(fetchGitApps('org')).resolves.toEqual([])
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/client/v1/git/apps')
   })
 
-  it('unwraps the GitLab OAuth summary and PUTs the patch', async () => {
-    const summary = {
-      clientId: 'app-1',
-      redirectUri: null,
-      baseUrl: 'https://gitlab.com',
-      hasClientSecret: true,
-      hasWebhookSecret: true,
-    }
+  it('POSTs a create and PATCHes only the supplied patch keys', async () => {
+    const app = { id: 'app-1', name: 'TurboPanel' }
 
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, gitlabOauth: summary }))
-    await expect(fetchGitlabOauthSettings()).resolves.toEqual(summary)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/api/admin/v1/instance/gitlab-oauth',
-    )
-
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, gitlabOauth: summary }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ app }))
     await expect(
-      saveGitlabOauthSettings({ clientId: 'app-1', baseUrl: null }),
-    ).resolves.toEqual(summary)
-    const [, init] = fetchMock.mock.calls[1] ?? []
-    expect((init as RequestInit).method).toBe('PUT')
+      createGitApp('admin', {
+        provider: 'github',
+        name: 'TurboPanel',
+        externalAppId: '123456',
+      }),
+    ).resolves.toEqual(app)
+    const [, created] = fetchMock.mock.calls[0] ?? []
+    expect((created as RequestInit).method).toBe('POST')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ app }))
+    await expect(
+      updateGitApp('org', 'app-1', { name: 'Renamed', clientId: null }),
+    ).resolves.toEqual(app)
+    const [url, init] = fetchMock.mock.calls[1] ?? []
+    expect(String(url)).toContain('/api/client/v1/git/apps/app-1')
+    expect((init as RequestInit).method).toBe('PATCH')
+    // Omitted keys must stay omitted, or a rename would clear a sealed secret.
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      clientId: 'app-1',
-      baseUrl: null,
+      name: 'Renamed',
+      clientId: null,
     })
   })
 })

@@ -51,4 +51,32 @@ describe('gitWebhookHint', () => {
       )
     }
   })
+
+  it('scopes the path to one app when given a webhook ref', () => {
+    const hint = gitWebhookHint(
+      ['https://panel.example.com'],
+      'github',
+      'ref-abc',
+    )
+    // The ref is what lets a delivery name its app before any secret is
+    // consulted, so it has to survive into the URL the operator copies.
+    expect(hint.webhookUrl).toBe(
+      'https://panel.example.com/api/git/v1/github/webhook/ref-abc',
+    )
+    expect(hint.reachable).toBe(true)
+  })
+
+  it('falls back to the bare path when no ref is given', () => {
+    const hint = gitWebhookHint(['https://panel.example.com'], 'gitlab')
+    expect(hint.webhookUrl).toBe(
+      'https://panel.example.com/api/git/v1/gitlab/webhook',
+    )
+  })
+
+  it('escapes a ref so it cannot break out of its path segment', () => {
+    const hint = gitWebhookHint(['https://panel.example.com'], 'github', 'a/b')
+    expect(hint.webhookUrl).toBe(
+      'https://panel.example.com/api/git/v1/github/webhook/a%2Fb',
+    )
+  })
 })

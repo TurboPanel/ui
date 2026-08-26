@@ -2,19 +2,23 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   applyPublicUrls,
   applyReencryptSecrets,
+  createGitApp,
+  deleteGitApp,
   fetchEmailSettings,
-  fetchGithubAppSettings,
-  fetchGitlabOauthSettings,
+  fetchGitApps,
   fetchPublicUrls,
   fetchSignupSettings,
+  type GitAppCreate,
+  type GitAppUpdate,
   isForbiddenError,
   saveEmailSettings,
-  saveGithubAppSettings,
-  saveGitlabOauthSettings,
   savePublicUrls,
   saveSignupSettings,
+  startGithubAppManifest,
+  updateGitApp,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { getActiveOrganizationId } from '@/lib/org-context'
 
 export function usePublicUrls(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -113,38 +117,85 @@ export function useSaveEmailSettings() {
   })
 }
 
-export function useGithubAppSettings(options?: Readonly<{ enabled?: boolean }>) {
+/**
+ * Cache key for one scope's collection.
+ *
+ * The org list is keyed by the **active organization**, not just by the string
+ * `'org'`: it contains that org's own apps plus instance-wide ones, and the
+ * `readOnly` flags and webhook URLs differ per org, so a shared key would serve
+ * the previous organization's answer after a switch. `apiFetch` resolves the
+ * org from the same module global, so the two always agree.
+ */
+function gitAppsKey(scope: 'admin' | 'org') {
+  if (scope === 'admin') return queryKeys.admin.gitApps
+  return queryKeys.org(getActiveOrganizationId() ?? 'none').gitApps
+}
+
+/**
+ * Registered Git provider applications for one scope.
+ *
+ * `admin` lists the instance-wide collection; `org` lists the organization's
+ * own plus every instance-wide one, with `readOnly` marking the latter.
+ *
+ * These live in `queries/admin` despite serving both surfaces: the two hit the
+ * same resource under different prefixes, and splitting them across modules
+ * would mean two copies of the cache-invalidation rules for one collection.
+ * Org-scoped screens importing from here is deliberate, not a stray import.
+ */
+export function useGitApps(
+  scope: 'admin' | 'org',
+  options?: Readonly<{ enabled?: boolean }>
+) {
   return useQuery({
-    queryKey: queryKeys.admin.gitGithubApp,
-    queryFn: fetchGithubAppSettings,
+    queryKey: gitAppsKey(scope),
+    queryFn: () => fetchGitApps(scope),
     enabled: options?.enabled ?? true,
   })
 }
 
-export function useSaveGithubAppSettings() {
+export function useCreateGitApp(scope: 'admin' | 'org') {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: saveGithubAppSettings,
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.admin.gitGithubApp, data)
+    mutationFn: (input: GitAppCreate) => createGitApp(scope, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
     },
   })
 }
 
-export function useGitlabOauthSettings(options?: Readonly<{ enabled?: boolean }>) {
-  return useQuery({
-    queryKey: queryKeys.admin.gitGitlabOauth,
-    queryFn: fetchGitlabOauthSettings,
-    enabled: options?.enabled ?? true,
+export function useUpdateGitApp(scope: 'admin' | 'org') {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: GitAppUpdate }) =>
+      updateGitApp(scope, id, updates),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
+    },
   })
 }
 
-export function useSaveGitlabOauthSettings() {
+export function useDeleteGitApp(scope: 'admin' | 'org') {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: saveGitlabOauthSettings,
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.admin.gitGitlabOauth, data)
+    mutationFn: (id: string) => deleteGitApp(scope, id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
     },
+  })
+}
+
+/**
+ * Start the GitHub App manifest flow.
+ *
+ * Returns the manifest and target URL; the caller POSTs them to GitHub as a
+ * form. No cache to update — the app row does not exist until the callback.
+ */
+export function useStartGithubAppManifest(scope: 'admin' | 'org') {
+  return useApiMutation({
+    mutationFn: (input: {
+      name?: string
+      baseUrl?: string
+      organizationLogin?: string | null
+    }) => startGithubAppManifest(scope, input),
   })
 }

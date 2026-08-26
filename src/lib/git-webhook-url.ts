@@ -75,18 +75,39 @@ function webhookUrlFor(origin: string, path: string): string {
 }
 
 /**
+ * The ingress path for one app.
+ *
+ * With a `webhookRef` this is that app's own scoped path — the URL a registered
+ * app is actually pointed at, and what lets a delivery name its app before any
+ * secret is consulted. Without one the caller gets the bare path, which still
+ * resolves by header (GitHub) or token digest (GitLab).
+ */
+export function webhookPathFor(
+  provider: GitWebhookProvider,
+  webhookRef?: string | null,
+): string {
+  const base = WEBHOOK_PATH_BY_PROVIDER[provider]
+  return webhookRef ? `${base}/${encodeURIComponent(webhookRef)}` : base
+}
+
+/**
  * Classify the instance's configured origins for one provider.
  *
  * The first publicly reachable origin wins — that is the one worth handing to
  * the provider. When none qualifies, the first configured origin is still
  * returned so the operator can see the endpoint's shape, paired with the note
  * explaining why it will not work as-is.
+ *
+ * Pass a `webhookRef` to get one app's own URL. Most callers do not need to:
+ * the control plane already resolves it onto the app and source reads, and
+ * this hint is consulted mainly for the reachability note.
  */
 export function gitWebhookHint(
   origins: readonly string[],
   provider: GitWebhookProvider,
+  webhookRef?: string | null,
 ): GitWebhookHint {
-  const path = WEBHOOK_PATH_BY_PROVIDER[provider]
+  const path = webhookPathFor(provider, webhookRef)
   const usable = origins
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)

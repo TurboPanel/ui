@@ -17,7 +17,7 @@ export const ADMIN_AREAS = [
     id: 'git',
     label: 'Git providers',
     pathSegment: 'git',
-    hint: 'GitHub App and GitLab OAuth application credentials',
+    hint: 'GitHub Apps and GitLab OAuth applications shared by the whole instance',
     subRoutes: [],
   },
   {

@@ -1,5 +1,5 @@
-import { GitProvidersSection } from '@/components/admin/git-providers-section'
+import { GitAppsSection } from '@/components/admin/git-apps-section'
 
 export default function AdminGitScreen() {
-  return <GitProvidersSection />
+  return <GitAppsSection scope="admin" />
 }

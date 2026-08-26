@@ -374,20 +374,24 @@ describe('queryKeys.org(…) remaining factories', () => {
     expect(queryKeys.org('org-1').all).toEqual(['org', 'org-1'])
   })
 
-  it('builds auth.session and admin git settings keys', () => {
+  it('builds auth.session and scope-separated git app keys', () => {
     expect(queryKeys.auth.session).toEqual(['auth', 'session'])
-    expect(queryKeys.admin.gitGithubApp).toEqual([
+    expect(queryKeys.admin.gitApps).toEqual([
       'admin',
       'settings',
       'git',
-      'github-app',
+      'apps',
     ])
-    expect(queryKeys.admin.gitGitlabOauth).toEqual([
-      'admin',
-      'settings',
+    // The org collection also contains instance-wide apps, and its readOnly
+    // flags differ per org, so it is keyed by organization — never shared with
+    // the admin list or with another org's.
+    expect(queryKeys.org('org-1').gitApps).toEqual([
+      'org',
+      'org-1',
       'git',
-      'gitlab-oauth',
+      'apps',
     ])
+    expect(queryKeys.org('org-1').gitApps).not.toEqual(queryKeys.admin.gitApps)
   })
 
   it('builds managed leaf factories under the managed prefix', () => {

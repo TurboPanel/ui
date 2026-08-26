@@ -222,6 +222,16 @@ export const queryKeys = {
           ] as const,
       },
 
+      /**
+       * Git applications this organization may connect through.
+       *
+       * Org-scoped, so it is keyed by `orgId` like every other org resource:
+       * the list contains the org's own apps *and* instance-wide ones, and
+       * the `readOnly` flag and webhook URLs differ per org — a shared key
+       * would serve the previous organization's answer after a switch.
+       */
+      gitApps: ['org', orgId, 'git', 'apps'] as const,
+
       sources: {
         all: ['org', orgId, 'sources'] as const,
         list: ['org', orgId, 'sources'] as const,
@@ -359,8 +369,8 @@ export const queryKeys = {
     publicUrls: ['admin', 'public-urls'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
     email: ['admin', 'settings', 'email'] as const,
-    gitGithubApp: ['admin', 'settings', 'git', 'github-app'] as const,
-    gitGitlabOauth: ['admin', 'settings', 'git', 'gitlab-oauth'] as const,
+    /** Instance-wide Git provider applications. The org-scoped list is `org(id).gitApps`. */
+    gitApps: ['admin', 'settings', 'git', 'apps'] as const,
   },
 } as const
 
