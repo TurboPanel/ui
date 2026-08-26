@@ -114,4 +114,123 @@ describe('buildComposeDocModel', () => {
     expect(buildComposeDocModel({ nope: true }).isEmpty).toBe(true)
     expect(buildComposeDocModel(yamlToComposeDocument('')).services).toEqual([])
   })
+
+  it('reads numeric ports, long-form volumes, map networks, and build sources', () => {
+    const model = buildComposeDocModel(
+      yamlToComposeDocument(`services:
+  web:
+    image: nginx
+    ports:
+      - 8080
+      - target: 80
+      - published: 443
+        target: 8443
+      - {}
+    volumes:
+      - source: data
+        target: /data
+      - ""
+      - source: ""
+        target: /orphan
+    networks:
+      front:
+        aliases:
+          - web
+    deploy:
+      replicas: 1
+    x-turbopanel:
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+  inline:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM alpine
+  fromfile:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.prod
+  healthy:
+    image: redis
+    depends_on: true
+    ports: mapping
+    volumes: mapping
+volumes:
+  data:
+    name: custom-data
+  local:
+    driver: local
+networks:
+  front: {}
+  ignored: not-a-map
+`),
+    )
+
+    const web = model.services.find((service) => service.name === 'web')
+    expect(web?.ports).toEqual(['8080', '80', '443:8443'])
+    expect(web?.mounts).toEqual([
+      { source: 'data', target: '/data', named: true },
+    ])
+    expect(web?.sourceBound).toBe(true)
+    expect(web?.dependsOn).toEqual([])
+
+    const inline = model.services.find((service) => service.name === 'inline')
+    expect(inline?.source).toBe('inline Dockerfile')
+    expect(inline?.lines).toContainEqual({
+      text: 'build',
+      value: 'inline Dockerfile',
+      depth: 1,
+    })
+
+    const fromfile = model.services.find((service) => service.name === 'fromfile')
+    expect(fromfile?.source).toBe('Dockerfile.prod')
+
+    expect(model.volumes.map((volume) => [volume.name, volume.detail])).toEqual([
+      ['data', 'custom-data'],
+      ['local', 'local'],
+    ])
+    expect(model.networks[0]).toEqual({
+      name: 'front',
+      usedBy: ['web'],
+      detail: null,
+    })
+  })
+
+  it('formats boolean and numeric scalars on long-syntax ports', () => {
+    const model = buildComposeDocModel({
+      version: 1,
+      data: {
+        services: {
+          web: {
+            image: 'nginx',
+            ports: [
+              { published: true, target: 80 },
+              { published: 0, target: false },
+            ],
+          },
+        },
+      },
+      presentation: { keyOrder: ['services'], comments: {} },
+    })
+    expect(model.services[0]?.ports).toEqual(['true:80', '0:false'])
+  })
+
+  it('drops empty volume sources and reports a service with no image or build', () => {
+    const model = buildComposeDocModel(
+      yamlToComposeDocument(`services:
+  web:
+    environment:
+      A: "1"
+    volumes:
+      - ":"
+      - ""
+  other: not-a-map
+volumes: not-a-map
+`),
+    )
+    expect(model.services[0]?.source).toBeNull()
+    expect(model.services[0]?.mounts).toEqual([])
+    expect(model.services[1]?.name).toBe('other')
+    expect(model.volumes).toEqual([])
+  })
 })

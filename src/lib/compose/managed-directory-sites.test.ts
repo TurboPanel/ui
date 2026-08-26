@@ -36,6 +36,20 @@ describe('managedDirectorySiteNames', () => {
     expect(managedDirectorySiteNames(null)).toEqual([])
     expect(managedDirectorySiteNames(undefined)).toEqual([])
     expect(managedDirectorySiteNames(documentWith({}))).toEqual([])
+    expect(
+      managedDirectorySiteNames({
+        version: 1,
+        data: { services: 'not-a-map' },
+        presentation: { keyOrder: [], comments: {} },
+      }),
+    ).toEqual([])
+    expect(
+      managedDirectorySiteNames({
+        version: 1,
+        data: { services: { broken: 'not-a-map', site: uploadedSite } },
+        presentation: { keyOrder: [], comments: {} },
+      }),
+    ).toEqual(['site'])
   })
 
   it('sorts so the notice reads the same across renders', () => {

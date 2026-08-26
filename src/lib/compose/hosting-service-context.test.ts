@@ -65,9 +65,13 @@ describe('resolveHostingServiceContext', () => {
 
     const nginx = resolveHostingServiceContext(document, 'static')
     expect(nginx.phpApplicability).toBe('applicable')
+    expect(nginx.webEnvMode).toBe('file_only')
     expect(hostingPhpSectionCopy(nginx).showFields).toBe(true)
     expect(hostingPhpSectionCopy(nginx).title).toBe('PHP settings (nginx php-fpm)')
     expect(hostingPhpSectionCopy(nginx).hint).toContain('fastcgi_pass')
+    expect(hostingServiceKindLabel(nginx)).toBe('Site · nginx')
+    expect(hostingWebEnvSectionCopy(nginx).showFields).toBe(true)
+    expect(hostingWebEnvSectionCopy(nginx).hint).toContain('nginx does not inject')
 
     const ols = resolveHostingServiceContext(document, 'site')
     expect(ols.phpApplicability).toBe('applicable')
@@ -203,6 +207,19 @@ describe('hosting copy helpers', () => {
     expect(hostingPhpSectionCopy(container).title).toBe('PHP settings')
     expect(hostingPhpSectionCopy(container).hint).toContain('Containers use their image runtime')
     expect(hostingWebEnvSectionCopy(container).hint).toContain('Hosting variables')
+  })
+
+  it('labels a site with no engine as a generic site', () => {
+    expect(
+      hostingServiceKindLabel({
+        composeServiceName: 'web',
+        kind: 'site',
+        engine: undefined,
+        siteSiblingNames: [],
+        phpApplicability: 'applicable',
+        webEnvMode: 'file_only',
+      }),
+    ).toBe('Site · site')
   })
 })
 

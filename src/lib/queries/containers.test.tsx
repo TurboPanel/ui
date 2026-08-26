@@ -6,6 +6,7 @@ import { createAppQueryClient } from '@/lib/query-client'
 import {
   useContainers,
   useContainersByProject,
+  useContainersByServices,
 } from '@/lib/queries/containers'
 
 const { fetchContainers } = vi.hoisted(() => ({
@@ -109,5 +110,60 @@ describe('containers query hooks', () => {
     })
     expect(fetchContainers).toHaveBeenCalledWith({ environmentId })
     expect(result.current.data?.containers).toHaveLength(1)
+  })
+
+  it('useContainersByServices maps one fetch per service id', async () => {
+    fetchContainers
+      .mockResolvedValueOnce({
+        containers: [{ id: 'ctr-a', serviceId: 'svc-a' }],
+      })
+      .mockResolvedValueOnce({
+        containers: [
+          { id: 'ctr-b1', serviceId: 'svc-b' },
+          { id: 'ctr-b2', serviceId: 'svc-b' },
+        ],
+      })
+
+    const { result } = renderHook(
+      () => useContainersByServices(orgId, ['svc-a', 'svc-b']),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    expect(fetchContainers).toHaveBeenCalledTimes(2)
+    expect(fetchContainers).toHaveBeenCalledWith({ serviceId: 'svc-a' })
+    expect(fetchContainers).toHaveBeenCalledWith({ serviceId: 'svc-b' })
+    expect(result.current.containersByService['svc-a']).toHaveLength(1)
+    expect(result.current.containersByService['svc-b']).toHaveLength(2)
+  })
+
+  it('useContainersByServices stays idle when orgId is empty', () => {
+    const { result } = renderHook(
+      () => useContainersByServices('', ['svc-a']),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.isLoading).toBe(false)
+    expect(fetchContainers).not.toHaveBeenCalled()
+  })
+
+  it('useContainersByServices skips blank service ids', async () => {
+    fetchContainers.mockResolvedValueOnce({
+      containers: [{ id: 'ctr-a', serviceId: 'svc-a' }],
+    })
+
+    const { result } = renderHook(
+      () => useContainersByServices(orgId, ['', 'svc-a']),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    expect(fetchContainers).toHaveBeenCalledTimes(1)
+    expect(fetchContainers).toHaveBeenCalledWith({ serviceId: 'svc-a' })
+    expect(result.current.containersByService['svc-a']).toHaveLength(1)
+    expect(result.current.containersByService['']).toBeUndefined()
   })
 })

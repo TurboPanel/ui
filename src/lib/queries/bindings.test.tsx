@@ -97,6 +97,47 @@ describe('bindings query hooks', () => {
     })
   })
 
+  it('useCreateBinding strips managedEnvironmentId and invalidates scoped lists', async () => {
+    createBinding.mockResolvedValueOnce({ ok: true, id: 'bind-3' })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useCreateBinding(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        serviceId,
+        principalId: 'principal-1',
+        databaseName: 'app',
+        managedEnvironmentId: environmentId,
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(createBinding).toHaveBeenCalledWith({
+      serviceId,
+      principalId: 'principal-1',
+      databaseName: 'app',
+    })
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).bindings.list({ serviceId }),
+      })
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).bindings.all,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).variables.list({ serviceId }),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).bindings.list({
+        managedEnvironmentId: environmentId,
+      }),
+    })
+  })
+
   it('useManagedEnvironmentBindings loads managed-cluster bindings', async () => {
     fetchBindings.mockResolvedValueOnce({ bindings: [] })
 
@@ -147,6 +188,44 @@ describe('bindings query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).bindings.list({ serviceId }),
       })
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).variables.list({ serviceId }),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).bindings.list({ environmentId }),
+    })
+  })
+
+  it('useUpdateBinding skips scoped list invalidation when scopes are omitted', async () => {
+    updateBinding.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUpdateBinding(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        id: 'bind-1',
+        serviceId,
+        body: { databaseName: 'analytics' },
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).bindings.list({ serviceId }),
+      })
+    })
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).bindings.list({ environmentId }),
+    })
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).bindings.list({
+        managedEnvironmentId: environmentId,
+      }),
     })
   })
 

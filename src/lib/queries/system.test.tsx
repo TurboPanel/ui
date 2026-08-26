@@ -214,6 +214,24 @@ describe('system query hooks', () => {
     expect(result.current.status).toBe('exited')
   })
 
+  it('useServerSystemIngress reports exited for dead or removing containers', () => {
+    mockReadyIngress(serverId, [
+      { id: 'ctr-1', containerId: 'docker-abc', status: 'dead' },
+    ])
+    const dead = renderHook(() => useServerSystemIngress(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    expect(dead.result.current.status).toBe('exited')
+
+    mockReadyIngress(serverId, [
+      { id: 'ctr-1', containerId: 'docker-abc', status: 'removing' },
+    ])
+    const removing = renderHook(() => useServerSystemIngress(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    expect(removing.result.current.status).toBe('exited')
+  })
+
   it('useServerSystemIngress reports pending for non-running non-exited statuses', () => {
     mockReadyIngress(serverId, [
       { id: 'ctr-1', containerId: 'docker-abc', status: 'paused' },

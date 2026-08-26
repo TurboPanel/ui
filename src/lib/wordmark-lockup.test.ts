@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeTurboPanelWordmarkLockup,
+  consoleMarkRenderSize,
   consoleWordmarkLockup,
   TURBOPANEL_WORDMARK_CHROME_SIZE,
   TURBOPANEL_WORDMARK_PROFILE,
+  wordmarkLetterSpacingPx,
 } from './wordmark-lockup'
 
 describe('computeTurboPanelWordmarkLockup', () => {
@@ -47,5 +49,34 @@ describe('computeTurboPanelWordmarkLockup', () => {
     const small = consoleWordmarkLockup(24)
     expect(small.lockupHeight).toBeLessThan(large.lockupHeight)
     expect(small.wordSize).toBeGreaterThan(0)
+  })
+
+  it('defaults profile to console and honours boost/down overrides', () => {
+    const defaults = computeTurboPanelWordmarkLockup({ size: 40 })
+    const boosted = computeTurboPanelWordmarkLockup({
+      size: 40,
+      wordBoostPx: 8,
+      wordDownPx: 0,
+    })
+    expect(defaults.wordBottomOffset).toBe(
+      -TURBOPANEL_WORDMARK_PROFILE.console.wordDownPx,
+    )
+    expect(boosted.wordSize).toBeGreaterThan(defaults.wordSize)
+    expect(boosted.wordBottomOffset).toBe(-0)
+  })
+})
+
+describe('wordmarkLetterSpacingPx', () => {
+  it('returns zero when letterSpacingEm is zero', () => {
+    expect(wordmarkLetterSpacingPx(40)).toBe(0)
+  })
+})
+
+describe('consoleMarkRenderSize', () => {
+  it('maps design size to mark ink height', () => {
+    const lockup = consoleWordmarkLockup(40, true)
+    expect(consoleMarkRenderSize(40)).toBe(
+      Math.round(lockup.markRenderHeight),
+    )
   })
 })

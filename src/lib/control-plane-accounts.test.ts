@@ -244,4 +244,153 @@ describe('control-plane account store', () => {
     await hydrateControlPlaneStore()
     expect(read).not.toHaveBeenCalled()
   })
+
+  it('hydrateControlPlaneStore skips storage on same-origin web', async () => {
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    const read = vi.fn(async () => null)
+    configureControlPlaneStorageForTests({ read, write: async () => {} })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'web',
+      isDev: true,
+      locationOrigin: LOCAL_HTTPS_ORIGIN,
+    }))
+    await hydrateControlPlaneStore()
+    expect(read).not.toHaveBeenCalled()
+    expect(isControlPlaneStoreHydrated()).toBe(true)
+  })
+
+  it('hydrateControlPlaneStore drops invalid stored accounts and falls back activeOrigin', async () => {
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () =>
+        JSON.stringify({
+          accounts: [
+            null,
+            'skip-me',
+            { origin: '' },
+            {
+              origin: LOCAL_HTTPS_ORIGIN,
+              kind: 'weird',
+              email: 12,
+              runtime: 'bun',
+              lastOrgId: 99,
+            },
+          ],
+          activeOrigin: 'https://missing.example',
+        }),
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getControlPlaneAccounts()).toEqual([
+      {
+        origin: LOCAL_HTTPS_ORIGIN,
+        kind: 'self-hosted',
+        email: null,
+        runtime: null,
+        lastOrgId: null,
+      },
+    ])
+    expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+  })
+
+  it('hydrateControlPlaneStore rejects non-object stored payloads', async () => {
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () => JSON.stringify(['not', 'an', 'object']),
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getControlPlaneAccounts()).toEqual([])
+  })
+
+  it('hydrateControlPlaneStore prefills from EXPO_PUBLIC_CONTROL_PLANE_URL', async () => {
+    const previous = process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = LOCAL_HTTPS_ORIGIN
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () => null,
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    expect(getControlPlaneAccounts()[0]?.kind).toBe('self-hosted')
+    if (previous === undefined) {
+      delete process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    } else {
+      process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = previous
+    }
+  })
+
+  it('hydrateControlPlaneStore activates an env origin already present in storage', async () => {
+    const previous = process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = LOCAL_HTTPS_ORIGIN
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () =>
+        JSON.stringify({
+          accounts: [
+            {
+              origin: LOCAL_HTTPS_ORIGIN,
+              kind: 'self-hosted',
+              email: 'ops@example.com',
+              runtime: null,
+              lastOrgId: null,
+            },
+          ],
+          activeOrigin: null,
+        }),
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    expect(getControlPlaneAccounts()).toHaveLength(1)
+    expect(getActiveControlPlaneAccount()?.email).toBe('ops@example.com')
+    if (previous === undefined) {
+      delete process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    } else {
+      process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = previous
+    }
+  })
+
+  it('persists account updates through the configured storage write path', async () => {
+    const writes: string[] = []
+    resetControlPlaneStoreForTests()
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () => null,
+      write: async (value) => {
+        writes.push(value)
+      },
+    })
+    activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    await Promise.resolve()
+    expect(writes.length).toBeGreaterThan(0)
+    expect(JSON.parse(writes.at(-1)!)).toMatchObject({
+      activeOrigin: LOCAL_HTTPS_ORIGIN,
+    })
+  })
 })

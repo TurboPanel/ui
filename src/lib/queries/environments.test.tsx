@@ -100,6 +100,42 @@ describe('environments query hooks', () => {
     expect(fetchDeployPreview).toHaveBeenCalledTimes(1)
   })
 
+  it('useDeployPreview retry callback accepts transient failures twice', async () => {
+    const client = createAppQueryClient()
+    fetchDeployPreview.mockResolvedValueOnce({
+      composeYaml: 'services: {}',
+    })
+
+    renderHook(() => useDeployPreview(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      expect(
+        client.getQueryCache().find({
+          queryKey: queryKeys
+            .org(orgId)
+            .environments.deployPreview(environmentId),
+        }),
+      ).toBeTruthy()
+    })
+
+    const query = client.getQueryCache().find({
+      queryKey: queryKeys.org(orgId).environments.deployPreview(environmentId),
+    })
+    if (!query) throw new TypeError('expected deploy-preview query')
+    const retry = (query.options as { retry?: unknown }).retry
+    if (typeof retry !== 'function') {
+      throw new TypeError('expected retry function')
+    }
+    expect(retry(0, new Error('HTTP 500: boom'))).toBe(true)
+    expect(retry(1, new Error('HTTP 500: boom'))).toBe(true)
+    expect(retry(2, new Error('HTTP 500: boom'))).toBe(false)
+    expect(
+      retry(0, new Error('path failed: HTTP 409: server_placement_required')),
+    ).toBe(false)
+  })
+
   it('useDeployPreview loads prepared compose', async () => {
     fetchDeployPreview.mockResolvedValueOnce({
       composeYaml: 'services:\n  web:\n    image: nginx',

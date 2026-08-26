@@ -4,7 +4,11 @@ import {
   applyTabIndent,
   applyTabOutdent,
   canFixComposeYamlIndentation,
+  expectedIndentForCommentLine,
+  expectedIndentForLine,
+  expectedServicePropertyIndent,
   fixComposeYamlIndentation,
+  fixUnderIndentedServiceKeyLine,
   formatComposeYamlOnLineChange,
   indentAfterNewline,
   isFullLineComment,
@@ -32,6 +36,14 @@ describe('lineOpensBlock', () => {
   it('ignores trailing comments when deciding', () => {
     expect(lineOpensBlock('services: # top')).toBe(true)
     expect(lineOpensBlock('    image: nginx # web')).toBe(false)
+  })
+
+  it('rejects empty lines and one-line flow collections', () => {
+    expect(lineOpensBlock('')).toBe(false)
+    expect(lineOpensBlock('   ')).toBe(false)
+    expect(lineOpensBlock('items: {')).toBe(false)
+    expect(lineOpensBlock('items: [')).toBe(false)
+    expect(lineOpensBlock('items: foo,')).toBe(false)
   })
 })
 
@@ -179,6 +191,20 @@ nginx:`
     expect(
       formatComposeYamlOnLineChange(text, { start: caret, end: caret }),
     ).toBeNull()
+  })
+
+  it('right-trims without rewriting already-valid indent', () => {
+    const text = `services:
+  nginx:
+    image: nginx   `
+    const result = formatComposeYamlOnLineChange(text, {
+      start: text.length,
+      end: text.length,
+    })
+    expect(result?.text).toBe(`services:
+  nginx:
+    image: nginx`)
+    expect(result?.selection.start).toBeLessThan(text.length)
   })
 })
 
@@ -407,5 +433,173 @@ nginx:
     expect(canFixComposeYamlIndentation('services:\n  nginx:\n    image: nginx')).toBe(
       false,
     )
+  })
+
+  it('outdents a line that has no indent prefix', () => {
+    expect(applyTabOutdent('nginx:', { start: 2, end: 2 })).toEqual({
+      text: 'nginx:',
+      selection: { start: 2, end: 2 },
+    })
+  })
+
+  it('expands a selection that ends on a newline without including the next line', () => {
+    const text = 'nginx:\nimage: nginx\n'
+    const result = applyTabIndent(text, { start: 0, end: 7 })
+    expect(result.text).toBe('  nginx:\nimage: nginx\n')
+  })
+})
+
+describe('expected indent helpers', () => {
+  it('returns null for blank lines, comments, and top-level keys', () => {
+    const lines = ['services:', '  nginx:', '    image: nginx', 'networks:']
+    expect(expectedIndentForLine(lines, 0)).toBeNull()
+    expect(expectedIndentForLine(['# comment'], 0)).toBeNull()
+    expect(expectedIndentForLine([''], 0)).toBeNull()
+    expect(expectedIndentForLine(lines, 3)).toBeNull()
+    expect(expectedIndentForLine(lines, 99)).toBeNull()
+  })
+
+  it('aligns a shallow sibling service name with the previous service', () => {
+    const lines = [
+      'services:',
+      '  nginx:',
+      '    image: nginx',
+      '   redis:',
+    ]
+    expect(expectedIndentForLine(lines, 3)).toBe(2)
+  })
+
+  it('leaves same-depth mapping keys alone when no shallower opener exists', () => {
+    const lines = ['  foo:', '  bar:']
+    expect(expectedIndentForLine(lines, 1)).toBeNull()
+  })
+
+  it('skips a colon-only opener when recovering a root-level service name', () => {
+    const lines = ['services:', ':', 'nginx:']
+    expect(expectedIndentForLine(lines, 2)).toBe(2)
+  })
+
+  it('nests a root-level service name under services', () => {
+    const lines = ['services:', 'nginx:']
+    expect(expectedIndentForLine(lines, 1)).toBe(2)
+  })
+
+  it('does not nest a second top-level key under services', () => {
+    const lines = ['services:', '  nginx:', '    image: nginx', 'networks:']
+    expect(expectedIndentForLine(lines, 3)).toBeNull()
+  })
+
+  it('returns null for comment indent when the line is not a comment', () => {
+    expect(expectedIndentForCommentLine(['services:'], 0)).toBeNull()
+    expect(expectedIndentForCommentLine(['services:'], 4)).toBeNull()
+  })
+
+  it('skips blank lines between a comment and the following content', () => {
+    const lines = ['services:', '# web', '', '  nginx:']
+    expect(expectedIndentForCommentLine(lines, 1)).toBe(2)
+  })
+
+  it('aligns a trailing comment with the previous sibling', () => {
+    const lines = ['services:', '  nginx:', '    image: nginx', '# trailing']
+    expect(expectedIndentForCommentLine(lines, 3)).toBe(4)
+  })
+
+  it('nests a trailing comment under the previous block opener', () => {
+    const lines = ['services:', '# at end']
+    expect(expectedIndentForCommentLine(lines, 1)).toBe(2)
+  })
+
+  it('leaves a root comment at column 0 when nothing surrounds it', () => {
+    expect(expectedIndentForCommentLine(['# lone'], 0)).toBeNull()
+  })
+
+  it('infers service-property indent from the service name', () => {
+    const lines = ['services:', '  nginx:', 'image: nginx']
+    expect(expectedServicePropertyIndent(lines, 2)).toBe(4)
+  })
+
+  it('returns null for a property sitting directly under services', () => {
+    expect(expectedServicePropertyIndent(['services:', 'image: nginx'], 1)).toBeNull()
+  })
+
+  it('returns null once a later top-level section has started', () => {
+    const lines = [
+      'services:',
+      '  nginx:',
+      '    image: nginx',
+      'networks:',
+      'image: nginx',
+    ]
+    expect(expectedServicePropertyIndent(lines, 4)).toBeNull()
+  })
+
+  it('fixUnderIndentedServiceKeyLine deepens a shallow restart key', () => {
+    const text = `services:
+  nginx:
+    image: nginx
+restart: always`
+    const fixed = fixUnderIndentedServiceKeyLine(text, 3)
+    expect(fixed?.text).toContain('    restart: always')
+    expect(fixed?.indentDelta).toBe(4)
+  })
+
+  it('fixUnderIndentedServiceKeyLine is a no-op for missing or already-deep keys', () => {
+    expect(fixUnderIndentedServiceKeyLine('services:\n', 9)).toBeNull()
+    expect(fixUnderIndentedServiceKeyLine('services:\n  nginx:', 1)).toBeNull()
+    const already = `services:
+  nginx:
+    image: nginx`
+    expect(fixUnderIndentedServiceKeyLine(already, 2)).toBeNull()
+  })
+})
+
+describe('caret mapping and newline insertion', () => {
+  it('mapOffsetThroughPerLineTrim is a no-op when nothing trims', () => {
+    const text = 'services:\n  nginx:'
+    expect(mapOffsetThroughPerLineTrim(text, text, 4)).toBe(4)
+    expect(mapOffsetThroughPerLineTrim(text, text, -1)).toBe(0)
+    expect(mapOffsetThroughPerLineTrim(text, text, 99)).toBe(text.length)
+  })
+
+  it('inserts a newline in the middle of a line and indents the continuation', () => {
+    const prev = 'services:\n  nginx:'
+    const next = 'services:\n  ng\ninx:'
+    const result = applyNewlineAutoIndent(prev, next)
+    expect(result?.text).toBe('services:\n  ng\n  inx:')
+  })
+
+  it('preserves a selection through an indent rewrite', () => {
+    const broken = `services:
+nginx:
+  image: nginx`
+    const caret = broken.indexOf('nginx:')
+    const fixed = fixComposeYamlIndentation(broken, { start: caret, end: caret })
+    expect(fixed?.text.startsWith('services:\n  nginx:')).toBe(true)
+    expect(fixed?.selection.start).toBeGreaterThanOrEqual(caret)
+  })
+
+  it('maps a multi-line selection through an indent rewrite', () => {
+    const broken = `services:
+nginx:
+  image: nginx`
+    const start = broken.indexOf('nginx:')
+    const end = broken.length
+    const fixed = fixComposeYamlIndentation(broken, { start, end })
+    expect(fixed?.selection.end).toBeGreaterThan(fixed?.selection.start ?? 0)
+  })
+
+  it('returns null when a comment is already at the expected indent', () => {
+    const lines = ['services:', '  # web', '  nginx:']
+    expect(expectedIndentForCommentLine(lines, 1)).toBeNull()
+  })
+
+  it('parseYamlMappingKey returns null without a colon', () => {
+    expect(parseYamlMappingKey('nginx')).toBeNull()
+    expect(parseYamlMappingKey('  ')).toBeNull()
+  })
+
+  it('does not rewrite a service property that is already nested', () => {
+    const lines = ['services:', '  nginx:', '    image: nginx']
+    expect(expectedIndentForLine(lines, 2)).toBeNull()
   })
 })

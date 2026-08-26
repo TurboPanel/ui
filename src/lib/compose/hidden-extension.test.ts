@@ -204,4 +204,95 @@ x-turbopanel:
     }
     expect(hiddenSiteServiceNames(hidden)).toEqual(['site'])
   })
+
+  it('preserves document comments when hiding and restoring', () => {
+    const full = yamlToComposeDocument(`# header
+
+services:
+  web:
+    image: nginx
+# footer
+`)
+    full.presentation.documentCommentBefore = 'header'
+    full.presentation.documentComment = 'footer'
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+    expect(visible.presentation.documentCommentBefore).toBe('header')
+    expect(visible.presentation.documentComment).toBe('footer')
+
+    hidden.root = { placement: { server_id: '11111111-1111-4111-8111-111111111111' } }
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(restored.data['x-turbopanel']).toEqual({
+      placement: { server_id: '11111111-1111-4111-8111-111111111111' },
+    })
+    expect(restored.presentation.keyOrder).toContain('x-turbopanel')
+    expect(restored.presentation.documentCommentBefore).toBe('header')
+  })
+
+  it('removes a restored root extension when the shadow has none', () => {
+    const visible = yamlToComposeDocument(`services:
+  web:
+    image: nginx
+x-turbopanel:
+  leftover: true
+`)
+    const restored = restoreComposeTurbopanelExtensions(visible, {
+      services: {},
+      comments: {},
+      blankLines: {},
+    })
+    expect(restored.data['x-turbopanel']).toBeUndefined()
+    expect(restored.presentation.keyOrder).not.toContain('x-turbopanel')
+  })
+
+  it('stashes nested extension presentation paths and preserves editorView', () => {
+    const full = yamlToComposeDocument(`services:
+  site:
+    x-turbopanel:
+      serviceKind: site
+      engine: nginx
+`)
+    full.presentation.editorView = 'visual'
+    full.presentation.comments = {
+      ...full.presentation.comments,
+      'services.site.x-turbopanel.engine': { inline: 'engine' },
+      'services.site.image': { inline: 'keep' },
+    }
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+    expect(visible.presentation.editorView).toBe('visual')
+    expect(hidden.comments['services.site.x-turbopanel.engine']).toEqual({
+      inline: 'engine',
+    })
+    expect(visible.presentation.comments['services.site.image']?.inline).toBe(
+      'keep',
+    )
+
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(restored.presentation.editorView).toBe('visual')
+    expect(restored.presentation.comments['services.site.x-turbopanel.engine']).toEqual(
+      { inline: 'engine' },
+    )
+  })
+
+  it('includes node services in hiddenSiteServiceNames', () => {
+    const hidden = {
+      services: {
+        api: { serviceKind: 'node', framework: 'auto' },
+        web: { serviceKind: 'container' },
+      },
+      comments: {},
+      blankLines: {},
+    }
+    expect(hiddenSiteServiceNames(hidden)).toEqual(['api'])
+  })
+
+  it('leaves a non-map services value untouched on restore', () => {
+    const visible = yamlToComposeDocument(`services: not-a-map
+`)
+    const restored = restoreComposeTurbopanelExtensions(visible, {
+      services: { web: { serviceKind: 'container' } },
+      comments: {},
+      blankLines: {},
+    })
+    expect(restored.data.services).toBe('not-a-map')
+  })
 })

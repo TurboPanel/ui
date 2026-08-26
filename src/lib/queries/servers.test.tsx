@@ -9,6 +9,7 @@ import {
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import {
+  SERVERS_REFRESH_MS,
   UPDATE_PROGRESS_POLL_MS,
   useBatchTriggerServerUpdates,
   useCreateLicense,
@@ -210,6 +211,55 @@ describe('servers query hooks', () => {
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchLicenses).not.toHaveBeenCalled()
+  })
+
+  it('useOrgLicenses polls while unbound pending keys remain', async () => {
+    const client = createAppQueryClient()
+    fetchLicenses.mockResolvedValue({
+      licenses: [
+        {
+          id: 'key-1',
+          name: 'rack',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          revocable: true,
+          boundServer: null,
+        },
+      ],
+    })
+
+    renderHook(() => useOrgLicenses(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    const key = queryKeys.org(orgId).servers.licenses
+    await waitFor(() => {
+      expect(
+        resolveRefetchInterval(client, key, {
+          licenses: [
+            {
+              id: 'key-1',
+              name: 'rack',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              revocable: true,
+              boundServer: null,
+            },
+          ],
+        }),
+      ).toBe(SERVERS_REFRESH_MS)
+    })
+    expect(
+      resolveRefetchInterval(client, key, {
+        licenses: [
+          {
+            id: 'key-1',
+            name: 'rack',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            revocable: true,
+            boundServer: { id: 'srv-1', name: 'edge', connected: true },
+          },
+        ],
+      }),
+    ).toBe(false)
   })
 
   it('useFleetServerUsage returns null when metrics backend is unavailable', async () => {

@@ -3,6 +3,7 @@ import {
   clearComposeBuildInline,
   DEFAULT_INLINE_DOCKERFILE,
   dockerfileHasFromInstruction,
+  emptyComposeBuildRef,
   parseComposeBuild,
   setComposeBuildInline,
 } from './build-ref'
@@ -76,6 +77,34 @@ describe('parseComposeBuild', () => {
     expect(parseComposeBuild(null).kind).toBe('none')
     expect(parseComposeBuild({}).kind).toBe('none')
     expect(parseComposeBuild(42).kind).toBe('none')
+    expect(parseComposeBuild('   ')).toEqual(emptyComposeBuildRef())
+    expect(parseComposeBuild([]).kind).toBe('none')
+  })
+
+  it('defaults missing inline context to .', () => {
+    expect(
+      parseComposeBuild({
+        dockerfile_inline: 'FROM alpine\n',
+      }),
+    ).toEqual({
+      kind: 'inline',
+      context: '.',
+      dockerfileInline: 'FROM alpine\n',
+      dockerfilePath: '',
+    })
+  })
+
+  it('defaults missing path-based context to .', () => {
+    expect(
+      parseComposeBuild({
+        dockerfile: 'Dockerfile.prod',
+      }),
+    ).toEqual({
+      kind: 'external',
+      context: '.',
+      dockerfileInline: '',
+      dockerfilePath: 'Dockerfile.prod',
+    })
   })
 })
 
@@ -164,6 +193,12 @@ describe('setComposeBuildInline / clearComposeBuildInline', () => {
       args: { A: '1' },
     })
   })
+
+  it('clear returns undefined for string shorthand and non-mappings', () => {
+    expect(clearComposeBuildInline('.')).toBeUndefined()
+    expect(clearComposeBuildInline(null)).toBeUndefined()
+    expect(clearComposeBuildInline('   ')).toBeUndefined()
+  })
 })
 
 describe('dockerfileHasFromInstruction', () => {
@@ -171,5 +206,8 @@ describe('dockerfileHasFromInstruction', () => {
     expect(dockerfileHasFromInstruction('# comment\nFROM alpine\n')).toBe(true)
     expect(dockerfileHasFromInstruction('WORKDIR /app\n')).toBe(false)
     expect(dockerfileHasFromInstruction('from ubuntu:24.04\n')).toBe(true)
+    expect(dockerfileHasFromInstruction('\n  \n# only comments\n')).toBe(false)
+    expect(dockerfileHasFromInstruction('')).toBe(false)
+    expect(dockerfileHasFromInstruction('FROM')).toBe(true)
   })
 })

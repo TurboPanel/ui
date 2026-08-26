@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   adjacentOrgTabHref,
   isOrgAreaActive,
@@ -9,13 +9,22 @@ import {
   defaultOrgDashboardHref,
   orgManageHref,
   organizationsHref,
+  orgRouteHref,
   orgTabHref,
+  containerLogsHref,
+  containerLogsSettingsHref,
   datacenterHref,
   datacenterNewHref,
   networkAddressesHref,
   networkDockerHref,
+  networkFabricHref,
+  replaceOrganization,
+  serverDetailHref,
+  serverDetailTabHref,
+  serverMetricsHref,
   serversDatacentersHref,
   serversPendingKeysHref,
+  projectSourcesHref,
 } from './org-navigation'
 
 describe('orgAreaFromPathname', () => {
@@ -242,5 +251,44 @@ describe('serversDatacentersHref', () => {
     expect(networkAddressesHref('org-1')).toBe('/org-1/network/addresses')
     expect(networkDockerHref('org-1')).toBe('/org-1/network/docker')
     expect(serversPendingKeysHref('org-1')).toBe('/org-1/servers/keys')
+  })
+})
+
+describe('remaining org href builders', () => {
+  it('builds server, sources, fabric, logs, and nested area paths', () => {
+    expect(serverDetailHref('org-1', 'srv-9')).toBe('/org-1/servers/srv-9')
+    expect(serverMetricsHref('org-1', 'srv-9')).toBe(
+      '/org-1/servers/srv-9/metrics',
+    )
+    expect(serverDetailTabHref('org-1', 'srv-9', 'control')).toBe(
+      '/org-1/servers/srv-9?tab=control',
+    )
+    expect(projectSourcesHref('org-1')).toBe('/org-1/projects/sources')
+    expect(networkFabricHref('org-1')).toBe('/org-1/network/fabric')
+    expect(containerLogsHref('org-1')).toBe('/org-1/logs')
+    expect(containerLogsSettingsHref('org-1')).toBe('/org-1/logs/settings')
+    expect(orgRouteHref('org-1', 'network', 'addresses')).toBe(
+      '/org-1/network/addresses',
+    )
+  })
+
+  it('replaceOrganization uses the singular org-console identity', () => {
+    const replace = vi.fn()
+    replaceOrganization({ replace }, '/org-2/overview')
+    expect(replace).toHaveBeenCalledWith('/org-2/overview', {
+      dangerouslySingular: expect.any(Function),
+    })
+    const options = replace.mock.calls[0]?.[1] as {
+      dangerouslySingular: () => string
+    }
+    expect(options.dangerouslySingular()).toBe('org-console')
+  })
+})
+
+describe('orgAreaFromPathname edge cases', () => {
+  it('returns null for short paths and unknown areas', () => {
+    expect(orgAreaFromPathname('/org')).toBeNull()
+    expect(orgAreaFromPathname('/')).toBeNull()
+    expect(orgAreaFromPathname('/org/not-an-area')).toBeNull()
   })
 })

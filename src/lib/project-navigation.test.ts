@@ -17,11 +17,23 @@ import {
   projectComposeHref,
   projectComposeSectionHref,
   projectEnvironmentComposeHref,
+  projectEnvironmentHostingHref,
   projectEnvironmentHref,
+  projectEnvironmentMapHref,
   projectEnvironmentServicesHref,
+  projectEnvironmentSettingsHref,
+  projectEnvironmentStorageHref,
+  projectHostingHref,
+  projectHref,
+  projectMapHref,
   projectNeedsSetup,
   projectOverviewHref,
+  projectServersHref,
+  projectServiceHref,
   projectServicesEditHref,
+  projectSetupHref,
+  projectSettingsHref,
+  projectStorageHref,
   projectTabHref,
   projectTypeLabel,
   resolveBaseComposeSelected,
@@ -77,6 +89,73 @@ describe('system project predicates', () => {
     expect(projectNeedsSetup(system)).toBe(false)
     expect(projectTypeLabel(system)).toBe(TURBOPANEL_WORKSPACE_BADGE_LABEL)
     expect(isComposeOrTemplateProject(project(null))).toBe(true)
+  })
+
+  it('labels managed, template, compose, and setup types', () => {
+    expect(projectTypeLabel(project({ type: 'managed', code: 'postgres' }))).toBe(
+      'Managed',
+    )
+    expect(projectTypeLabel(project({ type: 'template' }))).toBe('Template')
+    expect(projectTypeLabel(project({ type: 'docker-compose' }))).toBe('Compose')
+    expect(projectTypeLabel(project(null))).toBe('Setup')
+    expect(projectTypeLabel(project({ type: 'empty' }))).toBe('Setup')
+  })
+})
+
+describe('project href builders', () => {
+  it('builds setup, map, hosting, servers, storage, settings, and service paths', () => {
+    expect(projectHref('org', 'proj')).toBe('/org/projects/proj')
+    expect(projectSetupHref('org', 'proj')).toBe('/org/projects/proj/setup')
+    expect(projectMapHref('org', 'proj')).toBe('/org/projects/proj/map')
+    expect(projectHostingHref('org', 'proj')).toBe('/org/projects/proj/hosting')
+    expect(projectServersHref('org', 'proj')).toBe('/org/projects/proj/servers')
+    expect(projectStorageHref('org', 'proj')).toBe('/org/projects/proj/storage')
+    expect(projectSettingsHref('org', 'proj')).toBe('/org/projects/proj/settings')
+    expect(projectServiceHref('org', 'proj', 'svc-1')).toBe(
+      '/org/projects/proj/services/svc-1',
+    )
+    expect(projectEnvironmentMapHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/map',
+    )
+    expect(projectEnvironmentHostingHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/hosting',
+    )
+    expect(projectEnvironmentStorageHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/storage',
+    )
+    expect(projectEnvironmentSettingsHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/settings',
+    )
+  })
+
+  it('builds every compose section href for project and environment scope', () => {
+    expect(projectComposeSectionHref('org', 'proj', 'map')).toBe(
+      '/org/projects/proj/map',
+    )
+    expect(projectComposeSectionHref('org', 'proj', 'overview', 'env1')).toBe(
+      '/org/projects/proj/environments/env1',
+    )
+    expect(projectComposeSectionHref('org', 'proj', 'storage')).toBe(
+      '/org/projects/proj/storage',
+    )
+    expect(projectComposeSectionHref('org', 'proj', 'settings', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/settings',
+    )
+  })
+
+  it('decodes percent-encoded environment ids and keeps invalid escapes', () => {
+    expect(
+      parseProjectEnvironmentId(
+        '/org/projects/proj/environments/env%2Fone',
+        'proj',
+      ),
+    ).toBe('env/one')
+    expect(
+      parseProjectEnvironmentId(
+        '/org/projects/proj/environments/%E0%A4%A',
+        'proj',
+      ),
+    ).toBe('%E0%A4%A')
   })
 })
 

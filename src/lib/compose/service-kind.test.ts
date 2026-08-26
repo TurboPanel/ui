@@ -7,9 +7,15 @@ import {
   SUPPORTED_PHP_SERIES,
   isHostNativeServiceKind,
   isNodeComposeService,
+  isSiteComposeService,
+  parseServiceSourceExtension,
   parseServiceTurbopanelExtension,
   patchServiceTurbopanelExtension,
+  readServiceSourceExtension,
+  readServiceTurbopanelExtension,
   SERVICE_DESCRIPTION_MAX_LENGTH,
+  SOURCE_BRANCH_MAX_LENGTH,
+  SOURCE_COMMAND_MAX_LENGTH,
 } from './service-kind'
 
 describe('patchServiceTurbopanelExtension description', () => {
@@ -237,5 +243,153 @@ describe('PHP extension lists', () => {
 
   it('offers only series the instance supports', () => {
     expect(SUPPORTED_PHP_SERIES).toContain(DEFAULT_PHP_SERIES)
+  })
+})
+
+describe('parseServiceTurbopanelExtension shapes', () => {
+  it('parses cron jobs and drops incomplete entries', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      serviceKind: 'site',
+      cron: [
+        { name: 'nightly', schedule: '0 0 * * *', command: '/usr/bin/true' },
+        { name: '', schedule: '0 0 * * *', command: '/usr/bin/true' },
+        { name: 'ok', schedule: '  ', command: '/usr/bin/true' },
+        'not-a-job',
+      ],
+    })
+    expect(parsed?.cron).toEqual([
+      { name: 'nightly', schedule: '0 0 * * *', command: '/usr/bin/true' },
+    ])
+    expect(parseServiceTurbopanelExtension({ cron: 'nope' })?.cron).toBeUndefined()
+  })
+
+  it('parses php extensions, settings, and pool maps', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      serviceKind: 'site',
+      php: {
+        version: '8.4',
+        extensions: ['REDIS', ' redis ', '', 12],
+        settings: { memory_limit: '128M', skip: true, workers: 2 },
+        pool: { 'pm.max_children': 5 },
+      },
+    })
+    expect(parsed?.php).toEqual({
+      version: '8.4',
+      extensions: ['redis'],
+      settings: { memory_limit: '128M', workers: 2 },
+      pool: { 'pm.max_children': 5 },
+    })
+    expect(parseServiceTurbopanelExtension({ php: [] })?.php).toBeUndefined()
+    expect(
+      parseServiceTurbopanelExtension({ php: { settings: { skip: true } } })?.php,
+    ).toBeUndefined()
+  })
+
+  it('keeps a managed-directory sourceKind on a site', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      serviceKind: 'site',
+      sourceKind: 'managed-directory',
+    })
+    expect(parsed?.sourceKind).toBe('managed-directory')
+    expect(
+      parseServiceTurbopanelExtension({ sourceKind: 'bucket' })?.sourceKind,
+    ).toBeUndefined()
+    expect(
+      parseServiceTurbopanelExtension({ sourceKind: 1 })?.sourceKind,
+    ).toBeUndefined()
+  })
+
+  it('drops a source block without a usable sourceId', () => {
+    expect(parseServiceSourceExtension(null)).toBeNull()
+    expect(parseServiceSourceExtension('nope')).toBeNull()
+    expect(
+      parseServiceSourceExtension({ sourceId: 'not-a-uuid' }),
+    ).toBeNull()
+  })
+
+  it('keeps in-range source strings and skips empty or overlong ones', () => {
+    const sourceId = '11111111-2222-3333-4444-555555555555'
+    const parsed = parseServiceSourceExtension({
+      sourceId,
+      branch: '  main  ',
+      subdirectory: 'x'.repeat(201),
+      buildCommand: 'pnpm build',
+      startCommand: '',
+      outputDirectory: 'dist',
+    })
+    expect(parsed).toEqual({
+      sourceId,
+      branch: 'main',
+      buildCommand: 'pnpm build',
+      outputDirectory: 'dist',
+    })
+    expect(
+      parseServiceSourceExtension({
+        sourceId,
+        branch: 'b'.repeat(SOURCE_BRANCH_MAX_LENGTH + 1),
+        buildCommand: 'c'.repeat(SOURCE_COMMAND_MAX_LENGTH + 1),
+      }),
+    ).toEqual({ sourceId })
+  })
+
+  it('reads the source binding off a service and treats a non-map extension as absent', () => {
+    const sourceId = '11111111-2222-3333-4444-555555555555'
+    expect(
+      readServiceSourceExtension({
+        'x-turbopanel': { source: { sourceId } },
+      })?.sourceId,
+    ).toBe(sourceId)
+    expect(isSiteComposeService({ 'x-turbopanel': 5 })).toBe(false)
+    expect(isNodeComposeService({ 'x-turbopanel': 5 })).toBe(false)
+    expect(readServiceTurbopanelExtension({ image: 'nginx' })).toEqual({})
+    expect(parseServiceTurbopanelExtension(null)).toEqual({})
+  })
+})
+
+describe('patchServiceTurbopanelExtension cron and php', () => {
+  it('stores cron jobs on a host-native service and drops them on a container', () => {
+    const withCron = patchServiceTurbopanelExtension(
+      {},
+      {
+        serviceKind: 'site',
+        engine: 'caddy',
+        cron: [{ name: 'nightly', schedule: '0 0 * * *', command: '/usr/bin/true' }],
+      },
+    )
+    expect(withCron['x-turbopanel']).toEqual({
+      serviceKind: 'site',
+      engine: 'caddy',
+      cron: [{ name: 'nightly', schedule: '0 0 * * *', command: '/usr/bin/true' }],
+    })
+    const asContainer = patchServiceTurbopanelExtension(withCron, {
+      serviceKind: 'container',
+    })
+    expect(asContainer['x-turbopanel']).toEqual({ serviceKind: 'container' })
+  })
+
+  it('stores php settings and clears the binding with source: null', () => {
+    const withPhp = patchServiceTurbopanelExtension(
+      {},
+      {
+        serviceKind: 'site',
+        engine: 'nginx',
+        php: { version: '8.4', extensions: ['redis'] },
+        source: {
+          sourceId: '11111111-2222-3333-4444-555555555555',
+          branch: 'main',
+        },
+      },
+    )
+    expect(withPhp['x-turbopanel']).toMatchObject({
+      php: { version: '8.4', extensions: ['redis'] },
+      source: {
+        sourceId: '11111111-2222-3333-4444-555555555555',
+        branch: 'main',
+      },
+    })
+    const cleared = patchServiceTurbopanelExtension(withPhp, { source: null })
+    expect(
+      (cleared['x-turbopanel'] as { source?: unknown }).source,
+    ).toBeUndefined()
   })
 })

@@ -46,6 +46,12 @@ describe('formatCoresTotal', () => {
   })
 })
 
+describe('indexFleetUsageByServerId', () => {
+  it('returns an empty map for missing rows', () => {
+    expect(indexFleetUsageByServerId(undefined).size).toBe(0)
+  })
+})
+
 describe('formatSiBytes', () => {
   it('formats bytes with binary units', () => {
     expect(formatSiBytes(512)).toBe('512 B')
@@ -53,6 +59,7 @@ describe('formatSiBytes', () => {
     expect(formatSiBytes(10 * 1024)).toBe('10.0 KB')
     expect(formatSiBytes(100 * 1024)).toBe('100 KB')
     expect(formatSiBytes(16 * 1024 * 1024 * 1024)).toBe('16.0 GB')
+    expect(formatSiBytes(1024 * 1024 * 1024 * 1024)).toBe('1.00 TB')
   })
 
   it('renders an em dash when unknown', () => {
@@ -164,6 +171,25 @@ describe('computeFleetStatus', () => {
     )
   })
 
+  it('ignores metrics RAM when the sample count is zero', () => {
+    const servers = [server('a')]
+    const usageByServerId = indexFleetUsageByServerId([
+      usage('a', {
+        memoryUsedBytes: 2 * 1024 * 1024 * 1024,
+        memoryAvailableBytes: 6 * 1024 * 1024 * 1024,
+      }, 0),
+    ])
+    expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBeNull()
+  })
+
+  it('ignores partial metrics memory when used or available is missing', () => {
+    const servers = [server('a')]
+    const usageByServerId = indexFleetUsageByServerId([
+      usage('a', { memoryUsedBytes: 1024 }),
+    ])
+    expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBeNull()
+  })
+
   it('returns null capacity when nothing is known', () => {
     const status = computeFleetStatus([server('a')], new Map())
     expect(status.totalCores).toBeNull()
@@ -200,6 +226,19 @@ describe('fleetServersStatSuffix', () => {
         totalMemoryBytes: null,
       }),
     ).toBe('2 offline')
+  })
+
+  it('names initializing beside the online count', () => {
+    expect(
+      fleetServersStatSuffix({
+        serverCount: 2,
+        onlineCount: 1,
+        offlineCount: 0,
+        initializingCount: 1,
+        totalCores: null,
+        totalMemoryBytes: null,
+      }),
+    ).toBe('1 initializing')
   })
 
   it('names offline and initializing beside the online count', () => {

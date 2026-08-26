@@ -78,6 +78,10 @@ describe('isMetroWebOrigin', () => {
     expect(isMetroWebOrigin(LOCAL_HTTPS_ORIGIN)).toBe(false)
     expect(isMetroWebOrigin(null)).toBe(false)
   })
+
+  it('returns false for unparseable origins', () => {
+    expect(isMetroWebOrigin('not a url')).toBe(false)
+  })
 })
 
 describe('canBootstrapAgainstControlPlane', () => {
@@ -128,6 +132,12 @@ describe('resolveApiUrl', () => {
     ).toBe(`${LOCAL_HTTPS_ORIGIN}/api/client/v1/status`)
   })
 
+  it('normalizes trailing and missing slashes on native', () => {
+    expect(
+      resolveApiUrl('api/health', `${LOCAL_HTTPS_ORIGIN}/`, nativeEnv),
+    ).toBe(`${LOCAL_HTTPS_ORIGIN}/api/health`)
+  })
+
   it('throws on native when no origin is set', () => {
     expect(() => resolveApiUrl('/api/health', null, nativeEnv)).toThrow(
       new TypeError('Control plane origin is not set'),
@@ -143,5 +153,24 @@ describe('control-plane labels', () => {
       HA_PRODUCT_NAME,
     )
     expect(formatControlPlaneHostLabel(LOCAL_HTTPS_ORIGIN)).toBe('localhost:8443')
+    expect(formatControlPlaneHostLabel('not a url')).toBe('not a url')
+  })
+})
+
+describe('readEnvControlPlaneOrigin', () => {
+  it('returns null when the env var is unset or invalid', async () => {
+    const { readEnvControlPlaneOrigin } = await import('@/lib/control-plane')
+    const previous = process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    delete process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    expect(readEnvControlPlaneOrigin()).toBeNull()
+    process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = 'not a url'
+    expect(readEnvControlPlaneOrigin()).toBeNull()
+    process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = LOCAL_HTTPS_ORIGIN
+    expect(readEnvControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    if (previous === undefined) {
+      delete process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
+    } else {
+      process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = previous
+    }
   })
 })

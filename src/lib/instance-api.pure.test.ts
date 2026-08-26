@@ -282,6 +282,29 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
   })
 
+  it('fetchSession keeps HTTP status when the error body is not JSON', async () => {
+    fetchMock.mockResolvedValueOnce(textResponse('gateway timeout', 504))
+    await expect(fetchSession()).rejects.toThrow(
+      '/api/client/v1/authn/session failed: HTTP 504',
+    )
+  })
+
+  it('fetchSession omits needsInstall when the body does not send it', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        userId: 'u1',
+        email: 'ops@example.com',
+        role: 'admin',
+      }),
+    )
+    await expect(fetchSession()).resolves.toEqual({
+      userId: 'u1',
+      email: 'ops@example.com',
+      role: 'admin',
+    })
+  })
+
   it('fetchInstallStatus maps runtime and install flags', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -371,6 +394,19 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect(detail.datacenters).toEqual([])
   })
 
+  it('fetchOrgFabric normalizes allowRelay false on the fabric record', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        enabled: false,
+        relays: [],
+      }),
+    )
+    const settings = await fetchOrgFabric('org-1')
+    expect(settings.enabled).toBe(false)
+    expect(settings.fabric).toBeUndefined()
+    expect(settings.relays).toEqual([])
+  })
+
   it('fetchOrgFabric maps relays through toRelayRecord and allowRelay', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -399,6 +435,22 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect(settings.fabric?.allowRelay).toBe(true)
     expect(settings.relays).toHaveLength(1)
     expect(settings.relays[0]?.hasPresharedKey).toBe(true)
+  })
+
+  it('fetchOrgFabric keeps allowRelay false when the fabric record disables relay', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        enabled: true,
+        fabric: {
+          id: 'fab-1',
+          cidr: '10.192.0.0/16',
+          allowRelay: false,
+        },
+        relays: [],
+      }),
+    )
+    const settings = await fetchOrgFabric('org-1')
+    expect(settings.fabric?.allowRelay).toBe(false)
   })
 
   it('fetchDatacenter normalizes missing cidrs/subnets and member pin ids', async () => {
@@ -431,6 +483,26 @@ describe('fetch wrappers (mocked fetch)', () => {
     })
   })
 
+  it('createLicense returns minted key material on success', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        licenseId: 'lic-1',
+        licenseToken: 'tok',
+        installCommand: 'curl -fsSL turbopanel.sh | sh',
+      }),
+    )
+    await expect(createLicense('Huey', ' https://panel.example.com ')).resolves.toEqual({
+      licenseId: 'lic-1',
+      licenseToken: 'tok',
+      installCommand: 'curl -fsSL turbopanel.sh | sh',
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      name: 'Huey',
+      installBaseUrl: 'https://panel.example.com',
+    })
+  })
+
   it('createLicense throws ServerCapacityExceededError on 409 capacity', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -453,6 +525,35 @@ describe('fetch wrappers (mocked fetch)', () => {
       expect(err.maxServers).toBe(3)
       expect(err.usedSeats).toBe(3)
     }
+  })
+
+  it('createLicense treats missing capacity fields as unlimited with zero seats', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'server_capacity_exceeded' }, 409),
+    )
+    try {
+      await createLicense()
+      throw new TypeError('expected createLicense to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ServerCapacityExceededError)
+      if (!(err instanceof ServerCapacityExceededError)) {
+        throw new TypeError('expected ServerCapacityExceededError')
+      }
+      expect(err.maxServers).toBeNull()
+      expect(err.usedSeats).toBe(0)
+    }
+  })
+
+  it('createLicense maps generic and non-JSON failures', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
+    await expect(createLicense()).rejects.toThrow(
+      '/api/client/v1/licenses failed: HTTP 403: forbidden',
+    )
+
+    fetchMock.mockResolvedValueOnce(textResponse('bad gateway', 502))
+    await expect(createLicense()).rejects.toThrow(
+      '/api/client/v1/licenses failed: HTTP 502',
+    )
   })
 
   it('deleteServer throws ServerDeleteBlockedError on 409 blockers', async () => {
@@ -525,12 +626,65 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
   })
 
+  it('deployEnvironment surfaces fabric_reconcile_failed from non-409 failures', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'fabric_reconcile_failed' }, 422),
+    )
+    await expect(deployEnvironment('env-1')).rejects.toThrow(
+      /fabric_reconcile_failed/,
+    )
+  })
+
   it('deployEnvironment surfaces fabric_reconcile_pending from 409', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ error: 'fabric_reconcile_pending' }, 409),
     )
     await expect(deployEnvironment('env-1')).rejects.toThrow(
       /fabric_reconcile_pending/,
+    )
+  })
+
+  it('deployEnvironment succeeds and attaches the org header', async () => {
+    const { setActiveOrganizationId, ORG_ID_HEADER } = await import(
+      '@/lib/org-context'
+    )
+    setActiveOrganizationId('org-deploy')
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, commandId: 'cmd-1', status: 'queued' }),
+    )
+    await expect(deployEnvironment('env-1', { noCache: true })).resolves.toEqual({
+      ok: true,
+      commandId: 'cmd-1',
+      status: 'queued',
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-deploy',
+    })
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ noCache: true })
+    setActiveOrganizationId(null)
+  })
+
+  it('deployEnvironment falls through unknown 409 bodies to a generic failure', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'something_else' }, 409),
+    )
+    await expect(deployEnvironment('env-1')).rejects.toThrow(
+      /environments\/env-1\/deploy failed/,
+    )
+  })
+
+  it('deployEnvironment maps non-JSON deploy failures', async () => {
+    fetchMock.mockResolvedValueOnce(textResponse('boom', 500))
+    await expect(deployEnvironment('env-1')).rejects.toThrow(
+      /environments\/env-1\/deploy failed: HTTP 500/,
+    )
+  })
+
+  it('deployEnvironment ignores non-JSON 409 bodies and still fails generically', async () => {
+    fetchMock.mockResolvedValueOnce(textResponse('conflict', 409))
+    await expect(deployEnvironment('env-1')).rejects.toThrow(
+      /environments\/env-1\/deploy failed/,
     )
   })
 
@@ -560,6 +714,34 @@ describe('fetch wrappers (mocked fetch)', () => {
       }
       expect(err.backend).toBe('clickhouse')
     }
+  })
+
+  it('fetchServerMetricsSeries maps non-JSON 503 and generic failures', async () => {
+    fetchMock.mockResolvedValueOnce(textResponse('unavailable', 503))
+    await expect(
+      fetchServerMetricsSeries('srv-1', {
+        fromIso: '2026-01-01T00:00:00.000Z',
+        toIso: '2026-01-01T01:00:00.000Z',
+      }, 'org-explicit'),
+    ).rejects.toThrow(/metrics\/series\?.*failed: HTTP 503/)
+
+    fetchMock.mockResolvedValueOnce(textResponse('nope', 500))
+    await expect(
+      fetchServerMetricsSeries('srv-1', {
+        fromIso: '2026-01-01T00:00:00.000Z',
+        toIso: '2026-01-01T01:00:00.000Z',
+      }),
+    ).rejects.toThrow(/metrics\/series\?.*failed: HTTP 500/)
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'forbidden' }, 403),
+    )
+    await expect(
+      fetchServerMetricsSeries('srv-1', {
+        fromIso: '2026-01-01T00:00:00.000Z',
+        toIso: '2026-01-01T01:00:00.000Z',
+      }),
+    ).rejects.toThrow(/metrics\/series\?.*failed: HTTP 403: forbidden/)
   })
 
   it('apiFetch compose_invalid joins issue messages', async () => {

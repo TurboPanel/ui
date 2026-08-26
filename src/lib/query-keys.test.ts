@@ -218,3 +218,265 @@ describe('queryKeys.org(…).variables / storage / containers / commands', () =>
     expect(getAccessManagementPermissionKey('team')).toBe('organization:own')
   })
 })
+
+describe('queryKeys.org(…) remaining factories', () => {
+  it('builds variable parent keys for every scope', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.variables.list({ organizationId: 'o1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'organizationId',
+      'o1',
+    ])
+    expect(org.variables.list({ workspaceId: 'w1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'workspaceId',
+      'w1',
+    ])
+    expect(org.variables.list({ environmentId: 'e1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'environmentId',
+      'e1',
+    ])
+    expect(org.variables.list({ serviceId: 's1' })).toEqual([
+      'org',
+      'org-1',
+      'variables',
+      'serviceId',
+      's1',
+    ])
+    expect(org.variables.detail('var-1')).toEqual([
+      'org',
+      'org-1',
+      'variable',
+      'var-1',
+    ])
+  })
+
+  it('builds storage, project, environment, and source keys', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.storage.list({ projectId: 'p1' })).toEqual([
+      'org',
+      'org-1',
+      'storage',
+      'projectId',
+      'p1',
+    ])
+    expect(org.projects.list('ws-1')).toEqual([
+      'org',
+      'org-1',
+      'projects',
+      'ws-1',
+    ])
+    expect(org.projects.list()).toEqual(['org', 'org-1', 'projects', 'all'])
+    expect(org.environments.list('proj-1')).toEqual([
+      'org',
+      'org-1',
+      'environments',
+      'proj-1',
+    ])
+    expect(org.environments.deployPreview('env-1')).toEqual([
+      'org',
+      'org-1',
+      'environment',
+      'env-1',
+      'deploy-preview',
+    ])
+    expect(org.environments.releases('env-1', 'web')).toEqual([
+      'org',
+      'org-1',
+      'environment',
+      'env-1',
+      'releases',
+      'web',
+    ])
+    expect(org.environments.releases('env-1')).toEqual([
+      'org',
+      'org-1',
+      'environment',
+      'env-1',
+      'releases',
+      'all',
+    ])
+    expect(org.sources.repositories('inst-1')).toEqual([
+      'org',
+      'org-1',
+      'sources',
+      'installations',
+      'inst-1',
+      'repositories',
+    ])
+  })
+
+  it('builds container-log, command, and server metric keys', () => {
+    const org = queryKeys.org('org-1')
+    const logFilter = {
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-01-01T01:00:00.000Z',
+      serverId: 'srv-1',
+    }
+    expect(org.containerLogs.query(logFilter)).toEqual([
+      'org',
+      'org-1',
+      'container-logs',
+      'query',
+      logFilter,
+    ])
+    expect(org.commands.detail('srv-1', 'cmd-1')).toEqual([
+      'org',
+      'org-1',
+      'commands',
+      'srv-1',
+      'cmd-1',
+    ])
+    expect(org.commands.log('srv-1', 'cmd-1')).toEqual([
+      'org',
+      'org-1',
+      'commands',
+      'srv-1',
+      'cmd-1',
+      'log',
+    ])
+    expect(org.servers.metricsSeries('srv-1', '2026-01-01T00:00:00.000Z')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'metrics',
+      'series',
+      '2026-01-01T00:00:00.000Z',
+    ])
+    expect(org.servers.ips('srv-1', { scope: 'public' })).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'ips',
+      { scope: 'public' },
+    ])
+    expect(org.servers.networkPanel('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'network-panel',
+    ])
+  })
+
+  it('exposes stable auth and admin roots', () => {
+    expect(queryKeys.auth.all).toEqual(['auth'])
+    expect(queryKeys.admin.all).toEqual(['admin'])
+    expect(queryKeys.org('org-1').all).toEqual(['org', 'org-1'])
+  })
+
+  it('builds auth.session and admin git settings keys', () => {
+    expect(queryKeys.auth.session).toEqual(['auth', 'session'])
+    expect(queryKeys.admin.gitGithubApp).toEqual([
+      'admin',
+      'settings',
+      'git',
+      'github-app',
+    ])
+    expect(queryKeys.admin.gitGitlabOauth).toEqual([
+      'admin',
+      'settings',
+      'git',
+      'gitlab-oauth',
+    ])
+  })
+
+  it('builds managed leaf factories under the managed prefix', () => {
+    const managed = queryKeys.org('org-1').managed
+    expect(managed.orgList).toEqual(['org', 'org-1', 'managed'])
+    expect(managed.environment('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+    ])
+    expect(managed.status('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'status',
+    ])
+    expect(managed.users('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'users',
+    ])
+    expect(managed.databases('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'databases',
+    ])
+    expect(managed.backups('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'backups',
+    ])
+    expect(managed.logs('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'logs',
+    ])
+    expect(managed.status('env-1').slice(0, managed.all.length)).toEqual([
+      ...managed.all,
+    ])
+  })
+
+  it('builds services and hostings list keys', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.services.list('env-1')).toEqual([
+      'org',
+      'org-1',
+      'services',
+      'env-1',
+    ])
+    expect(org.services.list()).toEqual(['org', 'org-1', 'services', 'all'])
+    expect(org.services.all).toEqual(['org', 'org-1', 'services'])
+    expect(org.hostings.list('svc-1')).toEqual([
+      'org',
+      'org-1',
+      'hostings',
+      'svc-1',
+    ])
+    expect(org.hostings.all).toEqual(['org', 'org-1', 'hostings'])
+  })
+
+  it('builds topology.networks with filter identity', () => {
+    const topology = queryKeys.org('org-1').topology
+    const filters = { kind: 'docker' as const, serverId: 'srv-1' }
+    expect(topology.networks(filters)).toEqual([
+      'org',
+      'org-1',
+      'topology',
+      'networks',
+      filters,
+    ])
+    expect(topology.networks()).toEqual([
+      'org',
+      'org-1',
+      'topology',
+      'networks',
+      {},
+    ])
+    expect(topology.networks(filters).slice(0, topology.networksAll.length)).toEqual(
+      [...topology.networksAll],
+    )
+  })
+})

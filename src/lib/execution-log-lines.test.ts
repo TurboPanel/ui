@@ -9,6 +9,7 @@ import {
   parseCommandLogChunk,
   plainTextTranscriptLines,
   stripAnsi,
+  transcriptLineKey,
   transcriptPlainText,
   type LogTranscriptLine,
 } from './execution-log-lines'
@@ -83,6 +84,58 @@ describe('parseCommandLogChunk', () => {
     const rows = parseCommandLogChunk('{"nope":true}\n', 7)
     expect(rows[0]).toMatchObject({ seq: 8, message: '{"nope":true}' })
   })
+
+  it('falls back to stdout when NDJSON rows lack required event fields', () => {
+    expect(parseCommandLogChunk('{"sequence":1}\n', 0)).toEqual([
+      {
+        seq: 1,
+        timestamp: null,
+        stream: 'stdout',
+        phase: null,
+        message: '{"sequence":1}',
+      },
+    ])
+    expect(parseCommandLogChunk('{"message":"ok"}\n', 0)).toEqual([
+      {
+        seq: 1,
+        timestamp: null,
+        stream: 'stdout',
+        phase: null,
+        message: '{"message":"ok"}',
+      },
+    ])
+  })
+
+  it('normalizes blank phase and timestamp to null', () => {
+    const rows = parseCommandLogChunk(
+      `${JSON.stringify({
+        commandId: 'cmd-1',
+        sequence: 1,
+        timestamp: '   ',
+        stream: 'stdout',
+        phase: '',
+        message: 'ready',
+      })}\n`,
+    )
+    expect(rows[0]).toMatchObject({
+      seq: 1,
+      timestamp: null,
+      phase: null,
+      message: 'ready',
+    })
+  })
+
+  it('skips blank plain-text lines inside a chunk', () => {
+    expect(parseCommandLogChunk('   \nstill here\n')).toEqual([
+      {
+        seq: 1,
+        timestamp: null,
+        stream: 'stdout',
+        phase: null,
+        message: 'still here',
+      },
+    ])
+  })
 })
 
 describe('mergeTranscriptLines', () => {
@@ -124,6 +177,28 @@ describe('mergeTranscriptLines', () => {
     expect(merged).toEqual(current)
     expect(merged).not.toBe(current)
   })
+
+  it('replaces a replayed row when the same key arrives again', () => {
+    const merged = mergeTranscriptLines(
+      [line(1, 'old')],
+      [{ ...line(1, 'new'), stream: 'stdout' }],
+    )
+    expect(merged).toEqual([line(1, 'new')])
+  })
+})
+
+describe('transcriptLineKey', () => {
+  it('combines sequence and stream', () => {
+    const row: LogTranscriptLine = {
+      seq: 3,
+      timestamp: null,
+      stream: 'stdout',
+      phase: null,
+      message: 'x',
+    }
+    expect(transcriptLineKey(row)).toBe('3:stdout')
+    expect(transcriptLineKey({ ...row, stream: 'stderr' })).toBe('3:stderr')
+  })
 })
 
 describe('plainTextTranscriptLines', () => {
@@ -146,6 +221,10 @@ describe('transcriptPlainText', () => {
 })
 
 describe('docker progress lines', () => {
+  it('recognises progress lines with one trailing status word', () => {
+    expect(isDockerProgressLine(' 6d2dcf61e6fc Downloading layer')).toBe(true)
+  })
+
   it.each([
     ' Image adminer:latest Pulling ',
     ' 6d2dcf61e6fc Pulling fs layer 0B',
@@ -242,5 +321,27 @@ describe('groupTranscriptByPhase', () => {
         event(3, 'c', { phase: 'build' }),
     )
     expect(groupTranscriptByPhase(rows)).toHaveLength(3)
+  })
+
+  it('groups null-phase rows together', () => {
+    const rows = parseCommandLogChunk(
+      `${JSON.stringify({
+        commandId: 'cmd-1',
+        sequence: 1,
+        timestamp: '2026-08-21T12:00:00.000Z',
+        stream: 'stdout',
+        message: 'a',
+      })}\n${JSON.stringify({
+        commandId: 'cmd-1',
+        sequence: 2,
+        timestamp: '2026-08-21T12:00:00.000Z',
+        stream: 'stdout',
+        message: 'b',
+      })}\n`,
+    )
+    const groups = groupTranscriptByPhase(rows)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.phase).toBeNull()
+    expect(groups[0]?.lines).toHaveLength(2)
   })
 })

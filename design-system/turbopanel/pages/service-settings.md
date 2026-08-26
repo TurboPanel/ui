@@ -1,4 +1,4 @@
-# Service settings (Coolify parity)
+# Service settings
 
 Per-service operational settings live in `service.options` (not compose YAML). Deploy merges them via `apply-service-options.ts`.
 

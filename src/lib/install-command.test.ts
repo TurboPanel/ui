@@ -32,6 +32,7 @@ describe('parseInstallBaseUrl', () => {
   it('rejects paths, query strings, credentials, and shell metacharacters', () => {
     expect(parseInstallBaseUrl('https://panel.example.com/admin')).toBeNull()
     expect(parseInstallBaseUrl('https://panel.example.com?x=1')).toBeNull()
+    expect(parseInstallBaseUrl('https://panel.example.com#frag')).toBeNull()
     expect(
       parseInstallBaseUrl('https://user:pass@panel.example.com'),
     ).toBeNull()
@@ -41,6 +42,13 @@ describe('parseInstallBaseUrl', () => {
     expect(
       parseInstallBaseUrl('https://panel.example.com/$(id)'),
     ).toBeNull()
+    expect(parseInstallBaseUrl('ftp://panel.example.com')).toBeNull()
+  })
+
+  it('accepts IPv6 bracket hosts', () => {
+    expect(parseInstallBaseUrl('https://[2001:db8::1]:8443')).toBe(
+      'https://[2001:db8::1]:8443',
+    )
   })
 
   it('accepts host-only values and strips a trailing slash', () => {
@@ -90,6 +98,19 @@ describe('defaultDevInstallBaseUrl', () => {
 
   it('falls back to localhost HTTPS when nothing else is available', () => {
     expect(defaultDevInstallBaseUrl()).toBe('https://localhost:8443')
+  })
+
+  it('prefers a managed URL that matches the browser http origin', () => {
+    vi.stubGlobal('location', {
+      origin: 'http://studio.lan:8880',
+      hostname: 'studio.lan',
+    })
+    expect(
+      defaultDevInstallBaseUrl([
+        'https://studio.lan:8443',
+        'http://studio.lan:8880',
+      ]),
+    ).toBe('http://studio.lan:8880')
   })
 })
 
@@ -187,6 +208,12 @@ describe('buildInstallCommandWithBaseUrl', () => {
     expect(command).toContain(
       'TURBOPANEL_DL_BASE=https://turbopanel.sh/downloads/daemon',
     )
+
+    const bareHost = buildInstallCommandWithBaseUrl({
+      ...license,
+      baseUrl: 'turbopanel.sh',
+    })
+    expect(bareHost).toContain('curl -fsSL turbopanel.sh |')
   })
 
   it('omits insecure TLS for plaintext HTTP and still sets DL_BASE + HOST', () => {

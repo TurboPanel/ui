@@ -146,4 +146,37 @@ describe('visual field catalog', () => {
       /Unknown visual field/,
     )
   })
+
+  it('returns catalog entries for every known visual field id', () => {
+    expect(visualFieldById('restart').key).toBe('restart')
+    expect(visualFieldById('ports').offerAdd).toBe(false)
+    expect(visualFieldById('container_name').key).toBe('container_name')
+    expect(visualFieldById('build').label).toBe('Dockerfile')
+  })
+
+  it('treats on-failure:0 as a retry count of zero', () => {
+    expect(parseComposeRestart('on-failure:0')).toEqual({
+      policy: 'on-failure',
+      maxRetries: 0,
+    })
+    expect(formatComposeRestart('on-failure', 0)).toBe('on-failure:0')
+    expect(formatComposeRestart('on-failure', 3.9)).toBe('on-failure:3')
+  })
+
+  it('recognizes every Compose Spec restart policy', () => {
+    for (const policy of ['no', 'always', 'on-failure', 'unless-stopped'] as const) {
+      expect(isComposeRestartPolicy(policy)).toBe(true)
+    }
+    expect(isComposeRestartPolicy(false)).toBe(false)
+    expect(isComposeRestartPolicy(1)).toBe(false)
+  })
+
+  it('trims restart strings and rejects non-strings other than false', () => {
+    expect(parseComposeRestart('  always  ')).toEqual({
+      policy: 'always',
+      maxRetries: null,
+    })
+    expect(parseComposeRestart(0)).toBeNull()
+    expect(parseComposeRestart('on-failure:')).toBeNull()
+  })
 })

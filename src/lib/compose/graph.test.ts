@@ -169,6 +169,88 @@ describe('buildComposeGraph', () => {
       'site',
     )
   })
+
+  it('skips non-map services and volumes', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          web: { image: 'nginx' },
+          broken: 'not-a-map',
+        },
+        volumes: {
+          data: {},
+          also: 'not-a-map',
+        },
+      }),
+    )
+    expect(graph.nodes.filter((n) => n.kind === 'service')).toHaveLength(1)
+    expect(graph.nodes.find((n) => n.kind === 'volume')).toBeUndefined()
+  })
+
+  it('reads long-syntax named volume mounts and map-form networks', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          db: {
+            image: 'postgres',
+            volumes: [
+              { type: 'volume', source: 'data', target: '/var/lib/postgresql/data' },
+              { type: 'bind', source: '/host', target: '/etc' },
+              { type: 'volume', source: 'missing', target: '/tmp' },
+              12,
+            ],
+            networks: { frontend: { aliases: ['db'] } },
+          },
+          web: { image: 'app', networks: true },
+        },
+        networks: { frontend: {} },
+        volumes: { data: {} },
+      }),
+    )
+    expect(graph.nodes.find((n) => n.id === 'volume:data')).toBeDefined()
+    expect(graph.nodes.filter((n) => n.kind === 'volume')).toHaveLength(1)
+    expect(
+      graph.edges.some(
+        (edge) => edge.kind === 'network' && edge.to === 'network:frontend',
+      ),
+    ).toBe(true)
+  })
+
+  it('includes a registry host in the service image label', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          web: { image: 'ghcr.io/org/app:1.2' },
+          other: { image: 'nginx' },
+        },
+      }),
+    )
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.image).toBe(
+      'ghcr.io/org/app:1.2',
+    )
+    expect(graph.nodes.find((n) => n.id === 'service:other')?.image).toBe('nginx')
+  })
+
+  it('formats long-syntax ports when published is missing or null', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          web: {
+            image: 'app',
+            ports: [
+              { target: 80, published: null },
+              { target: 443 },
+              { published: 8080 },
+            ],
+          },
+        },
+      }),
+    )
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.ports).toEqual([
+      '80',
+      '443',
+    ])
+  })
 })
 
 describe('describeComposeGraph', () => {

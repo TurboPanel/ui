@@ -60,6 +60,23 @@ describe('rankRepositoryLanes', () => {
     expect(recommendedLane(ranked)).toBe('app')
     expect(ranked.find((c) => c.lane === 'static')?.evidence).toBe('public')
   })
+
+  it('recognizes compose.yml, PHP index, and a dist/ document root', () => {
+    const compose = rankRepositoryLanes([
+      { path: 'compose.yml', found: true },
+    ])
+    expect(recommendedLane(compose)).toBe('compose')
+    expect(detectedComposePath([{ path: 'docker-compose.yaml', found: true }])).toBe(
+      'docker-compose.yaml',
+    )
+
+    const php = rankRepositoryLanes([{ path: 'index.php', found: true }])
+    expect(recommendedLane(php)).toBe('site-php')
+
+    const dist = rankRepositoryLanes([], [{ path: 'dist', kind: 'dir' }])
+    expect(recommendedLane(dist)).toBe('static')
+    expect(rootFromEntries([{ path: 'dist', kind: 'dir' }])).toBe('dist')
+  })
 })
 
 describe('detectedComposePath', () => {

@@ -4,8 +4,10 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CommandStatus, CommandStatusRecord } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
+import { queryKeys } from '@/lib/query-keys'
 import {
   anyCommandInFlight,
+  COMMAND_POLL_MS,
   commandStatusById,
   hasInFlightCommands,
   hasPendingTrackedCommands,
@@ -34,6 +36,25 @@ function createWrapper(client = createAppQueryClient()) {
   return function Wrapper({ children }: Readonly<{ children: React.ReactNode }>) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
   }
+}
+
+function resolveRefetchInterval(
+  client: ReturnType<typeof createAppQueryClient>,
+  queryKey: readonly unknown[],
+  data?: unknown,
+): number | false {
+  const query = client.getQueryCache().find({ queryKey })
+  if (!query) throw new TypeError('expected query in cache')
+  const interval = (
+    query.options as { refetchInterval?: unknown }
+  ).refetchInterval
+  if (typeof interval !== 'function') {
+    throw new TypeError('expected refetchInterval function')
+  }
+  if (data !== undefined) {
+    query.setState({ ...query.state, data })
+  }
+  return interval(query) as number | false
 }
 
 afterEach(() => {
@@ -234,6 +255,34 @@ describe('useCommandsBatch', () => {
     expect(emptyOrg.result.current.fetchStatus).toBe('idle')
     expect(fetchCommandStatuses).not.toHaveBeenCalled()
   })
+
+  it('polls while any tracked command is in flight', async () => {
+    const client = createAppQueryClient()
+    const entries: TrackedCommandEntry[] = [
+      { serverId: 'srv-a', commandId: 'cmd-running' },
+    ]
+    fetchCommandStatuses.mockResolvedValue([
+      command('running', 'srv-a', 'cmd-running'),
+    ])
+
+    renderHook(() => useCommandsBatch(orgId, entries), {
+      wrapper: createWrapper(client),
+    })
+
+    const key = queryKeys.org(orgId).commands.batch(entries)
+    await waitFor(() => {
+      expect(
+        resolveRefetchInterval(client, key, [
+          command('running', 'srv-a', 'cmd-running'),
+        ]),
+      ).toBe(COMMAND_POLL_MS)
+    })
+    expect(
+      resolveRefetchInterval(client, key, [
+        command('succeeded', 'srv-a', 'cmd-running'),
+      ]),
+    ).toBe(false)
+  })
 })
 
 describe('useCommandRecordsBatch', () => {
@@ -282,6 +331,40 @@ describe('useCommandRecordsBatch', () => {
     })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchCommand).not.toHaveBeenCalled()
+  })
+
+  it('polls while any tracked record is in flight', async () => {
+    const client = createAppQueryClient()
+    const entries: TrackedCommandEntry[] = [
+      { serverId: 'srv-a', commandId: 'cmd-1' },
+    ]
+    fetchCommand.mockResolvedValue({
+      id: 'cmd-1',
+      serverId: 'srv-a',
+      status: 'running',
+      type: 'daemon.ping',
+    })
+
+    renderHook(() => useCommandRecordsBatch(orgId, entries), {
+      wrapper: createWrapper(client),
+    })
+
+    const key = [
+      ...queryKeys.org(orgId).commands.batch(entries),
+      'records',
+    ] as const
+    await waitFor(() => {
+      expect(
+        resolveRefetchInterval(client, key, [
+          { id: 'cmd-1', status: 'running' },
+        ]),
+      ).toBe(COMMAND_POLL_MS)
+    })
+    expect(
+      resolveRefetchInterval(client, key, [
+        { id: 'cmd-1', status: 'succeeded' },
+      ]),
+    ).toBe(false)
   })
 })
 

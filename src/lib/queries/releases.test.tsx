@@ -103,6 +103,24 @@ describe('releases query hooks', () => {
     expect(fetchServiceReleases).not.toHaveBeenCalled()
   })
 
+  it('useServiceReleases omits limit when not provided', async () => {
+    fetchServiceReleases.mockResolvedValueOnce({ releases: [] })
+
+    const { result } = renderHook(
+      () => useServiceReleases(orgId, environmentId),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchServiceReleases).toHaveBeenCalledWith(
+      environmentId,
+      undefined,
+      {},
+    )
+  })
+
   it('invalidateEnvironmentReleases invalidates the environment subtree', async () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')

@@ -1,3 +1,4 @@
+import { parseDocument } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import { blockingComposeLintIssues, lintComposeYaml } from './lint'
 
@@ -337,5 +338,247 @@ describe('railpack-built services', () => {
         issue.message.includes('must define "image"'),
       ),
     ).toBe(true)
+  })
+})
+
+describe('lintComposeYaml source ids and interpolation collections', () => {
+  it('errors when knownSourceIds does not contain the bound source', () => {
+    const source = `services:
+  api:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+`
+    const issues = lintComposeYaml(source, {
+      knownSourceIds: new Set(['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']),
+    })
+    expect(
+      issues.some(
+        (issue) =>
+          issue.level === 'error' &&
+          issue.path === 'services.api.x-turbopanel.source.sourceId',
+      ),
+    ).toBe(true)
+    expect(
+      lintComposeYaml(source, {
+        knownSourceIds: new Set(['11111111-2222-3333-4444-555555555555']),
+      }).some((issue) => issue.level === 'error'),
+    ).toBe(false)
+  })
+
+  it('lints list-form environment values after = or : separators', () => {
+    const source = `services:
+  web:
+    image: nginx
+    environment:
+      - BAD=prefix-{$PORT}
+      - ALSO:prefix-{$PORT}
+      - BARE
+      - OK={$NODE_ENV}
+`
+    const issues = lintComposeYaml(source)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment[0]'),
+    ).toBe(true)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment[1]'),
+    ).toBe(true)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment[3]'),
+    ).toBe(false)
+  })
+
+  it('lints build.args maps and sequences', () => {
+    const mapped = lintComposeYaml(`services:
+  web:
+    build:
+      context: .
+      args:
+        TOKEN: prefix-{$KEY}
+`)
+    expect(
+      mapped.some((issue) => issue.path === 'services.web.build.args.TOKEN'),
+    ).toBe(true)
+
+    const sequenced = lintComposeYaml(`services:
+  web:
+    build:
+      context: .
+      args:
+        - TOKEN=prefix-{$KEY}
+`)
+    expect(
+      sequenced.some((issue) => issue.path === 'services.web.build.args[0]'),
+    ).toBe(true)
+  })
+
+  it('errors when a service value is not a mapping', () => {
+    const issues = lintComposeYaml(`services:
+  nginx: just-a-string
+`)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.path === 'services.nginx' &&
+          issue.message.includes('must be a mapping'),
+      ),
+    ).toBe(true)
+  })
+
+  it('sorts an error before a warning on the same line', () => {
+    const issues = lintComposeYaml(`services:
+  web: { imaage: nginx }
+`)
+    const sameLine = issues.filter((issue) => issue.line === 2)
+    expect(sameLine.length).toBeGreaterThan(1)
+    expect(sameLine[0]?.level).toBe('error')
+  })
+
+  it('skips complex YAML keys that are not strings', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    ? [a, b]
+    : ignored
+`)
+    expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
+  })
+
+  it('allows a node service without image or build', () => {
+    const issues = lintComposeYaml(`services:
+  api:
+    x-turbopanel:
+      serviceKind: node
+      framework: auto
+`)
+    expect(
+      issues.some((issue) => issue.message.includes('must define "image"')),
+    ).toBe(false)
+  })
+
+  it('warns on a source block that is not a mapping and skips empty ids', () => {
+    const notAMap = lintComposeYaml(`services:
+  api:
+    image: nginx
+    x-turbopanel:
+      source: yes
+`)
+    expect(
+      notAMap.some(
+        (issue) =>
+          issue.path === 'services.api.x-turbopanel.source' &&
+          issue.blocking === false,
+      ),
+    ).toBe(true)
+
+    const emptyId = lintComposeYaml(
+      `services:
+  api:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: ""
+`,
+      { knownSourceIds: new Set(['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']) },
+    )
+    expect(
+      emptyId.some((issue) => issue.level === 'error'),
+    ).toBe(false)
+  })
+
+  it('treats a tagged image as present and skips a tagged services mapping', () => {
+    expect(
+      lintComposeYaml(`services:
+  web:
+    image: !override nginx
+`).some((issue) => issue.message.includes('must define "image"')),
+    ).toBe(false)
+
+    expect(
+      lintComposeYaml(`services: !reset null
+`).some((issue) => issue.path === 'services' && issue.level === 'error'),
+    ).toBe(false)
+  })
+
+  it('warns on unknown keys that have no close suggestion', () => {
+    const issues = lintComposeYaml(`zzzzzzzzzz:
+  nope: true
+services:
+  web:
+    image: nginx
+    zzzzzzzzzz: 1
+`)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.path === 'zzzzzzzzzz' &&
+          issue.message.includes('Unknown top-level key'),
+      ),
+    ).toBe(true)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.path === 'services.web.zzzzzzzzzz' &&
+          issue.message.includes('Unknown service key'),
+      ),
+    ).toBe(true)
+  })
+
+  it('treats a null image as missing', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: ~
+`)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.level === 'error' && issue.path === 'services.web',
+      ),
+    ).toBe(true)
+  })
+
+  it('sorts lineless issues after lined issues', () => {
+    const issues = lintComposeYaml(`foo: bar
+`)
+    const lineless = issues.filter((issue) => issue.line === undefined)
+    const lined = issues.filter((issue) => issue.line !== undefined)
+    expect(lineless).toHaveLength(1)
+    expect(lineless[0]?.path).toBe('$')
+    expect(lineless[0]?.message).toContain('no "services"')
+    expect(lined.length).toBeGreaterThan(0)
+    expect(lined[0]?.path).toBe('foo')
+    expect(issues.indexOf(lineless[0]!)).toBeGreaterThan(issues.indexOf(lined[0]!))
+  })
+
+  it('maps parse errors without linePos to lineless issues', () => {
+    const candidates = [
+      `services:\n  nginx:\n  image: nginx\n    ports: bad\n`,
+      '\tbad: tab indent\n',
+      '{ not yaml\n',
+    ]
+    let sourceWithoutLinePos: string | null = null
+    for (const source of candidates) {
+      const doc = parseDocument(source, { prettyErrors: true })
+      if (
+        doc.errors.length > 0 &&
+        doc.errors.every((error) => error.linePos?.[0]?.line === undefined)
+      ) {
+        sourceWithoutLinePos = source
+        break
+      }
+    }
+
+    if (!sourceWithoutLinePos) {
+      // yaml@2.9 attaches linePos on every parser error we can trigger here.
+      const issues = lintComposeYaml(`services:\n  [unclosed\n`)
+      expect(issues.length).toBeGreaterThan(0)
+      expect(issues.every((issue) => typeof issue.line === 'number')).toBe(true)
+      return
+    }
+
+    const issues = lintComposeYaml(sourceWithoutLinePos)
+    expect(issues.length).toBeGreaterThan(0)
+    expect(issues.every((issue) => issue.line === undefined)).toBe(true)
   })
 })

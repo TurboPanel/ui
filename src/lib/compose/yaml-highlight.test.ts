@@ -44,4 +44,12 @@ describe('splitYamlLineHighlight', () => {
       { text: '    image: "nginx#latest"', kind: 'code' },
     ])
   })
+
+  it('treats an empty line as code', () => {
+    expect(splitYamlLineHighlight('')).toEqual([{ text: '', kind: 'code' }])
+  })
+
+  it('styles a hash that starts the line as a full-line comment', () => {
+    expect(splitYamlLineHighlight('#')).toEqual([{ text: '#', kind: 'comment' }])
+  })
 })

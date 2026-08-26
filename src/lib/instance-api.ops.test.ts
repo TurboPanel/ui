@@ -60,6 +60,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+function textResponse(body: string, status: number): Response {
+  return new Response(body, { status })
+}
+
 describe('instance-api ops/admin/source/storage/principal fetch wrappers', () => {
   const fetchMock = vi.fn()
 
@@ -225,18 +229,23 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commands: [readable] }))
     await expect(
-      fetchCommandStatuses(['cmd-1', 'cmd-hidden']),
+      fetchCommandStatuses(['cmd-1', 'cmd-hidden', 'cmd-2']),
     ).resolves.toEqual([readable])
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).method).toBe('POST')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      ids: ['cmd-1', 'cmd-hidden'],
+      ids: ['cmd-1', 'cmd-hidden', 'cmd-2'],
     })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commands: [readable] }))
+    await expect(fetchCommandStatuses(['cmd-1', 'cmd-2'])).resolves.toEqual([
+      readable,
+    ])
 
     const manyIds = Array.from({ length: 101 }, (_, index) => `cmd-${index}`)
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commands: [] }))
     await expect(fetchCommandStatuses(manyIds)).resolves.toEqual([])
-    const [, manyInit] = fetchMock.mock.calls[1] ?? []
+    const [, manyInit] = fetchMock.mock.calls.at(-1) ?? []
     const posted = JSON.parse(String((manyInit as RequestInit).body)) as {
       ids: string[]
     }
@@ -291,8 +300,12 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
         from: '2026-01-01T00:00:00.000Z',
         to: '2026-01-02T00:00:00.000Z',
         serverId: 'srv-1',
+        environmentId: 'env-1',
+        serviceId: 'svc-1',
+        containerId: 'ctr-1',
         stream: 'stdout',
         search: 'error',
+        cursor: 'cur-next',
         limit: 50,
       }),
     ).resolves.toEqual({ events: [], nextCursor: null })
@@ -300,8 +313,12 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
     expect(logsUrl).toContain('/organizations/org-1/container-logs')
     expect(logsUrl).toContain('from=2026-01-01T00%3A00%3A00.000Z')
     expect(logsUrl).toContain('serverId=srv-1')
+    expect(logsUrl).toContain('environmentId=env-1')
+    expect(logsUrl).toContain('serviceId=svc-1')
+    expect(logsUrl).toContain('containerId=ctr-1')
     expect(logsUrl).toContain('stream=stdout')
     expect(logsUrl).toContain('search=error')
+    expect(logsUrl).toContain('cursor=cur-next')
     expect(logsUrl).toContain('limit=50')
 
     fetchMock.mockResolvedValueOnce(
@@ -733,5 +750,22 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
       }
       expect(error.backend).toBe('disabled')
     }
+
+    fetchMock.mockResolvedValueOnce(textResponse('down', 503))
+    await expect(fetchFleetMetricsLatest()).rejects.toThrow(
+      /metrics\/latest failed: HTTP 503/,
+    )
+
+    fetchMock.mockResolvedValueOnce(textResponse('nope', 500))
+    await expect(fetchFleetMetricsLatest()).rejects.toThrow(
+      /metrics\/latest failed: HTTP 500/,
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'forbidden' }, 403),
+    )
+    await expect(fetchFleetMetricsLatest()).rejects.toThrow(
+      /metrics\/latest failed: HTTP 403: forbidden/,
+    )
   })
 })

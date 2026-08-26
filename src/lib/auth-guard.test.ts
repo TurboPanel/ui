@@ -187,4 +187,37 @@ describe('resolveAuthGuardHref', () => {
       }),
     ).toBeNull()
   })
+
+  it('sends unsigned guests on org routes to sign-in', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: '11111111-1111-1111-1111-111111111111',
+        developerDevBypass: false,
+      }),
+    ).toBe('/sign-in')
+  })
+
+  it('keeps signed-in developer routes when bypass is on', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'developer',
+        developerDevBypass: true,
+      }),
+    ).toBeNull()
+  })
+
+  it('allows verify-email as a public auth route without a session', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'verify-email',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
 })

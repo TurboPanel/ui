@@ -106,6 +106,10 @@ describe('shortBackupChecksum', () => {
       ),
     ).toBe('abcdef0123')
   })
+
+  it('returns the whole digest when shorter than ten characters', () => {
+    expect(shortBackupChecksum('abc')).toBe('abc')
+  })
 })
 
 describe('managedErrorMessage', () => {
@@ -216,6 +220,42 @@ describe('managedErrorMessage', () => {
         'fallback',
       ),
     ).toContain('promotion was aborted')
+  })
+
+  it('maps remaining managed lifecycle and cluster error codes', () => {
+    const cases: [string, string][] = [
+      ['server_offline', 'offline'],
+      ['managed_settings_invalid', 'invalid'],
+      ['managed_user_exists', 'already exists'],
+      ['database_exists', 'already exists'],
+      ['cannot_drop_root_user', 'root user'],
+      ['cannot_drop_initial_database', 'initial database'],
+      ['not_managed_environment', 'not a managed service'],
+      ['managed_engine_unavailable', 'not available yet'],
+      ['daemon_key_unavailable', 'daemon key'],
+      ['managed_credential_not_sealed', 'not ready yet'],
+      ['root_principal_missing', 'Root credentials'],
+      ['managed_backup_unsupported', 'not supported'],
+      ['backup_not_found', 'no longer exists'],
+      ['managed_restore_checksum_mismatch', 'integrity verification'],
+      ['username_in_use', 'already taken'],
+      ['managed_member_exists', 'already hosts a member'],
+      ['managed_member_is_primary', 'Promote another member'],
+      ['managed_no_read_targets', 'no replica serving read traffic'],
+      ['datacenter_cidr_required', 'no private network'],
+      ['datacenter_ip_required', 'no private address'],
+      ['private_path_unavailable', 'No private path'],
+      ['managed_private_port_exhausted', 'No free private listener'],
+      ['managed_listener_bind_conflict', 'different network paths'],
+      ['managed_replica_not_streaming', 'not streaming'],
+      ['managed_replica_lagging', 'still lagging'],
+      ['managed_replica_health_stale', 'health has not been observed'],
+    ]
+    for (const [code, fragment] of cases) {
+      expect(
+        managedErrorMessage(new Error(`HTTP 422: ${code}`), 'fallback'),
+      ).toContain(fragment)
+    }
   })
 })
 
@@ -363,6 +403,13 @@ describe('replicationStateLabel / formatReplicationLag', () => {
         lagBytes: 1024 * 1024 * 1024 * 1024,
       }),
     ).toBe('1 TB behind')
+    expect(
+      formatReplicationLag({
+        state: 'streaming',
+        observedAt: '2026-01-01T00:00:00.000Z',
+        lagSeconds: Number.NaN,
+      }),
+    ).toBeNull()
   })
 })
 
