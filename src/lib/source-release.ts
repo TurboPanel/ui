@@ -1,7 +1,15 @@
-export const UI_LICENSE = 'AGPL-3.0-only'
-export const UI_SOURCE_REPO = 'https://github.com/TurboPanel/ui'
+export {
+  UI_LICENSE,
+  UI_SOURCE_REPO,
+  isFullGitCommit,
+  sourceReleaseUrl,
+} from './source-release-node.mjs'
 
-const FULL_GIT_COMMIT = /^[0-9a-f]{40}$/i
+import {
+  UI_LICENSE,
+  isFullGitCommit,
+  sourceReleaseUrl,
+} from './source-release-node.mjs'
 
 export type AppSourceRelease = Readonly<{
   license: string
@@ -19,27 +27,8 @@ export type SourceReleaseConfig = Readonly<{
   extra?: Readonly<Record<string, unknown>>
 }>
 
-export function isFullGitCommit(commit: string): boolean {
-  return FULL_GIT_COMMIT.test(commit.trim())
-}
-
 export function isReleaseSourceConfig(config: SourceReleaseConfig | null | undefined): boolean {
   return config?.extra?.release === true
-}
-
-export function sourceReleaseUrl(
-  commit: string,
-  options?: Readonly<{ release?: boolean }>,
-): string {
-  const hash = commit.trim()
-  if (options?.release) {
-    if (!isFullGitCommit(hash)) {
-      throw new TypeError('release source URL requires a full git commit')
-    }
-    return `${UI_SOURCE_REPO}/tree/${hash}`
-  }
-  if (!hash) return UI_SOURCE_REPO
-  return `${UI_SOURCE_REPO}/tree/${hash}`
 }
 
 export function readAppSourceRelease(

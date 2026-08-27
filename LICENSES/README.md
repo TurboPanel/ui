@@ -20,6 +20,9 @@ the exact revision used to produce that artifact — not `trunk`.
 `app.config.ts` records `gitCommit` and `sourceReleaseUrl` from
 `EAS_BUILD_GIT_COMMIT_HASH` (EAS Build), `EXPO_PUBLIC_GIT_COMMIT` /
 `GITHUB_SHA`, or `git rev-parse HEAD` (EAS Update via `pnpm eas:update`).
+Expo evaluates the config as Node ESM (after compiling it to `app.config.js`),
+so the config imports `src/lib/source-release-node.mjs` — not the extensionless
+TypeScript module, which Node cannot resolve.
 Production EAS Build, store build, and EAS Update **fail fast** when a full
 git commit cannot be resolved — the source URL must be `/tree/<full-sha>`.
 Local development may fall back to the repository root and marks

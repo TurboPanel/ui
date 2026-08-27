@@ -7,8 +7,20 @@ import {
   UI_LICENSE,
   UI_SOURCE_REPO,
 } from '@/lib/source-release'
+import * as sourceReleaseNode from '@/lib/source-release-node.mjs'
 
 const FULL_SHA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+
+describe('source-release-node.mjs (app.config Node ESM)', () => {
+  it('exports the same helpers app.config imports by explicit .mjs path', () => {
+    expect(sourceReleaseNode.UI_LICENSE).toBe(UI_LICENSE)
+    expect(sourceReleaseNode.UI_SOURCE_REPO).toBe(UI_SOURCE_REPO)
+    expect(sourceReleaseNode.isFullGitCommit(FULL_SHA)).toBe(true)
+    expect(sourceReleaseNode.sourceReleaseUrl(FULL_SHA, { release: true })).toBe(
+      `${UI_SOURCE_REPO}/tree/${FULL_SHA}`,
+    )
+  })
+})
 
 describe('sourceReleaseUrl', () => {
   it('points at the exact git revision, not trunk', () => {
