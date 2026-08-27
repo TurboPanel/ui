@@ -70,8 +70,17 @@ function isPubliclyReachableOrigin(origin: string): boolean {
   }
 }
 
+/** Drop every trailing `/` without a regex — `/\/+$/` is super-linear. */
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.codePointAt(end - 1) === 0x2f) {
+    end -= 1
+  }
+  return end === value.length ? value : value.slice(0, end)
+}
+
 function webhookUrlFor(origin: string, path: string): string {
-  return `${origin.replace(/\/$/, '')}${path}`
+  return `${stripTrailingSlashes(origin)}${path}`
 }
 
 /** The origins whose deliveries resolve without a ref in the path. */
@@ -101,7 +110,7 @@ export function webhookPathFor(
 ): string {
   const base = WEBHOOK_PATH_BY_PROVIDER[provider]
   if (!webhookRef || !baseUrl) return base
-  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  const normalized = stripTrailingSlashes(baseUrl.trim())
   if (normalized === HOSTED_PROVIDER_ORIGINS[provider]) return base
   return `${base}/${encodeURIComponent(webhookRef)}`
 }
