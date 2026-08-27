@@ -4,6 +4,7 @@ import { connectToControlPlane } from '@/lib/control-plane-connect'
 import {
   activateControlPlaneOrigin,
   getActiveControlPlaneOrigin,
+  getControlPlaneAccounts,
   resetControlPlaneStoreForTests,
 } from '@/lib/control-plane-accounts'
 import { fetchInstallStatus } from '@/lib/instance-api'
@@ -69,5 +70,33 @@ describe('connectToControlPlane', () => {
     const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
     expect(result.ok).toBe(false)
     expect(getActiveControlPlaneOrigin()).toBe(HA_CONTROL_PLANE_ORIGIN)
+  })
+
+  it('keeps an existing account and restores the previous origin when reconnect fails', async () => {
+    activateControlPlaneOrigin(HA_CONTROL_PLANE_ORIGIN)
+    activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    vi.mocked(fetchInstallStatus).mockRejectedValue(
+      new Error('/api/client/v1/status failed: HTTP 503'),
+    )
+    const result = await connectToControlPlane(HA_CONTROL_PLANE_ORIGIN)
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new TypeError('expected reconnect failure')
+    }
+    expect(result.error).toContain('HTTP 503')
+    expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    expect(
+      getControlPlaneAccounts().some((account) => account.origin === HA_CONTROL_PLANE_ORIGIN),
+    ).toBe(true)
+  })
+
+  it('returns a generic error when fetch throws a non-Error', async () => {
+    vi.mocked(fetchInstallStatus).mockRejectedValue('offline')
+    const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
+    expect(result).toEqual({
+      ok: false,
+      error: 'Could not reach that control plane.',
+    })
+    expect(getActiveControlPlaneOrigin()).toBeNull()
   })
 })

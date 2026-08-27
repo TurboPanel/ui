@@ -185,4 +185,154 @@ services:
     expect(yaml).toMatch(/# head[\s\S]*!reset/)
     expect(composeDocumentToRuntimeYaml(doc)).toContain('!reset')
   })
+
+  it('skips complex mapping keys while coercing boolean keys', () => {
+    const source = `true: keep
+[bad]: skip
+services:
+  web:
+    image: nginx
+`
+    const doc = yamlToComposeDocument(source)
+    expect(Object.hasOwn(doc.data, 'true')).toBe(true)
+    expect(Object.hasOwn(doc.data, '[bad]')).toBe(false)
+    expect(doc.presentation.keyOrder).toEqual(['true', 'services'])
+    expect(composeDocumentToYaml(doc)).toContain('keep')
+  })
+
+  it('uses data keys when a tagged scalar root has no mapping keyOrder', () => {
+    const doc = yamlToComposeDocument('!reset null\n')
+    expect(doc.presentation.keyOrder.length).toBeGreaterThan(0)
+    expect(doc.presentation.keyOrder).toEqual(Object.keys(doc.data))
+    expect(doc.data).toMatchObject({
+      [COMPOSE_TAG_KEY]: 'reset',
+    })
+    expect(Object.hasOwn(doc.data, 'value')).toBe(true)
+  })
+
+  it('round-trips key inline comments and node blank lines', () => {
+    const source = `services:
+  web:
+    image: nginx
+`
+    const doc = yamlToComposeDocument(source)
+    doc.presentation.comments.services = {
+      keyInline: 'inline key note',
+    }
+    doc.presentation.blankLines = { services: 1 }
+
+    const yaml = composeDocumentToYaml(doc)
+    expect(yaml).toContain('inline key note')
+    expect(yaml).toContain('services:')
+  })
+
+  it('collects and reapplies keyBefore comments from YAML', () => {
+    const source = `# services section
+services:
+  web:
+    image: nginx
+# trailing note
+`
+    const doc = yamlToComposeDocument(source)
+    expect(doc.presentation.comments.services?.keyBefore).toContain('services section')
+    expect(doc.presentation.documentComment).toContain('trailing note')
+
+    const yaml = composeDocumentToYaml(doc)
+    expect(yaml).toContain('# services section')
+    expect(yaml).toContain('# trailing note')
+  })
+
+  it('skips missing keyOrder entries and empty keyOrder on stringify', () => {
+    const doc = yamlToComposeDocument(`services:
+  web:
+    image: nginx
+`)
+    doc.presentation.keyOrder = ['networks', 'services']
+    const reordered = composeDocumentToYaml(doc)
+    expect(reordered).toContain('services:')
+    expect(reordered).not.toContain('networks:')
+
+    doc.presentation.keyOrder = []
+    expect(composeDocumentToYaml(doc)).toContain('services:')
+  })
+
+  it('preserves blank lines before sequence items through stringify', () => {
+    const source = `services:
+  web:
+    image: nginx
+    ports:
+
+      - "80:80"
+`
+    const doc = yamlToComposeDocument(source)
+    expect(doc.presentation.blankLines).toBeDefined()
+    const blanks = doc.presentation.blankLines
+    if (!blanks) {
+      throw new TypeError('expected blankLines on sequence item')
+    }
+    expect(Object.values(blanks).some((count) => count > 0)).toBe(true)
+
+    const yaml = composeDocumentToYaml(doc)
+    expect(yaml).toContain('80:80')
+    expect(yaml).toMatch(/ports:[\s\S]*80:80/)
+  })
+
+  it('applies key blankLines through spaceBefore', () => {
+    const source = `services:
+  web:
+    image: nginx
+`
+    const doc = yamlToComposeDocument(source)
+    doc.presentation.blankLines = { 'services#key': 1 }
+    const yaml = composeDocumentToYaml(doc)
+    expect(yaml).toContain('services:')
+  })
+
+  it('reorders top-level keys from presentation keyOrder', () => {
+    const doc = yamlToComposeDocument(`version: "3.9"
+services:
+  web:
+    image: nginx
+networks:
+  front: {}
+`)
+    doc.presentation.keyOrder = ['networks', 'services', 'version']
+    const yaml = composeDocumentToYaml(doc)
+    expect(yaml.indexOf('networks:')).toBeLessThan(yaml.indexOf('services:'))
+    expect(yaml.indexOf('services:')).toBeLessThan(yaml.indexOf('version:'))
+  })
+
+  it('skips a null mapping key when collecting keyOrder', () => {
+    const source = `~: leftover
+services:
+  web:
+    image: nginx
+`
+    const doc = yamlToComposeDocument(source)
+    expect(doc.presentation.keyOrder).toContain('services')
+    const yaml = composeDocumentToYaml(doc)
+    expect(yaml).toContain('services:')
+    expect(yaml).toContain('nginx')
+  })
+
+  it('reads a sentinel value that is a YAML alias rather than a collection', () => {
+    const shared = { PORT: '8080' }
+    const doc: ComposeDocument = {
+      version: 1,
+      data: {
+        services: {
+          web: {
+            image: 'nginx',
+            labels: shared,
+            environment: {
+              [COMPOSE_TAG_KEY]: 'override',
+              value: shared,
+            },
+          },
+        },
+      },
+      presentation: { keyOrder: ['services'], comments: {} },
+    }
+    expect(() => composeDocumentToYaml(doc)).toThrow(/Alias nodes cannot have tags/)
+  })
 })

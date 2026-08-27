@@ -1,6 +1,11 @@
 import { parseDocument } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { blockingComposeLintIssues, lintComposeYaml } from './lint'
+import {
+  blockingComposeLintIssues,
+  isComposeServicePropertyKey,
+  isComposeTopLevelKey,
+  lintComposeYaml,
+} from './lint'
 
 describe('lintComposeYaml', () => {
   it('returns no issues for empty input', () => {
@@ -376,6 +381,7 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       - ALSO:prefix-{$PORT}
       - BARE
       - OK={$NODE_ENV}
+      - "BOTH=prefix:{$PORT}"
 `
     const issues = lintComposeYaml(source)
     expect(
@@ -387,6 +393,9 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
     expect(
       issues.some((issue) => issue.path === 'services.web.environment[3]'),
     ).toBe(false)
+    expect(
+      issues.some((issue) => issue.path === 'services.web.environment[4]'),
+    ).toBe(true)
   })
 
   it('lints build.args maps and sequences', () => {
@@ -580,5 +589,75 @@ services:
     const issues = lintComposeYaml(sourceWithoutLinePos)
     expect(issues.length).toBeGreaterThan(0)
     expect(issues.every((issue) => issue.line === undefined)).toBe(true)
+  })
+
+  it('skips environment values that are not string collections', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    environment: ~
+    env_file: ignored
+  api:
+    image: nginx
+    environment:
+      - { NESTED: "1" }
+      - 12
+  db:
+    image: nginx
+    environment:
+      PORT: 80
+`)
+    expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
+  })
+
+  it('treats a mapping image and a tagged build as present', () => {
+    expect(
+      lintComposeYaml(`services:
+  web:
+    image:
+      name: nginx
+`).some((issue) => issue.message.includes('must define "image"')),
+    ).toBe(false)
+
+    expect(
+      lintComposeYaml(`services:
+  web:
+    build: !override .
+`).some((issue) => issue.message.includes('must define "image"')),
+    ).toBe(false)
+  })
+
+  it('advises on a source map that omits sourceId and skips non-string keys', () => {
+    const issues = lintComposeYaml(`? [a, b]
+: ignored
+services:
+  ? [c, d]
+  :
+    image: nginx
+  api:
+    image: nginx
+    x-turbopanel:
+      source:
+        branch: main
+`)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.path === 'services.api.x-turbopanel.source' &&
+          issue.blocking === false,
+      ),
+    ).toBe(true)
+    expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
+  })
+})
+
+describe('compose key classifiers', () => {
+  it('identifies top-level keys and service-only properties', () => {
+    expect(isComposeTopLevelKey('services')).toBe(true)
+    expect(isComposeTopLevelKey('image')).toBe(false)
+    expect(isComposeServicePropertyKey('restart')).toBe(true)
+    expect(isComposeServicePropertyKey('image')).toBe(true)
+    expect(isComposeServicePropertyKey('networks')).toBe(false)
+    expect(isComposeServicePropertyKey('zzzz')).toBe(false)
   })
 })

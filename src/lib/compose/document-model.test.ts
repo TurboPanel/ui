@@ -215,6 +215,54 @@ networks:
     expect(model.services[0]?.ports).toEqual(['true:80', '0:false'])
   })
 
+  it('ignores volume entries that are neither strings nor maps', () => {
+    const model = buildComposeDocModel({
+      version: 1,
+      data: {
+        services: {
+          web: {
+            image: 'nginx',
+            volumes: [
+              1,
+              true,
+              null,
+              [],
+              'data:',
+              { source: 'data' },
+              { source: './bind', target: '/srv' },
+              { target: '/orphan' },
+              { source: 1, target: 2 },
+            ],
+            ports: [{ target: ':' }, { published: 443 }],
+            depends_on: ['api', 1],
+            networks: ['front', 2],
+          },
+        },
+        volumes: {
+          data: { name: '', driver: '' },
+          other: { external: false },
+        },
+        networks: {
+          front: { name: '', driver: '' },
+        },
+      },
+      presentation: { keyOrder: ['services', 'volumes', 'networks'], comments: {} },
+    })
+    expect(model.services[0]?.mounts).toEqual([
+      { source: 'data', target: null, named: true },
+      { source: 'data', target: null, named: true },
+      { source: './bind', target: '/srv', named: false },
+    ])
+    expect(model.services[0]?.ports).toEqual(['443:'])
+    expect(model.services[0]?.dependsOn).toEqual(['api'])
+    expect(model.volumes.map((volume) => volume.detail)).toEqual([null, null])
+    expect(model.networks[0]).toEqual({
+      name: 'front',
+      usedBy: ['web'],
+      detail: null,
+    })
+  })
+
   it('drops empty volume sources and reports a service with no image or build', () => {
     const model = buildComposeDocModel(
       yamlToComposeDocument(`services:

@@ -23,6 +23,11 @@ describe('cronScheduleIssue', () => {
     expect(cronScheduleIssue('@reboot')).toContain('on start')
   })
 
+  it('rejects an unknown @ shorthand', () => {
+    expect(cronScheduleIssue('@every')).toContain('Unknown shorthand')
+    expect(cronScheduleIssue('@reboot-ish')).toContain('Unknown shorthand')
+  })
+
   it('catches the day-of-month / day-of-week trap under the cursor', () => {
     // Cron unions these two fields and a timer intersects them: `0 0 13 * 5` is
     // "the 13th or any Friday" to cron and "Friday the 13th" to systemd. This

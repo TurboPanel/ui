@@ -3,6 +3,7 @@ import {
   gitWebhookHint,
   LAN_WEBHOOK_NOTE,
   NO_URL_WEBHOOK_NOTE,
+  webhookPathFor,
 } from '@/lib/git-webhook-url'
 
 describe('gitWebhookHint', () => {
@@ -78,6 +79,17 @@ describe('gitWebhookHint', () => {
     expect(hint.webhookUrl).toBe('https://panel.example.com/webhook/github')
   })
 
+  it('treats a trailing slash on a hosted origin as the same origin', () => {
+    // Mirrors instance webhookPathFor: a trailing slash is not a different origin.
+    const hint = gitWebhookHint(
+      ['https://panel.example.com'],
+      'github',
+      'ref-abc',
+      'https://github.com/',
+    )
+    expect(hint.webhookUrl).toBe('https://panel.example.com/webhook/github')
+  })
+
   it('falls back to the bare path when no ref is given', () => {
     const hint = gitWebhookHint(['https://panel.example.com'], 'gitlab')
     expect(hint.webhookUrl).toBe(
@@ -95,5 +107,32 @@ describe('gitWebhookHint', () => {
     expect(hint.webhookUrl).toBe(
       'https://panel.example.com/webhook/github/a%2Fb',
     )
+  })
+})
+
+describe('webhookPathFor', () => {
+  it('keeps the hosted path clean and appends a ref only for self-hosted origins', () => {
+    expect(webhookPathFor('github', 'ref-1', 'https://github.com')).toBe('/webhook/github')
+    expect(webhookPathFor('gitlab', 'ref-1', 'https://gitlab.com')).toBe('/webhook/gitlab')
+    expect(webhookPathFor('github', 'ref-1', 'https://github.acme.test')).toBe(
+      '/webhook/github/ref-1',
+    )
+    expect(webhookPathFor('gitlab', 'ref-1', 'https://gitlab.acme.test')).toBe(
+      '/webhook/gitlab/ref-1',
+    )
+  })
+
+  it('does not treat trailing slashes or surrounding space as a different origin', () => {
+    expect(webhookPathFor('github', 'ref-1', 'https://github.com/')).toBe('/webhook/github')
+    expect(webhookPathFor('github', 'ref-1', 'https://github.com///')).toBe('/webhook/github')
+    expect(webhookPathFor('github', 'ref-1', '  https://github.com/  ')).toBe('/webhook/github')
+    expect(webhookPathFor('github', 'ref-1', 'https://github.acme.test/')).toBe(
+      '/webhook/github/ref-1',
+    )
+  })
+
+  it('falls back to the bare path when the ref or origin is missing', () => {
+    expect(webhookPathFor('github', null, 'https://github.acme.test')).toBe('/webhook/github')
+    expect(webhookPathFor('github', 'ref-1')).toBe('/webhook/github')
   })
 })

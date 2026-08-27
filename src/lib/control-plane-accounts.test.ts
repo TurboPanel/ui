@@ -1,11 +1,23 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
+
+const secureStore = vi.hoisted(() => ({
+  getItemAsync: vi.fn(async (_key: string): Promise<string | null> => null),
+  setItemAsync: vi.fn(async (_key: string, _value: string): Promise<void> => {}),
+}))
+
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: secureStore.getItemAsync,
+  setItemAsync: secureStore.setItemAsync,
+}))
+
 import {
   HA_CONTROL_PLANE_ORIGIN,
   LOCAL_HTTPS_ORIGIN,
   setControlPlaneEnvReader,
 } from '@/lib/control-plane'
+import * as controlPlane from '@/lib/control-plane'
 import {
   activateControlPlaneOrigin,
   canQueryControlPlane,
@@ -28,6 +40,9 @@ import {
 afterEach(() => {
   resetControlPlaneStoreForTests()
   configureControlPlaneStorageForTests(null)
+  secureStore.getItemAsync.mockReset()
+  secureStore.setItemAsync.mockReset()
+  secureStore.getItemAsync.mockResolvedValue(null)
   setControlPlaneEnvReader(() => ({
     platformOS: 'web',
     isDev: true,
@@ -336,6 +351,25 @@ describe('control-plane account store', () => {
     }
   })
 
+  it('uses in-memory storage when persist runs without a native SecureStore', async () => {
+    const remoteSpy = vi.spyOn(controlPlane, 'isRemoteCookieClient').mockReturnValue(true)
+    try {
+      resetControlPlaneStoreForTests()
+      setControlPlaneEnvReader(() => ({
+        platformOS: 'web',
+        isDev: true,
+        locationOrigin: null,
+      }))
+      configureControlPlaneStorageForTests(null)
+      activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    } finally {
+      remoteSpy.mockRestore()
+    }
+  })
+
   it('hydrateControlPlaneStore activates an env origin already present in storage', async () => {
     const previous = process.env.EXPO_PUBLIC_CONTROL_PLANE_URL
     process.env.EXPO_PUBLIC_CONTROL_PLANE_URL = LOCAL_HTTPS_ORIGIN
@@ -389,8 +423,97 @@ describe('control-plane account store', () => {
     activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
     await Promise.resolve()
     expect(writes.length).toBeGreaterThan(0)
-    expect(JSON.parse(writes.at(-1)!)).toMatchObject({
+    const persisted = writes.at(-1)
+    if (persisted === undefined) {
+      throw new TypeError('expected a persisted control-plane payload')
+    }
+    expect(JSON.parse(persisted)).toMatchObject({
       activeOrigin: LOCAL_HTTPS_ORIGIN,
     })
+  })
+
+  it('hydrates and persists through expo-secure-store on native when no override is set', async () => {
+    secureStore.getItemAsync.mockResolvedValue(
+      JSON.stringify({
+        accounts: [
+          {
+            origin: LOCAL_HTTPS_ORIGIN,
+            kind: 'self-hosted',
+            email: 'secure@example.com',
+            runtime: 'deno',
+            lastOrgId: 'org-9',
+          },
+        ],
+        activeOrigin: LOCAL_HTTPS_ORIGIN,
+      }),
+    )
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests(null)
+    await hydrateControlPlaneStore()
+    expect(secureStore.getItemAsync).toHaveBeenCalledWith(
+      'turbopanel.controlPlaneAccounts.v1',
+    )
+    expect(getActiveControlPlaneAccount()).toEqual({
+      origin: LOCAL_HTTPS_ORIGIN,
+      kind: 'self-hosted',
+      email: 'secure@example.com',
+      runtime: 'deno',
+      lastOrgId: 'org-9',
+    })
+    rememberSignedInAccount({ email: 'updated@example.com' })
+    await vi.waitFor(() => {
+      expect(secureStore.setItemAsync).toHaveBeenCalled()
+    })
+    const writeCall = secureStore.setItemAsync.mock.calls.at(-1)
+    if (!writeCall) {
+      throw new TypeError('expected expo-secure-store to persist the account')
+    }
+    expect(writeCall[0]).toBe('turbopanel.controlPlaneAccounts.v1')
+    expect(JSON.parse(writeCall[1])).toMatchObject({
+      activeOrigin: LOCAL_HTTPS_ORIGIN,
+      accounts: [{ email: 'updated@example.com' }],
+    })
+  })
+
+  it('falls back to in-memory storage when expo-secure-store cannot be imported', async () => {
+    vi.resetModules()
+    vi.doMock('expo-secure-store', () => {
+      throw new Error('SecureStore native module is unavailable')
+    })
+    try {
+      const { setControlPlaneEnvReader: setEnv } = await import('@/lib/control-plane')
+      const {
+        activateControlPlaneOrigin: activate,
+        configureControlPlaneStorageForTests: configureStorage,
+        getActiveControlPlaneOrigin: getActive,
+        hydrateControlPlaneStore: hydrate,
+        resetControlPlaneStoreForTests: resetStore,
+      } = await import('@/lib/control-plane-accounts')
+
+      setEnv(() => ({
+        platformOS: 'ios',
+        isDev: true,
+        locationOrigin: null,
+      }))
+      configureStorage(null)
+      resetStore({ accounts: [], activeOrigin: null }, { hydrated: false })
+      await hydrate()
+      await Promise.resolve()
+      await Promise.resolve()
+      activate(LOCAL_HTTPS_ORIGIN)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(getActive()).toBe(LOCAL_HTTPS_ORIGIN)
+    } finally {
+      vi.doMock('expo-secure-store', () => ({
+        getItemAsync: secureStore.getItemAsync,
+        setItemAsync: secureStore.setItemAsync,
+      }))
+    }
   })
 })

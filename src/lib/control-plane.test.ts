@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   HA_CONTROL_PLANE_ORIGIN,
   LOCAL_HTTP_ORIGIN,
@@ -104,6 +104,10 @@ describe('canBootstrapAgainstControlPlane', () => {
   })
 })
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('parseControlPlaneOrigin', () => {
   it('normalizes a valid URL to its origin', () => {
     expect(parseControlPlaneOrigin('https://panel.example.com/sign-in')).toEqual({
@@ -116,6 +120,29 @@ describe('parseControlPlaneOrigin', () => {
     expect(parseControlPlaneOrigin('').ok).toBe(false)
     expect(parseControlPlaneOrigin('ftp://panel.example.com').ok).toBe(false)
     expect(parseControlPlaneOrigin('not a url').ok).toBe(false)
+  })
+
+  it('rejects http(s) URLs that parse without a hostname', () => {
+    const OriginalURL = globalThis.URL
+    vi.stubGlobal(
+      'URL',
+      class EmptyHostURL {
+        protocol = 'https:'
+        hostname = ''
+        origin = 'https://empty-host.example'
+        constructor(input: string | URL, base?: string | URL) {
+          if (String(input) !== 'https://empty-host.example') {
+            return new OriginalURL(input, base)
+          }
+        }
+      },
+    )
+    const result = parseControlPlaneOrigin('https://empty-host.example')
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new TypeError('expected parse to fail for an empty hostname')
+    }
+    expect(result.error).toBe('Enter a valid http(s) URL.')
   })
 })
 

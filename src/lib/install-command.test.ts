@@ -59,6 +59,13 @@ describe('parseInstallBaseUrl', () => {
       'https://panel.example.com',
     )
   })
+
+  it('rejects blank values, a null hostname, and unparseable input', () => {
+    expect(parseInstallBaseUrl(undefined)).toBeNull()
+    expect(parseInstallBaseUrl('   ')).toBeNull()
+    expect(parseInstallBaseUrl('https://null')).toBeNull()
+    expect(parseInstallBaseUrl('https://[not-valid')).toBeNull()
+  })
 })
 
 describe('defaultDevInstallBaseUrl', () => {
@@ -112,6 +119,55 @@ describe('defaultDevInstallBaseUrl', () => {
       ]),
     ).toBe('http://studio.lan:8880')
   })
+
+  it('skips blank and invalid managed URLs when picking https', () => {
+    expect(
+      defaultDevInstallBaseUrl([
+        '',
+        '  ',
+        'not a url',
+        'https://huey.lan:8443',
+      ]),
+    ).toBe('https://huey.lan:8443')
+  })
+
+  it('ignores a browser origin that does not match any managed URL', () => {
+    vi.stubGlobal('location', {
+      origin: 'https://other.lan:8443',
+      hostname: 'other.lan',
+    })
+    expect(
+      defaultDevInstallBaseUrl([
+        '  ',
+        'not a url',
+        'https://huey.lan:8443',
+      ]),
+    ).toBe('https://huey.lan:8443')
+  })
+
+  it('uses the browser origin when managed URLs are blank or invalid', () => {
+    vi.stubGlobal('location', {
+      origin: 'https://dev.example.com:8443',
+      hostname: 'dev.example.com',
+    })
+    expect(defaultDevInstallBaseUrl(['  ', 'not a url'])).toBe(
+      'https://dev.example.com:8443',
+    )
+  })
+
+  it('ignores a null, blank, or unusable browser origin', () => {
+    vi.stubGlobal('location', { origin: 'null', hostname: '' })
+    expect(defaultDevInstallBaseUrl()).toBe('https://localhost:8443')
+
+    vi.stubGlobal('location', { origin: '  ', hostname: '' })
+    expect(defaultDevInstallBaseUrl()).toBe('https://localhost:8443')
+
+    vi.stubGlobal('location', {
+      origin: 'https://user:pass@dev.example.com',
+      hostname: 'dev.example.com',
+    })
+    expect(defaultDevInstallBaseUrl()).toBe('https://localhost:8443')
+  })
 })
 
 describe('defaultDevCaddyHttpsBaseUrl', () => {
@@ -131,6 +187,22 @@ describe('defaultDevCaddyHttpsBaseUrl', () => {
     expect(defaultDevCaddyHttpsBaseUrl(['not a url', '  '])).toBe(
       'https://localhost:8443',
     )
+  })
+
+  it('falls through when the browser origin is not a parseable URL', () => {
+    vi.stubGlobal('location', {
+      origin: '::not-a-url::',
+      hostname: 'dev.example.com',
+    })
+    expect(defaultDevCaddyHttpsBaseUrl()).toBe('https://localhost:8443')
+  })
+
+  it('ignores a browser origin whose hostname is null', () => {
+    vi.stubGlobal('location', {
+      origin: 'https://null',
+      hostname: 'null',
+    })
+    expect(defaultDevCaddyHttpsBaseUrl()).toBe('https://localhost:8443')
   })
 })
 
@@ -156,6 +228,25 @@ describe('defaultDevInstallHttpBaseUrl', () => {
   })
 
   it('falls back to localhost HTTP', () => {
+    expect(defaultDevInstallHttpBaseUrl()).toBe('http://localhost:8880')
+  })
+
+  it('skips blank and invalid managed URLs when picking http', () => {
+    expect(
+      defaultDevInstallHttpBaseUrl([
+        '',
+        '  ',
+        'not a url',
+        'http://huey.lan:8880',
+      ]),
+    ).toBe('http://huey.lan:8880')
+  })
+
+  it('falls back to localhost HTTP when the browser hostname is unusable', () => {
+    vi.stubGlobal('location', {
+      origin: 'https://null',
+      hostname: 'null',
+    })
     expect(defaultDevInstallHttpBaseUrl()).toBe('http://localhost:8880')
   })
 })
@@ -214,6 +305,73 @@ describe('buildInstallCommandWithBaseUrl', () => {
       baseUrl: 'turbopanel.sh',
     })
     expect(bareHost).toContain('curl -fsSL turbopanel.sh |')
+  })
+
+  it('uses the bare turbopanel.sh target for http and default ports', () => {
+    const httpOrigin = buildInstallCommandWithBaseUrl({
+      ...license,
+      baseUrl: 'http://turbopanel.sh',
+    })
+    expect(httpOrigin).toContain('curl -fsSL turbopanel.sh |')
+    expect(httpOrigin).not.toContain('turbopanel.sh/run.sh')
+
+    const https443 = buildInstallCommandWithBaseUrl({
+      ...license,
+      baseUrl: 'https://turbopanel.sh:443',
+    })
+    expect(https443).toContain('curl -fsSL turbopanel.sh |')
+
+    const http80 = buildInstallCommandWithBaseUrl({
+      ...license,
+      baseUrl: 'http://turbopanel.sh:80',
+    })
+    expect(http80).toContain('curl -fsSL turbopanel.sh |')
+  })
+
+  it('does not treat non-default ports, paths, or other hosts as the CDN', () => {
+    expect(
+      buildInstallCommandWithBaseUrl({
+        ...license,
+        baseUrl: 'https://turbopanel.sh:8443',
+      }),
+    ).toContain('https://turbopanel.sh:8443/run.sh')
+
+    expect(
+      buildInstallCommandWithBaseUrl({
+        ...license,
+        baseUrl: 'https://turbopanel.sh/extra',
+      }),
+    ).toContain('https://turbopanel.sh/extra/run.sh')
+
+    expect(
+      buildInstallCommandWithBaseUrl({
+        ...license,
+        baseUrl: 'https://turbopanel.sh?x=1',
+      }),
+    ).toContain('https://turbopanel.sh?x=1/run.sh')
+
+    expect(
+      buildInstallCommandWithBaseUrl({
+        ...license,
+        baseUrl: 'https://turbopanel.sh#frag',
+      }),
+    ).toContain('https://turbopanel.sh#frag/run.sh')
+
+    expect(
+      buildInstallCommandWithBaseUrl({
+        ...license,
+        baseUrl: 'ftp://turbopanel.sh',
+      }),
+    ).toContain('ftp://turbopanel.sh/run.sh')
+  })
+
+  it('does not treat an unparseable origin as turbopanel.sh', () => {
+    const command = buildInstallCommandWithBaseUrl({
+      ...license,
+      baseUrl: 'not a valid origin',
+    })
+    expect(command).toContain('curl -fsSL not a valid origin/run.sh')
+    expect(command).not.toContain('curl -fsSL turbopanel.sh |')
   })
 
   it('omits insecure TLS for plaintext HTTP and still sets DL_BASE + HOST', () => {

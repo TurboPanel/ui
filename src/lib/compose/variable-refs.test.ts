@@ -101,6 +101,18 @@ describe('parseExactVariableRef', () => {
       message:
         'Invalid TurboPanel variable ref; use {$KEY} or {$scope.KEY} with a Compose-safe key',
     })
+    expect(parseExactVariableRef('{$bad-key}')).toEqual({
+      ok: false,
+      error: 'invalid',
+      message:
+        'Invalid TurboPanel variable ref; use {$KEY} or {$scope.KEY} with a Compose-safe key',
+    })
+    expect(parseExactVariableRef('{$project.bad-key}')).toEqual({
+      ok: false,
+      error: 'invalid',
+      message:
+        'Invalid TurboPanel variable ref; use {$KEY} or {$scope.KEY} with a Compose-safe key',
+    })
   })
 
   it('rejects unknown scopes', () => {

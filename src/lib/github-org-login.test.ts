@@ -36,6 +36,12 @@ describe('githubOrgLoginError', () => {
     )
   })
 
+  it('rejects an invalid but nonempty login', () => {
+    expect(githubOrgLoginError('my org')).toBe(
+      'Use the organization login from github.com/<login> — letters, numbers, and hyphens only.',
+    )
+  })
+
   it('returns null for a valid login', () => {
     expect(githubOrgLoginError('@TurboPanel')).toBeNull()
   })

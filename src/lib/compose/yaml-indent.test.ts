@@ -603,3 +603,183 @@ nginx:
     expect(expectedIndentForLine(lines, 2)).toBeNull()
   })
 })
+
+describe('sibling top-level key recovery', () => {
+  it('leaves a root-level name/version pair at column 0', () => {
+    const lines = ['name: demo', 'version: "3.9"', 'services:']
+    expect(expectedIndentForLine(lines, 1)).toBeNull()
+    expect(expectedIndentForLine(lines, 2)).toBeNull()
+  })
+
+  it('does not nest a later top-level section under services', () => {
+    const lines = ['services:', '  nginx:', '    image: nginx', 'volumes:', 'secrets:']
+    expect(expectedIndentForLine(lines, 3)).toBeNull()
+    expect(expectedIndentForLine(lines, 4)).toBeNull()
+  })
+
+  it('deepens a one-space-indented name key under the preceding section', () => {
+    // `name` is top-level-only; indent 1 is still a child of `services:` for
+    // the opener walk (parent indent 0 < 1 < 2).
+    const lines = ['services:', ' name:']
+    expect(expectedIndentForLine(lines, 1)).toBe(2)
+  })
+
+  it('skips a column-0 user-defined name when recovering a later sibling section', () => {
+    const lines = ['services:', 'nginx:', 'networks:']
+    expect(expectedIndentForLine(lines, 2)).toBeNull()
+  })
+})
+
+describe('user-defined name keys', () => {
+  it('aligns a name one space deeper than the previous service name', () => {
+    const lines = ['services:', '  nginx:', '   redis:']
+    expect(expectedIndentForLine(lines, 2)).toBe(2)
+  })
+
+  it('does not outdent that one-space-deeper sibling when rewriting', () => {
+    const source = `services:
+  nginx:
+    image: nginx
+   redis:`
+    expect(fixComposeYamlIndentation(source)).toBeNull()
+    expect(canFixComposeYamlIndentation(source)).toBe(false)
+  })
+
+  it('aligns a column-0 name with a preceding indented service sibling', () => {
+    const lines = ['services:', '  nginx:', '    image: nginx', 'redis:']
+    expect(expectedIndentForLine(lines, 3)).toBe(2)
+  })
+
+  it('leaves a root-level user-defined name alone when no section is open', () => {
+    expect(expectedIndentForLine(['nginx:'], 0)).toBeNull()
+    expect(expectedIndentForLine(['# stack', 'nginx:'], 1)).toBeNull()
+    expect(expectedIndentForLine([':', 'custom:'], 1)).toBeNull()
+  })
+
+  it('leaves a root name alone after an indented top-level opener', () => {
+    const lines = ['  services:', 'custom:']
+    expect(expectedIndentForLine(lines, 1)).toBeNull()
+  })
+
+  it('nests a root name under services even when a column-0 name sits between', () => {
+    const lines = ['services:', 'nginx:', 'redis:']
+    expect(expectedIndentForLine(lines, 2)).toBe(2)
+  })
+})
+
+describe('comment indent edges', () => {
+  it('skips following comments when matching the next content line', () => {
+    const lines = ['services:', '# first', '# second', '  nginx:']
+    expect(expectedIndentForCommentLine(lines, 1)).toBe(2)
+  })
+
+  it('skips blank and comment lines when walking backward', () => {
+    const lines = ['services:', '  nginx:', '', '# note', '# trailing']
+    expect(expectedIndentForCommentLine(lines, 4)).toBe(4)
+  })
+
+  it('leaves a trailing comment that already matches the previous sibling', () => {
+    const lines = ['    image: nginx', '    # done']
+    expect(expectedIndentForCommentLine(lines, 1)).toBeNull()
+  })
+
+  it('leaves a trailing comment that already nests under the previous opener', () => {
+    const lines = ['services:', '  # already nested']
+    expect(expectedIndentForCommentLine(lines, 1)).toBeNull()
+  })
+
+  it('outdents an orphan indented comment to column 0', () => {
+    expect(expectedIndentForCommentLine(['    # orphan'], 0)).toBe(0)
+    const fixed = fixComposeYamlIndentation('    # orphan')
+    if (fixed === null) {
+      throw new TypeError('expected orphan comment to snap to column 0')
+    }
+    expect(fixed.text).toBe('# orphan')
+  })
+
+  it('nests a trailing comment after blanks under the previous opener', () => {
+    const lines = ['services:', '', '', '# end']
+    expect(expectedIndentForCommentLine(lines, 3)).toBe(2)
+  })
+})
+
+describe('rewrite and caret mapping leftovers', () => {
+  it('maps a caret on a later line through an earlier indent rewrite', () => {
+    const broken = `services:
+nginx:
+  image: nginx`
+    const caret = broken.indexOf('image')
+    const fixed = fixComposeYamlIndentation(broken, { start: caret, end: caret })
+    if (fixed === null) {
+      throw new TypeError('expected indent rewrite')
+    }
+    expect(fixed.text.indexOf('image')).toBe(fixed.selection.start)
+  })
+
+  it('keeps a caret in leading whitespace on the content when indent grows', () => {
+    const broken = `services:
+nginx:`
+    const caret = broken.indexOf('nginx:')
+    const fixed = fixComposeYamlIndentation(broken, { start: caret, end: caret })
+    if (fixed === null) {
+      throw new TypeError('expected indent rewrite')
+    }
+    expect(fixed.text).toBe('services:\n  nginx:')
+    expect(fixed.selection).toEqual({ start: caret + 2, end: caret + 2 })
+  })
+
+  it('maps a selection sitting in an over-indented comment that snaps left', () => {
+    const broken = `services:
+  nginx:
+        # too deep
+    image: nginx`
+    const commentAt = broken.indexOf('# too deep')
+    const fixed = fixComposeYamlIndentation(broken, {
+      start: commentAt - 2,
+      end: commentAt,
+    })
+    if (fixed === null) {
+      throw new TypeError('expected comment outdent')
+    }
+    expect(fixed.text).toBe(`services:
+  nginx:
+    # too deep
+    image: nginx`)
+    // Caret in leading whitespace does not apply a negative indent delta, so
+    // the selection columns stay put while the comment text moves left.
+    expect(fixed.selection).toEqual({ start: commentAt - 2, end: commentAt })
+  })
+
+  it('mapOffsetThroughPerLineTrim clamps a past-the-end offset on mismatched lines', () => {
+    expect(mapOffsetThroughPerLineTrim('hello', 'hi', 5)).toBe(2)
+    expect(mapOffsetThroughPerLineTrim('a\nb\n', 'a\nb', 4)).toBe(4)
+    expect(mapOffsetThroughPerLineTrim('a', '', 1)).toBe(0)
+  })
+})
+
+describe('newline auto-indent leftovers', () => {
+  it('returns null when the edit is not exactly one inserted character', () => {
+    expect(applyNewlineAutoIndent('services:', 'services:\n  ')).toBeNull()
+    expect(applyNewlineAutoIndent('abc', 'ab')).toBeNull()
+    expect(applyNewlineAutoIndent('abc', 'abc')).toBeNull()
+  })
+
+  it('returns null when a newline is inserted but the remainder does not match', () => {
+    expect(applyNewlineAutoIndent('abc', 'a\nxc')).toBeNull()
+  })
+
+  it('returns null when the inserted newline is at the start of the document', () => {
+    expect(applyNewlineAutoIndent('services:', '\nservices:')).toBeNull()
+    expect(applyNewlineAutoIndent('', '\n')).toBeNull()
+  })
+
+  it('indents after a newline inserted in the middle of a completed key line', () => {
+    const prev = 'services:\n  nginx: always'
+    const next = 'services:\n  nginx:\n always'
+    const result = applyNewlineAutoIndent(prev, next)
+    if (result === null) {
+      throw new TypeError('expected newline auto-indent')
+    }
+    expect(result.text).toBe('services:\n  nginx:\n     always')
+  })
+})
