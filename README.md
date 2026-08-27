@@ -66,7 +66,9 @@ Routing guide: [CONTRIBUTING.md](https://github.com/TurboPanel/.github/blob/trun
 
 ## License
 
-TurboPanel UI is licensed under the [GNU Affero General Public License v3.0 only (AGPL-3.0-only)](./LICENSE), with the [TurboPanel Apple App Store Additional Permission](./LICENSES/TurboPanel-Apple-App-Store-Additional-Permission.txt).
+TurboPanel UI is licensed under the [GNU Affero General Public License v3.0 only (AGPL-3.0-only)](./LICENSE), with the [TurboPanel Apple App Store Additional Permission](./LICENSES/TurboPanel-Apple-App-Store-Additional-Permission.txt). That permission covers only material TurboPanel has authority to license — see [LICENSES/README.md](./LICENSES/README.md).
+
+Third-party components keep their own licenses; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). OS artwork provenance is in [assets/os/NOTICE.md](./assets/os/NOTICE.md) and is not covered by this repository's AGPL or the App Store additional permission. Native **Settings → About** names Corresponding Source for the exact revision of that build, not `trunk`. The published model is [Licensing](https://turbopanel.io/docs/getting-started/licensing).
 
 The TurboPanel name and logos are trademarks. See [TRADEMARKS.md](./TRADEMARKS.md).
 

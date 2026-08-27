@@ -25,7 +25,7 @@ type GlassSurfaceProps = Readonly<{
   style?: StyleProp<ViewStyle>
   /** soft = chips; regular = panels; strong = sticky chrome */
   intensity?: GlassIntensity
-  /** Native iOS glass style when Liquid Glass API is available */
+  /** Native iOS glass style when expo-glass-effect is available */
   nativeStyle?: 'clear' | 'regular'
   /**
    * Hairline rim edges. Shell chrome on rounded devices should use `top` /
@@ -34,7 +34,7 @@ type GlassSurfaceProps = Readonly<{
   rim?: GlassRim
 }>
 
-function useNativeLiquidGlass(): boolean {
+function useNativeGlassEffect(): boolean {
   if (Platform.OS !== 'ios') return false
   try {
     return isLiquidGlassAvailable() && isGlassEffectAPIAvailable()
@@ -63,7 +63,7 @@ function rimStyle(rim: GlassRim): ViewStyle {
 }
 
 /**
- * Frosted / liquid-glass surface.
+ * Frosted chrome surface.
  *
  * - iOS 26+: native `GlassView` (expo-glass-effect)
  * - Web: CSS `backdrop-filter` + translucent fill
@@ -82,7 +82,7 @@ export function GlassSurface({
     rimStyle(rim),
     style,
   ]
-  const native = useNativeLiquidGlass()
+  const native = useNativeGlassEffect()
 
   if (native) {
     return (

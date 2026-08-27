@@ -104,6 +104,7 @@ function UserAccountMenuBody({
   otherAccounts,
   onSwitch,
   onAddControlPlane,
+  onAbout,
   onSignOut,
 }: Readonly<{
   email: string
@@ -114,6 +115,7 @@ function UserAccountMenuBody({
   otherAccounts: readonly ControlPlaneAccount[]
   onSwitch: (account: ControlPlaneAccount) => void
   onAddControlPlane: () => void
+  onAbout: () => void
   onSignOut: () => void
 }>) {
   return (
@@ -198,6 +200,19 @@ function UserAccountMenuBody({
           pressed && headerMenuGroupStyles.itemPressed,
           webPointer,
         ]}
+        onPress={onAbout}
+        accessibilityRole="menuitem"
+        accessibilityLabel="About"
+      >
+        <Text style={headerMenuGroupStyles.menuActionLabel}>About</Text>
+      </Pressable>
+
+      <Pressable
+        style={({ pressed }) => [
+          headerMenuGroupStyles.menuAction,
+          pressed && headerMenuGroupStyles.itemPressed,
+          webPointer,
+        ]}
         onPress={onSignOut}
         accessibilityRole="menuitem"
         accessibilityLabel="Sign out"
@@ -259,6 +274,11 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
     router.push('/connect')
   }
 
+  const handleAbout = () => {
+    close()
+    router.push('/about')
+  }
+
   return (
     <>
       <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
@@ -294,6 +314,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
           otherAccounts={otherAccounts}
           onSwitch={handleSwitch}
           onAddControlPlane={handleAddControlPlane}
+          onAbout={handleAbout}
           onSignOut={handleSignOut}
         />
       </HeaderMenuOverlay>

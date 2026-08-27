@@ -19,6 +19,7 @@ import {
 } from '@/components/org/project/compose-draft-context'
 import {
   useProjectContext,
+  useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
@@ -530,6 +531,7 @@ function ServicesPanelBody({
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
   const draftStore = useComposeDraftStore()
+  const projectRepositoryId = useProjectRepositoryId()
   const editing = sectionView != null
   const editView = sectionView ?? 'editor'
   const scopeKey = composeDraftScopeKey(
@@ -575,7 +577,11 @@ function ServicesPanelBody({
       setComposeEditorView(reconciled, viewForSave),
     )
     const blocking = blockingComposeLintIssues(
-      lintComposeYaml(composeDocumentToYaml(next)),
+      lintComposeYaml(composeDocumentToYaml(next), {
+        // Overview's own save path — the same rule the editor and the instance
+        // apply, so a second repository cannot slip in through this surface.
+        ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+      }),
     )
     if (blocking.length > 0) return
     if (baseSelected) {

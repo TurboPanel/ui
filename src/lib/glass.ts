@@ -2,7 +2,7 @@ import { Platform, type ViewStyle } from 'react-native'
 import { colors } from '@/lib/theme'
 
 /**
- * TurboPanel liquid-glass tokens (ui-ux-pro-max: Liquid Glass + Glassmorphism).
+ * TurboPanel frosted chrome tokens.
  *
  * Secondary polish on Dark OLED — frosted fill + saturate blur + hairline
  * specular edge. Not iridescent / chromatic aberration (reserved for marketing

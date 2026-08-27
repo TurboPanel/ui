@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatServerOsProductName } from '@/lib/server-os-display'
+import { formatServerOsProductName, resolveOsLogoKey } from '@/lib/server-os-display'
 import type { ServerOsMetadata } from '@/lib/instance-api'
 
 describe('formatServerOsProductName', () => {
@@ -66,5 +66,33 @@ describe('formatServerOsProductName', () => {
     expect(
       formatServerOsProductName({ id: 'ubuntu' }, 'Debian 12'),
     ).toBe('Ubuntu')
+  })
+})
+
+describe('resolveOsLogoKey', () => {
+  it('prefers the wire osLogo field', () => {
+    expect(
+      resolveOsLogoKey({
+        osLogo: 'debian',
+        os: { variant: 'raspberry-pi-os' },
+      }),
+    ).toBe('debian')
+    expect(
+      resolveOsLogoKey({ osLogo: 'raspberry-pi-os', os: { id: 'debian' } }),
+    ).toBe('raspberry-pi-os')
+  })
+
+  it('falls back from os metadata when osLogo is absent', () => {
+    expect(resolveOsLogoKey({ os: { variant: 'raspberry-pi-os' } })).toBe(
+      'raspberry-pi-os',
+    )
+    expect(resolveOsLogoKey({ os: { id: 'debian' } })).toBe('debian')
+    expect(resolveOsLogoKey({ os: { id: 'Debian' } })).toBe('debian')
+  })
+
+  it('returns null when no logo key can be derived', () => {
+    expect(resolveOsLogoKey({})).toBeNull()
+    expect(resolveOsLogoKey({ osLogo: null, os: null })).toBeNull()
+    expect(resolveOsLogoKey({ os: { id: 'ubuntu' } })).toBeNull()
   })
 })

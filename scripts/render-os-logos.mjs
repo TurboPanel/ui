@@ -10,11 +10,16 @@
  *
  * Adding a logo:
  *   1. Drop a transparent SVG into assets/os/src/<slug>.svg
- *   2. Run `pnpm os-logos`
- *   3. Map the slug in src/lib/os-logos.ts (and ServerOsLogoKey if needed)
+ *   2. Record provenance in assets/os/NOTICE.md (required before this script)
+ *   3. Run `pnpm os-logos`
+ *   4. Map the slug in src/lib/os-logos.ts (and ServerOsLogoKey if needed)
+ *
+ * This script rasterizes every SVG in assets/os/src/ and prunes generated PNGs
+ * whose slug no longer has a source SVG — removing the SVG is what removes
+ * the PNGs.
  */
 
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Resvg } from '@resvg/resvg-js'
@@ -115,12 +120,44 @@ function listSourceSvgs() {
     .sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * @param {string} name
+ * @returns {string | null}
+ */
+function pngSlug(name) {
+  if (!name.endsWith('.png')) return null
+  const withoutExt = name.slice(0, -'.png'.length)
+  for (const scale of SCALES) {
+    if (scale === 1) continue
+    const suffix = `@${scale}x`
+    if (withoutExt.endsWith(suffix)) {
+      return withoutExt.slice(0, -suffix.length)
+    }
+  }
+  return withoutExt
+}
+
+/**
+ * @param {Set<string>} keepSlugs
+ */
+function pruneStalePngs(keepSlugs) {
+  for (const name of readdirSync(OUT_DIR)) {
+    const slug = pngSlug(name)
+    if (!slug || keepSlugs.has(slug)) continue
+    const stalePath = join(OUT_DIR, name)
+    unlinkSync(stalePath)
+    console.log(`removed ${stalePath}`)
+  }
+}
+
 function renderAll() {
   mkdirSync(OUT_DIR, { recursive: true })
   const sources = listSourceSvgs()
   if (sources.length === 0) {
     throw new TypeError(`No SVGs found in ${SRC_DIR}`)
   }
+
+  const keepSlugs = new Set(sources.map((file) => basename(file, '.svg')))
 
   for (const file of sources) {
     const slug = basename(file, '.svg')
@@ -139,6 +176,8 @@ function renderAll() {
       console.log(`wrote ${outPath} (${canvasW}×${canvasH})`)
     }
   }
+
+  pruneStalePngs(keepSlugs)
 }
 
 renderAll()

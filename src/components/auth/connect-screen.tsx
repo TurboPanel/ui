@@ -36,6 +36,7 @@ export function ConnectScreenContent() {
 }
 
 function MetroWebConnectScreen() {
+  const router = useRouter()
   const accent = authAccentForRuntime(undefined)
   return (
     <AuthScreenShell
@@ -48,6 +49,7 @@ function MetroWebConnectScreen() {
         Use {LOCAL_HTTPS_ORIGIN} or {LOCAL_HTTP_ORIGIN} in your browser. Visiting
         Metro on port 8081 cannot sign in.
       </Text>
+      <AboutLink onPress={() => router.push('/about')} />
     </AuthScreenShell>
   )
 }
@@ -167,7 +169,21 @@ function NativeConnectScreen() {
         tint={tint}
         spinnerColor={accent.onAccent}
       />
+      <AboutLink onPress={() => router.push('/about')} />
     </AuthScreenShell>
+  )
+}
+
+function AboutLink({ onPress }: Readonly<{ onPress: () => void }>) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="link"
+      accessibilityLabel="About this app"
+      style={({ pressed }) => [styles.aboutLink, pressed && styles.chipPressed, webPointer]}
+    >
+      <Text style={styles.aboutLinkLabel}>About</Text>
+    </Pressable>
   )
 }
 
@@ -199,6 +215,17 @@ const styles = StyleSheet.create({
   },
   chipLabel: {
     color: colors.textChip,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  aboutLink: {
+    alignSelf: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  aboutLinkLabel: {
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },

@@ -11,7 +11,7 @@ import { colors, spacing } from '@/lib/theme'
  *
  * Owns the top safe-area inset as padding so the background runs edge-to-edge
  * (no left/right SafeArea inset that reads as a side border). Do not use
- * GlassSurface/GlassView — liquid glass paints a system rim on every edge.
+ * GlassSurface/GlassView — native glass paints a system rim on every edge.
  */
 export function OrgHeader({
   orgId,

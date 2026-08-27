@@ -1,4 +1,4 @@
-import type { ServerOsMetadata } from '@/lib/instance-api'
+import type { ServerOsLogoKey, ServerOsMetadata } from '@/lib/instance-api'
 
 function titleCaseWord(word: string): string {
   if (!word) return word
@@ -68,4 +68,18 @@ export function formatServerOsProductName(
   const display = osDisplay?.trim()
   if (!display) return null
   return productNameFromDisplay(display)
+}
+
+/** Wire `osLogo` key, including keys that no longer ship artwork. */
+export function resolveOsLogoKey(
+  input: Readonly<{
+    osLogo?: ServerOsLogoKey | null
+    os?: ServerOsMetadata | null
+  }>,
+): ServerOsLogoKey | null {
+  if (input.osLogo) return input.osLogo
+  const id = input.os?.id?.toLowerCase()
+  if (input.os?.variant === 'raspberry-pi-os') return 'raspberry-pi-os'
+  if (id === 'debian') return 'debian'
+  return null
 }

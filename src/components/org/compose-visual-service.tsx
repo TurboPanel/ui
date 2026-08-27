@@ -61,7 +61,10 @@ import {
 import {
   REPOSITORY_AUTO_DEPLOY_OPTIONS,
   type RepositoryAutoDeploy,
+  type RepositoryRecord,
 } from '@/lib/instance-api'
+import { Button } from '@/components/ui'
+import { useProjectRepositoryId } from '@/components/org/project/project-context'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
 import {
@@ -955,23 +958,44 @@ function NodeRuntimeBlock({
 /**
  * Bind a repository to a service that has none.
  *
- * Uses the same **application → account → repository** picker as project
- * creation, and attaching is what creates the underlying binding. Previously
- * this offered a flat list of whatever the organization had already connected
- * elsewhere, which meant a service could only be bound to a repository someone
- * had thought to connect in advance.
+ * **Two shapes, and which one you get is the whole point.** A project that is
+ * already its repository offers that repository and nothing else — one button,
+ * because there is no choice to make: every service in a repository-backed
+ * project builds out of the same checkout, and the per-service half of the
+ * question (`branch`, `subdirectory`, `buildCommand`) is the block below. A
+ * project with no repository yet gets the full **application → account →
+ * repository** picker, and the repository it lands on becomes the project's.
+ *
+ * Offering the org-wide picker on a bound project would be offering a choice
+ * the instance rejects — `POST/PATCH` answers 400 for a second distinct
+ * `sourceId` — so the narrow shape is not a convenience, it is the surface
+ * telling the truth about what can be saved.
  */
 function UnboundSourcePicker({
   orgId,
   disabled,
+  projectRepository,
   onSelect,
   onOpenSources,
 }: Readonly<{
   orgId: string
   disabled: boolean
+  /** The project's repository, when it has one. */
+  projectRepository: RepositoryRecord | undefined
   onSelect: (sourceId: string) => void
   onOpenSources: () => void
 }>) {
+  if (projectRepository) {
+    return (
+      <Button
+        label={`Build from ${repositoryLabel(projectRepository)}`}
+        variant="secondary"
+        size="sm"
+        disabled={disabled}
+        onPress={() => onSelect(projectRepository.id)}
+      />
+    )
+  }
   return (
     <RepositoryPicker
       orgId={orgId}
@@ -979,6 +1003,228 @@ function UnboundSourcePicker({
       onPick={(sourceId) => onSelect(sourceId)}
       onNeedsApp={onOpenSources}
     />
+  )
+}
+
+const SOURCE_EMPTY_KEYS = [
+  'branch',
+  'subdirectory',
+  'buildCommand',
+  'startCommand',
+  'outputDirectory',
+] as const
+
+function dropEmptySourceKeys(next: ComposeServiceSourceExtension) {
+  for (const key of SOURCE_EMPTY_KEYS) {
+    const value = next[key]
+    if (typeof value === 'string' && value.trim().length === 0) delete next[key]
+  }
+}
+
+function commitSourceExtension(
+  binding: ComposeServiceSourceExtension | undefined,
+  patch: Partial<ComposeServiceSourceExtension>,
+  onChange: (source: ComposeServiceSourceExtension) => void,
+) {
+  if (!binding) return
+  const next: ComposeServiceSourceExtension = { ...binding, ...patch }
+  dropEmptySourceKeys(next)
+  // `native` is the default, so writing it out would add a key that says
+  // nothing. Dropping it keeps a plain binding free of TurboPanel noise.
+  if (next.buildKind === 'native') delete next.buildKind
+  onChange(next)
+}
+
+function sourceBuildKindOptions(serviceKind: ComposeServiceKind | undefined) {
+  const containerKind = serviceKind === undefined || serviceKind === 'container'
+  return SOURCE_BUILD_KIND_OPTIONS.filter(
+    (option) => containerKind || !option.containerOnly,
+  )
+}
+
+function sourceSelectOptions(
+  sourceOptions: readonly RepositoryRecord[],
+  sourceId: string,
+) {
+  if (sourceOptions.length === 0) {
+    return [{ value: sourceId, label: sourceId }]
+  }
+  return sourceOptions.map((entry) => ({
+    value: entry.id,
+    label: repositoryLabel(entry),
+  }))
+}
+
+function sourceBuildKindHint(buildKind: ComposeSourceBuildKind): string {
+  return (
+    SOURCE_BUILD_KIND_OPTIONS.find((option) => option.value === buildKind)
+      ?.hint ?? ''
+  )
+}
+
+function sourceBranchHint(defaultBranch: string | null | undefined): string {
+  const suffix = defaultBranch ? ` (${defaultBranch})` : ''
+  return `Leave empty to build the default branch of the connected repository${suffix}.`
+}
+
+function sourceStartCommandHint(railpack: boolean): string {
+  if (railpack) {
+    return 'Overrides the start command Railpack detected for the image. Leave empty to use its own.'
+  }
+  return 'Only a native (node) service runs a start command; other kinds ignore it.'
+}
+
+function sourceOutputDirectoryHint(railpack: boolean): string {
+  if (railpack) {
+    return 'Not used under Railpack — the release is an image, not a directory. The value is kept but ignored, so switching modes back restores it.'
+  }
+  return 'Publishes this directory as the release instead of the whole checkout. Setting it turns off framework detection.'
+}
+
+function BoundSourceFields({
+  binding,
+  row,
+  sourceOptions,
+  serviceKind,
+  disabled,
+  autoDeployPending,
+  autoDeployError,
+  onChange,
+  onAutoDeploy,
+}: Readonly<{
+  binding: ComposeServiceSourceExtension
+  row: RepositoryRecord | undefined
+  sourceOptions: readonly RepositoryRecord[]
+  serviceKind: ComposeServiceKind | undefined
+  disabled: boolean
+  autoDeployPending: boolean
+  autoDeployError: string | null
+  onChange: (source: ComposeServiceSourceExtension) => void
+  onAutoDeploy: (value: string) => void
+}>) {
+  const buildKind: ComposeSourceBuildKind = binding.buildKind ?? 'native'
+  const railpack = buildKind === 'railpack'
+  const commit = (patch: Partial<ComposeServiceSourceExtension>) => {
+    commitSourceExtension(binding, patch, onChange)
+  }
+
+  return (
+    <>
+      <OptionSelect
+        value={binding.sourceId}
+        options={sourceSelectOptions(sourceOptions, binding.sourceId)}
+        disabled={disabled || sourceOptions.length < 2}
+        onChange={(sourceId) => commit({ sourceId })}
+      />
+
+      <Text style={styles.label}>Deployment mode</Text>
+      <OptionSelect
+        value={buildKind}
+        options={sourceBuildKindOptions(serviceKind).map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))}
+        disabled={disabled}
+        onChange={(value) =>
+          commit({ buildKind: value as ComposeSourceBuildKind })
+        }
+      />
+      <Text style={styles.hint}>{sourceBuildKindHint(buildKind)}</Text>
+
+      <Text style={styles.label}>Branch</Text>
+      <TextInput
+        value={binding.branch ?? ''}
+        onChangeText={(branch) => commit({ branch })}
+        editable={!disabled}
+        maxLength={SOURCE_BRANCH_MAX_LENGTH}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder={row?.defaultBranch ?? 'main'}
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>{sourceBranchHint(row?.defaultBranch)}</Text>
+
+      <Text style={styles.label}>Subdirectory</Text>
+      <TextInput
+        value={binding.subdirectory ?? ''}
+        onChangeText={(subdirectory) => commit({ subdirectory })}
+        editable={!disabled}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="apps/web"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>
+        Relative path inside the repository to build from — for a monorepo.
+      </Text>
+
+      <Text style={styles.label}>Build command</Text>
+      <TextInput
+        value={binding.buildCommand ?? ''}
+        onChangeText={(buildCommand) => commit({ buildCommand })}
+        editable={!disabled}
+        maxLength={SOURCE_COMMAND_MAX_LENGTH}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="npm run build"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      {railpack ? (
+        <Text style={styles.hint}>
+          Optional under Railpack — it detects a build command on its own,
+          and only uses this one where the language it detected has a slot
+          for it.
+        </Text>
+      ) : null}
+
+      <Text style={styles.label}>Start command</Text>
+      <TextInput
+        value={binding.startCommand ?? ''}
+        onChangeText={(startCommand) => commit({ startCommand })}
+        editable={!disabled}
+        maxLength={SOURCE_COMMAND_MAX_LENGTH}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="node server.js"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>{sourceStartCommandHint(railpack)}</Text>
+
+      <Text style={styles.label}>Output directory</Text>
+      <TextInput
+        value={binding.outputDirectory ?? ''}
+        onChangeText={(outputDirectory) => commit({ outputDirectory })}
+        editable={!disabled}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="dist"
+        placeholderTextColor={colors.textDim}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>{sourceOutputDirectoryHint(railpack)}</Text>
+
+      <Text style={styles.label}>Auto-deploy</Text>
+      <OptionSelect
+        value={row?.autoDeploy ?? 'disabled'}
+        options={REPOSITORY_AUTO_DEPLOY_OPTIONS.map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))}
+        disabled={disabled || !row || autoDeployPending}
+        onChange={onAutoDeploy}
+      />
+      <Text style={styles.hint}>
+        Saved on the repository, not in compose — it applies to every
+        service connected to it, and takes effect immediately.
+      </Text>
+      {autoDeployError ? (
+        <Text style={styles.hintWarn}>{autoDeployError}</Text>
+      ) : null}
+    </>
   )
 }
 
@@ -1021,33 +1267,19 @@ function SourceSection({
 
   const sources = repositoriesQuery.data?.repositories ?? []
   const row = binding ? sources.find((entry) => entry.id === binding.sourceId) : undefined
-  // Omitted means `native` — the same default the compose parser applies, so
-  // an untouched binding reads the same here as it does on the instance.
-  const buildKind: ComposeSourceBuildKind = binding?.buildKind ?? 'native'
-  const containerKind = serviceKind === undefined || serviceKind === 'container'
-  const buildKindOptions = SOURCE_BUILD_KIND_OPTIONS.filter(
-    (option) => containerKind || !option.containerOnly,
-  )
-  const railpack = buildKind === 'railpack'
-
-  const commit = (patch: Partial<ComposeServiceSourceExtension>) => {
-    if (!binding) return
-    const next: ComposeServiceSourceExtension = { ...binding, ...patch }
-    for (const key of [
-      'branch',
-      'subdirectory',
-      'buildCommand',
-      'startCommand',
-      'outputDirectory',
-    ] as const) {
-      const value = next[key]
-      if (typeof value === 'string' && value.trim().length === 0) delete next[key]
-    }
-    // `native` is the default, so writing it out would add a key that says
-    // nothing. Dropping it keeps a plain binding free of TurboPanel noise.
-    if (next.buildKind === 'native') delete next.buildKind
-    onChange(next)
-  }
+  // `undefined` is "not inside a project" (the create wizard's draft, before a
+  // repository is picked) and must not narrow anything; `null` is a project
+  // that has no repository yet and gets the full picker so it can adopt one.
+  const projectRepositoryId = useProjectRepositoryId()
+  const projectRepository = projectRepositoryId
+    ? sources.find((entry) => entry.id === projectRepositoryId)
+    : undefined
+  // A bound project offers its own repository and nothing else: the instance
+  // rejects a second distinct `sourceId` on save, so a longer list would only
+  // be offering a choice that cannot be made.
+  const sourceOptions = projectRepositoryId
+    ? sources.filter((entry) => entry.id === projectRepositoryId)
+    : sources
 
   const setAutoDeploy = (value: string) => {
     if (!row) return
@@ -1056,15 +1288,6 @@ function SourceSection({
       patch: { autoDeploy: value as RepositoryAutoDeploy },
     })
   }
-
-  const unboundPicker = (
-    <UnboundSourcePicker
-      orgId={orgId}
-      disabled={disabled}
-      onSelect={(sourceId) => onChange({ sourceId })}
-      onOpenSources={() => router.push(projectGitSourcesHref(orgId) as Href)}
-    />
-  )
 
   return (
     <View style={styles.fieldBlock}>
@@ -1084,146 +1307,25 @@ function SourceSection({
       </View>
 
       {binding ? (
-        <>
-          <OptionSelect
-            value={binding.sourceId}
-            options={
-              sources.length > 0
-                ? sources.map((entry) => ({
-                    value: entry.id,
-                    label: repositoryLabel(entry),
-                  }))
-                : [{ value: binding.sourceId, label: binding.sourceId }]
-            }
-            disabled={disabled}
-            onChange={(sourceId) => commit({ sourceId })}
-          />
-
-          <Text style={styles.label}>Deployment mode</Text>
-          <OptionSelect
-            value={buildKind}
-            options={buildKindOptions.map((option) => ({
-              value: option.value,
-              label: option.label,
-            }))}
-            disabled={disabled}
-            onChange={(value) =>
-              commit({ buildKind: value as ComposeSourceBuildKind })
-            }
-          />
-          <Text style={styles.hint}>
-            {SOURCE_BUILD_KIND_OPTIONS.find(
-              (option) => option.value === buildKind,
-            )?.hint ?? ''}
-          </Text>
-
-          <Text style={styles.label}>Branch</Text>
-          <TextInput
-            value={binding.branch ?? ''}
-            onChangeText={(branch) => commit({ branch })}
-            editable={!disabled}
-            maxLength={SOURCE_BRANCH_MAX_LENGTH}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder={row?.defaultBranch ?? 'main'}
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.hint}>
-            Leave empty to build the default branch of the connected repository
-            {row?.defaultBranch ? ` (${row.defaultBranch})` : ''}.
-          </Text>
-
-          <Text style={styles.label}>Subdirectory</Text>
-          <TextInput
-            value={binding.subdirectory ?? ''}
-            onChangeText={(subdirectory) => commit({ subdirectory })}
-            editable={!disabled}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="apps/web"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.hint}>
-            Relative path inside the repository to build from — for a monorepo.
-          </Text>
-
-          <Text style={styles.label}>Build command</Text>
-          <TextInput
-            value={binding.buildCommand ?? ''}
-            onChangeText={(buildCommand) => commit({ buildCommand })}
-            editable={!disabled}
-            maxLength={SOURCE_COMMAND_MAX_LENGTH}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="npm run build"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          {railpack ? (
-            <Text style={styles.hint}>
-              Optional under Railpack — it detects a build command on its own,
-              and only uses this one where the language it detected has a slot
-              for it.
-            </Text>
-          ) : null}
-
-          <Text style={styles.label}>Start command</Text>
-          <TextInput
-            value={binding.startCommand ?? ''}
-            onChangeText={(startCommand) => commit({ startCommand })}
-            editable={!disabled}
-            maxLength={SOURCE_COMMAND_MAX_LENGTH}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="node server.js"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.hint}>
-            {railpack
-              ? 'Overrides the start command Railpack detected for the image. Leave empty to use its own.'
-              : 'Only a native (node) service runs a start command; other kinds ignore it.'}
-          </Text>
-
-          <Text style={styles.label}>Output directory</Text>
-          <TextInput
-            value={binding.outputDirectory ?? ''}
-            onChangeText={(outputDirectory) => commit({ outputDirectory })}
-            editable={!disabled}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="dist"
-            placeholderTextColor={colors.textDim}
-            style={styles.input}
-          />
-          <Text style={styles.hint}>
-            {railpack
-              ? 'Not used under Railpack — the release is an image, not a directory. The value is kept but ignored, so switching modes back restores it.'
-              : 'Publishes this directory as the release instead of the whole checkout. Setting it turns off framework detection.'}
-          </Text>
-
-          <Text style={styles.label}>Auto-deploy</Text>
-          <OptionSelect
-            value={row?.autoDeploy ?? 'disabled'}
-            options={REPOSITORY_AUTO_DEPLOY_OPTIONS.map((option) => ({
-              value: option.value,
-              label: option.label,
-            }))}
-            disabled={disabled || !row || updateRepositoryMutation.isPending}
-            onChange={setAutoDeploy}
-          />
-          <Text style={styles.hint}>
-            Saved on the repository, not in compose — it applies to every
-            service connected to it, and takes effect immediately.
-          </Text>
-          {updateRepositoryMutation.actionError ? (
-            <Text style={styles.hintWarn}>{updateRepositoryMutation.actionError}</Text>
-          ) : null}
-        </>
+        <BoundSourceFields
+          binding={binding}
+          row={row}
+          sourceOptions={sourceOptions}
+          serviceKind={serviceKind}
+          disabled={disabled}
+          autoDeployPending={updateRepositoryMutation.isPending}
+          autoDeployError={updateRepositoryMutation.actionError}
+          onChange={onChange}
+          onAutoDeploy={setAutoDeploy}
+        />
       ) : (
-        unboundPicker
+        <UnboundSourcePicker
+          orgId={orgId}
+          disabled={disabled}
+          projectRepository={projectRepository}
+          onSelect={(sourceId) => onChange({ sourceId })}
+          onOpenSources={() => router.push(projectGitSourcesHref(orgId) as Href)}
+        />
       )}
     </View>
   )

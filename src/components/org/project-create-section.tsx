@@ -604,6 +604,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
         name={displayName}
         description={description}
         workspaceId={pickedWorkspaceId}
+        // The Repository card's pick, so the compose surface narrows its Source
+        // controls to it before the project exists — the row adopts the same id
+        // on create. Empty for every other card, which stays unbound.
+        repositoryId={selectedSourceId || null}
         compose={composeDoc}
         initialSection={selectedOption?.section ?? 'compose'}
         creating={submitting}

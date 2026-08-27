@@ -51,6 +51,18 @@ export type ComposeLintOptions = {
    * intentionally still `source`.
    */
   knownSourceIds?: ReadonlySet<string>
+  /**
+   * The repository this project is bound to. Mirrors the instance option: a
+   * repository-backed project *is* its repository, so every
+   * `x-turbopanel.source.sourceId` in the document has to name this row.
+   *
+   * `null` means the project has no binding yet and the rule weakens to "at
+   * most one distinct id" — the save that introduces the first repository is
+   * the one the project adopts it on. Omitted entirely skips the rule, the same
+   * way {@link ComposeLintOptions.knownSourceIds} does, so a surface with no
+   * project context never false-flags.
+   */
+  projectRepositoryId?: string | null
 }
 
 const MANAGED_EXTENSION_WARNING =
@@ -776,7 +788,71 @@ export function lintComposeYaml(
 
   const issues: ComposeLintIssue[] = []
   lintTopLevel(root, lineCounter, issues, options)
+  if (options?.projectRepositoryId !== undefined) {
+    lintSingleRepository(root, lineCounter, options.projectRepositoryId, issues)
+  }
   return issues.sort(compareLintIssues)
+}
+
+/**
+ * Collect every `x-turbopanel.source.sourceId` in the document, in file order.
+ *
+ * A second walk rather than another option threaded through the per-service
+ * pass: the rule is about the document as a whole, and the service walk has no
+ * place to hold what the other services said.
+ */
+function collectServiceSourceIds(
+  root: YAMLMap,
+  lineCounter: LineCounter,
+): { service: string; sourceId: string; line: number | undefined }[] {
+  const servicesNode = mapEntryValue(root, 'services')
+  if (!isMap(servicesNode)) return []
+  const found: { service: string; sourceId: string; line: number | undefined }[] = []
+  for (const item of servicesNode.items) {
+    const service = stringKey(item.key)
+    if (service === null) continue
+    const valueNode = item.value as Node | null | undefined
+    if (!isMap(valueNode)) continue
+    const entry = serviceSourceIdNode(valueNode as YAMLMap)
+    if (!entry?.sourceId) continue
+    const sourceId = entry.sourceId.trim()
+    if (sourceId.length === 0) continue
+    found.push({ service, sourceId, line: nodeLine(entry.node, lineCounter) })
+  }
+  return found
+}
+
+/**
+ * One repository per project — mirrors the instance rule; keep in sync.
+ *
+ * Flags the *second* distinct id and everything after it, never the first: the
+ * first is the project's repository (already bound, or adopted by this very
+ * save), so naming it as the offender would point at the binding the operator
+ * actually wants.
+ */
+function lintSingleRepository(
+  root: YAMLMap,
+  lineCounter: LineCounter,
+  projectRepositoryId: string | null,
+  issues: ComposeLintIssue[],
+): void {
+  const bound = projectRepositoryId?.trim() || null
+  let adopted = bound
+  for (const entry of collectServiceSourceIds(root, lineCounter)) {
+    if (adopted === null) {
+      adopted = entry.sourceId
+      continue
+    }
+    if (entry.sourceId === adopted) continue
+    issues.push({
+      level: 'error',
+      message: bound === null
+        ? 'a project builds from one repository — every service that names a source must name the same one'
+        : `source '${entry.sourceId}' is not this project's repository — a project builds from one repository`,
+      path: `services.${entry.service}.x-turbopanel.source.sourceId`,
+      line: entry.line,
+    })
+  }
 }
 
 /**

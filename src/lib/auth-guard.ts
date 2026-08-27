@@ -23,7 +23,7 @@ export type AuthGuardContext = Readonly<{
 export function resolveAuthGuardHref(ctx: AuthGuardContext): Href | null {
   const { needsInstall, topSegment, developerDevBypass } = ctx
 
-  if (topSegment === 'recovering') {
+  if (topSegment === 'about' || topSegment === 'recovering') {
     return null
   }
 
@@ -98,7 +98,9 @@ function isPublicAuthRoute(topSegment: string | undefined): boolean {
   return (
     topSegment === 'sign-in' ||
     topSegment === 'sign-up' ||
-    topSegment === 'verify-email'
+    topSegment === 'verify-email' ||
+    topSegment === 'about' ||
+    topSegment === 'recovering'
   )
 }
 
@@ -128,6 +130,7 @@ const PUBLIC_ROUTE_SEGMENTS = new Set([
   'recovering',
   'developer',
   'connect',
+  'about',
 ])
 
 function isOrgRoute(topSegment: string | undefined): boolean {

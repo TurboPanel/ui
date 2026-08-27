@@ -43,7 +43,7 @@
 - Web row/tile hover (`bgSecondary`) and selected tint (`bgActive`; cards also accent border)  
 - Hostname subtext (monospace) when distinct from display name  
 - Alternating row tint (`bgInset`) for scanability on the **web Detail** table  
-- OS logo beside name (density-aware PNGs) — no UUID in the primary column  
+- OS mark beside name — licensed density-aware PNG when we ship one (Debian); otherwise the product name as plain text (e.g. Raspberry Pi OS). No UUID in the primary column  
 - Online badge: accent dot + label (country is its own table column on web; stacked under the name on native)  
 - Empty fleet: **Add your first server** (point at the toolbar **+ Server** control) — never “Waiting for this server” / colocated-registering copy. An empty list means this org has no hosts (including a new org on a self-hosted instance). The colocated host is a row (Initializing → Online), not an empty-state wait.
 - Initializing badge: pending (amber) **pulsing** LED + label when `connected` is false and `statusChangedAt` is null — just-registered hosts (including the colocated host after `/install`) while the daemon is still connecting; not Offline. Fleet list refetches every **2 s** while a listed host is Initializing, then returns to 30 s. Honor reduced motion (static amber).  

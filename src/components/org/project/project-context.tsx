@@ -360,3 +360,16 @@ export function useProjectContext(): ProjectContextValue {
   }
   return ctx
 }
+
+/**
+ * The project's repository, when this tree is inside a project at all.
+ *
+ * `undefined` means "no project context" — the compose editor is also rendered
+ * by the create wizard against a draft, and by surfaces that are not a project.
+ * `null` means the project exists and has no repository yet. The two are not
+ * interchangeable: the first must not narrow anything, the second is what lets
+ * an unbound project adopt the first repository someone picks.
+ */
+export function useProjectRepositoryId(): string | null | undefined {
+  return useContext(ProjectContext)?.project?.repositoryId
+}

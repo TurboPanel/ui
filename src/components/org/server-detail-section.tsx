@@ -9,7 +9,6 @@ import {
   type SetStateAction,
 } from 'react'
 import { Link, useRouter, useLocalSearchParams } from 'expo-router'
-import { Image } from 'expo-image'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Pressable,
@@ -21,6 +20,7 @@ import {
 } from 'react-native'
 import { TurboPanelLogoMark } from '@/components/brand/turbopanel-logo'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
+import { OsIdentityMark } from '@/components/org/os-identity-mark'
 import { SectionPanel } from '@/components/org/section-panel'
 import {
   defaultServerCommandState,
@@ -61,7 +61,6 @@ import {
   type CommandRecord,
   type OrgServerRecord,
   type ServerDetailRecord,
-  type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { useCommandRecordsBatch } from '@/lib/queries/commands'
@@ -76,7 +75,6 @@ import {
   useTriggerServerUpdate,
 } from '@/lib/queries/servers'
 import { useCan, queryKeys } from '@/lib/query-client'
-import { osLogoSource } from '@/lib/os-logos'
 import {
   resolveServerConnectionStatus,
   serverConnectionStatusLabel,
@@ -128,14 +126,6 @@ function serverTitle(server: Pick<OrgServerRecord, 'name' | 'hostname' | 'id'>):
 
 function shortCommit(commit?: string | null): string {
   return commit ? commit.slice(0, 12) : 'Unknown'
-}
-
-function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
-  if (server.osLogo) return server.osLogo
-  const id = server.os?.id?.toLowerCase()
-  if (server.os?.variant === 'raspberry-pi-os') return 'raspberry-pi-os'
-  if (id === 'debian') return 'debian'
-  return null
 }
 
 function isColocatedServer(
@@ -704,7 +694,6 @@ export function ServerDetailSection({
 
   const updateVm = deriveServerUpdateViewModel(server, updateState)
   const flag = countryCodeToFlagEmoji(server.geo?.country)
-  const logo = osLogoSource(resolveOsLogoKey(server))
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
   const connectedVia = resolveConnectedViaLabel(server)
@@ -812,9 +801,7 @@ export function ServerDetailSection({
       </Link>
 
       <View style={styles.header}>
-        {logo ? (
-          <Image source={logo} style={styles.osLogo} contentFit="contain" />
-        ) : null}
+        <OsIdentityMark server={server} density="header" />
         <View style={styles.headerText}>
           <Text style={styles.title}>{title}</Text>
           {hostname && hostname !== title ? (
@@ -1198,10 +1185,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     alignItems: 'flex-start',
-  },
-  osLogo: {
-    width: 28,
-    height: 36,
   },
   headerText: {
     flex: 1,

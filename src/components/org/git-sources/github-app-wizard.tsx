@@ -45,7 +45,6 @@ type Identity = {
   name: string
   owner: Owner
   organizationLogin: string
-  systemWide: boolean
   selfHosted: boolean
   baseUrl: string
   apiUrl: string
@@ -58,7 +57,6 @@ function blankIdentity(): Identity {
     name: suggestGithubAppName(),
     owner: 'personal',
     organizationLogin: '',
-    systemWide: false,
     selfHosted: false,
     baseUrl: GITHUB_DOT_COM,
     apiUrl: '',
@@ -141,14 +139,14 @@ function errorMessage(error: unknown, fallback: string): string {
 function IdentityStep({
   identity,
   patch,
-  canBeSystemWide,
+  scope,
   busy,
   onCancel,
   onContinue,
 }: Readonly<{
   identity: Identity
   patch: (next: Partial<Identity>) => void
-  canBeSystemWide: boolean
+  scope: 'admin' | 'org'
   busy: boolean
   onCancel: () => void
   onContinue: () => void
@@ -194,23 +192,14 @@ function IdentityStep({
         )
         : null}
 
-      {canBeSystemWide
-        ? (
-          <FormField
-            label="Availability"
-            hint={identity.systemWide
-              ? 'Registered as a public App so other GitHub accounts can install it. Required for an App every organization shares.'
-              : 'Registered as a private App. GitHub only allows a private App to be installed on the account that owns it.'}
-          >
-            <Checkbox
-              checked={identity.systemWide}
-              onPress={() => patch({ systemWide: !identity.systemWide })}
-              disabled={busy}
-              label="Available to every organization on this instance"
-            />
-          </FormField>
-        )
-        : null}
+      <InlineNotice
+        title={scope === 'admin'
+          ? 'Available to every organization on this instance'
+          : 'Available to this organization only'}
+        body={scope === 'admin'
+          ? 'Apps registered here are always instance-wide, so this one is created public on GitHub — a private App can only be installed on the account that owns it.'
+          : "Apps registered here always belong to this organization, so this one is created private on GitHub. Only an instance administrator can register an instance-wide App, on the instance's own Git sources page."}
+      />
 
       <FormField
         label="GitHub Enterprise"
@@ -383,12 +372,17 @@ function WebhookStep({
  */
 export function GithubAppWizard({
   scope,
-  canBeSystemWide,
   onCancel,
 }: Readonly<{
+  /**
+   * Which surface is registering, and therefore the App's scope — there is no
+   * third option. `admin` writes an instance-wide app (public on GitHub, so
+   * any account can install it); `org` writes one owned by the current
+   * organization. The instance decides this from the endpoint the manifest
+   * flow was started on (`forges/handlers.ts`: `isPublic = organizationId ===
+   * null`), so offering it as a choice here could only ever disagree with it.
+   */
   scope: 'admin' | 'org'
-  /** Instance admins only; drives the App's visibility on GitHub. */
-  canBeSystemWide: boolean
   onCancel: () => void
 }>) {
   const start = useStartGithubAppManifest(scope)
@@ -447,7 +441,7 @@ export function GithubAppWizard({
           <IdentityStep
             identity={identity}
             patch={patch}
-            canBeSystemWide={canBeSystemWide}
+            scope={scope}
             busy={start.isPending}
             onCancel={onCancel}
             onContinue={continueFromIdentity}

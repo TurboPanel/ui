@@ -109,8 +109,10 @@ export function RepositoryPicker({
       })
   }
 
-  // A self-hosted GitLab or a plain SSH remote has no App to enumerate, so the
-  // deploy-key lane is offered beside the App lane rather than behind it.
+  // A self-hosted GitLab, a plain SSH remote, or any public repository has no
+  // App to enumerate, so the clone-URL lane is offered beside the App lane
+  // rather than behind it. It covers both access shapes: anonymous for a public
+  // repository, a generated deploy key for a private one.
   if (deployKeyLane) {
     return (
       <DeployKeySource
@@ -212,7 +214,7 @@ export function RepositoryPicker({
         : null}
 
       <Button
-        label="Use a clone URL and deploy key instead"
+        label="Use a clone URL instead"
         variant="ghost"
         size="sm"
         disabled={busy}

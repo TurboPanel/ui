@@ -2,6 +2,7 @@ import { OverviewNavIcon } from '@/components/icons/nav-icons'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { OsIdentityMark } from '@/components/org/os-identity-mark'
 import { SectionPanel } from '@/components/org/section-panel'
 import { Checkbox, EmptyState, LoadingState } from '@/components/ui'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
@@ -24,11 +25,9 @@ import {
   type FleetServerUsageRecord,
   type OrgServerRecord,
   type RelayRecord,
-  type ServerOsLogoKey,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
-import { osLogoSource } from '@/lib/os-logos'
 import {
   unboundPendingKeys,
   unusedRegistrationKeysLabel,
@@ -53,11 +52,9 @@ import {
   type ServerConnectionStatus,
 } from '@/lib/server-connection-status'
 import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
-import { formatServerOsProductName } from '@/lib/server-os-display'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
@@ -69,7 +66,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  type ImageStyle,
   type ViewStyle,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
@@ -87,14 +83,6 @@ function overlayByServerId(
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
-function resolveOsLogoKey(server: OrgServerRecord): ServerOsLogoKey | null {
-  if (server.osLogo) return server.osLogo
-  const id = server.os?.id?.toLowerCase()
-  if (server.os?.variant === 'raspberry-pi-os') return 'raspberry-pi-os'
-  if (id === 'debian') return 'debian'
-  return null
 }
 
 function isColocatedServer(
@@ -370,22 +358,13 @@ function ServersOverviewToolbar({
 }
 
 function ServerHostIdentity({ server }: Readonly<{ server: OrgServerRecord }>) {
-  const osProduct = formatServerOsProductName(server.os, server.osDisplay) ?? '—'
-  const logo = osLogoSource(resolveOsLogoKey(server))
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
   const showHostname = hostname != null && hostname.length > 0 && hostname !== title
 
   return (
     <View style={styles.nameButton}>
-      {logo ? (
-        <Image
-          source={logo}
-          style={styles.osLogoBesideName as ImageStyle}
-          contentFit="contain"
-          accessibilityLabel={osProduct === '—' ? 'OS' : osProduct}
-        />
-      ) : null}
+      <OsIdentityMark server={server} density="row" />
       <View style={styles.nameBlock}>
         <Text style={styles.nameText} numberOfLines={1}>
           {title}
@@ -1338,14 +1317,6 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     alignItems: 'center',
-  },
-  osLogoBesideName: {
-    width: 18,
-    height: 24,
-    flexShrink: 0,
-    alignSelf: 'center',
-    marginRight: spacing.xs,
-    opacity: 0.9,
   },
   nameButton: {
     flexDirection: 'row',

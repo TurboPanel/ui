@@ -50,6 +50,16 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Check vocabulary
+        run: pnpm check:vocabulary
+
+      - name: Check third-party notices
+        run: pnpm notices:check
+
+      # Clean-checkout CI is JS-only (`notices:check --js-only`). Native
+      # CocoaPods / Gradle / AAR graphs are required by `pnpm notices:check:native`
+      # after Expo prebuild / EAS (`eas-build-post-install --native`).
+
       - name: Typecheck
         run: pnpm typecheck
 

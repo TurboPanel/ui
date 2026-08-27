@@ -18,6 +18,43 @@ describe('resolveAuthGuardHref', () => {
         developerDevBypass: false,
       }),
     ).toBeNull()
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'recovering',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'recovering',
+        developerDevBypass: false,
+        needsControlPlane: true,
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps About reachable without a session, including during install', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'about',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'about',
+        developerDevBypass: false,
+        needsControlPlane: true,
+      }),
+    ).toBeNull()
   })
 
   it('sends unsigned hosts to install when setup is required', () => {

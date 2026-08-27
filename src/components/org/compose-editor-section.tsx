@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
+import { useProjectRepositoryId } from '@/components/org/project/project-context'
 import {
   ComposeDocumentView,
   type ComposeDocFacts,
@@ -889,9 +890,14 @@ export function ComposeEditorSection({
     try {
       const edited = currentDocument()
       const next = documentForSave(edited, tab)
-      // Blocking lint on full document YAML — matches instance validateComposeDocument.
+      // Blocking lint on full document YAML — matches instance
+      // validateComposeDocument, including the one-repository-per-project rule.
+      // `undefined` (no project context) leaves that rule skipped, exactly as
+      // the instance does for a caller that cannot resolve a project.
       const blocking = blockingComposeLintIssues(
-        lintComposeYaml(composeDocumentToYaml(next)),
+        lintComposeYaml(composeDocumentToYaml(next), {
+          ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+        }),
       )
       if (blocking.length > 0) {
         setShowSaveLint(true)
@@ -1045,6 +1051,8 @@ export function ComposeEditorSection({
       data: { ...draft.data, services: { ...services, [name]: { image: '' } } },
     })
   }
+
+  const projectRepositoryId = useProjectRepositoryId()
 
   const lintIssues = useMemo<ComposeLintIssue[]>(() => {
     // Lint the *visible* text so line numbers match the textarea. Site

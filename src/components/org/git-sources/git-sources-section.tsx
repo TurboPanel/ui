@@ -243,7 +243,6 @@ export function GitSourcesSection({
         ? (
           <GithubAppWizard
             scope={scope}
-            canBeSystemWide={scope === 'admin'}
             onCancel={() => setWizard(false)}
           />
         )

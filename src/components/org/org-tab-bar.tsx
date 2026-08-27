@@ -25,7 +25,7 @@ export function orgTabBarOccupiedHeight(safeBottom: number): number {
 /**
  * Native bottom tabs — plain fill + top hairline only.
  *
- * Avoid {@link GlassSurface}/GlassView: liquid glass paints a system rim on
+ * Avoid {@link GlassSurface}/GlassView: native glass paints a system rim on
  * every edge that looks wrong against rounded device screens.
  *
  * Layout matches platform tab bars: a fixed content row (icon + label) sits

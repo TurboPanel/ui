@@ -661,3 +661,97 @@ describe('compose key classifiers', () => {
     expect(isComposeServicePropertyKey('zzzz')).toBe(false)
   })
 })
+
+describe('one repository per project', () => {
+  const REPO_A = '11111111-2222-3333-4444-555555555555'
+  const REPO_B = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+  const twoRepositories = `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: ${REPO_A}
+  jobs:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: ${REPO_B}
+`
+
+  it('skips the rule when there is no project context', () => {
+    expect(
+      lintComposeYaml(twoRepositories).some((issue) =>
+        issue.message.includes('one repository'),
+      ),
+    ).toBe(false)
+  })
+
+  it('rejects a second repository on an unbound project, flagging the second', () => {
+    const issues = lintComposeYaml(twoRepositories, { projectRepositoryId: null })
+    expect(
+      issues.some(
+        (issue) =>
+          issue.level === 'error' &&
+          issue.path === 'services.jobs.x-turbopanel.source.sourceId',
+      ),
+    ).toBe(true)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.level === 'error' &&
+          issue.path === 'services.web.x-turbopanel.source.sourceId',
+      ),
+    ).toBe(false)
+    expect(blockingComposeLintIssues(issues).length).toBeGreaterThan(0)
+  })
+
+  it('accepts a monorepo — several services, one repository', () => {
+    const issues = lintComposeYaml(
+      `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: ${REPO_A}
+        subdirectory: apps/web
+  api:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: ${REPO_A}
+        subdirectory: apps/api
+`,
+      { projectRepositoryId: REPO_A },
+    )
+    expect(
+      issues.some((issue) => issue.message.includes('one repository')),
+    ).toBe(false)
+  })
+
+  it("rejects a source that is not the bound project's repository", () => {
+    const issues = lintComposeYaml(
+      `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      source:
+        sourceId: ${REPO_B}
+`,
+      { projectRepositoryId: REPO_A },
+    )
+    const offender = issues.find(
+      (issue) => issue.path === 'services.web.x-turbopanel.source.sourceId',
+    )
+    expect(offender?.level).toBe('error')
+    expect(offender?.message).toContain(REPO_B)
+  })
+
+  it('leaves a project whose services name no repository alone', () => {
+    expect(
+      lintComposeYaml(`services:\n  db:\n    image: postgres:17\n`, {
+        projectRepositoryId: null,
+      }).some((issue) => issue.message.includes('one repository')),
+    ).toBe(false)
+  })
+})

@@ -18,7 +18,7 @@
 
 TurboPanel is a **dark-first ops console** — deep OLED blacks, one electric green for "live / go", dense scannable tables, zero decorative fluff. Speed is the brand; the UI should feel like a precise instrument, not a marketing site.
 
-**Style blend:** Dark Mode (OLED) + Soft UI Evolution + **Liquid glass** (restrained frosted chrome) — not cyberpunk neon, not light SaaS purple, not iridescent chromatic aberration.
+**Style blend:** Dark Mode (OLED) + Soft UI Evolution + **frosted chrome** — not cyberpunk neon, not light SaaS purple, not iridescent chromatic aberration.
 
 ---
 
@@ -82,7 +82,7 @@ Layout constants: `sidebarWidth` 220, `contentMaxWidth` 1400, `desktopBreakpoint
 - Radius: **8px** controls/inputs, **10–12px** panels — not pill-everything  
 - Shadows only for floating menus/modals (`overlay` + slight lift); no multi-layer neumorphism
 
-### Liquid glass (secondary polish)
+### Frosted chrome (secondary polish)
 
 Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/components/glass/glass-surface.tsx`.
 
@@ -96,7 +96,7 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 
 **Where to use:** sticky header, sidebars / drawer, auth form panel (over the grid wash), `SectionPanel` shells, floating menus.  
 **Where not:** dense table cells, chart plots, monospace log blocks, every nested inset.  
-**Native:** iOS 26+ uses `expo-glass-effect` `GlassView` when `isLiquidGlassAvailable()`; web uses CSS blur; other platforms get translucent fill only.  
+**Native:** iOS 26+ uses `expo-glass-effect` `GlassView` when the native glass API is available; web uses CSS blur; other platforms get translucent fill only.  
 **A11y / perf:** honor `prefers-reduced-transparency` when available; keep text contrast ≥ 4.5:1 on frosted fills; avoid stacking many large blurred regions.
 
 ---
@@ -205,12 +205,12 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 ## Style Guidelines
 
 **Primary style:** Dark Mode (OLED)  
-**Secondary polish:** Soft elevation + **Liquid glass** (frosted chrome via `GlassSurface` / `glass.*` tokens)  
+**Secondary polish:** Soft elevation + **frosted chrome** (via `GlassSurface` / `glass.*` tokens)  
 
 **Keywords:** dense, scannable, ops, instrument, green live, monochrome chrome, hairline borders, frosted glass, Reanimated micro-motion  
 
 **Key effects (keep restrained):**
-- Liquid-glass chrome on shell surfaces (header, sidebar, auth panel, section shells)  
+- Frosted chrome on shell surfaces (header, sidebar, auth panel, section shells)  
 - Staggered fade-in on first paint (Y 8–12 → 0, opacity 0 → 1, 150–250ms)  
 - Status dot pulse only for *live* connected state  
 - Spring modals (`damping ~20`, `stiffness ~90`)  
@@ -246,7 +246,7 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 - ❌ Light-mode-first layouts or cream/serif "AI brochure" looks  
 - ❌ Purple / indigo gradient SaaS clichés  
 - ❌ Neon cyberpunk / matrix green / glitch / scanlines  
-- ❌ Full iridescent / chromatic-aberration “liquid glass” marketing excess on ops chrome  
+- ❌ Full iridescent / chromatic-aberration marketing excess on ops chrome  
 - ❌ Glass on every dense table cell or chart (blur cost + contrast risk)  
 - ❌ Emoji as icons  
 - ❌ Decorative card grids in the hero or overview chrome  

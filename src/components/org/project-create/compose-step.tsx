@@ -32,6 +32,7 @@ export function ComposeStep({
   name,
   description,
   workspaceId,
+  repositoryId = null,
   compose,
   initialSection,
   creating,
@@ -46,6 +47,14 @@ export function ComposeStep({
   description: string
   /** Empty until the workspace is resolved at create time — display only. */
   workspaceId: string
+  /**
+   * The repository the Repository card picked, if any.
+   *
+   * Carried onto the draft record so the compose surface narrows its Source
+   * pickers to it exactly as it will once the project exists — the row adopts
+   * this same id on create, from the compose the draft carries.
+   */
+  repositoryId?: string | null
   compose: ComposeDocument
   /** Tab this step opens on — Compose for the Compose card, Services for Services. */
   initialSection: ComposeProjectTabId
@@ -67,6 +76,7 @@ export function ComposeStep({
       name: name.trim() || null,
       description: description.trim() || null,
       workspaceId,
+      repositoryId,
       metadata: { type: 'docker-compose' },
       options: { compose },
       // Timestamps are display-only here and nothing in the surface reads them
@@ -74,7 +84,7 @@ export function ComposeStep({
       createdAt: '',
       updatedAt: '',
     }),
-    [name, description, workspaceId, compose],
+    [name, description, workspaceId, repositoryId, compose],
   )
 
   const draft = useMemo<ProjectDraft>(

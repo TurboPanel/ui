@@ -1032,7 +1032,13 @@ async function apiFetch<T>(
   return (await response.json()) as T
 }
 
-export async function fetchHealth(): Promise<{ ok: boolean }> {
+export type HealthResponse = {
+  ok: boolean
+  license?: string
+  revision?: { commit: string; sourceUrl: string }
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
   return await apiFetch('/api/health')
 }
 
@@ -1256,6 +1262,19 @@ export type ProjectRecord = {
   name: string | null
   description: string | null
   workspaceId: string
+  /**
+   * The one Git repository this project is, or `null` when it is not
+   * repository-backed.
+   *
+   * **A repository-backed project is its repository**, so every
+   * `x-turbopanel.source.sourceId` in the project's compose has to name this
+   * row — the instance rejects a save that names a second one. Services still
+   * carry their own source block for `branch` / `subdirectory` /
+   * `buildCommand`, which is how one checkout builds two services out of a
+   * monorepo. A project with no binding adopts the first repository its compose
+   * names, so the create wizard does not have to send this field.
+   */
+  repositoryId: string | null
   metadata: {
     /**
      * Read-side type stamp. `system` is platform-owned and read-only — this
