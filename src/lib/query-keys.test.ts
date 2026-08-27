@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { TaggableParentKey } from '@/lib/instance-api'
 import {
   getAccessManagementPermissionKey,
   isVisibilityQuery,
@@ -266,7 +267,7 @@ describe('queryKeys.org(…) remaining factories', () => {
     ])
   })
 
-  it('builds storage, project, environment, and source keys', () => {
+  it('builds storage, project, environment, and repository keys', () => {
     const org = queryKeys.org('org-1')
     expect(org.storage.list({ projectId: 'p1' })).toEqual([
       'org',
@@ -311,14 +312,61 @@ describe('queryKeys.org(…) remaining factories', () => {
       'releases',
       'all',
     ])
-    expect(org.sources.repositories('inst-1')).toEqual([
+    expect(org.repositories.connectionRepositories('inst-1')).toEqual([
       'org',
       'org-1',
-      'sources',
-      'installations',
+      'repositories',
+      'connections',
       'inst-1',
       'repositories',
     ])
+    expect(org.tags.forEntity('projectId', 'p1')).toEqual([
+      'org',
+      'org-1',
+      'tags',
+      'entity',
+      'projectId',
+      'p1',
+    ])
+    expect(org.tags.markers('tag-1')).toEqual([
+      'org',
+      'org-1',
+      'tags',
+      'tag-1',
+      'markers',
+    ])
+    expect(org.tasks.list({ serviceId: 'svc-1' })).toEqual([
+      'org',
+      'org-1',
+      'tasks',
+      'serviceId',
+      'svc-1',
+    ])
+    expect(org.tasks.detail('task-1')).toEqual([
+      'org',
+      'org-1',
+      'tasks',
+      'detail',
+      'task-1',
+    ])
+  })
+
+  it('constrains tags.forEntity to the taggable parent-key union', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.tags.forEntity('projectId', 'p1')).toEqual([
+      'org',
+      'org-1',
+      'tags',
+      'entity',
+      'projectId',
+      'p1',
+    ])
+    function forEntityKind(kind: TaggableParentKey): void {
+      org.tags.forEntity(kind, 'p1')
+    }
+    forEntityKind('projectId')
+    // @ts-expect-error arbitrary parent key
+    forEntityKind('hostingId')
   })
 
   it('builds command and server metric keys', () => {
@@ -370,24 +418,22 @@ describe('queryKeys.org(…) remaining factories', () => {
     expect(queryKeys.org('org-1').all).toEqual(['org', 'org-1'])
   })
 
-  it('builds auth.session and scope-separated git app keys', () => {
+  it('builds auth.session and scope-separated forge keys', () => {
     expect(queryKeys.auth.session).toEqual(['auth', 'session'])
-    expect(queryKeys.admin.gitApps).toEqual([
+    expect(queryKeys.admin.forges).toEqual([
       'admin',
       'settings',
-      'git',
-      'apps',
+      'forges',
     ])
-    // The org collection also contains instance-wide apps, and its readOnly
+    // The org collection also contains instance-wide forges, and its readOnly
     // flags differ per org, so it is keyed by organization — never shared with
     // the admin list or with another org's.
-    expect(queryKeys.org('org-1').gitApps).toEqual([
+    expect(queryKeys.org('org-1').forges).toEqual([
       'org',
       'org-1',
-      'git',
-      'apps',
+      'forges',
     ])
-    expect(queryKeys.org('org-1').gitApps).not.toEqual(queryKeys.admin.gitApps)
+    expect(queryKeys.org('org-1').forges).not.toEqual(queryKeys.admin.forges)
   })
 
   it('builds managed leaf factories under the managed prefix', () => {

@@ -26,7 +26,7 @@ import {
   fetchDatacenters,
   fetchDeployPreview,
   fetchEnvironment,
-  fetchGitApps,
+  fetchForges,
   fetchLicenses,
   fetchOrgHostDefaults,
   fetchOrganization,
@@ -53,8 +53,8 @@ import {
   retireOrganizationCa,
   rotateOrganizationCa,
   runEnvironmentLifecycle,
-  createGitApp,
-  updateGitApp,
+  createForge,
+  updateForge,
   saveOrgFabric,
   saveOrgHostDefaults,
   setServerHostname,
@@ -745,7 +745,7 @@ describe('instance-api fetch wrappers', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/tls/ca/retire')
   })
 
-  it('lists git apps from the scope-appropriate collection', async () => {
+  it('lists forges from the scope-appropriate collection', async () => {
     const app = {
       id: 'app-1',
       organizationId: null,
@@ -767,13 +767,13 @@ describe('instance-api fetch wrappers', () => {
     }
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ apps: [app] }))
-    await expect(fetchGitApps('admin')).resolves.toEqual([app])
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/git/apps')
+    await expect(fetchForges('admin')).resolves.toEqual([app])
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/forges')
 
     // The org surface is a different collection, not the same one filtered.
     fetchMock.mockResolvedValueOnce(jsonResponse({ apps: [] }))
-    await expect(fetchGitApps('org')).resolves.toEqual([])
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/client/v1/git/apps')
+    await expect(fetchForges('org')).resolves.toEqual([])
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/client/v1/forges')
   })
 
   it('POSTs a create and PATCHes only the supplied patch keys', async () => {
@@ -781,7 +781,7 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ app }))
     await expect(
-      createGitApp('admin', {
+      createForge('admin', {
         provider: 'github',
         name: 'TurboPanel',
         externalAppId: '123456',
@@ -792,10 +792,10 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ app }))
     await expect(
-      updateGitApp('org', 'app-1', { name: 'Renamed', clientId: null }),
+      updateForge('org', 'app-1', { name: 'Renamed', clientId: null }),
     ).resolves.toEqual(app)
     const [url, init] = fetchMock.mock.calls[1] ?? []
-    expect(String(url)).toContain('/api/client/v1/git/apps/app-1')
+    expect(String(url)).toContain('/api/client/v1/forges/app-1')
     expect((init as RequestInit).method).toBe('PATCH')
     // Omitted keys must stay omitted, or a rename would clear a sealed secret.
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({

@@ -16,14 +16,14 @@ import { gitWebhookHint } from '@/lib/git-webhook-url'
 import {
   githubAppInstallUrl,
   gitlabOauthConnectUrl,
-  type GitAppSummary,
-  type GitInstallationRecord,
+  type ForgeSummary,
+  type GitConnectionRecord,
 } from '@/lib/instance-api'
-import { usePublicUrlsOptional, useGitApps, useSyncGitApp } from '@/lib/queries/admin'
-import { useGitInstallations } from '@/lib/queries/releases'
+import { usePublicUrlsOptional, useForges, useSyncForge } from '@/lib/queries/admin'
+import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
 
-export type { GitAppSummary } from '@/lib/instance-api'
+export type { ForgeSummary } from '@/lib/instance-api'
 
 /** Whatever the panels have to say back to the page header. */
 type ReportMessage = (message: string | null) => void
@@ -62,7 +62,7 @@ function returnNotice(
 }
 
 /** One connected account. */
-function InstallationRow({ row }: Readonly<{ row: GitInstallationRecord }>) {
+function ConnectionRow({ row }: Readonly<{ row: GitConnectionRecord }>) {
   return (
     <View style={styles.account}>
       <MonoText>{row.accountLogin ?? row.externalInstallationId}</MonoText>
@@ -82,12 +82,12 @@ function InstallationRow({ row }: Readonly<{ row: GitInstallationRecord }>) {
  */
 function RepositoryAccessPanel({
   app,
-  installations,
+  connections,
   loading,
   onError,
 }: Readonly<{
-  app: GitAppSummary
-  installations: readonly GitInstallationRecord[]
+  app: ForgeSummary
+  connections: readonly GitConnectionRecord[]
   loading: boolean
   onError: ReportMessage
 }>) {
@@ -106,7 +106,7 @@ function RepositoryAccessPanel({
     >
       {loading ? <LoadingState /> : null}
 
-      {!loading && installations.length === 0 ? (
+      {!loading && connections.length === 0 ? (
         <InlineNotice
           title="Complete GitHub installation"
           body="Repository access has not been installed yet. Complete this step before attaching the source to an application."
@@ -122,11 +122,11 @@ function RepositoryAccessPanel({
         />
       ) : null}
 
-      {installations.map((row) => (
-        <InstallationRow key={row.id} row={row} />
+      {connections.map((row) => (
+        <ConnectionRow key={row.id} row={row} />
       ))}
 
-      {installations.length > 0 ? (
+      {connections.length > 0 ? (
         <ButtonRow align="end">
           <Button
             label={isGithub ? 'Add another account' : 'Connect another account'}
@@ -141,7 +141,7 @@ function RepositoryAccessPanel({
 }
 
 /** Where this application's deliveries arrive, and whether they can reach us. */
-function WebhookPanel({ app }: Readonly<{ app: GitAppSummary }>) {
+function WebhookPanel({ app }: Readonly<{ app: ForgeSummary }>) {
   const publicUrls = usePublicUrlsOptional()
   const unreachable =
     publicUrls.data && app.webhookUrl
@@ -182,12 +182,12 @@ function ProviderRecordPanel({
   onError,
   onSynced,
 }: Readonly<{
-  app: GitAppSummary
+  app: ForgeSummary
   scope: 'admin' | 'org'
   onError: ReportMessage
   onSynced: ReportMessage
 }>) {
-  const sync = useSyncGitApp(scope)
+  const sync = useSyncForge(scope)
 
   return (
     <SectionPanel title="Provider record" hint="What GitHub currently holds for this application">
@@ -224,20 +224,20 @@ function ProviderRecordPanel({
  * One registered application: what it is, where its deliveries arrive, and —
  * when it has no connected accounts yet — the step that is still missing.
  */
-export function GitAppDetailSection({
+export function ForgeDetailSection({
   orgId,
   appId,
   scope = 'org',
 }: Readonly<{ orgId: string; appId: string; scope?: 'admin' | 'org' }>) {
-  const appsQuery = useGitApps(scope)
-  const installationsQuery = useGitInstallations(orgId, { enabled: orgId.length > 0 })
+  const appsQuery = useForges(scope)
+  const connectionsQuery = useGitConnections(orgId, { enabled: orgId.length > 0 })
   const params = useLocalSearchParams<{ installed?: string; error?: string }>()
   const [error, setError] = useState<string | null>(null)
   const [synced, setSynced] = useState<string | null>(null)
 
   const app = (appsQuery.data ?? []).find((entry) => entry.id === appId)
-  const installations = (installationsQuery.data?.installations ?? []).filter(
-    (row) => row.appId === appId
+  const connections = (connectionsQuery.data?.connections ?? []).filter(
+    (row) => row.forgeId === appId
   )
   const notice = returnNotice(params)
 
@@ -264,15 +264,15 @@ export function GitAppDetailSection({
       {synced ? <Text style={styles.success}>{synced}</Text> : null}
 
       {/*
-        Installations are recorded per organization, so an instance-wide view
+        Connections are recorded per organization, so an instance-wide view
         has no account list to show — offering one would either be empty or
         another organization's.
       */}
       {orgId ? (
         <RepositoryAccessPanel
           app={app}
-          installations={installations}
-          loading={installationsQuery.isLoading}
+          connections={connections}
+          loading={connectionsQuery.isLoading}
           onError={setError}
         />
       ) : null}

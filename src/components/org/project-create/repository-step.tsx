@@ -5,8 +5,9 @@ import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
 import { Button, MonoText, TextField } from '@/components/ui'
 import { SOURCE_BRANCH_MAX_LENGTH } from '@/lib/compose/service-kind'
+import type { RepositoryRecord } from '@/lib/instance-api'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
-import { useSources } from '@/lib/queries'
+import { useRepositories } from '@/lib/queries'
 import { colors, spacing } from '@/lib/theme'
 
 /**
@@ -14,15 +15,15 @@ import { colors, spacing } from '@/lib/theme'
  * builds from, and optionally the ref.
  *
  * The picker is hierarchical — **application → account → repository** — and
- * attaching is what creates the underlying `source` row. That is the change
+ * attaching is what creates the underlying `repository` row. That is the change
  * from the previous flow, where a repository had to be connected on a separate
  * org-level page first and this step could only choose from what was already
  * there. Bindings are no longer something an operator manages on their own; one
  * is made here, on demand, and reused if the same repository is picked again.
  *
  * The step still commits nothing itself: the caller turns the selection into a
- * compose draft (`repository-seed.ts`) and hands it to `ComposeStep`, where the
- * single Create writes the project.
+ * compose draft (`src/lib/project-create/repository-seed.ts`) and hands it to
+ * `ComposeStep`, where the single Create writes the project.
  */
 export function RepositoryStep({
   orgId,
@@ -36,16 +37,16 @@ export function RepositoryStep({
   selectedSourceId: string
   branch: string
   disabled?: boolean
-  onSelectSourceId: (sourceId: string) => void
+  onSelectSourceId: (sourceId: string, record?: RepositoryRecord) => void
   onBranchChange: (branch: string) => void
 }>) {
   const router = useRouter()
-  const sourcesQuery = useSources(orgId)
+  const repositoriesQuery = useRepositories(orgId)
   const [pickedLabel, setPickedLabel] = useState('')
 
   const sources = useMemo(
-    () => sourcesQuery.data?.sources ?? [],
-    [sourcesQuery.data?.sources],
+    () => repositoriesQuery.data?.repositories ?? [],
+    [repositoriesQuery.data?.repositories],
   )
   const selected = sources.find((source) => source.id === selectedSourceId) ?? null
 
@@ -55,9 +56,9 @@ export function RepositoryStep({
         <RepositoryPicker
           orgId={orgId}
           disabled={disabled}
-          onPick={(sourceId, repository) => {
+          onPick={(sourceId, repository, record) => {
             setPickedLabel(repository?.fullName ?? '')
-            onSelectSourceId(sourceId)
+            onSelectSourceId(sourceId, record)
           }}
           onNeedsApp={() => router.push(projectGitSourcesHref(orgId) as Href)}
         />

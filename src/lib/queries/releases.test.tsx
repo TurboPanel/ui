@@ -6,42 +6,45 @@ import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import {
   invalidateEnvironmentReleases,
   useCreateGitlabDeployKey,
-  useCreateSource,
-  useDeleteSource,
-  useGitInstallations,
-  useInstallationRepositories,
+  useCreateRepository,
+  useDeleteRepository,
+  useGitConnections,
+  useConnectionRepositories,
   useRollbackEnvironment,
   useServiceReleases,
-  useSourceDetail,
-  useSourceInspection,
-  useSources,
-  useUpdateSource,
+  useRepositoryDetail,
+  useRepositoryInspection,
+  useRepositories,
+  useUpdateRepository,
+  useAttachRepository,
 } from '@/lib/queries/releases'
 
 const {
   fetchServiceReleases,
   rollbackEnvironment,
-  fetchSources,
-  fetchSource,
-  inspectSource,
-  fetchGitInstallations,
-  fetchInstallationRepositories,
-  createSource,
+  fetchRepositories,
+  fetchRepository,
+  inspectRepository,
+  fetchGitConnections,
+  fetchConnectionRepositories,
+  createRepository,
+  attachRepository,
   createGitlabDeployKey,
-  updateSource,
-  deleteSource,
+  updateRepository,
+  deleteRepository,
 } = vi.hoisted(() => ({
   fetchServiceReleases: vi.fn(),
   rollbackEnvironment: vi.fn(),
-  fetchSources: vi.fn(),
-  fetchSource: vi.fn(),
-  inspectSource: vi.fn(),
-  fetchGitInstallations: vi.fn(),
-  fetchInstallationRepositories: vi.fn(),
-  createSource: vi.fn(),
+  fetchRepositories: vi.fn(),
+  fetchRepository: vi.fn(),
+  inspectRepository: vi.fn(),
+  fetchGitConnections: vi.fn(),
+  fetchConnectionRepositories: vi.fn(),
+  createRepository: vi.fn(),
+  attachRepository: vi.fn(),
   createGitlabDeployKey: vi.fn(),
-  updateSource: vi.fn(),
-  deleteSource: vi.fn(),
+  updateRepository: vi.fn(),
+  deleteRepository: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -50,15 +53,16 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     ...actual,
     fetchServiceReleases,
     rollbackEnvironment,
-    fetchSources,
-    fetchSource,
-    inspectSource,
-    fetchGitInstallations,
-    fetchInstallationRepositories,
-    createSource,
+    fetchRepositories,
+    fetchRepository,
+    inspectRepository,
+    fetchGitConnections,
+    fetchConnectionRepositories,
+    createRepository,
+    attachRepository,
     createGitlabDeployKey,
-    updateSource,
-    deleteSource,
+    updateRepository,
+    deleteRepository,
   }
 })
 
@@ -75,8 +79,8 @@ afterEach(() => {
 describe('releases query hooks', () => {
   const orgId = 'org-1'
   const environmentId = 'env-1'
-  const sourceId = 'src-1'
-  const installationId = 'inst-1'
+  const repositoryId = 'src-1'
+  const connectionId = 'inst-1'
 
   it('useServiceReleases loads releases for an environment', async () => {
     fetchServiceReleases.mockResolvedValueOnce({ releases: [] })
@@ -166,139 +170,139 @@ describe('releases query hooks', () => {
     })
   })
 
-  it('useSources loads org repository bindings', async () => {
-    fetchSources.mockResolvedValueOnce({ sources: [] })
+  it('useRepositories loads org repository bindings', async () => {
+    fetchRepositories.mockResolvedValueOnce({ repositories: [] })
 
-    const { result } = renderHook(() => useSources(orgId), {
+    const { result } = renderHook(() => useRepositories(orgId), {
       wrapper: createWrapper(),
     })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchSources).toHaveBeenCalled()
+    expect(fetchRepositories).toHaveBeenCalled()
   })
 
-  it('useSources stays idle when orgId is empty', () => {
-    const { result } = renderHook(() => useSources(''), {
+  it('useRepositories stays idle when orgId is empty', () => {
+    const { result } = renderHook(() => useRepositories(''), {
       wrapper: createWrapper(),
     })
     expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchSources).not.toHaveBeenCalled()
+    expect(fetchRepositories).not.toHaveBeenCalled()
   })
 
-  it('useSourceDetail stays off by default', () => {
+  it('useRepositoryDetail stays off by default', () => {
     const { result } = renderHook(
-      () => useSourceDetail(orgId, sourceId),
+      () => useRepositoryDetail(orgId, repositoryId),
       { wrapper: createWrapper() },
     )
     expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchSource).not.toHaveBeenCalled()
+    expect(fetchRepository).not.toHaveBeenCalled()
   })
 
-  it('useSourceDetail loads when explicitly enabled', async () => {
-    fetchSource.mockResolvedValueOnce({
-      source: { id: sourceId, name: 'repo' },
+  it('useRepositoryDetail loads when explicitly enabled', async () => {
+    fetchRepository.mockResolvedValueOnce({
+      repository: { id: repositoryId, name: 'repo' },
     })
 
     const { result } = renderHook(
-      () => useSourceDetail(orgId, sourceId, { enabled: true }),
+      () => useRepositoryDetail(orgId, repositoryId, { enabled: true }),
       { wrapper: createWrapper() },
     )
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchSource).toHaveBeenCalledWith(sourceId)
+    expect(fetchRepository).toHaveBeenCalledWith(repositoryId)
   })
 
-  it('useSourceInspection stays off by default', () => {
+  it('useRepositoryInspection stays off by default', () => {
     const { result } = renderHook(
-      () => useSourceInspection(orgId, sourceId, 'main'),
+      () => useRepositoryInspection(orgId, repositoryId, 'main'),
       { wrapper: createWrapper() },
     )
     expect(result.current.fetchStatus).toBe('idle')
-    expect(inspectSource).not.toHaveBeenCalled()
+    expect(inspectRepository).not.toHaveBeenCalled()
   })
 
-  it('useSourceInspection loads when explicitly enabled', async () => {
-    inspectSource.mockResolvedValueOnce({ files: [] })
+  it('useRepositoryInspection loads when explicitly enabled', async () => {
+    inspectRepository.mockResolvedValueOnce({ files: [] })
 
     const { result } = renderHook(
       () =>
-        useSourceInspection(orgId, sourceId, 'main', { enabled: true }),
+        useRepositoryInspection(orgId, repositoryId, 'main', { enabled: true }),
       { wrapper: createWrapper() },
     )
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(inspectSource).toHaveBeenCalledWith(sourceId, 'main')
+    expect(inspectRepository).toHaveBeenCalledWith(repositoryId, 'main')
   })
 
-  it('useGitInstallations loads provider connections', async () => {
-    fetchGitInstallations.mockResolvedValueOnce({ installations: [] })
+  it('useGitConnections loads provider connections', async () => {
+    fetchGitConnections.mockResolvedValueOnce({ connections: [] })
 
-    const { result } = renderHook(() => useGitInstallations(orgId), {
+    const { result } = renderHook(() => useGitConnections(orgId), {
       wrapper: createWrapper(),
     })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchGitInstallations).toHaveBeenCalled()
+    expect(fetchGitConnections).toHaveBeenCalled()
   })
 
-  it('useInstallationRepositories stays idle without installation id', () => {
+  it('useConnectionRepositories stays idle without connection id', () => {
     const { result } = renderHook(
-      () => useInstallationRepositories(orgId, ''),
+      () => useConnectionRepositories(orgId, ''),
       { wrapper: createWrapper() },
     )
     expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchInstallationRepositories).not.toHaveBeenCalled()
+    expect(fetchConnectionRepositories).not.toHaveBeenCalled()
   })
 
-  it('useInstallationRepositories loads repositories for one connection', async () => {
-    fetchInstallationRepositories.mockResolvedValueOnce({ repositories: [] })
+  it('useConnectionRepositories loads repositories for one connection', async () => {
+    fetchConnectionRepositories.mockResolvedValueOnce({ repositories: [] })
 
     const { result } = renderHook(
-      () => useInstallationRepositories(orgId, installationId),
+      () => useConnectionRepositories(orgId, connectionId),
       { wrapper: createWrapper() },
     )
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchInstallationRepositories).toHaveBeenCalledWith(installationId)
+    expect(fetchConnectionRepositories).toHaveBeenCalledWith(connectionId)
   })
 
-  it('useCreateSource invalidates the sources cache', async () => {
-    createSource.mockResolvedValueOnce({ ok: true, id: 'src-2' })
+  it('useCreateRepository invalidates the repositories cache', async () => {
+    createRepository.mockResolvedValueOnce({ ok: true, id: 'src-2' })
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(() => useCreateSource(orgId), {
+    const { result } = renderHook(() => useCreateRepository(orgId), {
       wrapper: createWrapper(client),
     })
 
     await expect(
       result.current.run({
         provider: 'github',
-        installationId,
+        connectionId,
         repositoryUrl: 'https://github.com/org/repo.git',
       }),
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     })
   })
 
-  it('useCreateGitlabDeployKey invalidates the sources cache', async () => {
+  it('useCreateGitlabDeployKey invalidates the repositories cache', async () => {
     createGitlabDeployKey.mockResolvedValueOnce({
-      credentialId: 'cred-1',
+      secretId: 'cred-1',
       publicKey: 'ssh-ed25519 AAAA',
     })
     const client = createAppQueryClient()
@@ -314,54 +318,112 @@ describe('releases query hooks', () => {
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     })
   })
 
-  it('useUpdateSource patches a source row', async () => {
-    updateSource.mockResolvedValueOnce({ ok: true })
+  it('useUpdateRepository patches a repository row', async () => {
+    updateRepository.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(() => useUpdateSource(orgId), {
+    const { result } = renderHook(() => useUpdateRepository(orgId), {
       wrapper: createWrapper(client),
     })
 
     await expect(
       result.current.run({
-        sourceId,
+        repositoryId,
         patch: { autoDeploy: 'disabled' },
       }),
     ).resolves.toMatchObject({ ok: true })
 
-    expect(updateSource).toHaveBeenCalledWith(sourceId, {
+    expect(updateRepository).toHaveBeenCalledWith(repositoryId, {
       autoDeploy: 'disabled',
     })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     })
   })
 
-  it('useDeleteSource disconnects a repository', async () => {
-    deleteSource.mockResolvedValueOnce({ ok: true })
+  it('useDeleteRepository disconnects a repository', async () => {
+    deleteRepository.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(() => useDeleteSource(orgId), {
+    const { result } = renderHook(() => useDeleteRepository(orgId), {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run(sourceId)).resolves.toMatchObject({
+    await expect(result.current.run(repositoryId)).resolves.toMatchObject({
       ok: true,
     })
 
-    expect(deleteSource).toHaveBeenCalledWith(sourceId)
+    expect(deleteRepository).toHaveBeenCalledWith(repositoryId)
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
+      })
+    })
+  })
+
+  it('useAttachRepository fetches the row and invalidates the list', async () => {
+    const attached = {
+      id: 'src-new',
+      organizationId: orgId,
+      connectionId,
+      serviceId: null,
+      environmentId: null,
+      secretId: null,
+      provider: 'github' as const,
+      repositoryUrl: 'https://github.com/acme/api.git',
+      repositoryExternalId: 'ext-1',
+      defaultBranch: 'main',
+      subdirectory: null,
+      autoDeploy: 'immediate' as const,
+      metadata: null,
+      options: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    attachRepository.mockResolvedValueOnce({
+      ok: true,
+      id: attached.id,
+      reused: false,
+    })
+    fetchRepository.mockResolvedValueOnce({ repository: attached })
+    fetchRepositories.mockResolvedValue({ repositories: [attached] })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useAttachRepository(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        connectionId,
+        repositoryExternalId: 'ext-1',
+        repositoryUrl: attached.repositoryUrl,
+        defaultBranch: 'main',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { id: attached.id, repository: attached },
+    })
+    expect(attachRepository).toHaveBeenCalledWith({
+      connectionId,
+      repositoryExternalId: 'ext-1',
+      repositoryUrl: attached.repositoryUrl,
+      defaultBranch: 'main',
+    })
+    expect(fetchRepository).toHaveBeenCalledWith(attached.id)
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     })
   })

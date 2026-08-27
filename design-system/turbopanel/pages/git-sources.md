@@ -10,9 +10,9 @@
   (`org/git-sources/git-sources-section.tsx`, `scope="org"`)
 - Instance → Admin → **Git** (same component, `scope="admin"`)
 - One application
-  (`org/git-sources/git-app-detail-section.tsx`)
+  (`org/git-sources/forge-detail-section.tsx`)
 - Registration (`org/git-sources/github-app-wizard.tsx`,
-  `org/git-sources/git-app-editor.tsx`)
+  `org/git-sources/forge-editor.tsx`)
 - The repository picker every project screen reuses
   (`org/git-sources/repository-picker.tsx`) and its deploy-key lane
   (`org/git-sources/deploy-key-source.tsx`)
@@ -25,7 +25,7 @@ deliberately absent.
 
 ## The page lists applications. It does not list repositories.
 
-This reverses the previous design and the reversal is the point. A `source` row
+This reverses the previous design and the reversal is the point. A `repository` row
 is created when a project attaches a repository and is reused when a second
 project attaches the same one; it is never registered in advance, never listed,
 and never disconnected from a page of its own. An operator who has to connect a
@@ -94,7 +94,7 @@ from a flat list, and picking the wrong one binds a project to a repository it
 may not be able to clone. Each level narrows the next, and a level with exactly
 one option collapses so the common setup stays one click.
 
-The picker *attaches* on pick (`POST /sources/attach`, idempotent), so the
+The picker *attaches* on pick (`POST /repositories/attach`, idempotent), so the
 caller gets a `sourceId` before it saves anything that names one — an unknown
 `sourceId` fails the compose lint outright.
 
@@ -154,7 +154,7 @@ has no account list of its own — showing one would show somebody else's.
 
 ## Anti-patterns (page-specific)
 
-- ❌ A **Connected repositories** panel, or any surface for managing `source` rows
+- ❌ A **Connected repositories** panel, or any surface for managing `repository` rows
 - ❌ A flat repository list instead of application → account → repository
 - ❌ A default App name that is not unique, or one the operator cannot edit
 - ❌ Landing the operator on API JSON after a provider round-trip

@@ -12,7 +12,7 @@
 
 export type RepositoryLane = 'compose' | 'site-php' | 'app' | 'static'
 
-/** One probed file, as `GET /sources/:id/inspect` reports it. */
+/** One probed file, as `GET /repositories/:id/inspect` reports it. */
 export type ProbedFile = { path: string; found: boolean }
 
 export type LaneCandidate = {

@@ -17,8 +17,8 @@ import {
   ButtonRow,
   TextField,
 } from '@/components/ui'
-import type { GitAppCreate, GitAppSummary, GitAppUpdate } from '@/lib/instance-api'
-import { useCreateGitApp, useUpdateGitApp } from '@/lib/queries/admin'
+import type { ForgeCreate, ForgeSummary, ForgeUpdate } from '@/lib/instance-api'
+import { useCreateForge, useUpdateForge } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
 
 type Provider = 'github' | 'gitlab'
@@ -78,7 +78,7 @@ function blankEditor(provider: Provider): EditorState {
   }
 }
 
-function editorFrom(app: GitAppSummary): EditorState {
+function editorFrom(app: ForgeSummary): EditorState {
   return {
     name: app.name,
     baseUrl: app.baseUrl,
@@ -166,8 +166,8 @@ function payloadFrom(
   form: EditorState,
   touched: Record<string, boolean>,
   provider: Provider,
-): GitAppUpdate {
-  const secrets: GitAppUpdate = {}
+): ForgeUpdate {
+  const secrets: ForgeUpdate = {}
   if (touched.privateKeyPem && form.privateKeyPem.trim() !== '') {
     secrets.privateKeyPem = form.privateKeyPem
   }
@@ -194,7 +194,7 @@ function CredentialFields({
   busy,
 }: Readonly<{
   isGithub: boolean
-  existing?: GitAppSummary
+  existing?: ForgeSummary
   form: EditorState
   set: (key: keyof EditorState) => (text: string) => void
   busy: boolean
@@ -240,7 +240,7 @@ function CredentialFields({
         label="Redirect URI"
         value={form.redirectUri}
         onChangeText={set('redirectUri')}
-        placeholder="https://panel.example.com/api/client/v1/sources/gitlab/callback"
+        placeholder="https://panel.example.com/api/client/v1/repositories/gitlab/callback"
         hint="Must match the callback registered on the GitLab application, byte for byte."
         autoCapitalize="none"
         autoCorrect={false}
@@ -257,7 +257,7 @@ function CredentialFields({
  * sent only when the operator actually typed into one, so an edit that renames
  * an app keeps its sealed private key rather than clearing it.
  */
-export function GitAppEditor({
+export function ForgeEditor({
   provider,
   existing,
   scope,
@@ -265,13 +265,13 @@ export function GitAppEditor({
   onCancel,
 }: Readonly<{
   provider: Provider
-  existing?: GitAppSummary
+  existing?: ForgeSummary
   scope: Scope
   onDone: () => void
   onCancel: () => void
 }>) {
-  const create = useCreateGitApp(scope)
-  const update = useUpdateGitApp(scope)
+  const create = useCreateForge(scope)
+  const update = useUpdateForge(scope)
   const busy = create.isPending || update.isPending
 
   const [form, setForm] = useState<EditorState>(
@@ -302,7 +302,7 @@ export function GitAppEditor({
     if (existing) {
       update.mutate({ id: existing.id, updates: shared }, { onSuccess: onDone, onError })
     } else {
-      create.mutate({ provider, ...shared } as GitAppCreate, {
+      create.mutate({ provider, ...shared } as ForgeCreate, {
         onSuccess: onDone,
         onError,
       })

@@ -3,6 +3,8 @@ import type {
   IpAllocation,
   IpScope,
   NetworkKind,
+  TaggableParentKey,
+  TaskListFilter,
   VariableParentFilter,
 } from '@/lib/instance-api'
 
@@ -206,23 +208,49 @@ export const queryKeys = {
       },
 
       /**
-       * Git applications this organization may connect through.
+       * Git forges this organization may connect through.
        *
        * Org-scoped, so it is keyed by `orgId` like every other org resource:
-       * the list contains the org's own apps *and* instance-wide ones, and
+       * the list contains the org's own forges *and* instance-wide ones, and
        * the `readOnly` flag and webhook URLs differ per org — a shared key
        * would serve the previous organization's answer after a switch.
        */
-      gitApps: ['org', orgId, 'git', 'apps'] as const,
+      forges: ['org', orgId, 'forges'] as const,
 
-      sources: {
-        all: ['org', orgId, 'sources'] as const,
-        list: ['org', orgId, 'sources'] as const,
-        detail: (sourceId: string) =>
-          ['org', orgId, 'sources', 'detail', sourceId] as const,
-        installations: ['org', orgId, 'sources', 'installations'] as const,
-        repositories: (installationId: string) =>
-          ['org', orgId, 'sources', 'installations', installationId, 'repositories'] as const,
+      repositories: {
+        all: ['org', orgId, 'repositories'] as const,
+        list: ['org', orgId, 'repositories'] as const,
+        detail: (repositoryId: string) =>
+          ['org', orgId, 'repositories', 'detail', repositoryId] as const,
+        connections: ['org', orgId, 'repositories', 'connections'] as const,
+        connectionRepositories: (connectionId: string) =>
+          [
+            'org',
+            orgId,
+            'repositories',
+            'connections',
+            connectionId,
+            'repositories',
+          ] as const,
+      },
+
+      tags: {
+        all: ['org', orgId, 'tags'] as const,
+        list: ['org', orgId, 'tags'] as const,
+        forEntity: (kind: TaggableParentKey, id: string) =>
+          ['org', orgId, 'tags', 'entity', kind, id] as const,
+        markers: (tagId: string) =>
+          ['org', orgId, 'tags', tagId, 'markers'] as const,
+      },
+
+      tasks: {
+        all: ['org', orgId, 'tasks'] as const,
+        list: (filter: TaskListFilter) =>
+          'serviceId' in filter
+            ? (['org', orgId, 'tasks', 'serviceId', filter.serviceId] as const)
+            : (['org', orgId, 'tasks', 'environmentId', filter.environmentId] as const),
+        detail: (taskId: string) =>
+          ['org', orgId, 'tasks', 'detail', taskId] as const,
       },
 
       services: {
@@ -342,8 +370,8 @@ export const queryKeys = {
     publicUrls: ['admin', 'public-urls'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
     email: ['admin', 'settings', 'email'] as const,
-    /** Instance-wide Git provider applications. The org-scoped list is `org(id).gitApps`. */
-    gitApps: ['admin', 'settings', 'git', 'apps'] as const,
+    /** Instance-wide Git provider applications. The org-scoped list is `org(id).forges`. */
+    forges: ['admin', 'settings', 'forges'] as const,
   },
 } as const
 

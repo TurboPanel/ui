@@ -4,12 +4,16 @@ import {
   addPrincipalSshKey,
   createGitlabDeployKey,
   createProjectPrincipal,
-  createSource,
+  createRepository,
   createStorage,
+  createTag,
+  createTask,
   deletePrincipalSshKey,
   deleteProjectPrincipal,
-  deleteSource,
+  deleteRepository,
   deleteStorage,
+  deleteTag,
+  deleteTask,
   fetchCommandLog,
   fetchCommandStatuses,
   fetchContainerLogTail,
@@ -17,8 +21,8 @@ import {
   fetchEnvironmentDeployment,
   fetchEnvironmentDeployments,
   fetchFleetMetricsLatest,
-  fetchGitInstallations,
-  fetchInstallationRepositories,
+  fetchGitConnections,
+  fetchConnectionRepositories,
   fetchOrgResourceLimits,
   fetchPrincipalSshKeys,
   fetchProjectPrincipals,
@@ -26,12 +30,17 @@ import {
   fetchServerUpdate,
   fetchServersUpdateStatus,
   fetchServiceReleases,
-  fetchSource,
-  fetchSources,
+  fetchMarkers,
+  fetchRepository,
+  fetchRepositories,
   fetchStorage,
+  fetchTag,
+  fetchTags,
+  fetchTask,
+  fetchTasks,
   githubAppInstallUrl,
   gitlabOauthConnectUrl,
-  inspectSource,
+  inspectRepository,
   MetricsBackendUnavailableError,
   resetServerUpdateStatus,
   restartSystemComponent,
@@ -41,13 +50,22 @@ import {
   saveServerResourceLimits,
   saveSignupSettings,
   fetchSignupSettings,
-  SOURCE_REFERENCED_BY_COMPOSE_ERROR,
+  REPOSITORY_REFERENCED_BY_COMPOSE_ERROR,
+  setEntityTags,
+  TAG_NAME_IN_USE_ERROR,
+  TASK_LIMIT_REACHED_ERROR,
+  TASK_NAME_IN_USE_ERROR,
+  TASK_SCHEDULE_INVALID_ERROR,
   triggerAllServerUpdates,
   triggerServerUpdate,
   updateProjectPrincipal,
-  updateSource,
+  updateRepository,
   updateStorage,
   updateStorageMount,
+  updateTag,
+  updateTask,
+  type TaggableParentFilter,
+  type TaskListFilter,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -61,7 +79,7 @@ function textResponse(body: string, status: number): Response {
   return new Response(body, { status })
 }
 
-describe('instance-api ops/admin/source/storage/principal fetch wrappers', () => {
+describe('instance-api ops/admin/repository/storage/principal fetch wrappers', () => {
   const fetchMock = vi.fn()
 
   beforeEach(() => {
@@ -324,10 +342,10 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
     )
   })
 
-  it('source helpers cover list, inspect, detail, git, and mutations', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ sources: [] }))
-    await expect(fetchSources()).resolves.toEqual({ sources: [] })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/sources')
+  it('repository helpers cover list, inspect, detail, git, and mutations', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ repositories: [] }))
+    await expect(fetchRepositories()).resolves.toEqual({ repositories: [] })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/repositories')
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -337,15 +355,15 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
         entries: [],
       }),
     )
-    await expect(inspectSource('src-1', 'main')).resolves.toMatchObject({
+    await expect(inspectRepository('src-1', 'main')).resolves.toMatchObject({
       commitSha: 'abc123',
     })
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/sources/src-1/inspect')
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/repositories/src-1/inspect')
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('ref=main')
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        source: {
+        repository: {
           id: 'src-1',
           provider: 'github',
           repositoryUrl: 'https://github.com/org/repo',
@@ -353,28 +371,28 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
         },
       }),
     )
-    await expect(fetchSource('src-1')).resolves.toMatchObject({
-      source: { id: 'src-1' },
+    await expect(fetchRepository('src-1')).resolves.toMatchObject({
+      repository: { id: 'src-1' },
     })
 
-    fetchMock.mockResolvedValueOnce(jsonResponse({ installations: [] }))
-    await expect(fetchGitInstallations()).resolves.toEqual({ installations: [] })
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/sources/installations')
+    fetchMock.mockResolvedValueOnce(jsonResponse({ connections: [] }))
+    await expect(fetchGitConnections()).resolves.toEqual({ connections: [] })
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/repositories/connections')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ repositories: [] }))
     await expect(
-      fetchInstallationRepositories('inst-1'),
+      fetchConnectionRepositories('inst-1'),
     ).resolves.toEqual({ repositories: [] })
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
-      '/sources/installations/inst-1/repositories',
+      '/repositories/connections/inst-1/repositories',
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'src-new' }))
     await expect(
-      createSource({
+      createRepository({
         provider: 'github',
         repositoryUrl: 'https://github.com/org/repo',
-        installationId: 'inst-1',
+        connectionId: 'inst-1',
         autoDeploy: 'immediate',
       }),
     ).resolves.toEqual({ ok: true, id: 'src-new' })
@@ -382,49 +400,49 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      updateSource('src-1', { autoDeploy: 'disabled', defaultBranch: 'trunk' }),
+      updateRepository('src-1', { autoDeploy: 'disabled', defaultBranch: 'trunk' }),
     ).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({ method: 'PATCH' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(deleteSource('src-1')).resolves.toEqual({ ok: true })
+    await expect(deleteRepository('src-1')).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: SOURCE_REFERENCED_BY_COMPOSE_ERROR }, 409),
+      jsonResponse({ error: REPOSITORY_REFERENCED_BY_COMPOSE_ERROR }, 409),
     )
-    await expect(deleteSource('src-bound')).rejects.toThrow(
-      SOURCE_REFERENCED_BY_COMPOSE_ERROR,
+    await expect(deleteRepository('src-bound')).rejects.toThrow(
+      REPOSITORY_REFERENCED_BY_COMPOSE_ERROR,
     )
   })
 
   it('githubAppInstallUrl and gitlabOauthConnectUrl build browser navigation targets', () => {
     const github = githubAppInstallUrl('app-1')
-    expect(github).toContain('/api/client/v1/sources/github/install')
+    expect(github).toContain('/api/client/v1/repositories/github/install')
     // The app is named on the redirect: an instance may hold several, and the
     // callback binds the resulting installation to whichever one was chosen.
-    expect(github).toContain('appId=app-1')
+    expect(github).toContain('forgeId=app-1')
 
     // Escaped so an id can never inject another parameter or path segment.
     const gitlab = gitlabOauthConnectUrl('a&b=c/d')
-    expect(gitlab).toContain('/api/client/v1/sources/gitlab/oauth')
-    expect(gitlab).toContain('appId=a%26b%3Dc%2Fd')
+    expect(gitlab).toContain('/api/client/v1/repositories/gitlab/oauth')
+    expect(gitlab).toContain('forgeId=a%26b%3Dc%2Fd')
   })
 
   it('createGitlabDeployKey POSTs the deploy-key route', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        credentialId: 'cred-1',
+        secretId: 'cred-1',
         publicKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5',
         fingerprint: 'SHA256:abc',
       }),
     )
     await expect(createGitlabDeployKey({ name: 'deploy' })).resolves.toMatchObject({
-      credentialId: 'cred-1',
+      secretId: 'cred-1',
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/sources/gitlab/deploy-keys',
+      '/repositories/gitlab/deploy-keys',
     )
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
   })
@@ -693,5 +711,135 @@ describe('instance-api ops/admin/source/storage/principal fetch wrappers', () =>
     const url = String(fetchMock.mock.calls[0]?.[0])
     expect(url).toContain('/containers/ctr-1/logs')
     expect(url).toContain('tail=50')
+  })
+
+  it('tag helpers list, detail, mutate, and replace markers', async () => {
+    expect(TAG_NAME_IN_USE_ERROR).toBe('tag_name_in_use')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ tags: [] }))
+    await expect(fetchTags()).resolves.toEqual({ tags: [] })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tags')
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('?')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ tags: [{ id: 'tag-1' }] }))
+    await expect(fetchTags({ projectId: 'p1' })).resolves.toMatchObject({
+      tags: [{ id: 'tag-1' }],
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('projectId=p1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ tag: { id: 'tag-1' } }))
+    await expect(fetchTag('tag-1')).resolves.toEqual({ tag: { id: 'tag-1' } })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/tags/tag-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'tag-2' }))
+    await expect(createTag({ name: 'prod' })).resolves.toEqual({
+      ok: true,
+      id: 'tag-2',
+    })
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(updateTag('tag-1', { name: 'staging' })).resolves.toEqual({
+      ok: true,
+    })
+    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'PATCH' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ markers: [] }))
+    await expect(fetchMarkers('tag-1')).resolves.toEqual({ markers: [] })
+    expect(String(fetchMock.mock.calls[5]?.[0])).toContain('/markers?tagId=tag-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, tags: [] }))
+    await expect(
+      setEntityTags({ projectId: 'p1', tagIds: ['tag-1'] }),
+    ).resolves.toEqual({ ok: true, tags: [] })
+    expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(String(fetchMock.mock.calls[6]?.[0])).toContain('/markers')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(deleteTag('tag-1')).resolves.toEqual({ ok: true })
+    expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('tag and task filters reject objects with two parent keys', async () => {
+    function acceptTagFilter(_filter: TaggableParentFilter): void {
+      return
+    }
+    function acceptTaskFilter(_filter: TaskListFilter): void {
+      return
+    }
+    acceptTagFilter({ projectId: 'p1' })
+    acceptTaskFilter({ serviceId: 'svc-1' })
+    // @ts-expect-error two tag parent keys
+    acceptTagFilter({ projectId: 'p1', serviceId: 's1' })
+    // @ts-expect-error two task filter keys
+    acceptTaskFilter({ serviceId: 'svc-1', environmentId: 'env-1' })
+
+    await expect(
+      fetchTags({
+        projectId: 'p1',
+        serviceId: 's1',
+      } as unknown as TaggableParentFilter),
+    ).rejects.toBeInstanceOf(TypeError)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await expect(
+      setEntityTags({
+        projectId: 'p1',
+        serviceId: 's1',
+        tagIds: ['tag-1'],
+      } as unknown as TaggableParentFilter & { tagIds: string[] }),
+    ).rejects.toBeInstanceOf(TypeError)
+
+    await expect(
+      fetchTasks({
+        serviceId: 'svc-1',
+        environmentId: 'env-1',
+      } as unknown as TaskListFilter),
+    ).rejects.toBeInstanceOf(TypeError)
+  })
+
+  it('task helpers list, detail, and mutate with exclusive filters', async () => {
+    expect(TASK_NAME_IN_USE_ERROR).toBe('task_name_in_use')
+    expect(TASK_SCHEDULE_INVALID_ERROR).toBe('task_schedule_invalid')
+    expect(TASK_LIMIT_REACHED_ERROR).toBe('task_limit_reached')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ tasks: [] }))
+    await expect(fetchTasks({ serviceId: 'svc-1' })).resolves.toEqual({
+      tasks: [],
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tasks?serviceId=svc-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ tasks: [] }))
+    await expect(fetchTasks({ environmentId: 'env-1' })).resolves.toEqual({
+      tasks: [],
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      '/tasks?environmentId=env-1',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ task: { id: 'task-1' } }))
+    await expect(fetchTask('task-1')).resolves.toEqual({ task: { id: 'task-1' } })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/tasks/task-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'task-2' }))
+    await expect(
+      createTask({
+        serviceId: 'svc-1',
+        name: 'nightly',
+        schedule: '0 2 * * *',
+        command: 'backup',
+      }),
+    ).resolves.toEqual({ ok: true, id: 'task-2' })
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(updateTask('task-1', { isEnabled: false })).resolves.toEqual({
+      ok: true,
+    })
+    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'PATCH' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(deleteTask('task-1')).resolves.toEqual({ ok: true })
+    expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'DELETE' })
   })
 })

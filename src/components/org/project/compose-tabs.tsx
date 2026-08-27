@@ -997,7 +997,7 @@ function storageLabelsByVolume(
 ): Record<string, string> {
   const byVolume: Record<string, string> = {}
   for (const row of storage) {
-    const location = row.locations[0]
+    const location = row.copies[0]
     const locationServer = location?.serverId
       ? servers?.find((server) => server.id === location.serverId)
       : undefined

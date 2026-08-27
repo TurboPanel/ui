@@ -45,9 +45,10 @@ export type ComposeLintOptions = {
    */
   managedExtensionHidden?: boolean
   /**
-   * Source ids known to the signed-in organization. Mirrors the instance
+   * Repository ids known to the signed-in organization. Mirrors the instance
    * option: when omitted the `x-turbopanel.source.sourceId` resolution check is
-   * skipped rather than false-flagging.
+   * skipped rather than false-flagging. The compose document key is
+   * intentionally still `source`.
    */
   knownSourceIds?: ReadonlySet<string>
 }

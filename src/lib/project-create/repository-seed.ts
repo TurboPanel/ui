@@ -15,7 +15,7 @@ import {
   type ComposeServiceSourceExtension,
 } from '@/lib/compose/service-kind'
 import type { RepositoryLane } from '@/lib/compose/repository-lane'
-import type { SourceRecord } from '@/lib/instance-api'
+import type { RepositoryRecord } from '@/lib/instance-api'
 
 /** Compose key when the repository name yields nothing usable. */
 const FALLBACK_SERVICE_NAME = 'app'
@@ -53,7 +53,7 @@ function repositoryName(repositoryUrl: string): string {
  * or trailing `-`. The operator renames it on the Services tab if they want
  * something else; this only has to be valid and recognisable.
  */
-export function repositoryServiceName(source: SourceRecord): string {
+export function repositoryServiceName(source: RepositoryRecord): string {
   const collapsed = repositoryName(source.repositoryUrl)
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')
@@ -63,6 +63,8 @@ export function repositoryServiceName(source: SourceRecord): string {
 
 /**
  * Seed a compose draft for one repository lane.
+ *
+ * The compose document key is intentionally still `x-turbopanel.source`.
  *
  * Replaces the old always-`serviceKind: node` seed, which was accurate to the
  * code and wrong about the product: a repository is not necessarily a Node app,
@@ -74,7 +76,7 @@ export function repositoryServiceName(source: SourceRecord): string {
  * therefore a valid document on its own.
  */
 export function seedComposeForLane(params: {
-  source: SourceRecord
+  source: RepositoryRecord
   branch: string
   lane: RepositoryLane
   /** Parsed repo compose, for the `compose` lane. */

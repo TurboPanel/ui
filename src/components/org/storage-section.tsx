@@ -16,7 +16,7 @@ import type {
   OrgServerRecord,
   ServiceRecord,
   StorageKind,
-  StorageLocationRecord,
+  StorageCopyRecord,
   StorageMountRecord,
   StorageRecord,
 } from '@/lib/instance-api'
@@ -55,8 +55,8 @@ function locationProviderForKind(kind: StorageKind): 'docker' | 'path' {
   return kind === 'volume' ? 'docker' : 'path'
 }
 
-function primaryLocation(row: StorageRecord): StorageLocationRecord | undefined {
-  return row.locations.find((loc) => loc.role === 'primary') ?? row.locations[0]
+function primaryCopy(row: StorageRecord): StorageCopyRecord | undefined {
+  return row.copies.find((loc) => loc.role === 'primary') ?? row.copies[0]
 }
 
 function useStorageSection({
@@ -134,7 +134,7 @@ function useStorageSection({
         environmentId,
         kind,
         name: trimmedName,
-        location: {
+        copy: {
           provider,
           serverId,
           ...(provider === 'path' && sourcePath.trim()
@@ -353,7 +353,7 @@ function StorageAddForm({
 }
 
 function locationServerText(
-  location: StorageLocationRecord,
+  location: StorageCopyRecord,
   servers: OrgServerRecord[],
 ): string {
   if (!location.serverId) return 'shared'
@@ -366,7 +366,7 @@ function LocationSummary({
   location,
   servers,
 }: Readonly<{
-  location: StorageLocationRecord | undefined
+  location: StorageCopyRecord | undefined
   servers: OrgServerRecord[]
 }>) {
   if (!location) {
@@ -499,7 +499,7 @@ function StorageRow({
     destinationPath: string,
   ) => Promise<void>
 }>) {
-  const location = primaryLocation(row)
+  const location = primaryCopy(row)
   return (
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.rowHeader}>

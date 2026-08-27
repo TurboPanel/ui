@@ -164,6 +164,7 @@ function isAutoEndpointUnresolved(relay: RelayRecord): boolean {
 }
 
 function formatRelaySegment(segment: FabricRelaySegment): string {
+  // Compose-bridge subnets (table `subnet`); the relay API field is still `segments[]`.
   const parts = [segment.name, segment.subnet]
   if (segment.gateway) parts.push(`gw ${segment.gateway}`)
   if (segment.mtu != null) parts.push(`mtu ${String(segment.mtu)}`)

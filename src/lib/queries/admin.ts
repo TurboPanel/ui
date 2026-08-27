@@ -2,22 +2,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   applyPublicUrls,
   applyReencryptSecrets,
-  createGitApp,
-  deleteGitApp,
+  createForge,
+  deleteForge,
   fetchEmailSettings,
-  fetchGitApps,
+  fetchForges,
   fetchPublicUrls,
   fetchSignupSettings,
-  type GitAppCreate,
-  type GitAppUpdate,
+  type ForgeCreate,
+  type ForgeUpdate,
   isForbiddenError,
   saveEmailSettings,
   savePublicUrls,
   saveSignupSettings,
   type GithubManifestStartInput,
   startGithubAppManifest,
-  syncGitApp,
-  updateGitApp,
+  syncForge,
+  updateForge,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import { getActiveOrganizationId } from '@/lib/org-context'
@@ -128,9 +128,9 @@ export function useSaveEmailSettings() {
  * the previous organization's answer after a switch. `apiFetch` resolves the
  * org from the same module global, so the two always agree.
  */
-function gitAppsKey(scope: 'admin' | 'org') {
-  if (scope === 'admin') return queryKeys.admin.gitApps
-  return queryKeys.org(getActiveOrganizationId() ?? 'none').gitApps
+function forgesKey(scope: 'admin' | 'org') {
+  if (scope === 'admin') return queryKeys.admin.forges
+  return queryKeys.org(getActiveOrganizationId() ?? 'none').forges
 }
 
 /**
@@ -144,44 +144,44 @@ function gitAppsKey(scope: 'admin' | 'org') {
  * would mean two copies of the cache-invalidation rules for one collection.
  * Org-scoped screens importing from here is deliberate, not a stray import.
  */
-export function useGitApps(
+export function useForges(
   scope: 'admin' | 'org',
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: gitAppsKey(scope),
-    queryFn: () => fetchGitApps(scope),
+    queryKey: forgesKey(scope),
+    queryFn: () => fetchForges(scope),
     enabled: options?.enabled ?? true,
   })
 }
 
-export function useCreateGitApp(scope: 'admin' | 'org') {
+export function useCreateForge(scope: 'admin' | 'org') {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (input: GitAppCreate) => createGitApp(scope, input),
+    mutationFn: (input: ForgeCreate) => createForge(scope, input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
+      void queryClient.invalidateQueries({ queryKey: forgesKey(scope) })
     },
   })
 }
 
-export function useUpdateGitApp(scope: 'admin' | 'org') {
+export function useUpdateForge(scope: 'admin' | 'org') {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: GitAppUpdate }) =>
-      updateGitApp(scope, id, updates),
+    mutationFn: ({ id, updates }: { id: string; updates: ForgeUpdate }) =>
+      updateForge(scope, id, updates),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
+      void queryClient.invalidateQueries({ queryKey: forgesKey(scope) })
     },
   })
 }
 
-export function useDeleteGitApp(scope: 'admin' | 'org') {
+export function useDeleteForge(scope: 'admin' | 'org') {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (id: string) => deleteGitApp(scope, id),
+    mutationFn: (id: string) => deleteForge(scope, id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
+      void queryClient.invalidateQueries({ queryKey: forgesKey(scope) })
     },
   })
 }
@@ -206,12 +206,12 @@ export function useStartGithubAppManifest(scope: 'admin' | 'org') {
  * renders — the whole point is that they may have changed on the provider's
  * side without anything telling us.
  */
-export function useSyncGitApp(scope: 'admin' | 'org') {
+export function useSyncForge(scope: 'admin' | 'org') {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (id: string) => syncGitApp(scope, id),
+    mutationFn: (id: string) => syncForge(scope, id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: gitAppsKey(scope) })
+      void queryClient.invalidateQueries({ queryKey: forgesKey(scope) })
     },
   })
 }

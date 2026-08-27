@@ -93,7 +93,11 @@ export const CA_ROTATION_IN_PROGRESS_ERROR = 'ca_rotation_in_progress'
 export const NO_PENDING_ROTATION_ERROR = 'no_pending_rotation'
 export const CA_ROTATION_NOT_CONVERGED_ERROR = 'ca_rotation_not_converged'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
-export const SOURCE_REFERENCED_BY_COMPOSE_ERROR = 'source_referenced_by_compose'
+export const REPOSITORY_REFERENCED_BY_COMPOSE_ERROR = 'source_referenced_by_compose'
+export const TAG_NAME_IN_USE_ERROR = 'tag_name_in_use'
+export const TASK_NAME_IN_USE_ERROR = 'task_name_in_use'
+export const TASK_SCHEDULE_INVALID_ERROR = 'task_schedule_invalid'
+export const TASK_LIMIT_REACHED_ERROR = 'task_limit_reached'
 
 const CLIENT_API = '/api/client/v1'
 const INSTALL_API = '/api/install/v1'
@@ -636,7 +640,7 @@ export type FabricRelayPathState = {
   degraded: boolean
 }
 
-/** Host Docker bridge for a spanning compose network on this relay. */
+/** Host Docker bridge for a spanning compose network on this relay (table `subnet`). The relay API field stays `segments[]` on purpose. */
 export type FabricRelaySegment = {
   name: string
   subnet: string
@@ -658,6 +662,10 @@ export type RelayRecord = {
   publicKey: string | null
   prefix: string
   hasPresharedKey: boolean
+  /**
+   * Compose-bridge subnets (table `subnet`). Deliberately still named
+   * `segments[]` — the control plane kept the relay API field as-is.
+   */
   segments: FabricRelaySegment[]
   lastHandshakeAt: string | null
   transferRxBytes?: number
@@ -691,6 +699,7 @@ export type FabricRelayWireRow = {
   publicKey: string | null
   prefix: string
   hasPresharedKey?: boolean
+  /** Compose-bridge subnets; field name kept as `segments[]`. */
   segments?: FabricRelaySegment[]
   lastHandshakeAt?: string | null
   transferRxBytes?: number
@@ -2610,7 +2619,7 @@ export const GITHUB_WEBHOOK_PATH = '/webhook/github'
 export const GITLAB_WEBHOOK_PATH = '/webhook/gitlab'
 
 /**
- * A registered Git provider application, as either git-app surface reports it.
+ * A registered Git provider application, as either forge surface reports it.
  *
  * Presence-only: the sealed private key, OAuth client secret, and webhook
  * secret never leave the control plane, so the read shape carries
@@ -2622,7 +2631,7 @@ export const GITLAB_WEBHOOK_PATH = '/webhook/gitlab'
  * *this* viewer may edit it: an organization sees instance-wide apps so it can
  * connect through them, but only an instance admin can change one.
  */
-export type GitAppSummary = {
+export type ForgeSummary = {
   id: string
   organizationId: string | null
   provider: 'github' | 'gitlab'
@@ -2644,7 +2653,7 @@ export type GitAppSummary = {
   hasWebhookSecret: boolean
 }
 
-export type GitAppCreate = {
+export type ForgeCreate = {
   provider: 'github' | 'gitlab'
   name: string
   externalAppId: string
@@ -2664,7 +2673,7 @@ export type GitAppCreate = {
  * than send `''`. Nullable fields accept an explicit `null` to clear.
  * `provider` is immutable.
  */
-export type GitAppUpdate = {
+export type ForgeUpdate = {
   name?: string
   externalAppId?: string
   baseUrl?: string
@@ -2685,36 +2694,36 @@ export type GitAppUpdate = {
  * organization's own and is gated on `organization:manage`. Everything below
  * takes the scope rather than duplicating the client.
  */
-export type GitAppScope = 'admin' | 'org'
+export type ForgeScope = 'admin' | 'org'
 
-function gitAppsUrl(scope: GitAppScope, suffix = ''): string {
-  const base = scope === 'admin' ? `${ADMIN_API}/git/apps` : `${CLIENT_API}/git/apps`
+function forgesUrl(scope: ForgeScope, suffix = ''): string {
+  const base = scope === 'admin' ? `${ADMIN_API}/forges` : `${CLIENT_API}/forges`
   return `${base}${suffix}`
 }
 
-export async function fetchGitApps(scope: GitAppScope): Promise<GitAppSummary[]> {
-  const raw = await apiFetch<{ apps: GitAppSummary[] }>(gitAppsUrl(scope))
+export async function fetchForges(scope: ForgeScope): Promise<ForgeSummary[]> {
+  const raw = await apiFetch<{ apps: ForgeSummary[] }>(forgesUrl(scope))
   return raw.apps
 }
 
-export async function createGitApp(
-  scope: GitAppScope,
-  input: GitAppCreate
-): Promise<GitAppSummary> {
-  const raw = await apiFetch<{ app: GitAppSummary }>(gitAppsUrl(scope), {
+export async function createForge(
+  scope: ForgeScope,
+  input: ForgeCreate
+): Promise<ForgeSummary> {
+  const raw = await apiFetch<{ app: ForgeSummary }>(forgesUrl(scope), {
     method: 'POST',
     body: JSON.stringify(input),
   })
   return raw.app
 }
 
-export async function updateGitApp(
-  scope: GitAppScope,
+export async function updateForge(
+  scope: ForgeScope,
   id: string,
-  updates: GitAppUpdate
-): Promise<GitAppSummary> {
-  const raw = await apiFetch<{ app: GitAppSummary }>(
-    gitAppsUrl(scope, `/${encodeURIComponent(id)}`),
+  updates: ForgeUpdate
+): Promise<ForgeSummary> {
+  const raw = await apiFetch<{ app: ForgeSummary }>(
+    forgesUrl(scope, `/${encodeURIComponent(id)}`),
     {
       method: 'PATCH',
       body: JSON.stringify(updates),
@@ -2723,8 +2732,8 @@ export async function updateGitApp(
   return raw.app
 }
 
-export async function deleteGitApp(scope: GitAppScope, id: string): Promise<void> {
-  await apiFetch<void>(gitAppsUrl(scope, `/${encodeURIComponent(id)}`), {
+export async function deleteForge(scope: ForgeScope, id: string): Promise<void> {
+  await apiFetch<void>(forgesUrl(scope, `/${encodeURIComponent(id)}`), {
     method: 'DELETE',
   })
 }
@@ -2767,11 +2776,11 @@ export type GithubManifestStartInput = {
 }
 
 export async function startGithubAppManifest(
-  scope: GitAppScope,
+  scope: ForgeScope,
   input: GithubManifestStartInput
 ): Promise<GithubManifestStart> {
   return await apiFetch<GithubManifestStart>(
-    gitAppsUrl(scope, '/github/manifest'),
+    forgesUrl(scope, '/github/manifest'),
     {
       method: 'POST',
       body: JSON.stringify(input),
@@ -2780,7 +2789,7 @@ export async function startGithubAppManifest(
 }
 
 /** What the provider currently holds for an app, as of a sync. */
-export type GitAppProviderSnapshot = {
+export type ForgeProviderSnapshot = {
   permissions: Record<string, string>
   events: string[]
 }
@@ -2792,12 +2801,12 @@ export type GitAppProviderSnapshot = {
  * slug builds the install URL — so a renamed App silently loses the ability to
  * connect new accounts until this runs.
  */
-export async function syncGitApp(
-  scope: GitAppScope,
+export async function syncForge(
+  scope: ForgeScope,
   id: string
-): Promise<{ app: GitAppSummary; provider: GitAppProviderSnapshot }> {
-  return await apiFetch<{ app: GitAppSummary; provider: GitAppProviderSnapshot }>(
-    gitAppsUrl(scope, `/${encodeURIComponent(id)}/sync`),
+): Promise<{ app: ForgeSummary; provider: ForgeProviderSnapshot }> {
+  return await apiFetch<{ app: ForgeSummary; provider: ForgeProviderSnapshot }>(
+    forgesUrl(scope, `/${encodeURIComponent(id)}/sync`),
     { method: 'POST' }
   )
 }
@@ -3092,18 +3101,18 @@ export async function fetchEnvironmentDeployment(
 }
 
 /**
- * How a push to a source's repository becomes a deploy.
+ * How a push to a repository becomes a deploy.
  *
  * `immediate` deploys on push; `checks_passed` parks the SHA until the provider
  * reports an all-green result for it — a GitHub check **suite**, or a GitLab
- * **pipeline**; `disabled` leaves the source wired up but unarmed. This is a property of the `source` row, not of the
+ * **pipeline**; `disabled` leaves the repository wired up but unarmed. This is a property of the `repository` row, not of the
  * compose binding — one repository connected to several services has one
  * policy, and the webhook surface reads it from the row.
  */
-export type SourceAutoDeploy = 'immediate' | 'checks_passed' | 'disabled'
+export type RepositoryAutoDeploy = 'immediate' | 'checks_passed' | 'disabled'
 
-export const SOURCE_AUTO_DEPLOY_OPTIONS: readonly {
-  value: SourceAutoDeploy
+export const REPOSITORY_AUTO_DEPLOY_OPTIONS: readonly {
+  value: RepositoryAutoDeploy
   label: string
   hint: string
 }[] = [
@@ -3127,17 +3136,17 @@ export const SOURCE_AUTO_DEPLOY_OPTIONS: readonly {
 ]
 
 /**
- * Which provider backs a source, and therefore which connect flow created it.
+ * Which provider backs a repository, and therefore which connect flow created it.
  *
  * `git` is the generic SSH/HTTPS lane: a clone URL plus a deploy key, no
  * provider API behind it. `gitlab` can be *either* — an OAuth connection or a
  * deploy key — which is why the create form asks.
  */
-export const SOURCE_PROVIDERS = ['github', 'gitlab', 'git'] as const
-export type SourceProvider = (typeof SOURCE_PROVIDERS)[number]
+export const REPOSITORY_PROVIDERS = ['github', 'gitlab', 'git'] as const
+export type RepositoryProvider = (typeof REPOSITORY_PROVIDERS)[number]
 
-export const SOURCE_PROVIDER_OPTIONS: readonly {
-  value: SourceProvider
+export const REPOSITORY_PROVIDER_OPTIONS: readonly {
+  value: RepositoryProvider
   label: string
   hint: string
 }[] = [
@@ -3161,19 +3170,19 @@ export const SOURCE_PROVIDER_OPTIONS: readonly {
 ]
 
 /** An org-owned Git repository binding services attach to by `sourceId`. */
-export type SourceRecord = {
+export type RepositoryRecord = {
   id: string
   organizationId: string
-  installationId: string | null
+  connectionId: string | null
   serviceId: string | null
   environmentId: string | null
-  credentialId: string | null
-  provider: SourceProvider
+  secretId: string | null
+  provider: RepositoryProvider
   repositoryUrl: string
   repositoryExternalId: string | null
   defaultBranch: string | null
   subdirectory: string | null
-  autoDeploy: SourceAutoDeploy
+  autoDeploy: RepositoryAutoDeploy
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -3187,16 +3196,16 @@ export type SourceRecord = {
  * the row records the OAuth-connected account instead. `provider` is what tells
  * the two apart in a picker that lists both.
  */
-export type GitInstallationRecord = {
+export type GitConnectionRecord = {
   id: string
   organizationId: string
   /**
-   * The registered app this connection was granted through.
+   * The registered forge this connection was granted through.
    *
-   * What lets the repository picker group connections under their app, which is
-   * the top level of the app -> account -> repository hierarchy.
+   * What lets the repository picker group connections under their forge, which
+   * is the top level of the forge -> account -> repository hierarchy.
    */
-  appId: string
+  forgeId: string
   provider: string
   externalInstallationId: string
   accountLogin: string | null
@@ -3216,11 +3225,11 @@ export type GitRepositorySummary = {
   cloneUrl: string | null
 }
 
-export async function fetchSources(): Promise<{ sources: SourceRecord[] }> {
-  return await apiFetch(`${CLIENT_API}/sources`)
+export async function fetchRepositories(): Promise<{ repositories: RepositoryRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/repositories`)
 }
 
-/** One probed file, as `GET /sources/:id/inspect` reports it. */
+/** One probed file, as `GET /repositories/:id/inspect` reports it. */
 export type RepositoryProbedFile = {
   path: string
   found: boolean
@@ -3244,62 +3253,64 @@ export type RepositoryInspection = {
  * path list would widen what a compromised session can learn from "do these
  * filenames exist" to "read any file in any connected repository".
  */
-export async function inspectSource(
-  sourceId: string,
+export async function inspectRepository(
+  repositoryId: string,
   ref?: string,
 ): Promise<RepositoryInspection> {
   const query = ref && ref.length > 0 ? `?ref=${encodeURIComponent(ref)}` : ''
-  return await apiFetch(`${CLIENT_API}/sources/${sourceId}/inspect${query}`)
+  return await apiFetch(`${CLIENT_API}/repositories/${repositoryId}/inspect${query}`)
 }
 
 /**
- * One source plus the instance-wide webhook facts folded onto the read.
+ * One repository plus the instance-wide webhook facts folded onto the read.
  *
  * The three extra fields are properties of the *instance*, not of the row, so
- * `GET /sources` deliberately omits them — repeating an identical pair on every
- * entry would say nothing per row. They are also only attached for `github` and
- * `gitlab`: a generic `git` source has no provider webhook to point anywhere,
- * which is why each one is optional here rather than nullable.
+ * `GET /repositories` deliberately omits them — repeating an identical pair on
+ * every entry would say nothing per row. They are also only attached for
+ * `github` and `gitlab`: a generic `git` repository has no provider webhook to
+ * point anywhere, which is why each one is optional here rather than nullable.
  *
  * `reachabilityNote` is non-null exactly when this instance looks unreachable
  * from the public internet, and is the only one of the three this org-facing
  * page renders — the address itself belongs to the admin Git-providers surface,
  * which is where an operator can actually act on it.
  */
-export type SourceDetailRecord = SourceRecord & {
+export type RepositoryDetailRecord = RepositoryRecord & {
   /** Address to paste into the provider's webhook settings (github/gitlab only). */
   webhookUrl?: string | null
-  /** Whether a provider could deliver to {@link SourceDetailRecord.webhookUrl}. */
+  /** Whether a provider could deliver to {@link RepositoryDetailRecord.webhookUrl}. */
   webhookReachable?: boolean
   /** Why deliveries cannot arrive, when they cannot. Null when they can. */
   reachabilityNote?: string | null
 }
 
-export async function fetchSource(
-  sourceId: string
-): Promise<{ source: SourceDetailRecord }> {
-  return await apiFetch(`${CLIENT_API}/sources/${sourceId}`)
+export async function fetchRepository(
+  repositoryId: string
+): Promise<{ repository: RepositoryDetailRecord }> {
+  return await apiFetch(`${CLIENT_API}/repositories/${repositoryId}`)
 }
 
-export async function fetchGitInstallations(): Promise<{
-  installations: GitInstallationRecord[]
+export async function fetchGitConnections(): Promise<{
+  connections: GitConnectionRecord[]
 }> {
-  return await apiFetch(`${CLIENT_API}/sources/installations`)
+  return await apiFetch(`${CLIENT_API}/repositories/connections`)
 }
 
-export async function fetchInstallationRepositories(
-  installationId: string
+export async function fetchConnectionRepositories(
+  connectionId: string
 ): Promise<{ repositories: GitRepositorySummary[] }> {
-  return await apiFetch(`${CLIENT_API}/sources/installations/${installationId}/repositories`)
+  return await apiFetch(
+    `${CLIENT_API}/repositories/connections/${connectionId}/repositories`,
+  )
 }
 
 /**
  * Bind a repository to this organization, reusing the binding if it exists.
  *
  * This is how a repository gets attached now: the operator picks
- * **app -> account -> repository** while creating or editing a project, and
- * this resolves that to a `source` row underneath. The row itself never appears
- * in the console as a thing to manage.
+ * **forge -> account -> repository** while creating or editing a project, and
+ * this resolves that to a `repository` row underneath. The row itself never
+ * appears in the console as a thing to manage.
  *
  * **Idempotent.** Two projects on the same repository share one row rather than
  * making two — which matters because auto-deploy and the default branch live on
@@ -3307,60 +3318,60 @@ export async function fetchInstallationRepositories(
  * while a single push fanned out to both.
  *
  * Must resolve *before* the project save that references it: an unknown
- * `sourceId` fails the compose lint.
+ * `sourceId` (compose document field, intentionally still named `source`) fails
+ * the compose lint.
  */
-export async function attachSource(input: {
-  installationId: string
+export async function attachRepository(input: {
+  connectionId: string
   repositoryExternalId: string
   repositoryUrl: string
   defaultBranch?: string | null
-}): Promise<{ id: string; reused: boolean }> {
-  const raw = await apiFetch<{ id: string; reused: boolean }>(
-    `${CLIENT_API}/sources/attach`,
+}): Promise<{ ok: true; id: string; reused: boolean }> {
+  return await apiFetch<{ ok: true; id: string; reused: boolean }>(
+    `${CLIENT_API}/repositories/attach`,
     { method: 'POST', body: JSON.stringify(input) }
   )
-  return { id: raw.id, reused: raw.reused }
 }
 
 /**
- * Register a repository as an org-owned source a compose service can bind to.
+ * Register a repository as an org-owned binding a compose service can bind to.
  *
- * `installationId` is what makes a GitHub source cloneable — the instance mints
- * a short-lived installation token per deploy from it, so a source created
- * without one cannot be built. A GitLab source is cloneable through either an
- * `installationId` (its OAuth connection) or a `credentialId` (a generated
- * deploy key); `git` sources only ever use the latter.
+ * `connectionId` is what makes a GitHub repository cloneable — the instance
+ * mints a short-lived installation token per deploy from it, so a repository
+ * created without one cannot be built. A GitLab repository is cloneable through
+ * either a `connectionId` (its OAuth connection) or a `secretId` (a generated
+ * deploy key); `git` repositories only ever use the latter.
  */
-export async function createSource(
+export async function createRepository(
   body: Readonly<{
-    provider: SourceProvider
+    provider: RepositoryProvider
     repositoryUrl: string
-    installationId?: string | null
+    connectionId?: string | null
     /**
      * Deploy key from {@link createGitlabDeployKey}. For `gitlab`, supply
-     * exactly one of this or `installationId` — the instance rejects both.
+     * exactly one of this or `connectionId` — the instance rejects both.
      */
-    credentialId?: string | null
+    secretId?: string | null
     repositoryExternalId?: string | null
     defaultBranch?: string | null
-    autoDeploy?: SourceAutoDeploy
+    autoDeploy?: RepositoryAutoDeploy
   }>
 ): Promise<{ ok: true; id: string }> {
-  return await apiFetch(`${CLIENT_API}/sources`, {
+  return await apiFetch(`${CLIENT_API}/repositories`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
-export async function updateSource(
-  sourceId: string,
+export async function updateRepository(
+  repositoryId: string,
   patch: Readonly<{
-    autoDeploy?: SourceAutoDeploy
+    autoDeploy?: RepositoryAutoDeploy
     defaultBranch?: string | null
     subdirectory?: string | null
   }>
 ): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/sources/${sourceId}`, {
+  return await apiFetch(`${CLIENT_API}/repositories/${repositoryId}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
@@ -3369,13 +3380,13 @@ export async function updateSource(
 /**
  * Disconnect a repository from the organization.
  *
- * Answers **409** {@link SOURCE_REFERENCED_BY_COMPOSE_ERROR} while any stored
- * compose document still names the source in `x-turbopanel.source.sourceId` —
+ * Answers **409** {@link REPOSITORY_REFERENCED_BY_COMPOSE_ERROR} while any stored
+ * compose document still names the repository in `x-turbopanel.source.sourceId` —
  * the row is what a bound service clones through, so dropping it would leave a
  * service that cannot build. Detach it from the service first.
  */
-export async function deleteSource(sourceId: string): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/sources/${sourceId}`, {
+export async function deleteRepository(repositoryId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/repositories/${repositoryId}`, {
     method: 'DELETE',
   })
 }
@@ -3383,15 +3394,15 @@ export async function deleteSource(sourceId: string): Promise<{ ok: true }> {
 /**
  * Query string for a connect redirect.
  *
- * `appId` names which registered application to connect through — an instance
+ * `forgeId` names which registered application to connect through — an instance
  * may hold several per provider. `organizationId` is there because these are
  * **top-level browser navigations**, and a navigation carries no
  * `X-Turbopanel-Organization-Id`; the control plane accepts the query param as
- * the header's equivalent. Neither value is a credential: the session cookie
+ * the header's equivalent. Neither value is a secret: the session cookie
  * and the signed `state` are what authorize the flow.
  */
-function connectQuery(appId: string): string {
-  const params = new URLSearchParams({ appId })
+function connectQuery(forgeId: string): string {
+  const params = new URLSearchParams({ forgeId })
   const organizationId = getActiveOrganizationId()
   if (organizationId) params.set('organizationId', organizationId)
   return params.toString()
@@ -3406,8 +3417,8 @@ function connectQuery(appId: string): string {
  * there to choose an account and pick repositories. Following it with `fetch`
  * would consume the redirect and show nothing.
  */
-export function githubAppInstallUrl(appId: string): string {
-  return controlPlaneUrl(`${CLIENT_API}/sources/github/install?${connectQuery(appId)}`)
+export function githubAppInstallUrl(forgeId: string): string {
+  return controlPlaneUrl(`${CLIENT_API}/repositories/github/install?${connectQuery(forgeId)}`)
 }
 
 /**
@@ -3417,22 +3428,22 @@ export function githubAppInstallUrl(appId: string): string {
  * GitLab's authorize page, and the operator has to *land* there to approve the
  * grant. Following it with `fetch` would consume the redirect and show nothing.
  */
-export function gitlabOauthConnectUrl(appId: string): string {
-  return controlPlaneUrl(`${CLIENT_API}/sources/gitlab/oauth?${connectQuery(appId)}`)
+export function gitlabOauthConnectUrl(forgeId: string): string {
+  return controlPlaneUrl(`${CLIENT_API}/repositories/gitlab/oauth?${connectQuery(forgeId)}`)
 }
 
 /** What the deploy-key endpoint hands back — the public half, exactly once. */
 export type GitDeployKey = {
   ok: true
-  /** Pass as `credentialId` when creating the source. */
-  credentialId: string
+  /** Pass as `secretId` when creating the repository. */
+  secretId: string
   /** `ssh-ed25519 …` line to add to the project as a **read-only** Deploy Key. */
   publicKey: string
   fingerprint: string
 }
 
 /**
- * Mint a read-only deploy keypair for a GitLab source that will not use OAuth.
+ * Mint a read-only deploy keypair for a GitLab repository that will not use OAuth.
  *
  * The private half never leaves the instance unsealed; the public half comes
  * back **once**, here, and is not retrievable afterwards — so a caller that
@@ -3443,7 +3454,7 @@ export type GitDeployKey = {
 export async function createGitlabDeployKey(
   body: Readonly<{ name: string }>
 ): Promise<GitDeployKey> {
-  return await apiFetch(`${CLIENT_API}/sources/gitlab/deploy-keys`, {
+  return await apiFetch(`${CLIENT_API}/repositories/gitlab/deploy-keys`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
@@ -3724,7 +3735,7 @@ export type DeployPreviewServer = {
  * What one Git-backed service would check out and build, from the prepare
  * layer's already-resolved `sourceMaterial[]`.
  *
- * Preview never mints a token or seals a credential, so this is shape only —
+ * Preview never mints a token or seals a secret, so this is shape only —
  * and deliberately only the non-secret half: which source, which ref, which
  * commit, and the release id the deploy would publish under.
  */
@@ -3732,7 +3743,7 @@ export type DeployPreviewSource = {
   composeServiceName: string
   sourceId: string
   provider: 'github' | 'git'
-  /** Credential-free by contract on both wire parsers. */
+  /** Secret-free by contract on both wire parsers. */
   cloneUrl: string
   ref: string
   commitSha: string
@@ -3792,16 +3803,16 @@ export async function fetchDeployPreview(environmentId: string): Promise<DeployP
 export type StorageKind = 'volume' | 'directory' | 'file'
 export type StorageAccessMode = 'single_writer' | 'multi_reader' | 'multi_writer'
 export type StorageRetention = 'retain' | 'delete'
-export type LocationProvider = 'docker' | 'path'
-export type LocationRole = 'primary' | 'replica' | 'scratch' | 'archive'
-export type LocationState =
+export type CopyProvider = 'docker' | 'path'
+export type CopyRole = 'primary' | 'replica' | 'scratch' | 'archive'
+export type CopyState =
   'pending' | 'materializing' | 'ready' | 'syncing' | 'stale' | 'failed' | 'retiring'
 
-export type StorageLocationRecord = {
+export type StorageCopyRecord = {
   id: string
   storageId: string
   serverId: string | null
-  credentialId: string | null
+  secretId: string | null
   provider: string
   role: string
   state: string
@@ -3845,7 +3856,7 @@ export type StorageRecord = {
   options: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
-  locations: StorageLocationRecord[]
+  copies: StorageCopyRecord[]
   mounts: StorageMountRecord[]
 }
 
@@ -3861,12 +3872,12 @@ export type CreateStorageBody = {
   principalId?: string | null
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
-  location?: {
-    provider: LocationProvider
+  copy?: {
+    provider: CopyProvider
     serverId: string
     path?: string
-    role?: LocationRole
-    state?: LocationState
+    role?: CopyRole
+    state?: CopyState
   }
   mount?: {
     serviceId: string
@@ -3926,6 +3937,240 @@ export async function updateStorageMount(
 
 export async function deleteStorage(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/storage/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export type TagRecord = {
+  id: string
+  organizationId: string
+  name: string
+  description: string | null
+  color: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export const TAGGABLE_PARENT_KEYS = [
+  'serverId',
+  'workspaceId',
+  'projectId',
+  'environmentId',
+  'serviceId',
+  'datacenterId',
+  'storageId',
+] as const
+
+export type TaggableParentKey = (typeof TAGGABLE_PARENT_KEYS)[number]
+
+export const TASK_LIST_KEYS = ['serviceId', 'environmentId'] as const
+
+export type TaskListKey = (typeof TASK_LIST_KEYS)[number]
+
+/**
+ * Object with exactly one selected key; every other allowed key is `never` so
+ * a value held in a variable cannot satisfy two parents at once.
+ */
+type ExclusiveStringKeys<Keys extends string> = {
+  [K in Keys]: { readonly [P in K]: string } & {
+    readonly [P in Exclude<Keys, K>]?: never
+  }
+}[Keys]
+
+/**
+ * Exactly one parent. Structurally exclusive so a caller cannot send two.
+ */
+export type TaggableParentFilter = ExclusiveStringKeys<TaggableParentKey>
+
+export type MarkerRecord = {
+  id: string
+  tagId: string
+  createdAt: string
+  serverId?: string
+  workspaceId?: string
+  projectId?: string
+  environmentId?: string
+  serviceId?: string
+  datacenterId?: string
+  storageId?: string
+}
+
+/**
+ * Require exactly one populated key from `allowedKeys`. Extra keys (e.g.
+ * `tagIds`) are ignored. Throws rather than silently picking the first match.
+ */
+export function requireExclusiveQueryEntry<K extends string>(
+  record: Readonly<Record<string, unknown>>,
+  allowedKeys: readonly K[],
+): readonly [K, string] {
+  const populated: K[] = []
+  for (const key of allowedKeys) {
+    const value = record[key]
+    if (typeof value !== 'string' || value.length === 0) continue
+    populated.push(key)
+  }
+  if (populated.length !== 1) {
+    throw new TypeError(
+      `Expected exactly one of ${allowedKeys.join(', ')}; received ${String(populated.length)}`,
+    )
+  }
+  const key = populated[0]
+  if (!key) {
+    throw new TypeError(
+      `Expected exactly one of ${allowedKeys.join(', ')}; received 0`,
+    )
+  }
+  const value = record[key]
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`Expected ${key} to be a non-empty string`)
+  }
+  return [key, value]
+}
+
+export async function fetchTags(
+  scope?: TaggableParentFilter,
+): Promise<{ tags: TagRecord[] }> {
+  if (!scope) return await apiFetch(`${CLIENT_API}/tags`)
+  const [key, value] = requireExclusiveQueryEntry(
+    { ...scope },
+    TAGGABLE_PARENT_KEYS,
+  )
+  const params = new URLSearchParams({ [key]: value })
+  return await apiFetch(`${CLIENT_API}/tags?${params.toString()}`)
+}
+
+export async function fetchTag(id: string): Promise<{ tag: TagRecord }> {
+  return await apiFetch(`${CLIENT_API}/tags/${id}`)
+}
+
+export async function createTag(
+  body: Readonly<{
+    name: string
+    description?: string | null
+    color?: string | null
+  }>,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/tags`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateTag(
+  id: string,
+  body: Readonly<{
+    name?: string
+    description?: string | null
+    color?: string | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tags/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteTag(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tags/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchMarkers(
+  tagId: string,
+): Promise<{ markers: MarkerRecord[] }> {
+  const params = new URLSearchParams({ tagId })
+  return await apiFetch(`${CLIENT_API}/markers?${params.toString()}`)
+}
+
+export async function setEntityTags(
+  body: TaggableParentFilter & { tagIds: string[] },
+): Promise<{ ok: true; tags: TagRecord[] }> {
+  requireExclusiveQueryEntry({ ...body }, TAGGABLE_PARENT_KEYS)
+  return await apiFetch(`${CLIENT_API}/markers`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Scheduled-task configuration for a compose service.
+ *
+ * Configuration only — nothing runs yet. Unrelated to the compose-level
+ * `x-turbopanel.cron` block (`src/lib/compose/cron.ts`).
+ */
+export type TaskRecord = {
+  id: string
+  serviceId: string
+  name: string
+  schedule: string
+  command: string
+  timezone: string | null
+  isEnabled: boolean
+  concurrencyPolicy: string
+  timeoutSeconds: number | null
+  metadata: Record<string, unknown> | null
+  options: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type TaskListFilter = ExclusiveStringKeys<TaskListKey>
+
+export async function fetchTasks(
+  filter: TaskListFilter,
+): Promise<{ tasks: TaskRecord[] }> {
+  const [key, value] = requireExclusiveQueryEntry({ ...filter }, TASK_LIST_KEYS)
+  const params = new URLSearchParams({ [key]: value })
+  return await apiFetch(`${CLIENT_API}/tasks?${params.toString()}`)
+}
+
+export async function fetchTask(id: string): Promise<{ task: TaskRecord }> {
+  return await apiFetch(`${CLIENT_API}/tasks/${id}`)
+}
+
+export async function createTask(
+  body: Readonly<{
+    serviceId: string
+    name: string
+    schedule: string
+    command: string
+    timezone?: string | null
+    isEnabled?: boolean
+    concurrencyPolicy?: string
+    timeoutSeconds?: number | null
+    metadata?: Record<string, unknown> | null
+    options?: Record<string, unknown> | null
+  }>,
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateTask(
+  id: string,
+  body: Readonly<{
+    name?: string
+    schedule?: string
+    command?: string
+    timezone?: string | null
+    isEnabled?: boolean
+    concurrencyPolicy?: string
+    timeoutSeconds?: number | null
+    metadata?: Record<string, unknown> | null
+    options?: Record<string, unknown> | null
+  }>,
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteTask(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tasks/${id}`, {
     method: 'DELETE',
   })
 }
@@ -4052,11 +4297,11 @@ export async function createProjectPrincipal(
 }
 
 /**
- * Patch a principal's stewards, runtime entitlements, and/or SSH access.
+ * Patch a principal's tenancies, runtime entitlements, and/or SSH access.
  *
  * Each field is **omitted when undefined** and sent when present, because the
  * API distinguishes the two: absent means "leave them alone", `[]` means
- * "revoke everything". Collapsing them would make a steward-only edit silently
+ * "revoke everything". Collapsing them would make a tenancy-only edit silently
  * strip every entitlement.
  *
  * `reconciled` reports which servers the change was pushed to. Entitlements and

@@ -59,14 +59,14 @@ import {
   type SiteEngine,
 } from '@/lib/compose/service-kind'
 import {
-  SOURCE_AUTO_DEPLOY_OPTIONS,
-  type SourceAutoDeploy,
+  REPOSITORY_AUTO_DEPLOY_OPTIONS,
+  type RepositoryAutoDeploy,
 } from '@/lib/instance-api'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
 import {
-  useSources,
-  useUpdateSource,
+  useRepositories,
+  useUpdateRepository,
 } from '@/lib/queries/releases'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -990,10 +990,12 @@ function UnboundSourcePicker({
  * release is *run*, which the Deployment mode block above states.
  *
  * The auto-deploy policy is the one field here that does not live in compose:
- * it is a column on the org-owned `source` row, because one repository
+ * it is a column on the org-owned `repository` row, because one repository
  * connected to several services has one policy and the webhook surface reads it
  * from there. Editing it therefore takes effect immediately and for every
  * service bound to that repository — which the hint says out loud.
+ *
+ * The compose document key is intentionally still `x-turbopanel.source`.
  *
  * `serviceKind` is passed in only to decide which build modes are offerable:
  * Railpack produces an image, which is something only a container service can
@@ -1014,10 +1016,10 @@ function SourceSection({
 }>) {
   const orgId = getActiveOrganizationId() ?? ''
   const router = useRouter()
-  const sourcesQuery = useSources(orgId)
-  const updateSourceMutation = useUpdateSource(orgId)
+  const repositoriesQuery = useRepositories(orgId)
+  const updateRepositoryMutation = useUpdateRepository(orgId)
 
-  const sources = sourcesQuery.data?.sources ?? []
+  const sources = repositoriesQuery.data?.repositories ?? []
   const row = binding ? sources.find((entry) => entry.id === binding.sourceId) : undefined
   // Omitted means `native` — the same default the compose parser applies, so
   // an untouched binding reads the same here as it does on the instance.
@@ -1049,9 +1051,9 @@ function SourceSection({
 
   const setAutoDeploy = (value: string) => {
     if (!row) return
-    void updateSourceMutation.run({
-      sourceId: row.id,
-      patch: { autoDeploy: value as SourceAutoDeploy },
+    void updateRepositoryMutation.run({
+      repositoryId: row.id,
+      patch: { autoDeploy: value as RepositoryAutoDeploy },
     })
   }
 
@@ -1205,19 +1207,19 @@ function SourceSection({
           <Text style={styles.label}>Auto-deploy</Text>
           <OptionSelect
             value={row?.autoDeploy ?? 'disabled'}
-            options={SOURCE_AUTO_DEPLOY_OPTIONS.map((option) => ({
+            options={REPOSITORY_AUTO_DEPLOY_OPTIONS.map((option) => ({
               value: option.value,
               label: option.label,
             }))}
-            disabled={disabled || !row || updateSourceMutation.isPending}
+            disabled={disabled || !row || updateRepositoryMutation.isPending}
             onChange={setAutoDeploy}
           />
           <Text style={styles.hint}>
             Saved on the repository, not in compose — it applies to every
             service connected to it, and takes effect immediately.
           </Text>
-          {updateSourceMutation.actionError ? (
-            <Text style={styles.hintWarn}>{updateSourceMutation.actionError}</Text>
+          {updateRepositoryMutation.actionError ? (
+            <Text style={styles.hintWarn}>{updateRepositoryMutation.actionError}</Text>
           ) : null}
         </>
       ) : (

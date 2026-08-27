@@ -109,10 +109,10 @@ opens the compose surface, which keeps the single Create. A short muted line
 under the fields says what Continue produces, so the seeded service is not a
 surprise when the surface opens.
 
-**Connecting a repository is not offered here.** A `source` row is org-owned —
+**Connecting a repository is not offered here.** A `repository` row is org-owned —
 several services share one, and the auto-deploy policy lives on the row — so
-that flow has exactly one home, the Sources page. With nothing connected this
-step is an `InlineNotice` linking to `projectSourcesHref(orgId)`; it never grows
+that flow has exactly one home, the Git sources page. With nothing connected this
+step is an `InlineNotice` linking to `projectGitSourcesHref(orgId)`; it never grows
 a second connect surface that would have to stay in sync with the first.
 
 Footer on both repository steps is **Back** / **Continue**. Back from the lane
@@ -153,7 +153,7 @@ provider hiccup would be worse than asking. Likewise the Compose lane falls back
 to Static when the repository's YAML will not parse — TurboPanel did not write
 that file, so it can be anything.
 
-**Reading is opt-in and commit-addressed.** `GET /sources/:id/inspect` fires
+**Reading is opt-in and commit-addressed.** `GET /repositories/:id/inspect` fires
 once, on Continue from the picker — never from rendering it — and is cached by
 `(sourceId, ref)` so stepping back and forth reuses the answer. The probe set is
 fixed server-side: a caller-supplied path list would widen what a compromised

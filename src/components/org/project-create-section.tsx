@@ -12,7 +12,7 @@ import {
   parseRepositoryCompose,
   seedComposeForLane,
   seedHostingCompose,
-} from '@/components/org/project-create/repository-seed'
+} from '@/lib/project-create/repository-seed'
 import { LaneStep } from '@/components/org/project-create/lane-step'
 import {
   detectedComposePath,
@@ -22,6 +22,7 @@ import {
   type RepositoryLane,
 } from '@/lib/compose/repository-lane'
 import { RepositoryStep } from '@/components/org/project-create/repository-step'
+import { resolveWizardSelectedSource } from '@/lib/project-create/selected-source'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
@@ -44,19 +45,19 @@ import {
   type ComposeDocument,
 } from '@/lib/compose'
 import {
-  useSourceInspection,
+  useRepositoryInspection,
   useCreateProject,
   useCreateWorkspace,
   useProjectCatalog,
   useProjects,
-  useSources,
+  useRepositories,
   useWorkspaces,
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectOverviewHref } from '@/lib/project-navigation'
 import type {
   RepositoryInspection,
-  SourceRecord,
+  RepositoryRecord,
 } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
@@ -192,7 +193,7 @@ function isCatalogStep(
 function canContinueFromStep(
   step: Step,
   selectedLane: RepositoryLane | null,
-  selectedSource: SourceRecord | null,
+  selectedSource: RepositoryRecord | null,
 ): boolean {
   if (step === 'lane') return selectedLane != null
   return selectedSource != null
@@ -219,7 +220,7 @@ function continueFromWizardStep(
  * seeding a draft the operator cannot create from.
  */
 function seedForRepositoryLane(
-  source: SourceRecord,
+  source: RepositoryRecord,
   branch: string,
   lane: RepositoryLane,
   inspection: RepositoryInspection | undefined,
@@ -266,6 +267,9 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   const [selectedCode, setSelectedCode] = useState('')
   /** Repository card: the picked source id and ref, until they seed the draft. */
   const [selectedSourceId, setSelectedSourceId] = useState('')
+  const [attachedSource, setAttachedSource] = useState<RepositoryRecord | null>(
+    null,
+  )
   const [repositoryBranch, setRepositoryBranch] = useState('')
   /**
    * `sourceId@branch` the current draft was seeded from. Re-seeding on every
@@ -308,12 +312,12 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
    * the wizard was open disables Continue instead of seeding a draft bound to a
    * source the org no longer has.
    */
-  const sourcesQuery = useSources(orgId, { enabled: step === 'repository' })
+  const repositoriesQuery = useRepositories(orgId, { enabled: step === 'repository' })
   const [selectedLane, setSelectedLane] = useState<RepositoryLane | null>(null)
   // Reading a repository costs a provider round-trip or a clone on a connected
   // server, so it only fires once the operator has actually chosen one and
   // moved on — never from rendering the picker.
-  const inspection = useSourceInspection(
+  const inspection = useRepositoryInspection(
     orgId,
     selectedSourceId,
     repositoryBranch.trim(),
@@ -321,10 +325,12 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   )
   const selectedSource = useMemo(
     () =>
-      (sourcesQuery.data?.sources ?? []).find(
-        (source) => source.id === selectedSourceId,
-      ) ?? null,
-    [sourcesQuery.data?.sources, selectedSourceId],
+      resolveWizardSelectedSource(
+        repositoriesQuery.data?.repositories,
+        selectedSourceId,
+        attachedSource,
+      ),
+    [repositoriesQuery.data?.repositories, selectedSourceId, attachedSource],
   )
 
   const workspaces = useMemo(
@@ -673,7 +679,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
             selectedSourceId={selectedSourceId}
             branch={repositoryBranch}
             disabled={submitting}
-            onSelectSourceId={setSelectedSourceId}
+            onSelectSourceId={(sourceId, record) => {
+              setSelectedSourceId(sourceId)
+              setAttachedSource(record ?? null)
+            }}
             onBranchChange={setRepositoryBranch}
           />
         ) : null}

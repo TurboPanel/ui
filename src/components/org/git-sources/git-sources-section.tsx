@@ -18,11 +18,11 @@ import {
   githubManifestReturnNotice,
   readGithubManifestReturn,
 } from '@/lib/github-manifest-return'
-import type { GitAppSummary } from '@/lib/instance-api'
-import { useDeleteGitApp, useGitApps } from '@/lib/queries/admin'
-import { useGitInstallations } from '@/lib/queries/releases'
+import type { ForgeSummary } from '@/lib/instance-api'
+import { useDeleteForge, useForges } from '@/lib/queries/admin'
+import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
-import { GitAppEditor, SealedBadge } from './git-app-editor'
+import { ForgeEditor, SealedBadge } from './forge-editor'
 import { GithubAppWizard } from './github-app-wizard'
 
 type Provider = 'github' | 'gitlab'
@@ -47,7 +47,7 @@ function GitAppRow({
   onEdit,
   onCancelEdit,
 }: Readonly<{
-  app: GitAppSummary
+  app: ForgeSummary
   orgId: string
   scope: Scope
   installed: boolean
@@ -56,7 +56,7 @@ function GitAppRow({
   onCancelEdit: () => void
 }>) {
   const router = useRouter()
-  const remove = useDeleteGitApp(scope)
+  const remove = useDeleteForge(scope)
   const [error, setError] = useState<string | null>(null)
 
   return (
@@ -99,7 +99,7 @@ function GitAppRow({
 
       {editing
         ? (
-          <GitAppEditor
+          <ForgeEditor
             provider={app.provider}
             existing={app}
             scope={scope}
@@ -161,8 +161,8 @@ export function GitSourcesSection({
   scope = 'admin',
   orgId = '',
 }: Readonly<{ scope?: Scope; orgId?: string }> = {}) {
-  const query = useGitApps(scope)
-  const installationsQuery = useGitInstallations(orgId, { enabled: orgId.length > 0 })
+  const query = useForges(scope)
+  const connectionsQuery = useGitConnections(orgId, { enabled: orgId.length > 0 })
   const returnParams = useLocalSearchParams<{ created?: string; error?: string }>()
   const returnNotice = githubManifestReturnNotice(readGithubManifestReturn(returnParams))
 
@@ -174,9 +174,9 @@ export function GitSourcesSection({
   const installedAppIds = useMemo(
     () =>
       new Set(
-        (installationsQuery.data?.installations ?? []).map((row) => row.appId),
+        (connectionsQuery.data?.connections ?? []).map((row) => row.forgeId),
       ),
-    [installationsQuery.data],
+    [connectionsQuery.data],
   )
 
   // A row that disappeared underneath an open editor must not leave the form
@@ -263,7 +263,7 @@ export function GitSourcesSection({
               value={adding}
               onChange={(value) => setAdding(value as Provider)}
             />
-            <GitAppEditor
+            <ForgeEditor
               key={adding}
               provider={adding}
               scope={scope}

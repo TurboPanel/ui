@@ -39,8 +39,9 @@ const NODE_VERSION_RE = /^\d{1,3}(\.\d{1,3}){0,2}$/
  *
  * Mirrors the instance type in `turbopanel/src/lib/compose/service-kind.ts`.
  * `sourceId` shape is all this module can check — whether the id resolves is
- * decided by the instance route layer (and, once the UI has a sources list, by
- * passing `knownSourceIds` into `lintComposeYaml`).
+ * decided by the instance route layer (and, once the UI has a repositories
+ * list, by passing `knownSourceIds` into `lintComposeYaml`). The compose
+ * document key is intentionally still `x-turbopanel.source`.
  */
 export type ComposeServiceSourceExtension = {
   sourceId: string

@@ -3,9 +3,9 @@ import { StyleSheet, View } from 'react-native'
 import { FormSelect } from '@/components/org/form-select'
 import { DeployKeySource } from '@/components/org/git-sources/deploy-key-source'
 import { Button, FormField, InlineNotice, LoadingState } from '@/components/ui'
-import { attachSource, type GitRepositorySummary } from '@/lib/instance-api'
-import { useGitApps } from '@/lib/queries/admin'
-import { useGitInstallations, useInstallationRepositories } from '@/lib/queries/releases'
+import { type GitRepositorySummary, type RepositoryRecord } from '@/lib/instance-api'
+import { useForges } from '@/lib/queries/admin'
+import { useAttachRepository, useGitConnections, useConnectionRepositories } from '@/lib/queries/releases'
 import { spacing } from '@/lib/theme'
 
 /**
@@ -17,11 +17,11 @@ import { spacing } from '@/lib/theme'
  * it may not even be able to clone. Each level narrows the next.
  *
  * No new provider data is needed for it. A GitHub installation is scoped to
- * exactly one account, so `installation.accountLogin` *is* the owner for every
- * repository it returns, and `appId` on the installation gives the top level.
+ * exactly one account, so `connection.accountLogin` *is* the owner for every
+ * repository it returns, and `forgeId` on the connection gives the top level.
  *
- * Choosing a repository resolves it to a `source` row through
- * `POST /sources/attach` — idempotent, so picking the same repository from a
+ * Choosing a repository resolves it to a `repository` row through
+ * `POST /repositories/attach` — idempotent, so picking the same repository from a
  * second project reuses the first project's binding rather than creating a
  * rival one with its own auto-deploy policy.
  */
@@ -36,35 +36,41 @@ export function RepositoryPicker({
   /**
    * Receives the resolved `source.id` once the repository is bound. The summary
    * is `null` on the deploy-key lane, where the instance never saw the provider
-   * — all it was given is a clone URL.
+   * — all it was given is a clone URL. The attached row is passed when attach
+   * fetched it, so callers that gate on `useRepositories()` do not wait on a
+   * list that still lacks the new id.
    */
-  onPick: (sourceId: string, repository: GitRepositorySummary | null) => void
+  onPick: (
+    sourceId: string,
+    repository: GitRepositorySummary | null,
+    record?: RepositoryRecord,
+  ) => void
   /** Nothing to pick from yet — the caller decides where to send the operator. */
   onNeedsApp?: () => void
 }>) {
-  const appsQuery = useGitApps('org')
-  const installationsQuery = useGitInstallations(orgId, { enabled: orgId.length > 0 })
+  const appsQuery = useForges('org')
+  const connectionsQuery = useGitConnections(orgId, { enabled: orgId.length > 0 })
+  const attach = useAttachRepository(orgId)
 
   const [deployKeyLane, setDeployKeyLane] = useState(false)
   const [appId, setAppId] = useState('')
-  const [installationId, setInstallationId] = useState('')
-  const [attaching, setAttaching] = useState(false)
+  const [connectionId, setConnectionId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const apps = useMemo(() => appsQuery.data ?? [], [appsQuery.data])
-  const installations = useMemo(
-    () => installationsQuery.data?.installations ?? [],
-    [installationsQuery.data],
+  const connections = useMemo(
+    () => connectionsQuery.data?.connections ?? [],
+    [connectionsQuery.data],
   )
 
   /** Only apps that actually have a connected account can offer repositories. */
   const usableApps = useMemo(
-    () => apps.filter((app) => installations.some((row) => row.appId === app.id)),
-    [apps, installations],
+    () => apps.filter((app) => connections.some((row) => row.forgeId === app.id)),
+    [apps, connections],
   )
   const accounts = useMemo(
-    () => installations.filter((row) => row.appId === appId && !row.suspended),
-    [installations, appId],
+    () => connections.filter((row) => row.forgeId === appId && !row.suspended),
+    [connections, appId],
   )
 
   // Collapse the single-option cases so the common setup is one click, not three.
@@ -72,12 +78,12 @@ export function RepositoryPicker({
     if (!appId && usableApps.length === 1) setAppId(usableApps[0]!.id)
   }, [appId, usableApps])
   useEffect(() => {
-    if (accounts.length === 1) setInstallationId(accounts[0]!.id)
-    else if (!accounts.some((row) => row.id === installationId)) setInstallationId('')
-  }, [accounts, installationId])
+    if (accounts.length === 1) setConnectionId(accounts[0]!.id)
+    else if (!accounts.some((row) => row.id === connectionId)) setConnectionId('')
+  }, [accounts, connectionId])
 
-  const reposQuery = useInstallationRepositories(orgId, installationId, {
-    enabled: installationId.length > 0,
+  const reposQuery = useConnectionRepositories(orgId, connectionId, {
+    enabled: connectionId.length > 0,
   })
   const repositories = reposQuery.data?.repositories ?? []
 
@@ -85,20 +91,22 @@ export function RepositoryPicker({
     const repo = repositories.find((entry) => entry.id === repositoryExternalId)
     if (!repo) return
     setError(null)
-    setAttaching(true)
-    // Resolve to a source row *before* the caller saves anything that names it:
+    // Resolve to a repository row *before* the caller saves anything that names it:
     // an unknown sourceId fails the compose lint outright.
-    attachSource({
-      installationId,
-      repositoryExternalId: repo.id,
-      repositoryUrl: repo.cloneUrl ?? '',
-      defaultBranch: repo.defaultBranch,
-    })
-      .then((result) => onPick(result.id, repo))
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Could not attach the repository')
+    void attach
+      .run({
+        connectionId,
+        repositoryExternalId: repo.id,
+        repositoryUrl: repo.cloneUrl ?? '',
+        defaultBranch: repo.defaultBranch,
       })
-      .finally(() => setAttaching(false))
+      .then((result) => {
+        if (!result.ok) {
+          if (result.error) setError(result.error)
+          return
+        }
+        onPick(result.value.id, repo, result.value.repository)
+      })
   }
 
   // A self-hosted GitLab or a plain SSH remote has no App to enumerate, so the
@@ -114,7 +122,7 @@ export function RepositoryPicker({
     )
   }
 
-  if (appsQuery.isLoading || installationsQuery.isLoading) {
+  if (appsQuery.isLoading || connectionsQuery.isLoading) {
     return <LoadingState label="Loading Git applications…" />
   }
 
@@ -142,6 +150,7 @@ export function RepositoryPicker({
     )
   }
 
+  const attaching = attach.isPending
   const busy = disabled || attaching
 
   return (
@@ -166,7 +175,7 @@ export function RepositoryPicker({
         ? (
           <FormField label="Account">
             <FormSelect
-              value={installationId}
+              value={connectionId}
               options={accounts.map((row) => ({
                 value: row.id,
                 label: row.accountLogin ?? row.externalInstallationId,
@@ -174,13 +183,13 @@ export function RepositoryPicker({
               placeholder="Select an account…"
               disabled={busy}
               accessibilityLabel="GitHub account"
-              onChange={setInstallationId}
+              onChange={setConnectionId}
             />
           </FormField>
         )
         : null}
 
-      {installationId
+      {connectionId
         ? (
           <FormField
             label="Repository"

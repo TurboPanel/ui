@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { SourceRecord } from '@/lib/instance-api'
+import type { RepositoryRecord } from '@/lib/instance-api'
 import { repositoryLabel } from '@/lib/repository-label'
 
-function row(repositoryUrl: string): SourceRecord {
-  return { repositoryUrl } as SourceRecord
+function row(repositoryUrl: string): RepositoryRecord {
+  return { repositoryUrl } as RepositoryRecord
 }
 
 describe('repositoryLabel', () => {

@@ -1,16 +1,18 @@
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import {
-  inspectSource,
+  inspectRepository,
   createGitlabDeployKey,
-  createSource,
-  deleteSource,
-  fetchGitInstallations,
-  fetchInstallationRepositories,
+  createRepository,
+  attachRepository,
+  deleteRepository,
+  fetchGitConnections,
+  fetchConnectionRepositories,
   fetchServiceReleases,
-  fetchSource,
-  fetchSources,
+  fetchRepository,
+  fetchRepositories,
   rollbackEnvironment,
-  updateSource,
+  updateRepository,
+  type RepositoryRecord,
 } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 
@@ -96,32 +98,32 @@ export function useRollbackEnvironment(orgId: string, environmentId: string) {
 }
 
 /** Org-owned Git repository bindings a compose service can attach to. */
-export function useSources(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
+export function useRepositories(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).sources.list,
-    queryFn: fetchSources,
+    queryKey: queryKeys.org(orgId).repositories.list,
+    queryFn: fetchRepositories,
     enabled: (options?.enabled ?? true) && orgId.length > 0,
   })
 }
 
 /**
- * One source with the instance's webhook reachability note folded on.
+ * One repository with the instance's webhook reachability note folded on.
  *
- * `GET /sources/:id` resolves the instance public-URL list on every call to
- * produce that note, so this is **off by default**: a list of ten repositories
- * must not fan out ten of those reads just to render rows that never show the
- * note. Callers opt in per row when one is actually expanded.
+ * `GET /repositories/:id` resolves the instance public-URL list on every call
+ * to produce that note, so this is **off by default**: a list of ten
+ * repositories must not fan out ten of those reads just to render rows that
+ * never show the note. Callers opt in per row when one is actually expanded.
  */
-export function useSourceDetail(
+export function useRepositoryDetail(
   orgId: string,
-  sourceId: string,
+  repositoryId: string,
   options?: Readonly<{ enabled?: boolean }>,
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).sources.detail(sourceId),
-    queryFn: () => fetchSource(sourceId),
+    queryKey: queryKeys.org(orgId).repositories.detail(repositoryId),
+    queryFn: () => fetchRepository(repositoryId),
     enabled:
-      (options?.enabled ?? false) && orgId.length > 0 && sourceId.length > 0,
+      (options?.enabled ?? false) && orgId.length > 0 && repositoryId.length > 0,
   })
 }
 
@@ -131,20 +133,20 @@ export function useSourceDetail(
  * **Off by default.** Reading a repository costs a provider round-trip or a
  * clone on a connected server, so it must never fire from merely rendering a
  * picker — the wizard opts in once the operator has chosen a repository and
- * pressed Continue. Keyed by `(sourceId, ref)` so stepping back and forth in
- * the wizard reuses the answer instead of re-reading.
+ * pressed Continue. Keyed by `(repositoryId, ref)` so stepping back and forth
+ * in the wizard reuses the answer instead of re-reading.
  */
-export function useSourceInspection(
+export function useRepositoryInspection(
   orgId: string,
-  sourceId: string,
+  repositoryId: string,
   ref: string,
   options?: Readonly<{ enabled?: boolean }>,
 ) {
   return useQuery({
-    queryKey: [...queryKeys.org(orgId).sources.detail(sourceId), 'inspect', ref],
-    queryFn: () => inspectSource(sourceId, ref),
+    queryKey: [...queryKeys.org(orgId).repositories.detail(repositoryId), 'inspect', ref],
+    queryFn: () => inspectRepository(repositoryId, ref),
     enabled:
-      (options?.enabled ?? false) && orgId.length > 0 && sourceId.length > 0,
+      (options?.enabled ?? false) && orgId.length > 0 && repositoryId.length > 0,
     // Commit-addressed content; re-reading on a window focus would spend a
     // provider call to learn nothing.
     staleTime: 5 * 60 * 1000,
@@ -157,13 +159,13 @@ export function useSourceInspection(
  * GitHub App installations and connected GitLab accounts alike. Callers that
  * render one provider's picker filter on `provider` themselves.
  */
-export function useGitInstallations(
+export function useGitConnections(
   orgId: string,
   options?: Readonly<{ enabled?: boolean }>,
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).sources.installations,
-    queryFn: fetchGitInstallations,
+    queryKey: queryKeys.org(orgId).repositories.connections,
+    queryFn: fetchGitConnections,
     enabled: (options?.enabled ?? true) && orgId.length > 0,
   })
 }
@@ -173,47 +175,83 @@ export function useGitInstallations(
  * provider credential on the instance, so this is deliberately only fetched
  * once a picker is actually open (`enabled`).
  */
-export function useInstallationRepositories(
+export function useConnectionRepositories(
   orgId: string,
-  installationId: string,
+  connectionId: string,
   options?: Readonly<{ enabled?: boolean }>,
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).sources.repositories(installationId),
-    queryFn: () => fetchInstallationRepositories(installationId),
+    queryKey: queryKeys.org(orgId).repositories.connectionRepositories(connectionId),
+    queryFn: () => fetchConnectionRepositories(connectionId),
     enabled:
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
-      installationId.length > 0,
+      connectionId.length > 0,
   })
 }
 
 /**
- * Register a repository as a source and return its id.
+ * Register a repository and return its id.
  *
- * The compose binding stores only `sourceId`, so connecting a repository to a
+ * The compose binding stores only `sourceId` (compose document field,
+ * intentionally still named `source`), so connecting a repository to a
  * service is two steps: create the row here, then write the id into
  * `x-turbopanel.source` on the service.
  */
-export function useCreateSource(orgId: string) {
+export function useCreateRepository(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: Parameters<typeof createSource>[0]) => createSource(body),
+    mutationFn: (body: Parameters<typeof createRepository>[0]) => createRepository(body),
     fallbackError: 'Failed to connect repository',
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     },
   })
 }
 
 /**
- * Mint a read-only deploy keypair for a GitLab source that will not use OAuth.
+ * Bind a provider repository to this organization and return the row.
  *
- * Not a query: it *creates* a credential, and the public half it returns is
- * shown once and never fetched again. The caller keeps the `credentialId` to
- * pass to `useCreateSource`, and shows the operator the public key to paste
+ * Attach only returns `{ id }`. The project wizard gates Continue on the
+ * cached `useRepositories()` list, so this fetches the row, writes it into
+ * that list, then invalidates so other consumers refetch.
+ */
+export function useAttachRepository(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: async (input: Parameters<typeof attachRepository>[0]) => {
+      const attached = await attachRepository(input)
+      const { repository } = await fetchRepository(attached.id)
+      return { ...attached, repository }
+    },
+    fallbackError: 'Could not attach the repository',
+    onSuccess: async (data) => {
+      const listKey = queryKeys.org(orgId).repositories.list
+      queryClient.setQueryData(
+        listKey,
+        (current: { repositories: RepositoryRecord[] } | undefined) => {
+          const repositories = current?.repositories ?? []
+          if (repositories.some((row) => row.id === data.repository.id)) {
+            return current ?? { repositories }
+          }
+          return { repositories: [...repositories, data.repository] }
+        },
+      )
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).repositories.all,
+      })
+    },
+  })
+}
+
+/**
+ * Mint a read-only deploy keypair for a GitLab repository that will not use OAuth.
+ *
+ * Not a query: it *creates* a secret, and the public half it returns is
+ * shown once and never fetched again. The caller keeps the `secretId` to
+ * pass to `useCreateRepository`, and shows the operator the public key to paste
  * into the project's Deploy Keys.
  */
 export function useCreateGitlabDeployKey(orgId: string) {
@@ -224,31 +262,32 @@ export function useCreateGitlabDeployKey(orgId: string) {
     fallbackError: 'Failed to generate a deploy key',
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     },
   })
 }
 
 /**
- * Patch a `source` row — today the auto-deploy policy.
+ * Patch a `repository` row — today the auto-deploy policy.
  *
- * The policy lives on the source, not on the compose binding: one repository
- * connected to several services has one policy, and the webhook surface reads
- * it from the row. Editing it from a service's Source section therefore affects
- * every service bound to that repository, which the section says out loud.
+ * The policy lives on the repository, not on the compose binding: one
+ * repository connected to several services has one policy, and the webhook
+ * surface reads it from the row. Editing it from a service's Source section
+ * therefore affects every service bound to that repository, which the section
+ * says out loud.
  */
-export function useUpdateSource(orgId: string) {
+export function useUpdateRepository(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (vars: {
-      sourceId: string
-      patch: Parameters<typeof updateSource>[1]
-    }) => updateSource(vars.sourceId, vars.patch),
-    fallbackError: 'Failed to update source',
+      repositoryId: string
+      patch: Parameters<typeof updateRepository>[1]
+    }) => updateRepository(vars.repositoryId, vars.patch),
+    fallbackError: 'Failed to update repository',
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     },
   })
@@ -258,17 +297,17 @@ export function useUpdateSource(orgId: string) {
  * Disconnect a repository from the organization.
  *
  * The instance refuses (**409** `source_referenced_by_compose`) while a stored
- * compose document still names the source, so the caller renders that code as
- * "detach it from the service first" rather than as a failure to retry.
+ * compose document still names the repository, so the caller renders that code
+ * as "detach it from the service first" rather than as a failure to retry.
  */
-export function useDeleteSource(orgId: string) {
+export function useDeleteRepository(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (sourceId: string) => deleteSource(sourceId),
+    mutationFn: (repositoryId: string) => deleteRepository(repositoryId),
     fallbackError: 'Failed to disconnect repository',
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).sources.all,
+        queryKey: queryKeys.org(orgId).repositories.all,
       })
     },
   })

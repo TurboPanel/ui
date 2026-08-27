@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { FormSelect } from '@/components/org/form-select'
 import { orgPanelStyles } from '@/components/org/org-panel-styles'
 import { Button, CopyButton, FormField, InlineNotice, TextField } from '@/components/ui'
-import { useCreateGitlabDeployKey, useCreateSource } from '@/lib/queries/releases'
+import { useCreateGitlabDeployKey, useCreateRepository } from '@/lib/queries/releases'
 import { spacing } from '@/lib/theme'
 
 /**
@@ -39,31 +39,31 @@ export function DeployKeySource({
   const [repositoryUrl, setRepositoryUrl] = useState('')
   const [defaultBranch, setDefaultBranch] = useState('')
   const [deployKey, setDeployKey] = useState<
-    { credentialId: string; publicKey: string } | null
+    { secretId: string; publicKey: string } | null
   >(null)
   const createDeployKeyMutation = useCreateGitlabDeployKey(orgId)
-  const createSourceMutation = useCreateSource(orgId)
+  const createRepositoryMutation = useCreateRepository(orgId)
 
   const trimmedUrl = repositoryUrl.trim()
   const busy = disabled || createDeployKeyMutation.isPending ||
-    createSourceMutation.isPending
+    createRepositoryMutation.isPending
 
   const generate = async () => {
     if (trimmedUrl.length === 0) return
     const created = await createDeployKeyMutation.run({ name: trimmedUrl })
     if (!created.ok) return
     setDeployKey({
-      credentialId: created.value.credentialId,
+      secretId: created.value.secretId,
       publicKey: created.value.publicKey,
     })
   }
 
   const connect = async () => {
     if (!deployKey || trimmedUrl.length === 0) return
-    const created = await createSourceMutation.run({
+    const created = await createRepositoryMutation.run({
       provider,
       repositoryUrl: trimmedUrl,
-      credentialId: deployKey.credentialId,
+      secretId: deployKey.secretId,
       defaultBranch: defaultBranch.trim().length > 0 ? defaultBranch.trim() : null,
     })
     if (!created.ok) return
@@ -140,7 +140,7 @@ export function DeployKeySource({
               label="I have added the key — connect"
               busyLabel="Connecting…"
               variant="primary"
-              busy={createSourceMutation.isPending}
+              busy={createRepositoryMutation.isPending}
               disabled={busy}
               onPress={() => void connect()}
             />
@@ -166,8 +166,8 @@ export function DeployKeySource({
           </Text>
         )
         : null}
-      {createSourceMutation.actionError
-        ? <Text style={orgPanelStyles.error}>{createSourceMutation.actionError}</Text>
+      {createRepositoryMutation.actionError
+        ? <Text style={orgPanelStyles.error}>{createRepositoryMutation.actionError}</Text>
         : null}
     </View>
   )

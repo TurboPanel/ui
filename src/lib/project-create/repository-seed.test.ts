@@ -4,24 +4,24 @@ import {
   parseRepositoryCompose,
   seedComposeForLane,
   seedHostingCompose,
-} from '@/components/org/project-create/repository-seed'
+} from '@/lib/project-create/repository-seed'
 import { lintComposeYaml, composeDocumentToYaml } from '@/lib/compose'
 import {
   DEFAULT_PHP_SERIES,
   readServiceTurbopanelExtension,
 } from '@/lib/compose/service-kind'
-import type { SourceRecord } from '@/lib/instance-api'
+import type { RepositoryRecord } from '@/lib/instance-api'
 
 const SOURCE_ID = '11111111-2222-4333-8444-555555555555'
 
-function source(overrides: Partial<SourceRecord> = {}): SourceRecord {
+function source(overrides: Partial<RepositoryRecord> = {}): RepositoryRecord {
   return {
     id: SOURCE_ID,
     organizationId: 'org',
-    installationId: null,
+    connectionId: null,
     serviceId: null,
     environmentId: null,
-    credentialId: null,
+    secretId: null,
     provider: 'github',
     repositoryUrl: 'https://github.com/turbopanel/Storefront-API.git',
     repositoryExternalId: null,
