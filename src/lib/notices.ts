@@ -294,37 +294,84 @@ function parseGradleDependencyLine(
 ): { name: string; version: string } | undefined {
   const trimmed = line.trim()
   if (!trimmed || trimmed.includes('project ')) return undefined
-  const marker = /\S*?---\s+(.+)$/.exec(trimmed)
-  if (!marker?.[1]) return undefined
-  let coord = marker[1].replace(/\s+\(.*\)\s*$/, '').trim()
-  let resolvedVersion: string | undefined
-  const resolved = / -> (\S+)/.exec(coord)
-  if (resolved?.[1]) {
-    resolvedVersion = resolved[1]
-    coord = coord.slice(0, coord.indexOf(' -> ')).trim()
-  }
-  const parts = coord.split(':')
+  const coord = gradleCoordinateFromTreeLine(trimmed)
+  if (!coord) return undefined
+  const resolved = splitGradleResolvedCoord(coord)
+  const parts = resolved.declared.split(':')
   if (parts.length < 2) return undefined
   const group = parts[0]?.trim()
   const artifact = parts[1]?.trim()
-  let version = resolvedVersion ?? parts.slice(2).join(':').trim()
-  version = version.replace(/^\{strictly\s+/i, '').replace(/\}$/, '').trim()
+  const version = stripGradleStrictlyVersion(
+    resolved.version ?? parts.slice(2).join(':').trim(),
+  )
   if (!group || !artifact || !version || version === '*') return undefined
   return { name: `${group}:${artifact}`, version }
 }
 
+function gradleCoordinateFromTreeLine(line: string): string | undefined {
+  const marker = line.indexOf('---')
+  if (marker < 0) return undefined
+  const after = line.slice(marker + 3)
+  const coord = after.trimStart()
+  if (coord.length === after.length) return undefined
+  return stripGradleParenSuffix(coord)
+}
+
+function stripGradleParenSuffix(coord: string): string {
+  const end = coord.trimEnd()
+  if (!end.endsWith(')')) return end
+  const open = end.indexOf(' (')
+  if (open < 0) return end
+  return end.slice(0, open).trimEnd()
+}
+
+function splitGradleResolvedCoord(
+  coord: string,
+): { declared: string; version?: string } {
+  const arrow = ' -> '
+  const at = coord.indexOf(arrow)
+  if (at < 0) return { declared: coord }
+  const version = leadingNonWhitespace(coord.slice(at + arrow.length))
+  return {
+    declared: coord.slice(0, at).trimEnd(),
+    version: version || undefined,
+  }
+}
+
+function stripGradleStrictlyVersion(version: string): string {
+  let out = version
+  const prefix = '{strictly'
+  if (out.length > prefix.length && startsWithIgnoreCase(out, prefix)) {
+    const rest = out.slice(prefix.length)
+    if (rest.trimStart() !== rest) out = rest.trimStart()
+  }
+  if (out.endsWith('}')) out = out.slice(0, -1)
+  return out.trim()
+}
+
+function leadingNonWhitespace(text: string): string {
+  let end = 0
+  while (end < text.length) {
+    const ch = text.at(end)
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') break
+    end += 1
+  }
+  return text.slice(0, end)
+}
+
 export function licenseFromPomXml(xml: string): string {
-  const licensesBlock = /<licenses\b[\s\S]*?<\/licenses>/i.exec(xml)?.[0] ?? ''
-  const name = /<name>\s*([^<]+)\s*<\/name>/i.exec(licensesBlock)?.[1]?.trim() ?? ''
-  return spdxFromLicenseName(name)
+  const licensesBlock = xmlElementBlock(xml, 'licenses') ?? ''
+  return spdxFromLicenseName(firstXmlElementValue(licensesBlock, 'name') ?? '')
 }
 
 export function packagesFromMavenPom(xml: string): NoticePackage | undefined {
-  const project = /<project\b[\s\S]*?<\/project>/i.exec(xml)?.[0] ?? xml
-  const withoutParent = project.replace(/<parent\b[\s\S]*?<\/parent>/i, '')
-  const group = firstPomTag(withoutParent, 'groupId') ?? firstPomTag(project, 'groupId')
-  const artifact = firstPomTag(withoutParent, 'artifactId')
-  const version = firstPomTag(withoutParent, 'version') ?? firstPomTag(project, 'version')
+  const project = xmlElementBlock(xml, 'project') ?? xml
+  const withoutParent = withoutFirstXmlElement(project, 'parent')
+  const group = firstXmlElementValue(withoutParent, 'groupId') ??
+    firstXmlElementValue(project, 'groupId')
+  const artifact = firstXmlElementValue(withoutParent, 'artifactId')
+  const version = firstXmlElementValue(withoutParent, 'version') ??
+    firstXmlElementValue(project, 'version')
   if (!group || !artifact || !version) return undefined
   return {
     name: `${group}:${artifact}`,
@@ -335,10 +382,55 @@ export function packagesFromMavenPom(xml: string): NoticePackage | undefined {
   }
 }
 
-function firstPomTag(xml: string, tag: string): string | undefined {
-  const match = new RegExp(String.raw`<${tag}>\s*([^<]+)\s*</${tag}>`, 'i').exec(xml)
-  const value = match?.[1]?.trim()
-  return value && value.length > 0 ? value : undefined
+function firstXmlElementValue(xml: string, tag: string): string | undefined {
+  const open = `<${tag}>`
+  const close = `</${tag}>`
+  const start = indexOfIgnoreCase(xml, open)
+  if (start < 0) return undefined
+  const valueStart = start + open.length
+  const end = indexOfIgnoreCase(xml, close, valueStart)
+  if (end < 0) return undefined
+  const value = xml.slice(valueStart, end).trim()
+  if (!value || value.includes('<')) return undefined
+  return value
+}
+
+function xmlElementBlock(xml: string, tag: string): string | undefined {
+  const open = `<${tag}`
+  const close = `</${tag}>`
+  const start = indexOfIgnoreCase(xml, open)
+  if (start < 0) return undefined
+  const afterName = xml.at(start + open.length)
+  if (afterName !== undefined && isAsciiWordChar(afterName)) return undefined
+  const end = indexOfIgnoreCase(xml, close, start + open.length)
+  if (end < 0) return undefined
+  return xml.slice(start, end + close.length)
+}
+
+function withoutFirstXmlElement(xml: string, tag: string): string {
+  const block = xmlElementBlock(xml, tag)
+  if (!block) return xml
+  const at = xml.indexOf(block)
+  if (at < 0) return xml
+  return xml.slice(0, at) + xml.slice(at + block.length)
+}
+
+function isAsciiWordChar(ch: string): boolean {
+  const code = ch.codePointAt(0) ?? -1
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95
+  )
+}
+
+function indexOfIgnoreCase(haystack: string, needle: string, from = 0): number {
+  return haystack.toLowerCase().indexOf(needle.toLowerCase(), from)
+}
+
+function startsWithIgnoreCase(value: string, prefix: string): boolean {
+  return value.slice(0, prefix.length).toLowerCase() === prefix.toLowerCase()
 }
 
 export function spdxFromLicenseName(name: string): string {

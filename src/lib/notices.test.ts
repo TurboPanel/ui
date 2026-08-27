@@ -139,10 +139,13 @@ describe('packagesFromGradleDependencyReport', () => {
   it('parses release-variant coordinates including resolved versions', () => {
     const packages = packagesFromGradleDependencyReport(`
 +--- androidx.core:core:1.13.0
+|    \\--- androidx.annotation:annotation:1.7.0 (c)
 +--- org.jetbrains.kotlin:kotlin-stdlib:{strictly 1.9.24} -> 1.9.24 (*)
++--- project :app
 `)
     expect(packages.map((row) => `${row.name}@${row.version}`)).toEqual([
       'androidx.core:core@1.13.0',
+      'androidx.annotation:annotation@1.7.0',
       'org.jetbrains.kotlin:kotlin-stdlib@1.9.24',
     ])
     expect(packages.every((row) => row.source === 'gradle')).toBe(true)
@@ -158,10 +161,34 @@ describe('packagesFromMavenPom', () => {
   <licenses><license><name>The Apache Software License, Version 2.0</name></license></licenses>
 </project>`
     expect(licenseFromPomXml(xml)).toBe('Apache-2.0')
+    expect(
+      licenseFromPomXml(
+        `<licenses><license><NAME>  The Apache Software License, Version 2.0  </NAME></license></licenses>`,
+      ),
+    ).toBe('Apache-2.0')
     expect(packagesFromMavenPom(xml)).toEqual({
       name: 'androidx.core:core',
       version: '1.13.0',
       license: 'Apache-2.0',
+      role: 'native',
+      source: 'pom',
+    })
+  })
+
+  it('inherits groupId from parent when the project omits it', () => {
+    const xml = `<project>
+  <parent>
+    <groupId>androidx.core</groupId>
+    <artifactId>core-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>core</artifactId>
+  <version>1.13.0</version>
+</project>`
+    expect(packagesFromMavenPom(xml)).toEqual({
+      name: 'androidx.core:core',
+      version: '1.13.0',
+      license: '',
       role: 'native',
       source: 'pom',
     })
