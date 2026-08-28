@@ -178,6 +178,27 @@ function DockerNetworkListPanel({
 }
 
 /**
+ * Platform-allocated managed-engine network. The API refuses PATCH and DELETE
+ * on these rows, so this is a read-only listing with no affordances. Hidden
+ * entirely until the platform has allocated one.
+ */
+function ManagedNetworkListPanel({
+  networks,
+}: Readonly<{ networks: NetworkRecord[] }>) {
+  if (networks.length === 0) return null
+
+  return (
+    <SectionPanel title="Managed networks" hint="Platform-allocated">
+      <View style={styles.list}>
+        {networks.map((network) => (
+          <NetworkListItem key={network.id} network={network} showDelete={false} />
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
+/**
  * Docker network registry for compose external networks.
  * Deliberately quiet — deploy identity, not topology.
  */
@@ -187,9 +208,11 @@ export function NetworkDockerSection({
   const canManage = useCan('organization', orgId, 'organization:manage')
 
   const networksQuery = useNetworks(orgId, { kind: 'docker' })
+  const managedQuery = useNetworks(orgId, { kind: 'managed' })
   const serversQuery = useOrgServers(orgId)
 
   const networks = networksQuery.data?.networks ?? []
+  const managedNetworks = managedQuery.data?.networks ?? []
   const servers = serversQuery.data?.servers ?? []
 
   const loading =
@@ -220,6 +243,8 @@ export function NetworkDockerSection({
         loading={loading}
         canManage={canManage}
       />
+
+      <ManagedNetworkListPanel networks={managedNetworks} />
     </View>
   )
 }

@@ -11,6 +11,9 @@ import type { NetworkKind, NetworkRecord, IpRecord } from '@/lib/instance-api'
 import { spacing } from '@/lib/theme'
 
 function networkTitle(network: NetworkRecord): string {
+  if (network.kind === 'managed') {
+    return network.name?.trim() || 'Managed database network'
+  }
   const dockerName = readDockerNetworkName(network)
   if (dockerName) return network.name?.trim() || dockerName
   return network.name?.trim() || network.cidr?.trim() || network.id
@@ -27,7 +30,15 @@ export function readDockerNetworkName(network: NetworkRecord): string | null {
 
 function kindLabel(kind: NetworkKind): string {
   if (kind === 'datacenter') return 'Datacenter'
+  if (kind === 'managed') return 'Managed'
   return 'Docker'
+}
+
+/** Platform-allocated rows carry no CIDR by design — stay silent about it. */
+function renderCidr(network: NetworkRecord, isPlatformOwned: boolean) {
+  if (network.cidr) return <MonoText selectable>{network.cidr}</MonoText>
+  if (isPlatformOwned) return null
+  return <Text style={orgPanelStyles.muted}>No CIDR</Text>
 }
 
 export function NetworkListItem({
@@ -42,11 +53,14 @@ export function NetworkListItem({
   showDelete?: boolean
 }>) {
   const dockerName = readDockerNetworkName(network)
+  // Platform-allocated rows are read-only: the API refuses PATCH and DELETE
+  // with `managed_network_immutable`, so offer no affordance for either.
+  const isPlatformOwned = network.kind === 'managed'
   return (
     <View style={orgPanelStyles.detailCard}>
       <View style={styles.cardHeader}>
         <Text style={orgPanelStyles.detailTitle}>{networkTitle(network)}</Text>
-        {showDelete && onDelete ? (
+        {showDelete && onDelete && !isPlatformOwned ? (
           <ConfirmButton
             label={isDeleting ? 'Deleting…' : 'Delete'}
             confirmLabel="Delete network"
@@ -59,11 +73,10 @@ export function NetworkListItem({
       <View style={styles.badgeRow}>
         <Badge label={kindLabel(network.kind)} />
         {dockerName ? <MonoText selectable>{dockerName}</MonoText> : null}
-        {network.cidr ? (
-          <MonoText selectable>{network.cidr}</MonoText>
-        ) : (
-          <Text style={orgPanelStyles.muted}>No CIDR</Text>
-        )}
+        {isPlatformOwned ? (
+          <Text style={orgPanelStyles.muted}>Platform-managed</Text>
+        ) : null}
+        {renderCidr(network, isPlatformOwned)}
       </View>
       <Text style={orgPanelStyles.detailLine}>
         <Text style={orgPanelStyles.detailLabel}>Created: </Text>

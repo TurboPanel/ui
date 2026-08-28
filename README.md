@@ -1,6 +1,6 @@
 # TurboPanel UI
 
-**Web-first signed-in product console** for TurboPanel — fleet management, deploy workflows, managed services, networking, and admin surfaces.
+**Web-first signed-in product console** for [TurboPanel](https://turbopanel.io), one place to run everything you host — fleet management, deploy workflows, managed services, networking, and admin surfaces.
 
 [![Release](https://img.shields.io/github/v/release/TurboPanel/ui?label=release)](https://github.com/TurboPanel/ui/releases)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=turbopanel_ui)

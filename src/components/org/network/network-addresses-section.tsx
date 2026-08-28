@@ -72,6 +72,16 @@ function datacenterOptions(
   ]
 }
 
+/**
+ * `kind: managed` rows are platform-allocated with no CIDR of their own —
+ * Docker owns the subnet — so they are never a target for IP assignment.
+ */
+function selectableNetworks(
+  networks: readonly NetworkRecord[],
+): NetworkRecord[] {
+  return networks.filter((row) => row.kind !== 'managed')
+}
+
 function siteSubnetsForDatacenter(
   networks: readonly NetworkRecord[],
   datacenterId: string,
@@ -742,8 +752,12 @@ export function NetworkAddressesSection({
 
   const ips = ipsQuery.data?.ips ?? []
   const servers = orEmptyArray(serversQuery.data?.servers)
-  const networks = orEmptyArray(networksQuery.data?.networks)
+  const allNetworks = orEmptyArray(networksQuery.data?.networks)
   const datacenters = orEmptyArray(datacentersQuery.data?.datacenters)
+
+  // Pickers offer only operator-owned networks; the lookup map keeps every row
+  // so an already-assigned address still resolves to a label.
+  const networks = useMemo(() => selectableNetworks(allNetworks), [allNetworks])
 
   const loading = isIpsOverviewLoading({
     ipsLoading: ipsQuery.isLoading,
@@ -777,7 +791,7 @@ export function NetworkAddressesSection({
   const savingEdit = updateMutation.isPending
 
   const serverById = useMemo(() => indexById(servers), [servers])
-  const networkById = useMemo(() => indexById(networks), [networks])
+  const networkById = useMemo(() => indexById(allNetworks), [allNetworks])
   const datacenterById = useMemo(() => indexById(datacenters), [datacenters])
 
   const handleCreateScopeChange = (next: IpScope) => {

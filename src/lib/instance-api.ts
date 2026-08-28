@@ -1620,7 +1620,15 @@ export type ContainerRecord = {
   updatedAt: string
 }
 
-export type NetworkKind = 'datacenter' | 'docker'
+/** Kinds an operator can create through `POST /networks`. */
+export type CreatableNetworkKind = 'datacenter' | 'docker'
+
+/**
+ * Kinds a `network` row can carry on read. `managed` is the platform-allocated
+ * org-wide managed-engine network (one per org) — listable and filterable, but
+ * never operator-created, patched, or deleted.
+ */
+export type NetworkKind = CreatableNetworkKind | 'managed'
 
 export type NetworkRecord = {
   id: string
@@ -2332,7 +2340,7 @@ export async function fetchNetworks(filters?: {
 
 export async function createNetwork(body: {
   organizationId: string
-  kind: NetworkKind
+  kind: CreatableNetworkKind
   datacenterId?: string | null
   serverId?: string | null
   cidr?: string | null
@@ -2349,7 +2357,7 @@ export async function createNetwork(body: {
 export async function updateNetwork(
   id: string,
   body: Partial<{
-    kind: NetworkKind
+    kind: CreatableNetworkKind
     datacenterId: string | null
     serverId: string | null
     cidr: string | null
