@@ -315,7 +315,20 @@ export type ServerReportedIp = {
   scope: ServerReportedIpScope
   cidr?: string
   interface?: string
+  /** Address sits on the interface carrying the host's default route. */
+  preferred?: boolean
 }
+
+/**
+ * Which fact `OrgServerRecord.address` came from.
+ *
+ * - `observed` — the peer address the control plane saw the daemon connect
+ *   from (through a Cloudflare Tunnel, that is `CF-Connecting-IP`).
+ * - `interface` — a host interface the daemon reported. Used when the observed
+ *   address was the reverse proxy or a forwarded port rather than the host.
+ * - `local` — daemon shares a host with the control plane (Unix socket).
+ */
+export type ServerAddressSource = 'observed' | 'interface' | 'local'
 
 export type ServerTimeSync = {
   timezone?: string
@@ -364,7 +377,14 @@ export type OrgServerRecord = {
   createdAt: string
   connected: boolean
   hostname: string | null
+  /** Raw peer address seen on the wire. Diagnostic — prefer `address`. */
   remoteAddress: string | null
+  /** Best-known network address for this host; null until one is known. */
+  address: string | null
+  addressSource: ServerAddressSource | null
+  addressScope: ServerReportedIpScope | null
+  /** Host interface `address` belongs to, when known. */
+  addressInterface: string | null
   lastInboundAt: string | null
   connectedAt: string | null
   /** Last online/offline transition (`server.status_changed_at`). */

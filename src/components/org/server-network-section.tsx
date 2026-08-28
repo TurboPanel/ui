@@ -12,6 +12,7 @@ import {
   fetchNetworks,
   type RelayRecord,
   type ServerDetailRecord,
+  type ServerReportedIp,
 } from '@/lib/instance-api'
 import { datacenterHref, networkFabricHref } from '@/lib/org-navigation'
 import { useOrgFabric } from '@/lib/queries/fabric'
@@ -22,18 +23,31 @@ import { addressFamilyLabel } from '@/lib/cidr'
 
 // Docker/veth/bridge interfaces are filtered daemon-side before addresses reach the API.
 
+/**
+ * `preferred` marks the address on the host's default-route interface — the one
+ * a peer actually reaches it on, and the one the instance picks when the
+ * observed peer address is a proxy artifact.
+ */
 function AddressGroup({
   label,
   addresses,
-}: Readonly<{ label: string; addresses: string[] }>) {
+}: Readonly<{ label: string; addresses: ServerReportedIp[] }>) {
   if (addresses.length === 0) return null
   return (
     <View style={styles.group}>
       <Text style={orgPanelStyles.detailTitle}>{label}</Text>
-      {addresses.map((addr) => (
-        <MonoText key={addr} style={styles.mono} selectable>
-          {addr}
-        </MonoText>
+      {addresses.map((row) => (
+        <View key={row.address} style={styles.pinRow}>
+          <MonoText style={styles.mono} selectable>
+            {row.address}
+          </MonoText>
+          {row.interface ? (
+            <Text style={orgPanelStyles.muted}>{row.interface}</Text>
+          ) : null}
+          {row.preferred ? (
+            <Text style={orgPanelStyles.muted}>default route</Text>
+          ) : null}
+        </View>
       ))}
     </View>
   )
@@ -150,18 +164,18 @@ export function ServerNetworkSection({
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const ips = server.ips ?? []
-  const publicIpv4 = ips
-    .filter((row) => row.scope === 'public' && row.version === 4)
-    .map((row) => row.address)
-  const publicIpv6 = ips
-    .filter((row) => row.scope === 'public' && row.version === 6)
-    .map((row) => row.address)
-  const privateIpv4 = ips
-    .filter((row) => row.scope === 'private' && row.version === 4)
-    .map((row) => row.address)
-  const privateIpv6 = ips
-    .filter((row) => row.scope === 'private' && row.version === 6)
-    .map((row) => row.address)
+  const publicIpv4 = ips.filter(
+    (row) => row.scope === 'public' && row.version === 4,
+  )
+  const publicIpv6 = ips.filter(
+    (row) => row.scope === 'public' && row.version === 6,
+  )
+  const privateIpv4 = ips.filter(
+    (row) => row.scope === 'private' && row.version === 4,
+  )
+  const privateIpv6 = ips.filter(
+    (row) => row.scope === 'private' && row.version === 6,
+  )
   const hasLists =
     publicIpv4.length > 0 ||
     publicIpv6.length > 0 ||

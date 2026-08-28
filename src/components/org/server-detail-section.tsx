@@ -886,18 +886,23 @@ export function ServerDetailSection({
 }
 
 /**
- * Header connection line — colocated Unix socket or observed connecting IP.
- * `remoteAddress` is egress seen by the control plane; `__direct__` is local socket.
+ * Header connection line — colocated Unix socket, or the host's address.
+ *
+ * The instance resolves `address` for us: the peer address it observed when
+ * that is genuinely the host's (including through a Cloudflare Tunnel), and a
+ * daemon-reported interface address when the observed one was a reverse proxy
+ * or a forwarded port. Interface-sourced addresses are labelled so nobody reads
+ * one as proof of how the daemon reached us.
  */
 function resolveConnectedViaLabel(server: ServerDetailRecord): string | null {
-  const raw = server.remoteAddress?.trim() ?? ''
-  if (server.colocatedWithInstance === true || raw === '__direct__') {
+  if (server.colocatedWithInstance === true || server.addressSource === 'local') {
     return 'via Local Unix Socket'
   }
-  if (raw) {
-    return `via ${raw}`
-  }
-  return null
+  const address = server.address?.trim()
+  if (!address) return null
+  if (server.addressSource !== 'interface') return `via ${address}`
+  const iface = server.addressInterface?.trim()
+  return iface ? `at ${address} (${iface})` : `at ${address}`
 }
 
 function ServerOverviewTab({
