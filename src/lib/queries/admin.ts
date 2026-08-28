@@ -20,6 +20,11 @@ import {
   updateForge,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import {
+  isControlPlaneRestartError,
+  waitForControlPlaneRecovery,
+} from '@/lib/control-plane-recovery'
+import { samePublicUrlSet } from '@/lib/public-url-entry'
 import { getActiveOrganizationId } from '@/lib/org-context'
 
 export function usePublicUrls(options?: Readonly<{ enabled?: boolean }>) {
@@ -64,10 +69,80 @@ export function useSavePublicUrls() {
   })
 }
 
+/**
+ * Client-side ceiling on the apply request. The control plane gives the
+ * co-located daemon 180 s, but a connection killed by the Caddy reload can hang
+ * far longer than that with nothing on the other end — this bounds it and hands
+ * over to the reconnect wait, which finds out what really happened.
+ */
+const APPLY_REQUEST_DEADLINE_MS = 120_000
+
+async function requestPublicUrlsApply(urls?: string[]): Promise<void> {
+  const controller = new AbortController()
+  const deadline = setTimeout(() => {
+    controller.abort()
+  }, APPLY_REQUEST_DEADLINE_MS)
+  try {
+    await applyPublicUrls(urls, controller.signal)
+  } finally {
+    clearTimeout(deadline)
+  }
+}
+
+export type ApplyPublicUrlsVariables = Readonly<{
+  urls?: string[]
+  /** Fires once the request has died and the reconnect wait starts. */
+  onReconnecting?: () => void
+}>
+
+export type ApplyPublicUrlsOutcome =
+  /** The request survived the reload and the control plane confirmed it. */
+  | { kind: 'applied' }
+  /** The request died, the control plane came back, and the change is there. */
+  | { kind: 'reconnected'; urls: string[] }
+  /** It came back, but holding different addresses — the write never landed. */
+  | { kind: 'not-saved'; urls: string[] }
+  /** It never came back inside the wait window. */
+  | { kind: 'unreachable' }
+
+/**
+ * Apply public URLs, absorbing the control-plane restart the apply itself
+ * causes.
+ *
+ * Regenerating the certificate reloads Caddy, which drops the connection this
+ * request is riding on — an `HTTP 502` from Caddy or the tunnel in front of it,
+ * for work that in fact succeeded. So a restart-shaped failure is answered by
+ * waiting for the control plane and then *re-reading* the stored URLs, which is
+ * both the liveness check and the proof of what landed: the apply route
+ * persists before it dispatches to the daemon, so URLs that match the request
+ * mean the write went through. Anything the control plane actually answered —
+ * a 422 from a non-applying runtime, a 503 with no co-located daemon — still
+ * throws.
+ */
 export function useApplyPublicUrls() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (urls?: string[]) => applyPublicUrls(urls),
+    mutationFn: async ({
+      urls,
+      onReconnecting,
+    }: ApplyPublicUrlsVariables = {}): Promise<ApplyPublicUrlsOutcome> => {
+      try {
+        await requestPublicUrlsApply(urls)
+        return { kind: 'applied' }
+      } catch (err) {
+        if (!isControlPlaneRestartError(err)) throw err
+        onReconnecting?.()
+        const recovery = await waitForControlPlaneRecovery({
+          probe: fetchPublicUrls,
+        })
+        if (recovery.kind === 'unreachable') return { kind: 'unreachable' }
+        const saved = recovery.value.urls
+        if (urls && !samePublicUrlSet(saved, urls)) {
+          return { kind: 'not-saved', urls: saved }
+        }
+        return { kind: 'reconnected', urls: saved }
+      }
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.admin.publicUrls,

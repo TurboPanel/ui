@@ -2396,10 +2396,20 @@ export async function savePublicUrls(urls: string[]): Promise<PublicUrlsResponse
   })
 }
 
-export async function applyPublicUrls(urls?: string[]): Promise<ApplyPublicUrlsResponse> {
+/**
+ * Applying regenerates the control-plane certificate and reloads Caddy, so this
+ * request commonly dies in transit (see `lib/control-plane-recovery.ts`). Pass a
+ * `signal` to bound the wait: without one a dropped connection can leave the
+ * socket hanging well past the control plane's own 180 s apply timeout.
+ */
+export async function applyPublicUrls(
+  urls?: string[],
+  signal?: AbortSignal
+): Promise<ApplyPublicUrlsResponse> {
   return await apiFetch(`${ADMIN_API}/instance/public-urls/apply`, {
     method: 'POST',
     body: urls !== undefined ? JSON.stringify({ urls }) : undefined,
+    signal,
   })
 }
 

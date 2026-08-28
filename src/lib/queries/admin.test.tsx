@@ -252,7 +252,7 @@ describe('admin query hooks', () => {
   })
 
   it('useApplyPublicUrls invalidates public URL cache', async () => {
-    applyPublicUrls.mockResolvedValueOnce({ ok: true })
+    applyPublicUrls.mockResolvedValueOnce({ ok: true, applied: true })
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
@@ -261,14 +261,87 @@ describe('admin query hooks', () => {
     })
 
     await expect(
-      result.current.run(['https://panel.example.com']),
-    ).resolves.toMatchObject({ ok: true })
+      result.current.run({ urls: ['https://panel.example.com'] }),
+    ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.admin.publicUrls,
       })
     })
+  })
+
+  // The apply reloads Caddy with a new certificate, so the request that asked
+  // for it commonly dies in transit even though the work succeeded.
+  it('useApplyPublicUrls confirms the change after the control plane restarts', async () => {
+    applyPublicUrls.mockRejectedValueOnce(
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+    )
+    fetchPublicUrls
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ ok: true, urls: ['https://panel.example.com'] })
+
+    const { result } = renderHook(() => useApplyPublicUrls(), {
+      wrapper: createWrapper(),
+    })
+
+    const onReconnecting = vi.fn()
+    vi.useFakeTimers()
+    try {
+      const pending = result.current.run({
+        urls: ['https://panel.example.com'],
+        onReconnecting,
+      })
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        value: { kind: 'reconnected', urls: ['https://panel.example.com'] },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(onReconnecting).toHaveBeenCalledTimes(1)
+  })
+
+  it('useApplyPublicUrls reports a restart that did not save the change', async () => {
+    applyPublicUrls.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    fetchPublicUrls.mockResolvedValueOnce({ ok: true, urls: [] })
+
+    const { result } = renderHook(() => useApplyPublicUrls(), {
+      wrapper: createWrapper(),
+    })
+
+    vi.useFakeTimers()
+    try {
+      const pending = result.current.run({ urls: ['https://panel.example.com'] })
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        value: { kind: 'not-saved', urls: [] },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('useApplyPublicUrls still surfaces a failure the control plane answered', async () => {
+    applyPublicUrls.mockRejectedValueOnce(
+      new Error(
+        '/api/admin/v1/instance/public-urls/apply failed: HTTP 503: no co-located daemon connected',
+      ),
+    )
+
+    const { result } = renderHook(() => useApplyPublicUrls(), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(
+      result.current.run({ urls: ['https://panel.example.com'] }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('no co-located daemon connected'),
+    })
+    expect(fetchPublicUrls).not.toHaveBeenCalled()
   })
 
   it('useEmailSettings loads email provider settings', async () => {
