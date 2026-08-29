@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { Text } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   projectOverviewHref,
@@ -15,7 +15,7 @@ export default function ProjectIndexScreen() {
   const { loading, needsSetup } = useProjectContext()
 
   if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <Text style={panelStyles.muted}>Loading…</Text>
   }
 
   if (needsSetup) {

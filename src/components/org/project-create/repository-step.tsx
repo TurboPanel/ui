@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
 import { Button, MonoText, TextField } from '@/components/ui'
 import { SOURCE_BRANCH_MAX_LENGTH } from '@/lib/compose/service-kind'
@@ -102,7 +102,7 @@ export function RepositoryStep({
           : "Leave empty to use the repository's default branch."}
       />
 
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Next you get the project&apos;s own compose surface, with one service
         already bound to this repository — rename it, add more, then create.
       </Text>

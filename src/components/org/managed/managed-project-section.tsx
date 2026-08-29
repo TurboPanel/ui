@@ -5,6 +5,7 @@ import {
   ConfirmButton,
   EmptyState,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -23,8 +24,7 @@ import {
     type ManagedVersionSelection,
 } from '@/components/org/managed/managed-version-picker'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { type EnvironmentRecord } from '@/lib/instance-api'
 import { hasReadEligibleReplica } from '@/lib/managed-read-endpoint'
 import { managedReleaseSummary } from '@/lib/managed-releases'
@@ -77,7 +77,7 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -256,7 +256,7 @@ function ManagedSetupPanel({
   return (
     <SectionPanel title="Set up" hint="Pin a server and create the managed service" accent>
       {loading ? <LoadingState label="Loading servers…" /> : null}
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       <View style={styles.serverList}>
         {servers.map((server) => {
           const selected = server.id === serverId
@@ -311,7 +311,7 @@ function ManagedSetupPanel({
           }}
         />
       ) : (
-        <Text style={orgPanelStyles.muted}>You need manage permission to create this service.</Text>
+        <Text style={panelStyles.muted}>You need manage permission to create this service.</Text>
       )}
     </SectionPanel>
   )
@@ -373,7 +373,7 @@ export function ManagedEnvironmentBody({
   }
 
   if (error) {
-    return <Text style={orgPanelStyles.error}>{error}</Text>
+    return <Text style={panelStyles.error}>{error}</Text>
   }
 
   if (revealPassword) {
@@ -1132,7 +1132,7 @@ export function ManagedProjectSection({
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Managed service</Text>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {!activeEnvironment ? (
         <EmptyState title="No environments yet." />

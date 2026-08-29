@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, ConfirmButton, LoadingState } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  ConfirmButton,
+  LoadingState,
+  SectionPanel,
+} from '@/components/ui'
 import type { BindingRecord } from '@/lib/instance-api'
 import {
   managedCatalogEntryForCode,
@@ -97,7 +101,7 @@ export function ServiceBindingsPanel({
 
   return (
     <SectionPanel title="Bound databases" hint="Connected managed clusters">
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       <View style={styles.list}>
         {bindings.map((binding) => {
           const cluster = binding.managedEnvironmentId
@@ -110,16 +114,16 @@ export function ServiceBindingsPanel({
                   {engineLabel(binding.engine)}
                 </Text>
               </View>
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Cluster: </Text>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>Cluster: </Text>
                 {cluster?.name ?? 'Managed database'}
               </Text>
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Database: </Text>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>Database: </Text>
                 {binding.databaseName}
               </Text>
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Prefix: </Text>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>Prefix: </Text>
                 {binding.keyPrefix}
               </Text>
               <View style={styles.keyRow}>

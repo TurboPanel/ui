@@ -6,14 +6,14 @@ import {
   Text,
   View,
 } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
   ConfirmButton,
   EmptyState,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -86,7 +86,7 @@ function TeamScopePicker({
     body = <LoadingState label="Loading teams..." />
   } else if (isError) {
     body = (
-      <Text style={orgPanelStyles.error}>
+      <Text style={panelStyles.error}>
         {errorMessage(error, 'Failed to load teams')}
       </Text>
     )
@@ -132,16 +132,16 @@ function AccessGrantCard({
   onRevoke: (grantId: string) => void
 }>) {
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleBlock}>
-          <Text style={orgPanelStyles.detailTitle}>
+          <Text style={panelStyles.detailTitle}>
             {grant.subjectKind}: {grant.subjectId}
           </Text>
           <View style={styles.badgeRow}>
             {/* Deny grants are not supported — every grant is an allow grant. */}
             <Badge label={grant.effect} tone="ok" />
-            <Text style={orgPanelStyles.detailLine}>
+            <Text style={panelStyles.detailLine}>
               permission: {grant.permissionKey}
             </Text>
           </View>
@@ -184,7 +184,7 @@ function AccessGrantsPanel({
     body = <LoadingState />
   } else if (isError) {
     body = (
-      <Text style={orgPanelStyles.error}>
+      <Text style={panelStyles.error}>
         {errorMessage(error, 'Failed to load access grants')}
       </Text>
     )
@@ -209,7 +209,7 @@ function AccessGrantsPanel({
   return (
     <SectionPanel title="Access grants" hint="Active allow grants">
       {actionError ? (
-        <Text style={orgPanelStyles.error}>{actionError}</Text>
+        <Text style={panelStyles.error}>{actionError}</Text>
       ) : null}
       {body}
     </SectionPanel>
@@ -287,7 +287,7 @@ function AddGrantForm({
       </ScrollView>
 
       {submitError ? (
-        <Text style={orgPanelStyles.error}>{submitError}</Text>
+        <Text style={panelStyles.error}>{submitError}</Text>
       ) : null}
       <Button
         label="Create grant"
@@ -424,8 +424,8 @@ export function AccessOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Access</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Access</Text>
+      <Text style={panelStyles.pageCopy}>
         Manage permission grants for organizations and teams.
       </Text>
 
@@ -450,7 +450,7 @@ export function AccessOverviewSection({
           onSelect={setSelectedItemId}
         />
       ) : (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Managing access for organization {orgId}.
         </Text>
       )}

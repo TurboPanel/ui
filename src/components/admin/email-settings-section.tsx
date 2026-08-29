@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import Svg, { Path, Rect } from 'react-native-svg'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
 } from '@/components/ui'
 import type {
@@ -332,8 +332,8 @@ export function EmailSettingsSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Email</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Email</Text>
+      <Text style={panelStyles.pageCopy}>
         Configure the email provider used for system notifications. Settings stored in the
         database can be edited here. Environment variables take precedence and appear read-only.
       </Text>
@@ -343,13 +343,13 @@ export function EmailSettingsSection() {
         hint="Provider selection and credentials for SMTP or Mailgun API"
       >
         {emailQuery.isError ? (
-          <Text style={orgPanelStyles.error}>
+          <Text style={panelStyles.error}>
             {emailQuery.error instanceof Error
               ? emailQuery.error.message
               : 'Failed to load email settings'}
           </Text>
         ) : null}
-        {saveError ? <Text style={orgPanelStyles.error}>{saveError}</Text> : null}
+        {saveError ? <Text style={panelStyles.error}>{saveError}</Text> : null}
         {success ? <Text style={styles.success}>{success}</Text> : null}
 
         {emailQuery.isLoading ? (
@@ -370,7 +370,7 @@ export function EmailSettingsSection() {
               onPress={() => onSave()}
             />
 
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               Only fields not overridden by environment variables are sent on save.
               Clear a field to remove its stored value and fall back to defaults.
             </Text>

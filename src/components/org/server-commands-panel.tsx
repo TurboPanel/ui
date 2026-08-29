@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
@@ -93,8 +93,8 @@ function PingLatencyBlock({
   latency,
 }: Readonly<{ latency: PingLatencyBreakdown }>) {
   return (
-    <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>Latency breakdown</Text>
+    <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>Latency breakdown</Text>
       <View style={styles.latencyGrid}>
         {LATENCY_ROWS.map(({ key, label }) => (
           <View key={key} style={styles.latencyRow}>
@@ -248,7 +248,7 @@ export function ServerCommandsPanel({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.detailTitle}>Commands</Text>
+      <Text style={panelStyles.detailTitle}>Commands</Text>
 
       <ButtonRow>
         <Button
@@ -281,7 +281,7 @@ export function ServerCommandsPanel({
       ) : null}
 
       {showReboot && rebootError ? (
-        <Text style={orgPanelStyles.error}>{rebootError}</Text>
+        <Text style={panelStyles.error}>{rebootError}</Text>
       ) : null}
 
       {showPingProgress ? (
@@ -294,7 +294,7 @@ export function ServerCommandsPanel({
         <PingLatencyBlock latency={commandRecord.latency} />
       ) : null}
 
-      {pingError ? <Text style={orgPanelStyles.error}>{pingError}</Text> : null}
+      {pingError ? <Text style={panelStyles.error}>{pingError}</Text> : null}
 
       {canManage ? (
         <HostnameBlock

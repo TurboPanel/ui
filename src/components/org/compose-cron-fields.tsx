@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Button, ConfirmButton, MonoText, TextField } from '@/components/ui'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   cronCommandIssue,
   cronJobNameIssue,
@@ -74,8 +74,8 @@ export function CronFields({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.detailLabel}>Scheduled jobs</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.detailLabel}>Scheduled jobs</Text>
+      <Text style={panelStyles.muted}>
         Each job runs as this service&apos;s account, in its directory — so it
         can only use the runtimes that account was granted. Output goes to the
         log viewer.
@@ -89,11 +89,11 @@ export function CronFields({
         return (
           <View key={job.name} style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={orgPanelStyles.detailTitle}>{job.name}</Text>
+              <Text style={panelStyles.detailTitle}>{job.name}</Text>
               <MonoText style={styles.mono}>{job.schedule}</MonoText>
               <MonoText style={styles.mono}>{job.command}</MonoText>
               {issue ? (
-                <Text style={orgPanelStyles.error}>{issue}</Text>
+                <Text style={panelStyles.error}>{issue}</Text>
               ) : null}
             </View>
             {!disabled ? (
@@ -113,7 +113,7 @@ export function CronFields({
 
       {!disabled ? (
         <View style={styles.form}>
-          {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+          {error ? <Text style={panelStyles.error}>{error}</Text> : null}
           <TextField
             label="Name"
             value={name}
@@ -138,7 +138,7 @@ export function CronFields({
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Cron syntax, or <MonoText>@daily</MonoText> /{' '}
             <MonoText>@hourly</MonoText>. The command runs directly — no shell,
             so no pipes or redirection. <MonoText>php</MonoText> resolves to the

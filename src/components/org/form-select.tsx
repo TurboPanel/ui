@@ -1,7 +1,7 @@
 import { createElement, type CSSProperties } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 export type FormSelectOption = {
   value: string
@@ -88,7 +88,7 @@ function NativeFormSelect({
   onChange: (value: string) => void
 }>) {
   if (options.length === 0) {
-    return <Text style={orgPanelStyles.muted}>{placeholder}</Text>
+    return <Text style={panelStyles.muted}>{placeholder}</Text>
   }
 
   return (

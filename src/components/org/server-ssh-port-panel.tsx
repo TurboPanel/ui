@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { Text } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, ButtonRow, MonoText, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  ButtonRow,
+  MonoText,
+  SectionPanel,
+  TextField,
+} from '@/components/ui'
 import type { ServerDetailRecord } from '@/lib/instance-api'
 import {
   DEFAULT_SSH_PORT,
@@ -71,14 +76,14 @@ export function ServerSshPortPanel({
       collapsible
       defaultCollapsed
     >
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Effective: </Text>
         <MonoText>{String(server.sshPort)}</MonoText>
       </Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Source: {sshPortSourceLabel(server.sshPortSource)}
       </Text>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <TextField
         label="This server"
@@ -92,7 +97,7 @@ export function ServerSshPortPanel({
       />
 
       {readOnly ? (
-        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+        <Text style={panelStyles.muted}>Manage permission required.</Text>
       ) : (
         <ButtonRow>
           <Button

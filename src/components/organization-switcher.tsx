@@ -21,7 +21,6 @@ import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { truncateDisplayName } from '@/lib/display-name'
 import { organizationLabel, shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { setActiveOrganizationId } from '@/lib/org-context'
@@ -32,7 +31,7 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 const COMPACT_FOOTER_HEIGHT = 108

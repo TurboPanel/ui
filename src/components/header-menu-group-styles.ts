@@ -1,7 +1,6 @@
 import { Platform, StyleSheet, type ViewStyle } from 'react-native'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { glass } from '@/lib/glass'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 export const HEADER_MENU_WIDTH = 280
 export const HEADER_TRIGGER_MAX_WIDTH = 220

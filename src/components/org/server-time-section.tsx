@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { Button, MonoText, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  MonoText,
+  SectionPanel,
+  SettingRow,
+  StatusDot,
+  TextField,
+  Toggle,
+} from '@/components/ui'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
   type CommandEnqueueResponse,
@@ -21,7 +28,7 @@ import {
   useSetServerTimezone,
   useTimezones,
 } from '@/lib/queries/servers'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 type TimeSyncMaybe = ServerDetailRecord['timeSync']
 
@@ -110,8 +117,8 @@ function HostListLine({
 }: Readonly<{ label: string; hosts: string[] | undefined }>) {
   if (!hosts || hosts.length === 0) return null
   return (
-    <Text style={orgPanelStyles.detailLine}>
-      <Text style={orgPanelStyles.detailLabel}>{label}: </Text>
+    <Text style={panelStyles.detailLine}>
+      <Text style={panelStyles.detailLabel}>{label}: </Text>
       <MonoText>{hosts.join(', ')}</MonoText>
     </Text>
   )
@@ -123,7 +130,7 @@ function TimeSyncStatusPanel({
   if (!timeSync) {
     return (
       <SectionPanel title="Time sync status" hint="Facts from the last daemon heartbeat">
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           No time facts reported yet — waiting for the daemon.
         </Text>
       </SectionPanel>
@@ -134,23 +141,13 @@ function TimeSyncStatusPanel({
     <SectionPanel title="Time sync status" hint="Facts from the last daemon heartbeat">
       <View style={styles.statusRow}>
         <View style={styles.statusPair}>
-          <View
-            style={[
-              styles.dot,
-              timeSync.ntpEnabled ? styles.dotOn : styles.dotOff,
-            ]}
-          />
+          <StatusDot tone={timeSync.ntpEnabled ? 'online' : 'offline'} />
           <Text style={styles.statusText}>
             NTP client {timeSync.ntpEnabled ? 'Enabled' : 'Disabled'}
           </Text>
         </View>
         <View style={styles.statusPair}>
-          <View
-            style={[
-              styles.dot,
-              timeSync.ntpSynced ? styles.dotOn : styles.dotMuted,
-            ]}
-          />
+          <StatusDot tone={timeSync.ntpSynced ? 'online' : 'pending'} />
           <Text style={styles.statusText}>
             {ntpSyncLabel(timeSync.ntpSynced)}
           </Text>
@@ -159,7 +156,7 @@ function TimeSyncStatusPanel({
       <HostListLine label="Servers" hosts={timeSync.ntpServers} />
       <HostListLine label="Fallback" hosts={timeSync.fallbackNtpServers} />
       {timeSync.capturedAt ? (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Captured{' '}
           {formatLocalDateTime(timeSync.capturedAt, {
             timeZoneName: 'short',
@@ -203,16 +200,16 @@ function TimezoneSettingsPanel({
 
   return (
     <SectionPanel title="Timezone" hint="Effective timezone on this host">
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Effective: </Text>
         <MonoText>{server.timezone ?? 'Not set'}</MonoText>
       </Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Source: {configuredSourceLabel(server.timezoneSource)}
       </Text>
 
       {disabledReason ? (
-        <Text style={orgPanelStyles.muted}>{disabledReason}</Text>
+        <Text style={panelStyles.muted}>{disabledReason}</Text>
       ) : null}
       {server.datacenterEnforceServerTimezone && datacenterId ? (
         <Pressable
@@ -238,8 +235,8 @@ function TimezoneSettingsPanel({
         </Pressable>
       ) : null}
 
-      {localError ? <Text style={orgPanelStyles.error}>{localError}</Text> : null}
-      {pollError ? <Text style={orgPanelStyles.error}>{pollError}</Text> : null}
+      {localError ? <Text style={panelStyles.error}>{localError}</Text> : null}
+      {pollError ? <Text style={panelStyles.error}>{pollError}</Text> : null}
 
       <ServerTimezonePicker
         value={pickedTimezone}
@@ -257,7 +254,7 @@ function TimezoneSettingsPanel({
         onPress={onApply}
       />
       {commandInFlight ? (
-        <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
+        <Text style={panelStyles.muted}>Waiting for command to finish…</Text>
       ) : null}
     </SectionPanel>
   )
@@ -296,32 +293,21 @@ function NtpSettingsPanel({
 }>) {
   return (
     <SectionPanel title="NTP configuration" hint="Pushed to the daemon via command">
-      <Text style={orgPanelStyles.muted}>{defaultsHint}</Text>
+      <Text style={panelStyles.muted}>{defaultsHint}</Text>
       {disabledReason ? (
-        <Text style={orgPanelStyles.muted}>{disabledReason}</Text>
+        <Text style={panelStyles.muted}>{disabledReason}</Text>
       ) : null}
-      {localError ? <Text style={orgPanelStyles.error}>{localError}</Text> : null}
-      {pollError ? <Text style={orgPanelStyles.error}>{pollError}</Text> : null}
+      {localError ? <Text style={panelStyles.error}>{localError}</Text> : null}
+      {pollError ? <Text style={panelStyles.error}>{pollError}</Text> : null}
 
-      <View style={styles.switchRow}>
-        <Text style={styles.switchLabel}>NTP client enabled</Text>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{
-            checked: ntpEnabled,
-            disabled: formsDisabled,
-          }}
+      <SettingRow label="NTP client enabled">
+        <Toggle
+          value={ntpEnabled}
           disabled={formsDisabled}
-          onPress={onToggleEnabled}
-          style={[
-            styles.toggle,
-            ntpEnabled ? styles.toggleOn : styles.toggleOff,
-            formsDisabled && styles.btnDisabled,
-          ]}
-        >
-          <Text style={styles.toggleText}>{ntpEnabled ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+          accessibilityLabel="NTP client enabled"
+          onValueChange={onToggleEnabled}
+        />
+      </SettingRow>
 
       <TextField
         label="NTP servers"
@@ -349,7 +335,7 @@ function NtpSettingsPanel({
         onPress={onApply}
       />
       {commandInFlight ? (
-        <Text style={orgPanelStyles.muted}>Waiting for command to finish…</Text>
+        <Text style={panelStyles.muted}>Waiting for command to finish…</Text>
       ) : null}
     </SectionPanel>
   )
@@ -535,22 +521,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  dotOn: {
-    backgroundColor: colors.accent,
-  },
-  dotOff: {
-    backgroundColor: colors.textFaint,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-  },
-  dotMuted: {
-    backgroundColor: colors.pending,
-  },
   statusText: {
     color: colors.text,
     fontSize: 14,
@@ -560,40 +530,6 @@ const styles = StyleSheet.create({
     color: chrome.accent,
     fontSize: 13,
     fontWeight: '600',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  switchLabel: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  toggle: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  toggleOff: {
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-  },
-  toggleText: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 13,
   },
   btnDisabled: {
     opacity: 0.5,

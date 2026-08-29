@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, ButtonRow } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import {
   applyReencryptSecrets,
@@ -186,8 +185,8 @@ export function SecretsReencryptSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Secrets</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Secrets</Text>
+      <Text style={panelStyles.pageCopy}>
         Re-seal at-rest secret envelopes to the current encryption key version
         after a key rotation. Runs in bounded batches so large installs can
         resume. Daemon-bound envelopes are left untouched; invalid plaintext
@@ -198,7 +197,7 @@ export function SecretsReencryptSection() {
         title="At-rest encryption"
         hint="Re-encrypt secret variables, TLS private keys, and principal passwords"
       >
-        {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+        {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
         {isSuperadmin ? (
           <ReencryptActions
@@ -213,7 +212,7 @@ export function SecretsReencryptSection() {
             }}
           />
         ) : (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Superadmin required to re-encrypt at-rest secrets.
           </Text>
         )}

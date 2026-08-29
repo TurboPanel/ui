@@ -1,21 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
+  SettingRow,
   TextField,
+  Toggle,
 } from '@/components/ui'
 import {
   GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR,
@@ -55,7 +51,7 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCan, queryKeys } from '@/lib/query-client'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 const HANDSHAKE_STALE_MS = 3 * 60 * 1000
 
@@ -176,8 +172,8 @@ function RelayResolvedEndpoint({
 }: Readonly<{ relay: RelayRecord }>) {
   if (isAutoEndpointUnresolved(relay)) {
     return (
-      <View style={orgPanelStyles.calloutWarning}>
-        <Text style={orgPanelStyles.calloutWarningText}>
+      <View style={panelStyles.calloutWarning}>
+        <Text style={panelStyles.calloutWarningText}>
           Endpoint unresolved — auto-derivation failed. Pin an override or
           wait until this host has a public address.
         </Text>
@@ -186,12 +182,12 @@ function RelayResolvedEndpoint({
   }
   if (!relay.resolvedEndpoint) {
     return (
-      <Text style={orgPanelStyles.muted}>Resolved endpoint: unavailable</Text>
+      <Text style={panelStyles.muted}>Resolved endpoint: unavailable</Text>
     )
   }
   return (
-    <Text style={orgPanelStyles.detailLine}>
-      <Text style={orgPanelStyles.detailLabel}>Resolved endpoint: </Text>
+    <Text style={panelStyles.detailLine}>
+      <Text style={panelStyles.detailLabel}>Resolved endpoint: </Text>
       <Text style={styles.mono} selectable>
         {relay.resolvedEndpoint}
       </Text>
@@ -206,12 +202,12 @@ function RelaySegments({
     <>
       <Text style={styles.fieldLabel}>Segments</Text>
       {segments.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>None on this host</Text>
+        <Text style={panelStyles.muted}>None on this host</Text>
       ) : (
         segments.map((segment) => (
           <Text
             key={`${segment.name}:${segment.subnet}`}
-            style={orgPanelStyles.detailLine}
+            style={panelStyles.detailLine}
           >
             <Text style={styles.mono} selectable>
               {formatRelaySegment(segment)}
@@ -230,13 +226,13 @@ function FabricStatusBlock({
 }: Readonly<{ enabled: boolean; cidr?: string; status?: string }>) {
   return (
     <View style={styles.statusBlock}>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Status: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Status: </Text>
         {fabricStatusLabel(enabled, status)}
       </Text>
       {enabled && cidr ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>CIDR: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>CIDR: </Text>
           <Text style={styles.mono}>{cidr}</Text>
         </Text>
       ) : null}
@@ -246,7 +242,7 @@ function FabricStatusBlock({
 
 function FabricUnavailableNotice() {
   return (
-    <Text style={orgPanelStyles.muted}>
+    <Text style={panelStyles.muted}>
       {TURBOFABRIC_PRODUCT_NAME} is not available on this control plane
       yet.
     </Text>
@@ -255,7 +251,7 @@ function FabricUnavailableNotice() {
 
 function FabricManageHint() {
   return (
-    <Text style={orgPanelStyles.muted}>
+    <Text style={panelStyles.muted}>
       Organization manage permission is required to enable{' '}
       {TURBOFABRIC_PRODUCT_NAME}.
     </Text>
@@ -274,37 +270,15 @@ function FabricEnableToggle({
   onToggle: () => void
 }>) {
   return (
-    <View style={styles.toggleRow}>
-      <Text style={styles.toggleLabel}>
-        Enable {TURBOFABRIC_PRODUCT_NAME}
-      </Text>
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityLabel={`Enable ${TURBOFABRIC_PRODUCT_NAME}`}
-        accessibilityState={{ checked: enabled, disabled }}
+    <SettingRow label={`Enable ${TURBOFABRIC_PRODUCT_NAME}`}>
+      <Toggle
+        value={enabled}
         disabled={disabled}
-        onPress={onToggle}
-        style={[
-          styles.toggle,
-          enabled ? styles.toggleOn : styles.toggleOff,
-          disabled && styles.toggleDisabled,
-          webPointer,
-        ]}
-      >
-        {pending ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : (
-          <Text
-            style={[
-              styles.toggleText,
-              enabled ? styles.toggleTextOn : styles.toggleTextOff,
-            ]}
-          >
-            {enabled ? 'On' : 'Off'}
-          </Text>
-        )}
-      </Pressable>
-    </View>
+        busy={pending}
+        accessibilityLabel={`Enable ${TURBOFABRIC_PRODUCT_NAME}`}
+        onValueChange={onToggle}
+      />
+    </SettingRow>
   )
 }
 
@@ -321,36 +295,16 @@ function FabricAllowRelayToggle({
 }>) {
   return (
     <View style={styles.toggleBlock}>
-      <View style={styles.toggleRow}>
-        <Text style={styles.toggleLabel}>Allow relay path</Text>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityLabel="Allow relay path"
-          accessibilityState={{ checked: enabled, disabled }}
+      <SettingRow label="Allow relay path">
+        <Toggle
+          value={enabled}
           disabled={disabled}
-          onPress={onToggle}
-          style={[
-            styles.toggle,
-            enabled ? styles.toggleOn : styles.toggleOff,
-            disabled && styles.toggleDisabled,
-            webPointer,
-          ]}
-        >
-          {pending ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : (
-            <Text
-              style={[
-                styles.toggleText,
-                enabled ? styles.toggleTextOn : styles.toggleTextOff,
-              ]}
-            >
-              {enabled ? 'On' : 'Off'}
-            </Text>
-          )}
-        </Pressable>
-      </View>
-      <Text style={orgPanelStyles.muted}>
+          busy={pending}
+          accessibilityLabel="Allow relay path"
+          onValueChange={onToggle}
+        />
+      </SettingRow>
+      <Text style={panelStyles.muted}>
         Relay is a degraded fallback path and must be explicitly enabled. A
         datacenter gateway is not the same as an unrelated relay.
       </Text>
@@ -397,7 +351,7 @@ function AllowRelayOverridePicker({
           }}
         />
       </FormField>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Effective: {effective ? 'On' : 'Off'}
       </Text>
     </>
@@ -419,7 +373,7 @@ function PreferredGatewayPicker({
     return (
       <>
         <Text style={styles.fieldLabel}>Preferred gateways</Text>
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Promote a gateway-role relay before preferring one.
         </Text>
       </>
@@ -428,7 +382,7 @@ function PreferredGatewayPicker({
   return (
     <>
       <Text style={styles.fieldLabel}>Preferred gateways</Text>
-      <View style={orgPanelStyles.segmentGroup}>
+      <View style={panelStyles.segmentGroup}>
         {gateways.map((gateway) => {
           const active = selectedIds.includes(gateway.serverId)
           return (
@@ -442,16 +396,16 @@ function PreferredGatewayPicker({
                 if (!disabled) onToggle(gateway.serverId)
               }}
               style={[
-                orgPanelStyles.segmentChip,
-                active && orgPanelStyles.segmentChipActive,
+                panelStyles.segmentChip,
+                active && panelStyles.segmentChipActive,
                 disabled && styles.toggleDisabled,
                 webPointer,
               ]}
             >
               <Text
                 style={[
-                  orgPanelStyles.segmentChipText,
-                  active && orgPanelStyles.segmentChipTextActive,
+                  panelStyles.segmentChipText,
+                  active && panelStyles.segmentChipTextActive,
                 ]}
               >
                 {gateway.label}
@@ -490,25 +444,25 @@ function FabricPathMatrixPanel({
             return (
               <View
                 key={`${row.fromServerId}:${row.toServerId}`}
-                style={orgPanelStyles.detailCard}
+                style={panelStyles.detailCard}
               >
-                <Text style={orgPanelStyles.detailTitle}>
+                <Text style={panelStyles.detailTitle}>
                   {row.fromLabel} → {row.toLabel}
                 </Text>
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Path: </Text>
+                <Text style={panelStyles.detailLine}>
+                  <Text style={panelStyles.detailLabel}>Path: </Text>
                   {fabricPathKindLabel(row.kind)}
                   {latency ? `  ${latency}` : ''}
                 </Text>
                 {row.viaLabel ? (
-                  <Text style={orgPanelStyles.detailLine}>
-                    <Text style={orgPanelStyles.detailLabel}>Via: </Text>
+                  <Text style={panelStyles.detailLine}>
+                    <Text style={panelStyles.detailLabel}>Via: </Text>
                     {row.viaLabel}
                   </Text>
                 ) : null}
                 {warning ? (
-                  <View style={orgPanelStyles.calloutWarning}>
-                    <Text style={orgPanelStyles.calloutWarningText}>
+                  <View style={panelStyles.calloutWarning}>
+                    <Text style={panelStyles.calloutWarningText}>
                       {warning}
                     </Text>
                   </View>
@@ -556,15 +510,15 @@ function HandshakeLine({
   })
   if (!stale) {
     return (
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Last handshake: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Last handshake: </Text>
         {label}
       </Text>
     )
   }
   return (
-    <View style={orgPanelStyles.calloutWarning}>
-      <Text style={orgPanelStyles.calloutWarningText}>
+    <View style={panelStyles.calloutWarning}>
+      <Text style={panelStyles.calloutWarningText}>
         {lastHandshakeAt
           ? `Last handshake stale — ${label}`
           : 'Not converged yet — no handshake observed'}
@@ -579,14 +533,14 @@ function RelayResolvedAdvertisedCidrs({
   const formatted = formatResolvedAdvertisedCidrs(cidrs)
   if (cidrs.length === 0) {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Resolved advertised CIDRs: {formatted}
       </Text>
     )
   }
   return (
-    <Text style={orgPanelStyles.detailLine}>
-      <Text style={orgPanelStyles.detailLabel}>Resolved advertised CIDRs: </Text>
+    <Text style={panelStyles.detailLine}>
+      <Text style={panelStyles.detailLabel}>Resolved advertised CIDRs: </Text>
       <Text style={styles.mono} selectable>
         {formatted}
       </Text>
@@ -613,7 +567,7 @@ function AdvertisedCidrsField({
 }>) {
   if (role !== 'gateway') {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Members do not advertise LAN CIDRs.
       </Text>
     )
@@ -720,8 +674,8 @@ function RelayConfiguredFields({
   )
   return (
     <>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>TurboFabric address: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>TurboFabric address: </Text>
         <Text style={styles.mono} selectable>
           {relay.address}
         </Text>
@@ -781,12 +735,12 @@ function RelayConfiguredFields({
         disabled={disabled}
         onToggle={onPreferredGatewayToggle}
       />
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Public key: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Public key: </Text>
         {relay.publicKey != null ? 'Present' : 'Pending'}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Preshared key: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Preshared key: </Text>
         {relay.hasPresharedKey ? 'Present' : 'Not set'}
       </Text>
       <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} />
@@ -910,11 +864,11 @@ function RelayRow({
   const applyHint = relayApplyHint(applyPending, applyStatus)
 
   return (
-    <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>{serverTitle(server)}</Text>
+    <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>{serverTitle(server)}</Text>
       {!relay ? (
-        <View style={orgPanelStyles.calloutWarning}>
-          <Text style={orgPanelStyles.calloutWarningText}>
+        <View style={panelStyles.calloutWarning}>
+          <Text style={panelStyles.calloutWarningText}>
             Not on the mesh yet — enable {TURBOFABRIC_PRODUCT_NAME} and Apply.
           </Text>
         </View>
@@ -945,10 +899,10 @@ function RelayRow({
         />
       )}
       {applyHint ? (
-        <Text style={orgPanelStyles.muted}>{applyHint}</Text>
+        <Text style={panelStyles.muted}>{applyHint}</Text>
       ) : null}
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
     </View>
   )
@@ -1174,8 +1128,8 @@ export function NetworkFabricSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>{TURBOFABRIC_PRODUCT_NAME}</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>{TURBOFABRIC_PRODUCT_NAME}</Text>
+      <Text style={panelStyles.pageCopy}>
         Enabling {TURBOFABRIC_PRODUCT_NAME} lets environments run across
         servers. It is not required for single-engine Docker.
       </Text>
@@ -1183,7 +1137,7 @@ export function NetworkFabricSection({
       {unavailable ? <FabricUnavailableNotice /> : null}
 
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
 
       <SectionPanel
@@ -1219,7 +1173,7 @@ export function NetworkFabricSection({
         {canManage &&
         !enabled &&
         hostDefaultsQuery.data?.defaultFabricEnabled === true ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Host defaults prefer {TURBOFABRIC_PRODUCT_NAME} on. Enabling here
             still creates the mesh.
           </Text>
@@ -1271,50 +1225,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    minHeight: 44,
-  },
   toggleBlock: {
     gap: spacing.xs,
   },
-  toggleLabel: {
-    color: colors.textBody,
-    fontSize: 14,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  toggle: {
-    minWidth: 64,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    backgroundColor: chrome.bgActive,
-    borderColor: chrome.accent,
-  },
-  toggleOff: {
-    backgroundColor: colors.bgSecondary,
-    borderColor: colors.borderChip,
-  },
   toggleDisabled: {
     opacity: 0.5,
-  },
-  toggleText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  toggleTextOn: {
-    color: chrome.accent,
-  },
-  toggleTextOff: {
-    color: colors.textChip,
   },
 })

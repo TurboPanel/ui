@@ -1,9 +1,14 @@
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { PlatformBadge } from '@/components/org/platform-badge'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
-import { Button, ButtonRow, EmptyState, LoadingState } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  ButtonRow,
+  EmptyState,
+  LoadingState,
+  SectionPanel,
+} from '@/components/ui'
 import { useProjects, useWorkspace } from '@/lib/queries'
 import type { ProjectRecord, WorkspaceRecord } from '@/lib/instance-api'
 import {
@@ -40,7 +45,7 @@ function renderWorkspaceBody({
     <>
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Text style={orgPanelStyles.detailTitle}>
+          <Text style={panelStyles.detailTitle}>
             {workspace.name?.trim() || 'Unnamed workspace'}
           </Text>
           {system ? <PlatformBadge /> : null}
@@ -50,7 +55,7 @@ function renderWorkspaceBody({
         ) : null}
       </View>
       {description ? (
-        <Text style={orgPanelStyles.detailLine}>{description}</Text>
+        <Text style={panelStyles.detailLine}>{description}</Text>
       ) : null}
     </>
   )
@@ -76,14 +81,14 @@ function renderProjectsBody({
       {projects.map((project) => (
         <Pressable
           key={project.id}
-          style={orgPanelStyles.detailCard}
+          style={panelStyles.detailCard}
           onPress={() => onOpenProject(project.id)}
         >
-          <Text style={orgPanelStyles.detailTitle}>
+          <Text style={panelStyles.detailTitle}>
             {project.name?.trim() || 'Unnamed project'}
           </Text>
           {project.description ? (
-            <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
+            <Text style={panelStyles.detailLine}>{project.description}</Text>
           ) : null}
         </Pressable>
       ))}
@@ -116,12 +121,12 @@ export function WorkspaceDetailSection({
   return (
     <View style={styles.root}>
       <View style={styles.headingRow}>
-        <Text style={orgPanelStyles.pageTitle}>
+        <Text style={panelStyles.pageTitle}>
           {workspace?.name?.trim() || 'Workspace'}
         </Text>
         {system ? <PlatformBadge /> : null}
       </View>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <SectionPanel title="Workspace" hint="Workspace details">
         {renderWorkspaceBody({

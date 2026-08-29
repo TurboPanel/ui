@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   MANAGED_SSL_MODES,
   managedSslModeHint,
   managedSslModeLabel,
   type ManagedSslMode,
 } from '@/lib/managed-ssl'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 /**
  * Picker for the managed-SQL client TLS policy.
@@ -78,7 +78,7 @@ function ModeRow({
       <Text style={[styles.label, selected && styles.labelSelected]}>
         {label}
       </Text>
-      <Text style={orgPanelStyles.muted}>{hint}</Text>
+      <Text style={panelStyles.muted}>{hint}</Text>
     </Pressable>
   )
 }

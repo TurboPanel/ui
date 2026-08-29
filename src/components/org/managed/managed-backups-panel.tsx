@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   ConfirmButton,
   EmptyState,
+  SectionPanel,
   TextField,
 } from '@/components/ui'
 import { formatLocalDateTime } from '@/lib/format-datetime'
@@ -51,7 +51,7 @@ function BackupRow({
         <Text style={styles.rowLabel}>
           {formatLocalDateTime(backup.createdAt)}
         </Text>
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           {formatBytes(backup.sizeBytes)}
           {backup.database ? ` · ${backup.database}` : ''} ·{' '}
           {shortBackupChecksum(backup.checksum)}
@@ -188,7 +188,7 @@ export function ManagedBackupsPanel({
   if (!supported) {
     return (
       <SectionPanel title="Backups" hint="Back up and restore this managed service">
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Backups are not supported on this managed engine yet.
         </Text>
       </SectionPanel>
@@ -197,7 +197,7 @@ export function ManagedBackupsPanel({
 
   return (
     <SectionPanel title="Backups" hint="Back up and restore this managed service">
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {canManage ? (
         <Button

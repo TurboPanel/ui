@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
+import { SectionPanel } from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
 import { colors, spacing } from '@/lib/theme'
 

@@ -5,7 +5,7 @@ import {
   ComposeOverviewIcon,
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   COMPOSE_PROJECT_LENS_IDS,
@@ -16,7 +16,7 @@ import {
   projectComposeSectionHref,
   type ComposeProjectTabId,
 } from '@/lib/project-navigation'
-import { chrome, colors } from '@/lib/theme'
+import { chrome, colors, webPointer } from '@/lib/theme'
 
 /**
  * Icon per lens. Services reuses the service-cards glyph because that is what
@@ -73,7 +73,7 @@ export function ComposeSurfaceNav() {
 
   return (
     <View style={styles.bar}>
-      <View style={[orgPanelStyles.segmentGroup, styles.group]}>
+      <View style={[panelStyles.segmentGroup, styles.group]}>
         {lensIds.filter(isLens).map((tabId) => {
           // A non-lens route (Storage, Settings, …) keeps Services lit: those
           // are configuration reached from a service row, not a fourth lens.

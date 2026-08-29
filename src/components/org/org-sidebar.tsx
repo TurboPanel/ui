@@ -15,9 +15,8 @@ import {
   orgAreaHref,
   orgRouteHref,
 } from '@/lib/org-navigation'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { glass } from '@/lib/glass'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import { projectsHrefForScope } from '@/lib/workspace-scope'
 

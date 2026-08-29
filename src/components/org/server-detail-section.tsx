@@ -21,7 +21,6 @@ import {
 import { TurboPanelLogoMark } from '@/components/brand/turbopanel-logo'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
-import { SectionPanel } from '@/components/org/section-panel'
 import {
   defaultServerCommandState,
   isTerminalCommandStatus,
@@ -35,16 +34,17 @@ import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
+  type BadgeTone,
   Button,
   ButtonRow,
   ConfirmButton,
   LoadingState,
   MonoText,
+  SectionPanel,
   SegmentedControl,
-  type BadgeTone,
 } from '@/components/ui'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
@@ -85,7 +85,7 @@ import {
   formatServerGeoCountryCode,
   formatServerGeoLocation,
 } from '@/lib/server-geo'
-import { colors, layout, spacing } from '@/lib/theme'
+import { colors, layout, spacing, webPointer } from '@/lib/theme'
 
 type DetailActiveCommand = ActiveCommand
 
@@ -496,7 +496,7 @@ function renderServerDeletePanel(input: Readonly<{
   if (!input.canManage) return null
   if (input.colocated) {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         The co-located control plane server cannot be deleted.
       </Text>
     )
@@ -515,7 +515,7 @@ function ServerDetailLoading(): ReactNode {
 }
 
 function ServerDetailError({ message }: Readonly<{ message: string }>): ReactNode {
-  return <Text style={orgPanelStyles.error}>{message}</Text>
+  return <Text style={panelStyles.error}>{message}</Text>
 }
 
 export function ServerDetailSection({
@@ -931,33 +931,33 @@ function ServerOverviewTab({
       <SectionPanel title="Details">
         <View style={styles.detailGrid}>
           <View style={groupStyle}>
-            <Text style={orgPanelStyles.detailTitle}>Identity</Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Display name: </Text>
+            <Text style={panelStyles.detailTitle}>Identity</Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Display name: </Text>
               {server.name ?? '—'}
             </Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>ID: </Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>ID: </Text>
               <MonoText>{server.id}</MonoText>
             </Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Created: </Text>
               {formatLocalDateTime(server.createdAt)}
             </Text>
           </View>
 
           <View style={groupStyle}>
-            <Text style={orgPanelStyles.detailTitle}>Operating system</Text>
-            <Text style={orgPanelStyles.detailLine}>
+            <Text style={panelStyles.detailTitle}>Operating system</Text>
+            <Text style={panelStyles.detailLine}>
               {server.osDisplay ?? 'Not reported yet'}
             </Text>
             {server.os?.architecture ? (
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 Arch: {server.os.architecture}
               </Text>
             ) : null}
             {server.os?.codename ? (
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 Codename: {server.os.codename}
               </Text>
             ) : null}
@@ -965,32 +965,32 @@ function ServerOverviewTab({
 
           {hasGeo ? (
             <View style={groupStyle}>
-              <Text style={orgPanelStyles.detailTitle}>Geo</Text>
+              <Text style={panelStyles.detailTitle}>Geo</Text>
               {geoLine ? (
-                <Text style={orgPanelStyles.detailLine}>{geoLine}</Text>
+                <Text style={panelStyles.detailLine}>{geoLine}</Text>
               ) : null}
               {country ? (
-                <Text style={orgPanelStyles.detailLine}>{country}</Text>
+                <Text style={panelStyles.detailLine}>{country}</Text>
               ) : null}
-              {asn ? <Text style={orgPanelStyles.muted}>{asn}</Text> : null}
+              {asn ? <Text style={panelStyles.muted}>{asn}</Text> : null}
             </View>
           ) : null}
 
           <View style={groupStyle}>
-            <Text style={orgPanelStyles.detailTitle}>Timezone</Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Effective: </Text>
+            <Text style={panelStyles.detailTitle}>Timezone</Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Effective: </Text>
               <MonoText>{server.timezone ?? 'Not set'}</MonoText>
             </Text>
-            <Text style={orgPanelStyles.muted}>Source: {timezoneSource}</Text>
+            <Text style={panelStyles.muted}>Source: {timezoneSource}</Text>
             {server.datacenterEnforceServerTimezone ? (
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
               </Text>
             ) : null}
             {!server.datacenterEnforceServerTimezone &&
             server.enforceServerTimezone ? (
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 Organization enforces {server.orgDefaultTimezone ?? 'its default'}.
               </Text>
             ) : null}
@@ -1077,16 +1077,16 @@ function ServerControlTab({
 
       <SectionPanel title="Daemon update">
         {viewModel.colocated ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Co-located hosts are updated via local git, not remote trunk pulls.
           </Text>
         ) : null}
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Running: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Running: </Text>
           {shortCommit(viewModel.updateData?.current?.commit)}
         </Text>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Trunk: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Trunk: </Text>
           {viewModel.updateData?.targetStatus === 'unknown'
             ? 'Unknown'
             : shortCommit(viewModel.updateData?.target?.commit)}
@@ -1121,7 +1121,7 @@ function ServerControlTab({
           </ButtonRow>
         ) : null}
         {updateState.error ? (
-          <Text style={orgPanelStyles.error}>{updateState.error}</Text>
+          <Text style={panelStyles.error}>{updateState.error}</Text>
         ) : null}
       </SectionPanel>
 
@@ -1143,7 +1143,7 @@ function ServerDeletePanel({
 }>) {
   return (
     <>
-      {deleteError ? <Text style={orgPanelStyles.error}>{deleteError}</Text> : null}
+      {deleteError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
       <ConfirmButton
         label={deleting ? 'Deleting…' : 'Delete server'}
         confirmLabel="Confirm delete"

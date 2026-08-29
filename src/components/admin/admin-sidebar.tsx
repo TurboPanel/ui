@@ -3,10 +3,9 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { AdminAreaIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { ADMIN_AREAS, adminAreaHref } from '@/lib/admin-navigation'
 import { glass } from '@/lib/glass'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 export function AdminSidebar({
   onNavigate,

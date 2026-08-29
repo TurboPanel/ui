@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
 import { EmptyState, InlineNotice } from '@/components/ui'
 import {
@@ -18,7 +18,7 @@ import type {
   ContainerRecord,
   ServiceRecord,
 } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 export type OverviewComposeSource = 'proposed' | 'saved'
 
@@ -91,7 +91,7 @@ export function ComposeSavedView({
     )
   } else {
     overviewBody = (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         No services, networks, or volumes to diagram.
       </Text>
     )
@@ -151,7 +151,7 @@ export function ComposeSavedView({
         {inheritedCaption ? <InlineNotice title={inheritedCaption} /> : null}
         <ComposeInventoryStrip items={inventory} />
         {showSourceToggle && draftSource === 'proposed' ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Unsaved changes — switch to Saved to compare with the last save.
           </Text>
         ) : null}

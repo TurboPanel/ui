@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
@@ -38,7 +38,7 @@ function kindLabel(kind: NetworkKind): string {
 function renderCidr(network: NetworkRecord, isPlatformOwned: boolean) {
   if (network.cidr) return <MonoText selectable>{network.cidr}</MonoText>
   if (isPlatformOwned) return null
-  return <Text style={orgPanelStyles.muted}>No CIDR</Text>
+  return <Text style={panelStyles.muted}>No CIDR</Text>
 }
 
 export function NetworkListItem({
@@ -57,9 +57,9 @@ export function NetworkListItem({
   // with `managed_network_immutable`, so offer no affordance for either.
   const isPlatformOwned = network.kind === 'managed'
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <View style={styles.cardHeader}>
-        <Text style={orgPanelStyles.detailTitle}>{networkTitle(network)}</Text>
+        <Text style={panelStyles.detailTitle}>{networkTitle(network)}</Text>
         {showDelete && onDelete && !isPlatformOwned ? (
           <ConfirmButton
             label={isDeleting ? 'Deleting…' : 'Delete'}
@@ -74,12 +74,12 @@ export function NetworkListItem({
         <Badge label={kindLabel(network.kind)} />
         {dockerName ? <MonoText selectable>{dockerName}</MonoText> : null}
         {isPlatformOwned ? (
-          <Text style={orgPanelStyles.muted}>Platform-managed</Text>
+          <Text style={panelStyles.muted}>Platform-managed</Text>
         ) : null}
         {renderCidr(network, isPlatformOwned)}
       </View>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Created: </Text>
         {new Date(network.createdAt).toLocaleString()}
       </Text>
     </View>
@@ -108,7 +108,7 @@ export function IpListRow({
   showEdit?: boolean
 }>) {
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <View style={styles.cardHeader}>
         <MonoText selectable>{ip.address}</MonoText>
         <ButtonRow>
@@ -132,8 +132,8 @@ export function IpListRow({
         </ButtonRow>
       </View>
       {ip.description?.trim() ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Description: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Description: </Text>
           {ip.description.trim()}
         </Text>
       ) : null}
@@ -142,16 +142,16 @@ export function IpListRow({
         <Badge label={ip.scope} />
         <Badge label={ip.allocation} />
       </View>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Server: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Server: </Text>
         {serverLabel ?? '—'}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Network: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Network: </Text>
         {networkLabel ?? '—'}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Site: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Site: </Text>
         {datacenterLabel ?? '—'}
       </Text>
     </View>

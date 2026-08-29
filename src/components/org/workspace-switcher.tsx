@@ -10,7 +10,6 @@ import {
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { PlatformBadge } from '@/components/org/platform-badge'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { EmptyState } from '@/components/ui'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
@@ -19,7 +18,7 @@ import {
   isTurbopanelWorkspace,
   userWorkspaces,
 } from '@/lib/system-inventory'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import {
   ALL_WORKSPACES_SCOPE,

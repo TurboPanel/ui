@@ -1,7 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { webPointer } from '@/components/org/org-panel-styles'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 function CheckGlyph({ indeterminate }: Readonly<{ indeterminate: boolean }>) {
   return (

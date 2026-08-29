@@ -23,7 +23,6 @@ import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { UserIcon } from '@/components/icons/nav-icons'
 import { NotificationsPanelBody } from '@/components/notifications-panel-body'
-import { webPointer } from '@/components/org/org-panel-styles'
 import {
   formatControlPlaneHostLabel,
   isRemoteCookieClient,
@@ -36,7 +35,7 @@ import {
 import { useUnreadNotificationCount } from '@/lib/notifications'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
-import { colors, layout } from '@/lib/theme'
+import { colors, layout, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 

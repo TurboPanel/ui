@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  SectionPanel,
+  SettingRow,
+  TextField,
+  Toggle,
+} from '@/components/ui'
 import {
   saveOrgServerCapacity,
   type OrgServerCapacity,
 } from '@/lib/instance-api'
 import { useOrgServerCapacity } from '@/lib/queries/servers'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
-import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -81,47 +85,32 @@ export function ServerCapacitySettingsSection({
       title="Server capacity"
       hint="Owner-gated · enrolled servers + pending keys count as seats"
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           {errorMessage(query.error, 'Failed to load capacity')}
         </Text>
       ) : null}
 
       {capacity ? (
-        <Text style={orgPanelStyles.muted}>{formatCapacitySummary(capacity)}</Text>
+        <Text style={panelStyles.muted}>{formatCapacitySummary(capacity)}</Text>
       ) : null}
 
-      <View style={styles.switchRow}>
-        <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>Unlimited servers</Text>
-          <Text style={orgPanelStyles.muted}>
-            Self-hosted default. Turn off to set a hard seat cap for this
-            organization.
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{
-            checked: isUnlimited,
-            disabled: readOnly || pending || !capacity,
-          }}
+      <SettingRow
+        label="Unlimited servers"
+        description="Self-hosted default. Turn off to set a hard seat cap for this organization."
+      >
+        <Toggle
+          value={isUnlimited}
           disabled={readOnly || pending || !capacity}
-          onPress={() => {
-            const next = !isUnlimited
+          accessibilityLabel="Unlimited servers"
+          onValueChange={(next) => {
             setUnlimited(next)
             if (next) setDraftText('')
             else if (capacity?.maxServers == null) setDraftText('1')
           }}
-          style={[
-            styles.toggle,
-            isUnlimited ? styles.toggleOn : styles.toggleOff,
-            (readOnly || pending) && styles.toggleDisabled,
-          ]}
-        >
-          <Text style={styles.toggleText}>{isUnlimited ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+        />
+      </SettingRow>
 
       {!isUnlimited ? (
         <TextField
@@ -138,7 +127,7 @@ export function ServerCapacitySettingsSection({
       ) : null}
 
       {readOnly ? (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Organization owner permission is required to change the seat cap.
         </Text>
       ) : (
@@ -154,43 +143,3 @@ export function ServerCapacitySettingsSection({
   )
 }
 
-const styles = StyleSheet.create({
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  switchLabel: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  toggle: {
-    minWidth: 52,
-    minHeight: 44,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    backgroundColor: chrome.accent,
-  },
-  toggleOff: {
-    backgroundColor: colors.border,
-  },
-  toggleDisabled: {
-    opacity: 0.5,
-  },
-  toggleText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-})

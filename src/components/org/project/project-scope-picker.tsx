@@ -11,15 +11,14 @@ import {
 } from 'react-native'
 import { BreadcrumbChevron } from '@/components/header-chevron'
 import { SearchIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, StatusDot } from '@/components/ui'
 import {
   filterProjectScopeOptions,
   resolveScopeTriggerOption,
   shouldShowScopeSearch,
   type ProjectScopeOption,
 } from '@/lib/project-scope'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 const PICKER_WIDTH = 320
 const PICKER_MAX_LIST_HEIGHT = 320
@@ -69,11 +68,7 @@ function ScopeRow({
       onPress={onSelect}
     >
       {statusColor ? (
-        <View
-          style={[styles.statusDot, { backgroundColor: statusColor }]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+        <StatusDot size="sm" color={statusColor} />
       ) : (
         <View style={styles.statusSpacer} />
       )}
@@ -128,11 +123,7 @@ function ScopeTrigger({
       onPress={onPress}
     >
       {statusColor ? (
-        <View
-          style={[styles.statusDot, { backgroundColor: statusColor }]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+        <StatusDot size="sm" color={statusColor} />
       ) : null}
       <Text
         style={[styles.triggerLabel, selected && styles.triggerLabelSelected]}

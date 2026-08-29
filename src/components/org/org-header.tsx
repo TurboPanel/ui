@@ -7,9 +7,8 @@ import {
 } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { useAuth } from '@/lib/auth-context'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 export function OrgHeader({
   orgId,

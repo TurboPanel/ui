@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, Text } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { splitYamlLineHighlight } from '@/lib/compose/yaml-highlight'
 import { colors } from '@/lib/theme'
 
@@ -16,7 +16,7 @@ export function ReadOnlyYamlBlock({
 }>) {
   const lines = value.length > 0 ? value.split('\n') : []
   if (lines.length === 0) {
-    return <Text style={orgPanelStyles.muted}>{emptyLabel}</Text>
+    return <Text style={panelStyles.muted}>{emptyLabel}</Text>
   }
 
   return (
@@ -51,7 +51,7 @@ export function ReadOnlyYamlBlock({
 
 const styles = StyleSheet.create({
   yamlBlock: {
-    ...orgPanelStyles.commandCodeBlock,
+    ...panelStyles.commandCodeBlock,
   },
   yamlText: {
     fontFamily: 'monospace',

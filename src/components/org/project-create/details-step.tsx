@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import type {
   FieldErrors,
   WorkspaceMode,
@@ -16,7 +16,7 @@ import {
   DISPLAY_NAME_MAX_LENGTH,
 } from '@/lib/display-name'
 import type { WorkspaceRecord } from '@/lib/instance-api'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const WORKSPACE_MODE_OPTIONS = [
   { value: 'existing', label: 'Existing' },
@@ -107,7 +107,7 @@ function WorkspacePicker({
         selectedId={selectedId}
         onSelect={onSelect}
       />
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
     </View>
   )
 }

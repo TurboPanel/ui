@@ -1,8 +1,7 @@
 import { Link, type Href } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { webPointer } from '@/components/org/org-panel-styles'
 import type { StatTileIcon } from '@/components/ui/stat-tiles'
-import { chrome, colors } from '@/lib/theme'
+import { chrome, colors, webPointer } from '@/lib/theme'
 
 export type SectionNavItem = {
   id: string

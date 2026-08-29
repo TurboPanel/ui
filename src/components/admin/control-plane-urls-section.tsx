@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
@@ -10,6 +9,7 @@ import {
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -157,8 +157,8 @@ export function ControlPlaneUrlsSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Networking</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Networking</Text>
+      <Text style={panelStyles.pageCopy}>
         Every address this control plane answers on. They become the Platform CA
         leaf SANs used for daemon → control-plane trust (explicitly not the
         per-organization Organization CA), the webhook endpoint a Git provider
@@ -169,7 +169,7 @@ export function ControlPlaneUrlsSection() {
         title="Public URLs"
         hint="Scheme, host, and port — used for TLS certificate SANs, Git webhook callbacks, and install commands"
       >
-        {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+        {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
         {publicUrlsQuery.isLoading ? (
           <LoadingState />
         ) : (
@@ -402,12 +402,12 @@ function ApplyAvailabilityNote({
 }: Readonly<{ applyNotAvailable: boolean }>) {
   if (applyNotAvailable) {
     return (
-      <Text style={orgPanelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
+      <Text style={panelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
     )
   }
 
   return (
-    <Text style={orgPanelStyles.muted}>
+    <Text style={panelStyles.muted}>
       Apply regenerates the Platform CA leaf for LAN / :8443 listeners and reloads
       Caddy. Public HTTPS on port 443 (Cloudflare tunnel, Let’s Encrypt, or an
       uploaded certificate) is trusted by clients via the system store. Let’s

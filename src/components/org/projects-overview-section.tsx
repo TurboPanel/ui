@@ -7,10 +7,15 @@ import {
 } from 'react-native'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
-import { Badge, Button, EmptyState, LoadingState } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  EmptyState,
+  LoadingState,
+  SectionPanel,
+} from '@/components/ui'
 import { useProjects, useWorkspaces } from '@/lib/queries'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
@@ -89,10 +94,10 @@ function ProjectOverviewCard({
   onDeleted: () => void
 }>) {
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <View style={styles.cardHeader}>
         <View style={styles.titleRow}>
-          <Text style={orgPanelStyles.detailTitle}>
+          <Text style={panelStyles.detailTitle}>
             {project.name?.trim() || 'Unnamed project'}
           </Text>
           {projectTypeBadge(project.metadata)}
@@ -112,16 +117,16 @@ function ProjectOverviewCard({
         </View>
       </View>
       {project.description ? (
-        <Text style={orgPanelStyles.detailLine}>{project.description}</Text>
+        <Text style={panelStyles.detailLine}>{project.description}</Text>
       ) : null}
       {showWorkspaceLabels ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Workspace: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Workspace: </Text>
           {workspaceName}
         </Text>
       ) : null}
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Created: </Text>
         {new Date(project.createdAt).toLocaleString()}
       </Text>
       {isDeleting && deletingProject ? (
@@ -264,7 +269,7 @@ export function ProjectsOverviewSection({
   return (
     <View style={styles.root}>
       <View style={styles.pageHeader}>
-        <Text style={orgPanelStyles.pageTitle}>Projects</Text>
+        <Text style={panelStyles.pageTitle}>Projects</Text>
         <WorkspaceSwitcher orgId={orgId} />
       </View>
 
@@ -277,7 +282,7 @@ export function ProjectsOverviewSection({
           />
         ) : null}
 
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
         {projectListContent}
       </SectionPanel>

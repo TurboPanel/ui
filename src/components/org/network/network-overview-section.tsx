@@ -1,7 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { SectionPanel } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   networkAddressesHref,
   networkDockerHref,
@@ -9,7 +9,7 @@ import {
   serversDatacentersHref,
 } from '@/lib/org-navigation'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { spacing } from '@/lib/theme'
+import { spacing, webPointer } from '@/lib/theme'
 
 type NetworkHubLink = {
   title: string
@@ -49,8 +49,8 @@ export function NetworkOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Network</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Network</Text>
+      <Text style={panelStyles.pageCopy}>
         Private subnets live on Datacenters. This area is the mesh, address pool,
         and Docker registry.
       </Text>
@@ -60,13 +60,13 @@ export function NetworkOverviewSection({
           {hubLinks(orgId).map((link) => (
             <Pressable
               key={link.href}
-              style={[orgPanelStyles.detailCard, webPointer]}
+              style={[panelStyles.detailCard, webPointer]}
               onPress={() => router.push(link.href as Href)}
               accessibilityRole="link"
               accessibilityLabel={link.title}
             >
-              <Text style={orgPanelStyles.detailTitle}>{link.title}</Text>
-              <Text style={orgPanelStyles.muted}>{link.hint}</Text>
+              <Text style={panelStyles.detailTitle}>{link.title}</Text>
+              <Text style={panelStyles.muted}>{link.hint}</Text>
             </Pressable>
           ))}
         </View>

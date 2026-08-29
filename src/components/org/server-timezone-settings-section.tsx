@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, SectionPanel, SettingRow, Toggle } from '@/components/ui'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
   fetchOrgDefaultTimezone,
@@ -13,7 +12,7 @@ import {
 import { useTimezones } from '@/lib/queries/servers'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -70,8 +69,8 @@ export function ServerTimezoneSettingsSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Server fleet settings</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Server fleet settings</Text>
+      <Text style={panelStyles.pageCopy}>
         Default timezone applied to new hosts and optionally enforced across the
         fleet. SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference sit in
         Host defaults below. Per-server overrides live on each host unless
@@ -82,9 +81,9 @@ export function ServerTimezoneSettingsSection({
         title="Default server timezone"
         hint="Manage-gated · Postgres-backed settings"
       >
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
         {query.isError && !error ? (
-          <Text style={orgPanelStyles.error}>
+          <Text style={panelStyles.error}>
             {errorMessage(query.error, 'Failed to load settings')}
           </Text>
         ) : null}
@@ -98,34 +97,20 @@ export function ServerTimezoneSettingsSection({
           onChange={(tz) => setDraftTimezone(tz)}
         />
 
-        <View style={styles.switchRow}>
-          <View style={styles.switchCopy}>
-            <Text style={styles.switchLabel}>Enforce org default on every server</Text>
-            <Text style={orgPanelStyles.muted}>
-              When on, per-server timezone changes are blocked and the org default
-              wins.
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{
-              checked: enforce,
-              disabled: readOnly || pending || !settings,
-            }}
+        <SettingRow
+          label="Enforce org default on every server"
+          description="When on, per-server timezone changes are blocked and the org default wins."
+        >
+          <Toggle
+            value={enforce}
+            onValueChange={setDraftEnforce}
             disabled={readOnly || pending || !settings}
-            onPress={() => setDraftEnforce(!enforce)}
-            style={[
-              styles.toggle,
-              enforce ? styles.toggleOn : styles.toggleOff,
-              (readOnly || pending) && styles.toggleDisabled,
-            ]}
-          >
-            <Text style={styles.toggleText}>{enforce ? 'On' : 'Off'}</Text>
-          </Pressable>
-        </View>
+            accessibilityLabel="Enforce org default on every server"
+          />
+        </SettingRow>
 
         {readOnly ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Organization manage permission is required to edit these settings.
           </Text>
         ) : (
@@ -146,45 +131,5 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginTop: spacing.md,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  switchLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  toggle: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  toggleOff: {
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-  },
-  toggleDisabled: {
-    opacity: 0.5,
-  },
-  toggleText: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 13,
   },
 })

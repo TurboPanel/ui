@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { SectionPanel, SettingRow, Toggle } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
 import type { SignupSettingsResponse } from '@/lib/instance-api'
 import {
   useSaveSignupSettings,
   useSignupSettings,
 } from '@/lib/queries/admin'
 import { HA_SIGNUP_SETTINGS_NOTE } from '@/lib/platform-copy'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -33,8 +33,8 @@ export function SignupSettingsSection() {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Sign-up</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Sign-up</Text>
+      <Text style={panelStyles.pageCopy}>
         Control whether public account creation is available on the sign-in
         page. {HA_SIGNUP_SETTINGS_NOTE}
       </Text>
@@ -43,26 +43,26 @@ export function SignupSettingsSection() {
         title="Public sign-up"
         hint="When enabled, guests see Create account and can open /sign-up"
       >
-        {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+        {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
         {envForced ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Sign-up is force-controlled by TURBOPANEL_IS_SIGNUP_ENABLED
             {settings?.envOverride ? ` (${settings.envOverride})` : ''}. Clear
             that environment variable to use this panel toggle.
           </Text>
         ) : null}
 
-        <View style={styles.row}>
-          <Text style={styles.statusLabel}>{statusLabel(query.isLoading, enabled)}</Text>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{ checked: enabled, disabled: pending || envForced }}
-            disabled={pending || envForced || !settings}
-            onPress={() => {
+        <SettingRow label={statusLabel(query.isLoading, enabled)}>
+          <Toggle
+            value={enabled}
+            disabled={envForced || !settings}
+            busy={pending}
+            accessibilityLabel="Public sign-up"
+            onValueChange={(next) => {
               if (!settings) return
               setError(null)
-              mutation.mutate(!enabled, {
+              mutation.mutate(next, {
                 onError: () => {
                   setError(
                     mutation.actionError ?? 'Failed to update sign-up setting',
@@ -70,17 +70,8 @@ export function SignupSettingsSection() {
                 },
               })
             }}
-            style={[
-              styles.toggle,
-              enabled ? styles.toggleOn : styles.toggleOff,
-              pending || envForced ? styles.toggleDisabled : null,
-            ]}
-          >
-            <Text style={styles.toggleText}>
-              {enabled ? 'On' : 'Off'}
-            </Text>
-          </Pressable>
-        </View>
+          />
+        </SettingRow>
 
         <SignupMeta settings={settings} />
       </SectionPanel>
@@ -94,7 +85,7 @@ function SignupMeta({
   if (!settings) return null
   return (
     <View style={styles.meta}>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Database value: {settings.dbValue ?? 'unset (defaults to off)'}
       </Text>
     </View>
@@ -111,40 +102,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  statusLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  toggle: {
-    minWidth: 64,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  toggleOn: {
-    backgroundColor: chrome.accent,
-  },
-  toggleOff: {
-    backgroundColor: colors.border,
-  },
-  toggleDisabled: {
-    opacity: 0.5,
-  },
-  toggleText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   meta: {
     marginTop: spacing.md,

@@ -7,8 +7,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { webPointer } from '@/components/org/org-panel-styles'
-import { chrome, colors } from '@/lib/theme'
+import { chrome, colors, webPointer } from '@/lib/theme'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 export type ButtonSize = 'md' | 'sm'

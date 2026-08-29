@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Linking, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
@@ -11,6 +10,7 @@ import {
   InlineNotice,
   LoadingState,
   MonoText,
+  SectionPanel,
 } from '@/components/ui'
 import { gitWebhookHint } from '@/lib/git-webhook-url'
 import {
@@ -254,13 +254,13 @@ export function ForgeDetailSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>{app.name}</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>{app.name}</Text>
+      <Text style={panelStyles.pageCopy}>
         {app.provider === 'github' ? 'GitHub App' : 'GitLab OAuth application'} · {app.baseUrl}
       </Text>
 
       {notice ? <InlineNotice tone={notice.tone} title={notice.title} body={notice.body} /> : null}
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {synced ? <Text style={styles.success}>{synced}</Text> : null}
 
       {/*

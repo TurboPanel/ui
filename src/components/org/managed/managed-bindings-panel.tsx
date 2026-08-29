@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   Checkbox,
   ConfirmButton,
   EmptyState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -36,7 +36,7 @@ import {
 } from '@/lib/queries/bindings'
 import { useEnvironments } from '@/lib/queries/environments'
 import { useServices } from '@/lib/queries/services'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 type ServiceMeta = { name: string; projectId: string }
 
@@ -123,16 +123,16 @@ function BindingCard({
 
   return (
     <View style={styles.card}>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Database: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Database: </Text>
         {binding.databaseName}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>User: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>User: </Text>
         {user ? managedUserPickerLabel(user) : binding.principalId}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Prefix: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Prefix: </Text>
         {binding.keyPrefix}
       </Text>
       {binding.emitEngineDefaults ? (
@@ -140,11 +140,11 @@ function BindingCard({
           <Text style={styles.chipText}>Engine defaults</Text>
         </View>
       ) : null}
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Endpoint: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Endpoint: </Text>
         {endpoint}
       </Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         {
           "Points at this server's database ingress and does not move when the primary changes."
         }
@@ -264,8 +264,8 @@ function ConnectServiceForm({
 
   return (
     <View style={styles.form}>
-      <Text style={orgPanelStyles.detailTitle}>Connect to a service</Text>
-      <Text style={orgPanelStyles.detailLabel}>Environment</Text>
+      <Text style={panelStyles.detailTitle}>Connect to a service</Text>
+      <Text style={panelStyles.detailLabel}>Environment</Text>
       <ChipSelectRow
         items={otherEnvironments}
         getId={(env) => env.id}
@@ -280,7 +280,7 @@ function ConnectServiceForm({
 
       {targetEnvironmentId ? (
         <>
-          <Text style={orgPanelStyles.detailLabel}>Service</Text>
+          <Text style={panelStyles.detailLabel}>Service</Text>
           <ChipSelectRow
             items={envServices}
             getId={(service) => service.id}
@@ -296,7 +296,7 @@ function ConnectServiceForm({
         </>
       ) : null}
 
-      <Text style={orgPanelStyles.detailLabel}>User</Text>
+      <Text style={panelStyles.detailLabel}>User</Text>
       <ChipSelectRow
         items={users}
         getId={(user) => user.id}
@@ -306,7 +306,7 @@ function ConnectServiceForm({
         onSelect={setPrincipalId}
       />
 
-      <Text style={orgPanelStyles.detailLabel}>Database</Text>
+      <Text style={panelStyles.detailLabel}>Database</Text>
       <ChipSelectRow
         items={databases}
         getId={(name) => name}
@@ -527,7 +527,7 @@ export function ManagedBindingsPanel({
       hint="Bindings deliver credentials on deploy — the host and port point at this server's database ingress and stay put when the primary changes. Passwords are never shown here"
       accent
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {endpointUnavailable ? (
         <Pressable
           style={webPointer}

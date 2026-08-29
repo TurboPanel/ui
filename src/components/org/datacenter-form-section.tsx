@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { FormSelect } from '@/components/org/form-select'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   FormField,
   LoadingState,
+  SectionPanel,
   TextField,
 } from '@/components/ui'
 import type {
@@ -33,7 +33,7 @@ import {
 } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 function serverInventoryTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
@@ -231,7 +231,7 @@ function CreateDatacenterFields({
       {selectedServer ? (
         <FormField label="Private IP">
           {serverNetworks.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>No private IP reported.</Text>
+            <Text style={panelStyles.muted}>No private IP reported.</Text>
           ) : (
             <FormSelect
               value={selectedAddress}
@@ -257,7 +257,7 @@ function CreateDatacenterFields({
           </View>
         </FormField>
       ) : null}
-      {formError ? <Text style={orgPanelStyles.error}>{formError}</Text> : null}
+      {formError ? <Text style={panelStyles.error}>{formError}</Text> : null}
       <ButtonRow>
         <Button
           label="Create"
@@ -305,16 +305,16 @@ export function DatacenterFormSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>New datacenter</Text>
+      <Text style={panelStyles.pageTitle}>New datacenter</Text>
 
-      {queryError ? <Text style={orgPanelStyles.error}>{queryError}</Text> : null}
+      {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
 
       <View style={styles.formFrame}>
         <SectionPanel>
           {loading ? <LoadingState label="Loading servers…" /> : null}
           {!loading && blocked ? (
             <View style={styles.formBody}>
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 {createBlockedCopy(canManage, eligibility.reason)}
               </Text>
               <Button

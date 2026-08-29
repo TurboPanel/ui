@@ -1,12 +1,18 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { SectionPanel } from '@/components/org/section-panel'
-import { Button, ButtonRow, ConfirmButton } from '@/components/ui'
+import {
+  Button,
+  ButtonRow,
+  ConfirmButton,
+  SectionPanel,
+  SettingRow,
+  Toggle,
+} from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
 import type {
   EnvironmentRecord,
@@ -25,7 +31,7 @@ import {
   useVariables,
 } from '@/lib/queries'
 import { userWorkspaces } from '@/lib/system-inventory'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 type ProjectAddKind = 'variables' | 'principals'
 type EnvironmentAddKind = 'variables'
@@ -110,7 +116,7 @@ function ContainerNamingBody({
 
   if (!canEdit) {
     return (
-      <Text style={orgPanelStyles.detailLine}>
+      <Text style={panelStyles.detailLine}>
         {keepOriginal
           ? 'Keep original container names'
           : 'Rename containers (default)'}
@@ -120,43 +126,27 @@ function ContainerNamingBody({
 
   return (
     <View style={styles.namingBlock}>
-      <View style={styles.switchRow}>
-        <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>Keep original container names</Text>
-          <Text style={orgPanelStyles.muted}>
-            By default TurboPanel renames containers so you can run multiple
-            instances of this project.
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: keepOriginal, disabled: saving }}
+      <SettingRow
+        label="Keep original container names"
+        description="By default TurboPanel renames containers so you can run multiple instances of this project."
+      >
+        <Toggle
+          value={keepOriginal}
+          busy={saving}
           accessibilityLabel="Keep original container names"
-          disabled={saving}
-          hitSlop={6}
-          onPress={() => {
-            onSave(keepOriginal ? 'uuid' : 'custom')
-          }}
-          style={[
-            styles.toggle,
-            keepOriginal ? styles.toggleOn : styles.toggleOff,
-            saving && styles.disabled,
-            webPointer,
-          ]}
-        >
-          <Text style={styles.toggleText}>{keepOriginal ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+          onValueChange={(next) => onSave(next ? 'custom' : 'uuid')}
+        />
+      </SettingRow>
       {keepOriginal ? (
-        <View style={orgPanelStyles.calloutWarning}>
-          <Text style={orgPanelStyles.calloutWarningText}>
+        <View style={panelStyles.calloutWarning}>
+          <Text style={panelStyles.calloutWarningText}>
             Keeping original names disables rolling updates. We rename
             containers by default so multiple instances of this project can run
             side by side.
           </Text>
         </View>
       ) : null}
-      {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
+      {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </View>
   )
 }
@@ -179,7 +169,7 @@ function WorkspaceMoveBody({
   )
   if (!canMove) {
     return (
-      <Text style={orgPanelStyles.detailLine}>
+      <Text style={panelStyles.detailLine}>
         {sorted.find((ws) => ws.id === project.workspaceId)?.name ??
           project.workspaceId}
       </Text>
@@ -216,7 +206,7 @@ function WorkspaceMoveBody({
           )
         })}
       </View>
-      {saving ? <Text style={orgPanelStyles.muted}>Moving…</Text> : null}
+      {saving ? <Text style={panelStyles.muted}>Moving…</Text> : null}
     </>
   )
 }
@@ -281,7 +271,7 @@ export function ProjectSettingsPanel({
   if (!project) return null
 
   if (!projectAllowsMutations) {
-    return <Text style={orgPanelStyles.muted}>View only</Text>
+    return <Text style={panelStyles.muted}>View only</Text>
   }
 
   const canEdit = canManage && projectAllowsMutations
@@ -395,7 +385,7 @@ export function ProjectSettingsPanel({
             }}
           />
         ) : (
-          <Text style={orgPanelStyles.muted}>View only</Text>
+          <Text style={panelStyles.muted}>View only</Text>
         )}
       </SectionPanel>
     </View>
@@ -422,7 +412,7 @@ function EnvironmentDeleteControl({
   const deleteEnvironment = useDeleteEnvironment(orgId)
 
   if (!canOwn) {
-    return <Text style={orgPanelStyles.muted}>View only</Text>
+    return <Text style={panelStyles.muted}>View only</Text>
   }
 
   if (environments.length <= 1) {
@@ -437,13 +427,13 @@ function EnvironmentDeleteControl({
           onPress={() => {}}
         />
         <Pressable
-          style={[orgPanelStyles.toolbarBtnSecondary, webPointer]}
+          style={[panelStyles.toolbarBtnSecondary, webPointer]}
           onPress={onOpenProjectSettings}
           disabled={!onOpenProjectSettings}
           accessibilityRole="button"
           accessibilityLabel="Open Project settings to delete the project"
         >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+          <Text style={panelStyles.toolbarBtnTextSecondary}>
             Only environment — delete the project from Project → Settings
           </Text>
         </Pressable>
@@ -523,7 +513,7 @@ export function EnvironmentSettingsPanel({
   const showVariables = hasVariables || opened.has('variables')
 
   if (!projectAllowsMutations) {
-    return <Text style={orgPanelStyles.muted}>View only</Text>
+    return <Text style={panelStyles.muted}>View only</Text>
   }
 
   const pendingAdds: { kind: EnvironmentAddKind; label: string }[] = []
@@ -613,41 +603,6 @@ const styles = StyleSheet.create({
   },
   namingBlock: {
     gap: spacing.sm,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  switchLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  toggle: {
-    minWidth: 52,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 8,
-    alignItems: 'center',
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    backgroundColor: chrome.accent,
-  },
-  toggleOff: {
-    backgroundColor: colors.border,
-  },
-  toggleText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
   },
   list: { gap: spacing.xs },
   row: {

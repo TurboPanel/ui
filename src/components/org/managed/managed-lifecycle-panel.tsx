@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, ButtonRow, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, ButtonRow, SectionPanel, TextField } from '@/components/ui'
 import type { ManagedStatus } from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
 
@@ -47,7 +46,7 @@ export function ManagedLifecyclePanel({
   if (!canManage) {
     return (
       <SectionPanel title="Lifecycle" hint="Start, stop, apply, or delete">
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           You need manage permission to change lifecycle.
         </Text>
       </SectionPanel>
@@ -56,7 +55,7 @@ export function ManagedLifecyclePanel({
 
   return (
     <SectionPanel title="Lifecycle" hint="Start, stop, apply, or delete">
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       <ButtonRow>
         <Button
           label="Start"

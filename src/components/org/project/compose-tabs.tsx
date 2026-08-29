@@ -7,7 +7,7 @@ import {
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   composeDraftScopeKey,
   composeFullYaml,
@@ -654,7 +654,7 @@ function ServicesPanelBody({
   if (!selectedEnvironment) {
     return (
       <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
-        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+        <Text style={panelStyles.muted}>Select an environment.</Text>
       </ComposeEditorChrome>
     )
   }
@@ -662,7 +662,7 @@ function ServicesPanelBody({
   if (loading) {
     return (
       <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
-        <Text style={orgPanelStyles.muted}>Loading…</Text>
+        <Text style={panelStyles.muted}>Loading…</Text>
       </ComposeEditorChrome>
     )
   }
@@ -899,7 +899,7 @@ export function ComposeServicesTab() {
   if (!project) return null
 
   if (!isWorkspaceKindResolved) {
-    return <Text style={orgPanelStyles.muted}>Loading project…</Text>
+    return <Text style={panelStyles.muted}>Loading project…</Text>
   }
 
   if (isSystemProject) {
@@ -914,7 +914,7 @@ export function ComposeServicesTab() {
   return (
     <View style={styles.root}>
       {!canManage || !projectAllowsMutations ? (
-        <Text style={orgPanelStyles.muted}>View only</Text>
+        <Text style={panelStyles.muted}>View only</Text>
       ) : null}
 
       <View style={styles.overviewCompose}>

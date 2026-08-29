@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
@@ -13,8 +13,7 @@ import {
   ProjectSettingsPanel,
   readHostingIdParam,
 } from '@/components/org/project-settings-area'
-import { SectionPanel } from '@/components/org/section-panel'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, SectionPanel } from '@/components/ui'
 import type { EnvironmentRecord, OrgServerRecord } from '@/lib/instance-api'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { serverDisplayName } from '@/lib/resource-labels'
@@ -60,7 +59,7 @@ function EnvironmentHostingPanel({
   return (
     <View style={styles.envBlock}>
       {heading ? (
-        <Text style={orgPanelStyles.detailTitle}>{heading}</Text>
+        <Text style={panelStyles.detailTitle}>{heading}</Text>
       ) : null}
       <EnvironmentDetailBody
         orgId={orgId}
@@ -133,7 +132,7 @@ export function ComposeHostingTab() {
   if (!selectedEnvironment) {
     return (
       <ResourceTabChrome>
-        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+        <Text style={panelStyles.muted}>Select an environment.</Text>
       </ResourceTabChrome>
     )
   }
@@ -168,12 +167,12 @@ function EnvironmentServerPinBody({
   onClear: () => void
 }>) {
   if (!canEdit) {
-    return <Text style={orgPanelStyles.muted}>View only</Text>
+    return <Text style={panelStyles.muted}>View only</Text>
   }
   return (
     <>
       {!selectedEnvironment.serverId ? (
-        <Text style={orgPanelStyles.muted}>{inheritLabel}</Text>
+        <Text style={panelStyles.muted}>{inheritLabel}</Text>
       ) : null}
       <ServerPinSelect
         label="Server"
@@ -279,7 +278,7 @@ export function ComposeServersTab() {
           {canEdit && project ? (
             <ProjectServerHeaderControl />
           ) : (
-            <Text style={orgPanelStyles.muted}>View only</Text>
+            <Text style={panelStyles.muted}>View only</Text>
           )}
         </SectionPanel>
         {environments.map((environment) => (
@@ -296,7 +295,7 @@ export function ComposeServersTab() {
   if (!selectedEnvironment) {
     return (
       <ResourceTabChrome>
-        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+        <Text style={panelStyles.muted}>Select an environment.</Text>
       </ResourceTabChrome>
     )
   }
@@ -327,7 +326,7 @@ function EnvironmentStoragePanel({
   return (
     <View style={styles.envBlock}>
       {heading ? (
-        <Text style={orgPanelStyles.detailTitle}>{heading}</Text>
+        <Text style={panelStyles.detailTitle}>{heading}</Text>
       ) : null}
       <EnvironmentDetailBody
         orgId={orgId}
@@ -394,7 +393,7 @@ export function ComposeStorageTab() {
   if (!selectedEnvironment) {
     return (
       <ResourceTabChrome>
-        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+        <Text style={panelStyles.muted}>Select an environment.</Text>
       </ResourceTabChrome>
     )
   }
@@ -440,7 +439,7 @@ export function ComposeSettingsTab() {
   if (!selectedEnvironment) {
     return (
       <ResourceTabChrome>
-        <Text style={orgPanelStyles.muted}>Select an environment.</Text>
+        <Text style={panelStyles.muted}>Select an environment.</Text>
       </ResourceTabChrome>
     )
   }

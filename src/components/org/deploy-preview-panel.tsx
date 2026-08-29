@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { EmptyState, LoadingState } from '@/components/ui'
 import { useDeployPreview } from '@/lib/queries'
 import {
@@ -36,11 +36,11 @@ export function PreviewWarnings({
 }: Readonly<{ warnings: DeployPreviewResponse['warnings'] }>) {
   if (warnings.length === 0) return null
   return (
-    <View style={orgPanelStyles.calloutWarning}>
+    <View style={panelStyles.calloutWarning}>
       {warnings.map((warning) => (
         <Text
           key={`${warning.code}:${warning.message}`}
-          style={orgPanelStyles.calloutWarningText}
+          style={panelStyles.calloutWarningText}
         >
           {formatWarningLine(warning)}
         </Text>
@@ -101,7 +101,7 @@ function ServerComposeSection({
         </View>
       </View>
       {serviceLine.length > 0 ? (
-        <Text style={orgPanelStyles.muted}>{serviceLine}</Text>
+        <Text style={panelStyles.muted}>{serviceLine}</Text>
       ) : null}
       {runtimeFile ? (
         <ComposeLayerSection file={runtimeFile} />
@@ -146,7 +146,7 @@ function PreparedComposeSnapshot({
 
   return (
     <View style={styles.layersList}>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Compiled runtime compose the daemon writes as compose.yaml. Non-secrets
         interpolate from .env; secrets are file mounts under /run/secrets/.
       </Text>
@@ -175,7 +175,7 @@ function PreparedComposeSnapshot({
           {secretPlan.map((entry) => (
             <Text
               key={`${entry.composeServiceName}:${entry.source}:${entry.key}`}
-              style={orgPanelStyles.muted}
+              style={panelStyles.muted}
             >
               {secretPlanLine(entry)}
             </Text>
@@ -193,7 +193,7 @@ function PreparedComposeSnapshot({
           {sources.map((entry) => (
             <Text
               key={`${entry.composeServiceName}:${entry.releaseId}`}
-              style={orgPanelStyles.muted}
+              style={panelStyles.muted}
             >
               {previewSourceLine(entry)}
             </Text>
@@ -217,11 +217,11 @@ export function DeployPreviewBody({
   preview: DeployPreviewResponse | null
 }>) {
   return (
-    <View style={orgPanelStyles.expandedSection}>
+    <View style={panelStyles.expandedSection}>
       {loading && !preview ? (
         <LoadingState label="Loading deploy preview…" />
       ) : null}
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {preview ? (
         <>

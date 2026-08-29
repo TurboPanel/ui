@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
@@ -12,6 +11,7 @@ import {
   InlineNotice,
   LoadingState,
   MonoText,
+  SectionPanel,
   SegmentedControl,
 } from '@/components/ui'
 import {
@@ -64,7 +64,7 @@ function GitAppRow({
       title={app.name}
       hint={`${PROVIDER_LABEL[app.provider]} · ${app.baseUrl}`}
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <View style={styles.badges}>
         {app.organizationId === null
@@ -193,8 +193,8 @@ export function GitSourcesSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Git sources</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Git sources</Text>
+      <Text style={panelStyles.pageCopy}>
         {scope === 'admin'
           ? 'Applications the whole instance shares. Every organization can connect accounts through these.'
           : 'Applications this organization connects repositories through, plus any the instance shares. Repositories themselves are attached when you create or edit a project.'}
@@ -209,7 +209,7 @@ export function GitSourcesSection({
           />
         )
         : null}
-      {loadError ? <Text style={orgPanelStyles.error}>{loadError}</Text> : null}
+      {loadError ? <Text style={panelStyles.error}>{loadError}</Text> : null}
       {query.isLoading ? <LoadingState /> : null}
 
       {!query.isLoading && apps.length === 0 && !busy

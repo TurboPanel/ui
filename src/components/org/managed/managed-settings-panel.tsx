@@ -7,14 +7,14 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
 import {
   Button,
   Checkbox,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedAccessScopePicker } from '@/components/org/managed/managed-access-scope-picker'
 import {
@@ -35,7 +35,7 @@ import {
   managedErrorMessage,
   type ManagedSettings,
 } from '@/lib/managed-services'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const ENGINE_CONFIG_MAX = 16 * 1024
 const RESTART_POLICIES = ['no', 'always', 'on-failure', 'unless-stopped'] as const
@@ -217,7 +217,7 @@ function KvEditor({
 }>) {
   return (
     <View style={styles.kvBlock}>
-      <Text style={orgPanelStyles.detailLabel}>{title}</Text>
+      <Text style={panelStyles.detailLabel}>{title}</Text>
       {rows.map((row, index) => (
         <View key={row.id} style={styles.kvRow}>
           <TextInput
@@ -278,7 +278,7 @@ function ImagePicker({
 }>) {
   if (options.length === 0) {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         {value || 'Default image applies.'}
       </Text>
     )
@@ -319,8 +319,8 @@ function ExposureExtraFields({
 }>) {
   return (
     <>
-      <Text style={orgPanelStyles.detailLabel}>Client access</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.detailLabel}>Client access</Text>
+      <Text style={panelStyles.muted}>
         Where clients may reach the shared ProxySQL listener on this server.
         Public clients always dial ProxySQL — never the engine container port.
       </Text>
@@ -386,10 +386,10 @@ function SettingsFormBody({
 }>) {
   return (
     <View style={styles.body}>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
-      <Text style={orgPanelStyles.detailLabel}>Base image</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.detailLabel}>Base image</Text>
+      <Text style={panelStyles.muted}>
         {versionLabel
           ? `Running version ${versionLabel}. Moving to another version means creating a new managed database — an engine cannot start on another major's data directory.`
           : 'Only base-OS variants of the running version can be swapped here.'}
@@ -401,8 +401,8 @@ function SettingsFormBody({
         onSelect={(image) => setForm((current) => ({ ...current, image }))}
       />
 
-      <Text style={orgPanelStyles.detailLabel}>Client TLS</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.detailLabel}>Client TLS</Text>
+      <Text style={panelStyles.muted}>
         Applies to clients dialing the shared managed listener. The listener ↔
         engine leg is always encrypted regardless of this setting.
       </Text>
@@ -425,7 +425,7 @@ function SettingsFormBody({
         editable={!disabled}
       />
 
-      <Text style={orgPanelStyles.detailLabel}>Restart policy</Text>
+      <Text style={panelStyles.detailLabel}>Restart policy</Text>
       <SegmentedControl
         options={RESTART_POLICIES.map((policy) => ({
           value: policy,
@@ -589,7 +589,7 @@ export function ManagedSettingsPanel({
       defaultCollapsed
     >
       <Pressable
-        style={[orgPanelStyles.expandedSection, webPointer]}
+        style={[panelStyles.expandedSection, webPointer]}
         onPress={() => setExpanded((current) => !current)}
       >
         <Text style={styles.disclosure}>

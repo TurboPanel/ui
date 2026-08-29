@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, ButtonRow } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { useSaveServerLabels } from '@/lib/queries/servers'
 import {
   MAX_SERVER_LABELS,
@@ -84,14 +83,14 @@ function LabelsReadOnlyList({
   pairs,
 }: Readonly<{ pairs: readonly { key: string; value: string }[] }>) {
   if (pairs.length === 0) {
-    return <Text style={orgPanelStyles.muted}>No labels.</Text>
+    return <Text style={panelStyles.muted}>No labels.</Text>
   }
   const sorted = [...pairs].sort((a, b) => a.key.localeCompare(b.key))
   return (
     <View style={styles.readList}>
       {sorted.map((pair) => (
-        <Text key={pair.key} style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>{pair.key}: </Text>
+        <Text key={pair.key} style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>{pair.key}: </Text>
           {pair.value || '—'}
         </Text>
       ))}
@@ -174,14 +173,14 @@ export function ServerLabelsEditor({
       collapsible
       defaultCollapsed
     >
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Keys must start with a letter or digit, then letters, digits, dots,
         underscores, or hyphens. At most {String(MAX_SERVER_LABELS)} labels;
         keys and values up to 255 characters. Used for placement constraints.
       </Text>
 
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
 
       {!canManage ? <LabelsReadOnlyList pairs={labels ?? []} /> : null}

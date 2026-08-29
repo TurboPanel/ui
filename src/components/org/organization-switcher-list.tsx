@@ -13,14 +13,13 @@ import {
 import { HeaderCheck } from '@/components/header-check'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { GearIcon, SearchIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { EmptyState } from '@/components/ui'
 import type { OrganizationRecord } from '@/lib/instance-api'
 import {
   organizationLabel,
   visibleOrganizations,
 } from '@/lib/organization-switcher'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 export type OrganizationSwitcherDensity = 'compact' | 'page'
 

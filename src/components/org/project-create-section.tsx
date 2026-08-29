@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
@@ -60,7 +60,7 @@ import type {
   RepositoryRecord,
 } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
@@ -633,11 +633,11 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   return (
     <View style={styles.column}>
       <View style={styles.pageHeader}>
-        <Text style={[orgPanelStyles.pageTitle, styles.centeredText]}>
+        <Text style={[panelStyles.pageTitle, styles.centeredText]}>
           {title}
         </Text>
         {hint ? (
-          <Text style={[orgPanelStyles.pageCopy, styles.centeredText]}>
+          <Text style={[panelStyles.pageCopy, styles.centeredText]}>
             {hint}
           </Text>
         ) : null}
@@ -645,7 +645,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
 
       <PanelShell>
         {apiError ?? loadError ? (
-          <Text style={orgPanelStyles.error}>{apiError ?? loadError}</Text>
+          <Text style={panelStyles.error}>{apiError ?? loadError}</Text>
         ) : null}
 
         {scopedWorkspaceBlocked ? (

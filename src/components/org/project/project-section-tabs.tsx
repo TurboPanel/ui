@@ -9,7 +9,8 @@ import {
   View,
   type ViewStyle,
 } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { StatusDot } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { readHostingIdParam } from '@/components/org/project-settings-area'
 import { ProjectScopePicker } from '@/components/org/project/project-scope-picker'
@@ -33,7 +34,7 @@ import {
 } from '@/lib/project-scope'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { useContainersByProject, useOrgServers } from '@/lib/queries'
-import { chrome, colors } from '@/lib/theme'
+import { chrome, colors, webPointer } from '@/lib/theme'
 
 /** RN Web ScrollView expands by default; keep the chip strip content-sized. */
 const scrollHostWebStyle = {
@@ -127,14 +128,14 @@ function SectionTabStrip({
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
     >
-      <View style={[orgPanelStyles.segmentGroup, styles.group]}>
+      <View style={[panelStyles.segmentGroup, styles.group]}>
         {tabIds.map((tabId) => {
           const active = activeTab === tabId
           const href = hrefForTab(tabId) as Href
           const tabStyle = StyleSheet.flatten([
-            orgPanelStyles.segmentChip,
+            panelStyles.segmentChip,
             styles.chip,
-            active ? orgPanelStyles.segmentChipActive : null,
+            active ? panelStyles.segmentChipActive : null,
             webPointer,
           ])
           return (
@@ -196,20 +197,16 @@ function ScopeChip({
       accessibilityLabel={accessibilityLabel}
       hitSlop={{ top: 8, bottom: 8 }}
       style={[
-        orgPanelStyles.segmentChip,
+        panelStyles.segmentChip,
         styles.chip,
-        selected && orgPanelStyles.segmentChipActive,
+        selected && panelStyles.segmentChipActive,
         webPointer,
       ]}
       onPress={onSelect}
     >
       <View style={styles.chipContent}>
         {statusColor ? (
-          <View
-            style={[styles.statusDot, { backgroundColor: statusColor }]}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          />
+          <StatusDot size="sm" color={statusColor} />
         ) : null}
         <Text
           style={[styles.tabText, selected && styles.tabTextActive]}
@@ -345,7 +342,7 @@ export function ProjectScopeSelector() {
       accessibilityRole="tablist"
       accessibilityLabel="Project and environments"
     >
-      <View style={[orgPanelStyles.segmentGroup, styles.group]}>
+      <View style={[panelStyles.segmentGroup, styles.group]}>
         {/* Project is always first and never collapses into the picker. */}
         <ScopeChip
           label="Project"

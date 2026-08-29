@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { FormSelect } from '@/components/org/form-select'
 import {
   Button,
@@ -10,10 +9,11 @@ import {
   FormField,
   InlineNotice,
   MonoText,
+  SectionPanel,
   SegmentedControl,
   TextField,
-  WizardSteps,
   type WizardStepItem,
+  WizardSteps,
 } from '@/components/ui'
 import { gitWebhookHint } from '@/lib/git-webhook-url'
 import {
@@ -434,7 +434,7 @@ export function GithubAppWizard({
       hint="GitHub creates the App and hands its credentials straight back."
     >
       <WizardSteps steps={STEPS} current={step} />
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {step === 'identity'
         ? (

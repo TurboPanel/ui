@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 
 /** Small "IPv4"/"IPv6" chip; renders nothing when the family is unknown. */
 export function AddressFamilyBadge({
@@ -8,11 +8,11 @@ export function AddressFamilyBadge({
   if (!family) return null
   return (
     <View
-      style={orgPanelStyles.segmentChip}
+      style={panelStyles.segmentChip}
       accessibilityRole="text"
       accessibilityLabel={family}
     >
-      <Text style={orgPanelStyles.segmentChipText}>{family}</Text>
+      <Text style={panelStyles.segmentChipText}>{family}</Text>
     </View>
   )
 }

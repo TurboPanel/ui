@@ -1,10 +1,7 @@
-import { Platform, StyleSheet } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { chrome, colors, spacing } from '@/lib/theme'
 
-/** Web-only cursor for interactive rows and chips. */
-export const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {}
-
-export const orgPanelStyles = StyleSheet.create({
+export const panelStyles = StyleSheet.create({
   muted: {
     color: colors.textFaint,
     fontSize: 13,

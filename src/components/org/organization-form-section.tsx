@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
-import { Button, FormField, LoadingState, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  FormField,
+  LoadingState,
+  SectionPanel,
+  TextField,
+} from '@/components/ui'
 import {
   foldDisplayNameApostrophes,
   DISPLAY_NAME_MAX_LENGTH,
@@ -55,14 +60,14 @@ function OrganizationIdentityCard({
   organization,
 }: Readonly<{ organization: OrganizationRecord }>) {
   return (
-    <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>Identity</Text>
-      <Text style={orgPanelStyles.detailLine} selectable>
-        <Text style={orgPanelStyles.detailLabel}>ID: </Text>
+    <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>Identity</Text>
+      <Text style={panelStyles.detailLine} selectable>
+        <Text style={panelStyles.detailLabel}>ID: </Text>
         {organization.id}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Created: </Text>
         {formatLocalDateTime(organization.createdAt)}
       </Text>
     </View>
@@ -112,7 +117,7 @@ export function OrganizationFormSection({
   let body = <LoadingState />
   if (!orgsQuery.isLoading && !organization) {
     body = (
-      <Text style={orgPanelStyles.error}>
+      <Text style={panelStyles.error}>
         {orgsQuery.error instanceof Error
           ? orgsQuery.error.message
           : 'Organization not found.'}

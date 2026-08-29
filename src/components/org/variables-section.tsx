@@ -8,9 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Checkbox, LoadingState } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Checkbox, LoadingState, SectionPanel } from '@/components/ui'
 import type { VariableParentFilter, VariableRecord } from '@/lib/instance-api'
 import {
   useCreateVariable,
@@ -824,7 +823,7 @@ function VariablesTable({
 
   if (variables.length === 0 && !showAddForm) {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         No variables yet — add keys your compose references with {'{$KEY}'} or{' '}
         {'{$project.KEY}'}. Secrets become /run/secrets/ plus KEY_FILE.
       </Text>
@@ -931,7 +930,7 @@ function VariablesEnvView({
 }: Readonly<{ variables: VariableRecord[] }>) {
   if (variables.length === 0) {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         No variables yet — add keys your compose references with {'{$KEY}'} or{' '}
         {'{$project.KEY}'}. Secrets become /run/secrets/ plus KEY_FILE.
       </Text>
@@ -990,7 +989,7 @@ function BindingOwnedVariablesGroup({
   return (
     <View style={styles.bindingGroup}>
       <Text style={styles.bindingGroupTitle}>From connected databases</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Locked keys delivered by database connections — edit or disconnect from
         the managed Connect tab or Bound databases panel.
       </Text>
@@ -1283,7 +1282,7 @@ export function VariablesSection({
         ) : null}
       </View>
 
-      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
       {view === 'table' ? (
         <>
@@ -1651,7 +1650,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   envBlock: {
-    ...orgPanelStyles.commandCodeBlock,
+    ...panelStyles.commandCodeBlock,
     maxHeight: 420,
   },
   envText: {

@@ -4,12 +4,12 @@ import { useRouter } from 'expo-router'
 import { ScreenSafeArea } from '@/components/screen-safe-area'
 import { Button } from '@/components/ui/button'
 import { MonoText } from '@/components/ui/mono-text'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   formatVersionBuild,
   readAppSourceRelease,
 } from '@/lib/source-release'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 export function AboutScreenContent() {
   const router = useRouter()
@@ -33,31 +33,31 @@ export function AboutScreenContent() {
         <Text style={styles.backLabel}>Back</Text>
       </Pressable>
 
-      <Text style={orgPanelStyles.pageEyebrow}>TurboPanel UI</Text>
-      <Text style={orgPanelStyles.pageTitle}>About</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageEyebrow}>TurboPanel UI</Text>
+      <Text style={panelStyles.pageTitle}>About</Text>
+      <Text style={panelStyles.pageCopy}>
         This console is licensed under the GNU Affero General Public License
         version 3 only. Corresponding Source is the exact revision that produced
         this build — not the default branch.
       </Text>
 
-      <View style={orgPanelStyles.detailCard}>
-        <Text style={orgPanelStyles.detailTitle}>License</Text>
+      <View style={panelStyles.detailCard}>
+        <Text style={panelStyles.detailTitle}>License</Text>
         <MonoText>{release.license}</MonoText>
-        <Text style={orgPanelStyles.detailTitle}>Version</Text>
+        <Text style={panelStyles.detailTitle}>Version</Text>
         <MonoText>{versionLabel}</MonoText>
         {release.gitCommit ? (
           <>
-            <Text style={orgPanelStyles.detailTitle}>Revision</Text>
+            <Text style={panelStyles.detailTitle}>Revision</Text>
             <MonoText selectable>{release.gitCommit}</MonoText>
           </>
         ) : (
           <>
-            <Text style={orgPanelStyles.detailTitle}>Revision</Text>
+            <Text style={panelStyles.detailTitle}>Revision</Text>
             <MonoText>Development build — not a pinned release</MonoText>
           </>
         )}
-        <Text style={orgPanelStyles.detailTitle}>Corresponding Source</Text>
+        <Text style={panelStyles.detailTitle}>Corresponding Source</Text>
         <MonoText selectable>{release.sourceReleaseUrl}</MonoText>
       </View>
 

@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { StyleSheet, Text } from 'react-native'
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
-import { Button, TextField } from '@/components/ui'
+import { Button, SectionPanel, TextField } from '@/components/ui'
 import {
   fetchOrgManagedDefaults,
   saveOrgManagedDefaults,
@@ -121,21 +120,21 @@ function ManagedTlsDefaultsPanel({
       collapsible
       defaultCollapsed
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           {errorMessage(query.error, 'Failed to load managed database defaults')}
         </Text>
       ) : null}
 
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Sets how managed SQL clients must connect through the shared listener.
         Traffic between the listener and the database engine is always encrypted;
         this decides whether a plaintext client session is refused, and what
         verification the generated connection strings ask for. Services that set
         their own mode keep it.
       </Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Verify CA and Verify Full need the Organization CA, which is downloadable
         from a managed service&apos;s Connect tab.
       </Text>
@@ -261,15 +260,15 @@ function ManagedListenerPortsPanel({
       collapsible
       defaultCollapsed
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Ports clients dial on the shared listener. They are organization-wide
         because one listener fronts every managed database on a server. Engine
         backend ports are untouched, so a host already running its own PostgreSQL
         on 5432 or MySQL on 3306 never conflicts with these.
       </Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Saving reconciles the listener on every affected server. A port another
         process on the host already holds is refused before the current listener
         is disturbed.

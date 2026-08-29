@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { SegmentedControl } from '@/components/ui'
 import {
   managedReleasesForEngine,
@@ -55,7 +55,7 @@ export function ManagedVersionPicker({
 
   return (
     <View style={styles.group}>
-      <Text style={orgPanelStyles.detailLabel}>Version</Text>
+      <Text style={panelStyles.detailLabel}>Version</Text>
       <SegmentedControl
         options={releases.map((release) => ({
           value: release.series,
@@ -77,7 +77,7 @@ export function ManagedVersionPicker({
 
       {selected && selected.variants.length > 1 ? (
         <>
-          <Text style={orgPanelStyles.detailLabel}>Base image</Text>
+          <Text style={panelStyles.detailLabel}>Base image</Text>
           <SegmentedControl
             options={selected.variants.map((variant) => ({
               value: variant.id,

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   ConfirmButton,
   EmptyState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -19,7 +19,7 @@ import {
 } from '@/lib/managed-services'
 import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
 const DATABASE_PATTERN = /^[a-zA-Z_]\w{0,62}$/
@@ -68,7 +68,7 @@ function ConnectionRolePicker({
   const active = CONNECTION_ROLE_OPTIONS.find((row) => row.value === value)
   return (
     <>
-      <Text style={orgPanelStyles.detailLabel}>Connection role</Text>
+      <Text style={panelStyles.detailLabel}>Connection role</Text>
       <SegmentedControl
         options={CONNECTION_ROLE_OPTIONS.map((option) => ({
           value: option.value,
@@ -82,9 +82,9 @@ function ConnectionRolePicker({
         disabled={disabled}
         accessibilityLabel="Connection role"
       />
-      {active ? <Text style={orgPanelStyles.muted}>{active.hint}</Text> : null}
+      {active ? <Text style={panelStyles.muted}>{active.hint}</Text> : null}
       {readOnlyAvailable ? null : (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Read-only needs a replica with read traffic enabled — add one on
           Overview first.
         </Text>
@@ -105,7 +105,7 @@ function RedeployServicesPanel({
   const [busyId, setBusyId] = useState<string | null>(null)
   return (
     <View style={styles.redeployCard}>
-      <Text style={orgPanelStyles.detailTitle}>
+      <Text style={panelStyles.detailTitle}>
         {redeployRequired.count} service(s) need a redeploy to pick up the new
         password
       </Text>
@@ -368,7 +368,7 @@ export function ManagedUsersPanel({
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
@@ -385,7 +385,7 @@ export function ManagedUsersPanel({
                 </Text>
               ) : null}
               {canManage && deleteBlocked ? (
-                <Text style={orgPanelStyles.muted}>
+                <Text style={panelStyles.muted}>
                   Remove connections first ({bindingCount})
                 </Text>
               ) : null}
@@ -428,7 +428,7 @@ export function ManagedUsersPanel({
       ) : null}
 
       <Text style={styles.subheading}>Users</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Usernames are unique across every database on this server&apos;s
         organization.
       </Text>
@@ -444,7 +444,7 @@ export function ManagedUsersPanel({
                   <Chip key={db} label={db} />
                 ))}
               </View>
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 {user.connectionRole === 'read-only'
                   ? 'Read-only login — routed to replicas serving reads'
                   : 'Read/write login — routed to the current primary'}
@@ -456,7 +456,7 @@ export function ManagedUsersPanel({
                 </Text>
               ) : null}
               {user.privileges.length > 0 ? (
-                <Text style={orgPanelStyles.muted}>
+                <Text style={panelStyles.muted}>
                   {user.privileges.join(', ')}
                 </Text>
               ) : null}
@@ -471,7 +471,7 @@ export function ManagedUsersPanel({
                     }}
                   />
                   {deleteBlocked ? (
-                    <Text style={orgPanelStyles.muted}>
+                    <Text style={panelStyles.muted}>
                       Remove connections first ({bindingCount})
                     </Text>
                   ) : (
@@ -510,9 +510,9 @@ export function ManagedUsersPanel({
             editable={!disabled}
           />
           {usernameHint ? (
-            <Text style={orgPanelStyles.calloutWarning}>{usernameHint}</Text>
+            <Text style={panelStyles.calloutWarning}>{usernameHint}</Text>
           ) : null}
-          <Text style={orgPanelStyles.detailLabel}>Databases</Text>
+          <Text style={panelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
             {databases.map((name) => {
               const selected = selectedDbs.includes(name)

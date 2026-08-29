@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { ManagedEnvironmentBody } from '@/components/org/managed/managed-project-section'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { spacing } from '@/lib/theme'
 
@@ -13,7 +13,7 @@ export function ManagedFocusTab({
 
   if (!project) return null
   if (!selectedEnvironment) {
-    return <Text style={orgPanelStyles.muted}>No environment selected.</Text>
+    return <Text style={panelStyles.muted}>No environment selected.</Text>
   }
 
   return (

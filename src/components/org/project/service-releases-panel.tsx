@@ -2,9 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { nestedScrollDomProps, webNestedScrollStyle } from '@/components/org/logs/nested-scroll'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
-import { Badge, ConfirmButton, EmptyState, InlineNotice, LoadingState } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Badge,
+  ConfirmButton,
+  EmptyState,
+  InlineNotice,
+  LoadingState,
+  SectionPanel,
+  StatusDot,
+  type StatusTone,
+} from '@/components/ui'
 import { deploymentStatusTone, formatDeployTimestamp } from '@/lib/deployment-history'
 import type { ReleaseRecord } from '@/lib/instance-api'
 import { isTerminalCommandStatus, useCommandsBatch } from '@/lib/queries/commands'
@@ -14,7 +22,7 @@ import {
   useRollbackEnvironment,
   useServiceReleases,
 } from '@/lib/queries/releases'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient } from '@tanstack/react-query'
 
 /** Cap the list so a long release history scrolls inside the panel. */
@@ -85,10 +93,10 @@ function ReleaseImageIdentity({ release }: Readonly<{ release: ReleaseRecord }>)
   )
 }
 
-function statusDotStyle(tone: 'success' | 'failed' | 'pending') {
-  if (tone === 'success') return styles.dotSuccess
-  if (tone === 'failed') return styles.dotFailed
-  return styles.dotPending
+function statusDotTone(tone: 'success' | 'failed' | 'pending'): StatusTone {
+  if (tone === 'success') return 'online'
+  if (tone === 'failed') return 'failed'
+  return 'pending'
 }
 
 /**
@@ -153,7 +161,7 @@ function ReleaseRow({
         >
           <View style={[styles.cell, styles.colStatus]}>
             <View style={styles.statusCell}>
-              <View style={[styles.dot, statusDotStyle(tone.tone)]} />
+              <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
               <Text style={styles.statusText}>{tone.label}</Text>
             </View>
           </View>
@@ -341,14 +349,14 @@ export function ServiceReleasesPanel({
     >
       {releasesQuery.isLoading ? <LoadingState label="Loading releases…" /> : null}
       {releasesQuery.error ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           {releasesQuery.error instanceof Error
             ? releasesQuery.error.message
             : 'Failed to load releases'}
         </Text>
       ) : null}
       {rollback.actionError ? (
-        <Text style={orgPanelStyles.error} accessibilityRole="alert">
+        <Text style={panelStyles.error} accessibilityRole="alert">
           {rollback.actionError}
         </Text>
       ) : null}
@@ -499,20 +507,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  dotSuccess: {
-    backgroundColor: colors.accent,
-  },
-  dotFailed: {
-    backgroundColor: colors.error,
-  },
-  dotPending: {
-    backgroundColor: colors.pending,
   },
   statusText: {
     color: colors.textBody,

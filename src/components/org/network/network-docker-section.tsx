@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
 import { NetworkListItem } from '@/components/org/network/network-rows'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -86,7 +86,7 @@ function DockerNetworkRegisterPanel({
       collapsible
       defaultCollapsed
     >
-      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
       <TextField
         label="Display name"
         placeholder="Optional label"
@@ -155,7 +155,7 @@ function DockerNetworkListPanel({
       title="Docker networks"
       hint={loading ? 'Loading…' : `${networks.length} network(s)`}
     >
-      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
       {loading && networks.length === 0 ? (
         <LoadingState label="Loading Docker networks…" />
       ) : null}
@@ -225,13 +225,13 @@ export function NetworkDockerSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Docker networks</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Docker networks</Text>
+      <Text style={panelStyles.pageCopy}>
         External Docker network registry for compose. Compose must reference the
         same name under networks.*.name.
       </Text>
 
-      {queryError ? <Text style={orgPanelStyles.error}>{queryError}</Text> : null}
+      {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
 
       {canManage ? (
         <DockerNetworkRegisterPanel orgId={orgId} servers={servers} />

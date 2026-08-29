@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { FormSelect } from '@/components/org/form-select'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   CopyButton,
@@ -217,13 +217,13 @@ export function DeployKeySource({
 
       {createDeployKeyMutation.actionError
         ? (
-          <Text style={orgPanelStyles.error}>
+          <Text style={panelStyles.error}>
             {createDeployKeyMutation.actionError}
           </Text>
         )
         : null}
       {createRepositoryMutation.actionError
-        ? <Text style={orgPanelStyles.error}>{createRepositoryMutation.actionError}</Text>
+        ? <Text style={panelStyles.error}>{createRepositoryMutation.actionError}</Text>
         : null}
     </View>
   )

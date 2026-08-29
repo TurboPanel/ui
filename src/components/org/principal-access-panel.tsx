@@ -11,7 +11,7 @@ import {
   TextField,
   type SegmentedOption,
 } from '@/components/ui'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import type { PrincipalAccessLevel } from '@/lib/instance-api'
 import {
   useAddPrincipalSshKey,
@@ -110,7 +110,7 @@ export function PrincipalAccessPanel({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.detailLabel}>Access</Text>
+      <Text style={panelStyles.detailLabel}>Access</Text>
       <SegmentedControl
         options={ACCESS_OPTIONS}
         value={access}
@@ -118,7 +118,7 @@ export function PrincipalAccessPanel({
         disabled={!canManage || savingAccess}
         accessibilityLabel={`SSH access for ${username}`}
       />
-      <Text style={orgPanelStyles.muted}>{accessExplanation(access)}</Text>
+      <Text style={panelStyles.muted}>{accessExplanation(access)}</Text>
 
       {/* Two different states, and conflating them is what sends an operator
           hunting through sshd logs: "set to Shell but holds no key" is not the
@@ -131,7 +131,7 @@ export function PrincipalAccessPanel({
         />
       ) : null}
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {loading ? <LoadingState /> : null}
       {!loading && keys.length === 0 ? (
         <EmptyState title="No keys on file." />
@@ -140,11 +140,11 @@ export function PrincipalAccessPanel({
       {keys.map((key) => (
         <View key={key.id} style={styles.keyRow}>
           <View style={styles.keyText}>
-            <Text style={orgPanelStyles.detailTitle}>{key.name}</Text>
+            <Text style={panelStyles.detailTitle}>{key.name}</Text>
             {/* The fingerprint, not the key body: it is what `ssh-keygen -lf`
                 prints, so the operator can compare it against their agent. */}
             <MonoText style={styles.fingerprint}>{key.fingerprint}</MonoText>
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               {key.keyType}
               {key.bits ? ` · ${key.bits} bits` : ''}
               {key.comment ? ` · ${key.comment}` : ''}
@@ -186,7 +186,7 @@ export function PrincipalAccessPanel({
             autoCorrect={false}
             multiline
           />
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Paste the contents of your <MonoText>.pub</MonoText> file — the
             public half. Keys are managed here, not in the account&apos;s own{' '}
             <MonoText>~/.ssh</MonoText>, so removing one here removes it on the

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
 import { Checkbox } from '@/components/ui'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   type HealthCheckPolicy,
   type ServiceOptions,
@@ -223,10 +223,10 @@ export function ServiceSettingsPanel({
           canManage={canManage}
         />
       ) : null}
-      <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
-      {savedHint ? <Text style={orgPanelStyles.muted}>{savedHint}</Text> : null}
+      <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>{composeServiceName}</Text>
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {savedHint ? <Text style={panelStyles.muted}>{savedHint}</Text> : null}
 
       <ToggleRow
         label="Disable build cache"
@@ -352,7 +352,7 @@ export function ServiceSettingsPanel({
       {canManage ? (
         <>
           {!service ? (
-            <Text style={orgPanelStyles.muted}>Save the compose document first.</Text>
+            <Text style={panelStyles.muted}>Save the compose document first.</Text>
           ) : null}
           <Pressable
             style={[styles.saveButton, (saving || !service) && styles.buttonDisabled]}

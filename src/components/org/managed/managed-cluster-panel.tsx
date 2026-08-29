@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   Checkbox,
   ConfirmButton,
   EmptyState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -62,7 +62,7 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { useDatacenters } from '@/lib/queries/topology'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const PROMOTE_GATE_CODES = new Set([
   MANAGED_REPLICA_NOT_STREAMING_ERROR,
@@ -371,19 +371,19 @@ export function ManagedClusterPanel({
       hint={`Failover stays on the datacenter LAN · remote/read replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS`}
       accent
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {lastError ? (
-        <Text style={orgPanelStyles.error} accessibilityRole="alert">
+        <Text style={panelStyles.error} accessibilityRole="alert">
           {lastError}
         </Text>
       ) : null}
       {recoveryBanner ? (
         <View
-          style={orgPanelStyles.calloutWarning}
+          style={panelStyles.calloutWarning}
           accessibilityRole="alert"
           accessibilityLabel={recoveryBanner.text}
         >
-          <Text style={orgPanelStyles.calloutWarningText}>
+          <Text style={panelStyles.calloutWarningText}>
             {recoveryBanner.text}
           </Text>
         </View>
@@ -647,14 +647,14 @@ function PromoteDialog({
   const promoteDisabled = !promoteTypedOk || disabled
 
   return (
-    <View style={[orgPanelStyles.detailCard, styles.promoteCard]}>
-      <Text style={orgPanelStyles.detailTitle}>Promote replica</Text>
-      <Text style={orgPanelStyles.detailLine}>
+    <View style={[panelStyles.detailCard, styles.promoteCard]}>
+      <Text style={panelStyles.detailTitle}>Promote replica</Text>
+      <Text style={panelStyles.detailLine}>
         {primaryLabel
           ? `Writes pause while ${primaryLabel} is demoted and the selected replica becomes primary.`
           : 'Writes pause during the primary switch.'}
       </Text>
-      <Text style={orgPanelStyles.muted}>Type {confirmName} to confirm.</Text>
+      <Text style={panelStyles.muted}>Type {confirmName} to confirm.</Text>
       <TextField
         label="Confirmation"
         value={promoteConfirmName}
@@ -665,10 +665,10 @@ function PromoteDialog({
       />
       {forceEscalate ? (
         <View style={styles.armedRow}>
-          <Text style={orgPanelStyles.calloutWarning}>
+          <Text style={panelStyles.calloutWarning}>
             {forceGateMessage ?? 'Replica health gate blocked promotion.'}
           </Text>
-          <Text style={orgPanelStyles.detailLine}>
+          <Text style={panelStyles.detailLine}>
             Promote anyway accepts possible data loss if the primary still has
             unreplicated commits.
           </Text>
@@ -720,24 +720,24 @@ function DisasterRecoveryDialog({
   const confirmDisabled = !promoteTypedOk || disabled
 
   return (
-    <View style={[orgPanelStyles.detailCard, styles.promoteCard]}>
-      <Text style={orgPanelStyles.detailTitle}>
+    <View style={[panelStyles.detailCard, styles.promoteCard]}>
+      <Text style={panelStyles.detailTitle}>
         Promote for disaster recovery
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
+      <Text style={panelStyles.detailLine}>
         Current primary: {primaryLabel ?? '—'}
       </Text>
-      <Text style={orgPanelStyles.detailLine}>
+      <Text style={panelStyles.detailLine}>
         Target: {targetLabel} · {targetSite} · {lagLabel}
       </Text>
-      <View style={orgPanelStyles.calloutWarning}>
-        <Text style={orgPanelStyles.calloutWarningText}>
+      <View style={panelStyles.calloutWarning}>
+        <Text style={panelStyles.calloutWarningText}>
           This accepts possible data loss. Unreplicated commits on the old
           primary will not be recovered. Remaining failover replicas outside
           the new primary datacenter become remote read replicas.
         </Text>
       </View>
-      <Text style={orgPanelStyles.muted}>Type {confirmName} to confirm.</Text>
+      <Text style={panelStyles.muted}>Type {confirmName} to confirm.</Text>
       <TextField
         label="Confirmation"
         value={promoteConfirmName}
@@ -858,7 +858,7 @@ function AddReplicaForm({
 }>) {
   return (
     <View style={styles.addForm}>
-      <Text style={orgPanelStyles.detailLabel}>Replica class</Text>
+      <Text style={panelStyles.detailLabel}>Replica class</Text>
       <SegmentedControl
         options={[
           { value: 'failover', label: memberReplicaClassPickerLabel('failover') },
@@ -869,7 +869,7 @@ function AddReplicaForm({
         accessibilityLabel="Replica class"
         onChange={(next) => onSelectReplicaClass(next as ManagedReplicaClass)}
       />
-      <Text style={orgPanelStyles.detailLabel}>Server</Text>
+      <Text style={panelStyles.detailLabel}>Server</Text>
       {servers
         .filter((s) => s.id !== primaryServerId)
         .map((server) => (

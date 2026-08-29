@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { webPointer } from '@/lib/theme'
 
 export type SegmentedOption<T extends string> = Readonly<{
   value: T
@@ -10,7 +11,7 @@ export type SegmentedOption<T extends string> = Readonly<{
 
 /**
  * Standard segmented filter / view switcher using the shared
- * `orgPanelStyles.segment*` shapes (never hand-roll chip rows).
+ * `panelStyles.segment*` shapes (never hand-roll chip rows).
  */
 export function SegmentedControl<T extends string>({
   options,
@@ -28,7 +29,7 @@ export function SegmentedControl<T extends string>({
 }>) {
   return (
     <View
-      style={orgPanelStyles.segmentGroup}
+      style={panelStyles.segmentGroup}
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
     >
@@ -43,16 +44,16 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: active, disabled: optionDisabled }}
             style={[
-              orgPanelStyles.segmentChip,
+              panelStyles.segmentChip,
               webPointer,
-              active && orgPanelStyles.segmentChipActive,
+              active && panelStyles.segmentChipActive,
               optionDisabled && styles.disabled,
             ]}
           >
             <Text
               style={[
-                orgPanelStyles.segmentChipText,
-                active && orgPanelStyles.segmentChipTextActive,
+                panelStyles.segmentChipText,
+                active && panelStyles.segmentChipTextActive,
               ]}
             >
               {option.label}

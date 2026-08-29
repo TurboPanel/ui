@@ -5,9 +5,13 @@ import {
   ContainerStatusBadge,
 } from '@/components/org/managed/container-status-badge'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, EmptyState, SegmentedControl } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  EmptyState,
+  SectionPanel,
+  SegmentedControl,
+} from '@/components/ui'
 import type { ContainerRecord } from '@/lib/instance-api'
 import {
   managedStatusLabel,
@@ -152,14 +156,14 @@ export function ManagedStatusPanel({
         </View>
         {version ? <Text style={styles.version}>{version}</Text> : null}
         {host && port != null ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             {host}:{port}
           </Text>
         ) : null}
       </View>
 
       {lastError ? (
-        <Text style={orgPanelStyles.error} accessibilityRole="alert">
+        <Text style={panelStyles.error} accessibilityRole="alert">
           {lastError}
         </Text>
       ) : null}
@@ -187,7 +191,7 @@ export function ManagedStatusPanel({
 
       {applyCommand ? (
         <View style={styles.logSection}>
-          <Text style={orgPanelStyles.detailLabel}>Apply transcript</Text>
+          <Text style={panelStyles.detailLabel}>Apply transcript</Text>
           <LogTranscriptView
             lines={applyLog.snapshot.lines}
             state={applyLog.state}
@@ -198,7 +202,7 @@ export function ManagedStatusPanel({
         </View>
       ) : null}
 
-      <Text style={orgPanelStyles.detailLabel}>Engine logs</Text>
+      <Text style={panelStyles.detailLabel}>Engine logs</Text>
       <View style={styles.logControls}>
         <SegmentedControl
           options={TAIL_OPTIONS.map((option) => ({
@@ -221,7 +225,7 @@ export function ManagedStatusPanel({
         />
       </View>
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <LogTranscriptView
         lines={engineLogLines}

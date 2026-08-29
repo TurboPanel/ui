@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, SectionPanel } from '@/components/ui'
 import type {
   BindingImpactService,
   BindingRedeployRequired,
@@ -64,7 +63,7 @@ export function ManagedCredentialsPanel({
         />
         {redeployRequired && onRedeployService ? (
           <View style={styles.redeployCard}>
-            <Text style={orgPanelStyles.detailTitle}>
+            <Text style={panelStyles.detailTitle}>
               {redeployRequired.count} service(s) need a redeploy to pick up the
               new password
             </Text>
@@ -99,15 +98,15 @@ export function ManagedCredentialsPanel({
 
   return (
     <SectionPanel title="Credentials" hint="Root database user" accent>
-      <View style={orgPanelStyles.detailCard}>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Root username: </Text>
+      <View style={panelStyles.detailCard}>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Root username: </Text>
           {rootUsername ?? '—'}
         </Text>
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Passwords are never shown again after you dismiss the reveal.
         </Text>
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
         {canManage ? (
           <Button
             label="Rotate password"

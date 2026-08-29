@@ -1,7 +1,12 @@
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
-import { Button, ButtonRow, LoadingState, TextField } from '@/components/ui'
+import {
+  Button,
+  ButtonRow,
+  LoadingState,
+  SectionPanel,
+  TextField,
+} from '@/components/ui'
 import { displayNameConflictMessage, DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import {
@@ -146,7 +151,7 @@ function WorkspaceFormFields({
         error={fieldErrors.description}
       />
 
-      {apiError ? <Text style={orgPanelStyles.error}>{apiError}</Text> : null}
+      {apiError ? <Text style={panelStyles.error}>{apiError}</Text> : null}
 
       <ButtonRow>
         <Button

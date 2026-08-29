@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
   Button,
@@ -311,7 +311,7 @@ export function ForgeEditor({
 
   return (
     <View style={styles.editor}>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <TextField
         label="Name"

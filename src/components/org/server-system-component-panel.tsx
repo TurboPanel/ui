@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { Button, MonoText } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, MonoText, StatusDot } from '@/components/ui'
 import { systemRestartErrorMessage } from '@/components/org/project/system-project-overview-panel'
 import type { CommandEnqueueResponse } from '@/lib/instance-api'
 import { serviceStatusTone } from '@/lib/container-status'
@@ -15,7 +15,7 @@ import {
   SYSTEM_HOSTING_INGRESS_COMPONENT,
 } from '@/lib/system-inventory'
 import { projectEnvironmentHref } from '@/lib/project-navigation'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 function statusCopy(
   status: ReturnType<typeof useServerSystemIngress>['status'],
@@ -75,24 +75,20 @@ function ProvisionedIngressStatus({
   return (
     <View style={styles.statusBlock}>
       <View style={styles.statusRow}>
-        <View
-          style={[styles.statusDot, { backgroundColor: tone.color }]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+        <StatusDot size="md" color={tone.color} />
         <Text style={styles.statusLabel}>
           {statusCopy(ingress.status, tone.label)}
         </Text>
       </View>
       {containerName ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Container: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Container: </Text>
           <MonoText>{containerName}</MonoText>
         </Text>
       ) : null}
       {composeServiceName ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Service: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Service: </Text>
           <MonoText>{composeServiceName}</MonoText>
         </Text>
       ) : null}
@@ -119,11 +115,11 @@ function IngressStatusBody({
   composeServiceName: string | null
 }>) {
   if (ingress.isLoading) {
-    return <Text style={orgPanelStyles.muted}>Loading…</Text>
+    return <Text style={panelStyles.muted}>Loading…</Text>
   }
   if (ingress.error) {
     return (
-      <Text style={orgPanelStyles.error}>
+      <Text style={panelStyles.error}>
         {ingress.error instanceof Error
           ? ingress.error.message
           : 'Failed to load system component'}
@@ -132,7 +128,7 @@ function IngressStatusBody({
   }
   if (ingress.status === 'not_provisioned') {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         {statusCopy('not_provisioned', tone.label)}
       </Text>
     )
@@ -228,7 +224,7 @@ export function ServerSystemComponentPanel({
         accessibilityLabel="Restart server proxy"
       />
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
     </View>
   )
 }

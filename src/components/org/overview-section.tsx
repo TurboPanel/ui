@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { StatusStatBoxes } from '@/components/org/status-stat-boxes'
 import {
   computeFleetStatus,
@@ -51,7 +51,7 @@ export function OverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Overview</Text>
+      <Text style={panelStyles.pageTitle}>Overview</Text>
       {showStatus ? (
         <StatusStatBoxes
           accessibilityLabel={fleetStatusAccessibilityLabel(fleetStatus)}

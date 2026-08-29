@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, CopyButton } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, CopyButton, SectionPanel } from '@/components/ui'
 import { downloadCaBundle, downloadSuccessMessage } from '@/lib/download-ca'
 import type {
   ManagedAccessEndpoint,
@@ -76,11 +75,11 @@ function ReadOnlyConnectionBlock({
 }: Readonly<{ endpoint: string; logins: readonly string[] }>) {
   return (
     <>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Read-only endpoint: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Read-only endpoint: </Text>
         {endpoint}
       </Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Same host and port. A read-only login is routed to replicas that serve
         reads; the read/write login above always reaches the current primary.
       </Text>
@@ -93,7 +92,7 @@ function ReadOnlyConnectionBlock({
           ))}
         </View>
       ) : (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           No read-only login yet — create one under Users &amp; databases and
           set its connection role to Read-only.
         </Text>
@@ -124,12 +123,12 @@ function TlsPolicyLines({
   )
   return (
     <>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>TLS: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>TLS: </Text>
         {policy.param} ({policy.enforcement}) · {policy.source}
       </Text>
       {policy.verifies ? (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Clients verify the certificate, so they need the Organization CA below.
         </Text>
       ) : null}
@@ -145,10 +144,10 @@ function EndpointList({
   }
   return (
     <View style={styles.endpointList}>
-      <Text style={orgPanelStyles.detailLabel}>Reachable endpoints</Text>
+      <Text style={panelStyles.detailLabel}>Reachable endpoints</Text>
       {endpoints.map((entry) => (
-        <Text key={`${entry.scope}-${entry.host}`} style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>
+        <Text key={`${entry.scope}-${entry.host}`} style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>
             {managedAccessScopeLabel(entry.scope)}:{' '}
           </Text>
           {entry.host}:{entry.port}
@@ -212,29 +211,29 @@ export function ManagedConnectionPanel({
       hint="Shared proxy listener for this server"
       accent
     >
-      <View style={orgPanelStyles.detailCard}>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Write endpoint: </Text>
+      <View style={panelStyles.detailCard}>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Write endpoint: </Text>
           {endpointLabel(managed, connection)}
         </Text>
         {port != null ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Protocol port {port} — every managed database on this server shares
             this listener. The endpoint stays the same across failover.
           </Text>
         ) : null}
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Server: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Server: </Text>
           {serverLabel(server)}
         </Text>
         <EndpointList endpoints={visibleEndpoints} />
         {connection ? (
           <>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Read/write login: </Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Read/write login: </Text>
               {connection.username}
             </Text>
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               The username is how the proxy routes you to this cluster.
             </Text>
             {hasReadEligible ? (
@@ -243,8 +242,8 @@ export function ManagedConnectionPanel({
                 logins={readOnlyLogins}
               />
             ) : null}
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Database: </Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Database: </Text>
               {connection.database}
             </Text>
             <TlsPolicyLines engine={managed.engine} ssl={ssl} />
@@ -259,19 +258,19 @@ export function ManagedConnectionPanel({
               />
             </View>
             {overlapping ? (
-              <Text style={orgPanelStyles.calloutWarningText}>
+              <Text style={panelStyles.calloutWarningText}>
                 A previous Organization CA generation is still trusted during
                 rotation — download the latest bundle to pick up the new root.
               </Text>
             ) : null}
             {caMessage ? (
-              <Text style={orgPanelStyles.muted}>{caMessage}</Text>
+              <Text style={panelStyles.muted}>{caMessage}</Text>
             ) : null}
             {caError ? (
-              <Text style={orgPanelStyles.error}>{caError}</Text>
+              <Text style={panelStyles.error}>{caError}</Text>
             ) : null}
-            <Text style={orgPanelStyles.detailLabel}>DSN</Text>
-            <View style={orgPanelStyles.commandCodeBlock}>
+            <Text style={panelStyles.detailLabel}>DSN</Text>
+            <View style={panelStyles.commandCodeBlock}>
               <Text style={styles.dsn} selectable>
                 {connection.dsn}
               </Text>
@@ -280,7 +279,7 @@ export function ManagedConnectionPanel({
           </>
         ) : null}
       </View>
-      <Text style={[orgPanelStyles.muted, styles.pointer]}>
+      <Text style={[panelStyles.muted, styles.pointer]}>
         Connecting a TurboPanel service? Use Connect to a service — no copying
         required.
       </Text>

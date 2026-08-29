@@ -17,7 +17,7 @@ import {
   ComposeEditorIcon,
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   composeFullYaml,
   composeVisibleYaml,
@@ -1208,7 +1208,7 @@ export function ComposeEditorSection({
         }}
       />
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
     </View>
   )
 }

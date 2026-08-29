@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import { ConfirmButton } from '@/components/ui'
@@ -22,9 +22,9 @@ function EnvironmentOverridingBanner({
   const keyList = overriddenKeys.join(', ')
 
   return (
-    <View style={[orgPanelStyles.expandedSection, styles.banner]}>
-      <Text style={orgPanelStyles.detailTitle}>Environment compose</Text>
-      <Text style={orgPanelStyles.muted}>
+    <View style={[panelStyles.expandedSection, styles.banner]}>
+      <Text style={panelStyles.detailTitle}>Environment compose</Text>
+      <Text style={panelStyles.muted}>
         Overriding {keyLabel} of the project compose ({keyList}).
       </Text>
       {canMutate ? (

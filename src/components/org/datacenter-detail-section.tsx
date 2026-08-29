@@ -4,8 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { AddressFamilyBadge } from '@/components/org/address-family-badge'
 import { FormSelect } from '@/components/org/form-select'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
   Button,
@@ -14,8 +13,11 @@ import {
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
+  SettingRow,
   TextField,
+  Toggle,
 } from '@/components/ui'
 import type {
   DatacenterAddressPreference,
@@ -60,7 +62,7 @@ import {
   serverConnectionStatusLabel,
   resolveServerConnectionStatus,
 } from '@/lib/server-connection-status'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import {
   addressFamilyLabel,
   cidrsOverlap,
@@ -234,8 +236,8 @@ function SubnetLabelReadout({ name }: Readonly<{ name: string | null }>) {
   const shown = name?.trim()
   if (!shown) return null
   return (
-    <Text style={orgPanelStyles.detailLine}>
-      <Text style={orgPanelStyles.detailLabel}>Label: </Text>
+    <Text style={panelStyles.detailLine}>
+      <Text style={panelStyles.detailLabel}>Label: </Text>
       {shown}
     </Text>
   )
@@ -262,7 +264,7 @@ function SubnetCard({
   const label = subnet.name ?? ''
 
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <ExpandToggle
         expanded={expanded}
         accessibilityLabel={
@@ -278,8 +280,8 @@ function SubnetCard({
           </Text>
           <AddressFamilyBadge family={family} />
         </View>
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Servers: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Servers: </Text>
           {formatDatacenterServerCount(subnet.memberCount)}
         </Text>
         {!expanded ? <SubnetLabelReadout name={subnet.name} /> : null}
@@ -298,7 +300,7 @@ function SubnetCard({
             <SubnetLabelReadout name={subnet.name} />
           )}
           {canManage && blocked ? (
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               Unassign the pinned servers first.
             </Text>
           ) : null}
@@ -447,7 +449,7 @@ function AddressPreferencePanel({
         onChange={onChange}
         disabled={controlsDisabled}
       />
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Only applies when both servers have an address in the same datacenter in
         both families.
       </Text>
@@ -461,7 +463,7 @@ function AddressPreferencePanel({
           accessibilityLabel="Save address preference"
         />
       ) : (
-        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+        <Text style={panelStyles.muted}>Manage permission required.</Text>
       )}
     </SectionPanel>
   )
@@ -539,7 +541,7 @@ function MemberPinCard({
   const unassignText = pinUnassignText(pinCount)
 
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <ExpandToggle
         expanded={expanded}
         accessibilityLabel={
@@ -549,7 +551,7 @@ function MemberPinCard({
         }
         onPress={() => setExpanded((prev) => !prev)}
       >
-        <Text style={orgPanelStyles.detailTitle}>{serverLabel}</Text>
+        <Text style={panelStyles.detailTitle}>{serverLabel}</Text>
         <View style={styles.pinAddressRow}>
           <Text style={styles.mono} selectable>
             {pin.address}
@@ -560,15 +562,15 @@ function MemberPinCard({
       {expanded ? (
         <>
           {server ? (
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>Status: </Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Status: </Text>
               {serverConnectionStatusLabel(
                 resolveServerConnectionStatus(server),
               )}
             </Text>
           ) : null}
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Subnet: </Text>
+          <Text style={panelStyles.detailLine}>
+            <Text style={panelStyles.detailLabel}>Subnet: </Text>
             {pinSubnetCidr(pin, subnets) ?? '—'}
           </Text>
           {canManage ? (
@@ -677,7 +679,7 @@ function MemberServersPanel({
       {canManage ? (
         <View style={styles.assignBlock}>
           {candidateServers.length === 0 ? (
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               {memberAssignEmptyCopy(subnets.length)}
             </Text>
           ) : (
@@ -839,7 +841,7 @@ function MeshFromDatacenterPanel({
       hint={`${rows.length} relays`}
     >
       {!canManage ? (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Manage permission required.
         </Text>
       ) : null}
@@ -851,8 +853,8 @@ function MeshFromDatacenterPanel({
       ) : null}
 
       {canManage && missingCidr ? (
-        <View style={orgPanelStyles.calloutWarning}>
-          <Text style={orgPanelStyles.calloutWarningText}>
+        <View style={panelStyles.calloutWarning}>
+          <Text style={panelStyles.calloutWarningText}>
             This datacenter has no subnets — apply will fail until a prefix is
             added.
           </Text>
@@ -864,33 +866,33 @@ function MeshFromDatacenterPanel({
           {rows.map((row) => (
             <Pressable
               key={row.serverId}
-              style={[orgPanelStyles.detailCard, webPointer]}
+              style={[panelStyles.detailCard, webPointer]}
               onPress={() => router.push(networkFabricHref(orgId) as Href)}
             >
               <View style={styles.gatewayTitleRow}>
-                <Text style={orgPanelStyles.detailTitle}>{row.serverLabel}</Text>
+                <Text style={panelStyles.detailTitle}>{row.serverLabel}</Text>
                 {row.isPrimary ? (
                   <Text style={styles.primaryBadge}>Primary</Text>
                 ) : null}
               </View>
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Role: </Text>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>Role: </Text>
                 {relayRoleLabel(row.role)}
               </Text>
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>
                   Other datacenters:{' '}
                 </Text>
                 {row.otherDatacenterLabel}
               </Text>
               {row.viaLabel ? (
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Via: </Text>
+                <Text style={panelStyles.detailLine}>
+                  <Text style={panelStyles.detailLabel}>Via: </Text>
                   {row.viaLabel}
                 </Text>
               ) : null}
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>
                   TurboFabric address:{' '}
                 </Text>
                 {row.address}
@@ -956,12 +958,12 @@ function DatacenterSshPortPanel({
         error={localError}
         accessibilityLabel="Datacenter SSH port"
       />
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Empty inherits the organization default (then {String(DEFAULT_SSH_PORT)}
         ). Saving does not change sshd.
       </Text>
       {readOnly ? (
-        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+        <Text style={panelStyles.muted}>Manage permission required.</Text>
       ) : (
         <Button
           label="Save"
@@ -1007,27 +1009,14 @@ function DatacenterNtpPanel({
       collapsible
       defaultCollapsed
     >
-      <View style={styles.switchRow}>
-        <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>NTP client enabled</Text>
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{
-            checked: enabled,
-            disabled: readOnly || pending || !datacenter,
-          }}
+      <SettingRow label="NTP client enabled">
+        <Toggle
+          value={enabled}
           disabled={readOnly || pending || !datacenter}
-          onPress={() => setDraftEnabled(!enabled)}
-          style={[
-            styles.toggle,
-            enabled ? styles.toggleOn : styles.toggleOff,
-            (readOnly || pending) && styles.buttonDisabled,
-          ]}
-        >
-          <Text style={styles.toggleText}>{enabled ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+          accessibilityLabel="NTP client enabled"
+          onValueChange={setDraftEnabled}
+        />
+      </SettingRow>
       <TextField
         label="NTP servers"
         value={serversText}
@@ -1044,12 +1033,12 @@ function DatacenterNtpPanel({
         placeholder="Optional fallback hosts"
         accessibilityLabel="Datacenter fallback NTP servers"
       />
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Empty + off inherits the organization NTP default. Apply still happens
         on each server Time tab.
       </Text>
       {readOnly ? (
-        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+        <Text style={panelStyles.muted}>Manage permission required.</Text>
       ) : (
         <ButtonRow>
           <Button
@@ -1108,29 +1097,16 @@ function DatacenterTimezonePanel({
         noneLabel="Inherit org default"
         onChange={onTimezoneChange}
       />
-      <View style={styles.switchRow}>
-        <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>Enforce on members</Text>
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{
-            checked: enforce,
-            disabled: readOnly || pending || !datacenter,
-          }}
+      <SettingRow label="Enforce on members">
+        <Toggle
+          value={enforce}
           disabled={readOnly || pending || !datacenter}
-          onPress={onEnforceToggle}
-          style={[
-            styles.toggle,
-            enforce ? styles.toggleOn : styles.toggleOff,
-            (readOnly || pending) && styles.buttonDisabled,
-          ]}
-        >
-          <Text style={styles.toggleText}>{enforce ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+          accessibilityLabel="Enforce on members"
+          onValueChange={onEnforceToggle}
+        />
+      </SettingRow>
       {readOnly ? (
-        <Text style={orgPanelStyles.muted}>Manage permission required.</Text>
+        <Text style={panelStyles.muted}>Manage permission required.</Text>
       ) : (
         <Button
           label="Save"
@@ -1162,11 +1138,11 @@ function DatacenterDeletePanel({
   return (
     <SectionPanel title="Delete" collapsible defaultCollapsed>
       {blocked ? (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Unassign every server first.
         </Text>
       ) : (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Permanently remove this empty datacenter.
         </Text>
       )}
@@ -1364,15 +1340,15 @@ export function DatacenterDetailSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>{title}</Text>
+      <Text style={panelStyles.pageTitle}>{title}</Text>
       {datacenter?.description?.trim() ? (
-        <Text style={orgPanelStyles.pageCopy}>
+        <Text style={panelStyles.pageCopy}>
           {datacenter.description.trim()}
         </Text>
       ) : null}
 
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
 
       <DatacenterIdentityPanel
@@ -1670,44 +1646,6 @@ const styles = StyleSheet.create({
   mono: {
     fontFamily: 'monospace',
     color: colors.textBody,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  switchLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  toggle: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  toggleOff: {
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-  },
-  toggleText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
   },
   buttonDisabled: {
     opacity: 0.5,

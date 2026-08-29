@@ -1,14 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   ConfirmButton,
   EmptyState,
   LoadingState,
+  SectionPanel,
   TextField,
 } from '@/components/ui'
 import { downloadCaBundle, downloadSuccessMessage } from '@/lib/download-ca'
@@ -219,9 +219,9 @@ function caLoadError(isError: boolean, error: unknown): string | null {
 function CaWarningCallout({ messages }: Readonly<{ messages: readonly string[] }>) {
   if (messages.length === 0) return null
   return (
-    <View style={orgPanelStyles.calloutWarning}>
+    <View style={panelStyles.calloutWarning}>
       {messages.map((message) => (
-        <Text key={message} style={orgPanelStyles.calloutWarningText}>
+        <Text key={message} style={panelStyles.calloutWarningText}>
           {message}
         </Text>
       ))}
@@ -234,9 +234,9 @@ function ActiveCaCard({
   warnings,
 }: Readonly<{ tls: OrganizationCaRecord; warnings: readonly string[] }>) {
   return (
-    <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Valid: </Text>
+    <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Valid: </Text>
         {formatTlsDate(tls.metadata.notBefore)} →{' '}
         {formatTlsDate(tls.metadata.notAfter)}
       </Text>
@@ -326,7 +326,7 @@ function RetirePreviousCaButton({
         onConfirm={onPress}
       />
       {blockerReason ? (
-        <Text style={orgPanelStyles.muted}>{blockerReason}</Text>
+        <Text style={panelStyles.muted}>{blockerReason}</Text>
       ) : null}
     </View>
   )
@@ -348,15 +348,15 @@ function RotationProgressRow({
   )
 
   return (
-    <View style={orgPanelStyles.detailCard}>
-      <Text style={orgPanelStyles.detailTitle}>
+    <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>
         {serverLabel(row.serverId, serverNames)}
       </Text>
       {badgeParts.length > 0 ? (
-        <Text style={orgPanelStyles.muted}>{badgeParts.join(' · ')}</Text>
+        <Text style={panelStyles.muted}>{badgeParts.join(' · ')}</Text>
       ) : null}
-      {status ? <Text style={orgPanelStyles.muted}>{status}</Text> : null}
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {status ? <Text style={panelStyles.muted}>{status}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
     </View>
   )
 }
@@ -379,7 +379,7 @@ function RotateConfirmSection({
   const matches = confirmText.trim() === confirmName
   const confirmDisabled = !matches || confirming
   return (
-    <View style={orgPanelStyles.expandedSection}>
+    <View style={panelStyles.expandedSection}>
       <Text style={styles.stepLabel}>Confirm Organization CA rotation</Text>
       <Text style={styles.stepCopy}>
         Clients pinned with <Text style={styles.confirmName}>verify-ca</Text> or{' '}
@@ -478,7 +478,7 @@ function OrganizationCaReady({
         onDownload={onDownload}
         onRotate={onRevealConfirm}
       />
-      {caMessage ? <Text style={orgPanelStyles.muted}>{caMessage}</Text> : null}
+      {caMessage ? <Text style={panelStyles.muted}>{caMessage}</Text> : null}
       {canManage && showConfirm ? (
         <RotateConfirmSection
           confirmName={confirmName}
@@ -674,7 +674,7 @@ export function OrganizationCaPanel({ orgId }: Readonly<{ orgId: string }>) {
         onRetire={onRetire}
       />
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
     </SectionPanel>
   )

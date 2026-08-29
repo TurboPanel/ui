@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
-  type ViewStyle,
 } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  DataTable,
+  DataTableCell,
+  type DataTableColumn,
+  DataTableRow,
+  SectionPanel,
+} from '@/components/ui'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { LicenseRecord } from '@/lib/instance-api'
 import {
@@ -21,7 +24,7 @@ import {
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useDeleteLicense, useOrgLicenses } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 function pendingKeysHint(loading: boolean, count: number): string {
   if (loading) return 'Loading…'
@@ -46,14 +49,14 @@ function PendingKeyDeleteControl({
   const title = pendingKeyDisplayName(row)
 
   if (!row.revocable) {
-    return <Text style={orgPanelStyles.muted}>Protected</Text>
+    return <Text style={panelStyles.muted}>Protected</Text>
   }
 
   if (deleting) {
     return (
       <View style={styles.deleteBusy}>
         <ActivityIndicator size="small" color={colors.textMuted} />
-        <Text style={orgPanelStyles.muted}>Deleting…</Text>
+        <Text style={panelStyles.muted}>Deleting…</Text>
       </View>
     )
   }
@@ -65,25 +68,25 @@ function PendingKeyDeleteControl({
           accessibilityRole="button"
           accessibilityLabel={`Confirm delete ${title}`}
           style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
+            panelStyles.toolbarBtnPrimary,
             pressed && styles.pressed,
             webPointer,
           ]}
           onPress={onConfirm}
         >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>Confirm delete</Text>
+          <Text style={panelStyles.toolbarBtnTextPrimary}>Confirm delete</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Cancel delete"
           style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnSecondary,
+            panelStyles.toolbarBtnSecondary,
             pressed && styles.pressed,
             webPointer,
           ]}
           onPress={onCancel}
         >
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Cancel</Text>
+          <Text style={panelStyles.toolbarBtnTextSecondary}>Cancel</Text>
         </Pressable>
       </View>
     )
@@ -94,16 +97,22 @@ function PendingKeyDeleteControl({
       accessibilityRole="button"
       accessibilityLabel={`Delete ${title}`}
       style={({ pressed }) => [
-        orgPanelStyles.toolbarBtnSecondary,
+        panelStyles.toolbarBtnSecondary,
         pressed && styles.pressed,
         webPointer,
       ]}
       onPress={onRequestConfirm}
     >
-      <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Delete</Text>
+      <Text style={panelStyles.toolbarBtnTextSecondary}>Delete</Text>
     </Pressable>
   )
 }
+
+const PENDING_KEY_COLUMNS = [
+  { key: 'name', header: 'Name', flex: 1.6, minWidth: 140 },
+  { key: 'created', header: 'Created', flex: 1.4, minWidth: 160 },
+  { key: 'delete', header: 'Delete', flex: 1.4, minWidth: 160, align: 'end' },
+] as const satisfies readonly DataTableColumn[]
 
 function PendingKeyRow({
   row,
@@ -124,21 +133,21 @@ function PendingKeyRow({
 }>) {
   const title = pendingKeyDisplayName(row)
 
+  const [nameColumn, createdColumn, deleteColumn] = PENDING_KEY_COLUMNS
+
   return (
-    <View
-      style={[styles.tableRow, rowIndex % 2 === 1 ? styles.tableRowEven : null]}
-    >
-      <View style={[styles.tableCell, styles.colName]}>
+    <DataTableRow alt={rowIndex % 2 === 1}>
+      <DataTableCell column={nameColumn}>
         <Text style={styles.nameText} numberOfLines={1}>
           {title}
         </Text>
-      </View>
-      <View style={[styles.tableCell, styles.colCreated]}>
+      </DataTableCell>
+      <DataTableCell column={createdColumn}>
         <Text style={styles.createdText} numberOfLines={1}>
           {formatLocalDateTime(row.createdAt, { includeSeconds: false })}
         </Text>
-      </View>
-      <View style={[styles.tableCell, styles.colDelete]}>
+      </DataTableCell>
+      <DataTableCell column={deleteColumn}>
         <PendingKeyDeleteControl
           row={row}
           confirming={confirming}
@@ -147,8 +156,8 @@ function PendingKeyRow({
           onCancel={onCancel}
           onConfirm={onConfirm}
         />
-      </View>
-    </View>
+      </DataTableCell>
+    </DataTableRow>
   )
 }
 
@@ -168,38 +177,20 @@ function PendingKeysTable({
   onConfirm: (id: string) => void
 }>) {
   return (
-    <ScrollView
-      horizontal
-      style={styles.tableScroll}
-      contentContainerStyle={styles.tableScrollContent}
-      nestedScrollEnabled
-    >
-      <View style={styles.table}>
-        <View style={[styles.tableRow, styles.tableHeaderRow]}>
-          <View style={[styles.tableCell, styles.colName]}>
-            <Text style={styles.tableHeaderText}>Name</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colCreated]}>
-            <Text style={styles.tableHeaderText}>Created</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colDelete]}>
-            <Text style={styles.tableHeaderText}>Delete</Text>
-          </View>
-        </View>
-        {rows.map((row, index) => (
-          <PendingKeyRow
-            key={row.id}
-            row={row}
-            rowIndex={index}
-            confirming={confirmingId === row.id}
-            deleting={deletingId === row.id}
-            onRequestConfirm={() => onRequestConfirm(row.id)}
-            onCancel={onCancel}
-            onConfirm={() => onConfirm(row.id)}
-          />
-        ))}
-      </View>
-    </ScrollView>
+    <DataTable columns={PENDING_KEY_COLUMNS} minWidth={520}>
+      {rows.map((row, index) => (
+        <PendingKeyRow
+          key={row.id}
+          row={row}
+          rowIndex={index}
+          confirming={confirmingId === row.id}
+          deleting={deletingId === row.id}
+          onRequestConfirm={() => onRequestConfirm(row.id)}
+          onCancel={onCancel}
+          onConfirm={() => onConfirm(row.id)}
+        />
+      ))}
+    </DataTable>
   )
 }
 
@@ -247,8 +238,8 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   if (!canOwn) {
     return (
       <View style={styles.root}>
-        <Text style={orgPanelStyles.pageTitle}>Pending keys</Text>
-        <Text style={orgPanelStyles.pageCopy}>
+        <Text style={panelStyles.pageTitle}>Pending keys</Text>
+        <Text style={panelStyles.pageCopy}>
           Only organization owners can view unused registration keys.
         </Text>
       </View>
@@ -257,25 +248,25 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Pending keys</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Pending keys</Text>
+      <Text style={panelStyles.pageCopy}>
         Registration keys that have not enrolled a host yet. Delete a key if you
         no longer need it — the install command cannot be recovered after you
         leave Add server.
       </Text>
 
-      {displayError ? <Text style={orgPanelStyles.error}>{displayError}</Text> : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
       <SectionPanel title="Unused keys" hint={pendingKeysHint(loading, rows.length)}>
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="small" color={colors.accent} />
-            <Text style={orgPanelStyles.muted}>Loading keys…</Text>
+            <Text style={panelStyles.muted}>Loading keys…</Text>
           </View>
         ) : null}
 
         {!loading && rows.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             No unused registration keys. Keys appear here after you add a server,
             until a host connects.
           </Text>
@@ -308,70 +299,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  tableScroll: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  tableScrollContent: {
-    flexGrow: 1,
-    minWidth: '100%',
-  },
-  table: {
-    flexGrow: 1,
-    width: '100%',
-    minWidth: 520,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    alignSelf: 'stretch',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.sm,
-    minHeight: 44,
-  },
-  tableRowEven: {
-    backgroundColor: colors.bgInset,
-  },
-  tableHeaderRow: {
-    backgroundColor: colors.bgSecondary,
-    paddingVertical: spacing.xs,
-    minHeight: 32,
-    ...(Platform.OS === 'web'
-      ? ({
-          position: 'sticky',
-          top: 0,
-          zIndex: 2,
-        } as unknown as ViewStyle)
-      : null),
-  },
-  tableCell: {
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  tableHeaderText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  colName: {
-    flex: 1.6,
-    minWidth: 140,
-  },
-  colCreated: {
-    flex: 1.4,
-    minWidth: 160,
-  },
-  colDelete: {
-    flex: 1.4,
-    minWidth: 160,
-    alignItems: 'flex-end',
   },
   nameText: {
     color: colors.textTitle,

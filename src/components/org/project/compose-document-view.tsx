@@ -1,13 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GearIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { EmptyState } from '@/components/ui'
 import {
   buildComposeDocModel,
   type ComposeDocServiceBlock,
 } from '@/lib/compose/document-model'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 /** Which editor a service row has expanded, if any. */
 export type ComposeDocFacet = 'compose' | 'hosting' | 'releases'

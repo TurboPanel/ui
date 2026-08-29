@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { spacing } from '@/lib/theme'
@@ -15,7 +15,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Manage Organization</Text>
+      <Text style={panelStyles.pageTitle}>Manage Organization</Text>
       <OrganizationFormSection orgId={orgId} />
     </View>
   )

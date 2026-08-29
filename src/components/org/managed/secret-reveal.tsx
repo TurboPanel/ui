@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, CopyButton } from '@/components/ui'
 import { colors, spacing } from '@/lib/theme'
 
@@ -23,19 +23,19 @@ export function SecretReveal({
 }>) {
   return (
     <View style={styles.root}>
-      <View style={orgPanelStyles.calloutWarning}>
-        <Text style={orgPanelStyles.calloutWarningText}>{SHOW_ONCE_WARNING}</Text>
+      <View style={panelStyles.calloutWarning}>
+        <Text style={panelStyles.calloutWarningText}>{SHOW_ONCE_WARNING}</Text>
       </View>
 
       {username ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>{usernameLabel}: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>{usernameLabel}: </Text>
           {username}
         </Text>
       ) : null}
 
-      <Text style={orgPanelStyles.detailLabel}>{passwordLabel}</Text>
-      <View style={orgPanelStyles.commandCodeBlock}>
+      <Text style={panelStyles.detailLabel}>{passwordLabel}</Text>
+      <View style={panelStyles.commandCodeBlock}>
         <Text style={styles.password} selectable>
           {password}
         </Text>

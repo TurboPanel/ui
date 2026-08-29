@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Text } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { Button, SectionPanel, TextField } from '@/components/ui'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import {
@@ -71,14 +70,14 @@ export function DefaultEnvironmentSettingsSection({
       title="Default environment name"
       hint="Manage-gated · applies to newly created projects"
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           {errorMessage(query.error, 'Failed to load default environment name')}
         </Text>
       ) : null}
 
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Every new project starts with one environment; this names it. Existing
         projects are unchanged.
       </Text>

@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
-import { SectionPanel } from '@/components/org/section-panel'
-import { Button, EmptyState, MonoText } from '@/components/ui'
+import {
+  Button,
+  EmptyState,
+  MonoText,
+  SectionPanel,
+  StatusDot,
+} from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import {
@@ -171,11 +176,9 @@ function SystemServiceRows({
           service.id
         return (
           <View key={service.id} style={styles.serviceRow}>
-            <View
-              style={[styles.statusDot, { backgroundColor: tone.color }]}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
+            <View style={styles.statusDotSlot}>
+              <StatusDot color={tone.color} />
+            </View>
             <View style={styles.serviceText}>
               <Text style={styles.serviceLabel}>
                 {service.name?.trim() ||
@@ -207,7 +210,7 @@ function SystemRestartAction({
 }>) {
   if (!showRestart) {
     return (
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         {operateAllowed
           ? 'Select a server-backed environment to restart this component.'
           : 'This platform component is read only — restart is not available.'}
@@ -317,21 +320,21 @@ export function SystemProjectOverviewPanel() {
       <SectionPanel title="Platform component" hint="Read only">
         <View style={styles.badgeRow}>
           <PlatformBadge />
-          <Text style={orgPanelStyles.muted}>{TURBOPANEL_WORKSPACE_DESCRIPTION}</Text>
+          <Text style={panelStyles.muted}>{TURBOPANEL_WORKSPACE_DESCRIPTION}</Text>
         </View>
 
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Component: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Component: </Text>
           <MonoText>{systemComponentLabel(componentKey)}</MonoText>
         </Text>
 
         {serverLabel ? (
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Target server: </Text>
+          <Text style={panelStyles.detailLine}>
+            <Text style={panelStyles.detailLabel}>Target server: </Text>
             <MonoText>{serverLabel}</MonoText>
           </Text>
         ) : (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             No environment selected — pick a server environment above.
           </Text>
         )}
@@ -357,7 +360,7 @@ export function SystemProjectOverviewPanel() {
         />
 
         {actionError ? (
-          <Text style={orgPanelStyles.error}>{actionError}</Text>
+          <Text style={panelStyles.error}>{actionError}</Text>
         ) : null}
       </SectionPanel>
 
@@ -391,10 +394,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  statusDotSlot: {
     marginTop: 6,
   },
   serviceText: {

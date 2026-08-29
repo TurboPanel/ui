@@ -1,9 +1,14 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, TextField } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  SectionPanel,
+  SettingRow,
+  TextField,
+  Toggle,
+} from '@/components/ui'
 import {
   fetchOrgHostDefaults,
   saveOrgHostDefaults,
@@ -18,7 +23,6 @@ import {
 } from '@/lib/host-defaults'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
-import { chrome, colors, spacing } from '@/lib/theme'
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -142,9 +146,9 @@ export function ServerHostDefaultsSettingsSection({
       title="Host defaults"
       hint="Org → datacenter → server · most specific wins"
     >
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           {errorMessage(query.error, 'Failed to load host defaults')}
         </Text>
       ) : null}
@@ -208,7 +212,7 @@ function HostDefaultsFields({
   const fieldsDisabled = readOnly || pending
   return (
     <>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference for this
         organization. Datacenters and individual servers can override SSH and
         NTP. Saving here does not change sshd or push NTP to hosts.
@@ -225,27 +229,17 @@ function HostDefaultsFields({
         hint={`Empty inherits platform default ${String(DEFAULT_SSH_PORT)}.`}
       />
 
-      <View style={styles.switchRow}>
-        <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>NTP client enabled</Text>
-          <Text style={orgPanelStyles.muted}>
-            Desired default for the Time tab. Apply still happens per host.
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: ntpEnabled, disabled: fieldsDisabled }}
+      <SettingRow
+        label="NTP client enabled"
+        description="Desired default for the Time tab. Apply still happens per host."
+      >
+        <Toggle
+          value={ntpEnabled}
           disabled={fieldsDisabled || !settingsLoaded}
-          onPress={onToggleNtp}
-          style={[
-            styles.toggle,
-            ntpEnabled ? styles.toggleOn : styles.toggleOff,
-            fieldsDisabled && styles.toggleDisabled,
-          ]}
-        >
-          <Text style={styles.toggleText}>{ntpEnabled ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+          accessibilityLabel="NTP client enabled"
+          onValueChange={onToggleNtp}
+        />
+      </SettingRow>
 
       <TextField
         label="NTP servers"
@@ -274,33 +268,17 @@ function HostDefaultsFields({
         />
       ) : null}
 
-      <View style={styles.switchRow}>
-        <View style={styles.switchCopy}>
-          <Text style={styles.switchLabel}>
-            Default {TURBOFABRIC_PRODUCT_NAME} on
-          </Text>
-          <Text style={orgPanelStyles.muted}>
-            Preference only. Enable or disable the mesh on the Network →{' '}
-            {TURBOFABRIC_PRODUCT_NAME} page.
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{
-            checked: fabricEnabled,
-            disabled: fieldsDisabled,
-          }}
+      <SettingRow
+        label={`Default ${TURBOFABRIC_PRODUCT_NAME} on`}
+        description={`Preference only. Enable or disable the mesh on the Network → ${TURBOFABRIC_PRODUCT_NAME} page.`}
+      >
+        <Toggle
+          value={fabricEnabled}
           disabled={fieldsDisabled || !settingsLoaded}
-          onPress={onToggleFabric}
-          style={[
-            styles.toggle,
-            fabricEnabled ? styles.toggleOn : styles.toggleOff,
-            fieldsDisabled && styles.toggleDisabled,
-          ]}
-        >
-          <Text style={styles.toggleText}>{fabricEnabled ? 'On' : 'Off'}</Text>
-        </Pressable>
-      </View>
+          accessibilityLabel={`Default ${TURBOFABRIC_PRODUCT_NAME} on`}
+          onValueChange={onToggleFabric}
+        />
+      </SettingRow>
 
       <Button
         label="Save host defaults"
@@ -313,43 +291,3 @@ function HostDefaultsFields({
   )
 }
 
-const styles = StyleSheet.create({
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  switchLabel: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  toggle: {
-    minWidth: 52,
-    minHeight: 44,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleOn: {
-    backgroundColor: chrome.accent,
-  },
-  toggleOff: {
-    backgroundColor: colors.border,
-  },
-  toggleDisabled: {
-    opacity: 0.5,
-  },
-  toggleText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-})

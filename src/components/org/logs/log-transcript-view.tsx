@@ -13,7 +13,7 @@ import {
   nestedScrollDomProps,
   webNestedScrollStyle,
 } from '@/components/org/logs/nested-scroll'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, CopyButton, EmptyState, LoadingState } from '@/components/ui'
 import {
   collapseRepeatedProgressLines,
@@ -277,11 +277,11 @@ export function LogTranscriptView({
           ) : null}
         </View>
       ) : null}
-      {hint ? <Text style={orgPanelStyles.muted}>{hint}</Text> : null}
+      {hint ? <Text style={panelStyles.muted}>{hint}</Text> : null}
 
       {state === 'truncated' ? (
-        <View style={orgPanelStyles.calloutWarning}>
-          <Text style={orgPanelStyles.calloutWarningText}>
+        <View style={panelStyles.calloutWarning}>
+          <Text style={panelStyles.calloutWarningText}>
             Output exceeded the retained size limit — earlier lines were kept and
             later output was dropped.
           </Text>
@@ -309,7 +309,7 @@ export function LogTranscriptView({
           </View>
           <View
             style={[
-              orgPanelStyles.commandCodeBlock,
+              panelStyles.commandCodeBlock,
               styles.viewport,
               { height: maxHeight },
             ]}

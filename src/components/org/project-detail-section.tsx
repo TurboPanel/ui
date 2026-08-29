@@ -6,14 +6,16 @@ import {
   EmptyState,
   InlineNotice,
   LoadingState,
+  SectionPanel,
+  SettingRow,
   TextField,
+  Toggle,
 } from '@/components/ui'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { usePersistProjectCompose } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { unownedManagedDirectorySites } from '@/lib/compose/managed-directory-sites'
@@ -282,7 +284,7 @@ export function ProjectPrincipalsSection({
 
   const body = (
     <>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {unownedSites.length > 0 ? (
         <InlineNotice
           tone="warning"
@@ -302,15 +304,15 @@ export function ProjectPrincipalsSection({
       ) : null}
       <View style={styles.principalList}>
         {principals.map((row) => (
-          <View key={row.id} style={orgPanelStyles.detailCard}>
-            <Text style={orgPanelStyles.detailTitle}>{row.username}</Text>
-            <Text style={orgPanelStyles.detailLine}>
-              <Text style={orgPanelStyles.detailLabel}>UID/GID: </Text>
+          <View key={row.id} style={panelStyles.detailCard}>
+            <Text style={panelStyles.detailTitle}>{row.username}</Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>UID/GID: </Text>
               {row.metadata?.uid ?? '—'} / {row.metadata?.gid ?? '—'}
             </Text>
             {serviceOptions.length > 0 ? (
               <View style={styles.serviceAssignRow}>
-                <Text style={orgPanelStyles.detailLabel}>Services</Text>
+                <Text style={panelStyles.detailLabel}>Services</Text>
                 <View style={styles.serviceChipRow}>
                   {serviceOptions.map((option) => {
                     const assigned = row.serviceIds.includes(option.id)
@@ -342,12 +344,12 @@ export function ProjectPrincipalsSection({
                   })}
                 </View>
                 {savingAssignments.has(row.id) ? (
-                  <Text style={orgPanelStyles.muted}>Saving assignments…</Text>
+                  <Text style={panelStyles.muted}>Saving assignments…</Text>
                 ) : null}
               </View>
             ) : null}
             <View style={styles.serviceAssignRow}>
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 Runtimes this user may execute. Without a grant its processes
                 cannot start the interpreter at all — the check is the kernel&apos;s,
                 not ours.
@@ -399,7 +401,7 @@ export function ProjectPrincipalsSection({
                 })}
               </View>
               {savingEntitlements.has(row.id) ? (
-                <Text style={orgPanelStyles.muted}>Saving runtimes…</Text>
+                <Text style={panelStyles.muted}>Saving runtimes…</Text>
               ) : null}
             </View>
             <View style={styles.serviceAssignRow}>
@@ -533,7 +535,7 @@ function projectTitleField({
 }>) {
   const displayTitle = project.name?.trim() || 'Unnamed project'
   if (!canOwn) {
-    return <Text style={orgPanelStyles.pageTitle}>{displayTitle}</Text>
+    return <Text style={panelStyles.pageTitle}>{displayTitle}</Text>
   }
   return (
     <TextInput
@@ -587,7 +589,7 @@ function projectDescriptionField({
     )
   }
   if (project.description) {
-    return <Text style={orgPanelStyles.pageCopy}>{project.description}</Text>
+    return <Text style={panelStyles.pageCopy}>{project.description}</Text>
   }
   return null
 }
@@ -632,7 +634,7 @@ function ProjectPageHeader({
         onChangeDescription,
         onSave,
       })}
-      {savingMeta ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
+      {savingMeta ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </View>
   )
 }
@@ -658,40 +660,20 @@ function ContainerNamingPanel({
     >
       {canManage ? (
         <View style={styles.namingBlock}>
-          <View style={styles.namingSwitchRow}>
-            <View style={styles.namingSwitchCopy}>
-              <Text style={styles.namingSwitchLabel}>
-                Keep original container names
-              </Text>
-              <Text style={orgPanelStyles.muted}>
-                By default TurboPanel renames containers so you can run multiple
-                instances of this project.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: keepOriginal, disabled: saving }}
+          <SettingRow
+            label="Keep original container names"
+            description="By default TurboPanel renames containers so you can run multiple instances of this project."
+          >
+            <Toggle
+              value={keepOriginal}
+              busy={saving}
               accessibilityLabel="Keep original container names"
-              disabled={saving}
-              hitSlop={6}
-              onPress={() => {
-                onChange(keepOriginal ? 'uuid' : 'custom')
-              }}
-              style={[
-                styles.namingToggle,
-                keepOriginal ? styles.namingToggleOn : styles.namingToggleOff,
-                webPointer,
-                saving && styles.namingDisabled,
-              ]}
-            >
-              <Text style={styles.namingToggleText}>
-                {keepOriginal ? 'On' : 'Off'}
-              </Text>
-            </Pressable>
-          </View>
+              onValueChange={(next) => onChange(next ? 'custom' : 'uuid')}
+            />
+          </SettingRow>
           {keepOriginal ? (
-            <View style={orgPanelStyles.calloutWarning}>
-              <Text style={orgPanelStyles.calloutWarningText}>
+            <View style={panelStyles.calloutWarning}>
+              <Text style={panelStyles.calloutWarningText}>
                 Keeping original names disables rolling updates. We rename
                 containers by default so multiple instances of this project can
                 run side by side.
@@ -700,13 +682,13 @@ function ContainerNamingPanel({
           ) : null}
         </View>
       ) : (
-        <Text style={orgPanelStyles.detailLine}>
+        <Text style={panelStyles.detailLine}>
           {keepOriginal
             ? 'Keep original container names'
             : 'Rename containers (default)'}
         </Text>
       )}
-      {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
+      {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </SectionPanel>
   )
 }
@@ -744,9 +726,9 @@ function WorkspaceMovePanel({
           ))}
         </View>
       ) : (
-        <Text style={orgPanelStyles.detailLine}>{currentWorkspaceLabel}</Text>
+        <Text style={panelStyles.detailLine}>{currentWorkspaceLabel}</Text>
       )}
-      {savingWorkspace ? <Text style={orgPanelStyles.muted}>Moving…</Text> : null}
+      {savingWorkspace ? <Text style={panelStyles.muted}>Moving…</Text> : null}
     </SectionPanel>
   )
 }
@@ -896,7 +878,7 @@ export function ProjectDetailSection({
 
   return (
     <View style={styles.root}>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {project ? (
         <>
@@ -1036,44 +1018,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     textAlignVertical: 'top',
   },
-  namingDisabled: { opacity: 0.55 },
   namingBlock: {
     gap: spacing.sm,
-  },
-  namingSwitchRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  namingSwitchCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  namingSwitchLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  namingToggle: {
-    minWidth: 52,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 8,
-    alignItems: 'center',
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  namingToggleOn: {
-    backgroundColor: chrome.accent,
-  },
-  namingToggleOff: {
-    backgroundColor: colors.border,
-  },
-  namingToggleText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '600',
   },
   serverList: { gap: spacing.xs },
   serverOption: {

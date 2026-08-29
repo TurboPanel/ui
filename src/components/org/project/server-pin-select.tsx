@@ -1,10 +1,10 @@
 import { createElement, type CSSProperties, type ReactNode } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { EmptyState } from '@/components/ui'
 import type { OrgServerRecord } from '@/lib/instance-api'
 import { serverDisplayName } from '@/lib/resource-labels'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 function serverOptionLabel(server: OrgServerRecord): string {
   const base = serverDisplayName(server)
@@ -312,7 +312,7 @@ export function ServerPinSelect({
         ) : null}
       </View>
       {hint && !isCompact ? (
-        <Text style={orgPanelStyles.muted}>{hint}</Text>
+        <Text style={panelStyles.muted}>{hint}</Text>
       ) : null}
     </View>
   )

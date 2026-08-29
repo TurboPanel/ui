@@ -13,7 +13,6 @@ import {
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { SearchIcon } from '@/components/icons/nav-icons'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { EmptyState } from '@/components/ui/state-views'
 import {
   filterSelectOptions,
@@ -21,7 +20,7 @@ import {
   shouldShowSelectSearch,
   type SelectOption,
 } from '@/lib/select-options'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 export type { SelectOption }
 

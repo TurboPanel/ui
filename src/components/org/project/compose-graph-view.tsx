@@ -1,8 +1,8 @@
 import { Fragment } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StatusDot } from '@/components/ui'
 import { Link, type Href } from 'expo-router'
 import Svg, { Path, Polygon } from 'react-native-svg'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { serviceStatusTone } from '@/lib/container-status'
 import {
   describeComposeGraph,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/compose'
 import type { ContainerRecord, ServiceRecord } from '@/lib/instance-api'
 import { projectServiceHref } from '@/lib/project-navigation'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 const SERVICE_W = 176
 const SERVICE_H = 60
@@ -161,11 +161,7 @@ function ServiceNodeOverlay({
       <View style={styles.serviceBody}>
         <View style={styles.serviceTitleRow}>
           {tone ? (
-            <View
-              style={[styles.statusDot, { backgroundColor: tone.color }]}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
+            <StatusDot size="sm" color={tone.color} />
           ) : null}
           <Text style={styles.serviceName} numberOfLines={1}>
             {node.name}

@@ -24,6 +24,7 @@ import {
   Checkbox,
   EmptyState,
   LoadingState,
+  SectionPanel,
   TextField,
 } from '@/components/ui'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
@@ -40,8 +41,7 @@ import {
 } from '@/components/org/managed/container-status-badge'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { VariablesSection } from '@/components/org/variables-section'
 import {
   DeployHealthCheckMissingError,
@@ -91,7 +91,7 @@ import {
   stripComposePlacement,
   type HostingServiceContext,
 } from '@/lib/compose'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
@@ -451,7 +451,7 @@ function HostingWebEnvFields({
       {!showWebEnvFields ? (
         <>
           <Text style={styles.fieldLabel}>{webEnvCopy.title}</Text>
-          <Text style={orgPanelStyles.muted}>{webEnvCopy.hint}</Text>
+          <Text style={panelStyles.muted}>{webEnvCopy.hint}</Text>
         </>
       ) : (
         <>
@@ -482,7 +482,7 @@ function HostingWebEnvFields({
         memory limit that never reaches the host.
       */}
       <Text style={styles.fieldLabel}>PHP</Text>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         PHP version, limits, and extensions are configured on the service
         itself, under Services — one PHP process pool belongs to one service,
         not to each hostname pointed at it.
@@ -581,7 +581,7 @@ function HostingPanelRow({
     >
       <View style={styles.hostingSummaryCopy}>
         <View style={styles.hostingTitleRow}>
-          <Text style={orgPanelStyles.detailTitle}>{composeServiceName}</Text>
+          <Text style={panelStyles.detailTitle}>{composeServiceName}</Text>
           <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
         </View>
         <Text style={styles.hostingSummaryText} numberOfLines={1}>
@@ -595,7 +595,7 @@ function HostingPanelRow({
   if (!expanded) {
     return (
       <View
-        style={[orgPanelStyles.detailCard, focused && styles.hostingRowFocused]}
+        style={[panelStyles.detailCard, focused && styles.hostingRowFocused]}
         accessibilityState={focused ? { selected: true } : undefined}
       >
         {header}
@@ -605,7 +605,7 @@ function HostingPanelRow({
 
   return (
     <View
-      style={[orgPanelStyles.detailCard, focused && styles.hostingRowFocused]}
+      style={[panelStyles.detailCard, focused && styles.hostingRowFocused]}
       accessibilityState={focused ? { selected: true } : undefined}
     >
       {header}
@@ -839,7 +839,7 @@ function HostingPanelRow({
           showPresets={false}
         />
       ) : (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Save hosting first to add hostname-scoped variables.
         </Text>
       )}
@@ -867,7 +867,7 @@ function EnvironmentPlacementPanel({
   let picker
   if (options.length === 0) {
     picker = (
-      <Text style={orgPanelStyles.muted}>No connected servers available.</Text>
+      <Text style={panelStyles.muted}>No connected servers available.</Text>
     )
   } else if (Platform.OS === 'web') {
     picker = createElement(
@@ -902,7 +902,7 @@ function EnvironmentPlacementPanel({
     picker = (
       <View style={styles.serverList}>
         {!placementServerId ? (
-          <Text style={orgPanelStyles.muted}>Select a server…</Text>
+          <Text style={panelStyles.muted}>Select a server…</Text>
         ) : null}
         {options.map((server) => {
           const isSelected = placementServerId === server.id
@@ -959,17 +959,17 @@ function EnvironmentPlacementPanel({
     >
       {picker}
       {!placementServerId ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           Select a server before deploying (or set a default on Project).
         </Text>
       ) : null}
       {selectedOffline ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           Selected server is offline. Choose a connected server.
         </Text>
       ) : null}
       {savingPlacement ? (
-        <Text style={orgPanelStyles.muted}>Saving…</Text>
+        <Text style={panelStyles.muted}>Saving…</Text>
       ) : null}
     </SectionPanel>
   )
@@ -992,10 +992,10 @@ function HealthCheckAckModal({
   return (
     <View style={styles.modalBackdrop}>
       <View style={styles.modalCard}>
-        <Text style={orgPanelStyles.detailTitle}>
+        <Text style={panelStyles.detailTitle}>
           {required ? 'Health checks required' : 'Health checks missing'}
         </Text>
-        <Text style={orgPanelStyles.detailLine}>
+        <Text style={panelStyles.detailLine}>
           {required
             ? 'These services require a Compose healthcheck before deploy can continue:'
             : 'These services have no healthcheck configured. You can deploy anyway:'}
@@ -1046,16 +1046,16 @@ function EnvironmentInfoPanel({
 }>) {
   return (
     <SectionPanel title="Environment" hint="Environment details">
-      <Text style={orgPanelStyles.detailTitle}>
+      <Text style={panelStyles.detailTitle}>
         {environment.name?.trim() || 'Unnamed environment'}
       </Text>
       {environment.description ? (
-        <Text style={orgPanelStyles.detailLine}>
+        <Text style={panelStyles.detailLine}>
           {environment.description}
         </Text>
       ) : null}
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Project: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Project: </Text>
         {projectId}
       </Text>
     </SectionPanel>
@@ -1150,7 +1150,7 @@ function EnvironmentDeployChromePanels({
           <View ref={previewBtnRef} collapsable={false} style={styles.splitGroup}>
             <Pressable
               style={[
-                orgPanelStyles.toolbarBtnSecondary,
+                panelStyles.toolbarBtnSecondary,
                 styles.splitPrimary,
                 deploying && styles.buttonDisabled,
                 webPointer,
@@ -1160,11 +1160,11 @@ function EnvironmentDeployChromePanels({
               accessibilityRole="button"
               accessibilityLabel="Preview merged compose"
             >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Preview</Text>
+              <Text style={panelStyles.toolbarBtnTextSecondary}>Preview</Text>
             </Pressable>
             <Pressable
               style={[
-                orgPanelStyles.toolbarBtnSecondary,
+                panelStyles.toolbarBtnSecondary,
                 styles.splitCaret,
                 deploying && styles.buttonDisabled,
                 webPointer,
@@ -1189,7 +1189,7 @@ function EnvironmentDeployChromePanels({
           />
         </View>
         {deployStatus ? (
-          <Text style={orgPanelStyles.detailLine}>{deployStatus}</Text>
+          <Text style={panelStyles.detailLine}>{deployStatus}</Text>
         ) : null}
       </SectionPanel>
 
@@ -1431,8 +1431,8 @@ function EnvironmentContainersSectionPanel({
               return null
             }
             return (
-              <View key={service.id} style={orgPanelStyles.detailCard}>
-                <Text style={orgPanelStyles.detailTitle}>
+              <View key={service.id} style={panelStyles.detailCard}>
+                <Text style={panelStyles.detailTitle}>
                   {service.name?.trim() ||
                     String(service.composeServiceName ?? service.id)}
                 </Text>
@@ -1445,14 +1445,14 @@ function EnvironmentContainersSectionPanel({
                     ]}
                   >
                     <View style={styles.containerHeader}>
-                      <Text style={orgPanelStyles.detailLine}>
+                      <Text style={panelStyles.detailLine}>
                         {containerDisplayName(container)}
                       </Text>
                       <ContainerRoleBadge role={container.role} />
                       <ContainerStatusBadge status={container.status} />
                     </View>
-                    <Text style={orgPanelStyles.detailLine}>
-                      <Text style={orgPanelStyles.detailLabel}>Host: </Text>
+                    <Text style={panelStyles.detailLine}>
+                      <Text style={panelStyles.detailLabel}>Host: </Text>
                       {containerHostLabel(container, allServers)}
                     </Text>
                     <ContainerLogTail orgId={orgId} container={container} />
@@ -2217,7 +2217,7 @@ export function EnvironmentDetailBody({
 
   return (
     <View style={styles.body}>
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {environment ? (
         <EnvironmentLoadedPanels

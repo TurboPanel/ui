@@ -1,7 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import type { ReactNode } from 'react'
-import { webPointer } from '@/components/org/org-panel-styles'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 /** Vertical stack of {@link ChoiceCard}s — type cards, catalog cards. */
 export function ChoiceGrid({

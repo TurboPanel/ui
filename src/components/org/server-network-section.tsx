@@ -3,9 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AddressFamilyBadge } from '@/components/org/address-family-badge'
 import { IpListRow } from '@/components/org/network/network-rows'
-import { MonoText } from '@/components/ui'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { MonoText, SectionPanel } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   fetchDatacenters,
   fetchIps,
@@ -18,7 +17,7 @@ import { datacenterHref, networkFabricHref } from '@/lib/org-navigation'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 import { addressFamilyLabel } from '@/lib/cidr'
 
 // Docker/veth/bridge interfaces are filtered daemon-side before addresses reach the API.
@@ -35,17 +34,17 @@ function AddressGroup({
   if (addresses.length === 0) return null
   return (
     <View style={styles.group}>
-      <Text style={orgPanelStyles.detailTitle}>{label}</Text>
+      <Text style={panelStyles.detailTitle}>{label}</Text>
       {addresses.map((row) => (
         <View key={row.address} style={styles.pinRow}>
           <MonoText style={styles.mono} selectable>
             {row.address}
           </MonoText>
           {row.interface ? (
-            <Text style={orgPanelStyles.muted}>{row.interface}</Text>
+            <Text style={panelStyles.muted}>{row.interface}</Text>
           ) : null}
           {row.preferred ? (
-            <Text style={orgPanelStyles.muted}>default route</Text>
+            <Text style={panelStyles.muted}>default route</Text>
           ) : null}
         </View>
       ))}
@@ -67,11 +66,11 @@ function DatacenterPrivatePins({
   datacenterNameById: ReadonlyMap<string, string>
 }>) {
   if (loading) {
-    return <Text style={orgPanelStyles.muted}>Loading private address…</Text>
+    return <Text style={panelStyles.muted}>Loading private address…</Text>
   }
   if (ips.length === 0) {
     return (
-      <Text style={orgPanelStyles.muted}>No private address assigned</Text>
+      <Text style={panelStyles.muted}>No private address assigned</Text>
     )
   }
   return (
@@ -88,7 +87,7 @@ function DatacenterPrivatePins({
             </MonoText>
             <AddressFamilyBadge family={family} />
             {datacenterLabel ? (
-              <Text style={orgPanelStyles.muted}>{datacenterLabel}</Text>
+              <Text style={panelStyles.muted}>{datacenterLabel}</Text>
             ) : null}
           </View>
         )
@@ -116,35 +115,35 @@ function ServerMeshMembershipPanel({
       hint={`${TURBOFABRIC_PRODUCT_NAME} membership for this host`}
     >
       {!canManage ? (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           Organization manage permission is required to view{' '}
           {TURBOFABRIC_PRODUCT_NAME} membership.
         </Text>
       ) : null}
       {canManage && loading && !relay ? (
-        <Text style={orgPanelStyles.muted}>Loading mesh membership…</Text>
+        <Text style={panelStyles.muted}>Loading mesh membership…</Text>
       ) : null}
       {canManage && !loading && !relay ? (
-        <View style={orgPanelStyles.statePanel}>
-          <Text style={orgPanelStyles.muted}>
+        <View style={panelStyles.statePanel}>
+          <Text style={panelStyles.muted}>
             Not a {TURBOFABRIC_PRODUCT_NAME} relay.
           </Text>
         </View>
       ) : null}
       {canManage && relay ? (
-        <View style={orgPanelStyles.detailCard}>
+        <View style={panelStyles.detailCard}>
           <Pressable
             style={webPointer}
             onPress={() => router.push(networkFabricHref(orgId) as Href)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${TURBOFABRIC_PRODUCT_NAME}`}
           >
-            <Text style={orgPanelStyles.detailTitle}>
+            <Text style={panelStyles.detailTitle}>
               {TURBOFABRIC_PRODUCT_NAME}
             </Text>
           </Pressable>
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>
+          <Text style={panelStyles.detailLine}>
+            <Text style={panelStyles.detailLabel}>
               TurboFabric address:{' '}
             </Text>
             <MonoText style={styles.mono} selectable>
@@ -235,8 +234,8 @@ export function ServerNetworkSection({
         hint="Membership pins for this host"
       >
         {memberships.length === 0 ? (
-          <Text style={orgPanelStyles.detailLine}>
-            <Text style={orgPanelStyles.detailLabel}>Datacenters: </Text>
+          <Text style={panelStyles.detailLine}>
+            <Text style={panelStyles.detailLabel}>Datacenters: </Text>
             Not assigned
           </Text>
         ) : (
@@ -252,8 +251,8 @@ export function ServerNetworkSection({
                 accessibilityRole="link"
                 accessibilityLabel={`Open datacenter ${label}`}
               >
-                <Text style={orgPanelStyles.detailLine}>
-                  <Text style={orgPanelStyles.detailLabel}>Datacenter: </Text>
+                <Text style={panelStyles.detailLine}>
+                  <Text style={panelStyles.detailLabel}>Datacenter: </Text>
                   {label}
                 </Text>
               </Pressable>
@@ -279,10 +278,10 @@ export function ServerNetworkSection({
         hint="Organization IP pool rows assigned to this host"
       >
         {serverManagedIpsQuery.isLoading ? (
-          <Text style={orgPanelStyles.muted}>Loading managed addresses…</Text>
+          <Text style={panelStyles.muted}>Loading managed addresses…</Text>
         ) : null}
         {!serverManagedIpsQuery.isLoading && managedIps.length === 0 ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             No managed addresses assigned to this server.
           </Text>
         ) : null}
@@ -310,7 +309,7 @@ export function ServerNetworkSection({
 
       <SectionPanel title="Interfaces" hint="Non-container addresses from the daemon">
         {!hasLists ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             No interface addresses reported yet.
           </Text>
         ) : (

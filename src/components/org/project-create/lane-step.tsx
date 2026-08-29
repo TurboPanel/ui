@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { ChoiceCard, ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { InlineNotice, LoadingState } from '@/components/ui'
 import {
@@ -103,7 +103,7 @@ export function LaneStep({
           body={`${error.message} You can still choose how to run it.`}
         />
       ) : (
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           {detected
             ? 'Picked from what is in the repository. Change it if that is not what you want.'
             : 'Nothing in the repository points at one of these, so pick the one you want.'}

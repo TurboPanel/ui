@@ -15,7 +15,7 @@ import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderUserAccountControl } from '@/components/header-account-controls'
 import { PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { LoadingState } from '@/components/ui'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
@@ -27,7 +27,7 @@ import {
 } from '@/lib/org-navigation'
 import { shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 /**
  * Full-page organization switcher (`/organizations`).
@@ -134,7 +134,7 @@ export function OrganizationSwitcherScreen() {
       >
         <View style={styles.titleRow}>
           <View style={styles.titleCopy}>
-            <Text style={orgPanelStyles.pageTitle}>Organizations</Text>
+            <Text style={panelStyles.pageTitle}>Organizations</Text>
             <Text style={styles.subtitle}>
               Switch organizations or create a new one. Opening an organization
               takes you to Overview.
@@ -142,7 +142,7 @@ export function OrganizationSwitcherScreen() {
           </View>
           <Pressable
             style={({ pressed }) => [
-              orgPanelStyles.toolbarBtnPrimary,
+              panelStyles.toolbarBtnPrimary,
               styles.newBtn,
               pressed && styles.pressed,
               webPointer,
@@ -152,7 +152,7 @@ export function OrganizationSwitcherScreen() {
             accessibilityLabel="Create organization"
           >
             <PlusIcon size={14} color={chrome.accent} />
-            <Text style={orgPanelStyles.toolbarBtnTextPrimary}>New</Text>
+            <Text style={panelStyles.toolbarBtnTextPrimary}>New</Text>
           </Pressable>
         </View>
 

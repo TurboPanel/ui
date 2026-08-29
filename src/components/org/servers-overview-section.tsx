@@ -1,10 +1,18 @@
 import { OverviewNavIcon } from '@/components/icons/nav-icons'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
-import { SectionPanel } from '@/components/org/section-panel'
-import { Checkbox, EmptyState, LoadingState } from '@/components/ui'
+import {
+  Checkbox,
+  DataTable,
+  DataTableCell,
+  type DataTableColumn,
+  DataTableRow,
+  EmptyState,
+  LoadingState,
+  SectionPanel,
+} from '@/components/ui'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
 import {
   indexFleetUsageByServerId,
@@ -52,7 +60,7 @@ import {
   type ServerConnectionStatus,
 } from '@/lib/server-connection-status'
 import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
@@ -61,7 +69,6 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -165,9 +172,9 @@ function LayoutToggleChip({
     <Pressable
       onPress={onPress}
       style={[
-        orgPanelStyles.segmentChip,
+        panelStyles.segmentChip,
         styles.layoutChip,
-        active && orgPanelStyles.segmentChipActive,
+        active && panelStyles.segmentChipActive,
         webPointer,
       ]}
       accessibilityRole="radio"
@@ -196,7 +203,7 @@ function ServersLayoutToggle({
 }>) {
   return (
     <View
-      style={[orgPanelStyles.segmentGroup, styles.layoutToggle]}
+      style={[panelStyles.segmentGroup, styles.layoutToggle]}
       accessibilityRole="radiogroup"
       accessibilityLabel="Server view"
     >
@@ -230,7 +237,7 @@ function AddServerToolbarButton({
   return (
     <Pressable
       style={({ pressed }) => [
-        open ? orgPanelStyles.toolbarBtnSecondary : orgPanelStyles.toolbarBtnPrimary,
+        open ? panelStyles.toolbarBtnSecondary : panelStyles.toolbarBtnPrimary,
         compact && styles.toolbarBtnCompact,
         disabled && styles.buttonDisabled,
         pressed && !disabled && styles.buttonPressed,
@@ -240,7 +247,7 @@ function AddServerToolbarButton({
       onPress={onPress}
     >
       <Text
-        style={open ? orgPanelStyles.toolbarBtnTextSecondary : orgPanelStyles.toolbarBtnTextPrimary}
+        style={open ? panelStyles.toolbarBtnTextSecondary : panelStyles.toolbarBtnTextPrimary}
       >
         {open ? 'Close' : '+ Server'}
       </Text>
@@ -329,7 +336,7 @@ function ServersOverviewToolbar({
       {showUpdate ? (
         <TouchableOpacity
           style={[
-            orgPanelStyles.toolbarBtnSecondary,
+            panelStyles.toolbarBtnSecondary,
             compactChrome && styles.toolbarBtnCompact,
             updateDisabled && styles.buttonDisabled,
           ]}
@@ -337,7 +344,7 @@ function ServersOverviewToolbar({
           disabled={updateDisabled}
         >
           {batchUpdating ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-          <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+          <Text style={panelStyles.toolbarBtnTextSecondary}>
             {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
           </Text>
         </TouchableOpacity>
@@ -379,11 +386,29 @@ function ServerHostIdentity({ server }: Readonly<{ server: OrgServerRecord }>) {
   )
 }
 
+const SERVER_COLUMNS = [
+  { key: 'name', header: 'Host', flex: 2.6, minWidth: 220, gap: 2 },
+  { key: 'status', header: 'Status', flex: 1.1, minWidth: 110, gap: 4 },
+  { key: 'location', header: 'Country', flex: 1.4, minWidth: 130 },
+  { key: 'usage', header: 'Usage', flex: 1.6, minWidth: 148 },
+  { key: 'mesh', header: 'Mesh', flex: 1.1, minWidth: 110 },
+  { key: 'check', header: 'Select', width: 40, align: 'center' },
+] as const satisfies readonly DataTableColumn[]
+
+const [
+  SV_NAME,
+  SV_STATUS,
+  SV_LOCATION,
+  SV_USAGE,
+  SV_MESH,
+  SV_CHECK,
+] = SERVER_COLUMNS
+
 function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
-    <View style={[styles.tableCell, styles.colName]}>
+    <DataTableCell column={SV_NAME}>
       <ServerHostIdentity server={server} />
-    </View>
+    </DataTableCell>
   )
 }
 
@@ -428,9 +453,9 @@ function ServerStatusBadge({ server }: Readonly<{ server: OrgServerRecord }>) {
 
 function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
-    <View style={[styles.tableCell, styles.colStatus]}>
+    <DataTableCell column={SV_STATUS}>
       <ServerStatusBadge server={server} />
-    </View>
+    </DataTableCell>
   )
 }
 
@@ -454,9 +479,9 @@ function ServerCountryLine({ server }: Readonly<{ server: OrgServerRecord }>) {
 
 function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
-    <View style={[styles.tableCell, styles.colLocation]}>
+    <DataTableCell column={SV_LOCATION}>
       <ServerCountryLine server={server} />
-    </View>
+    </DataTableCell>
   )
 }
 
@@ -482,19 +507,19 @@ function ServerUsageCell({
   cpuCores: number | null
 }>) {
   return (
-    <View style={[styles.tableCell, styles.colUsage]}>
+    <DataTableCell column={SV_USAGE}>
       <ServerUsageBars density="list" cpuCores={cpuCores} {...usageBarMetrics(usage)} />
-    </View>
+    </DataTableCell>
   )
 }
 
 function ServerMeshCell({ overlayAddress }: Readonly<{ overlayAddress: string | null }>) {
   return (
-    <View style={[styles.tableCell, styles.colMesh]}>
+    <DataTableCell column={SV_MESH}>
       <Text style={styles.meshText} numberOfLines={1}>
         {overlayAddress ?? '—'}
       </Text>
-    </View>
+    </DataTableCell>
   )
 }
 
@@ -518,23 +543,13 @@ function OrgServerTableRow({
   onToggleSelected: () => void
 }>) {
   const router = useRouter()
-  const [rowHovered, setRowHovered] = useState(false)
 
   return (
-    <Pressable
+    <DataTableRow
       onPress={() => router.push(serverDetailHref(orgId, server.id))}
-      onPointerEnter={() => setRowHovered(true)}
-      onPointerLeave={() => setRowHovered(false)}
-      style={({ pressed }) => [
-        styles.tableRow,
-        isLast ? styles.tableRowLast : null,
-        rowIndex % 2 === 1 ? styles.tableRowEven : null,
-        selected ? styles.tableRowSelected : null,
-        rowHovered ? styles.tableRowHovered : null,
-        pressed && styles.buttonPressed,
-        webPointer,
-      ]}
-      accessibilityRole="button"
+      last={isLast}
+      alt={rowIndex % 2 === 1}
+      selected={selected}
       accessibilityLabel={`Open ${serverTitle(server)}`}
     >
       <ServerNameCell server={server} />
@@ -542,14 +557,14 @@ function OrgServerTableRow({
       <ServerLocationCell server={server} />
       <ServerUsageCell usage={usage} cpuCores={serverCpuThreads(server)} />
       <ServerMeshCell overlayAddress={overlayAddress} />
-      <View style={[styles.tableCell, styles.colCheck]}>
+      <DataTableCell column={SV_CHECK}>
         <Checkbox
           checked={selected}
           onPress={onToggleSelected}
           accessibilityLabel={`Select ${serverTitle(server)}`}
         />
-      </View>
-    </Pressable>
+      </DataTableCell>
+    </DataTableRow>
   )
 }
 
@@ -670,38 +685,20 @@ function ServersFleetTable({
   onToggleSelected,
 }: ServersFleetViewProps) {
   return (
-    <ScrollView
-      horizontal
-      nestedScrollEnabled
-      style={styles.tableScroll}
-      contentContainerStyle={styles.tableScrollContent}
+    <DataTable
+      columns={SERVER_COLUMNS}
+      minWidth={900}
+      renderHeaderCell={(column) =>
+        column.key === 'check' ? (
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onPress={onToggleSelectAll}
+            accessibilityLabel="Select all servers"
+          />
+        ) : undefined
+      }
     >
-      <View style={styles.table}>
-        <View style={[styles.tableRow, styles.tableHeaderRow]}>
-          <View style={[styles.tableCell, styles.colName]}>
-            <Text style={styles.tableHeaderText}>Host</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colStatus]}>
-            <Text style={styles.tableHeaderText}>Status</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colLocation]}>
-            <Text style={styles.tableHeaderText}>Country</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colUsage]}>
-            <Text style={styles.tableHeaderText}>Usage</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colMesh]}>
-            <Text style={styles.tableHeaderText}>Mesh</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colCheck]}>
-            <Checkbox
-              checked={allSelected}
-              indeterminate={someSelected}
-              onPress={onToggleSelectAll}
-              accessibilityLabel="Select all servers"
-            />
-          </View>
-        </View>
         {servers.map((server, index) => (
           <OrgServerTableRow
             key={server.id}
@@ -715,8 +712,7 @@ function ServersFleetTable({
             onToggleSelected={() => onToggleSelected(server.id)}
           />
         ))}
-      </View>
-    </ScrollView>
+    </DataTable>
   )
 }
 
@@ -839,7 +835,7 @@ function ServersOverviewFleet({
     <>
       {fleetSurface.showFleetPanel ? (
         <SectionPanel>
-          {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+          {error ? <Text style={panelStyles.error}>{error}</Text> : null}
           {loading && serverCount === 0 ? <LoadingState label="Loading fleet…" /> : null}
           {!loading && serverCount === 0 ? <ServersFleetEmptyState /> : null}
           {fleetSurface.showDetailInPanel ? (
@@ -1058,7 +1054,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         style={[styles.titleRow, selectedIds.size > 0 && styles.titleRowPinned]}
       >
         <Text
-          style={[orgPanelStyles.pageTitle, styles.titleText]}
+          style={[panelStyles.pageTitle, styles.titleText]}
           numberOfLines={1}
         >
           Servers
@@ -1202,89 +1198,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  tableScroll: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  tableScrollContent: {
-    flexGrow: 1,
-    minWidth: '100%',
-  },
-  table: {
-    flexGrow: 1,
-    width: '100%',
-    minWidth: 900,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    alignSelf: 'stretch',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.sm,
-  },
-  tableRowLast: {
-    borderBottomWidth: 0,
-  },
-  tableRowEven: {
-    backgroundColor: colors.bgInset,
-  },
-  tableRowHovered: {
-    backgroundColor: colors.bgSecondary,
-  },
   tableRowSelected: {
     backgroundColor: chrome.bgActive,
-  },
-  tableHeaderRow: {
-    backgroundColor: colors.bgSecondary,
-    paddingVertical: spacing.xs,
-    ...(Platform.OS === 'web'
-      ? ({
-          position: 'sticky',
-          top: 0,
-          zIndex: 2,
-        } as unknown as ViewStyle)
-      : null),
-  },
-  tableCell: {
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  tableHeaderText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  colName: {
-    flex: 2.6,
-    minWidth: 220,
-    gap: 2,
-  },
-  colStatus: {
-    flex: 1.1,
-    minWidth: 110,
-    gap: 4,
-    alignItems: 'flex-start',
-  },
-  colLocation: {
-    flex: 1.4,
-    minWidth: 130,
-    alignItems: 'flex-start',
-  },
-  colUsage: {
-    flex: 1.6,
-    minWidth: 148,
-    alignItems: 'flex-start',
-  },
-  colMesh: {
-    flex: 1.1,
-    minWidth: 110,
-    alignItems: 'flex-start',
   },
   meshText: {
     color: colors.stdout,
@@ -1311,12 +1226,6 @@ const styles = StyleSheet.create({
   locationMuted: {
     color: colors.textDim,
     fontSize: 12,
-  },
-  colCheck: {
-    width: 40,
-    flexGrow: 0,
-    flexShrink: 0,
-    alignItems: 'center',
   },
   nameButton: {
     flexDirection: 'row',

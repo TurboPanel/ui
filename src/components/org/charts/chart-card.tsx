@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 export function ChartCard({
@@ -41,7 +41,7 @@ export function ChartCard({
         {unavailable ? (
           <View style={styles.unavailableBlock}>
             <View style={styles.unavailableDot} />
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               Metric unavailable for this range
             </Text>
           </View>

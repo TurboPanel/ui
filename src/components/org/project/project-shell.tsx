@@ -10,7 +10,7 @@ import {
   type TextStyle,
 } from 'react-native'
 import { BreadcrumbChevron } from '@/components/header-chevron'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -36,7 +36,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 function EnvironmentSelector() {
@@ -48,7 +48,7 @@ function EnvironmentSelector() {
 
   if (environments.length === 0) {
     return (
-      <Text style={orgPanelStyles.muted} accessibilityRole="text">
+      <Text style={panelStyles.muted} accessibilityRole="text">
         No environments
       </Text>
     )
@@ -389,7 +389,7 @@ function ProjectHeader({
       {isSystemProject ? (
         <Text style={styles.platformEyebrow}>Platform managed</Text>
       ) : null}
-      {saving ? <Text style={orgPanelStyles.muted}>Saving…</Text> : null}
+      {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </View>
   )
 }
@@ -455,7 +455,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   if ((loading && !project) || (project != null && !isWorkspaceKindResolved)) {
     return (
       <View style={styles.root}>
-        <Text style={orgPanelStyles.muted}>Loading project…</Text>
+        <Text style={panelStyles.muted}>Loading project…</Text>
       </View>
     )
   }
@@ -469,7 +469,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
         showScopeSelector={showScopeSelector}
       />
 
-      {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {deletingProject && project && projectAllowsMutations && managed ? (
         <ProjectDeletePanel

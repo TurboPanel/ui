@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, InlineNotice } from '@/components/ui'
 import {
   formatComposeImageRef,
@@ -134,7 +134,7 @@ export function ComposeInheritedPanel({
   const hasBase =
     view === 'visual' ? services.length > 0 : projectYaml.trim().length > 0
 
-  let actions: ReactNode = <Text style={orgPanelStyles.muted}>View only</Text>
+  let actions: ReactNode = <Text style={panelStyles.muted}>View only</Text>
   if (canMutate) {
     actions = (
       <>

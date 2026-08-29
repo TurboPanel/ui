@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
 import { IpListRow } from '@/components/org/network/network-rows'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
-  TextField,
   type SegmentedOption,
+  TextField,
 } from '@/components/ui'
 import type {
   DatacenterRecord,
@@ -372,14 +372,14 @@ function IpEditPanel({
   const saveDisabled = saving ||
     isMembershipPinIncomplete(scope, datacenterId, networkId, serverId)
   return (
-    <View style={[orgPanelStyles.detailCard, styles.editCard]}>
-      <Text style={orgPanelStyles.detailTitle}>Edit address</Text>
+    <View style={[panelStyles.detailCard, styles.editCard]}>
+      <Text style={panelStyles.detailTitle}>Edit address</Text>
       <Text style={styles.fieldLabel}>Address</Text>
-      <Text style={orgPanelStyles.detailLine}>{address}</Text>
+      <Text style={panelStyles.detailLine}>{address}</Text>
       <Text style={styles.fieldLabel}>Allocation</Text>
-      <Text style={orgPanelStyles.detailLine}>{allocation}</Text>
+      <Text style={panelStyles.detailLine}>{allocation}</Text>
       <Text style={styles.fieldLabel}>Scope</Text>
-      <Text style={orgPanelStyles.detailLine}>{scope}</Text>
+      <Text style={panelStyles.detailLine}>{scope}</Text>
       <TextField
         label="Description"
         value={description}
@@ -966,13 +966,13 @@ export function NetworkAddressesSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Addresses</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Addresses</Text>
+      <Text style={panelStyles.pageCopy}>
         Organization address pool for ingress and internal routing.
       </Text>
 
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
 
       <AddressFiltersPanel

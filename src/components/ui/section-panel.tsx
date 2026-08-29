@@ -2,9 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderChevron } from '@/components/header-chevron'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { glass } from '@/lib/glass'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 export function SectionPanel({
   title,

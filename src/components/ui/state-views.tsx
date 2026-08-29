@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { colors, spacing } from '@/lib/theme'
 
 /**
@@ -19,12 +19,12 @@ export function EmptyState({
   action?: ReactNode
 }>) {
   if (!panel) {
-    return <Text style={orgPanelStyles.muted}>{title}</Text>
+    return <Text style={panelStyles.muted}>{title}</Text>
   }
   return (
-    <View style={orgPanelStyles.statePanel}>
-      <Text style={orgPanelStyles.statePanelTitle}>{title}</Text>
-      {hint ? <Text style={orgPanelStyles.muted}>{hint}</Text> : null}
+    <View style={panelStyles.statePanel}>
+      <Text style={panelStyles.statePanelTitle}>{title}</Text>
+      {hint ? <Text style={panelStyles.muted}>{hint}</Text> : null}
       {action}
     </View>
   )
@@ -37,7 +37,7 @@ export function LoadingState({
   return (
     <View style={styles.loadingRow} accessibilityRole="progressbar">
       <ActivityIndicator size="small" color={colors.textMuted} />
-      <Text style={orgPanelStyles.muted}>{label}</Text>
+      <Text style={panelStyles.muted}>{label}</Text>
     </View>
   )
 }

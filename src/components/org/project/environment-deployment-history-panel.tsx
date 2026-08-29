@@ -5,9 +5,15 @@ import {
   nestedScrollDomProps,
   webNestedScrollStyle,
 } from '@/components/org/logs/nested-scroll'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
-import { SectionPanel } from '@/components/org/section-panel'
-import { EmptyState, LoadingState, SegmentedControl } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  EmptyState,
+  LoadingState,
+  SectionPanel,
+  SegmentedControl,
+  StatusDot,
+  type StatusTone,
+} from '@/components/ui'
 import {
   deploymentServerLabel,
   deploymentStatusTone,
@@ -23,25 +29,24 @@ import {
   useCommandLog,
   useEnvironmentDeployments,
 } from '@/lib/queries/execution-logs'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 /** Cap the history table so a long run of deploys scrolls inside the panel. */
 const HISTORY_LIST_MAX_HEIGHT = 560
 
-function statusDotStyle(tone: 'success' | 'failed' | 'pending') {
-  if (tone === 'success') return styles.dotSuccess
-  if (tone === 'failed') return styles.dotFailed
-  return styles.dotPending
+function statusDotTone(tone: 'success' | 'failed' | 'pending'): StatusTone {
+  if (tone === 'success') return 'online'
+  if (tone === 'failed') return 'failed'
+  return 'pending'
 }
 
 function StatusCell({
   status,
 }: Readonly<{ status: DeploymentGroup['status'] }>) {
   const tone = deploymentStatusTone(status)
-  const dotStyle = statusDotStyle(tone.tone)
   return (
     <View style={styles.statusCell}>
-      <View style={[styles.dot, dotStyle]} />
+      <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
       <Text style={styles.statusText}>{tone.label}</Text>
     </View>
   )
@@ -104,7 +109,7 @@ function DeploymentDetail({
         />
       ) : null}
       {failure ? (
-        <Text style={orgPanelStyles.error} accessibilityRole="alert">
+        <Text style={panelStyles.error} accessibilityRole="alert">
           {failure}
         </Text>
       ) : null}
@@ -228,7 +233,7 @@ export function EnvironmentDeploymentHistoryPanel({
         <LoadingState label="Loading deploy history…" />
       ) : null}
       {deploymentsQuery.error ? (
-        <Text style={orgPanelStyles.error}>
+        <Text style={panelStyles.error}>
           {deploymentsQuery.error instanceof Error
             ? deploymentsQuery.error.message
             : 'Failed to load deploy history'}
@@ -349,20 +354,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  dotSuccess: {
-    backgroundColor: colors.accent,
-  },
-  dotFailed: {
-    backgroundColor: colors.error,
-  },
-  dotPending: {
-    backgroundColor: colors.pending,
   },
   statusText: {
     color: colors.textBody,

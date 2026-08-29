@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceGrid } from '@/components/org/project-create/choice-card'
@@ -12,7 +11,7 @@ import {
   setupOptionForChoice,
   type SetupChoice,
 } from '@/components/org/project-create/setup-types'
-import { Button, ButtonRow } from '@/components/ui'
+import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
@@ -127,11 +126,11 @@ export function ProjectSetupSection() {
         accent
       >
         {localError ? (
-          <Text style={orgPanelStyles.error}>{localError}</Text>
+          <Text style={panelStyles.error}>{localError}</Text>
         ) : null}
 
         {!canManage ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Ask an organization manager to finish setup.
           </Text>
         ) : null}

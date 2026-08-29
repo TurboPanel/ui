@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
@@ -9,6 +8,7 @@ import {
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -371,8 +371,8 @@ function LocationSummary({
 }>) {
   if (!location) {
     return (
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Location: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Location: </Text>
         none
       </Text>
     )
@@ -380,13 +380,13 @@ function LocationSummary({
   const pathText = location.resolvedSourcePath ?? location.path
   return (
     <>
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Location: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Location: </Text>
         {location.provider} · {locationServerText(location, servers)}
       </Text>
       {pathText ? (
-        <Text style={orgPanelStyles.detailLine}>
-          <Text style={orgPanelStyles.detailLabel}>Path: </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Path: </Text>
           {pathText}
         </Text>
       ) : null}
@@ -471,8 +471,8 @@ function MountDestination({
         if (canManage) setEditing(true)
       }}
     >
-      <Text style={orgPanelStyles.detailLine}>
-        <Text style={orgPanelStyles.detailLabel}>Mount: </Text>
+      <Text style={panelStyles.detailLine}>
+        <Text style={panelStyles.detailLabel}>Mount: </Text>
         {mount.destinationPath}
         {mount.readOnly ? ' (read-only)' : ''}
       </Text>
@@ -501,14 +501,14 @@ function StorageRow({
 }>) {
   const location = primaryCopy(row)
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <View style={styles.rowHeader}>
-        <Text style={orgPanelStyles.detailTitle}>{row.name}</Text>
+        <Text style={panelStyles.detailTitle}>{row.name}</Text>
         <Text style={styles.kindBadge}>{KIND_LABELS[row.kind]}</Text>
       </View>
       <LocationSummary location={location} servers={servers} />
       {row.mounts.length === 0 ? (
-        <Text style={orgPanelStyles.muted}>No service mounts</Text>
+        <Text style={panelStyles.muted}>No service mounts</Text>
       ) : (
         row.mounts.map((mount) => (
           <MountDestination
@@ -558,7 +558,7 @@ export function StorageSection({
 
   const body = (
     <>
-      {storage.error ? <Text style={orgPanelStyles.error}>{storage.error}</Text> : null}
+      {storage.error ? <Text style={panelStyles.error}>{storage.error}</Text> : null}
 
       {canManage ? (
         <Button

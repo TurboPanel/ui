@@ -1,22 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
-} from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { StyleSheet, Text, View } from 'react-native'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
+  DataTable,
+  DataTableCell,
+  type DataTableColumn,
+  DataTableRow,
   EmptyState,
   FormField,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
+  StatusDot,
+  type StatusTone,
 } from '@/components/ui'
 import { type ManagedListRecord } from '@/lib/instance-api'
 import {
@@ -87,32 +85,52 @@ function statusFilterLabel(status: ManagedStatus | 'all'): string {
   return managedStatusLabel(status)
 }
 
+const MANAGED_COLUMNS = [
+  { key: 'engine', header: 'Engine', flex: 1.1, minWidth: 110 },
+  { key: 'name', header: 'Name', flex: 1.6, minWidth: 140 },
+  { key: 'project', header: 'Project', flex: 1.8, minWidth: 160 },
+  { key: 'server', header: 'Server', flex: 1.3, minWidth: 120 },
+  { key: 'status', header: 'Status', flex: 1.3, minWidth: 130 },
+  { key: 'topology', header: 'Topology', flex: 1.5, minWidth: 140 },
+  { key: 'endpoint', header: 'Shared listener', flex: 1.6, minWidth: 140 },
+] as const satisfies readonly DataTableColumn[]
+
+const [
+  MG_ENGINE,
+  MG_NAME,
+  MG_PROJECT,
+  MG_SERVER,
+  MG_STATUS,
+  MG_TOPOLOGY,
+  MG_ENDPOINT,
+] = MANAGED_COLUMNS
+
 function statusTone(status: ManagedStatus) {
   switch (status) {
     case 'ready':
       return {
         badge: styles.statusReady,
         text: styles.statusTextReady,
-        dot: styles.statusDotReady,
+        dot: 'online' as StatusTone,
       }
     case 'failed':
       return {
         badge: styles.statusFailed,
         text: styles.statusTextFailed,
-        dot: styles.statusDotFailed,
+        dot: 'failed' as StatusTone,
       }
     case 'stopped':
       return {
         badge: styles.statusStopped,
         text: styles.statusTextStopped,
-        dot: styles.statusDotStopped,
+        dot: 'offline' as StatusTone,
       }
     case 'provisioning':
     case 'applying':
       return {
         badge: styles.statusPending,
         text: styles.statusTextPending,
-        dot: styles.statusDotPending,
+        dot: 'pending' as StatusTone,
       }
   }
 }
@@ -120,14 +138,14 @@ function statusTone(status: ManagedStatus) {
 function ManagedStatusCell({ status }: Readonly<{ status: ManagedStatus }>) {
   const tone = statusTone(status)
   return (
-    <View style={[styles.tableCell, styles.colStatus]}>
+    <DataTableCell column={MG_STATUS}>
       <View style={[styles.statusBadge, tone.badge]}>
-        <View style={[styles.statusDot, tone.dot]} />
+        <StatusDot size="sm" tone={tone.dot} />
         <Text style={[styles.statusText, tone.text]}>
           {managedStatusLabel(status)}
         </Text>
       </View>
-    </View>
+    </DataTableCell>
   )
 }
 
@@ -141,47 +159,37 @@ function ManagedTableRow({
   rowIndex: number
 }>) {
   const router = useRouter()
-  const [rowHovered, setRowHovered] = useState(false)
   const title = serviceTitle(row)
   const href = `/${orgId}/projects/${row.projectId}` as Href
 
   return (
-    <Pressable
+    <DataTableRow
       onPress={() => router.push(href)}
-      onPointerEnter={() => setRowHovered(true)}
-      onPointerLeave={() => setRowHovered(false)}
-      style={({ pressed }) => [
-        styles.tableRow,
-        rowIndex % 2 === 1 ? styles.tableRowEven : null,
-        rowHovered ? styles.tableRowHovered : null,
-        pressed && styles.buttonPressed,
-        webPointer,
-      ]}
-      accessibilityRole="button"
+      alt={rowIndex % 2 === 1}
       accessibilityLabel={`Open ${title}`}
     >
-      <View style={[styles.tableCell, styles.colEngine]}>
+      <DataTableCell column={MG_ENGINE}>
         <View style={styles.engineBadge}>
           <Text style={styles.engineBadgeText}>{engineLabel(row)}</Text>
         </View>
-      </View>
-      <View style={[styles.tableCell, styles.colName]}>
+      </DataTableCell>
+      <DataTableCell column={MG_NAME}>
         <Text style={styles.nameText} numberOfLines={1}>
           {title}
         </Text>
-      </View>
-      <View style={[styles.tableCell, styles.colProject]}>
+      </DataTableCell>
+      <DataTableCell column={MG_PROJECT}>
         <Text style={styles.secondaryText} numberOfLines={1}>
           {projectEnvironmentLabel(row)}
         </Text>
-      </View>
-      <View style={[styles.tableCell, styles.colServer]}>
+      </DataTableCell>
+      <DataTableCell column={MG_SERVER}>
         <Text style={styles.secondaryText} numberOfLines={1}>
           {serverLabel(row)}
         </Text>
-      </View>
+      </DataTableCell>
       <ManagedStatusCell status={row.status} />
-      <View style={[styles.tableCell, styles.colTopology]}>
+      <DataTableCell column={MG_TOPOLOGY}>
         <View style={styles.topologyCell}>
           {clusterHasUnhealthyMember(row.members) ? (
             <View
@@ -195,8 +203,8 @@ function ManagedTableRow({
             {topologyLabel(row)}
           </Text>
         </View>
-      </View>
-      <View style={[styles.tableCell, styles.colEndpoint]}>
+      </DataTableCell>
+      <DataTableCell column={MG_ENDPOINT}>
         <Text
           style={
             row.host && row.port != null
@@ -207,8 +215,8 @@ function ManagedTableRow({
         >
           {endpointLabel(row)}
         </Text>
-      </View>
-    </Pressable>
+      </DataTableCell>
+    </DataTableRow>
   )
 }
 
@@ -353,46 +361,16 @@ function ManagedFleetTable({
   rows,
 }: Readonly<{ orgId: string; rows: readonly ManagedListRecord[] }>) {
   return (
-    <ScrollView
-      horizontal
-      nestedScrollEnabled
-      style={styles.tableScroll}
-      contentContainerStyle={styles.tableScrollContent}
-    >
-      <View style={styles.table}>
-        <View style={[styles.tableRow, styles.tableHeaderRow]}>
-          <View style={[styles.tableCell, styles.colEngine]}>
-            <Text style={styles.tableHeaderText}>Engine</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colName]}>
-            <Text style={styles.tableHeaderText}>Name</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colProject]}>
-            <Text style={styles.tableHeaderText}>Project</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colServer]}>
-            <Text style={styles.tableHeaderText}>Server</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colStatus]}>
-            <Text style={styles.tableHeaderText}>Status</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colTopology]}>
-            <Text style={styles.tableHeaderText}>Topology</Text>
-          </View>
-          <View style={[styles.tableCell, styles.colEndpoint]}>
-            <Text style={styles.tableHeaderText}>Shared listener</Text>
-          </View>
-        </View>
-        {rows.map((row, index) => (
-          <ManagedTableRow
-            key={row.id}
-            orgId={orgId}
-            row={row}
-            rowIndex={index}
-          />
-        ))}
-      </View>
-    </ScrollView>
+    <DataTable columns={MANAGED_COLUMNS} minWidth={1080} bordered>
+      {rows.map((row, index) => (
+        <ManagedTableRow
+          key={row.id}
+          orgId={orgId}
+          row={row}
+          rowIndex={index}
+        />
+      ))}
+    </DataTable>
   )
 }
 
@@ -421,7 +399,7 @@ function ManagedFleetBody({
 
   // Initial-load failure only — preserve cached fleet rows on background refresh errors.
   if (error && rows.length === 0) {
-    return <Text style={orgPanelStyles.error}>{error}</Text>
+    return <Text style={panelStyles.error}>{error}</Text>
   }
 
   if (rows.length === 0) {
@@ -429,7 +407,7 @@ function ManagedFleetBody({
   }
 
   const refreshError = error ? (
-    <Text style={orgPanelStyles.error}>{error}</Text>
+    <Text style={panelStyles.error}>{error}</Text>
   ) : null
 
   if (filtered.length === 0) {
@@ -497,8 +475,8 @@ export function ManagedOverviewSection({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Managed services</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Managed services</Text>
+      <Text style={panelStyles.pageCopy}>
         Every managed engine in this organization. Open a row for the project
         detail surface.
       </Text>
@@ -562,92 +540,6 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.88,
   },
-  tableScroll: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  tableScrollContent: {
-    flexGrow: 1,
-    minWidth: '100%',
-  },
-  table: {
-    flexGrow: 1,
-    width: '100%',
-    minWidth: 1080,
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    alignSelf: 'stretch',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.sm,
-  },
-  tableRowEven: {
-    backgroundColor: colors.bgInset,
-  },
-  tableRowHovered: {
-    backgroundColor: colors.bgSecondary,
-  },
-  tableHeaderRow: {
-    backgroundColor: colors.bgSecondary,
-    paddingVertical: spacing.xs,
-    ...(Platform.OS === 'web'
-      ? ({
-          position: 'sticky',
-          top: 0,
-          zIndex: 2,
-        } as unknown as ViewStyle)
-      : null),
-  },
-  tableCell: {
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  tableHeaderText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  colEngine: {
-    flex: 1.1,
-    minWidth: 110,
-    alignItems: 'flex-start',
-  },
-  colName: {
-    flex: 1.6,
-    minWidth: 140,
-  },
-  colProject: {
-    flex: 1.8,
-    minWidth: 160,
-  },
-  colServer: {
-    flex: 1.3,
-    minWidth: 120,
-  },
-  colStatus: {
-    flex: 1.3,
-    minWidth: 130,
-    alignItems: 'flex-start',
-  },
-  colTopology: {
-    flex: 1.5,
-    minWidth: 140,
-  },
-  colEndpoint: {
-    flex: 1.6,
-    minWidth: 140,
-  },
   topologyCell: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -707,25 +599,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusDotReady: {
-    backgroundColor: colors.accent,
-  },
-  statusDotStopped: {
-    backgroundColor: colors.textFaint,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-  },
-  statusDotPending: {
-    backgroundColor: colors.pending,
-  },
-  statusDotFailed: {
-    backgroundColor: colors.error,
   },
   statusReady: {
     borderColor: chrome.accent,

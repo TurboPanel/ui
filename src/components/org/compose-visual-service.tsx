@@ -10,7 +10,7 @@ import {
 import { useRouter, type Href } from 'expo-router'
 import { CronFields } from '@/components/org/compose-cron-fields'
 import { DockerfileEditor } from '@/components/org/dockerfile-editor'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { repositoryLabel } from '@/lib/repository-label'
 import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
 import {
@@ -1523,7 +1523,7 @@ export function ComposeVisualServiceCard({
   }
 
   return (
-    <View style={orgPanelStyles.detailCard}>
+    <View style={panelStyles.detailCard}>
       <View style={styles.serviceHeader}>
         <Text style={styles.serviceHeaderTitle}>Service</Text>
         <Pressable

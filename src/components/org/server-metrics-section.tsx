@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
+import { SectionPanel } from '@/components/ui'
 import { ChartCard } from '@/components/org/charts/chart-card'
 import { ChartLegend } from '@/components/org/charts/chart-legend'
 import {
@@ -14,8 +15,7 @@ import {
   type MetricGapBand,
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   formatAxisTime,
   formatBytes,
@@ -38,7 +38,7 @@ import {
 } from '@/lib/instance-api'
 import { HA_METRICS_LOCAL_NOTE } from '@/lib/platform-copy'
 import { useOrgServers, useServerMetricsSeries } from '@/lib/queries/servers'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 const RANGE_OPTIONS: readonly {
   id: MetricsRangeId
@@ -454,7 +454,7 @@ function RangePicker({
   return (
     <View style={styles.rangeRow}>
       <Text style={styles.rangeLabel}>Time range</Text>
-      <View style={orgPanelStyles.segmentGroup}>
+      <View style={panelStyles.segmentGroup}>
         {RANGE_OPTIONS.map((option) => {
           const active = option.id === rangeId
           return (
@@ -462,8 +462,8 @@ function RangePicker({
               key={option.id}
               onPress={() => onChange(option.id)}
               style={({ pressed }) => [
-                orgPanelStyles.segmentChip,
-                active ? orgPanelStyles.segmentChipActive : null,
+                panelStyles.segmentChip,
+                active ? panelStyles.segmentChipActive : null,
                 pressed && styles.rangeChipPressed,
                 webPointer,
               ]}
@@ -473,8 +473,8 @@ function RangePicker({
             >
               <Text
                 style={[
-                  orgPanelStyles.segmentChipText,
-                  active ? orgPanelStyles.segmentChipTextActive : null,
+                  panelStyles.segmentChipText,
+                  active ? panelStyles.segmentChipTextActive : null,
                 ]}
               >
                 {option.label}
@@ -541,7 +541,7 @@ function MetricsStateBlock({
   return (
     <View
       style={[
-        orgPanelStyles.statePanel,
+        panelStyles.statePanel,
         styles.stateBlock,
         {
           borderColor: toneStyle.border,
@@ -549,10 +549,10 @@ function MetricsStateBlock({
         },
       ]}
     >
-      <Text style={[orgPanelStyles.statePanelTitle, { color: toneStyle.title }]}>
+      <Text style={[panelStyles.statePanelTitle, { color: toneStyle.title }]}>
         {title}
       </Text>
-      <Text style={orgPanelStyles.muted}>{body}</Text>
+      <Text style={panelStyles.muted}>{body}</Text>
       {action}
     </View>
   )
@@ -586,7 +586,7 @@ function MetricsStatusMessages({
       {isLoading && !hasData ? (
         <View style={styles.loadingRow}>
           <ActivityIndicator color={colors.accent} />
-          <Text style={orgPanelStyles.muted}>Loading metrics…</Text>
+          <Text style={panelStyles.muted}>Loading metrics…</Text>
         </View>
       ) : null}
 
@@ -614,13 +614,13 @@ function MetricsStatusMessages({
           action={
             <Pressable
               style={({ pressed }) => [
-                orgPanelStyles.toolbarBtnSecondary,
+                panelStyles.toolbarBtnSecondary,
                 pressed && styles.rangeChipPressed,
                 webPointer,
               ]}
               onPress={onRetry}
             >
-              <Text style={orgPanelStyles.toolbarBtnTextSecondary}>Retry</Text>
+              <Text style={panelStyles.toolbarBtnTextSecondary}>Retry</Text>
             </Pressable>
           }
         />
@@ -961,10 +961,10 @@ export function ServerMetricsSection({
     <View style={styles.root}>
       {!embedded ? (
         <>
-          <Text style={orgPanelStyles.pageTitle}>
+          <Text style={panelStyles.pageTitle}>
             {server ? serverTitle(server) : 'Server'} · Metrics
           </Text>
-          <Text style={orgPanelStyles.pageCopy}>
+          <Text style={panelStyles.pageCopy}>
             Host metrics sampled about once per minute. Charts use the backend
             resolution for this range — not live sub-second data.
           </Text>
@@ -978,7 +978,7 @@ export function ServerMetricsSection({
       {metricsQuery.isFetching && data ? (
         <View style={styles.refetchBanner}>
           <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={orgPanelStyles.muted}>Refreshing charts…</Text>
+          <Text style={panelStyles.muted}>Refreshing charts…</Text>
         </View>
       ) : null}
 

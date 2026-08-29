@@ -1,11 +1,10 @@
 import { createElement, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { webPointer } from '@/components/org/org-panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import type { OrgServerRecord } from '@/lib/instance-api'
 import { useOrgServers, useUpdateProject } from '@/lib/queries'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
-import { colors } from '@/lib/theme'
+import { colors, webPointer } from '@/lib/theme'
 
 function serverLabel(server: OrgServerRecord): string {
   return (

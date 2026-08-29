@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   ProjectProvider,
   type ProjectDraft,
@@ -115,10 +115,10 @@ export function ComposeStep({
 
       <View style={styles.footer}>
         {error ? (
-          <Text style={orgPanelStyles.error}>{error}</Text>
+          <Text style={panelStyles.error}>{error}</Text>
         ) : null}
         {yamlBroken ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Fix the compose YAML before creating this project.
           </Text>
         ) : null}

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
   CopyButton,
   LoadingState,
+  SectionPanel,
   TextField,
   WizardSteps,
 } from '@/components/ui'
@@ -136,7 +136,7 @@ function DevInstallUrlFields({
         />
       </ButtonRow>
       {tlsHint ? (
-        <Text style={orgPanelStyles.muted}>{tlsHint}</Text>
+        <Text style={panelStyles.muted}>{tlsHint}</Text>
       ) : null}
     </>
   )
@@ -175,7 +175,7 @@ function CreateStep({
         editable={!creating}
       />
       {createError ? (
-        <Text style={orgPanelStyles.error}>{createError}</Text>
+        <Text style={panelStyles.error}>{createError}</Text>
       ) : null}
       {__DEV__ ? (
         <>
@@ -185,7 +185,7 @@ function CreateStep({
             onChange={onInstallBaseUrlChange}
             editable={!creating}
           />
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Used for TURBOPANEL_HOST and download URLs in the install command.
           </Text>
         </>
@@ -223,8 +223,8 @@ function InstallStep({
 }: InstallStepProps) {
   return (
     <View style={styles.revealed}>
-      <View style={orgPanelStyles.calloutWarning}>
-        <Text style={orgPanelStyles.calloutWarningText}>
+      <View style={panelStyles.calloutWarning}>
+        <Text style={panelStyles.calloutWarningText}>
           Run this install command on the new server. The registration key is
           embedded and can only enroll one host.
         </Text>
@@ -237,7 +237,7 @@ function InstallStep({
           onChange={onInstallBaseUrlChange}
         />
       ) : null}
-      <View style={orgPanelStyles.commandCodeBlock}>
+      <View style={panelStyles.commandCodeBlock}>
         <Text selectable style={styles.secretValue}>
           {displayedInstallCommand}
         </Text>
@@ -247,7 +247,7 @@ function InstallStep({
         label="Copy install command"
         copiedLabel="Copied install command"
       />
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
       <Button label="Continue" variant="primary" onPress={onContinue} />
@@ -305,7 +305,7 @@ function WaitingStep({
   if (pollError) {
     return (
       <View style={styles.waiting}>
-        <Text style={orgPanelStyles.error}>{pollError}</Text>
+        <Text style={panelStyles.error}>{pollError}</Text>
         <WaitingActions
           primaryLabel="Retry"
           onPrimary={onRetry}
@@ -324,7 +324,7 @@ function WaitingStep({
         <LoadingState
           label={`Waiting for this host to connect (${elapsedSeconds}s)`}
         />
-        <Text style={orgPanelStyles.muted}>
+        <Text style={panelStyles.muted}>
           This key stays under Pending keys until a host enrolls. You can add
           another server now.
         </Text>

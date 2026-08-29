@@ -99,3 +99,12 @@ export const spacing = {
   lg: 16,
   xl: 20,
 } as const
+
+/**
+ * Web-only pointer cursor for interactive rows and chips.
+ *
+ * Lives here rather than in a component module so the shared `components/ui`
+ * primitives can reach it without importing from a feature folder.
+ */
+export const webPointer =
+  Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : {}

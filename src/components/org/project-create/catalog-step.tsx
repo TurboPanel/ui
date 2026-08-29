@@ -9,7 +9,7 @@ import {
   isCatalogEntrySelectable,
   type SetupType,
 } from '@/components/org/project-create/setup-types'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { EmptyState, LoadingState } from '@/components/ui'
 import type { CatalogSummary } from '@/lib/instance-api'
 import { spacing } from '@/lib/theme'
@@ -44,7 +44,7 @@ export function CatalogStep({
     return <LoadingState label="Loading catalog…" />
   }
   if (error) {
-    return <Text style={orgPanelStyles.error}>{error}</Text>
+    return <Text style={panelStyles.error}>{error}</Text>
   }
   if (entries.length === 0) {
     return (
@@ -60,7 +60,7 @@ export function CatalogStep({
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.muted}>
+      <Text style={panelStyles.muted}>
         {type === 'template'
           ? 'Pick a template, then create the project.'
           : 'Pick the database engine to provision, then create the project.'}

@@ -1,9 +1,9 @@
 import { Redirect, type Href, useLocalSearchParams } from 'expo-router'
 import { Text, View } from 'react-native'
+import { SectionPanel } from '@/components/ui'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { projectOverviewHref } from '@/lib/project-navigation'
 import { useServices } from '@/lib/queries/services'
@@ -39,10 +39,10 @@ export default function ProjectServiceDetailScreen() {
   }
 
   if (servicesQuery.isLoading) {
-    return <Text style={orgPanelStyles.muted}>Loading service…</Text>
+    return <Text style={panelStyles.muted}>Loading service…</Text>
   }
   if (!service) {
-    return <Text style={orgPanelStyles.muted}>Service not found.</Text>
+    return <Text style={panelStyles.muted}>Service not found.</Text>
   }
 
   const composeName = service.composeServiceName ?? 'service'

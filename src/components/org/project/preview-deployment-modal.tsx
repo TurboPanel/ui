@@ -1,21 +1,14 @@
 import { useEffect, useState } from 'react'
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ModalSheet } from '@/components/ui'
 import {
   DeployPreviewBody,
   usePreparedComposePreview,
 } from '@/components/org/deploy-preview-panel'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { composePreviewMergedYaml } from '@/lib/compose'
-import { colors, layout, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 export type ComposePreviewMode = 'merged' | 'prepared'
 
@@ -82,15 +75,15 @@ function ModePicker({
   onSelect: (mode: ComposePreviewMode) => void
 }>) {
   return (
-    <View style={orgPanelStyles.segmentGroup}>
+    <View style={panelStyles.segmentGroup}>
       {MODE_OPTIONS.map((option) => {
         const active = mode === option.id
         return (
           <Pressable
             key={option.id}
             style={[
-              orgPanelStyles.segmentChip,
-              active && orgPanelStyles.segmentChipActive,
+              panelStyles.segmentChip,
+              active && panelStyles.segmentChipActive,
               webPointer,
             ]}
             onPress={() => {
@@ -102,8 +95,8 @@ function ModePicker({
           >
             <Text
               style={[
-                orgPanelStyles.segmentChipText,
-                active && orgPanelStyles.segmentChipTextActive,
+                panelStyles.segmentChipText,
+                active && panelStyles.segmentChipTextActive,
               ]}
             >
               {option.label}
@@ -155,7 +148,7 @@ function ModalFooterActions({
     <View style={styles.actions}>
       <Pressable
         style={({ pressed }) => [
-          orgPanelStyles.toolbarBtnSecondary,
+          panelStyles.toolbarBtnSecondary,
           pressed && styles.itemPressed,
           webPointer,
           deploying && styles.disabled,
@@ -165,14 +158,14 @@ function ModalFooterActions({
         accessibilityRole="button"
         accessibilityLabel={isConfirm ? 'Cancel deployment' : 'Close preview'}
       >
-        <Text style={orgPanelStyles.toolbarBtnTextSecondary}>
+        <Text style={panelStyles.toolbarBtnTextSecondary}>
           {isConfirm ? 'Cancel' : 'Close'}
         </Text>
       </Pressable>
       {isConfirm && onConfirm ? (
         <Pressable
           style={({ pressed }) => [
-            orgPanelStyles.toolbarBtnPrimary,
+            panelStyles.toolbarBtnPrimary,
             pressed && styles.itemPressed,
             (deploying || !placementServerId) && styles.disabled,
             webPointer,
@@ -182,7 +175,7 @@ function ModalFooterActions({
           accessibilityRole="button"
           accessibilityLabel={confirmLabel}
         >
-          <Text style={orgPanelStyles.toolbarBtnTextPrimary}>
+          <Text style={panelStyles.toolbarBtnTextPrimary}>
             {deploying ? 'Deploying…' : confirmLabel}
           </Text>
         </Pressable>
@@ -230,8 +223,6 @@ export function PreviewDeploymentModal({
   onCancel: () => void
   onConfirm?: () => void
 }>) {
-  const { width } = useWindowDimensions()
-  const isCompact = width < layout.desktopBreakpoint
   const [mode, setMode] = useState<ComposePreviewMode>(initialMode)
 
   useEffect(() => {
@@ -266,94 +257,49 @@ export function PreviewDeploymentModal({
     MODE_OPTIONS.find((option) => option.id === mode)?.hint ?? ''
 
   return (
-    <Modal
+    <ModalSheet
       visible={visible}
-      transparent
-      animationType={isCompact ? 'slide' : 'fade'}
       onRequestClose={handleClose}
-    >
-      <View style={styles.backdrop}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={handleClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close compose preview"
+      title={title}
+      description={subtitle}
+      maxWidth={720}
+      dismissLabel="Close compose preview"
+      footer={
+        <ModalFooterActions
+          isConfirm={isConfirm}
+          deploying={deploying}
+          placementServerId={placementServerId}
+          confirmLabel={confirmLabel}
+          onCancel={handleClose}
+          onConfirm={onConfirm}
         />
-        <View style={[styles.panel, isCompact && styles.panelSheet]}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.copy}>{subtitle}</Text>
-          <TargetServerLine
-            placementServerId={placementServerId}
-            targetServerDisplay={targetServerDisplay}
-          />
+      }
+    >
+      <TargetServerLine
+        placementServerId={placementServerId}
+        targetServerDisplay={targetServerDisplay}
+      />
 
-          <ModePicker mode={mode} onSelect={setMode} />
+      <ModePicker mode={mode} onSelect={setMode} />
 
-          <Text style={orgPanelStyles.muted}>{activeHint}</Text>
+      <Text style={panelStyles.muted}>{activeHint}</Text>
 
-          <ScrollView
-            style={styles.previewScroll}
-            contentContainerStyle={styles.previewScrollContent}
-            nestedScrollEnabled
-          >
-            <ComposePreviewBody
-              mode={mode}
-              mergedYaml={mergedYaml}
-              prepared={prepared}
-            />
-          </ScrollView>
-
-          <ModalFooterActions
-            isConfirm={isConfirm}
-            deploying={deploying}
-            placementServerId={placementServerId}
-            confirmLabel={confirmLabel}
-            onCancel={handleClose}
-            onConfirm={onConfirm}
-          />
-        </View>
-      </View>
-    </Modal>
+      <ScrollView
+        style={styles.previewScroll}
+        contentContainerStyle={styles.previewScrollContent}
+        nestedScrollEnabled
+      >
+        <ComposePreviewBody
+          mode={mode}
+          mergedYaml={mergedYaml}
+          prepared={prepared}
+        />
+      </ScrollView>
+    </ModalSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  panel: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 720,
-    maxHeight: '90%',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    zIndex: 2,
-  },
-  panelSheet: {
-    marginTop: 'auto',
-    marginBottom: 0,
-    maxHeight: '92%',
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textBody,
-    fontSize: 14,
-    lineHeight: 20,
-  },
   targetServer: {
     color: colors.textMuted,
     fontSize: 13,

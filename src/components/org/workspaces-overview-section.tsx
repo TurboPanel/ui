@@ -8,9 +8,14 @@ import {
 } from 'react-native'
 import { FirstRunWizard } from '@/components/org/first-run-wizard'
 import { PlatformBadge } from '@/components/org/platform-badge'
-import { SectionPanel } from '@/components/org/section-panel'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
-import { Button, ConfirmButton, EmptyState, LoadingState } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import {
+  Button,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  SectionPanel,
+} from '@/components/ui'
 import { displayNameConflictMessage, isDisplayNameTaken } from '@/lib/display-name'
 import { WORKSPACE_HAS_CHILDREN_ERROR } from '@/lib/instance-api'
 import { useCreateWorkspace, useDeleteWorkspace, useWorkspaces } from '@/lib/queries'
@@ -132,14 +137,14 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
           const system = isTurbopanelWorkspace(ws)
           const descriptionLine = workspaceDescriptionText(system, ws.description)
           return (
-            <View key={ws.id} style={orgPanelStyles.detailCard}>
+            <View key={ws.id} style={panelStyles.detailCard}>
               <View style={styles.cardHeader}>
                 <Pressable
                   style={styles.titlePress}
                   onPress={() => router.push(`/${orgId}/workspaces/${ws.id}`)}
                 >
                   <View style={styles.titleRow}>
-                    <Text style={orgPanelStyles.detailTitle}>
+                    <Text style={panelStyles.detailTitle}>
                       {ws.name?.trim() || 'Unnamed workspace'}
                     </Text>
                     {system ? <PlatformBadge /> : null}
@@ -166,10 +171,10 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
                 ) : null}
               </View>
               {descriptionLine ? (
-                <Text style={orgPanelStyles.detailLine}>{descriptionLine}</Text>
+                <Text style={panelStyles.detailLine}>{descriptionLine}</Text>
               ) : null}
-              <Text style={orgPanelStyles.detailLine}>
-                <Text style={orgPanelStyles.detailLabel}>Created: </Text>
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>Created: </Text>
                 {new Date(ws.createdAt).toLocaleString()}
               </Text>
             </View>
@@ -181,8 +186,8 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
 
   return (
     <View style={styles.root}>
-      <Text style={orgPanelStyles.pageTitle}>Workspaces</Text>
-      <Text style={orgPanelStyles.pageCopy}>
+      <Text style={panelStyles.pageTitle}>Workspaces</Text>
+      <Text style={panelStyles.pageCopy}>
         New organizations start with a Default Workspace. Create more here, then
         use the workspace switcher on Projects to filter by workspace.
       </Text>
@@ -208,7 +213,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
 
       <SectionPanel title="Workspaces" hint="Organization workspaces">
         {error ?? queryError ? (
-          <Text style={orgPanelStyles.error}>{error ?? queryError}</Text>
+          <Text style={panelStyles.error}>{error ?? queryError}</Text>
         ) : null}
 
         {workspaceListContent}

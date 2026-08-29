@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
-import { SectionPanel } from '@/components/org/section-panel'
 import {
   Button,
   ConfirmButton,
   EmptyState,
   LoadingState,
+  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -149,14 +149,14 @@ export function TlsOverviewSection({
       return <EmptyState title="No certificates yet." />
     }
     return rows.map((row) => (
-      <View key={row.id} style={orgPanelStyles.detailCard}>
-        <Text style={orgPanelStyles.detailTitle}>{tlsTitle(row)}</Text>
-        <Text style={orgPanelStyles.muted}>
+      <View key={row.id} style={panelStyles.detailCard}>
+        <Text style={panelStyles.detailTitle}>{tlsTitle(row)}</Text>
+        <Text style={panelStyles.muted}>
           {tlsSourceLabel(row.source)} · {row.metadata.status}
         </Text>
         <Text style={styles.sans}>{formatSans(row)}</Text>
         {row.metadata.notAfter ? (
-          <Text style={orgPanelStyles.muted}>
+          <Text style={panelStyles.muted}>
             Expires {new Date(row.metadata.notAfter).toLocaleString()}
           </Text>
         ) : null}
@@ -230,7 +230,7 @@ export function TlsOverviewSection({
             />
           )}
           {source === 'lets_encrypt' ? (
-            <Text style={orgPanelStyles.muted}>
+            <Text style={panelStyles.muted}>
               Creates a pending ACME order; certificates become usable after issuance.
             </Text>
           ) : null}
@@ -245,7 +245,7 @@ export function TlsOverviewSection({
       ) : null}
 
       {displayError ? (
-        <Text style={orgPanelStyles.error}>{displayError}</Text>
+        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
     </View>
   )

@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   MANAGED_SQL_ACCESS_SCOPES,
   managedAccessScopeHint,
   managedAccessScopeLabel,
   type ManagedSqlAccessScope,
 } from '@/lib/managed-access-scope'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 export function ManagedAccessScopePicker({
   value,
@@ -58,7 +58,7 @@ function ScopeRow({
       <Text style={[styles.label, selected && styles.labelSelected]}>
         {label}
       </Text>
-      <Text style={orgPanelStyles.muted}>{hint}</Text>
+      <Text style={panelStyles.muted}>{hint}</Text>
     </Pressable>
   )
 }

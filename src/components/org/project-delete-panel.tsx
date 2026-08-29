@@ -7,7 +7,7 @@ import {
   type SetStateAction,
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, LoadingState, TextField } from '@/components/ui'
 import {
   MANAGED_RUNTIME_PRESENT_ERROR,
@@ -212,14 +212,14 @@ function StopStepSection({
               <Text style={styles.envName}>
                 {environmentLabel(row.environment)}
               </Text>
-              <Text style={orgPanelStyles.muted}>
+              <Text style={panelStyles.muted}>
                 {copy.countLabel(row.activeCount)}
               </Text>
               {row.status ? (
-                <Text style={orgPanelStyles.muted}>{row.status}</Text>
+                <Text style={panelStyles.muted}>{row.status}</Text>
               ) : null}
               {row.error ? (
-                <Text style={orgPanelStyles.error}>{row.error}</Text>
+                <Text style={panelStyles.error}>{row.error}</Text>
               ) : null}
             </View>
             <Button
@@ -265,7 +265,7 @@ function ConfirmStepSection({
         autoCorrect={false}
         editable={!deleting}
       />
-      {deleteError ? <Text style={orgPanelStyles.error}>{deleteError}</Text> : null}
+      {deleteError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
     </View>
   )
 }
@@ -708,7 +708,7 @@ export function ProjectDeletePanel({
       <Text style={styles.title}>Delete project</Text>
       <Text style={styles.warning}>{projectDeleteWarning(managedProject)}</Text>
 
-      {loadError ? <Text style={orgPanelStyles.error}>{loadError}</Text> : null}
+      {loadError ? <Text style={panelStyles.error}>{loadError}</Text> : null}
       <DeletePanelBody
         loading={loading}
         managedProject={managedProject}

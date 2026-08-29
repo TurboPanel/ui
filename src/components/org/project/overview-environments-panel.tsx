@@ -16,9 +16,9 @@ import {
 } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
-import { orgPanelStyles, webPointer } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
-import { TextField } from '@/components/ui'
+import { StatusDot, TextField } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   PreviewDeploymentModal,
@@ -54,7 +54,7 @@ import {
 import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
-import { chrome, colors, layout, spacing } from '@/lib/theme'
+import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 type TrackedCommand = {
   environmentId: string
@@ -577,11 +577,7 @@ function StatusAside({
   }
   return (
     <View style={styles.statusCluster}>
-      <View
-        style={[styles.statusDot, { backgroundColor: toneColor }]}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
+      <StatusDot size="sm" color={toneColor} />
       <Text style={styles.statusText} numberOfLines={1}>
         {loading ? 'Loading…' : toneLabel}
       </Text>
@@ -679,8 +675,8 @@ function DeployOutcomeBanner({
     )
   }
   return (
-    <View style={orgPanelStyles.calloutWarning}>
-      <Text style={orgPanelStyles.calloutWarningText}>
+    <View style={panelStyles.calloutWarning}>
+      <Text style={panelStyles.calloutWarningText}>
         {error ?? `Deploy ${status}`}
       </Text>
     </View>
@@ -1400,11 +1396,11 @@ function PanelErrorMessages({
   return (
     <>
       {containerError ? (
-        <Text style={orgPanelStyles.error}>{containerError}</Text>
+        <Text style={panelStyles.error}>{containerError}</Text>
       ) : null}
-      {actionError ? <Text style={orgPanelStyles.error}>{actionError}</Text> : null}
+      {actionError ? <Text style={panelStyles.error}>{actionError}</Text> : null}
       {commandError ? (
-        <Text style={orgPanelStyles.error}>{commandError}</Text>
+        <Text style={panelStyles.error}>{commandError}</Text>
       ) : null}
     </>
   )

@@ -1,4 +1,4 @@
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, TextField } from '@/components/ui'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -71,7 +71,7 @@ export function FirstRunWizard({
           />
         ) : null}
 
-        {error ? <Text style={orgPanelStyles.error}>{error}</Text> : null}
+        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
         <Button
           label={actionLabel}

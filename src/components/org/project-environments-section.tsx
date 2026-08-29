@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
-import { orgPanelStyles } from '@/components/org/org-panel-styles'
+import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
@@ -411,7 +411,7 @@ export function ProjectEnvironmentsSection({
     <View style={styles.root}>
       <Text style={styles.heading}>Environments</Text>
       {error ?? queryError ? (
-        <Text style={orgPanelStyles.error}>{error ?? queryError}</Text>
+        <Text style={panelStyles.error}>{error ?? queryError}</Text>
       ) : null}
       {content}
     </View>
