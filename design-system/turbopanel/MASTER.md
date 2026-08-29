@@ -144,6 +144,7 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 ### Selectors that grow
 
 - A fixed set (≤5) is a chip strip / segmented control. A list that grows with the fleet or the org gets a **searchable picker**: a trigger reading as the current selection, an anchored menu on desktop, a bottom sheet on compact, and a filter field once the list is long enough to scan (see `ProjectScopePicker`, `OrganizationSwitcherList`).
+- For **form selects** the shared control is `Select` (`src/components/ui/select.tsx`) — same pattern as a full-width form field, virtualized list that lands on the current value, `mono` for IDs/timezones, `noneLabel` for an explicit inherit/none option. Never render a long list as a platform `<select>` or a stacked inline option list; reserve `FormSelect` (`src/components/org/form-select.tsx`) for legacy short fixed lists until its call sites migrate.
 - Never solve growth by letting a horizontal strip scroll — options then hide off-screen with no affordance.
 - Never label every row with the same string. If the natural name repeats (one resource per server), label by what differs (`src/lib/resource-labels.ts`).
 

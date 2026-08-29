@@ -19,6 +19,7 @@ export {
   SECTION_NAV_HEIGHT,
   type SectionNavItem,
 } from '@/components/ui/section-nav'
+export { Select, type SelectOption } from '@/components/ui/select'
 export {
   SegmentedControl,
   type SegmentedOption,
