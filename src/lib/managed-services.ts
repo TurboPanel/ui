@@ -343,10 +343,30 @@ export type ManagedAccessEndpoint = {
   port: number
 }
 
+/**
+ * What the host's shared ProxySQL actually publishes for this cluster, next to
+ * what the cluster's own settings asked for.
+ *
+ * The listener is shared by every managed database on the server, so a cluster
+ * with `requested: false` can still be `published: true` — the control plane
+ * reports that as `viaCoResidentCluster` instead of claiming it is unreachable.
+ */
+export type ManagedExposureView = {
+  /** `settings.exposure.enabled` for this cluster. */
+  requested: boolean
+  /** A host listener publishes in front of this cluster. */
+  published: boolean
+  /** Scopes the published listener covers, widest first. */
+  scopes: ManagedSqlAccessScope[]
+  /** Published only because another cluster on the same host asked for it. */
+  viaCoResidentCluster: boolean
+}
+
 export type ManagedDetailResponse = {
   managed: ManagedEnvironmentRecord | null
   connection: ManagedConnectionInfo | null
   endpoints?: ManagedAccessEndpoint[]
+  exposure?: ManagedExposureView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null
   release: ManagedReleaseView | null

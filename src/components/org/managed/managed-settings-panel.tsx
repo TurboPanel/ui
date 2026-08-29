@@ -33,6 +33,7 @@ import {
 import {
   managedCatalogEntryForCode,
   managedErrorMessage,
+  type ManagedExposureView,
   type ManagedSettings,
 } from '@/lib/managed-services'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
@@ -359,6 +360,27 @@ function ApplyButton({
   )
 }
 
+/**
+ * The gap between the toggle and the network, stated plainly.
+ *
+ * One ProxySQL fronts every managed database on a server and publishes one set
+ * of host ports for all of them, so turning this cluster's exposure off does
+ * not close the port while a co-resident cluster is exposed. Saying nothing
+ * would leave an operator believing a reachable database is private.
+ */
+function ExposureRealityNote({
+  exposure,
+}: Readonly<{ exposure: ManagedExposureView | null }>) {
+  if (!exposure?.viaCoResidentCluster) return null
+  return (
+    <Text style={panelStyles.muted}>
+      Still reachable on the host: another managed database on this server is
+      exposed, and they share one proxy listener. Turn that one off too to close
+      the published port.
+    </Text>
+  )
+}
+
 function SettingsFormBody({
   form,
   setForm,
@@ -369,6 +391,7 @@ function SettingsFormBody({
   imageOptions,
   versionLabel,
   organizationSslMode,
+  exposure,
   onApply,
 }: Readonly<{
   form: SettingsForm
@@ -382,6 +405,8 @@ function SettingsFormBody({
   versionLabel: string | null
   /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
   organizationSslMode: ManagedSslMode | null
+  /** What the shared listener really publishes; `null` before the row exists. */
+  exposure: ManagedExposureView | null
   onApply: () => void
 }>) {
   return (
@@ -494,6 +519,9 @@ function SettingsFormBody({
         }
       />
 
+      {/* The toggle is enforced: with it off (and no other cluster on the
+          host exposed) the daemon publishes no host ports at all and the
+          engine is reachable only over the managed Docker network. */}
       <Checkbox
         label="Expose externally"
         checked={form.exposureEnabled}
@@ -516,6 +544,8 @@ function SettingsFormBody({
         />
       ) : null}
 
+      <ExposureRealityNote exposure={exposure} />
+
       <ApplyButton
         canManage={canManage}
         disabled={disabled}
@@ -530,6 +560,7 @@ export function ManagedSettingsPanel({
   settings,
   engineCode,
   organizationSslMode,
+  exposure,
   canManage,
   busy,
   onApply,
@@ -539,6 +570,8 @@ export function ManagedSettingsPanel({
   engineCode: string | null
   /** From the detail response `ssl.organizationDefault`; labels the inherit row. */
   organizationSslMode: ManagedSslMode | null
+  /** From the detail response `exposure`; what the shared listener really publishes. */
+  exposure?: ManagedExposureView | null
   canManage: boolean
   busy: boolean
   onApply: (next: ManagedSettings) => Promise<void>
@@ -608,6 +641,7 @@ export function ManagedSettingsPanel({
           imageOptions={imageOptions}
           versionLabel={versionLabel}
           organizationSslMode={organizationSslMode}
+          exposure={exposure ?? null}
           onApply={() => {
             void apply()
           }}

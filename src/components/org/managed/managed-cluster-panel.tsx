@@ -54,6 +54,7 @@ import {
   useAddManagedReplica,
   usePromoteManagedDisasterRecovery,
   usePromoteManagedMember,
+  useResyncManagedMember,
   useRemoveManagedMember,
   useUpdateManagedMemberReadEligible,
   useUpdateManagedMemberReplicaClass,
@@ -137,6 +138,7 @@ export function ManagedClusterPanel({
   )
   const removeMember = useRemoveManagedMember(orgId, environmentId)
   const promoteMember = usePromoteManagedMember(orgId, environmentId)
+  const resyncMember = useResyncManagedMember(orgId, environmentId)
   const promoteDisaster = usePromoteManagedDisasterRecovery(orgId, environmentId)
 
   const [error, setError] = useState<string | null>(null)
@@ -294,6 +296,19 @@ export function ManagedClusterPanel({
     }
   }
 
+  const handleResync = async (memberId: string) => {
+    setWorking(true)
+    setError(null)
+    try {
+      const result = await resyncMember.mutateAsync(memberId)
+      onRegisterCommand(result.commandId, 'Resync replica', result.serverId)
+    } catch (err) {
+      setError(managedErrorMessage(err, 'Failed to resync replica'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
   const runPromote = async (memberId: string, force: boolean) => {
     setWorking(true)
     setError(null)
@@ -404,6 +419,9 @@ export function ManagedClusterPanel({
             onConfirmRemove={() => {
               void handleRemove(member.id)
             }}
+            onConfirmResync={() => {
+              void handleResync(member.id)
+            }}
             onConfirmConvert={() => {
               void handleConvertToFailover(member.id)
             }}
@@ -513,6 +531,7 @@ function ClusterMemberRow({
   siteLabel,
   onToggleReads,
   onConfirmRemove,
+  onConfirmResync,
   onConfirmConvert,
   onStartPromote,
   onStartDisasterRecovery,
@@ -524,6 +543,7 @@ function ClusterMemberRow({
   siteLabel: string
   onToggleReads: () => void
   onConfirmRemove: () => void
+  onConfirmResync: () => void
   onConfirmConvert: () => void
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
@@ -590,6 +610,13 @@ function ClusterMemberRow({
             prompt="Removes this replica and destroys its data volume."
             disabled={disabled}
             onConfirm={onConfirmRemove}
+          />
+          <ConfirmButton
+            label="Resync"
+            confirmLabel="Confirm resync"
+            prompt="Wipes this replica's data and re-seeds it from the primary."
+            disabled={disabled}
+            onConfirm={onConfirmResync}
           />
           {isReadReplica ? (
             <>

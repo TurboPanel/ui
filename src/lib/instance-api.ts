@@ -4764,13 +4764,19 @@ export async function runEnvironmentLifecycle(
   })
 }
 
-export async function deleteEnvironmentManaged(environmentId: string): Promise<{
+export async function deleteEnvironmentManaged(
+  environmentId: string,
+  options?: { force?: boolean }
+): Promise<{
   ok: true
   deleted: boolean
   commandId?: string
   serverId?: string
 }> {
-  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`, { method: 'DELETE' })
+  const suffix = options?.force ? '?force=true' : ''
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed${suffix}`, {
+    method: 'DELETE',
+  })
 }
 
 /**
@@ -5009,6 +5015,17 @@ export async function removeManagedMember(
   return await apiFetch(
     `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}`,
     { method: 'DELETE' }
+  )
+}
+
+/** Force re-seed a replica from the primary (the escape from needs-resync). */
+export async function resyncManagedMember(
+  environmentId: string,
+  memberId: string
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/members/${encodeURIComponent(memberId)}/resync`,
+    { method: 'POST', body: JSON.stringify({}) }
   )
 }
 

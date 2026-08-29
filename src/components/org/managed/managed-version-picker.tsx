@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { SegmentedControl } from '@/components/ui'
 import {
-  managedReleasesForEngine,
+  managedCreatableReleasesForEngine,
   managedSeriesLabel,
 } from '@/lib/managed-releases'
 import { spacing } from '@/lib/theme'
@@ -16,13 +16,14 @@ export type ManagedVersionSelection = {
 
 /**
  * Default selection for `engine` — recommended series, first variant. `null`
- * when the engine has no release catalog (`redis` / `clickhouse`), in which case
- * the create request should omit version fields and take the backend default.
+ * when the engine has no creatable release (no catalog at all, as with `redis` /
+ * `clickhouse`, or no tested series), in which case the create request should
+ * omit version fields and take the backend default.
  */
 export function defaultManagedVersionSelection(
   engine: string | null | undefined,
 ): ManagedVersionSelection | null {
-  const releases = managedReleasesForEngine(engine)
+  const releases = managedCreatableReleasesForEngine(engine)
   const release = releases.find((row) => row.isDefault) ?? releases[0]
   const variantId = release?.variants[0]?.id
   if (!release || variantId === undefined) return null
@@ -31,7 +32,14 @@ export function defaultManagedVersionSelection(
 
 /**
  * Version series first, base-OS variant second — operators pick a database
- * version, not an OCI tag. Renders nothing for engines without a catalog.
+ * version, not an OCI tag. Renders nothing for engines with no creatable
+ * release.
+ *
+ * Only **tested** series are offered: the control plane refuses anything else
+ * with `managed_version_unsupported`, so showing an untested series here would
+ * only produce a 422. A series the catalog knows about but has not validated is
+ * therefore absent from this list even though `describeManagedImage` can still
+ * name it for an existing cluster.
  *
  * All members of a topology stay on one series and a cluster's series is
  * immutable after create (`managed_series_immutable`), so this is the only place
@@ -48,7 +56,7 @@ export function ManagedVersionPicker({
   disabled: boolean
   onChange: (next: ManagedVersionSelection) => void
 }>) {
-  const releases = managedReleasesForEngine(engine)
+  const releases = managedCreatableReleasesForEngine(engine)
   if (releases.length === 0 || !value) return null
 
   const selected = releases.find((row) => row.series === value.series)

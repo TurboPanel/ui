@@ -292,6 +292,9 @@ function ManagedSetupPanel({
         onChange={setVersion}
       />
 
+      {/* The toggle is enforced: with it off (and no other cluster on the
+          host exposed) the daemon publishes no host ports at all and the
+          engine is reachable only over the managed Docker network. */}
       <Checkbox
         label="Expose externally"
         checked={expose}
@@ -648,6 +651,7 @@ function ManagedEnvironmentReadyPanels({
           settings={settings}
           engineCode={managed.engine}
           organizationSslMode={detail.ssl?.organizationDefault ?? null}
+          exposure={detail.exposure ?? null}
           canManage={canManage}
           busy={inFlight}
           onApply={async (next: ManagedSettings) => {

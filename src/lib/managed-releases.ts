@@ -26,18 +26,41 @@ export type ManagedEngineRelease = {
   lifecycle: ManagedEngineLifecycle
   /** Exactly one release per engine is the default for new clusters. */
   isDefault: boolean
+  /**
+   * Validated end-to-end and therefore creatable. Untested series stay in the
+   * catalog only so an already-persisted image can be named; the picker hides
+   * them and the control plane refuses them (`managed_version_unsupported`).
+   */
+  tested: boolean
   /** Display order; the first entry is this series' default variant. */
   variants: readonly ManagedImageVariant[]
 }
 
+/** Explicit opt-in to untested series — tests only; there is no ambient form. */
+export type ManagedReleaseGate = {
+  includeUntested?: boolean
+}
+
+function isReleaseCreatable(
+  release: ManagedEngineRelease,
+  gate: ManagedReleaseGate | undefined,
+): boolean {
+  return release.tested || gate?.includeUntested === true
+}
+
 const DEBIAN = 'Debian'
 
-function postgresRelease(series: string, isDefault = false): ManagedEngineRelease {
+function postgresRelease(
+  series: string,
+  isDefault = false,
+  tested = false,
+): ManagedEngineRelease {
   return {
     engine: 'postgres',
     series,
     lifecycle: 'supported',
     isDefault,
+    tested,
     variants: [
       { id: 'alpine', label: 'Alpine', image: `docker.io/library/postgres:${series}-alpine` },
       { id: 'debian', label: DEBIAN, image: `docker.io/library/postgres:${series}` },
@@ -46,12 +69,17 @@ function postgresRelease(series: string, isDefault = false): ManagedEngineReleas
 }
 
 /** MySQL dropped Alpine after 8.0; Oracle Linux 9 is the vendor alternative. */
-function mysqlRelease(series: string, isDefault = false): ManagedEngineRelease {
+function mysqlRelease(
+  series: string,
+  isDefault = false,
+  tested = false,
+): ManagedEngineRelease {
   return {
     engine: 'mysql',
     series,
     lifecycle: 'lts',
     isDefault,
+    tested,
     variants: [
       { id: 'debian', label: DEBIAN, image: `docker.io/library/mysql:${series}` },
       {
@@ -64,12 +92,17 @@ function mysqlRelease(series: string, isDefault = false): ManagedEngineRelease {
 }
 
 /** MariaDB has never shipped Alpine; UBI is the vendor-published alternative. */
-function mariadbRelease(series: string, isDefault = false): ManagedEngineRelease {
+function mariadbRelease(
+  series: string,
+  isDefault = false,
+  tested = false,
+): ManagedEngineRelease {
   return {
     engine: 'mariadb',
     series,
     lifecycle: 'lts',
     isDefault,
+    tested,
     variants: [
       { id: 'debian', label: DEBIAN, image: `docker.io/library/mariadb:${series}` },
       { id: 'ubi', label: 'UBI', image: `docker.io/library/mariadb:${series}-ubi` },
@@ -78,24 +111,32 @@ function mariadbRelease(series: string, isDefault = false): ManagedEngineRelease
 }
 
 /**
- * Supported series for new clusters, newest first per engine. PostgreSQL stops
- * at 15 to bound the replication test matrix; MySQL 8.0 is absent because it
- * reached EOL in April 2026.
+ * Every catalogued series, newest first per engine. PostgreSQL stops at 15 to
+ * bound the replication test matrix; MySQL 8.0 is absent because it reached EOL
+ * in April 2026.
+ *
+ * Only PostgreSQL 18, MySQL 9.7 and MariaDB 12.3 are `tested` — the rest are
+ * kept so {@link describeManagedImage} can still name an already-persisted
+ * image, and are hidden from the create picker.
  */
 export const MANAGED_ENGINE_RELEASES: readonly ManagedEngineRelease[] = [
-  postgresRelease('18', true),
+  postgresRelease('18', true, true),
   postgresRelease('17'),
   postgresRelease('16'),
   postgresRelease('15'),
-  mysqlRelease('9.7', true),
+  mysqlRelease('9.7', true, true),
   mysqlRelease('8.4'),
-  mariadbRelease('12.3', true),
+  mariadbRelease('12.3', true, true),
   mariadbRelease('11.8'),
   mariadbRelease('11.4'),
   mariadbRelease('10.11'),
 ]
 
-/** Releases for `engine` in display order; empty when the engine has no catalog. */
+/**
+ * Every catalogued release for `engine` in display order, **including untested
+ * series** — for naming an image that already exists. Empty when the engine has
+ * no catalog.
+ */
 export function managedReleasesForEngine(
   engine: string | null | undefined,
 ): readonly ManagedEngineRelease[] {
@@ -103,24 +144,37 @@ export function managedReleasesForEngine(
   return MANAGED_ENGINE_RELEASES.filter((release) => release.engine === engine)
 }
 
-/** The default series for `engine`, or `undefined` when the engine has no catalog. */
+/** Releases the picker may offer: tested series only unless gated open. */
+export function managedCreatableReleasesForEngine(
+  engine: string | null | undefined,
+  gate?: ManagedReleaseGate,
+): readonly ManagedEngineRelease[] {
+  return managedReleasesForEngine(engine).filter((release) => isReleaseCreatable(release, gate))
+}
+
+/** The default series for `engine`, or `undefined` when nothing is creatable. */
 export function defaultManagedRelease(
   engine: string | null | undefined,
+  gate?: ManagedReleaseGate,
 ): ManagedEngineRelease | undefined {
-  const releases = managedReleasesForEngine(engine)
+  const releases = managedCreatableReleasesForEngine(engine, gate)
   return releases.find((release) => release.isDefault) ?? releases[0]
 }
 
 /** Default image (default series, default variant) for `engine`. */
-export function defaultManagedImage(engine: string | null | undefined): string | undefined {
-  return defaultManagedRelease(engine)?.variants[0]?.image
+export function defaultManagedImage(
+  engine: string | null | undefined,
+  gate?: ManagedReleaseGate,
+): string | undefined {
+  return defaultManagedRelease(engine, gate)?.variants[0]?.image
 }
 
 /** Every image `engine` accepts, in display order — mirrors the instance allowlist. */
 export function managedAllowedImagesForEngine(
   engine: string | null | undefined,
+  gate?: ManagedReleaseGate,
 ): readonly string[] {
-  return managedReleasesForEngine(engine).flatMap((release) =>
+  return managedCreatableReleasesForEngine(engine, gate).flatMap((release) =>
     release.variants.map((variant) => variant.image),
   )
 }
@@ -130,8 +184,11 @@ export function resolveManagedImage(
   engine: string | null | undefined,
   series: string,
   variantId?: string,
+  gate?: ManagedReleaseGate,
 ): string | undefined {
-  const release = managedReleasesForEngine(engine).find((row) => row.series === series)
+  const release = managedCreatableReleasesForEngine(engine, gate).find(
+    (row) => row.series === series,
+  )
   if (!release) return undefined
   if (variantId === undefined) return release.variants[0]?.image
   return release.variants.find((variant) => variant.id === variantId)?.image
@@ -141,6 +198,8 @@ export type ManagedImageDescriptor = {
   engine: string
   series: string
   lifecycle: ManagedEngineLifecycle
+  /** False for a catalogued-but-not-creatable series — render it as unsupported. */
+  tested: boolean
   variantId: string
 }
 
@@ -160,6 +219,7 @@ export function describeManagedImage(
           engine: release.engine,
           series: release.series,
           lifecycle: release.lifecycle,
+          tested: release.tested,
           variantId: variant.id,
         }
       }
@@ -199,9 +259,10 @@ export function managedImageVariantLabel(image: string): string {
   return image
 }
 
-/** `18` → `18 (recommended)`; legacy series are flagged. */
+/** `18` → `18 (recommended)`; untested and legacy series are flagged. */
 export function managedSeriesLabel(release: ManagedEngineRelease): string {
   if (release.isDefault) return `${release.series} (recommended)`
+  if (!release.tested) return `${release.series} (untested)`
   if (release.lifecycle === 'legacy') return `${release.series} (legacy)`
   return release.series
 }

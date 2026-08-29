@@ -22,6 +22,7 @@ import {
     promoteManagedMember,
     removeManagedMember,
     restoreManagedBackup,
+    resyncManagedMember,
     rotateManagedRootPassword,
     rotateManagedUserPassword,
     runManagedLifecycle,
@@ -278,7 +279,12 @@ export function useDeleteEnvironmentManaged(orgId: string, environmentId: string
 export function useDeleteEnvironmentManagedMutation(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (environmentId: string) => deleteEnvironmentManaged(environmentId),
+    mutationFn: (input: string | { environmentId: string; force?: boolean }) =>
+      typeof input === 'string'
+        ? deleteEnvironmentManaged(input)
+        : deleteEnvironmentManaged(input.environmentId, {
+          ...(input.force ? { force: true } : {}),
+        }),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -538,6 +544,14 @@ export function useRemoveManagedMember(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (memberId: string) => removeManagedMember(environmentId, memberId),
+    onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
+  })
+}
+
+export function useResyncManagedMember(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (memberId: string) => resyncManagedMember(environmentId, memberId),
     onSuccess: () => invalidateManagedMembers(queryClient, orgId, environmentId),
   })
 }

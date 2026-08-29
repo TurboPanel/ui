@@ -5,6 +5,7 @@ import {
   defaultManagedRelease,
   describeManagedImage,
   managedAllowedImagesForEngine,
+  managedCreatableReleasesForEngine,
   managedImageVariantLabel,
   managedReleaseSummary,
   managedReleasesForEngine,
@@ -31,6 +32,37 @@ describe('MANAGED_ENGINE_RELEASES', () => {
       '11.8',
       '11.4',
       '10.11',
+    ])
+  })
+
+  it('only three verified series are creatable', () => {
+    expect(
+      managedCreatableReleasesForEngine('postgres').map((row) => row.series),
+    ).toEqual(['18'])
+    expect(managedCreatableReleasesForEngine('mysql').map((row) => row.series)).toEqual([
+      '9.7',
+    ])
+    expect(
+      managedCreatableReleasesForEngine('mariadb').map((row) => row.series),
+    ).toEqual(['12.3'])
+    // The untested series stay catalogued so an existing image can be named.
+    expect(managedCreatableReleasesForEngine('postgres', { includeUntested: true })).toEqual(
+      managedReleasesForEngine('postgres'),
+    )
+  })
+
+  it('allowlists only the tested series images', () => {
+    expect(managedAllowedImagesForEngine('postgres')).toEqual([
+      'docker.io/library/postgres:18-alpine',
+      'docker.io/library/postgres:18',
+    ])
+    expect(managedAllowedImagesForEngine('mysql')).toEqual([
+      'docker.io/library/mysql:9.7',
+      'docker.io/library/mysql:9.7-oraclelinux9',
+    ])
+    expect(managedAllowedImagesForEngine('mariadb')).toEqual([
+      'docker.io/library/mariadb:12.3',
+      'docker.io/library/mariadb:12.3-ubi',
     ])
   })
 
@@ -96,17 +128,17 @@ describe('MANAGED_SERVICE_CATALOG derives from the release catalog', () => {
 
 describe('resolveManagedImage', () => {
   it('maps series plus variant to an image', () => {
-    expect(resolveManagedImage('postgres', '16', 'debian')).toBe(
-      'docker.io/library/postgres:16',
+    expect(resolveManagedImage('postgres', '18', 'debian')).toBe(
+      'docker.io/library/postgres:18',
     )
-    expect(resolveManagedImage('mariadb', '11.4', 'ubi')).toBe(
-      'docker.io/library/mariadb:11.4-ubi',
+    expect(resolveManagedImage('mariadb', '12.3', 'ubi')).toBe(
+      'docker.io/library/mariadb:12.3-ubi',
     )
   })
 
   it('falls back to the series default variant when none is given', () => {
-    expect(resolveManagedImage('postgres', '17')).toBe(
-      'docker.io/library/postgres:17-alpine',
+    expect(resolveManagedImage('postgres', '18')).toBe(
+      'docker.io/library/postgres:18-alpine',
     )
   })
 
@@ -114,6 +146,15 @@ describe('resolveManagedImage', () => {
     expect(resolveManagedImage('postgres', '14')).toBeUndefined()
     expect(resolveManagedImage('postgres', '18', 'ubi')).toBeUndefined()
     expect(resolveManagedImage('redis', '7')).toBeUndefined()
+  })
+
+  it('refuses an untested series unless the gate is opened', () => {
+    expect(resolveManagedImage('postgres', '17')).toBeUndefined()
+    expect(resolveManagedImage('mysql', '8.4')).toBeUndefined()
+    expect(resolveManagedImage('mariadb', '11.8')).toBeUndefined()
+    expect(resolveManagedImage('postgres', '17', undefined, { includeUntested: true })).toBe(
+      'docker.io/library/postgres:17-alpine',
+    )
   })
 })
 
@@ -125,10 +166,21 @@ describe('describeManagedImage', () => {
           engine: release.engine,
           series: release.series,
           lifecycle: release.lifecycle,
+          tested: release.tested,
           variantId: variant.id,
         })
       }
     }
+  })
+
+  it('still names an untested series so an existing cluster renders', () => {
+    expect(describeManagedImage('docker.io/library/postgres:17-alpine')).toEqual({
+      engine: 'postgres',
+      series: '17',
+      lifecycle: 'supported',
+      tested: false,
+      variantId: 'alpine',
+    })
   })
 
   it('is undefined outside the catalog', () => {
@@ -175,10 +227,10 @@ describe('display helpers', () => {
     )
   })
 
-  it('flags the recommended series', () => {
+  it('flags the recommended series and untested ones', () => {
     const [postgresDefault, postgresOlder] = managedReleasesForEngine('postgres')
     expect(managedSeriesLabel(postgresDefault!)).toBe('18 (recommended)')
-    expect(managedSeriesLabel(postgresOlder!)).toBe('17')
+    expect(managedSeriesLabel(postgresOlder!)).toBe('17 (untested)')
   })
 
   it('flags legacy series in the picker', () => {
@@ -188,6 +240,7 @@ describe('display helpers', () => {
         series: '14',
         lifecycle: 'legacy',
         isDefault: false,
+        tested: true,
         variants: [],
       }),
     ).toBe('14 (legacy)')

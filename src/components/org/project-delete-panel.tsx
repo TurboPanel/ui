@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Button, LoadingState, TextField } from '@/components/ui'
+import { Button, ConfirmButton, LoadingState, TextField } from '@/components/ui'
 import {
   MANAGED_RUNTIME_PRESENT_ERROR,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
@@ -195,10 +195,12 @@ const MANAGED_DESTROY_COPY: StopStepCopy = {
 function StopStepSection({
   envRows,
   onStop,
+  onForceDestroy,
   copy,
 }: Readonly<{
   envRows: EnvStopRow[]
   onStop: (environmentId: string) => void
+  onForceDestroy?: (environmentId: string) => void
   copy: StopStepCopy
 }>) {
   return (
@@ -222,13 +224,23 @@ function StopStepSection({
                 <Text style={panelStyles.error}>{row.error}</Text>
               ) : null}
             </View>
-            <Button
-              label={row.stopping ? copy.actionBusyLabel : copy.actionLabel}
-              variant="danger"
-              size="sm"
-              busy={row.stopping}
-              onPress={() => onStop(row.environment.id)}
-            />
+            <View style={styles.envActions}>
+              <Button
+                label={row.stopping ? copy.actionBusyLabel : copy.actionLabel}
+                variant="danger"
+                size="sm"
+                busy={row.stopping}
+                onPress={() => onStop(row.environment.id)}
+              />
+              {row.error && onForceDestroy ? (
+                <ConfirmButton
+                  label="Force destroy"
+                  confirmLabel="Confirm force"
+                  prompt="Removes the database records immediately and tears down what it can. Leftover containers on unreachable servers must be cleaned up manually."
+                  onConfirm={() => onForceDestroy(row.environment.id)}
+                />
+              ) : null}
+            </View>
           </View>
         ))}
       </View>
@@ -306,6 +318,7 @@ function DeletePanelBody({
   hasActiveServices,
   envRows,
   onStop,
+  onForceDestroy,
   confirmName,
   confirmText,
   onConfirmTextChange,
@@ -317,6 +330,7 @@ function DeletePanelBody({
   hasActiveServices: boolean
   envRows: EnvStopRow[]
   onStop: (environmentId: string) => void
+  onForceDestroy?: (environmentId: string) => void
   confirmName: string
   confirmText: string
   onConfirmTextChange: (value: string) => void
@@ -339,6 +353,7 @@ function DeletePanelBody({
       <StopStepSection
         envRows={envRows}
         onStop={onStop}
+        onForceDestroy={managedProject ? onForceDestroy : undefined}
         copy={managedProject ? MANAGED_DESTROY_COPY : COMPOSE_STOP_COPY}
       />
     )
@@ -637,7 +652,10 @@ export function ProjectDeletePanel({
     trackQueuedCommand(environmentId, serverId, commandId, 'Stopping services…')
   }
 
-  const handleDestroyManaged = async (environmentId: string) => {
+  const handleDestroyManaged = async (
+    environmentId: string,
+    options?: { force?: boolean },
+  ) => {
     setStopRows((current) => ({
       ...current,
       [environmentId]: {
@@ -647,7 +665,9 @@ export function ProjectDeletePanel({
         serverId: current[environmentId]?.serverId ?? null,
       },
     }))
-    const result = await destroyManagedMutation.run(environmentId)
+    const result = await destroyManagedMutation.run(
+      options?.force ? { environmentId, force: true } : environmentId,
+    )
     if (!result.ok) {
       markStopFailed(
         environmentId,
@@ -715,6 +735,8 @@ export function ProjectDeletePanel({
         hasActiveServices={hasActiveServices}
         envRows={envRows}
         onStop={(environmentId) => void handleStop(environmentId)}
+        onForceDestroy={(environmentId) =>
+          void handleDestroyManaged(environmentId, { force: true })}
         confirmName={confirmName}
         confirmText={confirmText}
         onConfirmTextChange={setConfirmText}
@@ -787,6 +809,10 @@ const styles = StyleSheet.create({
   envInfo: {
     flex: 1,
     gap: 2,
+  },
+  envActions: {
+    gap: spacing.xs,
+    alignItems: 'flex-end',
   },
   envName: {
     color: colors.text,
