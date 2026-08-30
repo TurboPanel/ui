@@ -1,7 +1,6 @@
 import {
   Button,
   ButtonRow,
-  Checkbox,
   ConfirmButton,
   EmptyState,
   LoadingState,
@@ -198,7 +197,6 @@ function ManagedSetupPanel({
   onCreated: (rootPassword?: string) => void
 }>) {
   const [serverId, setServerId] = useState<string | null>(null)
-  const [expose, setExpose] = useState(false)
   const [version, setVersion] = useState<ManagedVersionSelection | null>(() =>
     defaultManagedVersionSelection(engineCode)
   )
@@ -237,10 +235,9 @@ function ManagedSetupPanel({
         }
         return
       }
-      const result = await createManagedMutation.run({
-        ...(version ? { engineSeries: version.series, imageVariant: version.variantId } : {}),
-        ...(expose ? { exposure: { enabled: true } } : {}),
-      })
+      const result = await createManagedMutation.run(
+        version ? { engineSeries: version.series, imageVariant: version.variantId } : {}
+      )
       if (!result.ok) {
         if (createManagedMutation.actionError) {
           setError(createManagedMutation.actionError)
@@ -290,16 +287,6 @@ function ManagedSetupPanel({
         value={version}
         disabled={submitting}
         onChange={setVersion}
-      />
-
-      {/* The toggle is enforced: with it off (and no other cluster on the
-          host exposed) the daemon publishes no host ports at all and the
-          engine is reachable only over the managed Docker network. */}
-      <Checkbox
-        label="Expose externally"
-        checked={expose}
-        disabled={submitting}
-        onPress={() => setExpose((current) => !current)}
       />
 
       {canManage ? (

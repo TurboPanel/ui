@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { withDevelopmentClientNativeNetwork } from './src/lib/metro-cleartext-node.mjs'
 import { isFullGitCommit, sourceReleaseUrl, UI_LICENSE, UI_SOURCE_REPO } from './src/lib/source-release-node.mjs'
 
 /** FHS git — do not resolve `git` from PATH (typescript:S4036). */
@@ -50,7 +51,7 @@ export default function appConfig() {
   } else if (gitCommit) {
     releaseUrl = sourceReleaseUrl(gitCommit)
   }
-  return {
+  return withDevelopmentClientNativeNetwork({
     ...appJson.expo,
     extra: {
       ...appJson.expo.extra,
@@ -59,5 +60,5 @@ export default function appConfig() {
       sourceReleaseUrl: releaseUrl,
       release,
     },
-  }
+  })
 }
