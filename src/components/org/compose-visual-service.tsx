@@ -1063,8 +1063,12 @@ function sourceBuildKindHint(buildKind: ComposeSourceBuildKind): string {
 }
 
 function sourceBranchHint(defaultBranch: string | null | undefined): string {
-  const suffix = defaultBranch ? ` (${defaultBranch})` : ''
-  return `Leave empty to build the default branch of the connected repository${suffix}.`
+  if (!defaultBranch) {
+    // No fallback exists: deploy-prepare rejects a binding with no branch when
+    // the repository records no default branch (`source_ref_unresolved`).
+    return 'The connected repository records no default branch — name one here to deploy this service.'
+  }
+  return `Leave empty to build the default branch of the connected repository (${defaultBranch}).`
 }
 
 function sourceStartCommandHint(railpack: boolean): string {

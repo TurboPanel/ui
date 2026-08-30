@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
+import { Link, type Href } from 'expo-router'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
@@ -47,10 +48,18 @@ import {
   useCreateEnvironment,
   useDeployEnvironment,
   useOrgServers,
+  useProjectPrincipals,
   useRunEnvironmentLifecycle,
+  useServicesByEnvironments,
   useStopEnvironment,
   type TrackedCommandEntry,
 } from '@/lib/queries'
+import { mergeComposeOverlay } from '@/lib/compose'
+import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
+import {
+  projectEnvironmentBindingsHref,
+  projectEnvironmentHostingHref,
+} from '@/lib/project-navigation'
 import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
@@ -398,6 +407,7 @@ function RedeploySplitButton({
 
 function LifecycleToolbar({
   hasServer,
+  needsPrincipal,
   hasContainers,
   isRunning,
   inFlight,
@@ -416,6 +426,7 @@ function LifecycleToolbar({
   onRefresh,
 }: Readonly<{
   hasServer: boolean
+  needsPrincipal: boolean
   hasContainers: boolean
   isRunning: boolean
   inFlight: boolean
@@ -434,6 +445,10 @@ function LifecycleToolbar({
   onRefresh: () => void
 }>) {
   const actionDisabled = !hasServer || busy
+  // Deploying without a system user would "succeed" with the daemon silently
+  // skipping every native release, so Deploy / Redeploy require one up front.
+  // Start / Stop only touch containers that already exist and stay available.
+  const deployDisabled = actionDisabled || needsPrincipal
   let destroyLabel = 'Destroy'
   let destroyA11y = 'Destroy'
   if (destroyBusy) {
@@ -461,7 +476,7 @@ function LifecycleToolbar({
           label={inFlight ? 'Working…' : 'Deploy'}
           accessibilityLabel="Deploy environment"
           tone="primary"
-          disabled={actionDisabled}
+          disabled={deployDisabled}
           onPress={onDeploy}
         />
       ) : null}
@@ -477,7 +492,7 @@ function LifecycleToolbar({
       {showRedeploy ? (
         <RedeploySplitButton
           inFlight={inFlight}
-          disabled={actionDisabled}
+          disabled={deployDisabled}
           onRedeploy={onRedeploy}
           onCachelessRedeploy={onCachelessRedeploy}
         />
@@ -585,10 +600,71 @@ function StatusAside({
   )
 }
 
+/**
+ * Server placement lives on the Hosting tab. When the environment has no
+ * server, Deploy stays disabled — this link in the same strip says why and
+ * takes the operator there.
+ */
+function MissingServerHostingLink({
+  environmentId,
+}: Readonly<{ environmentId: string }>) {
+  const { orgId, projectId } = useProjectContext()
+  return (
+    <Link
+      href={
+        projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href
+      }
+      asChild
+    >
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="Set a server on the Hosting tab"
+        style={webPointer}
+      >
+        <Text style={styles.statusText}>
+          No server — <Text style={styles.hostingLink}>set one in Hosting</Text>
+        </Text>
+      </Pressable>
+    </Link>
+  )
+}
+
+/**
+ * A native release deploys into a system user's home; without one the daemon
+ * silently skips it. Deploy stays disabled until a system user stewards every
+ * source-backed service — this link in the same strip says why and takes the
+ * operator to the Bindings tab.
+ */
+function MissingPrincipalBindingsLink({
+  environmentId,
+}: Readonly<{ environmentId: string }>) {
+  const { orgId, projectId } = useProjectContext()
+  return (
+    <Link
+      href={
+        projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href
+      }
+      asChild
+    >
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="Assign a system user on the Bindings tab"
+        style={webPointer}
+      >
+        <Text style={styles.statusText}>
+          No system user —{' '}
+          <Text style={styles.hostingLink}>assign one in Bindings</Text>
+        </Text>
+      </Pressable>
+    </Link>
+  )
+}
+
 function BarTrailingActions({
   showLifecycle,
   showRefreshOnly,
   hasServer,
+  needsPrincipal,
   hasContainers,
   isRunning,
   inFlight,
@@ -609,6 +685,7 @@ function BarTrailingActions({
   showLifecycle: boolean
   showRefreshOnly: boolean
   hasServer: boolean
+  needsPrincipal: boolean
   hasContainers: boolean
   isRunning: boolean
   inFlight: boolean
@@ -630,6 +707,7 @@ function BarTrailingActions({
     return (
       <LifecycleToolbar
         hasServer={hasServer}
+        needsPrincipal={needsPrincipal}
         hasContainers={hasContainers}
         isRunning={isRunning}
         inFlight={inFlight}
@@ -935,6 +1013,8 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   statusLabel: string
   toneColor: string
   hasServer: boolean
+  /** A native release declares a source but no principal stewards it. */
+  needsPrincipal: boolean
   hasContainers: boolean
   isRunning: boolean
   inFlight: boolean
@@ -1099,6 +1179,38 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     Boolean(selectedEnvironment) &&
     !selectedEnvironment?.serverId &&
     Boolean(projectDefaultServerId)
+
+  // Require a system user before Deploy: without one the daemon silently
+  // skips every native release ("release skipped … no project principal
+  // assigned" in the transcript) and the deploy "succeeds" unreleased.
+  const principalsQuery = useProjectPrincipals(orgId, projectId)
+  const selectedEnvId = selectedEnvironment?.id ?? null
+  const selectedEnvIds = useMemo(
+    () => (selectedEnvId ? [selectedEnvId] : []),
+    [selectedEnvId],
+  )
+  const envServicesQuery = useServicesByEnvironments(orgId, selectedEnvIds)
+  const envComposeOverlay = selectedEnvironment?.options?.compose
+  const projectCompose = project?.options?.compose
+  const missingPrincipalServices = useMemo(() => {
+    // Never gate on missing data: while the queries load (or fail) the
+    // deploy path's own errors remain the backstop.
+    if (!selectedEnvId || principalsQuery.data == null) return []
+    if (envServicesQuery.isLoading) return []
+    return unownedPrincipalRequiredServices({
+      document: mergeComposeOverlay(projectCompose, envComposeOverlay),
+      services: envServicesQuery.servicesByEnv[selectedEnvId] ?? [],
+      principals: principalsQuery.data.principals,
+    })
+  }, [
+    selectedEnvId,
+    principalsQuery.data,
+    envServicesQuery.isLoading,
+    envServicesQuery.servicesByEnv,
+    projectCompose,
+    envComposeOverlay,
+  ])
+  const needsPrincipal = missingPrincipalServices.length > 0
 
   const registerCommand = (
     commandId: string,
@@ -1336,6 +1448,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     statusLabel,
     toneColor: tone.color,
     hasServer,
+    needsPrincipal,
     hasContainers,
     isRunning,
     inFlight,
@@ -1485,6 +1598,7 @@ function OverviewEnvironmentsPanelView({
   statusLabel,
   toneColor,
   hasServer,
+  needsPrincipal,
   hasContainers,
   isRunning,
   inFlight,
@@ -1538,10 +1652,21 @@ function OverviewEnvironmentsPanelView({
 
           <View style={styles.barSpacer} />
 
+          {selectedEnvironment && !hasServer ? (
+            <MissingServerHostingLink environmentId={selectedEnvironment.id} />
+          ) : null}
+
+          {selectedEnvironment && hasServer && needsPrincipal ? (
+            <MissingPrincipalBindingsLink
+              environmentId={selectedEnvironment.id}
+            />
+          ) : null}
+
           <BarTrailingActions
             showLifecycle={canMutateLifecycle}
             showRefreshOnly={!canMutateLifecycle}
             hasServer={hasServer}
+            needsPrincipal={needsPrincipal}
             hasContainers={hasContainers}
             isRunning={isRunning}
             inFlight={inFlight}
@@ -1646,7 +1771,8 @@ function OverviewEnvironmentsPanelView({
  * Overview lifecycle strip (Deploy / Redeploy / Start / Stop / Refresh /
  * Destroy) and env management. Project / environment / section chips live
  * in the compose editor toolbar via {@link ProjectSectionTabs}.
- * Server placement lives on the Servers compose surface tab.
+ * Server placement lives on the Hosting tab; when the environment has no
+ * server this bar links there instead of embedding a pin.
  */
 export function OverviewEnvironmentsPanel() {
   const model = useOverviewEnvironmentsPanelModel()
@@ -1713,6 +1839,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: '500',
+  },
+  hostingLink: {
+    color: chrome.accent,
+    fontWeight: '600',
   },
   barSpacer: {
     flexGrow: 1,

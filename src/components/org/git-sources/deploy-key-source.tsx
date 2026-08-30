@@ -189,7 +189,7 @@ export function DeployKeySource({
         autoCorrect={false}
         placeholder="main"
         mono
-        hint="Leave empty to watch every branch this repository pushes."
+        hint="Deploys build this branch when a service doesn't name one. Leave empty to watch every pushed branch — services must then name their branch to deploy."
       />
 
       <DeployKeyConnectAction

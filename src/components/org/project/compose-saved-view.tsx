@@ -4,7 +4,8 @@ import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
-import { EmptyState, InlineNotice } from '@/components/ui'
+import { EmptyState } from '@/components/ui'
+import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
 import {
   ComposeInventoryStrip,
   type InventoryStripItem,
@@ -37,6 +38,7 @@ export function ComposeSavedView({
   services,
   containersByService,
   showServiceStatus,
+  documentFacts,
   draftSource,
   onDraftSourceChange,
   toolbarTrailing,
@@ -51,13 +53,18 @@ export function ComposeSavedView({
   summaryDocument?: unknown
   /** Quantitative rollup (environments / servers / services / storage / bindings, …). */
   inventory: InventoryStripItem[]
-  /** Scope statement shown above the tiles, e.g. inheriting project compose. */
+  /** Quiet scope note at the end of the counts row, e.g. `Using project compose`. */
   inheritedCaption?: string | null
   orgId: string
   projectId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   showServiceStatus: boolean
+  /**
+   * Live deployment facts for the diagram — the effective server placement
+   * (frame) and per-service hostnames (hosting nodes). Omit for compose-only.
+   */
+  documentFacts?: ComposeDocFacts
   /**
    * When unsaved edits exist, Overview can toggle Proposed vs last Saved.
    * Omit when there is no draft to preview.
@@ -70,7 +77,18 @@ export function ComposeSavedView({
   const normalized = normalizeCompose(document)
   const blank = isBlankComposeData(normalized.data)
   const diagramSource = summaryDocument ?? normalized
-  const graph = useMemo(() => buildComposeGraph(diagramSource), [diagramSource])
+  const byService = documentFacts?.byService
+  const hostnamesByService = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const [name, facts] of Object.entries(byService ?? {})) {
+      if (facts.hostname) out[name] = facts.hostname
+    }
+    return out
+  }, [byService])
+  const graph = useMemo(
+    () => buildComposeGraph(diagramSource, { hostnamesByService }),
+    [diagramSource, hostnamesByService],
+  )
   const hasDiagram = graph.nodes.length > 0
   const showSourceToggle =
     draftSource != null && onDraftSourceChange != null
@@ -87,6 +105,7 @@ export function ComposeSavedView({
         services={services}
         containersByService={containersByService}
         showServiceStatus={showServiceStatus}
+        placementLabel={documentFacts?.placementLabel ?? null}
       />
     )
   } else {
@@ -148,8 +167,12 @@ export function ComposeSavedView({
       }
     >
       <View style={styles.body}>
-        {inheritedCaption ? <InlineNotice title={inheritedCaption} /> : null}
-        <ComposeInventoryStrip items={inventory} />
+        <View style={styles.inventoryRow}>
+          <ComposeInventoryStrip items={inventory} />
+          {inheritedCaption ? (
+            <Text style={styles.scopeCaption}>{inheritedCaption}</Text>
+          ) : null}
+        </View>
         {showSourceToggle && draftSource === 'proposed' ? (
           <Text style={panelStyles.muted}>
             Unsaved changes — switch to Saved to compare with the last save.
@@ -165,6 +188,18 @@ const styles = StyleSheet.create({
   body: {
     padding: spacing.md,
     gap: spacing.md,
+  },
+  inventoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  scopeCaption: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
   },
   headerTrailing: {
     flexDirection: 'row',

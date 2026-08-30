@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { StatusDot } from '@/components/ui'
 import { Link, type Href } from 'expo-router'
-import Svg, { Path, Polygon } from 'react-native-svg'
+import Svg, { Path, Polygon, Rect } from 'react-native-svg'
 import { serviceStatusTone } from '@/lib/container-status'
 import {
   describeComposeGraph,
@@ -18,52 +18,97 @@ const SERVICE_W = 176
 const SERVICE_H = 60
 const RESOURCE_W = 116
 const RESOURCE_H = 34
+const HOSTING_W = 176
+const HOSTING_H = 34
 const COL_GAP = 18
 const ROW_GAP = 34
 const PADDING = 18
 const ARROW_W = 8
 const ARROW_H = 7
 const DIAGRAM_MAX_HEIGHT = 480
+/** Breathing room between the server frame border and the nodes inside it. */
+const FRAME_INSET = 14
+/** Space reserved inside the frame top for the `SERVER · name` caption. */
+const FRAME_LABEL_H = 18
 
 type PixelRect = { x: number; y: number; w: number; h: number }
 
 function nodeSize(kind: ComposeGraphNode['kind']): { w: number; h: number } {
-  return kind === 'service'
-    ? { w: SERVICE_W, h: SERVICE_H }
-    : { w: RESOURCE_W, h: RESOURCE_H }
+  if (kind === 'service') return { w: SERVICE_W, h: SERVICE_H }
+  if (kind === 'hosting') return { w: HOSTING_W, h: HOSTING_H }
+  return { w: RESOURCE_W, h: RESOURCE_H }
 }
 
-/** Absolute pixel rects for every node, plus the canvas size that contains them. */
-function computeLayout(graph: ComposeGraph): {
+/**
+ * Absolute pixel rects for every node, plus the canvas size that contains
+ * them. When `framed`, everything except the hosting row is wrapped in a
+ * mermaid-subgraph-style server frame, so those nodes get an extra inset and
+ * the frame rect is returned for the renderer.
+ */
+function computeLayout(
+  graph: ComposeGraph,
+  framed: boolean,
+): {
   rects: Map<string, PixelRect>
   totalWidth: number
   totalHeight: number
+  frame: PixelRect | null
 } {
   const rowHeights = new Map<number, number>()
+  let frameStartRow = Number.POSITIVE_INFINITY
   for (const node of graph.nodes) {
     const { h } = nodeSize(node.kind)
     rowHeights.set(node.row, Math.max(rowHeights.get(node.row) ?? 0, h))
+    if (node.kind !== 'hosting') {
+      frameStartRow = Math.min(frameStartRow, node.row)
+    }
   }
+  const hasFrame = framed && Number.isFinite(frameStartRow)
 
   const rowTop = new Map<number, number>()
   let cursorY = PADDING
+  let frameTop = 0
   for (let row = 0; row < graph.rows; row += 1) {
+    if (hasFrame && row === frameStartRow) {
+      frameTop = cursorY
+      cursorY += FRAME_LABEL_H + FRAME_INSET
+    }
     rowTop.set(row, cursorY)
     cursorY += (rowHeights.get(row) ?? SERVICE_H) + ROW_GAP
   }
-  const totalHeight = graph.rows > 0 ? cursorY - ROW_GAP + PADDING : PADDING * 2
+  let bottom = graph.rows > 0 ? cursorY - ROW_GAP : cursorY
+  if (hasFrame) bottom += FRAME_INSET
+  const totalHeight = graph.rows > 0 ? bottom + PADDING : PADDING * 2
 
   const rects = new Map<string, PixelRect>()
   let maxRight = 0
+  let maxFramedRight = 0
   for (const node of graph.nodes) {
     const { w, h } = nodeSize(node.kind)
-    const x = PADDING + node.column * (w + COL_GAP)
+    const framedNode = hasFrame && node.kind !== 'hosting'
+    const x =
+      PADDING + (framedNode ? FRAME_INSET : 0) + node.column * (w + COL_GAP)
     const y = rowTop.get(node.row) ?? PADDING
     rects.set(node.id, { x, y, w, h })
     maxRight = Math.max(maxRight, x + w)
+    if (framedNode) maxFramedRight = Math.max(maxFramedRight, x + w)
   }
 
-  return { rects, totalWidth: maxRight + PADDING, totalHeight }
+  const frame: PixelRect | null = hasFrame
+    ? {
+        x: PADDING,
+        y: frameTop,
+        w: maxFramedRight + FRAME_INSET - PADDING,
+        h: bottom - frameTop,
+      }
+    : null
+
+  return {
+    rects,
+    totalWidth: Math.max(maxRight, frame ? frame.x + frame.w : 0) + PADDING,
+    totalHeight,
+    frame,
+  }
 }
 
 /** Vertical S-curve between two anchor points. */
@@ -79,6 +124,9 @@ function edgeStyle(kind: ComposeGraphEdge['kind']): {
   opacity?: number
 } {
   if (kind === 'depends_on') return { stroke: colors.command, strokeWidth: 1.5 }
+  if (kind === 'hosting') {
+    return { stroke: colors.accent, strokeWidth: 1.2, opacity: 0.8 }
+  }
   if (kind === 'volume') {
     return { stroke: colors.textDim, strokeWidth: 1, dash: '4 3' }
   }
@@ -110,7 +158,7 @@ function GraphEdges({
               strokeDasharray={style.dash}
               strokeOpacity={style.opacity}
             />
-            {edge.kind === 'depends_on' ? (
+            {edge.kind === 'depends_on' || edge.kind === 'hosting' ? (
               <Polygon
                 points={`${x2 - ARROW_W / 2},${y2 - ARROW_H} ${x2 + ARROW_W / 2},${y2 - ARROW_H} ${x2},${y2}`}
                 fill={style.stroke}
@@ -147,8 +195,9 @@ function ServiceNodeOverlay({
   showStatus: boolean
 }>) {
   const tone = showStatus ? serviceStatusTone(containers) : null
-  const subtitle = node.image ?? (node.serviceKind === 'site' ? 'Site' : null)
+  const subtitle = node.image
   const ports = joinPorts(node.ports)
+  const kindLabel = node.serviceKind === 'site' ? 'site' : 'service'
 
   const content = (
     <View
@@ -166,6 +215,7 @@ function ServiceNodeOverlay({
           <Text style={styles.serviceName} numberOfLines={1}>
             {node.name}
           </Text>
+          <Text style={styles.serviceKind}>{kindLabel}</Text>
         </View>
         {subtitle ? (
           <Text style={styles.serviceSubtitle} numberOfLines={1}>
@@ -210,6 +260,27 @@ function ServiceNodeOverlay({
   )
 }
 
+/** Exposure pill above the frame — the hostname routing traffic into a service. */
+function HostingNodeOverlay({
+  node,
+  rect,
+}: Readonly<{ node: ComposeGraphNode; rect: PixelRect }>) {
+  return (
+    <View
+      style={[
+        styles.hostingNode,
+        { left: rect.x, top: rect.y, width: rect.w, height: rect.h },
+      ]}
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Text style={styles.hostingName} numberOfLines={1}>
+        {node.name}
+      </Text>
+      <Text style={styles.resourceKind}>hosting</Text>
+    </View>
+  )
+}
+
 function ResourceNodeOverlay({
   node,
   rect,
@@ -238,36 +309,45 @@ const LEGEND_ENTRIES = [
   { key: 'service', label: 'Service', swatch: 'legendSwatchService' },
   { key: 'network', label: 'Network', swatch: 'legendSwatchNetwork' },
   { key: 'volume', label: 'Volume', swatch: 'legendSwatchVolume' },
+  { key: 'hosting', label: 'Hosting', swatch: 'legendSwatchHosting' },
+  { key: 'server', label: 'Server', swatch: 'legendSwatchServer' },
   { key: 'depends', label: 'Depends on', swatch: 'legendLineDependsOn' },
 ] as const
+
+type LegendKey = (typeof LEGEND_ENTRIES)[number]['key']
 
 /**
  * Diagram key as one quiet hairline pill under the canvas — chrome for the
  * diagram, not a second content block. Node shapes carry their own kind label,
- * so this stays small and muted rather than competing with them.
+ * so this stays small and muted rather than competing with them. Entries only
+ * appear for shapes actually drawn (hosting / server frame are conditional).
  */
-function GraphLegend() {
+function GraphLegend({ hidden }: Readonly<{ hidden: readonly LegendKey[] }>) {
   return (
     <View
       style={styles.legend}
       accessibilityElementsHidden
       importantForAccessibility="no"
     >
-      {LEGEND_ENTRIES.map((entry) => (
-        <View key={entry.key} style={styles.legendItem}>
-          <View style={styles[entry.swatch]} />
-          <Text style={styles.legendText}>{entry.label}</Text>
-        </View>
-      ))}
+      {LEGEND_ENTRIES.filter((entry) => !hidden.includes(entry.key)).map(
+        (entry) => (
+          <View key={entry.key} style={styles.legendItem}>
+            <View style={styles[entry.swatch]} />
+            <Text style={styles.legendText}>{entry.label}</Text>
+          </View>
+        ),
+      )}
     </View>
   )
 }
 
 /**
- * Mermaid-style flow diagram of a Compose document: services layered by
- * `depends_on`, plus the networks/volumes they join. SVG renders shapes and
- * edges; absolutely positioned RN views carry the text labels on top (same
- * hybrid pattern as {@link import('../charts/metric-line-chart').MetricLineChart}).
+ * Mermaid-style flow diagram of a Compose document: hosting hostnames feeding
+ * services layered by `depends_on`, plus the networks/volumes they join — all
+ * wrapped in a subgraph-style frame naming the server this scope deploys to
+ * (or will deploy to) when one is set. SVG renders shapes and edges;
+ * absolutely positioned RN views carry the text labels on top (same hybrid
+ * pattern as {@link import('../charts/metric-line-chart').MetricLineChart}).
  * Service nodes link to the matching service detail page when one exists.
  */
 export function ComposeGraphView({
@@ -277,6 +357,7 @@ export function ComposeGraphView({
   services,
   containersByService,
   showServiceStatus,
+  placementLabel,
 }: Readonly<{
   graph: ComposeGraph
   orgId: string
@@ -284,14 +365,28 @@ export function ComposeGraphView({
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   showServiceStatus: boolean
+  /** Effective server for this scope — draws the server frame when set. */
+  placementLabel?: string | null
 }>) {
   if (graph.nodes.length === 0) return null
 
-  const { rects, totalWidth, totalHeight } = computeLayout(graph)
+  const { rects, totalWidth, totalHeight, frame } = computeLayout(
+    graph,
+    Boolean(placementLabel),
+  )
   const serviceByName = new Map(
     services.map((service) => [service.composeServiceName, service]),
   )
-  const accessibilityLabel = describeComposeGraph(graph).join('. ')
+  const hasHosting = graph.nodes.some((node) => node.kind === 'hosting')
+  const hiddenLegendKeys: LegendKey[] = []
+  if (!hasHosting) hiddenLegendKeys.push('hosting')
+  if (!frame) hiddenLegendKeys.push('server')
+  const accessibilityLabel = [
+    placementLabel ? `Deploys to server ${placementLabel}` : null,
+    ...describeComposeGraph(graph),
+  ]
+    .filter(Boolean)
+    .join('. ')
 
   return (
     <View style={styles.wrap}>
@@ -316,8 +411,35 @@ export function ComposeGraphView({
               height={totalHeight}
               style={StyleSheet.absoluteFill}
             >
+              {frame ? (
+                <Rect
+                  x={frame.x}
+                  y={frame.y}
+                  width={frame.w}
+                  height={frame.h}
+                  rx={12}
+                  fill={colors.bgInset}
+                  fillOpacity={0.4}
+                  stroke={colors.borderSubtle}
+                  strokeWidth={1}
+                />
+              ) : null}
               <GraphEdges graph={graph} rects={rects} />
             </Svg>
+            {frame && placementLabel ? (
+              <View
+                style={[
+                  styles.frameLabel,
+                  { left: frame.x + 12, top: frame.y + 5 },
+                ]}
+                importantForAccessibility="no-hide-descendants"
+              >
+                <Text style={styles.frameLabelKind}>server</Text>
+                <Text style={styles.frameLabelName} numberOfLines={1}>
+                  {placementLabel}
+                </Text>
+              </View>
+            ) : null}
             {graph.nodes.map((node) => {
               const rect = rects.get(node.id)
               if (!rect) return null
@@ -336,12 +458,15 @@ export function ComposeGraphView({
                   />
                 )
               }
+              if (node.kind === 'hosting') {
+                return <HostingNodeOverlay key={node.id} node={node} rect={rect} />
+              }
               return <ResourceNodeOverlay key={node.id} node={node} rect={rect} />
             })}
           </View>
         </ScrollView>
       </ScrollView>
-      <GraphLegend />
+      <GraphLegend hidden={hiddenLegendKeys} />
     </View>
   )
 }
@@ -388,6 +513,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flexShrink: 1,
   },
+  serviceKind: {
+    marginLeft: 'auto',
+    color: colors.textFaint,
+    fontSize: 8,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   serviceSubtitle: {
     color: colors.textMuted,
     fontSize: 11,
@@ -429,12 +562,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  hostingNode: {
+    position: 'absolute',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.bgInset,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    paddingHorizontal: 8,
+  },
+  hostingName: {
+    color: colors.textChip,
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
   resourceKind: {
     color: colors.textFaint,
     fontSize: 9,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  frameLabel: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  frameLabelKind: {
+    color: colors.textFaint,
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  frameLabelName: {
+    color: colors.textChip,
+    fontSize: 11,
+    fontWeight: '600',
   },
   legend: {
     flexDirection: 'row',
@@ -477,6 +645,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.textDim,
+    backgroundColor: colors.bgInset,
+  },
+  legendSwatchHosting: {
+    width: 10,
+    height: 7,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.bgInset,
+  },
+  legendSwatchServer: {
+    width: 12,
+    height: 8,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
     backgroundColor: colors.bgInset,
   },
   legendLineDependsOn: {

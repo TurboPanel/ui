@@ -99,7 +99,9 @@ export function RepositoryStep({
         accessibilityLabel="Branch"
         hint={selected?.defaultBranch
           ? `Leave empty to use the repository's default branch (${selected.defaultBranch}).`
-          : "Leave empty to use the repository's default branch."}
+          // No fallback exists on deploy for a repository with no recorded
+          // default branch — an empty binding is `source_ref_unresolved`.
+          : 'This repository records no default branch — name one to deploy.'}
       />
 
       <Text style={panelStyles.muted}>

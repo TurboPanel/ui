@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   COMPOSE_PROJECT_CONFIG_TAB_IDS,
   COMPOSE_PROJECT_LENS_IDS,
+  COMPOSE_PROJECT_SURFACE_TAB_IDS,
   COMPOSE_PROJECT_TAB_IDS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
   isComposeOrTemplateProject,
@@ -15,20 +16,19 @@ import {
   parseProjectEnvironmentId,
   projectComposeEditHref,
   projectComposeHref,
+  projectBindingsHref,
   projectComposeSectionHref,
+  projectEnvironmentBindingsHref,
   projectEnvironmentComposeHref,
   projectEnvironmentHostingHref,
   projectEnvironmentHref,
-  projectEnvironmentMapHref,
   projectEnvironmentServicesHref,
   projectEnvironmentSettingsHref,
   projectEnvironmentStorageHref,
   projectHostingHref,
   projectHref,
-  projectMapHref,
   projectNeedsSetup,
   projectOverviewHref,
-  projectServersHref,
   projectServiceHref,
   projectServicesEditHref,
   projectSetupHref,
@@ -104,22 +104,23 @@ describe('system project predicates', () => {
 })
 
 describe('project href builders', () => {
-  it('builds setup, map, hosting, servers, storage, settings, and service paths', () => {
+  it('builds setup, hosting, bindings, storage, settings, and service paths', () => {
     expect(projectHref('org', 'proj')).toBe('/org/projects/proj')
     expect(projectSetupHref('org', 'proj')).toBe('/org/projects/proj/setup')
-    expect(projectMapHref('org', 'proj')).toBe('/org/projects/proj/map')
     expect(projectHostingHref('org', 'proj')).toBe('/org/projects/proj/hosting')
-    expect(projectServersHref('org', 'proj')).toBe('/org/projects/proj/servers')
+    expect(projectBindingsHref('org', 'proj')).toBe(
+      '/org/projects/proj/bindings',
+    )
     expect(projectStorageHref('org', 'proj')).toBe('/org/projects/proj/storage')
     expect(projectSettingsHref('org', 'proj')).toBe('/org/projects/proj/settings')
     expect(projectServiceHref('org', 'proj', 'svc-1')).toBe(
       '/org/projects/proj/services/svc-1',
     )
-    expect(projectEnvironmentMapHref('org', 'proj', 'env1')).toBe(
-      '/org/projects/proj/environments/env1/map',
-    )
     expect(projectEnvironmentHostingHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1/hosting',
+    )
+    expect(projectEnvironmentBindingsHref('org', 'proj', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/bindings',
     )
     expect(projectEnvironmentStorageHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1/storage',
@@ -130,11 +131,17 @@ describe('project href builders', () => {
   })
 
   it('builds every compose section href for project and environment scope', () => {
-    expect(projectComposeSectionHref('org', 'proj', 'map')).toBe(
-      '/org/projects/proj/map',
+    expect(projectComposeSectionHref('org', 'proj', 'overview')).toBe(
+      '/org/projects/proj/overview',
     )
     expect(projectComposeSectionHref('org', 'proj', 'overview', 'env1')).toBe(
       '/org/projects/proj/environments/env1',
+    )
+    expect(projectComposeSectionHref('org', 'proj', 'services')).toBe(
+      '/org/projects/proj/services',
+    )
+    expect(projectComposeSectionHref('org', 'proj', 'services', 'env1')).toBe(
+      '/org/projects/proj/environments/env1/services',
     )
     expect(projectComposeSectionHref('org', 'proj', 'storage')).toBe(
       '/org/projects/proj/storage',
@@ -193,10 +200,10 @@ describe('path-based environment selection', () => {
     expect(projectEnvironmentServicesHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1/services',
     )
-    // The visual editor is the Services lens, which lives on the overview path.
+    // The visual editor is the Services lens on the `/services` path.
     expect(
       projectComposeEditHref('org', 'proj', { view: 'visual' }),
-    ).toBe('/org/projects/proj/overview')
+    ).toBe('/org/projects/proj/services')
     expect(
       projectComposeEditHref('org', 'proj', {
         environmentId: 'env1',
@@ -249,16 +256,26 @@ describe('path-based environment selection', () => {
     expect(parseComposeProjectTab('/org/projects/proj/compose', 'proj')).toBe(
       'compose',
     )
-    // Retired `/services` resolves to the Services lens.
     expect(parseComposeProjectTab('/org/projects/proj/services', 'proj')).toBe(
+      'services',
+    )
+    // Service detail keeps the Services tab active.
+    expect(
+      parseComposeProjectTab('/org/projects/proj/services/svc1', 'proj'),
+    ).toBe('services')
+    // Retired `/map` resolves to the Overview lens (the topology diagram).
+    expect(parseComposeProjectTab('/org/projects/proj/map', 'proj')).toBe(
       'overview',
     )
-    expect(parseComposeProjectTab('/org/projects/proj/map', 'proj')).toBe('map')
     expect(parseComposeProjectTab('/org/projects/proj/hosting', 'proj')).toBe(
       'hosting',
     )
+    expect(parseComposeProjectTab('/org/projects/proj/bindings', 'proj')).toBe(
+      'bindings',
+    )
+    // Retired `/servers` resolves to the Hosting tab (placement lives there).
     expect(parseComposeProjectTab('/org/projects/proj/servers', 'proj')).toBe(
-      'servers',
+      'hosting',
     )
     expect(parseComposeProjectTab('/org/projects/proj/storage', 'proj')).toBe(
       'storage',
@@ -283,10 +300,10 @@ describe('path-based environment selection', () => {
         '/org/projects/proj/environments/env1/services',
         'proj',
       ),
-    ).toBe('overview')
+    ).toBe('services')
     expect(
       parseComposeProjectTab('/org/projects/proj/environments/env1/map', 'proj'),
-    ).toBe('map')
+    ).toBe('overview')
     expect(
       parseComposeProjectTab(
         '/org/projects/proj/environments/env1/hosting',
@@ -298,7 +315,7 @@ describe('path-based environment selection', () => {
         '/org/projects/proj/environments/env1/servers',
         'proj',
       ),
-    ).toBe('servers')
+    ).toBe('hosting')
     expect(
       projectComposeSectionHref('org', 'proj', 'compose', 'env1'),
     ).toBe('/org/projects/proj/environments/env1/compose')
@@ -306,8 +323,8 @@ describe('path-based environment selection', () => {
       projectComposeSectionHref('org', 'proj', 'hosting'),
     ).toBe('/org/projects/proj/hosting')
     expect(
-      projectComposeSectionHref('org', 'proj', 'servers', 'env1'),
-    ).toBe('/org/projects/proj/environments/env1/servers')
+      projectComposeSectionHref('org', 'proj', 'hosting', 'env1'),
+    ).toBe('/org/projects/proj/environments/env1/hosting')
   })
 
   it('parses environment id from the environments path', () => {
@@ -343,36 +360,45 @@ describe('path-based environment selection', () => {
   it('offers every lens on the create-wizard draft', () => {
     // A draft has no environments and no row to configure — lenses only.
     expect([...DRAFT_COMPOSE_PROJECT_TAB_IDS]).toEqual([
-      'map',
-      'compose',
       'overview',
+      'compose',
+      'services',
     ])
     expect([...COMPOSE_PROJECT_TAB_IDS]).toEqual([
-      'map',
-      'compose',
       'overview',
+      'compose',
+      'services',
       'hosting',
-      'servers',
+      'bindings',
       'storage',
       'settings',
     ])
   })
 
   it('splits lenses from scope configuration', () => {
-    // The lens bar is three items however much the project grows; Hosting is
-    // neither, because it is reached from a service's gutter fact.
+    // The surface nav is the three lenses plus Hosting (server placement +
+    // exposure); Storage and Settings stay off the bar.
     expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual([
-      'map',
-      'compose',
       'overview',
+      'compose',
+      'services',
+    ])
+    expect([...COMPOSE_PROJECT_SURFACE_TAB_IDS]).toEqual([
+      'overview',
+      'compose',
+      'services',
+      'hosting',
+      'bindings',
     ])
     expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual([
-      'servers',
       'storage',
       'settings',
     ])
     for (const tabId of COMPOSE_PROJECT_LENS_IDS) {
       expect(isComposeProjectLens(tabId)).toBe(true)
+      expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
+    }
+    for (const tabId of COMPOSE_PROJECT_SURFACE_TAB_IDS) {
       expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
     }
     for (const tabId of COMPOSE_PROJECT_CONFIG_TAB_IDS) {

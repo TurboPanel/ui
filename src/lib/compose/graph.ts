@@ -9,14 +9,14 @@ import { normalizeCompose } from './types'
 import { parseComposeImageRef } from './image-ref'
 import { readServiceTurbopanelExtension, type ComposeServiceKind } from './service-kind'
 
-export type ComposeGraphNodeKind = 'service' | 'network' | 'volume'
+export type ComposeGraphNodeKind = 'service' | 'network' | 'volume' | 'hosting'
 
 export type ComposeGraphNode = {
   id: string
   kind: ComposeGraphNodeKind
-  /** Raw Compose key (service/network/volume name). */
+  /** Raw Compose key (service/network/volume name), or the hostname for hosting nodes. */
   name: string
-  /** Grid row — services are layered by `depends_on`; networks/volumes sit in the row below all services. */
+  /** Grid row — hosting sits above every service; services are layered by `depends_on`; networks/volumes sit in the row below all services. */
   row: number
   /** Position within the row, in original definition order. */
   column: number
@@ -25,16 +25,25 @@ export type ComposeGraphNode = {
   ports?: string[]
 }
 
-export type ComposeGraphEdgeKind = 'depends_on' | 'network' | 'volume'
+export type ComposeGraphEdgeKind = 'depends_on' | 'network' | 'volume' | 'hosting'
 
 export type ComposeGraphEdge = {
   id: string
   kind: ComposeGraphEdgeKind
-  /** Service node id. */
+  /** Service node id, or the hosting node id for hosting edges (traffic flows in). */
   from: string
-  /** Dependency service node id (depends_on) or network/volume node id. */
+  /** Dependency service node id (depends_on), network/volume node id, or the served service node id (hosting). */
   to: string
 }
+
+/**
+ * Live deployment facts overlaid on the pure compose topology — a hostname
+ * per compose service name (first configured hosting row). Everything here is
+ * optional; without facts the graph is compose-only, exactly as before.
+ */
+export type ComposeGraphFacts = Readonly<{
+  hostnamesByService?: Readonly<Record<string, string>>
+}>
 
 export type ComposeGraph = {
   nodes: ComposeGraphNode[]
@@ -266,6 +275,37 @@ function appendResourceNodes(
   return resourceColumn
 }
 
+/**
+ * Insert hostname nodes in a new top row (row 0) with an edge into each
+ * served service — traffic flows hosting → service. Shifts every existing
+ * node down one row; a no-op when no service has a hostname.
+ */
+function attachHostingNodes(
+  nodes: ComposeGraphNode[],
+  edges: ComposeGraphEdge[],
+  hostnamesByService: Readonly<Record<string, string>>,
+): void {
+  const served = nodes.filter(
+    (node) => node.kind === 'service' && hostnamesByService[node.name],
+  )
+  if (served.length === 0) return
+  for (const node of nodes) node.row += 1
+  let column = 0
+  for (const service of served) {
+    const hostname = hostnamesByService[service.name]
+    if (!hostname) continue
+    const id = `host:${service.name}`
+    nodes.push({ id, kind: 'hosting', name: hostname, row: 0, column })
+    column += 1
+    edges.push({
+      id: `host:${hostname}->${service.name}`,
+      kind: 'hosting',
+      from: id,
+      to: service.id,
+    })
+  }
+}
+
 function graphGridSize(nodes: readonly ComposeGraphNode[]): { columns: number; rows: number } {
   if (nodes.length === 0) return { columns: 0, rows: 0 }
   const rowWidths = new Map<number, number>()
@@ -284,9 +324,13 @@ function graphGridSize(nodes: readonly ComposeGraphNode[]): { columns: number; r
  * volumes sit in one shared row beneath every service layer. When no service
  * declares `networks` at all, an implicit `default` network node joins every
  * service — mirroring real Compose behavior (Compose always creates a
- * project-default network when none is declared).
+ * project-default network when none is declared). Optional {@link ComposeGraphFacts}
+ * add live hosting nodes (hostnames) above the service layers.
  */
-export function buildComposeGraph(document: unknown): ComposeGraph {
+export function buildComposeGraph(
+  document: unknown,
+  facts?: ComposeGraphFacts,
+): ComposeGraph {
   const normalized = normalizeCompose(document)
   const services = mapEntries(normalized.data.services)
   const namedVolumes = new Set(mapEntries(normalized.data.volumes).map(([name]) => name))
@@ -316,6 +360,10 @@ export function buildComposeGraph(document: unknown): ComposeGraph {
   )
   appendResourceNodes(nodes, edges, volumeMembers, 'volume', resourceRow, afterNetworks)
 
+  if (facts?.hostnamesByService) {
+    attachHostingNodes(nodes, edges, facts.hostnamesByService)
+  }
+
   const { columns, rows } = graphGridSize(nodes)
   return { nodes, edges, columns, rows }
 }
@@ -341,8 +389,13 @@ export function describeComposeGraph(graph: ComposeGraph): string[] {
       .filter((edge) => edge.kind === 'volume' && edge.from === node.id)
       .map((edge) => byId.get(edge.to)?.name)
       .filter((name): name is string => Boolean(name))
+    const hostnames = graph.edges
+      .filter((edge) => edge.kind === 'hosting' && edge.to === node.id)
+      .map((edge) => byId.get(edge.from)?.name)
+      .filter((name): name is string => Boolean(name))
 
     const parts = [node.name]
+    if (hostnames.length > 0) parts.push(`served at ${hostnames.join(', ')}`)
     if (dependsOn.length > 0) parts.push(`depends on ${dependsOn.join(', ')}`)
     if (networks.length > 0) parts.push(`on network ${networks.join(', ')}`)
     if (volumes.length > 0) parts.push(`mounts volume ${volumes.join(', ')}`)

@@ -8,14 +8,16 @@ import {
 } from '@/lib/project-navigation'
 
 /**
- * Services lens — the compose services as cards, for one environment
- * (`/environments/:environmentId/services`).
+ * Environment-scope Bindings editor — system users + bound databases
+ * (`/environments/:environmentId/bindings`).
  */
-export default function ProjectEnvironmentServicesScreen() {
+export default function ProjectEnvironmentBindingsScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
 
   if (isSystemProject) {
-    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+    return (
+      <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+    )
   }
   if (project && isManagedProject(project)) {
     return <ManagedFocusTab focus="overview" />

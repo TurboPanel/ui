@@ -50,7 +50,7 @@ describe('SETUP_TYPE_OPTIONS', () => {
   it('lands the repository card on the compose surface as docker-compose', () => {
     const repository = setupOptionForChoice('repository')
     expect(repository?.type).toBe('docker-compose')
-    expect(repository?.section).toBe('overview')
+    expect(repository?.section).toBe('services')
   })
 
   /**
@@ -78,13 +78,13 @@ describe('SETUP_TYPE_OPTIONS', () => {
     expect(services?.type).toBe('docker-compose')
     // Compose lens vs the Services lens (service list, on the overview path).
     expect(compose?.section).toBe('compose')
-    expect(services?.section).toBe('overview')
+    expect(services?.section).toBe('services')
   })
 
   it('opens every compose draft on a lens the operator picked', () => {
     for (const option of SETUP_TYPE_OPTIONS) {
       if (option.type !== 'docker-compose') continue
-      expect(['compose', 'overview']).toContain(option.section)
+      expect(['compose', 'services', 'overview']).toContain(option.section)
     }
   })
 
@@ -158,7 +158,7 @@ describe('the Hosting card', () => {
     // second deploy-prepare, and second read paths.
     const hosting = setupOptionForChoice('hosting')
     expect(hosting?.type).toBe('docker-compose')
-    expect(hosting?.section).toBe('overview')
+    expect(hosting?.section).toBe('services')
   })
 
   it('does not sit ahead of Compose', () => {

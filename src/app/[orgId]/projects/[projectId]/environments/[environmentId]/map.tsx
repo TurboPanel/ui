@@ -1,24 +1,31 @@
-import { Redirect, type Href } from 'expo-router'
-import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
-import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  isManagedProject,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
+import { projectComposeSectionHref } from '@/lib/project-navigation'
+
+function firstParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return value ?? ''
+}
 
 /**
- * Overview lens — compose topology for one environment
- * (`/environments/:environmentId/map`).
+ * Retired route — the topology Overview for an environment lives at the bare
+ * `/environments/:environmentId` path now.
  */
 export default function ProjectEnvironmentMapScreen() {
-  const { orgId, projectId, project, isSystemProject } = useProjectContext()
-
-  if (isSystemProject) {
-    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
-  }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
-  return <ProjectOverviewTab />
+  const { orgId, projectId } = useProjectContext()
+  const { environmentId } = useLocalSearchParams<{
+    environmentId: string | string[]
+  }>()
+  return (
+    <Redirect
+      href={
+        projectComposeSectionHref(
+          orgId,
+          projectId,
+          'overview',
+          firstParam(environmentId) || null,
+        ) as Href
+      }
+    />
+  )
 }

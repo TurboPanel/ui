@@ -159,7 +159,7 @@ export function ComposeInheritedPanel({
     <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
       <View style={styles.body}>
         <InlineNotice
-          title="Inheriting project compose"
+          title="Using project compose"
           body={inheritedDescription(view, hasBase)}
           actions={actions}
         />

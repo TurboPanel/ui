@@ -47,17 +47,20 @@ export function projectTypeLabel(project: ProjectRecord): string {
 /**
  * Compose project section tabs inside the editor chrome. Project · environment
  * scope chips stay in the header; switching scope keeps the active tab.
- * `map` (Overview), `compose` (Compose), and `overview` (Services) are
- * **lenses** on one artifact and live in the surface lens bar, in that order.
- * Hosting / Servers / Storage / Settings are configuration routes reached from
- * a service row or the scope-strip gear — never a nav list.
+ * `overview` (topology diagram), `compose` (YAML), and `services` (service
+ * cards) are **lenses** on one artifact; the surface nav bar shows them plus
+ * `hosting` (server placement and exposure) and `bindings` (system users and
+ * bound databases). Storage / Settings are configuration routes reached from a
+ * service row or the scope-strip gear. `servers` is retired — placement lives
+ * on the Hosting tab and `/servers` paths redirect there. `/map` is the
+ * retired Overview path and redirects to `/overview`.
  */
 export const COMPOSE_PROJECT_TAB_IDS = [
-  'map',
-  'compose',
   'overview',
+  'compose',
+  'services',
   'hosting',
-  'servers',
+  'bindings',
   'storage',
   'settings',
 ] as const
@@ -66,9 +69,9 @@ export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
 
 /** Create-wizard draft has no environments and no row to configure — lenses only. */
 export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
-  'map',
-  'compose',
   'overview',
+  'compose',
+  'services',
 ] as const
 
 /** Platform projects never accept mutations from the UI. */
@@ -77,17 +80,34 @@ export function systemProjectAllowsMutations(): boolean {
 }
 
 export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
-  map: 'Overview',
+  overview: 'Overview',
   compose: 'Compose',
-  overview: 'Services',
+  services: 'Services',
   hosting: 'Hosting',
-  servers: 'Servers',
+  bindings: 'Bindings',
   storage: 'Storage',
   settings: 'Settings',
 }
 
 /** The three lenses on the compose artifact, in lens-bar order. */
-export const COMPOSE_PROJECT_LENS_IDS = ['map', 'compose', 'overview'] as const
+export const COMPOSE_PROJECT_LENS_IDS = [
+  'overview',
+  'compose',
+  'services',
+] as const
+
+/**
+ * Tabs on the surface nav bar, in order: the three lenses plus Hosting
+ * (server placement and hostnames / proxying) and Bindings (system users and
+ * bound databases — what a service deploys *as* and connects *to*).
+ */
+export const COMPOSE_PROJECT_SURFACE_TAB_IDS = [
+  'overview',
+  'compose',
+  'services',
+  'hosting',
+  'bindings',
+] as const
 
 export function isComposeProjectLens(
   tabId: ComposeProjectTabId,
@@ -100,7 +120,6 @@ export function isComposeProjectLens(
  * Not lenses, and deliberately not a nav list.
  */
 export const COMPOSE_PROJECT_CONFIG_TAB_IDS: readonly ComposeProjectTabId[] = [
-  'servers',
   'storage',
   'settings',
 ]
@@ -147,7 +166,10 @@ export function projectTabHref(
   return `${projectHref(orgId, projectId)}/${tabId}`
 }
 
-/** Overview Base compose — no environment segment, no query. */
+/**
+ * Overview (topology diagram) for Project scope — no environment segment,
+ * no query. Path: `/projects/:projectId/overview`
+ */
 export function projectOverviewHref(orgId: string, projectId: string): string {
   return projectTabHref(orgId, projectId, 'overview')
 }
@@ -172,7 +194,7 @@ export function projectServicesEditHref(
 }
 
 /**
- * Hosting (hostnames / ports / TLS) for Project scope.
+ * Hosting (server placement + hostnames / ports / TLS) for Project scope.
  * Path: `/projects/:projectId/hosting`
  */
 export function projectHostingHref(orgId: string, projectId: string): string {
@@ -180,31 +202,11 @@ export function projectHostingHref(orgId: string, projectId: string): string {
 }
 
 /**
- * Server placement for Project scope (default project server).
- * Path: `/projects/:projectId/servers`
+ * Bindings (system users + bound databases) for Project scope.
+ * Path: `/projects/:projectId/bindings`
  */
-export function projectServersHref(orgId: string, projectId: string): string {
-  return `${projectHref(orgId, projectId)}/servers`
-}
-
-/**
- * Topology map lens for Project scope.
- * Path: `/projects/:projectId/map`
- */
-export function projectMapHref(orgId: string, projectId: string): string {
-  return `${projectHref(orgId, projectId)}/map`
-}
-
-/**
- * Topology map lens for an environment.
- * Path: `/projects/:projectId/environments/:environmentId/map`
- */
-export function projectEnvironmentMapHref(
-  orgId: string,
-  projectId: string,
-  environmentId: string,
-): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/map`
+export function projectBindingsHref(orgId: string, projectId: string): string {
+  return `${projectHref(orgId, projectId)}/bindings`
 }
 
 /**
@@ -224,7 +226,8 @@ export function projectSettingsHref(orgId: string, projectId: string): string {
 }
 
 /**
- * Selected environment on Overview (compose overlay / lifecycle).
+ * Overview (topology diagram) with a concrete environment selected —
+ * compose overlay / lifecycle scope.
  * Path: `/projects/:projectId/environments/:environmentId`
  */
 export function projectEnvironmentHref(
@@ -272,15 +275,15 @@ export function projectEnvironmentHostingHref(
 }
 
 /**
- * Server pin for an environment.
- * Path: `/projects/:projectId/environments/:environmentId/servers`
+ * Bindings for an environment.
+ * Path: `/projects/:projectId/environments/:environmentId/bindings`
  */
-export function projectEnvironmentServersHref(
+export function projectEnvironmentBindingsHref(
   orgId: string,
   projectId: string,
   environmentId: string,
 ): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/servers`
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/bindings`
 }
 
 /**
@@ -384,12 +387,17 @@ export function parseComposeProjectTab(
 ): ComposeProjectTabId {
   const view = parseComposeEditView(pathname, projectId)
   if (view === 'editor') return 'compose'
-  // The visual editor is the Services lens, which lives on the overview path.
-  if (view === 'visual') return 'overview'
+  // The visual editor is the Services lens (`/services` paths).
+  if (view === 'visual') return 'services'
   const suffix = composePathSectionSegment(pathname, projectId)
-  if (suffix === 'map') return 'map'
+  // Retired `/map` — the topology diagram lives on the Overview path now.
+  if (suffix === 'map') return 'overview'
+  // `/services/:serviceId` detail (bare `/services` already resolved above).
+  if (suffix === 'services') return 'services'
   if (suffix === 'hosting') return 'hosting'
-  if (suffix === 'servers') return 'servers'
+  // Retired `/servers` — placement lives on the Hosting tab now.
+  if (suffix === 'servers') return 'hosting'
+  if (suffix === 'bindings') return 'bindings'
   if (suffix === 'storage') return 'storage'
   if (suffix === 'settings') return 'settings'
   return 'overview'
@@ -416,7 +424,10 @@ const COMPOSE_SECTION_HREFS: Readonly<
     environment: projectEnvironmentHref,
     project: projectOverviewHref,
   },
-  map: { environment: projectEnvironmentMapHref, project: projectMapHref },
+  services: {
+    environment: projectEnvironmentServicesHref,
+    project: projectServicesEditHref,
+  },
   compose: {
     environment: projectEnvironmentComposeHref,
     project: projectComposeHref,
@@ -425,9 +436,9 @@ const COMPOSE_SECTION_HREFS: Readonly<
     environment: projectEnvironmentHostingHref,
     project: projectHostingHref,
   },
-  servers: {
-    environment: projectEnvironmentServersHref,
-    project: projectServersHref,
+  bindings: {
+    environment: projectEnvironmentBindingsHref,
+    project: projectBindingsHref,
   },
   storage: {
     environment: projectEnvironmentStorageHref,
@@ -465,7 +476,7 @@ export function projectComposeEditHref(
   }> = {},
 ): string {
   const view = options.view ?? 'editor'
-  const tab: ComposeProjectTabId = view === 'visual' ? 'overview' : 'compose'
+  const tab: ComposeProjectTabId = view === 'visual' ? 'services' : 'compose'
   return projectComposeSectionHref(
     orgId,
     projectId,
@@ -516,7 +527,8 @@ export function parseProjectEnvironmentId(
 
 /**
  * True on Overview Base (`…/overview`, `/compose`, `/services`, `/hosting`,
- * `/servers`, `/storage`, `/settings`, or bare index).
+ * `/bindings`, retired `/servers` and `/map`, `/storage`, `/settings`, or
+ * bare index).
  */
 export function isProjectOverviewBasePath(
   pathname: string,
@@ -529,6 +541,7 @@ export function isProjectOverviewBasePath(
   // Bare `/services` (edit) and `/services/:id` (detail) live under Project scope.
   if (pathname.includes(`/projects/${projectId}/services`)) return true
   if (pathname.includes(`/projects/${projectId}/hosting`)) return true
+  if (pathname.includes(`/projects/${projectId}/bindings`)) return true
   if (pathname.includes(`/projects/${projectId}/servers`)) return true
   if (pathname.includes(`/projects/${projectId}/map`)) return true
   if (pathname.includes(`/projects/${projectId}/storage`)) return true

@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
-import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   Button,
@@ -26,14 +25,13 @@ import {
 import { buildProjectOptionsPatch } from '@/lib/project-options'
 import {
   useDeleteEnvironment,
-  useProjectPrincipals,
   useUpdateProject,
   useVariables,
 } from '@/lib/queries'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
-type ProjectAddKind = 'variables' | 'principals'
+type ProjectAddKind = 'variables'
 type EnvironmentAddKind = 'variables'
 
 function openAddKind<K extends string>(
@@ -257,7 +255,6 @@ export function ProjectSettingsPanel({
   const router = useRouter()
   const updateProjectMutation = useUpdateProject(orgId, projectId)
   const variablesQuery = useVariables(orgId, { projectId })
-  const principalsQuery = useProjectPrincipals(orgId, projectId)
   const [opened, setOpened] = useState<ReadonlySet<ProjectAddKind>>(
     () => new Set(),
   )
@@ -277,10 +274,8 @@ export function ProjectSettingsPanel({
   const canEdit = canManage && projectAllowsMutations
   const canMove = canOwn && projectAllowsMutations
   const hasVariables = (variablesQuery.data?.variables?.length ?? 0) > 0
-  const hasPrincipals = (principalsQuery.data?.principals?.length ?? 0) > 0
 
   const showVariables = hasVariables || opened.has('variables')
-  const showPrincipals = hasPrincipals || opened.has('principals')
 
   const openKind = (kind: ProjectAddKind) => {
     openAddKind(kind, setOpened, setAddSeed)
@@ -289,9 +284,6 @@ export function ProjectSettingsPanel({
   const pendingAdds: { kind: ProjectAddKind; label: string }[] = []
   if (!showVariables) {
     pendingAdds.push({ kind: 'variables', label: 'Add Variable' })
-  }
-  if (!showPrincipals) {
-    pendingAdds.push({ kind: 'principals', label: 'Add System user' })
   }
 
   return (
@@ -311,17 +303,6 @@ export function ProjectSettingsPanel({
             embedded
             showPresets
             initialShowAdd={opened.has('variables') && !hasVariables}
-          />
-        </ResourceSection>
-      ) : null}
-
-      {showPrincipals ? (
-        <ResourceSection title="System users" hint={scopeHint}>
-          <ProjectPrincipalsSection
-            orgId={orgId}
-            projectId={projectId}
-            canManage={canManage && projectAllowsMutations}
-            embedded
           />
         </ResourceSection>
       ) : null}

@@ -3,7 +3,9 @@ import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
+import { EnvironmentBindingsPanel } from '@/components/org/environment-bindings-panel'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
+import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
@@ -25,10 +27,10 @@ function resolveInheritServerLabel(
   projectDefaultServerId: string | null,
 ): string {
   if (inheritedServer) {
-    return `Inheriting project server: ${serverDisplayName(inheritedServer)}`
+    return `Using project server: ${serverDisplayName(inheritedServer)}`
   }
   if (projectDefaultServerId) {
-    return 'Inheriting project server'
+    return 'Using project server'
   }
   return 'No project server set — pick a server for this environment'
 }
@@ -74,9 +76,29 @@ function EnvironmentHostingPanel({
   )
 }
 
+/** Default project server pin — leads the Hosting tab on Project scope. */
+function ProjectDefaultServerPanel() {
+  const { project, canManage, projectAllowsMutations } = useProjectContext()
+  const canEdit = canManage && projectAllowsMutations
+  return (
+    <SectionPanel
+      title="Default project server"
+      hint="Applies to every environment that does not pin its own server"
+    >
+      {canEdit && project ? (
+        <ProjectServerHeaderControl />
+      ) : (
+        <Text style={panelStyles.muted}>View only</Text>
+      )}
+    </SectionPanel>
+  )
+}
+
 /**
- * Hosting tab: hostnames / ports / TLS for the active scope.
- * Project scope lists every environment; environment scope edits that env only.
+ * Hosting tab: where the scope runs and how it is reached — the server pin
+ * first (deploys go nowhere without one), then hostnames / ports / TLS /
+ * proxying. Project scope shows the default project server plus every
+ * environment; environment scope edits that env only.
  */
 export function ComposeHostingTab() {
   const {
@@ -101,29 +123,121 @@ export function ComposeHostingTab() {
   }
 
   if (baseSelected) {
-    if (environments.length === 0) {
-      return (
-        <ResourceTabChrome>
-          <EmptyState title="Add an environment to configure hosting." />
-        </ResourceTabChrome>
-      )
-    }
     const showHeadings = environments.length > 1
     return (
       <ResourceTabChrome>
+        <ProjectDefaultServerPanel />
+        {environments.length === 0 ? (
+          <EmptyState title="Add an environment to configure hosting." />
+        ) : (
+          environments.map((environment) => (
+            <View key={environment.id} style={styles.envBlock}>
+              {showHeadings ? (
+                <Text style={panelStyles.detailTitle}>
+                  {environment.name?.trim() || 'Environment'}
+                </Text>
+              ) : null}
+              <EnvironmentServersPanel selectedEnvironment={environment} />
+              <EnvironmentHostingPanel
+                orgId={orgId}
+                projectId={projectId}
+                environmentId={environment.id}
+                focusHostingId={focusHostingId}
+              />
+            </View>
+          ))
+        )}
+      </ResourceTabChrome>
+    )
+  }
+
+  if (!selectedEnvironment) {
+    return (
+      <ResourceTabChrome>
+        <Text style={panelStyles.muted}>Select an environment.</Text>
+      </ResourceTabChrome>
+    )
+  }
+
+  return (
+    <ResourceTabChrome>
+      <EnvironmentServersPanel selectedEnvironment={selectedEnvironment} />
+      <EnvironmentHostingPanel
+        orgId={orgId}
+        projectId={projectId}
+        environmentId={selectedEnvironment.id}
+        focusHostingId={focusHostingId}
+      />
+    </ResourceTabChrome>
+  )
+}
+
+/**
+ * Project-wide Linux accounts. Lives on the Bindings tab because a system
+ * user is what a service deploys *as*: native releases publish into the
+ * account's home, and the daemon skips any release with nobody assigned.
+ */
+function SystemUsersPanel() {
+  const { orgId, projectId, canManage, projectAllowsMutations } =
+    useProjectContext()
+  return (
+    <SectionPanel
+      title="System users"
+      hint="Project-wide — native releases deploy into a system user's home"
+    >
+      <ProjectPrincipalsSection
+        orgId={orgId}
+        projectId={projectId}
+        canManage={canManage && projectAllowsMutations}
+        embedded
+      />
+    </SectionPanel>
+  )
+}
+
+/**
+ * Bindings tab: what a service deploys as and connects to — system users
+ * (project principals) first, then the databases bound into each environment.
+ * Project scope stacks every environment; environment scope narrows to it.
+ */
+export function ComposeBindingsTab() {
+  const {
+    orgId,
+    environments,
+    selectedEnvironment,
+    baseSelected,
+    canManage,
+    projectAllowsMutations,
+    draft,
+  } = useProjectContext()
+  const canEdit = canManage && projectAllowsMutations
+
+  if (draft) {
+    return (
+      <ResourceTabChrome>
+        <EmptyState title="Create the project to add system users and databases." />
+      </ResourceTabChrome>
+    )
+  }
+
+  if (baseSelected) {
+    const showHeadings = environments.length > 1
+    return (
+      <ResourceTabChrome>
+        <SystemUsersPanel />
         {environments.map((environment) => (
-          <EnvironmentHostingPanel
-            key={environment.id}
-            orgId={orgId}
-            projectId={projectId}
-            environmentId={environment.id}
-            focusHostingId={focusHostingId}
-            heading={
-              showHeadings
-                ? environment.name?.trim() || 'Environment'
-                : undefined
-            }
-          />
+          <View key={environment.id} style={styles.envBlock}>
+            {showHeadings ? (
+              <Text style={panelStyles.detailTitle}>
+                {environment.name?.trim() || 'Environment'}
+              </Text>
+            ) : null}
+            <EnvironmentBindingsPanel
+              orgId={orgId}
+              environmentId={environment.id}
+              canManage={canEdit}
+            />
+          </View>
         ))}
       </ResourceTabChrome>
     )
@@ -139,11 +253,11 @@ export function ComposeHostingTab() {
 
   return (
     <ResourceTabChrome>
-      <EnvironmentHostingPanel
+      <SystemUsersPanel />
+      <EnvironmentBindingsPanel
         orgId={orgId}
-        projectId={projectId}
         environmentId={selectedEnvironment.id}
-        focusHostingId={focusHostingId}
+        canManage={canEdit}
       />
     </ResourceTabChrome>
   )
@@ -190,10 +304,8 @@ function EnvironmentServerPinBody({
 
 function EnvironmentServersPanel({
   selectedEnvironment,
-  title,
 }: Readonly<{
   selectedEnvironment: EnvironmentRecord
-  title?: string
 }>) {
   const { orgId, project, canManage, projectAllowsMutations, setError } =
     useProjectContext()
@@ -212,7 +324,7 @@ function EnvironmentServersPanel({
 
   return (
     <SectionPanel
-      title={title ?? 'Server'}
+      title="Server"
       hint="This environment only — deploys to one server"
     >
       <EnvironmentServerPinBody
@@ -241,69 +353,6 @@ function EnvironmentServersPanel({
         }}
       />
     </SectionPanel>
-  )
-}
-
-/**
- * Servers tab: project default pin on Project scope; environment override
- * (or inherit) on an environment chip.
- */
-export function ComposeServersTab() {
-  const {
-    project,
-    environments,
-    selectedEnvironment,
-    baseSelected,
-    canManage,
-    projectAllowsMutations,
-    draft,
-  } = useProjectContext()
-  const canEdit = canManage && projectAllowsMutations
-
-  if (draft) {
-    return (
-      <ResourceTabChrome>
-        <EmptyState title="Create the project to choose a server." />
-      </ResourceTabChrome>
-    )
-  }
-
-  if (baseSelected) {
-    return (
-      <ResourceTabChrome>
-        <SectionPanel
-          title="Default project server"
-          hint="Applies to every environment that does not pin its own server"
-        >
-          {canEdit && project ? (
-            <ProjectServerHeaderControl />
-          ) : (
-            <Text style={panelStyles.muted}>View only</Text>
-          )}
-        </SectionPanel>
-        {environments.map((environment) => (
-          <EnvironmentServersPanel
-            key={environment.id}
-            selectedEnvironment={environment}
-            title={environment.name?.trim() || 'Environment'}
-          />
-        ))}
-      </ResourceTabChrome>
-    )
-  }
-
-  if (!selectedEnvironment) {
-    return (
-      <ResourceTabChrome>
-        <Text style={panelStyles.muted}>Select an environment.</Text>
-      </ResourceTabChrome>
-    )
-  }
-
-  return (
-    <ResourceTabChrome>
-      <EnvironmentServersPanel selectedEnvironment={selectedEnvironment} />
-    </ResourceTabChrome>
   )
 }
 

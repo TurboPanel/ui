@@ -1,18 +1,20 @@
-import { Redirect, type Href } from 'expo-router'
-import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   isManagedProject,
+  projectEnvironmentHostingHref,
+  projectHostingHref,
   projectOverviewHref,
 } from '@/lib/project-navigation'
 
 /**
- * Environment-scope Servers editor
- * (`/environments/:environmentId/servers`).
+ * Retired route — server placement lives on the Hosting tab
+ * (`/environments/:environmentId/hosting`).
  */
 export default function ProjectEnvironmentServersScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  const { environmentId } = useLocalSearchParams<{ environmentId?: string }>()
 
   if (isSystemProject) {
     return (
@@ -22,5 +24,9 @@ export default function ProjectEnvironmentServersScreen() {
   if (project && isManagedProject(project)) {
     return <ManagedFocusTab focus="overview" />
   }
-  return <ProjectOverviewTab />
+  const href =
+    typeof environmentId === 'string' && environmentId
+      ? projectEnvironmentHostingHref(orgId, projectId, environmentId)
+      : projectHostingHref(orgId, projectId)
+  return <Redirect href={href as Href} />
 }

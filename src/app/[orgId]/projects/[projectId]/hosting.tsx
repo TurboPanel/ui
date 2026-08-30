@@ -7,7 +7,7 @@ import {
 } from '@/lib/project-navigation'
 
 /**
- * Project-scope Hosting editor
+ * Project-scope Hosting editor — server placement + hosting
  * (`/projects/:projectId/hosting`).
  */
 export default function ProjectHostingScreen() {

@@ -8,7 +8,7 @@ import {
 } from '@/lib/project-navigation'
 
 /**
- * Environment-scope Hosting editor
+ * Environment-scope Hosting editor — server placement + hosting
  * (`/environments/:environmentId/hosting`).
  */
 export default function ProjectEnvironmentHostingScreen() {

@@ -2,13 +2,15 @@ import { Link, usePathname, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   ComposeEditorIcon,
+  ComposeHostingIcon,
   ComposeOverviewIcon,
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
+import { BindingResourceIcon } from '@/components/icons/resource-icons'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
-  COMPOSE_PROJECT_LENS_IDS,
+  COMPOSE_PROJECT_SURFACE_TAB_IDS,
   COMPOSE_PROJECT_TAB_LABELS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
   parseComposeProjectTab,
@@ -19,28 +21,32 @@ import {
 import { chrome, colors, webPointer } from '@/lib/theme'
 
 /**
- * Icon per lens. Services reuses the service-cards glyph because that is what
- * it renders — the compose services as rows, not a diagram.
+ * Icon per nav tab. Services reuses the service-cards glyph because that is
+ * what it renders — the compose services as rows, not a diagram. Hosting is
+ * the globe (server placement and exposure); Bindings is the chain links
+ * (system users and bound databases).
  */
-const LENS_ICONS = {
-  map: ComposeOverviewIcon,
+const NAV_TAB_ICONS = {
+  overview: ComposeOverviewIcon,
   compose: ComposeEditorIcon,
-  overview: ComposeVisualIcon,
+  services: ComposeVisualIcon,
+  hosting: ComposeHostingIcon,
+  bindings: BindingResourceIcon,
 } as const satisfies Partial<
   Record<ComposeProjectTabId, typeof ComposeEditorIcon>
 >
 
-type LensId = keyof typeof LENS_ICONS
+type NavTabId = keyof typeof NAV_TAB_ICONS
 
-function isLens(tabId: ComposeProjectTabId): tabId is LensId {
-  return tabId in LENS_ICONS
+function isNavTab(tabId: ComposeProjectTabId): tabId is NavTabId {
+  return tabId in NAV_TAB_ICONS
 }
 
-function LensFace({
+function NavTabFace({
   tabId,
   active,
-}: Readonly<{ tabId: LensId; active: boolean }>) {
-  const Icon = LENS_ICONS[tabId]
+}: Readonly<{ tabId: NavTabId; active: boolean }>) {
+  const Icon = NAV_TAB_ICONS[tabId]
   return (
     <View style={styles.face}>
       <Icon size={14} color={active ? chrome.accent : colors.textMuted} />
@@ -52,13 +58,14 @@ function LensFace({
 }
 
 /**
- * Lens bar: **Overview · Compose · Services** — three representations of one
- * compose artifact, not a list of places.
+ * Surface nav: **Overview · Compose · Services · Hosting · Bindings** — the
+ * three lenses on one compose artifact, plus Hosting (server placement and
+ * exposure: hostnames / proxying / TLS) and Bindings (system users and bound
+ * databases: what a service deploys as and connects to).
  *
- * The project editor deliberately has no section nav. Hosting, Storage,
- * Servers, and Settings are reached from the object they belong to (a
- * service's gutter fact in the Services lens, or the scope-strip gear), which
- * is why this bar stays three items wide however much the project grows.
+ * Storage and Settings stay off this bar — they are reached from the object
+ * they belong to (a service's gutter fact in the Services lens, or the
+ * scope-strip gear). Create-wizard drafts show the lenses only.
  */
 export function ComposeSurfaceNav() {
   const pathname = usePathname()
@@ -67,19 +74,19 @@ export function ComposeSurfaceNav() {
   const activeTab = draft
     ? draft.section
     : parseComposeProjectTab(pathname, projectId)
-  const lensIds = draft
+  const tabIds = draft
     ? DRAFT_COMPOSE_PROJECT_TAB_IDS
-    : COMPOSE_PROJECT_LENS_IDS
+    : COMPOSE_PROJECT_SURFACE_TAB_IDS
 
   return (
     <View style={styles.bar}>
       <View style={[panelStyles.segmentGroup, styles.group]}>
-        {lensIds.filter(isLens).map((tabId) => {
-          // A non-lens route (Storage, Settings, …) keeps Services lit: those
-          // are configuration reached from a service row, not a fourth lens.
-          const active = isLens(activeTab)
+        {tabIds.filter(isNavTab).map((tabId) => {
+          // An off-bar route (Storage, Settings) keeps Services lit: those
+          // are configuration reached from a service row, not a fifth tab.
+          const active = isNavTab(activeTab)
             ? activeTab === tabId
-            : tabId === 'overview'
+            : tabId === 'services'
           const style = StyleSheet.flatten([
             styles.lens,
             active && styles.lensActive,
@@ -96,7 +103,7 @@ export function ComposeSurfaceNav() {
                 style={style}
                 onPress={() => draft.setSection(tabId)}
               >
-                <LensFace tabId={tabId} active={active} />
+                <NavTabFace tabId={tabId} active={active} />
               </Pressable>
             )
           }
@@ -120,7 +127,7 @@ export function ComposeSurfaceNav() {
                 accessibilityLabel={COMPOSE_PROJECT_TAB_LABELS[tabId]}
                 style={style}
               >
-                <LensFace tabId={tabId} active={active} />
+                <NavTabFace tabId={tabId} active={active} />
               </Pressable>
             </Link>
           )

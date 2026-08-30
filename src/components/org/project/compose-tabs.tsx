@@ -25,8 +25,8 @@ import {
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
 import {
+  ComposeBindingsTab,
   ComposeHostingTab,
-  ComposeServersTab,
   ComposeSettingsTab,
   ComposeStorageTab,
 } from '@/components/org/project/compose-resource-tabs'
@@ -123,7 +123,8 @@ function draftSectionView(
 ): ComposeEditorView | null {
   if (section === 'compose') return 'editor'
   // Services lens — the compose services as a list.
-  if (section === 'overview') return 'visual'
+  if (section === 'services') return 'visual'
+  // Overview — the topology diagram.
   return null
 }
 
@@ -148,9 +149,9 @@ function resolveComposeSectionView(
 ): ComposeEditorView | null {
   if (draft) return draftSectionView(draft.section)
   const tab = parseComposeProjectTab(pathname, projectId)
-  if (tab === 'map') return null
+  if (tab === 'overview') return null
   if (tab === 'compose') return 'editor'
-  if (tab === 'overview') return 'visual'
+  if (tab === 'services') return 'visual'
   return parseComposeEditView(pathname, projectId)
 }
 
@@ -180,15 +181,16 @@ function isComposeServicesLoading(
 }
 
 /**
- * Hosting / Servers / Storage / Settings are dedicated surface tabs;
- * everything else is Overview · Compose · Services.
+ * Hosting / Bindings / Storage / Settings are dedicated surface tabs;
+ * everything else is Overview · Compose · Services. Hosting carries server
+ * placement; Bindings carries system users and bound databases.
  */
 function composeSurfaceBody(
   activeTab: ComposeProjectTabId,
   overviewBody: ReactNode,
 ): ReactNode {
   if (activeTab === 'hosting') return <ComposeHostingTab />
-  if (activeTab === 'servers') return <ComposeServersTab />
+  if (activeTab === 'bindings') return <ComposeBindingsTab />
   if (activeTab === 'storage') return <ComposeStorageTab />
   if (activeTab === 'settings') return <ComposeSettingsTab />
   return overviewBody
@@ -312,6 +314,7 @@ function ProjectOverviewCompose({
   saving,
   onSave,
   onDiscard,
+  documentFacts,
 }: Readonly<{
   projectId: string
   orgId: string
@@ -328,6 +331,7 @@ function ProjectOverviewCompose({
   saving: boolean
   onSave: () => void
   onDiscard: () => void
+  documentFacts: ComposeDocFacts
 }>) {
   const projectSummary = summarizeComposeDocument(proposedDoc)
   const inventory: InventoryStripItem[] = [
@@ -373,6 +377,7 @@ function ProjectOverviewCompose({
       services={services}
       containersByService={containersByService}
       showServiceStatus={false}
+      documentFacts={documentFacts}
       draftSource={isDirty ? overviewSource : undefined}
       onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
       toolbarTrailing={overviewSaveTrailing(
@@ -403,6 +408,7 @@ function EnvironmentOverviewCompose({
   saving,
   onSave,
   onDiscard,
+  documentFacts,
 }: Readonly<{
   project: ProjectRecord
   selectedEnvironment: EnvironmentRecord
@@ -420,6 +426,7 @@ function EnvironmentOverviewCompose({
   saving: boolean
   onSave: () => void
   onDiscard: () => void
+  documentFacts: ComposeDocFacts
 }>) {
   const overlayState = resolveComposeOverlayState(
     selectedEnvironment.options?.compose,
@@ -469,12 +476,13 @@ function EnvironmentOverviewCompose({
       document={inheriting ? merged : proposedOverlay}
       summaryDocument={merged}
       inventory={inventory}
-      inheritedCaption={inheriting ? 'Inheriting project compose' : null}
+      inheritedCaption={inheriting ? 'Using project compose' : null}
       orgId={orgId}
       projectId={projectId}
       services={services}
       containersByService={containersByService}
       showServiceStatus={isStarted}
+      documentFacts={documentFacts}
       draftSource={isDirty ? overviewSource : undefined}
       onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
       toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave, onDiscard)}
@@ -647,6 +655,7 @@ function ServicesPanelBody({
         saving={saving}
         onSave={runOverviewSave}
         onDiscard={discardOverviewDraft}
+        documentFacts={documentFacts}
       />
     )
   }
@@ -747,6 +756,7 @@ function ServicesPanelBody({
       saving={saving}
       onSave={runOverviewSave}
       onDiscard={discardOverviewDraft}
+      documentFacts={documentFacts}
     />
   )
 }

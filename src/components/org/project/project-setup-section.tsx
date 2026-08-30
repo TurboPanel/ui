@@ -75,8 +75,9 @@ export function ProjectSetupSection() {
       ? catalogQuery.error.message
       : configureProject.actionError
 
-  // Where setup hands off. Services lands on the Services tab so the operator
-  // continues in the surface they picked; everything else lands on Overview.
+  // Where setup hands off. Compose lands on the YAML editor, managed on
+  // Overview; every other choice lands on the Services cards so the operator
+  // continues in the surface they picked.
   const landingSection = selectedOption?.section ?? 'overview'
   const landingHref = projectComposeSectionHref(
     orgId,

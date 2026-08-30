@@ -251,6 +251,37 @@ describe('buildComposeGraph', () => {
       '443',
     ])
   })
+
+  it('adds hosting nodes above services and shifts every row down', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          db: { image: 'postgres' },
+          web: { image: 'app', depends_on: ['db'] },
+        },
+      }),
+      { hostnamesByService: { web: 'app.example.com' } },
+    )
+    const host = graph.nodes.find((n) => n.id === 'host:web')
+    expect(host).toMatchObject({ kind: 'hosting', name: 'app.example.com', row: 0 })
+    expect(graph.nodes.find((n) => n.id === 'service:db')?.row).toBe(1)
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.row).toBe(2)
+    expect(graph.edges).toContainEqual({
+      id: 'host:app.example.com->web',
+      kind: 'hosting',
+      from: 'host:web',
+      to: 'service:web',
+    })
+  })
+
+  it('ignores hostnames for services not in the document and stays flat without any match', () => {
+    const graph = buildComposeGraph(
+      doc({ services: { web: { image: 'app' } } }),
+      { hostnamesByService: { missing: 'gone.example.com' } },
+    )
+    expect(graph.nodes.find((n) => n.kind === 'hosting')).toBeUndefined()
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.row).toBe(0)
+  })
 })
 
 describe('describeComposeGraph', () => {
@@ -273,5 +304,15 @@ describe('describeComposeGraph', () => {
   it('returns bare names when a service has no relationships', () => {
     const graph = buildComposeGraph(doc({ services: { solo: { image: 'app' } } }))
     expect(describeComposeGraph(graph)).toEqual(['solo'])
+  })
+
+  it('mentions the hostname a service is served at', () => {
+    const graph = buildComposeGraph(
+      doc({ services: { web: { image: 'app' } } }),
+      { hostnamesByService: { web: 'app.example.com' } },
+    )
+    expect(describeComposeGraph(graph)).toEqual([
+      'web — served at app.example.com',
+    ])
   })
 })

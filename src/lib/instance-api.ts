@@ -1026,6 +1026,7 @@ async function apiFetch<T>(
     try {
       const body = (await response.json()) as {
         error?: string
+        message?: string
         issues?: { message?: string }[]
       }
       if (
@@ -1042,6 +1043,16 @@ async function apiFetch<T>(
             .join('; ') || body.error
       } else if (body.error) {
         detail = formatFetchFailureDetail(response.status, body.error)
+        // Many route errors carry a human explanation beside the code (e.g.
+        // deploy-prepare 422s). Append rather than replace — callers match on
+        // the code with `.includes(...)`, so it must stay in the message.
+        if (
+          typeof body.message === 'string' &&
+          body.message.length > 0 &&
+          body.message !== body.error
+        ) {
+          detail = `${detail} — ${body.message}`
+        }
       }
     } catch {
       // Non-JSON error body — keep the status-only message.

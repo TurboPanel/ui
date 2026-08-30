@@ -1,16 +1,16 @@
 import { Redirect, type Href } from 'expo-router'
+import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   isManagedProject,
-  projectHostingHref,
   projectOverviewHref,
 } from '@/lib/project-navigation'
 
 /**
- * Retired route — server placement lives on the Hosting tab
- * (`/projects/:projectId/hosting`).
+ * Project-scope Bindings editor — system users + bound databases
+ * (`/projects/:projectId/bindings`).
  */
-export default function ProjectServersScreen() {
+export default function ProjectBindingsScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
 
   if (isSystemProject || (project && isManagedProject(project))) {
@@ -18,5 +18,5 @@ export default function ProjectServersScreen() {
       <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
     )
   }
-  return <Redirect href={projectHostingHref(orgId, projectId) as Href} />
+  return <ProjectOverviewTab />
 }

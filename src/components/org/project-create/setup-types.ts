@@ -50,7 +50,7 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     type: 'docker-compose',
     label: 'Services',
     description: 'The same stack, defined with service cards instead of YAML.',
-    section: 'overview',
+    section: 'services',
   },
   {
     // Third `docker-compose` card. Linking a repository is a create-time act,
@@ -65,7 +65,7 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     label: 'Repository',
     description:
       "Read a repository you've connected — its compose file, a site, or an app. Pick the repo and branch.",
-    section: 'overview',
+    section: 'services',
   },
   {
     // Fourth `docker-compose` card, and the one an operator moving a WordPress
@@ -83,14 +83,14 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     // capability, and it is one a very large share of the web actually uses.
     description:
       'A directory and an account. Upload over SFTP and serve it — static, PHP, or WordPress.',
-    section: 'overview',
+    section: 'services',
   },
   {
     choice: 'template',
     type: 'template',
     label: 'Template',
     description: 'A ready-made stack from the catalog.',
-    section: 'overview',
+    section: 'services',
   },
   {
     choice: 'managed',
