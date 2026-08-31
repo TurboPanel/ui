@@ -140,3 +140,60 @@ describe('unownedPrincipalRequiredServices', () => {
     ).toEqual(['site'])
   })
 })
+
+describe('declared aliases settle ownership without a query', () => {
+  const aliased = patchServiceTurbopanelExtension(
+    {},
+    {
+      serviceKind: 'node',
+      principal: 'app',
+      source: { sourceId: '11111111-1111-4111-8111-111111111111' },
+    },
+  )
+
+  function withPrincipals(
+    services: Record<string, Record<string, unknown>>,
+    principals: Record<string, Record<string, unknown>>,
+  ): ComposeDocument {
+    return {
+      version: 1,
+      data: { services, 'x-turbopanel': { principals } },
+      presentation: { keyOrder: ['services'], comments: {} },
+    }
+  }
+
+  it('counts a resolving alias as owned with no service rows at all', () => {
+    // The common case before the first deploy: there are no service rows yet,
+    // so the steward check has nothing to look at — but the operator has
+    // already written down which account the app runs as.
+    expect(
+      unownedPrincipalRequiredServices({
+        document: withPrincipals({ api: aliased }, { app: {} }),
+        services: [],
+        principals: [],
+      }),
+    ).toEqual([])
+  })
+
+  it('still reports an alias the root does not declare', () => {
+    // A dangling alias names an account that does not exist, which is the same
+    // standing as naming none.
+    expect(
+      unownedPrincipalRequiredServices({
+        document: withPrincipals({ api: aliased }, { other: {} }),
+        services: [],
+        principals: [],
+      }),
+    ).toEqual(['api'])
+  })
+
+  it('keeps the steward fallback for a document that declares no alias', () => {
+    expect(
+      unownedPrincipalRequiredServices({
+        document: documentWith({ api: nodeApp }),
+        services: [{ id: 'svc-1', composeServiceName: 'api' }],
+        principals: [{ serviceIds: ['svc-1'] }],
+      }),
+    ).toEqual([])
+  })
+})

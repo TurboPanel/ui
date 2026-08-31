@@ -26,6 +26,7 @@ export function ComposeBasePanel({
   onOpenScopeConfig,
   renderHostingEditor,
   renderReleasesPanel,
+  extraPrincipalAliases,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -52,6 +53,12 @@ export function ComposeBasePanel({
   renderHostingEditor?: (composeServiceName: string) => ReactNode
   /** Inline releases + rollback for one Git-backed service (document lens). */
   renderReleasesPanel?: (composeServiceName: string) => ReactNode
+  /**
+   * Principal aliases declared outside this document (the project base's, for
+   * an overlay). Omitted skips the alias-resolution rule — see
+   * `ComposeEditorSection`.
+   */
+  extraPrincipalAliases?: readonly string[]
 }>) {
   return (
     <View style={styles.root}>
@@ -76,6 +83,7 @@ export function ComposeBasePanel({
         {...(onOpenScopeConfig ? { onOpenScopeConfig } : {})}
         {...(renderHostingEditor ? { renderHostingEditor } : {})}
         {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
+        {...(extraPrincipalAliases === undefined ? {} : { extraPrincipalAliases })}
       />
     </View>
   )

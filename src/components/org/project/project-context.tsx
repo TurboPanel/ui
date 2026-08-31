@@ -373,3 +373,17 @@ export function useProjectContext(): ProjectContextValue {
 export function useProjectRepositoryId(): string | null | undefined {
   return useContext(ProjectContext)?.project?.repositoryId
 }
+
+/**
+ * The saved project this tree is inside, or `undefined` when there is not one.
+ *
+ * `undefined` covers both "no project context at all" and "a create-wizard
+ * draft that has not been persisted": either way there is no project row a
+ * route could resolve, so a caller must omit the id rather than send a
+ * placeholder the server would 404 on.
+ */
+export function useOptionalProjectId(): string | undefined {
+  const ctx = useContext(ProjectContext)
+  if (ctx?.project == null) return undefined
+  return ctx.projectId
+}

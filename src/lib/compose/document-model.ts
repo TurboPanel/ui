@@ -12,6 +12,7 @@
  * (Code) and a document that repeats the file verbatim is just a worse editor.
  */
 import { parseComposeBuild } from './build-ref'
+import { SPANNING_NETWORK_DRIVER } from './field-policy'
 import { formatComposeImageRef, parseComposeImageRef } from './image-ref'
 import { readServiceSourceExtension } from './service-kind'
 import { normalizeCompose } from './types'
@@ -68,9 +69,20 @@ export type ComposeDocResourceBlock = Readonly<{
   name: string
   /** Compose service names mounting this volume / joining this network. */
   usedBy: readonly string[]
-  /** `external: true`, driver, … — null when the entry is empty (`{}`). */
+  /**
+   * `external: true`, driver, … — null when the entry is empty (`{}`).
+   *
+   * A network declared `driver: overlay` reads as
+   * {@link SPANNING_NETWORK_DETAIL} rather than as the bare driver string: that
+   * value is the authored signal that TurboFabric may span the network across
+   * hosts, and "overlay" alone would suggest a Docker overlay driver this
+   * platform does not run.
+   */
   detail: string | null
 }>
+
+/** How a `driver: overlay` network is labelled, rather than as a bare driver. */
+export const SPANNING_NETWORK_DETAIL = 'overlay (TurboFabric)'
 
 export type ComposeDocModel = Readonly<{
   services: readonly ComposeDocServiceBlock[]
@@ -231,11 +243,17 @@ function countOtherKeys(service: Record<string, unknown>): number {
   ).length
 }
 
-function resourceDetail(entry: Record<string, unknown>): string | null {
+function resourceDetail(
+  entry: Record<string, unknown>,
+  kind: 'network' | 'volume',
+): string | null {
   if (entry.external === true) return 'external'
   if (typeof entry.name === 'string' && entry.name) return entry.name
-  if (typeof entry.driver === 'string' && entry.driver) return entry.driver
-  return null
+  if (typeof entry.driver !== 'string' || !entry.driver) return null
+  // Networks only: `overlay` on a volume is just a volume driver name.
+  return kind === 'network' && entry.driver.trim() === SPANNING_NETWORK_DRIVER
+    ? SPANNING_NETWORK_DETAIL
+    : entry.driver
 }
 
 /**
@@ -284,14 +302,19 @@ export function buildComposeDocModel(document: unknown): ComposeDocModel {
   const toResource = (
     [name, entry]: [string, Record<string, unknown>],
     users: Map<string, string[]>,
+    kind: 'network' | 'volume',
   ): ComposeDocResourceBlock => ({
     name,
     usedBy: users.get(name) ?? [],
-    detail: resourceDetail(entry),
+    detail: resourceDetail(entry, kind),
   })
 
-  const volumes = volumeEntries.map((entry) => toResource(entry, volumeUsers))
-  const networks = networkEntries.map((entry) => toResource(entry, networkUsers))
+  const volumes = volumeEntries.map((entry) =>
+    toResource(entry, volumeUsers, 'volume'),
+  )
+  const networks = networkEntries.map((entry) =>
+    toResource(entry, networkUsers, 'network'),
+  )
 
   return {
     services,

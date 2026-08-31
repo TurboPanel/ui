@@ -5585,3 +5585,113 @@ export async function downloadOrganizationCaPem(): Promise<string> {
   }
   return await response.text()
 }
+
+/**
+ * `docker run` import — `POST /api/client/v1/docker-run/import`.
+ *
+ * Compute only: the control plane parses the command, compiles a one-service
+ * compose fragment, and returns it. **Nothing is persisted there.** The caller
+ * merges the fragment into its own draft and saves it through the ordinary
+ * compose PATCH, and the pasted command is never stored anywhere.
+ */
+export const DOCKER_RUN_UNSUPPORTED_ERROR = 'docker_run_unsupported'
+
+export type DockerRunDiagnostic = {
+  code: string
+  flag?: string
+  message: string
+  blocking: boolean
+}
+
+export type DockerRunRiskFlag = {
+  kind: string
+  source: string
+  message: string
+}
+
+export type DockerRunComposeIssue = {
+  path: string
+  message: string
+  level?: 'error' | 'warning'
+  line?: number
+}
+
+export type DockerRunImportResponse = {
+  ok: true
+  compose: ComposeDocument
+  image: string | null
+  command: string[]
+  diagnostics: DockerRunDiagnostic[]
+  riskFlags: DockerRunRiskFlag[]
+  composeIssues: DockerRunComposeIssue[]
+}
+
+export type DockerRunUnsupportedResponse = {
+  ok: false
+  error: typeof DOCKER_RUN_UNSUPPORTED_ERROR
+  diagnostics: DockerRunDiagnostic[]
+}
+
+export type DockerRunImportResult =
+  | DockerRunImportResponse
+  | DockerRunUnsupportedResponse
+
+/**
+ * Unlike every other helper here this one does **not** throw on its 422.
+ *
+ * `docker_run_unsupported` is a result the operator has to read — the list of
+ * flags that stopped the import is the whole answer — and `apiFetch` flattens
+ * an error body to one message string. Every other status still throws.
+ *
+ * The 422 is final: a blocking diagnostic cannot be acknowledged into a
+ * success, because a fragment with those flags left out no longer means what
+ * was pasted. `riskFlags` arrive only with a successful import, as the list the
+ * caller has to show — and authorize — before merging.
+ */
+export async function importDockerRunCommand(body: {
+  serviceName: string
+  argv: string
+  projectId?: string
+}): Promise<DockerRunImportResult> {
+  const path = `${CLIENT_API}/docker-run/import`
+  const organizationId = getActiveOrganizationId()
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (organizationId) {
+    headers[ORG_ID_HEADER] = organizationId
+  }
+
+  const response = await fetch(controlPlaneUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify({
+      serviceName: body.serviceName,
+      argv: body.argv,
+      ...(body.projectId ? { projectId: body.projectId } : {}),
+    }),
+  })
+
+  if (response.status === 422) {
+    const unsupported = (await response.json()) as DockerRunUnsupportedResponse
+    return {
+      ok: false,
+      error: DOCKER_RUN_UNSUPPORTED_ERROR,
+      diagnostics: unsupported.diagnostics ?? [],
+    }
+  }
+
+  if (!response.ok) {
+    let detail = formatFetchFailureDetail(response.status)
+    try {
+      const errorBody = (await response.json()) as { error?: string }
+      if (errorBody.error) {
+        detail = formatFetchFailureDetail(response.status, errorBody.error)
+      }
+    } catch {
+      // Non-JSON error body — keep the status-only message.
+    }
+    throw new Error(`${path} failed: ${detail}`)
+  }
+
+  return (await response.json()) as DockerRunImportResponse
+}

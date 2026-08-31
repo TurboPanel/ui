@@ -117,3 +117,47 @@ describe('unownedManagedDirectorySites', () => {
     ).toEqual(['shop'])
   })
 })
+
+describe('declared aliases settle ownership without a query', () => {
+  const aliasedSite = patchServiceTurbopanelExtension(
+    {},
+    {
+      serviceKind: 'site',
+      engine: 'caddy',
+      root: 'public',
+      sourceKind: 'managed-directory',
+      principal: 'app',
+    },
+  )
+
+  function withPrincipals(
+    services: Record<string, Record<string, unknown>>,
+    principals: Record<string, Record<string, unknown>>,
+  ): ComposeDocument {
+    return {
+      version: 1,
+      data: { services, 'x-turbopanel': { principals } },
+      presentation: { keyOrder: ['services'], comments: {} },
+    }
+  }
+
+  it('counts a resolving alias as owned with no service rows at all', () => {
+    expect(
+      unownedManagedDirectorySites({
+        document: withPrincipals({ blog: aliasedSite }, { app: {} }),
+        services: [],
+        principals: [],
+      }),
+    ).toEqual([])
+  })
+
+  it('still reports an alias the root does not declare', () => {
+    expect(
+      unownedManagedDirectorySites({
+        document: withPrincipals({ blog: aliasedSite }, { other: {} }),
+        services: [],
+        principals: [],
+      }),
+    ).toEqual(['blog'])
+  })
+})

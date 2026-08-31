@@ -58,6 +58,10 @@ describe('lintComposeYaml', () => {
     x-turbopanel:
       serviceKind: site
       engine: nginx
+      principal: app
+x-turbopanel:
+  principals:
+    app: {}
 `
     expect(lintComposeYaml(source)).toEqual([])
   })
@@ -201,6 +205,22 @@ x-turbopanel:
   })
 
   it('allows x- extension keys', () => {
+    // Any `x-` key is an author's own business — except `x-turbopanel`, which
+    // is TurboPanel's and is validated against `./root-extension`.
+    const source = `x-fleet-notes:
+  owner: platform
+x-turbopanel:
+  principals:
+    web:
+      access: sftp
+services:
+  nginx:
+    image: nginx
+`
+    expect(lintComposeYaml(source)).toEqual([])
+  })
+
+  it('rejects placement in the authored root extension', () => {
     const source = `x-turbopanel:
   placement:
     server_id: abc
@@ -208,7 +228,14 @@ services:
   nginx:
     image: nginx
 `
-    expect(lintComposeYaml(source)).toEqual([])
+    expect(lintComposeYaml(source)).toEqual([
+      {
+        level: 'error',
+        message: 'placement is not stored in compose; use environment.server_id',
+        path: 'x-turbopanel.placement',
+        line: 2,
+      },
+    ])
   })
 
   it('reports invalid YAML as an error with a line', () => {
@@ -753,5 +780,337 @@ describe('one repository per project', () => {
         projectRepositoryId: null,
       }).some((issue) => issue.message.includes('one repository')),
     ).toBe(false)
+  })
+})
+
+/**
+ * Parity with the instance's `collectServiceTurbopanelValidationIssues`: the
+ * editor must not call a document clean that the save then rejects. Both sides
+ * read `SERVICE_KIND_FIELD_TABLE`, so these are the cases where the table says
+ * a field does not belong — or that a kind is not that kind without one.
+ */
+describe('per-service x-turbopanel field legality', () => {
+  const SOURCE_ID = '11111111-2222-3333-4444-555555555555'
+
+  it('errors on engine without serviceKind: site', () => {
+    const source = `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      engine: nginx
+`
+    const issue = lintComposeYaml(source).find(
+      (found) => found.path === 'services.web.x-turbopanel.engine',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toBe(
+      'engine is only valid when serviceKind is site',
+    )
+    expect(issue?.line).toBe(5)
+    expect(blockingComposeLintIssues(lintComposeYaml(source))).toHaveLength(1)
+  })
+
+  it('errors on root authored on a container', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      serviceKind: container
+      root: public
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.web.x-turbopanel.root',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toBe('root is only valid when serviceKind is site')
+    expect(issue?.line).toBe(6)
+  })
+
+  it('errors when serviceKind: node has no source', () => {
+    const issues = lintComposeYaml(`services:
+  api:
+    x-turbopanel:
+      serviceKind: node
+      framework: next
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.api.x-turbopanel.source',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toBe('node services require source')
+    // A node service is host-native, so the missing source is the only error.
+    expect(
+      issues.some((found) => found.message.includes('must define "image"')),
+    ).toBe(false)
+  })
+
+  it('accepts a node service with a source and its node-only fields', () => {
+    const issues = lintComposeYaml(`services:
+  api:
+    x-turbopanel:
+      serviceKind: node
+      framework: next
+      nodeVersion: "24"
+      startupFile: server.js
+      principal: app
+      source:
+        sourceId: ${SOURCE_ID}
+x-turbopanel:
+  principals:
+    app: {}
+`)
+    expect(blockingComposeLintIssues(issues)).toEqual([])
+  })
+
+  it('errors on node-only fields authored on a site', () => {
+    const issues = lintComposeYaml(`services:
+  site:
+    x-turbopanel:
+      serviceKind: site
+      engine: caddy
+      root: public
+      framework: next
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.site.x-turbopanel.framework',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toBe(
+      'framework is only valid when serviceKind is node',
+    )
+  })
+
+  it('errors on cron authored on a container, naming both host-native kinds', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      cron:
+        - name: nightly
+          schedule: "@daily"
+          command: /srv/nightly.sh
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.web.x-turbopanel.cron',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toBe(
+      'cron is only valid when serviceKind is site or node',
+    )
+  })
+
+  it('errors when x-turbopanel is not a mapping', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel: nope
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.web.x-turbopanel',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toBe('x-turbopanel must be a mapping')
+  })
+
+  it('ignores an empty x-turbopanel key and unknown fields', () => {
+    expect(
+      blockingComposeLintIssues(
+        lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+`),
+      ),
+    ).toEqual([])
+    expect(
+      blockingComposeLintIssues(
+        lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      futureField: keep-this
+`),
+      ),
+    ).toEqual([])
+  })
+
+  it('says nothing about a block the save discards', () => {
+    // `managedExtensionHidden` means author-typed `x-turbopanel` never reaches
+    // the instance, so its legality is not the author's problem — the warning
+    // that the block is ignored is the whole message.
+    const issues = lintComposeYaml(
+      `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      engine: nginx
+`,
+      { managedExtensionHidden: true },
+    )
+    expect(
+      issues.some((found) => found.message.includes('only valid when')),
+    ).toBe(false)
+    expect(
+      issues.find((found) => found.path === 'services.web.x-turbopanel')
+        ?.message,
+    ).toContain('managed by TurboPanel')
+  })
+})
+
+describe('principal alias resolution', () => {
+  const SITE = `services:
+  blog:
+    x-turbopanel:
+      serviceKind: site
+      principal: ghost
+x-turbopanel:
+  principals:
+    app: {}
+`
+
+  it('skips the rule when no alias set is supplied', () => {
+    // Mirrors the instance contract: a surface that cannot see the sibling
+    // layer must not be made to false-flag.
+    expect(
+      lintComposeYaml(SITE).some((issue) =>
+        issue.path === 'services.blog.x-turbopanel.principal',
+      ),
+    ).toBe(false)
+  })
+
+  it('blocks an alias the document does not declare', () => {
+    const issues = lintComposeYaml(SITE, {
+      knownPrincipalAliases: new Set(['app']),
+    })
+    const issue = issues.find(
+      (found) => found.path === 'services.blog.x-turbopanel.principal',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.line).toBe(5)
+    expect(issue?.message).toContain("principal 'ghost'")
+  })
+
+  it('accepts an alias the set contains', () => {
+    const issues = lintComposeYaml(
+      `services:
+  blog:
+    x-turbopanel:
+      serviceKind: site
+      principal: app
+x-turbopanel:
+  principals:
+    app: {}
+`,
+      { knownPrincipalAliases: new Set(['app']) },
+    )
+    expect(blockingComposeLintIssues(issues)).toEqual([])
+  })
+
+  it('accepts a legacy document that names no alias on either host-native kind', () => {
+    // The alias is the newer of the two ways a host-native service names its
+    // account; a document written before `x-turbopanel.principals` existed
+    // names none and is owned by whatever principal an operator assigned in
+    // the panel. Blocking it here would make the editor refuse documents the
+    // control plane still deploys through the sole-steward fallback — see
+    // `./principal-required.ts`, which answers ownership where the
+    // environment's principals are actually known.
+    const issues = lintComposeYaml(`services:
+  blog:
+    x-turbopanel:
+      serviceKind: site
+  api:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+`)
+    expect(blockingComposeLintIssues(issues)).toEqual([])
+  })
+
+  it('rejects a principal on a container service', () => {
+    const issues = lintComposeYaml(`services:
+  api:
+    image: nginx
+    x-turbopanel:
+      serviceKind: container
+      principal: app
+`)
+    expect(
+      issues.find(
+        (found) => found.path === 'services.api.x-turbopanel.principal',
+      )?.message,
+    ).toContain('only valid when serviceKind is site or node')
+  })
+})
+
+describe('native restart_policy values', () => {
+  // Mirrors the instance rule: a `serviceKind: node` service is supervised by a
+  // generated systemd unit that can express only part of the Compose
+  // vocabulary, and the editor says so while there is still time to change it.
+  it('names each value the generated unit cannot express', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    x-turbopanel:
+      serviceKind: node
+      principal: app
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+    deploy:
+      restart_policy:
+        condition: sometimes
+        delay: soon
+        max_attempts: 0
+`)
+    expect(
+      issues
+        .filter((issue) => issue.code === 'field_unsupported')
+        .map((issue) => issue.path)
+        .sort(),
+    ).toEqual([
+      'services.web.deploy.restart_policy.condition',
+      'services.web.deploy.restart_policy.delay',
+      'services.web.deploy.restart_policy.max_attempts',
+    ])
+    // Advice, not a refusal — the editor never blocks a save.
+    expect(
+      blockingComposeLintIssues(issues).some((issue) =>
+        issue.path.startsWith('services.web.deploy.restart_policy')
+      ),
+    ).toBe(false)
+  })
+
+  it('passes a policy the unit can express', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    x-turbopanel:
+      serviceKind: node
+      principal: app
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 1m30s
+`)
+    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual(
+      [],
+    )
+  })
+
+  it('leaves a container service the whole Compose vocabulary', () => {
+    // Docker reads it itself; narrowing it there would flag documents that work.
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx:alpine
+    deploy:
+      restart_policy:
+        condition: unless-stopped
+        max_attempts: 0
+`)
+    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual(
+      [],
+    )
   })
 })

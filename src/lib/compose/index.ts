@@ -56,6 +56,7 @@ export {
   yamlToComposeDocument,
 } from './convert'
 export type {
+  ComposeLintCode,
   ComposeLintIssue,
   ComposeLintLevel,
   ComposeLintOptions,
@@ -66,6 +67,17 @@ export {
   isComposeTopLevelKey,
   lintComposeYaml,
 } from './lint'
+export type { ComposeFieldPolicy, ComposeFieldState } from './field-policy'
+export {
+  classifyDeployKey,
+  classifyDeployPlacementKey,
+  classifyServiceKey,
+  classifyTopLevelKey,
+  DEPLOY_FIELD_KEYS,
+  SERVICE_FIELD_KEYS,
+  TOP_LEVEL_FIELD_KEYS,
+  unsupportedDeployReason,
+} from './field-policy'
 export type { ComposeHiddenExtensions } from './hidden-extension'
 export {
   hideComposeTurbopanelExtensions,
@@ -73,16 +85,23 @@ export {
   restoreComposeTurbopanelExtensions,
 } from './hidden-extension'
 export type {
+  ComposeContainerServiceExtension,
+  ComposeNodeServiceExtension,
+  ComposeServiceExtensionFields,
   ComposeServiceKind,
   ComposeServiceSourceExtension,
   ComposeServiceTurbopanelExtension,
   ComposeServiceTurbopanelExtensionPatch,
+  ComposeSiteServiceExtension,
   ComposeSourceBuildKind,
   NativeRuntimeFramework,
+  ServiceKindFieldIssue,
+  ServiceKindFieldRules,
   SourceIdResolver,
   SiteEngine,
 } from './service-kind'
 export {
+  collectServiceKindFieldIssues,
   isHostNativeServiceKind,
   isNodeComposeService,
   isSiteComposeService,
@@ -90,25 +109,101 @@ export {
   parseServiceTurbopanelExtension,
   readServiceSourceExtension,
   readServiceTurbopanelExtension,
+  SERVICE_KIND_FIELD_TABLE,
+  serviceKindFieldMessage,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
 } from './service-kind'
+export type {
+  ComposeHostingBindScope,
+  ComposeHostingBindSpec,
+  ComposeHostingExtensionEntry,
+  ComposeHostingTlsMode,
+  ComposeHostingTlsSpec,
+  HostingExtensionIssue,
+} from './hosting-extension'
+export {
+  collectHostingExtensionValidationIssues,
+  DEFAULT_HOSTING_BIND_SCOPE,
+  DEFAULT_HOSTING_PATH_PREFIX,
+  DEFAULT_HOSTING_TLS_MODE,
+  HOSTING_BIND_SCOPES,
+  HOSTING_ENTRY_KEYS,
+  HOSTING_HOSTNAME_MAX_LENGTH,
+  HOSTING_HOSTNAME_RE,
+  HOSTING_HOSTNAME_REQUIRED_MESSAGE,
+  HOSTING_KEY_REDIRECTS,
+  HOSTING_NOT_A_PUBLISH_MESSAGE,
+  HOSTING_PATH_PREFIX_MESSAGE,
+  HOSTING_REF_MAX_LENGTH,
+  HOSTING_TARGET_PORT_NOT_FOR_NODE_MESSAGE,
+  HOSTING_TARGET_PORT_NOT_FOR_SITE_MESSAGE,
+  HOSTING_TARGET_PORT_RANGE_MESSAGE,
+  HOSTING_TLS_MODE_AUTOMATIC_UNSUPPORTED_MESSAGE,
+  HOSTING_TLS_MODES,
+  hostingBindScopeOf,
+  hostingEntryKey,
+  hostingIpRefUnresolvedMessage,
+  hostingPathPrefixOf,
+  hostingTargetPortAuthorable,
+  hostingTlsModeOf,
+  hostingTlsRefUnresolvedMessage,
+  isHostingBindScope,
+  isHostingTlsMode,
+  MAX_HOSTING_ENTRIES_PER_SERVICE,
+  parseHostingExtensionEntries,
+  readHostingHostname,
+  readHostingPathPrefix,
+} from './hosting-extension'
+export type {
+  PrincipalAccess,
+  PrincipalSpec,
+  RootExtensionIssue,
+  TurbopanelRootExtension,
+} from './root-extension'
+export {
+  AUTHORED_ROOT_EXTENSION_KEYS,
+  collectRootExtensionValidationIssues,
+  DEFAULT_PRINCIPAL_ACCESS,
+  isPrincipalAccess,
+  isPrincipalAlias,
+  parseRootExtension,
+  PLACEMENT_NOT_STORED_MESSAGE,
+  PRINCIPAL_ACCESS_VALUES,
+  PRINCIPAL_ALIAS_RE,
+  principalAccessOf,
+  principalAliasesInComposeData,
+  ROOT_KEY_REDIRECTS,
+  TURBOPANEL_ROOT_EXTENSION_KEY,
+} from './root-extension'
 export type {
   HostingPhpApplicability,
   HostingServiceContext,
   HostingWebEnvMode,
 } from './hosting-service-context'
 export {
+  findComposeHostingEntryIndex,
+  hasComposeAuthoredHosting,
   hostingDockerBridgeHint,
   hostingPathPrefixHint,
   hostingPhpSectionCopy,
   hostingServiceKindLabel,
+  hostingTargetPortHint,
   hostingWebEnvSectionCopy,
+  readComposeHostingEntries,
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
   siteEnvKeyForService,
+  writeComposeHostingEntries,
 } from './hosting-service-context'
+export type {
+  ComposeHostingEditorFields,
+} from './hosting-editor-entry'
+export {
+  composeHostingEntryFromEditorFields,
+  parseHostnameList,
+} from './hosting-editor-entry'
 export type { ComposeImageRef } from './image-ref'
 export {
   emptyComposeImageRef,
@@ -846,8 +941,19 @@ export function mergeComposeOverlay(
 /** Mirror of instance `src/lib/compose/placement.ts`. */
 export const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
 
-export type ComposeTurbopanelExtension = {
-  placement?: { server_id?: string }
+/**
+ * The **runtime** top-level `x-turbopanel` block — preview/compile-time audit
+ * metadata, never authored and never stored. Mirrors the instance's
+ * `TurbopanelRuntimeRootExtension` in `src/lib/compose/placement.ts`.
+ *
+ * Structurally separate from the authored `TurbopanelRootExtension` in
+ * `./root-extension` on purpose: the two are not variants of one all-optional
+ * shape, and an authored root has no `placement` key to reach for. Both keys
+ * are required because a runtime root carrying no server id is not a weaker
+ * runtime root, it is the absence of one.
+ */
+export type TurbopanelRuntimeRootExtension = {
+  placement: { server_id: string }
 }
 
 function stripTurbopanelField(

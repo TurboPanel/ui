@@ -80,17 +80,32 @@ import { useTlsLibrary } from '@/lib/queries/tls'
 import { useIps } from '@/lib/queries/topology'
 import { coversAllHostnames } from '@/lib/tls-match'
 import {
+  composeHostingEntryFromEditorFields,
+  findComposeHostingEntryIndex,
+  hostingBindScopeOf,
   hostingDockerBridgeHint,
+  hostingEntryKey,
   hostingPathPrefixHint,
   hostingServiceKindLabel,
+  hostingTargetPortAuthorable,
+  hostingTargetPortHint,
   hostingWebEnvSectionCopy,
   mergeComposeOverlay,
   normalizeCompose,
+  parseHostnameList,
+  readComposeHostingEntries,
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
   stripComposePlacement,
+  writeComposeHostingEntries,
+  type ComposeHostingExtensionEntry,
+  type ComposeServiceKind,
   type HostingServiceContext,
 } from '@/lib/compose'
+import {
+  isComposeOwnedHosting,
+  readHostingComposeRoute,
+} from '@/lib/hosting-compose-owner'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { orEmptyArray } from '@/lib/or-empty-array'
@@ -275,6 +290,189 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
   return options
 }
 
+/**
+ * How one rendered hosting row is authored, and therefore where a save goes.
+ *
+ * `panel` rows are the historical case: one `hosting` row an operator created
+ * here, saved with `PUT`/`PATCH /hostings`. `compose` rows are declared by
+ * `services.<name>.x-turbopanel.hosting[]` and are **read-only through that
+ * API** (`409 hosting_owned_by_compose`), so their save writes the compose
+ * document instead — one row per authored entry, never
+ * `hostingsByService[serviceId][0]`, which would hide every route after the
+ * first.
+ */
+type HostingRowSource =
+  | { kind: 'panel' }
+  | {
+    kind: 'compose'
+    /** {@link hostingEntryKey} of the declaration this row renders. */
+    route: string
+    /**
+     * Index in the **environment overlay's** entry list, or null when the
+     * route is inherited from the project compose.
+     *
+     * Only the overlay is editable from this surface. `hosting` is a plain
+     * compose sequence, so an overlay list is appended to the project's rather
+     * than merged entry-by-entry — writing an inherited route here would add a
+     * second declaration, not change the one on screen.
+     */
+    overlayIndex: number | null
+  }
+
+type HostingPanelRowDescriptor = {
+  /** Key into `hostingEditors`, and the row's React key. */
+  editorKey: string
+  composeServiceName: string
+  serviceContext: HostingServiceContext
+  source: HostingRowSource
+  /** Persisted row id, when one exists yet. */
+  hostingId: string | null
+  /** Editor state seeded from whichever document/row authored the route. */
+  seed: HostingEditorState
+}
+
+/** True when this surface can actually author the row's declaration. */
+function isEditableRow(row: HostingPanelRowDescriptor): boolean {
+  return row.source.kind === 'panel' || row.source.overlayIndex !== null
+}
+
+/** The compose-owned `hosting` row for one declared route, when deploy made it. */
+function findComposeOwnedRow(
+  rows: readonly HostingRecord[],
+  route: string,
+): HostingRecord | undefined {
+  return rows.find((row) => readHostingComposeRoute(row.metadata) === route)
+}
+
+/**
+ * Editor state for one declared route.
+ *
+ * Compose-authored fields come from the entry — it is the truth, and the row
+ * may not exist yet (nothing is materialized until the first deploy). The
+ * panel-only fields (proxy toggles, web env, raw tcp/udp) come from the row
+ * when there is one: they have no compose spelling, are preserved across every
+ * reconcile, and are shown read-only so an operator can see what is stored.
+ */
+function readComposeHostingEditor(
+  entry: ComposeHostingExtensionEntry,
+  row: HostingRecord | undefined,
+): HostingEditorState {
+  const base = readHostingEditor(row ? [row] : [])
+  return {
+    ...base,
+    protocol: 'http',
+    hostnames: entry.hostname,
+    pathPrefix: entry.pathPrefix ?? '',
+    targetPort: entry.targetPort === undefined ? '' : String(entry.targetPort),
+    forceHttps: entry.forceHttps !== false,
+    bind: hostingBindScopeOf(entry),
+    ipId: entry.bind?.ipRef ?? null,
+    tlsId: entry.tls?.mode === 'certificate'
+      ? entry.tls.certificateRef ?? null
+      : null,
+  }
+}
+
+/**
+ * The entry to write back for one edited compose row.
+ *
+ * The rule itself lives in `@/lib/compose` so it can be pinned by a test — a
+ * write path into a compose document that only exists inside a screen is a
+ * write path nothing can assert on. This wrapper is only the screen's half:
+ * turning the resolved service context into the `serviceKind` the rule asks
+ * for.
+ */
+function composeHostingEntryFromEditor(
+  editor: HostingEditorState,
+  serviceContext: HostingServiceContext,
+): ComposeHostingExtensionEntry | null {
+  return composeHostingEntryFromEditorFields(
+    editor,
+    composeServiceKindOf(serviceContext),
+  )
+}
+
+/**
+ * `serviceKind` as the hosting rules read it.
+ *
+ * The context now names all three kinds, so this is a passthrough rather than
+ * the narrowing it used to be. It kept the function because the *reason* is
+ * worth a name: every hosting rule keyed off a service kind reads it here, and
+ * folding `node` into `container` is exactly what let the editor offer — and
+ * write — a `targetPort` the control plane refuses on a native app.
+ */
+function composeServiceKindOf(
+  serviceContext: HostingServiceContext,
+): ComposeServiceKind {
+  return serviceContext.kind
+}
+
+/**
+ * One descriptor per rendered row: every declared compose route on a service,
+ * or the single panel row when compose declares none.
+ */
+function buildHostingPanelRows(params: {
+  serviceNames: readonly string[]
+  services: readonly ServiceRecord[]
+  mergedCompose: ComposeDocument
+  overlayCompose: ComposeDocument
+  hostingsByService: Record<string, HostingRecord[]>
+}): HostingPanelRowDescriptor[] {
+  const rows: HostingPanelRowDescriptor[] = []
+  for (const composeServiceName of params.serviceNames) {
+    const service = params.services.find(
+      (item) => item.composeServiceName === composeServiceName,
+    )
+    const serviceKey = service?.id ?? composeServiceName
+    const serviceRows = service ? params.hostingsByService[service.id] ?? [] : []
+    const serviceContext = resolveHostingServiceContext(
+      params.mergedCompose,
+      composeServiceName,
+    )
+
+    if (serviceContext.composeHostingEntries.length === 0) {
+      // No declaration: the historical single-row panel form, still saved
+      // straight to /hostings. Compose-owned rows can only exist alongside a
+      // declaration, so anything here is the operator's own.
+      const panelRow = serviceRows.find(
+        (row) => !isComposeOwnedHosting(row.metadata),
+      ) ?? serviceRows[0]
+      rows.push({
+        editorKey: serviceKey,
+        composeServiceName,
+        serviceContext,
+        source: { kind: 'panel' },
+        hostingId: panelRow?.id ?? null,
+        seed: readHostingEditor(panelRow ? [panelRow] : []),
+      })
+      continue
+    }
+
+    const overlayEntries = readComposeHostingEntries(
+      params.overlayCompose,
+      composeServiceName,
+    )
+    for (const entry of serviceContext.composeHostingEntries) {
+      const route = hostingEntryKey(entry)
+      const overlayIndex = findComposeHostingEntryIndex(overlayEntries, route)
+      const composeOwnedRow = findComposeOwnedRow(serviceRows, route)
+      rows.push({
+        editorKey: `${serviceKey}::${route}`,
+        composeServiceName,
+        serviceContext,
+        source: {
+          kind: 'compose',
+          route,
+          overlayIndex: overlayIndex === -1 ? null : overlayIndex,
+        },
+        hostingId: composeOwnedRow?.id ?? null,
+        seed: readComposeHostingEditor(entry, composeOwnedRow),
+      })
+    }
+  }
+  return rows
+}
+
 function composeServiceNames(document: ComposeDocument): string[] {
   const services = document.data.services
   if (typeof services !== 'object' || services === null || Array.isArray(services)) {
@@ -334,13 +532,6 @@ function containerHostLabel(
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
-}
-
-function parseHostnameList(value: string): string[] {
-  return value
-    .split(',')
-    .map((hostname) => hostname.trim())
-    .filter(Boolean)
 }
 
 function upsertServiceById(
@@ -434,10 +625,13 @@ function HostingWebEnvFields({
   serviceContext,
   editor,
   onChange,
+  disabled = false,
 }: Readonly<{
   serviceContext: HostingServiceContext
   editor: HostingEditorState
   onChange: (patch: Partial<HostingEditorState>) => void
+  /** Read-only on a compose-owned row: `web.env` has no compose spelling. */
+  disabled?: boolean
 }>) {
   const webEnvCopy = hostingWebEnvSectionCopy(serviceContext)
   const hasWebEnvValues = editor.webEnvLines.trim().length > 0
@@ -465,6 +659,7 @@ function HostingWebEnvFields({
             label={webEnvCopy.title}
             hint={webEnvCopy.hint}
             value={editor.webEnvLines}
+            editable={!disabled}
             onChangeText={(value) => onChange({ webEnvLines: value })}
             placeholder={'APP_ENV=production\n# comments allowed'}
             mono
@@ -522,11 +717,376 @@ function hostingRowSummary(
   return parts.filter(Boolean).join(' · ')
 }
 
+function HostingHintText({ hint }: Readonly<{ hint: string | null }>) {
+  if (!hint) return null
+  return <Text style={styles.tlsHint}>{hint}</Text>
+}
+
+function ComposeOwnedHint({
+  composeOwned,
+  composeEditable,
+}: Readonly<{ composeOwned: boolean; composeEditable: boolean }>) {
+  if (!composeOwned) return null
+  return (
+    <Text style={styles.tlsHint}>
+      {composeEditable
+        ? 'Compose declares this route in x-turbopanel.hosting. Saving writes the environment compose overlay — the hosting row is re-materialized from it on the next deploy.'
+        : 'The project compose declares this route in x-turbopanel.hosting. Edit it there: an entry saved here would be appended to the project list, not replace it.'}
+    </Text>
+  )
+}
+
+function HostingProtocolPicker({
+  composeOwned,
+  editor,
+  disabled,
+  onChange,
+}: Readonly<{
+  composeOwned: boolean
+  editor: HostingEditorState
+  disabled: boolean
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  if (composeOwned) return null
+  return (
+    <>
+      <Text style={styles.tlsLabel}>Protocol</Text>
+      <Text style={styles.tlsHint}>
+        Http routes hostnames through Traefik + Caddy with TLS. Tcp/Udp
+        publish raw port(s) straight through Traefik — no hostname or TLS
+        routing (databases, game servers, relays).
+      </Text>
+      <View style={styles.tlsOptions}>
+        {(
+          [
+            { id: 'http' as const, label: 'Http' },
+            { id: 'tcp' as const, label: 'Tcp' },
+            { id: 'udp' as const, label: 'Udp' },
+          ] as const
+        ).map((option) => (
+          <Pressable
+            key={option.id}
+            style={[
+              styles.tlsChip,
+              editor.protocol === option.id && styles.tlsChipActive,
+            ]}
+            disabled={disabled}
+            onPress={() => onChange({ protocol: option.id })}
+          >
+            <Text style={styles.tlsChipText}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  )
+}
+
+function HostingAddressField({
+  isHttp,
+  composeOwned,
+  editor,
+  locked,
+  onChange,
+}: Readonly<{
+  isHttp: boolean
+  composeOwned: boolean
+  editor: HostingEditorState
+  locked: boolean
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  if (!isHttp) {
+    return (
+      <TextField
+        label="Ports"
+        hint={
+          'Comma-separated published[:target] pairs. Target defaults to published when omitted (e.g. "5432, 8443:8080").'
+        }
+        value={editor.ports}
+        onChangeText={(value) => onChange({ ports: value })}
+        placeholder="5432, 8443:8080"
+        mono
+        autoCapitalize="none"
+      />
+    )
+  }
+  return (
+    <TextField
+      label={composeOwned ? 'Hostname' : 'Hostnames'}
+      hint={composeOwned
+        ? 'One hostname per x-turbopanel.hosting entry. Add another entry for another route.'
+        : undefined}
+      value={editor.hostnames}
+      editable={!locked}
+      onChangeText={(value) => onChange({ hostnames: value })}
+      placeholder="app.example.com"
+      mono
+      autoCapitalize="none"
+    />
+  )
+}
+
+function HostingTlsPicker({
+  isHttp,
+  composeOwned,
+  editor,
+  covering,
+  locked,
+  onChange,
+}: Readonly<{
+  isHttp: boolean
+  composeOwned: boolean
+  editor: HostingEditorState
+  covering: TlsRecord[]
+  locked: boolean
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  if (!isHttp) return null
+  return (
+    <>
+      <Text style={styles.tlsLabel}>TLS certificate</Text>
+      <Text style={styles.tlsHint}>
+        {composeOwned
+          ? 'Self-signed is tls.mode "internal"; picking a library certificate is tls.mode "certificate" with tls.certificateRef. Nothing is requested automatically — "automatic" is refused at deploy rather than served as self-signed.'
+          : 'Default is a basic self-signed cert. Pick a library certificate to use an upload, org self-signed, or Let\u2019s Encrypt cert — nothing is requested automatically.'}
+      </Text>
+      <View style={styles.tlsOptions}>
+        <Pressable
+          style={[styles.tlsChip, editor.tlsId === null && styles.tlsChipActive]}
+          disabled={locked}
+          onPress={() => onChange({ tlsId: null })}
+        >
+          <Text style={styles.tlsChipText}>Self-signed</Text>
+        </Pressable>
+        {covering.map((row) => (
+          <Pressable
+            key={row.id}
+            style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
+            disabled={locked}
+            onPress={() => onChange({ tlsId: row.id })}
+          >
+            <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  )
+}
+
+function HostingBindPicker({
+  editor,
+  locked,
+  onChange,
+}: Readonly<{
+  editor: HostingEditorState
+  locked: boolean
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  return (
+    <>
+      <Text style={styles.tlsLabel}>Bind</Text>
+      <Text style={styles.tlsHint}>
+        Public — reachable on the internet. Datacenter — private network only.
+        Local — this server only (127.x).
+      </Text>
+      <View style={styles.tlsOptions}>
+        {(
+          [
+            { id: 'public' as const, label: 'Public' },
+            { id: 'datacenter' as const, label: 'Datacenter' },
+            { id: 'local' as const, label: 'Local' },
+          ] as const
+        ).map((option) => (
+          <Pressable
+            key={option.id}
+            style={[
+              styles.tlsChip,
+              editor.bind === option.id && styles.tlsChipActive,
+            ]}
+            disabled={locked}
+            onPress={() =>
+              onChange({
+                bind: option.id,
+                ...(option.id !== 'public' ? { ipId: null } : {}),
+              })
+            }
+          >
+            <Text style={styles.tlsChipText}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  )
+}
+
+function HostingPublicIpPicker({
+  editor,
+  publicIps,
+  locked,
+  onChange,
+}: Readonly<{
+  editor: HostingEditorState
+  publicIps: IpRecord[]
+  locked: boolean
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  if (editor.bind !== 'public') return null
+  return (
+    <>
+      <Text style={styles.tlsLabel}>Public IP</Text>
+      <Text style={styles.tlsHint}>
+        Pin a managed public address, or leave Any interface for the server
+        to choose.
+      </Text>
+      <View style={styles.tlsOptions}>
+        <Pressable
+          style={[styles.tlsChip, editor.ipId === null && styles.tlsChipActive]}
+          disabled={locked}
+          onPress={() => onChange({ ipId: null })}
+        >
+          <Text style={styles.tlsChipText}>Any interface</Text>
+        </Pressable>
+        {publicIps.map((ip) => (
+          <Pressable
+            key={ip.id}
+            style={[
+              styles.tlsChip,
+              editor.ipId === ip.id && styles.tlsChipActive,
+            ]}
+            disabled={locked}
+            onPress={() => onChange({ ipId: ip.id })}
+          >
+            <Text style={styles.tlsChipText}>
+              {ip.address}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  )
+}
+
+function HostingProxyFields({
+  isHttp,
+  composeOwned,
+  serviceContext,
+  editor,
+  locked,
+  panelFieldsLocked,
+  targetPortAuthorable,
+  targetPortHint,
+  onChange,
+}: Readonly<{
+  isHttp: boolean
+  composeOwned: boolean
+  serviceContext: HostingServiceContext
+  editor: HostingEditorState
+  locked: boolean
+  panelFieldsLocked: boolean
+  targetPortAuthorable: boolean
+  targetPortHint: string
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  if (!isHttp) return null
+  return (
+    <>
+      <Text style={styles.tlsLabel}>Proxy</Text>
+      {composeOwned ? (
+        <Text style={styles.tlsHint}>
+          Only Force HTTPS is authored in compose (forceHttps). The rest are
+          hosting-row settings with no compose spelling; deploy preserves
+          them as stored.
+        </Text>
+      ) : null}
+      <Checkbox
+        label="Force HTTPS"
+        checked={editor.forceHttps}
+        disabled={locked}
+        onPress={() => onChange({ forceHttps: !editor.forceHttps })}
+      />
+      <Checkbox
+        label="Gzip"
+        checked={editor.gzip}
+        disabled={panelFieldsLocked}
+        onPress={() => onChange({ gzip: !editor.gzip })}
+      />
+      <Checkbox
+        label="Brotli"
+        checked={editor.brotli}
+        disabled={panelFieldsLocked}
+        onPress={() => onChange({ brotli: !editor.brotli })}
+      />
+
+      <TextField
+        label="Strip prefix"
+        value={editor.stripPrefix}
+        editable={!panelFieldsLocked}
+        onChangeText={(value) => onChange({ stripPrefix: value })}
+        placeholder="/api"
+        mono
+        autoCapitalize="none"
+      />
+      <TextField
+        label="Path prefix"
+        hint={hostingPathPrefixHint(serviceContext)}
+        value={editor.pathPrefix}
+        editable={!locked}
+        onChangeText={(value) => onChange({ pathPrefix: value })}
+        placeholder="/"
+        mono
+        autoCapitalize="none"
+      />
+      {targetPortAuthorable ? (
+        <TextField
+          label="Target port"
+          value={editor.targetPort}
+          editable={!locked}
+          onChangeText={(value) => onChange({ targetPort: value })}
+          placeholder="8080"
+          mono
+          keyboardType="number-pad"
+        />
+      ) : (
+        <Text style={styles.tlsHint}>{targetPortHint}</Text>
+      )}
+
+      <HostingWebEnvFields
+        serviceContext={serviceContext}
+        editor={editor}
+        onChange={onChange}
+        disabled={panelFieldsLocked}
+      />
+    </>
+  )
+}
+
+function HostingVariablesBlock({
+  orgId,
+  hostingId,
+}: Readonly<{ orgId: string; hostingId: string | null }>) {
+  if (!hostingId) {
+    return (
+      <Text style={panelStyles.muted}>
+        Save hosting first to add hostname-scoped variables.
+      </Text>
+    )
+  }
+  return (
+    <VariablesSection
+      orgId={orgId}
+      parentField={{ hostingId }}
+      embedded
+      showPresets={false}
+    />
+  )
+}
+
 function HostingPanelRow({
   orgId,
   composeServiceName,
   serviceContext,
   hostingId,
+  composeRoute = null,
+  composeEditable = true,
   focused = false,
   expanded,
   onToggleExpanded,
@@ -543,6 +1103,19 @@ function HostingPanelRow({
   serviceContext: HostingServiceContext
   /** Persisted hosting row id; null until the first successful save. */
   hostingId: string | null
+  /**
+   * `hostingEntryKey` of the `x-turbopanel.hosting` entry this row renders, or
+   * null for a panel-authored row. Non-null means compose owns the route: the
+   * save writes the document, and the fields compose has no spelling for are
+   * shown read-only rather than offered as edits the API would refuse.
+   */
+  composeRoute?: string | null
+  /**
+   * False when the declaration lives in the project compose. The route still
+   * renders — it is what will deploy — but this surface only authors the
+   * environment overlay, so saving here would append a second declaration.
+   */
+  composeEditable?: boolean
   /** Highlight when opened from a `/networking/:hostingId` deep link. */
   focused?: boolean
   /** Full editor visible; collapsed rows show the one-line summary only. */
@@ -563,9 +1136,27 @@ function HostingPanelRow({
       coversAllHostnames(row.metadata.dnsNames, hostnames),
   )
 
-  const isHttp = editor.protocol === 'http'
+  const composeOwned = composeRoute !== null
+  const targetPortAuthorable = hostingTargetPortAuthorable(
+    composeServiceKindOf(serviceContext),
+  )
+  // Named per kind, so the row says which host process already owns the port
+  // rather than only that the field is gone.
+  const targetPortHint = hostingTargetPortHint(serviceContext) ?? ''
+  // Compose authors the route, never the proxy toggles, the web env, or a raw
+  // tcp/udp publish — those stay on the row and survive every reconcile, so
+  // they are shown as stored rather than hidden or offered as a doomed edit.
+  const locked = disabled || (composeOwned && !composeEditable)
+  const panelFieldsLocked = disabled || composeOwned
+  const isHttp = composeOwned || editor.protocol === 'http'
   const kindLabel = hostingServiceKindLabel(serviceContext)
   const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
+  const saveLabel = composeOwned ? 'Save route to compose' : 'Save hosting'
+  const cardStyle = [
+    panelStyles.detailCard,
+    focused && styles.hostingRowFocused,
+  ]
+  const cardAccessibilityState = focused ? { selected: true } : undefined
 
   const header = (
     <Pressable
@@ -594,255 +1185,84 @@ function HostingPanelRow({
 
   if (!expanded) {
     return (
-      <View
-        style={[panelStyles.detailCard, focused && styles.hostingRowFocused]}
-        accessibilityState={focused ? { selected: true } : undefined}
-      >
+      <View style={cardStyle} accessibilityState={cardAccessibilityState}>
         {header}
       </View>
     )
   }
 
   return (
-    <View
-      style={[panelStyles.detailCard, focused && styles.hostingRowFocused]}
-      accessibilityState={focused ? { selected: true } : undefined}
-    >
+    <View style={cardStyle} accessibilityState={cardAccessibilityState}>
       {header}
-      {dockerBridgeHint ? (
-        <Text style={styles.tlsHint}>{dockerBridgeHint}</Text>
-      ) : null}
-
-      <Text style={styles.tlsLabel}>Protocol</Text>
-      <Text style={styles.tlsHint}>
-        Http routes hostnames through Traefik + Caddy with TLS. Tcp/Udp publish
-        raw port(s) straight through Traefik — no hostname or TLS routing
-        (databases, game servers, relays).
-      </Text>
-      <View style={styles.tlsOptions}>
-        {(
-          [
-            { id: 'http' as const, label: 'Http' },
-            { id: 'tcp' as const, label: 'Tcp' },
-            { id: 'udp' as const, label: 'Udp' },
-          ] as const
-        ).map((option) => (
-          <Pressable
-            key={option.id}
-            style={[
-              styles.tlsChip,
-              editor.protocol === option.id && styles.tlsChipActive,
-            ]}
-            disabled={disabled}
-            onPress={() => onChange({ protocol: option.id })}
-          >
-            <Text style={styles.tlsChipText}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {isHttp ? (
-        <TextField
-          label="Hostnames"
-          value={editor.hostnames}
-          onChangeText={(value) => onChange({ hostnames: value })}
-          placeholder="app.example.com, www.example.com"
-          mono
-          autoCapitalize="none"
-        />
-      ) : (
-        <TextField
-          label="Ports"
-          hint={
-            'Comma-separated published[:target] pairs. Target defaults to published when omitted (e.g. "5432, 8443:8080").'
-          }
-          value={editor.ports}
-          onChangeText={(value) => onChange({ ports: value })}
-          placeholder="5432, 8443:8080"
-          mono
-          autoCapitalize="none"
-        />
-      )}
-
-      {isHttp ? (
-        <>
-          <Text style={styles.tlsLabel}>TLS certificate</Text>
-          <Text style={styles.tlsHint}>
-            Default is a basic self-signed cert. Pick a library certificate to use
-            an upload, org self-signed, or Let&apos;s Encrypt cert — nothing is requested
-            automatically.
-          </Text>
-          <View style={styles.tlsOptions}>
-            <Pressable
-              style={[styles.tlsChip, editor.tlsId === null && styles.tlsChipActive]}
-              disabled={disabled}
-              onPress={() => onChange({ tlsId: null })}
-            >
-              <Text style={styles.tlsChipText}>Self-signed</Text>
-            </Pressable>
-            {covering.map((row) => (
-              <Pressable
-                key={row.id}
-                style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
-                disabled={disabled}
-                onPress={() => onChange({ tlsId: row.id })}
-              >
-                <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </>
-      ) : null}
-
-      <Text style={styles.tlsLabel}>Bind</Text>
-      <Text style={styles.tlsHint}>
-        Public — reachable on the internet. Datacenter — private network only.
-        Local — this server only (127.x).
-      </Text>
-      <View style={styles.tlsOptions}>
-        {(
-          [
-            { id: 'public' as const, label: 'Public' },
-            { id: 'datacenter' as const, label: 'Datacenter' },
-            { id: 'local' as const, label: 'Local' },
-          ] as const
-        ).map((option) => (
-          <Pressable
-            key={option.id}
-            style={[
-              styles.tlsChip,
-              editor.bind === option.id && styles.tlsChipActive,
-            ]}
-            disabled={disabled}
-            onPress={() =>
-              onChange({
-                bind: option.id,
-                ...(option.id !== 'public' ? { ipId: null } : {}),
-              })
-            }
-          >
-            <Text style={styles.tlsChipText}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {editor.bind === 'public' ? (
-        <>
-          <Text style={styles.tlsLabel}>Public IP</Text>
-          <Text style={styles.tlsHint}>
-            Pin a managed public address, or leave Any interface for the server
-            to choose.
-          </Text>
-          <View style={styles.tlsOptions}>
-            <Pressable
-              style={[styles.tlsChip, editor.ipId === null && styles.tlsChipActive]}
-              disabled={disabled}
-              onPress={() => onChange({ ipId: null })}
-            >
-              <Text style={styles.tlsChipText}>Any interface</Text>
-            </Pressable>
-            {publicIps.map((ip) => (
-              <Pressable
-                key={ip.id}
-                style={[
-                  styles.tlsChip,
-                  editor.ipId === ip.id && styles.tlsChipActive,
-                ]}
-                disabled={disabled}
-                onPress={() => onChange({ ipId: ip.id })}
-              >
-                <Text style={styles.tlsChipText}>
-                  {ip.address}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </>
-      ) : null}
-
-      {isHttp ? (
-        <>
-          <Text style={styles.tlsLabel}>Proxy</Text>
-          <Checkbox
-            label="Force HTTPS"
-            checked={editor.forceHttps}
-            disabled={disabled}
-            onPress={() => onChange({ forceHttps: !editor.forceHttps })}
-          />
-          <Checkbox
-            label="Gzip"
-            checked={editor.gzip}
-            disabled={disabled}
-            onPress={() => onChange({ gzip: !editor.gzip })}
-          />
-          <Checkbox
-            label="Brotli"
-            checked={editor.brotli}
-            disabled={disabled}
-            onPress={() => onChange({ brotli: !editor.brotli })}
-          />
-
-          <TextField
-            label="Strip prefix"
-            value={editor.stripPrefix}
-            onChangeText={(value) => onChange({ stripPrefix: value })}
-            placeholder="/api"
-            mono
-            autoCapitalize="none"
-          />
-          <TextField
-            label="Path prefix"
-            hint={hostingPathPrefixHint(serviceContext)}
-            value={editor.pathPrefix}
-            onChangeText={(value) => onChange({ pathPrefix: value })}
-            placeholder="/"
-            mono
-            autoCapitalize="none"
-          />
-          <TextField
-            label="Target port"
-            value={editor.targetPort}
-            onChangeText={(value) => onChange({ targetPort: value })}
-            placeholder="8080"
-            mono
-            keyboardType="number-pad"
-          />
-
-          <HostingWebEnvFields
-            serviceContext={serviceContext}
-            editor={editor}
-            onChange={onChange}
-          />
-        </>
-      ) : null}
-
-      <Button
-        label="Save hosting"
-        busyLabel="Saving…"
-        size="sm"
-        variant="secondary"
-        busy={saving}
-        disabled={disabled}
-        onPress={onSave}
+      <ComposeOwnedHint
+        composeOwned={composeOwned}
+        composeEditable={composeEditable}
       />
+      <HostingHintText hint={dockerBridgeHint} />
+
+      <HostingProtocolPicker
+        composeOwned={composeOwned}
+        editor={editor}
+        disabled={disabled}
+        onChange={onChange}
+      />
+
+      <HostingAddressField
+        isHttp={isHttp}
+        composeOwned={composeOwned}
+        editor={editor}
+        locked={locked}
+        onChange={onChange}
+      />
+
+      <HostingTlsPicker
+        isHttp={isHttp}
+        composeOwned={composeOwned}
+        editor={editor}
+        covering={covering}
+        locked={locked}
+        onChange={onChange}
+      />
+
+      <HostingBindPicker editor={editor} locked={locked} onChange={onChange} />
+
+      <HostingPublicIpPicker
+        editor={editor}
+        publicIps={publicIps}
+        locked={locked}
+        onChange={onChange}
+      />
+
+      <HostingProxyFields
+        isHttp={isHttp}
+        composeOwned={composeOwned}
+        serviceContext={serviceContext}
+        editor={editor}
+        locked={locked}
+        panelFieldsLocked={panelFieldsLocked}
+        targetPortAuthorable={targetPortAuthorable}
+        targetPortHint={targetPortHint}
+        onChange={onChange}
+      />
+
+      {composeEditable ? (
+        <Button
+          label={saveLabel}
+          busyLabel="Saving…"
+          size="sm"
+          variant="secondary"
+          busy={saving}
+          disabled={disabled}
+          onPress={onSave}
+        />
+      ) : null}
 
       <Text style={styles.tlsLabel}>Hosting variables</Text>
       <Text style={styles.tlsHint}>
         Hostname-scoped overrides for this service. Applied at deploy after
         service scope (compose injects at the service level).
       </Text>
-      {hostingId ? (
-        <VariablesSection
-          orgId={orgId}
-          parentField={{ hostingId }}
-          embedded
-          showPresets={false}
-        />
-      ) : (
-        <Text style={panelStyles.muted}>
-          Save hosting first to add hostname-scoped variables.
-        </Text>
-      )}
+      <HostingVariablesBlock orgId={orgId} hostingId={hostingId} />
     </View>
   )
 }
@@ -1271,12 +1691,9 @@ function EnvironmentDeployChromePanels({
 
 function EnvironmentHostingSectionPanel({
   orgId,
-  serviceNames,
-  services,
-  mergedCompose,
+  hostingRows,
   hostingEditors,
   setHostingEditors,
-  hostingsByService,
   tlsLibrary,
   publicIps,
   savingHosting,
@@ -1284,16 +1701,20 @@ function EnvironmentHostingSectionPanel({
   focusHostingId,
 }: Readonly<{
   orgId: string
-  serviceNames: string[]
-  services: ServiceRecord[]
-  mergedCompose: ComposeDocument
+  /**
+   * One descriptor per rendered route — every `x-turbopanel.hosting` entry a
+   * service declares, or its single panel row when it declares none. Built by
+   * {@link buildHostingPanelRows} so this component never has to decide who
+   * owns a route.
+   */
+  hostingRows: HostingPanelRowDescriptor[]
   hostingEditors: Record<string, HostingEditorState>
   setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
-  hostingsByService: Record<string, HostingRecord[]>
   tlsLibrary: TlsRecord[]
   publicIps: IpRecord[]
+  /** `editorKey` of the row being saved, or null. */
   savingHosting: string | null
-  onSaveHosting: (composeServiceName: string) => void
+  onSaveHosting: (row: HostingPanelRowDescriptor) => void
   focusHostingId: string | null
 }>) {
   // Per-row expand-in-place; deep-linked (focused) rows open by default.
@@ -1303,52 +1724,46 @@ function EnvironmentHostingSectionPanel({
       title="Hosting"
       hint="Map compose services to hostnames (http) or raw ports (tcp/udp)"
     >
-      {serviceNames.length === 0 ? (
+      {hostingRows.length === 0 ? (
         <EmptyState title="Add services to Compose before configuring hostnames." />
       ) : (
         <View style={styles.hostingList}>
-          {serviceNames.map((composeServiceName) => {
-            const service = services.find(
-              (item) => item.composeServiceName === composeServiceName,
-            )
-            const serviceKey = service?.id ?? composeServiceName
-            const editor =
-              hostingEditors[serviceKey] ??
-              readHostingEditor([])
-            const hostingId = hostingsByService[serviceKey]?.[0]?.id ?? null
+          {hostingRows.map((row) => {
+            const editor = hostingEditors[row.editorKey] ?? row.seed
             const focused =
-              focusHostingId != null && hostingId === focusHostingId
-            const expanded = expandedRows[serviceKey] ?? focused
+              focusHostingId != null && row.hostingId === focusHostingId
+            const expanded = expandedRows[row.editorKey] ?? focused
             return (
               <HostingPanelRow
-                key={composeServiceName}
+                key={row.editorKey}
                 orgId={orgId}
-                composeServiceName={composeServiceName}
-                serviceContext={resolveHostingServiceContext(
-                  mergedCompose,
-                  composeServiceName,
-                )}
-                hostingId={hostingId}
+                composeServiceName={row.composeServiceName}
+                serviceContext={row.serviceContext}
+                hostingId={row.hostingId}
+                composeRoute={row.source.kind === 'compose'
+                  ? row.source.route
+                  : null}
+                composeEditable={isEditableRow(row)}
                 focused={focused}
                 expanded={expanded}
                 onToggleExpanded={() =>
                   setExpandedRows((current) => ({
                     ...current,
-                    [serviceKey]: !expanded,
+                    [row.editorKey]: !expanded,
                   }))
                 }
                 editor={editor}
                 tlsOptions={tlsLibrary}
                 publicIps={publicIps}
-                saving={savingHosting === composeServiceName}
+                saving={savingHosting === row.editorKey}
                 disabled={savingHosting !== null}
                 onChange={(patch) =>
                   setHostingEditors((current) => ({
                     ...current,
-                    [serviceKey]: { ...editor, ...patch },
+                    [row.editorKey]: { ...editor, ...patch },
                   }))
                 }
-                onSave={() => onSaveHosting(composeServiceName)}
+                onSave={() => onSaveHosting(row)}
               />
             )
           })}
@@ -1489,9 +1904,9 @@ function EnvironmentLoadedPanels({
   inheritsProjectDefault = false,
   services,
   onServiceChange,
+  hostingRows,
   hostingEditors,
   setHostingEditors,
-  hostingsByService,
   tlsLibrary,
   publicIps,
   savingHosting,
@@ -1526,13 +1941,13 @@ function EnvironmentLoadedPanels({
   inheritsProjectDefault?: boolean
   services: ServiceRecord[]
   onServiceChange: (nextService: ServiceRecord) => void
+  hostingRows: HostingPanelRowDescriptor[]
   hostingEditors: Record<string, HostingEditorState>
   setHostingEditors: Dispatch<SetStateAction<Record<string, HostingEditorState>>>
-  hostingsByService: Record<string, HostingRecord[]>
   tlsLibrary: TlsRecord[]
   publicIps: IpRecord[]
   savingHosting: string | null
-  onSaveHosting: (composeServiceName: string) => void
+  onSaveHosting: (row: HostingPanelRowDescriptor) => void
   containersByService: Record<string, ContainerRecord[]>
   canManage: boolean
   showEnvironmentPanel?: boolean
@@ -1584,12 +1999,9 @@ function EnvironmentLoadedPanels({
       {showSection('hosting') ? (
         <EnvironmentHostingSectionPanel
           orgId={orgId}
-          serviceNames={serviceNames}
-          services={services}
-          mergedCompose={mergedCompose}
+          hostingRows={hostingRows}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}
-          hostingsByService={hostingsByService}
           tlsLibrary={tlsLibrary}
           publicIps={publicIps}
           savingHosting={savingHosting}
@@ -1658,22 +2070,32 @@ function computeEnvironmentDetailLoading(queries: {
 }
 
 /**
- * Seed `hostingEditors` for any service id not yet present. Returns the same
- * object when nothing is missing so a new `hostingsByService` identity does
- * not loop the seeding effect.
+ * Seed `hostingEditors` for any row not yet present. Returns the same object
+ * when nothing is missing so a new `hostingRows` identity does not loop the
+ * seeding effect.
+ *
+ * Keyed on `editorKey` rather than service id: a service declaring three
+ * routes in compose has three editors, and collapsing them onto the service
+ * would put every route's edits in one box.
  */
 function seedHostingEditors(
   current: Record<string, HostingEditorState>,
-  serviceIds: string[],
-  hostingsByService: Record<string, HostingRecord[]>,
+  hostingRows: readonly HostingPanelRowDescriptor[],
 ): Record<string, HostingEditorState> {
-  const missingIds = serviceIds.filter((serviceId) => !(serviceId in current))
-  if (missingIds.length === 0) return current
+  const missing = hostingRows.filter((row) => !(row.editorKey in current))
+  if (missing.length === 0) return current
   const next = { ...current }
-  for (const serviceId of missingIds) {
-    next[serviceId] = readHostingEditor(hostingsByService[serviceId] ?? [])
-  }
+  for (const row of missing) next[row.editorKey] = row.seed
   return next
+}
+
+/** Every editor re-seeded from the rows a refetch produced. */
+function resetHostingEditors(
+  hostingRows: readonly HostingPanelRowDescriptor[],
+): Record<string, HostingEditorState> {
+  const editors: Record<string, HostingEditorState> = {}
+  for (const row of hostingRows) editors[row.editorKey] = row.seed
+  return editors
 }
 
 /**
@@ -1921,7 +2343,9 @@ export function EnvironmentDetailBody({
   const publicIps = ipsQuery.data?.ips ?? []
   const hostingsByService = hostingsQuery.hostingsByService
   const containersByService = containersQuery.containersByService
-  const resolvedServices = services ?? []
+  // Memoized because `hostingRows` depends on it: a fresh `[]` every render
+  // would rebuild every descriptor and re-seed the editors mid-edit.
+  const resolvedServices = useMemo(() => services ?? [], [services])
 
   const loading = computeEnvironmentDetailLoading({
     environmentLoading: environmentQuery.isLoading,
@@ -1953,15 +2377,6 @@ export function EnvironmentDetailBody({
       )
     }
   }, [queryError])
-
-  // Seed editors once per service id. Return the same state object when
-  // nothing is missing so a new hostingsByService identity cannot loop.
-  useEffect(() => {
-    if (loading) return
-    setHostingEditors((current) =>
-      seedHostingEditors(current, serviceIds, hostingsByService),
-    )
-  }, [loading, serviceIds, hostingsByService])
 
   useEffect(() => {
     if (!commandsQuery.data || trackedEntries.length === 0) return
@@ -2024,6 +2439,36 @@ export function EnvironmentDetailBody({
     const keep = new Set(filterServiceNames)
     return all.filter((name) => keep.has(name))
   }, [mergedCompose, filterServiceNames])
+  // The overlay on its own, not merged: it is the only document this surface
+  // can author, so it decides which compose-declared routes are editable here.
+  const overlayCompose = useMemo(
+    () => normalizeCompose(environment?.options?.compose),
+    [environment?.options?.compose],
+  )
+  const hostingRows = useMemo(
+    () =>
+      buildHostingPanelRows({
+        serviceNames,
+        services: resolvedServices,
+        mergedCompose,
+        overlayCompose,
+        hostingsByService,
+      }),
+    [
+      serviceNames,
+      resolvedServices,
+      mergedCompose,
+      overlayCompose,
+      hostingsByService,
+    ],
+  )
+
+  // Seed editors once per rendered row. Return the same state object when
+  // nothing is missing so a new hostingRows identity cannot loop.
+  useEffect(() => {
+    if (loading) return
+    setHostingEditors((current) => seedHostingEditors(current, hostingRows))
+  }, [loading, hostingRows])
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
     [allServers, placementServerId],
@@ -2051,13 +2496,7 @@ export function EnvironmentDetailBody({
 
   const resetHostingEditorsFromQueries = async () => {
     await Promise.all([hostingsQuery.refetchAll(), servicesQuery.refetch()])
-    const editors: Record<string, HostingEditorState> = {}
-    for (const service of servicesQuery.data?.services ?? resolvedServices) {
-      editors[service.id] = readHostingEditor(
-        hostingsQuery.hostingsByService[service.id] ?? [],
-      )
-    }
-    setHostingEditors(editors)
+    setHostingEditors(resetHostingEditors(hostingRows))
   }
 
   const saveCompose = async (compose: ComposeDocument) => {
@@ -2151,49 +2590,89 @@ export function EnvironmentDetailBody({
     setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
   }
 
-  const saveHosting = async (composeServiceName: string) => {
-    setSavingHosting(composeServiceName)
-    setError(null)
-    try {
-      const service = resolvedServices.find(
-        (item) => item.composeServiceName === composeServiceName,
-      )
-      if (!service) {
-        setError('Save the compose document first.')
-        return
-      }
-      const editor = hostingEditors[service.id] ?? readHostingEditor([])
-      const existing = hostingsByService[service.id]?.[0]
-      const options = buildHostingOptions(editor)
-      const body = {
-        name: composeServiceName,
-        metadata: { composeServiceName },
-        options,
+  /**
+   * Persist one edited compose route by rewriting the environment overlay.
+   *
+   * Never `PATCH /hostings`: the row this renders is materialized from the
+   * document and the API answers a write to it with
+   * `409 hosting_owned_by_compose`. The next deploy re-projects the row from
+   * what is saved here.
+   */
+  const saveComposeHostingRow = async (
+    row: HostingPanelRowDescriptor,
+    overlayIndex: number,
+  ): Promise<void> => {
+    const editor = hostingEditors[row.editorKey] ?? row.seed
+    const entry = composeHostingEntryFromEditor(editor, row.serviceContext)
+    if (!entry) {
+      setError('Enter a hostname for this route.')
+      return
+    }
+    const entries = [
+      ...readComposeHostingEntries(overlayCompose, row.composeServiceName),
+    ]
+    entries[overlayIndex] = entry
+    await saveCompose(
+      writeComposeHostingEntries(
+        overlayCompose,
+        row.composeServiceName,
+        entries,
+      ),
+    )
+  }
+
+  /** Persist one panel-authored row straight to `/hostings`, as before. */
+  const savePanelHostingRow = async (
+    row: HostingPanelRowDescriptor,
+  ): Promise<void> => {
+    const service = resolvedServices.find(
+      (item) => item.composeServiceName === row.composeServiceName,
+    )
+    if (!service) {
+      setError('Save the compose document first.')
+      return
+    }
+    const editor = hostingEditors[row.editorKey] ?? row.seed
+    const result = await upsertHostingMutation.run({
+      serviceId: service.id,
+      ...(row.hostingId ? { hostingId: row.hostingId } : {}),
+      body: {
+        name: row.composeServiceName,
+        metadata: { composeServiceName: row.composeServiceName },
+        options: buildHostingOptions(editor),
         tlsId: editor.tlsId,
         ipId: editor.ipId,
+      },
+    })
+    if (!result.ok) {
+      if (upsertHostingMutation.actionError) {
+        setError(upsertHostingMutation.actionError)
       }
-      const result = await upsertHostingMutation.run({
-        serviceId: service.id,
-        ...(existing ? { hostingId: existing.id } : {}),
-        body,
-      })
-      if (!result.ok) {
-        if (upsertHostingMutation.actionError) {
-          setError(upsertHostingMutation.actionError)
-        }
+      return
+    }
+    await Promise.all([
+      servicesQuery.refetch(),
+      hostingsQuery.refetchAll(),
+      containersQuery.refetchAll(),
+    ])
+    await resetHostingEditorsFromQueries()
+  }
+
+  const saveHosting = async (row: HostingPanelRowDescriptor) => {
+    setSavingHosting(row.editorKey)
+    setError(null)
+    try {
+      if (row.source.kind === 'panel') {
+        await savePanelHostingRow(row)
         return
       }
-      await Promise.all([
-        servicesQuery.refetch(),
-        hostingsQuery.refetchAll(),
-        containersQuery.refetchAll(),
-      ])
-      const refreshedHostings =
-        hostingsQuery.hostingsByService[service.id] ?? []
-      setHostingEditors((current) => ({
-        ...current,
-        [service.id]: readHostingEditor(refreshedHostings),
-      }))
+      if (row.source.overlayIndex === null) {
+        setError(
+          'This route is declared by the project compose. Edit it there — saving here would append a second declaration.',
+        )
+        return
+      }
+      await saveComposeHostingRow(row, row.source.overlayIndex)
     } finally {
       setSavingHosting(null)
     }
@@ -2245,14 +2724,14 @@ export function EnvironmentDetailBody({
           inheritsProjectDefault={inheritsProjectDefault}
           services={resolvedServices}
           onServiceChange={updateServiceInCache}
+          hostingRows={hostingRows}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}
-          hostingsByService={hostingsByService}
           tlsLibrary={tlsLibrary}
           publicIps={publicIps}
           savingHosting={savingHosting}
-          onSaveHosting={(composeServiceName) => {
-            saveHosting(composeServiceName).catch(() => {
+          onSaveHosting={(row) => {
+            saveHosting(row).catch(() => {
               // Errors are surfaced via setError.
             })
           }}

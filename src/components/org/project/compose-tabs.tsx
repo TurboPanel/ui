@@ -48,6 +48,7 @@ import {
 } from '@/components/icons/resource-icons'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { composePrincipalAliases } from '@/lib/compose/principals-document'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import type {
   ComposeDocFacts,
@@ -263,6 +264,7 @@ function ComposeEditorPanel({
   onOpenScopeConfig,
   renderHostingEditor,
   renderReleasesPanel,
+  extraPrincipalAliases,
 }: Readonly<{
   document: unknown
   onSave: (compose: ComposeDocument) => Promise<void>
@@ -275,6 +277,8 @@ function ComposeEditorPanel({
   onOpenScopeConfig?: () => void
   renderHostingEditor?: (composeServiceName: string) => ReactNode
   renderReleasesPanel?: (composeServiceName: string) => ReactNode
+  /** Aliases from the layer above; `[]` on the base, the base's on an overlay. */
+  extraPrincipalAliases?: readonly string[]
 }>) {
   return (
     <ComposeBasePanel
@@ -294,6 +298,7 @@ function ComposeEditorPanel({
       {...(onOpenScopeConfig ? { onOpenScopeConfig } : {})}
       {...(renderHostingEditor ? { renderHostingEditor } : {})}
       {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
+      {...(extraPrincipalAliases === undefined ? {} : { extraPrincipalAliases })}
     />
   )
 }
@@ -586,9 +591,16 @@ function ServicesPanelBody({
     )
     const blocking = blockingComposeLintIssues(
       lintComposeYaml(composeDocumentToYaml(next), {
-        // Overview's own save path — the same rule the editor and the instance
-        // apply, so a second repository cannot slip in through this surface.
+        // Overview's own save path — the same rules the editor and the instance
+        // apply, so neither a second repository nor a dangling principal alias
+        // can slip in through this surface.
         ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+        knownPrincipalAliases: new Set([
+          ...(baseSelected
+            ? []
+            : composePrincipalAliases(project.options?.compose)),
+          ...composePrincipalAliases(next),
+        ]),
       }),
     )
     if (blocking.length > 0) return
@@ -625,6 +637,8 @@ function ServicesPanelBody({
           saving={saving}
           editView={editView}
           sessionKey={scopeKey}
+          // The base has no layer above it, so its own root is the whole scope.
+          extraPrincipalAliases={[]}
           documentFacts={documentFacts}
           onOpenScopeConfig={onOpenScopeConfig}
           {...(draft
@@ -709,6 +723,8 @@ function ServicesPanelBody({
         saving={saving}
         editView={editView}
         sessionKey={scopeKey}
+        // An overlay answers to the project's root as well as its own.
+        extraPrincipalAliases={composePrincipalAliases(project.options?.compose)}
         documentFacts={documentFacts}
         onOpenScopeConfig={onOpenScopeConfig}
         renderHostingEditor={(composeServiceName) => (

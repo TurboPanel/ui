@@ -14,11 +14,23 @@ import {
   SOURCE_BRANCH_MAX_LENGTH,
   type ComposeServiceSourceExtension,
 } from '@/lib/compose/service-kind'
+import { writeComposePrincipals } from '@/lib/compose/principals-document'
 import type { RepositoryLane } from '@/lib/compose/repository-lane'
 import type { RepositoryRecord } from '@/lib/instance-api'
 
 /** Compose key when the repository name yields nothing usable. */
 const FALLBACK_SERVICE_NAME = 'app'
+
+/**
+ * Alias every seeded host-native service runs as.
+ *
+ * Sites and Node apps require one — the document root, the release tree, and
+ * any scheduled jobs belong to an account — so a seed that declared none would
+ * hand the operator a draft the save rejects. One account for the one service a
+ * seed creates is also the right default: a second is a decision, and the
+ * Accounts section is where it gets made.
+ */
+const SEED_PRINCIPAL_ALIAS = 'app'
 
 /** Docker keeps service keys short; this is well past anything readable. */
 const SERVICE_NAME_MAX_LENGTH = 63
@@ -101,11 +113,16 @@ export function seedComposeForLane(params: {
   }
 
   const extension = lane === 'app'
-    ? { serviceKind: 'node' as const, source: binding }
+    ? {
+      serviceKind: 'node' as const,
+      principal: SEED_PRINCIPAL_ALIAS,
+      source: binding,
+    }
     : {
       serviceKind: 'site' as const,
       engine: params.engine ?? DEFAULT_SITE_ENGINE,
       root: params.root ?? 'public',
+      principal: SEED_PRINCIPAL_ALIAS,
       source: binding,
       // An empty `php: {}` would be a no-op twice over: the extension parser
       // drops an empty block, and the daemon's `siteNeedsPhp` requires a
@@ -114,11 +131,22 @@ export function seedComposeForLane(params: {
     }
 
   const service = patchServiceTurbopanelExtension({}, extension)
-  return {
+  return withSeedPrincipal({
     version: 1,
     data: { services: { [repositoryServiceName(source)]: service } },
     presentation: { keyOrder: ['services'], comments: {} },
-  }
+  })
+}
+
+/**
+ * Declare the alias the seeded service names.
+ *
+ * A per-service `principal` that resolves to nothing is a dangling reference —
+ * the linter says so, and deploy-prepare refuses it — so the two are written
+ * together or not at all.
+ */
+function withSeedPrincipal(document: ComposeDocument): ComposeDocument {
+  return writeComposePrincipals(document, { [SEED_PRINCIPAL_ALIAS]: {} })
 }
 
 /**
@@ -175,15 +203,16 @@ export function seedHostingCompose(params: {
       engine: params.engine ?? DEFAULT_SITE_ENGINE,
       root: params.root ?? 'public',
       sourceKind: 'managed-directory',
+      principal: SEED_PRINCIPAL_ALIAS,
       // An empty `php: {}` is a no-op twice over — the extension parser drops an
       // empty block and the daemon's `siteNeedsPhp` requires a non-empty one —
       // so naming the default series is what actually turns PHP on.
       ...(params.php ? { php: { version: DEFAULT_PHP_SERIES } } : {}),
     },
   )
-  return {
+  return withSeedPrincipal({
     version: 1,
     data: { services: { [params.serviceName ?? 'site']: service } },
     presentation: { keyOrder: ['services'], comments: {} },
-  }
+  })
 }

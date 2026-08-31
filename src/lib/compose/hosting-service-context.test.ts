@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { yamlToComposeDocument } from './convert'
 import {
+  findComposeHostingEntryIndex,
   hostingDockerBridgeHint,
   hostingPathPrefixHint,
   hostingPhpSectionCopy,
   hostingServiceKindLabel,
+  hostingTargetPortHint,
   hostingWebEnvSectionCopy,
+  readComposeHostingEntries,
   readComposeServiceMap,
   resolveHostingServiceContext,
   shouldRevealOptionalHostingFields,
   siteEnvKeyForService,
+  writeComposeHostingEntries,
 } from './hosting-service-context'
 import type { ComposeDocument } from './types'
 
@@ -102,6 +106,61 @@ describe('resolveHostingServiceContext', () => {
     expect(hint).toContain('TURBOPANEL_SITE_PHP_URL')
     expect(hint).toContain('TURBOPANEL_SITE_ENDPOINTS')
     expect(hostingDockerBridgeHint(resolveHostingServiceContext(document, 'php'))).toBeNull()
+  })
+})
+
+describe('node services are their own kind', () => {
+  const document = yamlToComposeDocument(`services:
+  app:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+  api:
+    image: node:22
+  blog:
+    x-turbopanel:
+      serviceKind: site
+      engine: caddy
+`)
+
+  it('resolves a node service as node, not container', () => {
+    // The regression: every non-site service used to resolve as `container`,
+    // so a native app inherited container rules — most visibly `targetPort`,
+    // which the panel offered and wrote for a kind the control plane refuses
+    // it on.
+    expect(resolveHostingServiceContext(document, 'app').kind).toBe('node')
+    expect(resolveHostingServiceContext(document, 'api').kind).toBe('container')
+    expect(resolveHostingServiceContext(document, 'blog').kind).toBe('site')
+  })
+
+  it('labels the native node lane and describes who owns the port', () => {
+    const node = resolveHostingServiceContext(document, 'app')
+    expect(hostingServiceKindLabel(node)).toBe('Node app')
+    const hint = hostingTargetPortHint(node)
+    expect(hint).toContain('systemd')
+    expect(hint).toContain('PORT')
+    // A site is answered by an engine vhost, not a supervised process — the
+    // hint names which, so the field reads as already decided rather than
+    // missing.
+    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'blog')))
+      .toContain('Caddy')
+    // A container keeps the field, so it has nothing to say in its place.
+    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'api')))
+      .toBeNull()
+  })
+
+  it('offers neither PHP nor container-variable advice for a node service', () => {
+    const node = resolveHostingServiceContext(document, 'app')
+    expect(node.phpApplicability).toBe('not_applicable')
+    expect(hostingPhpSectionCopy(node).showFields).toBe(false)
+    expect(node.webEnvMode).toBe('node_unit_environment')
+    const copy = hostingWebEnvSectionCopy(node)
+    expect(copy.showFields).toBe(false)
+    expect(copy.hint).toContain('host-supervised process')
+    // Not a container, so the docker bridge advice would point at a control
+    // that cannot reach the process.
+    expect(hostingDockerBridgeHint(node)).toBeNull()
   })
 })
 
@@ -218,6 +277,7 @@ describe('hosting copy helpers', () => {
         siteSiblingNames: [],
         phpApplicability: 'applicable',
         webEnvMode: 'file_only',
+        composeHostingEntries: [],
       }),
     ).toBe('Site · site')
   })
@@ -247,5 +307,59 @@ describe('caddy site engine', () => {
 `)
     const ctx = resolveHostingServiceContext(doc, 'web')
     expect(ctx.engine).toBe('caddy')
+  })
+})
+
+describe('compose-authored hosting entries', () => {
+  const overlay = yamlToComposeDocument(`services:
+  web:
+    x-turbopanel:
+      hosting:
+        - hostname: app.example.com
+        - hostname: docs.example.com
+          pathPrefix: /docs
+`)
+
+  it('reads every entry a service declares, in document order', () => {
+    expect(
+      readComposeHostingEntries(overlay, 'web').map((e) => e.hostname),
+    ).toEqual(['app.example.com', 'docs.example.com'])
+    expect(readComposeHostingEntries(overlay, 'missing')).toEqual([])
+  })
+
+  it('locates an entry by its route rather than by position', () => {
+    const entries = readComposeHostingEntries(overlay, 'web')
+    expect(findComposeHostingEntryIndex(entries, 'docs.example.com /docs')).toBe(1)
+    expect(findComposeHostingEntryIndex(entries, 'app.example.com /')).toBe(0)
+    expect(findComposeHostingEntryIndex(entries, 'nope.example.com /')).toBe(-1)
+  })
+
+  it('replaces the whole list without touching other services', () => {
+    const next = writeComposeHostingEntries(overlay, 'web', [
+      { hostname: 'app.example.com', tls: { mode: 'internal' } },
+    ])
+    expect(readComposeHostingEntries(next, 'web')).toEqual([
+      { hostname: 'app.example.com', tls: { mode: 'internal' } },
+    ])
+    // The source document is untouched — the caller saves the copy.
+    expect(readComposeHostingEntries(overlay, 'web')).toHaveLength(2)
+  })
+
+  it('declares a route on a service the overlay did not mention', () => {
+    const next = writeComposeHostingEntries(overlay, 'api', [
+      { hostname: 'api.example.com' },
+    ])
+    expect(readComposeHostingEntries(next, 'api')).toEqual([
+      { hostname: 'api.example.com' },
+    ])
+    expect(readComposeHostingEntries(next, 'web')).toHaveLength(2)
+  })
+
+  it('drops the hosting key when the last entry goes away', () => {
+    const next = writeComposeHostingEntries(overlay, 'web', [])
+    expect(readComposeHostingEntries(next, 'web')).toEqual([])
+    expect(
+      resolveHostingServiceContext(next, 'web').composeHostingEntries,
+    ).toEqual([])
   })
 })

@@ -65,7 +65,7 @@ import {
   type RepositoryAutoDeploy,
   type RepositoryRecord,
 } from '@/lib/instance-api'
-import { Button } from '@/components/ui'
+import { Button, Select } from '@/components/ui'
 import { useProjectRepositoryId } from '@/components/org/project/project-context'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
@@ -1388,10 +1388,77 @@ function containerVisualFlags(
   }
 }
 
+/**
+ * Which account this site or Node app runs as.
+ *
+ * A picker over the aliases the document declares, not a free-text box: the
+ * value has to resolve against the root `x-turbopanel.principals` block, and a
+ * typo in a text field would only be caught by the linter after the fact. "New
+ * account" declares one at the root and selects it in the same press, because a
+ * service that has just been created has nowhere to point yet and sending the
+ * operator off to declare one first is a detour with no purpose.
+ *
+ * Deliberately not defaulted to "the first declared alias": which account owns
+ * a service is an ownership decision, and quietly picking one would put a
+ * tenant's files under an account nobody chose.
+ */
+function PrincipalField({
+  alias,
+  aliases,
+  disabled,
+  onChange,
+  onDeclare,
+}: Readonly<{
+  alias: string | undefined
+  aliases: readonly string[]
+  disabled: boolean
+  onChange: (alias: string | undefined) => void
+  onDeclare?: () => string
+}>) {
+  // An alias the root no longer declares still has to be *shown* — silently
+  // blanking the picker would look like the operator never chose one.
+  const options = (alias && !aliases.includes(alias) ? [...aliases, alias] : aliases)
+    .map((entry) => ({
+      value: entry,
+      label: entry,
+      ...(entry === alias && !aliases.includes(entry)
+        ? { detail: 'not declared in x-turbopanel.principals' }
+        : {}),
+    }))
+
+  return (
+    <View style={styles.fieldBlock}>
+      <Text style={styles.label}>Runs as</Text>
+      <Select
+        value={alias ?? null}
+        options={options}
+        placeholder="Pick an account"
+        disabled={disabled}
+        accessibilityLabel="Account this service runs as"
+        onChange={(next) => onChange(next ?? undefined)}
+      />
+      {onDeclare && !disabled ? (
+        <Button
+          label="New account"
+          size="sm"
+          onPress={() => onChange(onDeclare())}
+        />
+      ) : null}
+      <Text style={styles.hint}>
+        Required for sites and Node apps: the document root, the release tree,
+        and any scheduled jobs all belong to this account. Declare accounts
+        under Accounts on this document.
+      </Text>
+    </View>
+  )
+}
+
 export function ComposeVisualServiceCard({
   service,
   nameDraft,
   saving,
+  principalAliases = [],
+  onDeclarePrincipalAlias,
   onNameDraftChange,
   onRename,
   onRemoveService,
@@ -1402,6 +1469,18 @@ export function ComposeVisualServiceCard({
   service: Record<string, unknown>
   nameDraft: string
   saving: boolean
+  /** Aliases the document's root declares, in document order. */
+  principalAliases?: readonly string[]
+  /**
+   * Declare a brand-new alias at the root and return the name it got.
+   *
+   * The picker needs it because the common case is a service that has just been
+   * added: sending the operator to a separate section to declare an account
+   * before they can finish the service is a detour with no purpose. Absent when
+   * the surface cannot write the root block, and the picker then offers only
+   * what is already declared.
+   */
+  onDeclarePrincipalAlias?: () => string
   onNameDraftChange: (value: string) => void
   onRename: (nextName: string) => void
   onRemoveService: () => void
@@ -1534,6 +1613,10 @@ export function ComposeVisualServiceCard({
     })
   }
 
+  const principalDeclareProps = onDeclarePrincipalAlias
+    ? { onDeclare: onDeclarePrincipalAlias }
+    : {}
+
   return (
     <View style={panelStyles.detailCard}>
       <View style={styles.serviceHeader}>
@@ -1618,6 +1701,30 @@ export function ComposeVisualServiceCard({
           )}
         </Text>
       </View>
+
+      {hostNative ? (
+        <PrincipalField
+          alias={extension.principal}
+          aliases={principalAliases}
+          disabled={saving}
+          {...principalDeclareProps}
+          onChange={(principal) =>
+            applyExtension(
+              extension.serviceKind === 'site'
+                ? {
+                  serviceKind: 'site',
+                  engine: extension.engine ?? DEFAULT_SITE_ENGINE,
+                  root: extension.root ?? 'public',
+                  principal,
+                }
+                : {
+                  serviceKind: 'node',
+                  framework: extension.framework ?? 'auto',
+                  principal,
+                },
+            )}
+        />
+      ) : null}
 
       {extension.serviceKind === 'node' ? (
         <NodeRuntimeBlock

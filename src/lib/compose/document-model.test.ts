@@ -43,6 +43,32 @@ networks:
 `)
 
 describe('buildComposeDocModel', () => {
+  it('names a driver: overlay network as the TurboFabric signal it is', () => {
+    const model = buildComposeDocModel(
+      yamlToComposeDocument(`services:
+  web:
+    image: nginx:1.27
+    networks:
+      - spans
+      - local
+networks:
+  spans:
+    driver: overlay
+  local:
+    driver: bridge
+volumes:
+  data:
+    driver: overlay
+`),
+    )
+    expect(model.networks.map((n) => [n.name, n.detail])).toEqual([
+      ['spans', 'overlay (TurboFabric)'],
+      ['local', 'bridge'],
+    ])
+    // A volume driver named `overlay` is just a volume driver.
+    expect(model.volumes[0]!.detail).toBe('overlay')
+  })
+
   it('keeps definition order and reads each service source', () => {
     const model = buildComposeDocModel(doc)
     expect(model.services.map((s) => s.name)).toEqual(['web', 'api', 'db'])

@@ -7,8 +7,14 @@ import {
   type ReactNode,
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { ComposeNetworksFields } from '@/components/org/compose-networks-fields'
+import { ComposePrincipalsFields } from '@/components/org/compose-principals-fields'
 import { ComposeVisualServiceCard } from '@/components/org/compose-visual-service'
-import { useProjectRepositoryId } from '@/components/org/project/project-context'
+import { DockerRunImportModal } from '@/components/org/docker-run-import-modal'
+import {
+  useOptionalProjectId,
+  useProjectRepositoryId,
+} from '@/components/org/project/project-context'
 import {
   ComposeDocumentView,
   type ComposeDocFacts,
@@ -36,6 +42,7 @@ import {
   hideComposeTurbopanelExtensions,
   hiddenSiteServiceNames,
   lintComposeYaml,
+  mergeComposeOverlay,
   normalizeCompose,
   readComposeEditorView,
   restoreComposeTurbopanelExtensions,
@@ -46,6 +53,18 @@ import {
   type ComposeEditorView,
   type ComposeLintIssue,
 } from '@/lib/compose'
+import {
+  readComposeNetworks,
+  writeComposeNetworks,
+  type ComposeNetworkEntry,
+} from '@/lib/compose/networks-document'
+import {
+  composePrincipalAliases,
+  nextPrincipalAlias,
+  readComposePrincipals,
+  writeComposePrincipals,
+} from '@/lib/compose/principals-document'
+import type { PrincipalSpec } from '@/lib/compose/root-extension'
 import type { VisualFieldDef } from '@/lib/compose/visual-fields'
 import {
   applyNewlineAutoIndent,
@@ -478,6 +497,7 @@ function editorChromeTrailing({
   saving,
   canSave,
   toolbarTrailing,
+  importAction,
   onSave,
   onDiscard,
 }: Readonly<{
@@ -485,13 +505,16 @@ function editorChromeTrailing({
   saving: boolean
   canSave: boolean
   toolbarTrailing: ReactNode
+  /** `docker run` import — left of Discard / Save, hidden on read-only surfaces. */
+  importAction: ReactNode
   onSave: () => void
   onDiscard: () => void
 }>): ReactNode | undefined {
-  if (!showSave && !toolbarTrailing) return undefined
+  if (!showSave && !toolbarTrailing && !importAction) return undefined
   return (
     <View style={styles.headerActions}>
       {toolbarTrailing}
+      {importAction}
       {showSave ? (
         <ComposeDraftActionButtons
           saving={saving}
@@ -515,6 +538,11 @@ function ComposeDocumentBody({
   hideSave,
   documentFacts,
   serviceCard,
+  principals,
+  onPrincipalsChange,
+  networks,
+  networkIssues,
+  onNetworksChange,
   onAddService,
   onOpenScopeConfig,
   renderHostingEditor,
@@ -525,6 +553,11 @@ function ComposeDocumentBody({
   hideSave: boolean
   documentFacts: ComposeDocFacts | undefined
   serviceCard: (name: string) => ReactNode
+  principals: Readonly<Record<string, PrincipalSpec>>
+  onPrincipalsChange: (next: Record<string, PrincipalSpec>) => void
+  networks: Readonly<Record<string, ComposeNetworkEntry>>
+  networkIssues: readonly ComposeLintIssue[]
+  onNetworksChange: (next: Record<string, ComposeNetworkEntry>) => void
   onAddService: () => void
   onOpenScopeConfig: (() => void) | undefined
   renderHostingEditor: ((composeServiceName: string) => ReactNode) | undefined
@@ -541,6 +574,21 @@ function ComposeDocumentBody({
         {...(renderHostingEditor ? { renderHostingEditor } : {})}
         {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
       />
+      <View style={styles.documentNetworks}>
+        <ComposeNetworksFields
+          networks={networks}
+          issues={networkIssues}
+          disabled={saving || hideSave}
+          onChange={onNetworksChange}
+        />
+      </View>
+      <View style={styles.documentPrincipals}>
+        <ComposePrincipalsFields
+          principals={principals}
+          disabled={saving || hideSave}
+          onChange={onPrincipalsChange}
+        />
+      </View>
       <View style={styles.documentFooter}>
         <Button
           label="Add service"
@@ -574,6 +622,7 @@ export function ComposeEditorSection({
   onOpenScopeConfig,
   renderHostingEditor,
   renderReleasesPanel,
+  extraPrincipalAliases,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -589,6 +638,18 @@ export function ComposeEditorSection({
   onViewChange?: (view: ComposeEditorView) => void
   /** Debounced draft updates; `null` while editor YAML is unparseable. */
   onDraftChange?: (document: ComposeDocument | null) => void
+  /**
+   * Principal aliases declared **outside** this document that a service here
+   * may still name — the project base's, for an environment overlay.
+   *
+   * Presence is the switch, not the contents: an empty array says "this surface
+   * holds the whole scope" and turns the resolution rule on, while omitting it
+   * skips the rule the same way the instance skips it for a caller with no
+   * project context. A surface that cannot see the sibling layer must omit it
+   * rather than pass `[]`, or every overlay service naming a base alias would
+   * be flagged.
+   */
+  extraPrincipalAliases?: readonly string[]
   /**
    * When set (and a draft store is present), unsaved edits survive Overview /
    * Compose / Services route remounts for this scope key.
@@ -897,6 +958,12 @@ export function ComposeEditorSection({
       const blocking = blockingComposeLintIssues(
         lintComposeYaml(composeDocumentToYaml(next), {
           ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+          ...(extraPrincipalAliases === undefined ? {} : {
+            knownPrincipalAliases: new Set([
+              ...extraPrincipalAliases,
+              ...composePrincipalAliases(next),
+            ]),
+          }),
         }),
       )
       if (blocking.length > 0) {
@@ -1052,7 +1119,61 @@ export function ComposeEditorSection({
     })
   }
 
+  const principals = readComposePrincipals(draft)
+  const principalAliases = Object.keys(principals)
+
+  /**
+   * The document's top-level `networks:` block.
+   *
+   * Surfaced next to the accounts block rather than on a service card because
+   * that is where Compose declares it: a service *joins* a network, the
+   * document *defines* it, and `driver: overlay` — the authored signal that
+   * TurboFabric may span it across servers — is a property of the definition.
+   */
+  const networks = readComposeNetworks(draft)
+
+  const setNetworks = (next: Record<string, ComposeNetworkEntry>) => {
+    updateDraft(writeComposeNetworks(draft, next))
+  }
+
+  const setPrincipals = (next: Record<string, PrincipalSpec>) => {
+    updateDraft(writeComposePrincipals(draft, next))
+  }
+
+  /**
+   * Declare a fresh alias and hand its name back so the caller can select it.
+   *
+   * Seeded from nothing in particular — the service editor is the only caller
+   * and it wants "an account for this service", which `nextPrincipalAlias`
+   * turns into the first free `app`, `app-2`, … . Returning the name rather
+   * than taking a callback is what lets the picker set the service's field in
+   * the same press.
+   */
+  const declarePrincipalAlias = (): string => {
+    const alias = nextPrincipalAlias(principalAliases, 'app')
+    setPrincipals({ ...principals, [alias]: {} })
+    return alias
+  }
+
   const projectRepositoryId = useProjectRepositoryId()
+  const projectId = useOptionalProjectId()
+  const [dockerRunOpen, setDockerRunOpen] = useState(false)
+
+  /**
+   * Merge an imported `docker run` fragment into the live draft.
+   *
+   * `mergeComposeOverlay` rather than a hand-rolled object spread: it is the
+   * same Compose Specification merge the environment overlay uses, so a service
+   * key that already exists combines the way `docker compose -f a -f b` would
+   * instead of silently replacing what is there.
+   */
+  const mergeImportedCompose = (fragment: ComposeDocument) => {
+    try {
+      updateDraft(mergeComposeOverlay(currentDocument(), fragment))
+    } catch {
+      setError('Fix the compose YAML before importing into it')
+    }
+  }
 
   const lintIssues = useMemo<ComposeLintIssue[]>(() => {
     // Lint the *visible* text so line numbers match the textarea. Site
@@ -1064,8 +1185,14 @@ export function ComposeEditorSection({
     return lintComposeYaml(lintSource, {
       siteServices,
       managedExtensionHidden: true,
+      ...(extraPrincipalAliases === undefined ? {} : {
+        knownPrincipalAliases: new Set([
+          ...extraPrincipalAliases,
+          ...composePrincipalAliases(draft),
+        ]),
+      }),
     })
-  }, [tab, lintYaml, draft])
+  }, [tab, lintYaml, draft, extraPrincipalAliases])
   const blockingLintIssues = useMemo(
     () => blockingComposeLintIssues(lintIssues),
     [lintIssues],
@@ -1078,6 +1205,13 @@ export function ComposeEditorSection({
   const indentFixAvailable = useMemo(
     () => tab === 'editor' && canFixComposeYamlIndentation(lintYaml),
     [tab, lintYaml],
+  )
+  // Every `networks.*` verdict, not just the ones the panel is showing: the
+  // networks editor renders them beside the field they name, so an advisory the
+  // panel is currently hiding still has to reach its own control.
+  const networkLintIssues = useMemo(
+    () => lintIssues.filter((issue) => issue.path.startsWith('networks.')),
+    [lintIssues],
   )
   // Dirty vs full-document baseline (not visible YAML).
   const isDirty = useMemo(() => {
@@ -1118,6 +1252,8 @@ export function ComposeEditorSection({
         service={service}
         nameDraft={serviceNameDrafts[name] ?? name}
         saving={saving}
+        principalAliases={principalAliases}
+        {...(hideSave ? {} : { onDeclarePrincipalAlias: declarePrincipalAlias })}
         onNameDraftChange={(value) =>
           setServiceNameDrafts((current) => ({ ...current, [name]: value }))
         }
@@ -1151,6 +1287,11 @@ export function ComposeEditorSection({
         hideSave={hideSave}
         documentFacts={documentFacts}
         serviceCard={serviceCard}
+        principals={principals}
+        onPrincipalsChange={setPrincipals}
+        networks={networks}
+        networkIssues={networkLintIssues}
+        onNetworksChange={setNetworks}
         onAddService={addService}
         onOpenScopeConfig={onOpenScopeConfig}
         renderHostingEditor={renderHostingEditor}
@@ -1160,6 +1301,17 @@ export function ComposeEditorSection({
   } else {
     editorBody = (
       <View style={[styles.serviceList, styles.visualBody]}>
+        <ComposeNetworksFields
+          networks={networks}
+          issues={networkLintIssues}
+          disabled={saving || hideSave}
+          onChange={setNetworks}
+        />
+        <ComposePrincipalsFields
+          principals={principals}
+          disabled={saving || hideSave}
+          onChange={setPrincipals}
+        />
         {Object.keys(servicesFrom(draft)).map((name) => (
           <View key={name}>{serviceCard(name)}</View>
         ))}
@@ -1183,6 +1335,14 @@ export function ComposeEditorSection({
           saving,
           canSave,
           toolbarTrailing,
+          importAction: hideSave ? null : (
+            <Button
+              label="Import docker run"
+              size="sm"
+              disabled={saving}
+              onPress={() => setDockerRunOpen(true)}
+            />
+          ),
           onSave: () => void handleSave(),
           onDiscard: handleDiscard,
         })}
@@ -1209,6 +1369,14 @@ export function ComposeEditorSection({
       />
 
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+
+      <DockerRunImportModal
+        visible={dockerRunOpen}
+        onRequestClose={() => setDockerRunOpen(false)}
+        onMerge={mergeImportedCompose}
+        existingServiceNames={Object.keys(servicesFrom(draft))}
+        {...(projectId ? { projectId } : {})}
+      />
     </View>
   )
 }
@@ -1309,6 +1477,14 @@ const styles = StyleSheet.create({
   serviceList: { gap: spacing.sm },
   visualBody: {
     padding: spacing.sm,
+  },
+  documentNetworks: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+  },
+  documentPrincipals: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
   },
   documentFooter: {
     flexDirection: 'row',

@@ -6,9 +6,16 @@
  */
 
 import {
+  hostingEntryKey,
+  type ComposeHostingExtensionEntry,
+} from './hosting-extension'
+import {
   DEFAULT_SITE_ENGINE,
+  isNodeComposeService,
   isSiteComposeService,
   readServiceTurbopanelExtension,
+  TURBOPANEL_SERVICE_EXTENSION_KEY,
+  type ComposeServiceKind,
   type SiteEngine,
 } from './service-kind'
 import type { ComposeDocument } from './types'
@@ -21,15 +28,52 @@ export type HostingWebEnvMode =
   | 'file_only'
   | 'ignored'
   | 'container_variables'
+  | 'node_unit_environment'
 
 export type HostingServiceContext = {
   composeServiceName: string
-  kind: 'container' | 'site'
+  /**
+   * The document's own `serviceKind`, not a two-way approximation of it.
+   *
+   * `node` used to collapse into `container` here, which made every rule keyed
+   * off this field answer a native app as though it were a Docker service —
+   * most visibly `targetPort`, which the panel then offered and wrote into
+   * `x-turbopanel.hosting` for a kind the control plane refuses it on
+   * (`hostingTargetPortAuthorable`). A service kind the editor cannot name is a
+   * service kind the editor gets wrong, so all three are named.
+   */
+  kind: ComposeServiceKind
   engine: SiteEngine | undefined
   /** Other site compose service names in the same document. */
   siteSiblingNames: string[]
   phpApplicability: HostingPhpApplicability
   webEnvMode: HostingWebEnvMode
+  /**
+   * Routes this service declares in `x-turbopanel.hosting`, in document order.
+   *
+   * Present whenever the compose document authors any, which is exactly when
+   * the instance's deploy-prepare will materialize a compose-owned `hosting`
+   * row per entry — and therefore exactly when the panel's own hosting form
+   * must render one row per entry and send edits back through the compose
+   * document rather than through `PATCH /hostings`, which answers such a write
+   * with `409 hosting_owned_by_compose`.
+   *
+   * This is the source of truth the hosting panel reads — never
+   * `hostingsByService[serviceId][0]`, which both collapses a multi-route
+   * service to its first row and cannot say who authored it.
+   */
+  composeHostingEntries: ComposeHostingExtensionEntry[]
+}
+
+/**
+ * True when compose authors this service's ingress, so the hosting form must
+ * edit the document rather than the row. Derived rather than stored: an entry
+ * list that is non-empty *is* the ownership claim.
+ */
+export function hasComposeAuthoredHosting(
+  context: HostingServiceContext,
+): boolean {
+  return context.composeHostingEntries.length > 0
 }
 
 function isPlainServiceMap(
@@ -78,10 +122,20 @@ function phpApplicabilityFor(
   return kind === 'site' ? 'applicable' : 'not_applicable'
 }
 
+/** `Site · Caddy` / `Node app` / `Container`, as a badge reads. */
+function serviceKindLabel(kind: HostingServiceContext['kind']): string {
+  if (kind === 'node') return 'Node app'
+  return 'Container'
+}
+
 function webEnvModeFor(
   kind: HostingServiceContext['kind'],
   engine: SiteEngine | undefined,
 ): HostingWebEnvMode {
+  // A native app is not a container: there is no compose service left to
+  // inject variables into, so the container advice would send an operator to a
+  // control that cannot reach the process.
+  if (kind === 'node') return 'node_unit_environment'
   if (kind !== 'site') return 'container_variables'
   // Caddy's `php_fastcgi` takes an `env` subdirective, so web.env reaches the
   // PHP process — the same guarantee Apache's SetEnv gives, which nginx cannot.
@@ -113,13 +167,17 @@ export function resolveHostingServiceContext(
       siteSiblingNames,
       phpApplicability: 'not_applicable',
       webEnvMode: 'container_variables',
+      composeHostingEntries: [],
     }
   }
 
   const isSite = isSiteComposeService(service)
   const extension = readServiceTurbopanelExtension(service) ?? {}
   const engine = isSite ? extension.engine ?? DEFAULT_SITE_ENGINE : undefined
-  const kind = isSite ? 'site' : 'container'
+  const nonSiteKind: ComposeServiceKind = isNodeComposeService(service)
+    ? 'node'
+    : 'container'
+  const kind: ComposeServiceKind = isSite ? 'site' : nonSiteKind
 
   return {
     composeServiceName,
@@ -128,6 +186,7 @@ export function resolveHostingServiceContext(
     siteSiblingNames,
     phpApplicability: phpApplicabilityFor(kind),
     webEnvMode: webEnvModeFor(kind, engine),
+    composeHostingEntries: extension.hosting ?? [],
   }
 }
 
@@ -135,7 +194,29 @@ export function hostingServiceKindLabel(context: HostingServiceContext): string 
   if (context.kind === 'site') {
     return `Site · ${engineLabel(context.engine)}`
   }
-  return 'Container'
+  return serviceKindLabel(context.kind)
+}
+
+/**
+ * What to say where the Target port field would have been.
+ *
+ * Both host-native kinds are answered by a host process on a loopback port
+ * TurboPanel allocates, so neither may pin one — but *which* process differs,
+ * and naming it is the difference between "the field is missing" and "the
+ * daemon already decided this". A container keeps the field, so it has no hint.
+ */
+export function hostingTargetPortHint(
+  context: HostingServiceContext,
+): string | null {
+  if (context.kind === 'site') {
+    return `Target port is allocated by TurboPanel: deploy gives this site its own ${
+      engineLabel(context.engine)
+    } vhost on a loopback port and routes the hostname to it.`
+  }
+  if (context.kind === 'node') {
+    return 'Target port is allocated by TurboPanel: this service runs as a host-supervised Node process under a generated systemd unit, which is told the port to bind through PORT, and hosting Caddy proxies the hostname to it.'
+  }
+  return null
 }
 
 /**
@@ -208,6 +289,14 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
       showFields: true,
     }
   }
+  if (context.webEnvMode === 'node_unit_environment') {
+    return {
+      title: 'Web environment (not applied)',
+      hint:
+        'Static web.env is for site host stacks. This node service runs as a host-supervised process, not a container and not behind a php-fpm pool — give it configuration through the environment variables the generated unit carries, or through hosting-scoped variables below.',
+      showFields: false,
+    }
+  }
   if (context.webEnvMode === 'ignored') {
     return {
       title: 'Web environment (not applied)',
@@ -250,4 +339,81 @@ export function shouldRevealOptionalHostingFields(
   hasStoredValues: boolean,
 ): boolean {
   return showByDefault || hasStoredValues
+}
+
+/**
+ * The `hosting` entries one service declares in **this** document.
+ *
+ * Separate from {@link resolveHostingServiceContext} because the panel needs
+ * the answer for two different documents: the merged one (what will deploy,
+ * and therefore what to render) and the environment overlay (what this surface
+ * can actually author, and therefore what to let an operator edit).
+ */
+export function readComposeHostingEntries(
+  document: ComposeDocument,
+  composeServiceName: string,
+): ComposeHostingExtensionEntry[] {
+  const service = readComposeServiceMap(document)[composeServiceName]
+  if (!service) return []
+  return readServiceTurbopanelExtension(service)?.hosting ?? []
+}
+
+/**
+ * Index of the entry routing `route` ({@link hostingEntryKey}), or `-1`.
+ *
+ * Matched on the route rather than the position: the overlay lists only the
+ * entries it authors, so its indices do not line up with the merged list a row
+ * was rendered from.
+ */
+export function findComposeHostingEntryIndex(
+  entries: readonly ComposeHostingExtensionEntry[],
+  route: string,
+): number {
+  return entries.findIndex((entry) => hostingEntryKey(entry) === route)
+}
+
+function cloneComposeData(
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  return structuredClone(data)
+}
+
+/**
+ * `document` with one service's `x-turbopanel.hosting` list replaced.
+ *
+ * Whole-list replacement, because that is the only edit the overlay merge can
+ * express: `hosting` is a plain sequence, so an overlay list is **appended** to
+ * the base one rather than matched entry-by-entry. Writing the list an operator
+ * sees is therefore only correct against the document that already owns it —
+ * which is why the panel edits an inherited route nowhere but the project
+ * compose.
+ */
+export function writeComposeHostingEntries(
+  document: ComposeDocument,
+  composeServiceName: string,
+  entries: readonly ComposeHostingExtensionEntry[],
+): ComposeDocument {
+  const data = cloneComposeData(document.data)
+  const services = isPlainServiceMap(data.services)
+    ? { ...data.services }
+    : {}
+  const service = isPlainServiceMap(services[composeServiceName])
+    ? { ...(services[composeServiceName] as Record<string, unknown>) }
+    : {}
+  const extension = isPlainServiceMap(service[TURBOPANEL_SERVICE_EXTENSION_KEY])
+    ? { ...(service[TURBOPANEL_SERVICE_EXTENSION_KEY] as Record<string, unknown>) }
+    : {}
+
+  if (entries.length === 0) delete extension.hosting
+  else extension.hosting = entries.map((entry) => ({ ...entry }))
+
+  if (Object.keys(extension).length === 0) {
+    delete service[TURBOPANEL_SERVICE_EXTENSION_KEY]
+  } else {
+    service[TURBOPANEL_SERVICE_EXTENSION_KEY] = extension
+  }
+  services[composeServiceName] = service
+  data.services = services
+
+  return { ...document, data }
 }

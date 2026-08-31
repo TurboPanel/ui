@@ -205,6 +205,124 @@ x-turbopanel:
     expect(hiddenSiteServiceNames(hidden)).toEqual(['site'])
   })
 
+  it('round-trips a root principals block byte for byte', () => {
+    // `hidden.root` is opaque on purpose: the YAML surface stashes whatever the
+    // root extension holds and puts it back untouched. This locks that in for
+    // `principals` explicitly — key order, comments, and blank lines included —
+    // so a later phase's authoring UI cannot quietly lose an alias.
+    const source = `# header
+
+services:
+  web:
+    image: nginx
+
+x-turbopanel:
+  # who this project runs as
+  principals:
+    web:
+      description: serves the site
+      access: sftp
+
+    worker:
+      access: none
+`
+    const full = yamlToComposeDocument(source)
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+
+    expect(composeDocumentToYaml(visible)).not.toContain('x-turbopanel')
+    expect(composeDocumentToYaml(visible)).not.toContain('principals')
+    expect(hidden.root).toEqual({
+      principals: {
+        web: { description: 'serves the site', access: 'sftp' },
+        worker: { access: 'none' },
+      },
+    })
+
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(composeDocumentToYaml(restored)).toBe(source)
+    expect(restored.presentation.keyOrder).toEqual(full.presentation.keyOrder)
+    expect(restored.presentation.comments).toEqual(full.presentation.comments)
+    expect(restored.presentation.blankLines).toEqual(
+      full.presentation.blankLines,
+    )
+    // Per-service extensions are what `hiddenSiteServiceNames` inspects; a root
+    // principals block is none of its business and must not appear.
+    expect(hiddenSiteServiceNames(hidden)).toEqual([])
+  })
+
+  it('round-trips a root block authored before services', () => {
+    // The root extension is not required to be the last top-level key. Hiding
+    // it and putting it back must not reorder a document the author never
+    // touched, so the stash records where it sat.
+    const source = `x-turbopanel:
+  principals:
+    web:
+      description: serves the site
+      access: sftp
+
+services:
+  web:
+    image: nginx
+`
+    const full = yamlToComposeDocument(source)
+    expect(full.presentation.keyOrder).toEqual(['x-turbopanel', 'services'])
+
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+    expect(composeDocumentToYaml(visible)).not.toContain('x-turbopanel')
+    expect(hidden.rootKeyIndex).toBe(0)
+    expect(hidden.rootAfterKey).toBeUndefined()
+
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(composeDocumentToYaml(restored)).toBe(source)
+    expect(restored.presentation.keyOrder).toEqual(full.presentation.keyOrder)
+  })
+
+  it('restores a root block after the sibling it followed', () => {
+    const source = `name: demo
+x-turbopanel:
+  principals:
+    web: {}
+services:
+  web:
+    image: nginx
+networks:
+  edge: {}
+`
+    const full = yamlToComposeDocument(source)
+    const { document: visible, hidden } = hideComposeTurbopanelExtensions(full)
+    expect(hidden.rootAfterKey).toBe('name')
+    expect(hidden.rootKeyIndex).toBe(1)
+
+    const restored = restoreComposeTurbopanelExtensions(visible, hidden)
+    expect(composeDocumentToYaml(restored)).toBe(source)
+  })
+
+  it('falls back to the recorded index when the anchor key is gone', () => {
+    const full = yamlToComposeDocument(`name: demo
+x-turbopanel:
+  principals:
+    web: {}
+services:
+  web:
+    image: nginx
+`)
+    const { hidden } = hideComposeTurbopanelExtensions(full)
+    // The author deleted `name` while the block was hidden; index 1 is still
+    // the nearest honest answer, and appending would be a bigger lie.
+    const edited = yamlToComposeDocument(`services:
+  web:
+    image: nginx
+networks:
+  edge: {}
+`)
+    const restored = restoreComposeTurbopanelExtensions(edited, hidden)
+    expect(restored.presentation.keyOrder).toEqual([
+      'services',
+      'x-turbopanel',
+      'networks',
+    ])
+  })
+
   it('preserves document comments when hiding and restoring', () => {
     const full = yamlToComposeDocument(`# header
 

@@ -24,6 +24,19 @@ const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
 /** Stashed `x-turbopanel` nodes + presentation entries removed for the YAML surface. */
 export type ComposeHiddenExtensions = {
   root?: unknown
+  /**
+   * Top-level key the root `x-turbopanel` directly followed, or `undefined`
+   * when it was the first key. A sibling anchor rather than a bare index: the
+   * author can add or remove top-level keys while the block is hidden, and the
+   * key it sat after is what still means something afterwards.
+   */
+  rootAfterKey?: string
+  /**
+   * Its original index in `presentation.keyOrder`, used only when the anchor
+   * above is gone (the author deleted that sibling) — restoring at the end
+   * would rewrite a document nobody edited.
+   */
+  rootKeyIndex?: number
   services: Record<string, unknown>
   comments: Record<string, ComposeComment>
   blankLines: Record<string, number>
@@ -91,10 +104,16 @@ function withoutServiceExtension(
 
 function stashRootExtension(
   data: Record<string, unknown>,
+  keyOrder: readonly string[],
   hidden: ComposeHiddenExtensions,
 ): void {
   if (!(TURBOPANEL_EXTENSION_KEY in data)) return
   hidden.root = deepCopy(data[TURBOPANEL_EXTENSION_KEY])
+  const index = keyOrder.indexOf(TURBOPANEL_EXTENSION_KEY)
+  if (index >= 0) {
+    hidden.rootKeyIndex = index
+    if (index > 0) hidden.rootAfterKey = keyOrder[index - 1]
+  }
   delete data[TURBOPANEL_EXTENSION_KEY]
 }
 
@@ -140,15 +159,40 @@ function takeManagedPresentation<T>(
   return kept
 }
 
+/**
+ * Where the root `x-turbopanel` key goes back, from the anchor recorded at
+ * stash time: after the sibling it followed, at index 0 when it was first, and
+ * only at the end when neither is knowable (a shadow from before the anchor was
+ * recorded, or one built by hand).
+ */
+function rootRestoreIndex(
+  keyOrder: readonly string[],
+  hidden: ComposeHiddenExtensions,
+): number {
+  const { rootAfterKey, rootKeyIndex } = hidden
+  if (rootAfterKey !== undefined) {
+    const anchor = keyOrder.indexOf(rootAfterKey)
+    if (anchor >= 0) return anchor + 1
+  } else if (rootKeyIndex === 0) {
+    return 0
+  }
+  if (rootKeyIndex !== undefined && rootKeyIndex <= keyOrder.length) {
+    return rootKeyIndex
+  }
+  return keyOrder.length
+}
+
 function applyHiddenRoot(
   data: Record<string, unknown>,
   keyOrder: string[],
-  root: unknown,
+  hidden: ComposeHiddenExtensions,
 ): void {
-  if (root !== undefined) {
-    data[TURBOPANEL_EXTENSION_KEY] = deepCopy(root)
+  if (hidden.root !== undefined) {
+    data[TURBOPANEL_EXTENSION_KEY] = deepCopy(hidden.root)
+    // An author-typed key keeps the position the author gave it; only a key
+    // that is genuinely being put back gets the stashed one.
     if (!keyOrder.includes(TURBOPANEL_EXTENSION_KEY)) {
-      keyOrder.push(TURBOPANEL_EXTENSION_KEY)
+      keyOrder.splice(rootRestoreIndex(keyOrder, hidden), 0, TURBOPANEL_EXTENSION_KEY)
     }
     return
   }
@@ -218,7 +262,7 @@ export function hideComposeTurbopanelExtensions(
     blankLines: {},
   }
 
-  stashRootExtension(data, hidden)
+  stashRootExtension(data, normalized.presentation.keyOrder, hidden)
   stashServiceExtensions(data, hidden)
 
   const comments = takeManagedPresentation(
@@ -262,7 +306,7 @@ export function restoreComposeTurbopanelExtensions(
   const data = { ...normalized.data }
   const keyOrder = [...normalized.presentation.keyOrder]
 
-  applyHiddenRoot(data, keyOrder, hidden.root)
+  applyHiddenRoot(data, keyOrder, hidden)
   restoreServiceExtensions(data, hidden.services)
 
   const comments = overlayHiddenPresentation(
