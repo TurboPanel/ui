@@ -179,6 +179,10 @@ function ManagedProjectTrashButton({
     pathname,
     projectId,
     orgId,
+    deleteEnvironment,
+    invalidateEnvironments,
+    router,
+    setError,
   ])
 
   if (!canOwn) return null

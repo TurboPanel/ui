@@ -951,7 +951,7 @@ function NodeRuntimeBlock({
         />
         <Text style={styles.hint}>
           Series the host runs this service under. Version, package manager, and
-          mode are also on the service's Node.js settings page.
+          mode are also on the service&apos;s Node.js settings page.
         </Text>
       </View>
     </View>

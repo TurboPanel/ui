@@ -1,12 +1,12 @@
-export {
+import {
   UI_LICENSE,
-  UI_SOURCE_REPO,
   isFullGitCommit,
   sourceReleaseUrl,
 } from './source-release-node.mjs'
 
-import {
+export {
   UI_LICENSE,
+  UI_SOURCE_REPO,
   isFullGitCommit,
   sourceReleaseUrl,
 } from './source-release-node.mjs'

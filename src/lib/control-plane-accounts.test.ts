@@ -1,17 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
-
-const secureStore = vi.hoisted(() => ({
-  getItemAsync: vi.fn(async (_key: string): Promise<string | null> => null),
-  setItemAsync: vi.fn(async (_key: string, _value: string): Promise<void> => {}),
-}))
-
-vi.mock('expo-secure-store', () => ({
-  getItemAsync: secureStore.getItemAsync,
-  setItemAsync: secureStore.setItemAsync,
-}))
-
 import {
   HA_CONTROL_PLANE_ORIGIN,
   LOCAL_HTTPS_ORIGIN,
@@ -36,6 +25,16 @@ import {
   switchControlPlaneAccount,
   useControlPlaneStore,
 } from '@/lib/control-plane-accounts'
+
+const secureStore = vi.hoisted(() => ({
+  getItemAsync: vi.fn(async (_key: string): Promise<string | null> => null),
+  setItemAsync: vi.fn(async (_key: string, _value: string): Promise<void> => {}),
+}))
+
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: secureStore.getItemAsync,
+  setItemAsync: secureStore.setItemAsync,
+}))
 
 afterEach(() => {
   resetControlPlaneStoreForTests()

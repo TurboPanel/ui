@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { downloadOrganizationCaPem } from '@/lib/instance-api'
+import * as Clipboard from 'expo-clipboard'
+import { downloadCaBundle, downloadSuccessMessage } from './download-ca'
 
 vi.mock('@/lib/instance-api', () => ({
   downloadOrganizationCaPem: vi.fn(),
@@ -7,10 +10,6 @@ vi.mock('@/lib/instance-api', () => ({
 vi.mock('expo-clipboard', () => ({
   setStringAsync: vi.fn(),
 }))
-
-import { downloadOrganizationCaPem } from '@/lib/instance-api'
-import * as Clipboard from 'expo-clipboard'
-import { downloadCaBundle, downloadSuccessMessage } from './download-ca'
 
 const SAMPLE_PEM = String.raw`-----BEGIN CERTIFICATE-----
 MIIBTEST
