@@ -425,6 +425,11 @@ export type ServerDetailRecord = OrgServerRecord & {
   datacenterEnforceServerTimezone: boolean
   colocatedWithInstance: boolean
   labels?: { key: string; value: string }[]
+  /**
+   * Stored sensor / hosting-path overrides
+   * (`server.metadata.metricsOverrides`); `null`/absent when none are set.
+   */
+  metricsOverrides?: ServerMetricsOverrides | null
 }
 
 export type NtpSetInput = {
@@ -635,6 +640,34 @@ export async function saveOrgManagedDefaults(
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/managed-defaults`, {
     method: 'PUT',
     body: JSON.stringify(patch),
+  })
+}
+
+/**
+ * Org randomized-usernames default. When on (platform default), every newly
+ * created principal's applied login (Linux account / database role) gets a
+ * random `_<11 chars>` suffix. `randomizedUsernames` is the configured
+ * override (`null` = inheriting the platform default); `effective…` is what
+ * new principals actually get. Toggling never renames existing principals.
+ */
+export type OrgPrincipalDefaults = {
+  randomizedUsernames: boolean | null
+  effectiveRandomizedUsernames: boolean
+}
+
+export async function fetchOrgPrincipalDefaults(
+  orgId: string
+): Promise<OrgPrincipalDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principal-defaults`)
+}
+
+export async function saveOrgPrincipalDefaults(
+  orgId: string,
+  randomizedUsernames: boolean | null
+): Promise<OrgPrincipalDefaults & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principal-defaults`, {
+    method: 'PUT',
+    body: JSON.stringify({ randomizedUsernames }),
   })
 }
 
@@ -3324,8 +3357,13 @@ export type RepositoryInspection = {
 export async function inspectRepository(
   repositoryId: string,
   ref?: string,
+  /** Directory the `entries` listing reads; default the repository root. */
+  listPath?: string,
 ): Promise<RepositoryInspection> {
-  const query = ref && ref.length > 0 ? `?ref=${encodeURIComponent(ref)}` : ''
+  const params = new URLSearchParams()
+  if (ref && ref.length > 0) params.set('ref', ref)
+  if (listPath && listPath.length > 0) params.set('listPath', listPath)
+  const query = params.size > 0 ? `?${params.toString()}` : ''
   return await apiFetch(`${CLIENT_API}/repositories/${repositoryId}/inspect${query}`)
 }
 
@@ -4248,6 +4286,12 @@ export type ProjectPrincipalRecord = {
   kind: string
   provider: string
   username: string
+  /**
+   * Login actually created on the host — the short `username` plus a random
+   * `_<11 chars>` suffix when the org randomized-usernames default was on at
+   * create. SSH/SFTP with this name; `username` is the panel identity.
+   */
+  appliedUsername: string
   projectId: string | null
   metadata: { uid?: number; gid?: number; home?: string } | null
   options: Record<string, unknown> | null
@@ -4273,6 +4317,12 @@ export type ProjectPrincipalRecord = {
   access: PrincipalAccessLevel
   /** Keys on file. Zero means no login is possible at any access level. */
   sshKeyCount: number
+  /**
+   * Whether password sign-in is enabled. The server stores only the crypt
+   * hash, so this is presence, never the password — and with neither this nor
+   * a key, no login is possible at any access level.
+   */
+  passwordAuth: boolean
   createdAt: string
   updatedAt: string
 }
@@ -4357,7 +4407,15 @@ export async function createProjectPrincipal(
     access?: PrincipalAccessLevel
     options?: Record<string, unknown>
   }
-): Promise<{ ok: true; id: string; uid: number; gid: number; serviceIds?: string[] }> {
+): Promise<{
+  ok: true
+  id: string
+  /** Host login actually created (short name + optional random suffix). */
+  appliedUsername: string
+  uid: number
+  gid: number
+  serviceIds?: string[]
+}> {
   return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -4393,6 +4451,39 @@ export async function updateProjectPrincipal(
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+}
+
+/**
+ * Enable (or rotate) password sign-in for a principal.
+ *
+ * Omit `password` to have the server generate one; the plaintext comes back in
+ * `generatedPassword` exactly once and is never retrievable again — only the
+ * crypt hash is stored.
+ */
+export async function setPrincipalPassword(
+  projectId: string,
+  principalId: string,
+  body: { password?: string }
+): Promise<{
+  ok: true
+  generatedPassword?: string
+  reconciled: PrincipalsReconcileOutcome
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/password`,
+    { method: 'POST', body: JSON.stringify(body) }
+  )
+}
+
+/** Disable password sign-in; the host locks the account password. */
+export async function disablePrincipalPassword(
+  projectId: string,
+  principalId: string
+): Promise<{ ok: true; reconciled: PrincipalsReconcileOutcome }> {
+  return await apiFetch(
+    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/password`,
+    { method: 'DELETE' }
+  )
 }
 
 export async function deleteProjectPrincipal(projectId: string, id: string): Promise<{ ok: true }> {
@@ -4446,33 +4537,56 @@ export async function stopEnvironment(environmentId: string): Promise<CommandEnq
   })
 }
 
-/** Ordered metric keys — mirrors instance `HOST_METRIC_KEYS`. */
+/**
+ * Named metric keys — mirrors instance v2 `HOST_METRIC_KEYS`
+ * (`turbopanel/src/daemon/metrics/contract.ts`). Raw measurements only: the
+ * v2 contract stores no derived percentages or usage bytes — CPU busy and
+ * memory/swap/storage used % are computed client-side.
+ */
 export const HOST_METRIC_KEYS = [
-  'cpuUsagePercent',
   'cpuUserPercent',
   'cpuSystemPercent',
+  'cpuNicePercent',
+  'cpuIdlePercent',
   'cpuIowaitPercent',
+  'cpuIrqPercent',
+  'cpuSoftirqPercent',
+  'cpuStealPercent',
   'load1',
   'load5',
   'load15',
-  'memoryUsedPercent',
-  'memoryUsedBytes',
+  'memoryTotalBytes',
   'memoryAvailableBytes',
-  'swapUsedPercent',
-  'diskUsedPercent',
+  'memoryFreeBytes',
+  'swapTotalBytes',
+  'swapFreeBytes',
+  'systemStorageTotalBytes',
+  'systemStorageAvailableBytes',
+  'hostingStorageTotalBytes',
+  'hostingStorageAvailableBytes',
+  'dockerStorageTotalBytes',
+  'dockerStorageAvailableBytes',
   'diskReadBytesPerSecond',
   'diskWriteBytesPerSecond',
   'diskReadOpsPerSecond',
   'diskWriteOpsPerSecond',
-  'networkReceiveBytesPerSecond',
-  'networkTransmitBytesPerSecond',
+  'diskReadLatencyMs',
+  'diskWriteLatencyMs',
+  'uplinkReceiveBytesPerSecond',
+  'uplinkTransmitBytesPerSecond',
+  'fabricReceiveBytesPerSecond',
+  'fabricTransmitBytesPerSecond',
+  'cpuTemperatureCelsius',
+  'gpuTemperatureCelsius',
+  'cpuPowerWatts',
+  'gpuPowerWatts',
   'processCount',
   'uptimeSeconds',
 ] as const
 
 export type HostMetricKey = (typeof HOST_METRIC_KEYS)[number]
 
-export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'clickhouse'
+export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'
 
 export type MetricsSeriesPoint = {
   at: string
@@ -4690,6 +4804,272 @@ export async function fetchFleetMetricsLatest(
   return (await response.json()) as FleetMetricsLatestResponse
 }
 
+/**
+ * Live-metrics lease response (`POST …/metrics/live`). Mirrors instance
+ * `MetricsLiveLeaseStartResponse`.
+ */
+export type MetricsLiveLeaseStartResponse = {
+  ok: true
+  leaseId: string
+  intervalSeconds: number
+  expiresAt: string
+}
+
+/**
+ * Typed start outcome so the metrics screen can branch: `disabled` (admin cap
+ * is 0) silently falls back to baseline sampling; `offline` shows an inline
+ * notice. Anything else throws.
+ */
+export type MetricsLiveStartOutcome =
+  | {
+      kind: 'started'
+      leaseId: string
+      intervalSeconds: number
+      expiresAt: string
+    }
+  | { kind: 'disabled' }
+  | { kind: 'offline' }
+
+async function readConflictError(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { error?: string }
+    return body.error ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Start (or renew, when `leaseId` is passed) a live-metrics lease. The daemon
+ * samples every ~10 s while the lease is active; expiry is capped by the
+ * admin `SERVER_METRICS_LIVE_MAX_MINUTES` setting.
+ */
+export async function startServerMetricsLive(
+  serverId: string,
+  leaseId?: string,
+  organizationId?: string | null
+): Promise<MetricsLiveStartOutcome> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const path = `${CLIENT_API}/servers/${serverId}/metrics/live`
+  const response = await fetch(controlPlaneUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(leaseId ? { leaseId } : {}),
+  })
+
+  if (response.status === 409) {
+    const code = await readConflictError(response)
+    if (code === 'live_metrics_disabled') return { kind: 'disabled' }
+    if (code === 'server_offline') return { kind: 'offline' }
+    throw new Error(
+      `${path} failed: ${formatFetchFailureDetail(response.status, code ?? undefined)}`
+    )
+  }
+
+  if (!response.ok) {
+    const code = await readConflictError(response)
+    throw new Error(
+      `${path} failed: ${formatFetchFailureDetail(response.status, code ?? undefined)}`
+    )
+  }
+
+  const body = (await response.json()) as MetricsLiveLeaseStartResponse
+  return {
+    kind: 'started',
+    leaseId: body.leaseId,
+    intervalSeconds: body.intervalSeconds,
+    expiresAt: body.expiresAt,
+  }
+}
+
+/**
+ * Stop a live-metrics lease. A disconnected daemon is a soft success on the
+ * instance side — callers may fire-and-forget on unmount.
+ */
+export async function stopServerMetricsLive(
+  serverId: string,
+  leaseId: string,
+  organizationId?: string | null
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/metrics/live`,
+    {
+      method: 'DELETE',
+      body: JSON.stringify({ leaseId }),
+    },
+    organizationId
+  )
+}
+
+/** Stable sensor identity — chip + label + sysfs path, never a bare index. */
+export type MetricsSensorCandidate = {
+  chip: string
+  label: string
+  path: string
+}
+
+export type MetricsStorageMountCapability = {
+  path: string
+  totalBytes: number
+  availableBytes: number
+} | null
+
+/** One block-backed mount selectable as the hosting filesystem. */
+export type MetricsStorageMountCandidate = {
+  path: string
+  source: string
+  fsType: string
+  totalBytes: number
+  availableBytes: number
+}
+
+export type MetricsNetworkInterfaceCapability = {
+  name: string
+  classification: 'loopback' | 'container-bridge' | 'fabric' | 'uplink'
+}
+
+/** One physical GPU's candidates, grouped by hwmon chip directory. */
+export type MetricsGpuDeviceCandidates = {
+  path: string
+  chip: string
+  temperature: MetricsSensorCandidate[]
+  power: MetricsSensorCandidate[]
+}
+
+/** Mirrors daemon `MetricsCapabilities` (capability discovery round trip). */
+export type MetricsCapabilities = {
+  sensors: {
+    cpuTemperature: MetricsSensorCandidate[]
+    gpuTemperature: MetricsSensorCandidate[]
+    cpuPower: MetricsSensorCandidate[]
+    gpuPower: MetricsSensorCandidate[]
+    gpuDevices: MetricsGpuDeviceCandidates[]
+  }
+  storageMounts: {
+    system: MetricsStorageMountCapability
+    hosting: MetricsStorageMountCapability
+    docker: MetricsStorageMountCapability
+    candidates: MetricsStorageMountCandidate[]
+  }
+  networkInterfaces: MetricsNetworkInterfaceCapability[]
+}
+
+export type MetricsCapabilitiesOutcome =
+  | { kind: 'ok'; capabilities: MetricsCapabilities }
+  | { kind: 'offline' }
+
+/**
+ * Capability discovery — a correlated daemon round trip. Opened deliberately
+ * from server settings; never poll this endpoint.
+ */
+export async function fetchServerMetricsCapabilities(
+  serverId: string,
+  organizationId?: string | null
+): Promise<MetricsCapabilitiesOutcome> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  }
+  if (resolvedOrgId) {
+    headers[ORG_ID_HEADER] = resolvedOrgId
+  }
+
+  const path = `${CLIENT_API}/servers/${serverId}/metrics/capabilities`
+  const response = await fetch(controlPlaneUrl(path), {
+    credentials: 'include',
+    headers,
+  })
+
+  if (response.status === 409) {
+    const code = await readConflictError(response)
+    if (code === 'server_offline') return { kind: 'offline' }
+    throw new Error(
+      `${path} failed: ${formatFetchFailureDetail(response.status, code ?? undefined)}`
+    )
+  }
+
+  if (!response.ok) {
+    const code = await readConflictError(response)
+    throw new Error(
+      `${path} failed: ${formatFetchFailureDetail(response.status, code ?? undefined)}`
+    )
+  }
+
+  const body = (await response.json()) as {
+    ok: true
+    capabilities: MetricsCapabilities
+  }
+  return { kind: 'ok', capabilities: body.capabilities }
+}
+
+/**
+ * Persisted sensor / hosting-path overrides. Mirrors instance
+ * `ServerMetricsOverrides` (`server.metadata.metricsOverrides`).
+ */
+export type ServerMetricsOverrides = {
+  cpuTemperature?: string
+  gpuTemperature?: string
+  cpuPower?: string
+  gpuPower?: string
+  hostingPath?: string
+}
+
+/** Per-field patch: `null` clears an override, `undefined` leaves it alone. */
+export type ServerMetricsOverridesUpdate = {
+  [K in keyof ServerMetricsOverrides]?: string | null
+}
+
+export async function saveServerMetricsSensorOverrides(
+  serverId: string,
+  overrides: ServerMetricsOverridesUpdate,
+  organizationId?: string | null
+): Promise<{ ok: true; overrides: ServerMetricsOverrides; pushed: boolean }> {
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/metrics/sensor-overrides`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(overrides),
+    },
+    organizationId
+  )
+}
+
+/** Admin cap on one live-metrics session, minutes. `0` disables live mode. */
+export type ServerMetricsLiveSettingsResponse = { maxMinutes: number }
+
+/** Minimum non-zero live-session cap (minutes) — mirrors instance setting. */
+export const SERVER_METRICS_LIVE_MIN_MINUTES = 5
+/** Maximum live-session cap (minutes) — mirrors instance setting. */
+export const SERVER_METRICS_LIVE_MAX_MINUTES = 240
+
+const ADMIN_SERVER_METRICS_LIVE_URL = `${ADMIN_API}/settings/server-metrics-live`
+
+export async function fetchServerMetricsLiveSettings(): Promise<ServerMetricsLiveSettingsResponse> {
+  return await apiFetch<ServerMetricsLiveSettingsResponse>(
+    ADMIN_SERVER_METRICS_LIVE_URL
+  )
+}
+
+export async function saveServerMetricsLiveSettings(
+  maxMinutes: number
+): Promise<ServerMetricsLiveSettingsResponse> {
+  return await apiFetch<ServerMetricsLiveSettingsResponse>(
+    ADMIN_SERVER_METRICS_LIVE_URL,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ maxMinutes }),
+    }
+  )
+}
+
 export async function fetchEnvironmentManaged(
   environmentId: string
 ): Promise<ManagedDetailResponse> {
@@ -4724,6 +5104,8 @@ export async function createEnvironmentManaged(
   commandId?: string
   serverId?: string
   rootPassword?: string
+  /** Generated administrative login (`postgres_<hex>` / `root_<hex>`). */
+  rootUsername?: string
   alreadyProvisioned?: boolean
 }> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed`, {

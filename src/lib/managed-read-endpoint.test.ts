@@ -77,6 +77,7 @@ function user(
   return {
     id: `u-${username}`,
     username,
+    appliedUsername: `${username}_ab12cd34ef5`,
     databases: ['app'],
     privileges: [],
     connectionRole,

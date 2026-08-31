@@ -394,10 +394,12 @@ describe('releases query hooks', () => {
       id: attached.id,
       reused: false,
     })
-    fetchRepository.mockResolvedValueOnce({ repository: attached })
+    fetchRepository.mockResolvedValue({ repository: attached })
     fetchRepositories.mockResolvedValue({ repositories: [attached] })
     const client = createAppQueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const invalidate = vi
+      .spyOn(client, 'invalidateQueries')
+      .mockResolvedValue(undefined)
 
     const { result } = renderHook(() => useAttachRepository(orgId), {
       wrapper: createWrapper(client),

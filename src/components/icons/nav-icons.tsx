@@ -361,6 +361,27 @@ export function NotificationsBellIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
+/** Rising line chart — server metrics settings. */
+export function MetricsNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 4v15a1 1 0 0 0 1 1h15"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+      <Path
+        d="m7.5 14.5 3.5-4 3 2.5 5-6"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 const AREA_ICONS = {
   overview: OverviewNavIcon,
   projects: ProjectsNavIcon,
@@ -376,6 +397,7 @@ const ADMIN_AREA_ICONS = {
   git: GitNavIcon,
   signup: SignupNavIcon,
   secrets: SecretsNavIcon,
+  metrics: MetricsNavIcon,
 } as const satisfies Record<AdminAreaId, (props: NavIconProps) => ReactElement>
 
 export function OrgAreaIcon({

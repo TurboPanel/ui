@@ -56,17 +56,9 @@ function memoryTotalFromUsage(
   usage: FleetServerUsageRecord | undefined,
 ): number | null {
   if (!usage || usage.sampleCount <= 0) return null
-  const used = usage.values.memoryUsedBytes
-  const available = usage.values.memoryAvailableBytes
-  if (
-    used == null ||
-    available == null ||
-    !Number.isFinite(used) ||
-    !Number.isFinite(available)
-  ) {
-    return null
-  }
-  const total = used + available
+  // v2 stores the total directly — no used+available reconstruction.
+  const total = usage.values.memoryTotalBytes
+  if (total == null || !Number.isFinite(total)) return null
   return total > 0 ? total : null
 }
 

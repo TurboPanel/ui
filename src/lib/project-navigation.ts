@@ -49,8 +49,8 @@ export function projectTypeLabel(project: ProjectRecord): string {
  * scope chips stay in the header; switching scope keeps the active tab.
  * `overview` (topology diagram), `compose` (YAML), and `services` (service
  * cards) are **lenses** on one artifact; the surface nav bar shows them plus
- * `hosting` (server placement and exposure) and `bindings` (system users and
- * bound databases). Storage / Settings are configuration routes reached from a
+ * `bindings` (system users and bound databases) and `hosting` (server
+ * placement and exposure). Storage / Settings are configuration routes reached from a
  * service row or the scope-strip gear. `servers` is retired — placement lives
  * on the Hosting tab and `/servers` paths redirect there. `/map` is the
  * retired Overview path and redirects to `/overview`.
@@ -59,8 +59,8 @@ export const COMPOSE_PROJECT_TAB_IDS = [
   'overview',
   'compose',
   'services',
-  'hosting',
   'bindings',
+  'hosting',
   'storage',
   'settings',
 ] as const
@@ -97,16 +97,16 @@ export const COMPOSE_PROJECT_LENS_IDS = [
 ] as const
 
 /**
- * Tabs on the surface nav bar, in order: the three lenses plus Hosting
- * (server placement and hostnames / proxying) and Bindings (system users and
- * bound databases — what a service deploys *as* and connects *to*).
+ * Tabs on the surface nav bar, in order: the three lenses plus Bindings
+ * (system users and bound databases — what a service deploys *as* and
+ * connects *to*) and Hosting (server placement and hostnames / proxying).
  */
 export const COMPOSE_PROJECT_SURFACE_TAB_IDS = [
   'overview',
   'compose',
   'services',
-  'hosting',
   'bindings',
+  'hosting',
 ] as const
 
 export function isComposeProjectLens(

@@ -54,6 +54,7 @@ export type CpuStackSegments = {
  * and iowait. Idle is the unfilled track.
  */
 export function buildCpuStackSegments(input: {
+  /** Derived busy % (`100 − cpuIdlePercent`) — includes iowait. */
   usage?: number | null
   user?: number | null
   system?: number | null
@@ -70,10 +71,11 @@ export function buildCpuStackSegments(input: {
     input.usage != null
   if (!known) return null
 
-  // usage excludes iowait; residual active = irq/softirq/steal/etc.
+  // Derived busy counts everything non-idle (iowait included); residual
+  // active = nice/irq/softirq/steal.
   let other = 0
   if (usage != null) {
-    other = Math.max(0, usage - user - system)
+    other = Math.max(0, usage - user - system - iowait)
   }
 
   const sum = user + system + other + iowait
@@ -102,22 +104,56 @@ export function finiteMetric(value: number | null | undefined): number | null {
   return finiteOrNull(value)
 }
 
+/**
+ * Used % from a capacity pair — `(total − free) / total`. The v2 metrics
+ * contract stores raw byte counters only; every used-percentage the UI shows
+ * comes through here.
+ */
+export function usedPercentFromBytes(
+  totalBytes: number | null | undefined,
+  freeBytes: number | null | undefined,
+): number | null {
+  const total = finiteOrNull(totalBytes)
+  const free = finiteOrNull(freeBytes)
+  if (total == null || free == null || total <= 0) return null
+  return clampPercent(((total - free) / total) * 100)
+}
+
+/** Memory used % from `memoryTotalBytes` / `memoryAvailableBytes`. */
+export function memoryUsedPercentFrom(
+  totalBytes: number | null | undefined,
+  availableBytes: number | null | undefined,
+): number | null {
+  return usedPercentFromBytes(totalBytes, availableBytes)
+}
+
+/** Swap used % from `swapTotalBytes` / `swapFreeBytes`. */
+export function swapUsedPercentFrom(
+  totalBytes: number | null | undefined,
+  freeBytes: number | null | undefined,
+): number | null {
+  return usedPercentFromBytes(totalBytes, freeBytes)
+}
+
 export type UsageMetricInput = Readonly<{
-  cpuUsagePercent?: number | null
+  /** Stored idle % — busy is derived (`100 − idle`), never stored. */
+  cpuIdlePercent?: number | null
   cpuUserPercent?: number | null
   cpuSystemPercent?: number | null
   cpuIowaitPercent?: number | null
   load1?: number | null
   load5?: number | null
   load15?: number | null
+  /** Derived by the caller (e.g. {@link memoryUsedPercentFrom}). */
   memoryPercent?: number | null
+  /** Derived by the caller (e.g. {@link swapUsedPercentFrom}). */
   swapPercent?: number | null
 }>
 
 /** True when any displayed usage metric has arrived (zero counts as a sample). */
 export function hasUsageMetrics(input: UsageMetricInput): boolean {
   return [
-    input.cpuUsagePercent,
+    input.cpuIdlePercent,
     input.cpuUserPercent,
     input.cpuSystemPercent,
     input.cpuIowaitPercent,

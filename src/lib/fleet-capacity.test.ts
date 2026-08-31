@@ -162,8 +162,7 @@ describe('computeFleetStatus', () => {
     const servers = [server('a')]
     const usageByServerId = indexFleetUsageByServerId([
       usage('a', {
-        memoryUsedBytes: 2 * 1024 * 1024 * 1024,
-        memoryAvailableBytes: 6 * 1024 * 1024 * 1024,
+        memoryTotalBytes: 8 * 1024 * 1024 * 1024,
       }),
     ])
     expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBe(
@@ -175,17 +174,16 @@ describe('computeFleetStatus', () => {
     const servers = [server('a')]
     const usageByServerId = indexFleetUsageByServerId([
       usage('a', {
-        memoryUsedBytes: 2 * 1024 * 1024 * 1024,
-        memoryAvailableBytes: 6 * 1024 * 1024 * 1024,
+        memoryTotalBytes: 8 * 1024 * 1024 * 1024,
       }, 0),
     ])
     expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBeNull()
   })
 
-  it('ignores partial metrics memory when used or available is missing', () => {
+  it('ignores metrics memory when the total is missing', () => {
     const servers = [server('a')]
     const usageByServerId = indexFleetUsageByServerId([
-      usage('a', { memoryUsedBytes: 1024 }),
+      usage('a', { memoryAvailableBytes: 1024 }),
     ])
     expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBeNull()
   })

@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  derivedCpuBusyPercent,
   formatAxisTime,
   formatBytes,
   formatBytesPerSecond,
+  formatCelsius,
   formatCoveragePercent,
   formatCount,
+  formatDerivedCpuBusyPercent,
+  formatMilliseconds,
   formatOpsPerSecond,
   formatPercent,
   formatUptimeSeconds,
+  formatWatts,
   presentSamplesFromGaps,
   type MetricsRangeId,
 } from '@/lib/format-metrics'
@@ -90,6 +95,64 @@ describe('formatCount', () => {
     expect(formatCount(10_000)).toBe('10.0k')
     expect(formatCount(12_500)).toBe('12.5k')
     expect(formatCount(1_500_000)).toBe('1.5M')
+  })
+})
+
+describe('formatCelsius', () => {
+  it('returns em dash for null and non-finite values', () => {
+    expect(formatCelsius(null)).toBe('—')
+    expect(formatCelsius(undefined)).toBe('—')
+    expect(formatCelsius(Number.NaN)).toBe('—')
+  })
+
+  it('formats one decimal with a degree unit', () => {
+    expect(formatCelsius(56.25)).toBe('56.3 °C')
+    expect(formatCelsius(0)).toBe('0.0 °C')
+  })
+})
+
+describe('formatWatts', () => {
+  it('returns em dash for null and non-finite values', () => {
+    expect(formatWatts(null)).toBe('—')
+    expect(formatWatts(Number.POSITIVE_INFINITY)).toBe('—')
+  })
+
+  it('formats one decimal with a watt unit', () => {
+    expect(formatWatts(35.04)).toBe('35.0 W')
+  })
+})
+
+describe('formatMilliseconds', () => {
+  it('returns em dash for null and non-finite values', () => {
+    expect(formatMilliseconds(null)).toBe('—')
+    expect(formatMilliseconds(undefined)).toBe('—')
+    expect(formatMilliseconds(Number.NaN)).toBe('—')
+  })
+
+  it('uses two decimals under 10 and one above', () => {
+    expect(formatMilliseconds(0.437)).toBe('0.44 ms')
+    expect(formatMilliseconds(12.34)).toBe('12.3 ms')
+  })
+})
+
+describe('derivedCpuBusyPercent', () => {
+  it('derives busy as 100 minus idle, clamped', () => {
+    expect(derivedCpuBusyPercent(80)).toBe(20)
+    expect(derivedCpuBusyPercent(0)).toBe(100)
+    expect(derivedCpuBusyPercent(100)).toBe(0)
+    expect(derivedCpuBusyPercent(120)).toBe(0)
+    expect(derivedCpuBusyPercent(-5)).toBe(100)
+  })
+
+  it('returns null when idle is missing', () => {
+    expect(derivedCpuBusyPercent(null)).toBeNull()
+    expect(derivedCpuBusyPercent(undefined)).toBeNull()
+    expect(derivedCpuBusyPercent(Number.NaN)).toBeNull()
+  })
+
+  it('formats through formatDerivedCpuBusyPercent', () => {
+    expect(formatDerivedCpuBusyPercent(80)).toBe('20.0%')
+    expect(formatDerivedCpuBusyPercent(null)).toBe('—')
   })
 })
 

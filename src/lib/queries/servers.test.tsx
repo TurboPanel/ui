@@ -264,7 +264,7 @@ describe('servers query hooks', () => {
 
   it('useFleetServerUsage returns null when metrics backend is unavailable', async () => {
     fetchFleetMetricsLatest.mockRejectedValueOnce(
-      new MetricsBackendUnavailableError('clickhouse'),
+      new MetricsBackendUnavailableError('duckdb'),
     )
 
     const { result } = renderHook(() => useFleetServerUsage(orgId), {
@@ -302,7 +302,7 @@ describe('servers query hooks', () => {
 
   it('useServerReporting returns null when metrics backend is unavailable', async () => {
     fetchServerMetricsSeries.mockRejectedValueOnce(
-      new MetricsBackendUnavailableError('clickhouse'),
+      new MetricsBackendUnavailableError('duckdb'),
     )
 
     const { result } = renderHook(

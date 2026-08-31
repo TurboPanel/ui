@@ -1,4 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -7,7 +14,15 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
-import { SectionPanel } from '@/components/ui'
+import { Button, InlineNotice, SectionPanel, StatTiles } from '@/components/ui'
+import {
+  CpuMetricIcon,
+  MemoryMetricIcon,
+  NetworkMetricIcon,
+  ProcessMetricIcon,
+  StorageMetricIcon,
+  UptimeMetricIcon,
+} from '@/components/icons/metric-icons'
 import { ChartCard } from '@/components/org/charts/chart-card'
 import { ChartLegend } from '@/components/org/charts/chart-legend'
 import {
@@ -17,14 +32,18 @@ import {
 } from '@/components/org/charts/metric-line-chart'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
+  derivedCpuBusyPercent,
   formatAxisTime,
   formatBytes,
   formatBytesPerSecond,
+  formatCelsius,
   formatCount,
   formatCoveragePercent,
+  formatMilliseconds,
   formatOpsPerSecond,
   formatPercent,
   formatUptimeSeconds,
+  formatWatts,
   presentSamplesFromGaps,
   type MetricsRangeId,
 } from '@/lib/format-metrics'
@@ -32,18 +51,38 @@ import {
   MetricsBackendUnavailableError,
   type MetricsBackendKind,
   type HostMetricKey,
+  type MetricsLiveStartOutcome,
   type OrgServerRecord,
   type MetricsSeriesPoint,
   type MetricsSeriesResponse,
 } from '@/lib/instance-api'
-import { HA_METRICS_LOCAL_NOTE } from '@/lib/platform-copy'
-import { useOrgServers, useServerMetricsSeries } from '@/lib/queries/servers'
+import {
+  HA_METRICS_LOCAL_NOTE,
+  TURBOFABRIC_PRODUCT_NAME,
+} from '@/lib/platform-copy'
+import {
+  useOrgServers,
+  useServerMetricsSeries,
+  useStartServerMetricsLive,
+  useStopServerMetricsLive,
+} from '@/lib/queries/servers'
+import {
+  CPU_IOWAIT,
+  CPU_OTHER,
+  CPU_SYSTEM,
+  CPU_USER,
+  LOAD_FILL,
+  memoryUsedPercentFrom,
+  usedPercentFromBytes,
+} from '@/lib/server-usage'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 const RANGE_OPTIONS: readonly {
   id: MetricsRangeId
   label: string
 }[] = [
+  { id: '5m', label: '5m' },
+  { id: '10m', label: '10m' },
   { id: '1h', label: '1h' },
   { id: '6h', label: '6h' },
   { id: '24h', label: '24h' },
@@ -53,12 +92,22 @@ const RANGE_OPTIONS: readonly {
 ]
 
 const RANGE_MS: Record<MetricsRangeId, number> = {
+  '5m': 300_000,
+  '10m': 600_000,
   '1h': 3_600_000,
   '6h': 21_600_000,
   '24h': 86_400_000,
   '7d': 604_800_000,
   '30d': 2_592_000_000,
   '90d': 7_776_000_000,
+}
+
+/** Chart refetch cadence while a live-metrics lease is active. */
+const LIVE_REFETCH_MS = 10_000
+
+/** Ranges that opt into live sampling — this single-server screen only. */
+function isLiveRange(rangeId: MetricsRangeId): boolean {
+  return rangeId === '5m' || rangeId === '10m'
 }
 
 const SERIES_COLORS = [
@@ -68,17 +117,61 @@ const SERIES_COLORS = [
   colors.errorSoft,
   colors.log,
   colors.textChip,
+  CPU_USER,
+  CPU_SYSTEM,
+  CPU_OTHER,
+  CPU_IOWAIT,
+  LOAD_FILL,
 ] as const
+
+type MetricValueReader = (
+  values: MetricsSeriesPoint['values'],
+) => number | null
+
+/** Read one stored metric; missing/non-finite → null (never 0). */
+function metric(key: HostMetricKey): MetricValueReader {
+  return (values) => {
+    const value = values[key]
+    if (value == null || !Number.isFinite(value)) return null
+    return value
+  }
+}
+
+/** Derived used % from a stored total/free byte pair. */
+function usedPercent(
+  totalKey: HostMetricKey,
+  freeKey: HostMetricKey,
+): MetricValueReader {
+  return (values) =>
+    usedPercentFromBytes(values[totalKey] ?? null, values[freeKey] ?? null)
+}
+
+const readCpuBusy: MetricValueReader = (values) =>
+  derivedCpuBusyPercent(values.cpuIdlePercent ?? null)
+
+type ChartSeriesDefinition = Readonly<{
+  id: string
+  label: string
+  read: MetricValueReader
+  /** Explicit series color; falls back to the shared palette by position. */
+  color?: string
+}>
 
 type ChartDefinition = Readonly<{
   id: string
   title: string
   unit: string
-  keys: readonly HostMetricKey[]
-  labels: readonly string[]
+  series: readonly ChartSeriesDefinition[]
   yFormat: (value: number) => string
   yDomain?: readonly [number, number]
   area?: boolean
+  /** Render series as a cumulative stacked area chart (CPU modes). */
+  stacked?: boolean
+  /**
+   * Omit the whole card when no series has a non-null sample in the range —
+   * a missing sensor/mount must never paint a 0-value flatline.
+   */
+  hideWhenEmpty?: boolean
 }>
 
 const CHART_DEFINITIONS: readonly ChartDefinition[] = [
@@ -86,13 +179,59 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'cpu',
     title: 'CPU usage',
     unit: '%',
-    keys: [
-      'cpuUsagePercent',
-      'cpuUserPercent',
-      'cpuSystemPercent',
-      'cpuIowaitPercent',
+    // Stacked bottom-up in this order, idle on top — the stack sums to ~100%
+    // so idle headroom is the visible remainder, never a hidden derived line.
+    stacked: true,
+    series: [
+      {
+        id: 'cpuUserPercent',
+        label: 'User',
+        color: CPU_USER,
+        read: metric('cpuUserPercent'),
+      },
+      {
+        id: 'cpuSystemPercent',
+        label: 'System',
+        color: CPU_SYSTEM,
+        read: metric('cpuSystemPercent'),
+      },
+      {
+        id: 'cpuNicePercent',
+        label: 'Nice',
+        color: CPU_OTHER,
+        read: metric('cpuNicePercent'),
+      },
+      {
+        id: 'cpuIowaitPercent',
+        label: 'I/O wait',
+        color: CPU_IOWAIT,
+        read: metric('cpuIowaitPercent'),
+      },
+      {
+        id: 'cpuIrqPercent',
+        label: 'IRQ',
+        color: colors.errorSoft,
+        read: metric('cpuIrqPercent'),
+      },
+      {
+        id: 'cpuSoftirqPercent',
+        label: 'SoftIRQ',
+        color: colors.pending,
+        read: metric('cpuSoftirqPercent'),
+      },
+      {
+        id: 'cpuStealPercent',
+        label: 'Steal',
+        color: colors.log,
+        read: metric('cpuStealPercent'),
+      },
+      {
+        id: 'cpuIdlePercent',
+        label: 'Idle',
+        color: colors.textChip,
+        read: metric('cpuIdlePercent'),
+      },
     ],
-    labels: ['Total', 'User', 'System', 'I/O wait'],
     yFormat: (v) => formatPercent(v),
     yDomain: [0, 100],
   },
@@ -100,78 +239,259 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'load',
     title: 'Load average',
     unit: 'load',
-    keys: ['load1', 'load5', 'load15'],
-    labels: ['1m', '5m', '15m'],
+    series: [
+      { id: 'load1', label: '1m', read: metric('load1') },
+      { id: 'load5', label: '5m', read: metric('load5') },
+      { id: 'load15', label: '15m', read: metric('load15') },
+    ],
     yFormat: (v) => v.toFixed(2),
-  },
-  {
-    id: 'memory-percent',
-    title: 'Memory & swap',
-    unit: '%',
-    keys: ['memoryUsedPercent', 'swapUsedPercent'],
-    labels: ['Memory used', 'Swap used'],
-    yFormat: (v) => formatPercent(v),
-    yDomain: [0, 100],
   },
   {
     id: 'memory-bytes',
     title: 'Memory bytes',
     unit: 'bytes',
-    keys: ['memoryUsedBytes', 'memoryAvailableBytes'],
-    labels: ['Used', 'Available'],
+    series: [
+      { id: 'memoryTotalBytes', label: 'Total', read: metric('memoryTotalBytes') },
+      {
+        id: 'memoryAvailableBytes',
+        label: 'Available',
+        read: metric('memoryAvailableBytes'),
+      },
+      { id: 'memoryFreeBytes', label: 'Free', read: metric('memoryFreeBytes') },
+    ],
     yFormat: (v) => formatBytes(v),
   },
   {
-    id: 'disk-percent',
-    title: 'Root disk usage',
+    id: 'memory-percent',
+    title: 'Memory used',
     unit: '%',
-    keys: ['diskUsedPercent'],
-    labels: ['Used'],
+    series: [
+      {
+        id: 'memoryUsed',
+        label: 'Used',
+        read: usedPercent('memoryTotalBytes', 'memoryAvailableBytes'),
+      },
+    ],
     yFormat: (v) => formatPercent(v),
     yDomain: [0, 100],
     area: true,
   },
   {
+    id: 'swap-bytes',
+    title: 'Swap bytes',
+    unit: 'bytes',
+    series: [
+      { id: 'swapTotalBytes', label: 'Total', read: metric('swapTotalBytes') },
+      { id: 'swapFreeBytes', label: 'Free', read: metric('swapFreeBytes') },
+    ],
+    yFormat: (v) => formatBytes(v),
+  },
+  {
+    id: 'swap-percent',
+    title: 'Swap used',
+    unit: '%',
+    series: [
+      {
+        id: 'swapUsed',
+        label: 'Used',
+        read: usedPercent('swapTotalBytes', 'swapFreeBytes'),
+      },
+    ],
+    yFormat: (v) => formatPercent(v),
+    yDomain: [0, 100],
+    area: true,
+  },
+  {
+    id: 'storage-system',
+    title: 'System storage',
+    unit: 'bytes',
+    series: [
+      {
+        id: 'systemStorageTotalBytes',
+        label: 'Total',
+        read: metric('systemStorageTotalBytes'),
+      },
+      {
+        id: 'systemStorageAvailableBytes',
+        label: 'Available',
+        read: metric('systemStorageAvailableBytes'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+  },
+  {
+    id: 'storage-hosting',
+    title: 'Hosting storage',
+    unit: 'bytes',
+    series: [
+      {
+        id: 'hostingStorageTotalBytes',
+        label: 'Total',
+        read: metric('hostingStorageTotalBytes'),
+      },
+      {
+        id: 'hostingStorageAvailableBytes',
+        label: 'Available',
+        read: metric('hostingStorageAvailableBytes'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+  },
+  {
+    id: 'storage-docker',
+    title: 'Docker storage',
+    unit: 'bytes',
+    series: [
+      {
+        id: 'dockerStorageTotalBytes',
+        label: 'Total',
+        read: metric('dockerStorageTotalBytes'),
+      },
+      {
+        id: 'dockerStorageAvailableBytes',
+        label: 'Available',
+        read: metric('dockerStorageAvailableBytes'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
     id: 'disk-throughput',
     title: 'Disk throughput',
     unit: 'B/s',
-    keys: ['diskReadBytesPerSecond', 'diskWriteBytesPerSecond'],
-    labels: ['Read', 'Write'],
+    series: [
+      {
+        id: 'diskReadBytesPerSecond',
+        label: 'Read',
+        read: metric('diskReadBytesPerSecond'),
+      },
+      {
+        id: 'diskWriteBytesPerSecond',
+        label: 'Write',
+        read: metric('diskWriteBytesPerSecond'),
+      },
+    ],
     yFormat: (v) => formatBytesPerSecond(v),
   },
   {
     id: 'disk-ops',
     title: 'Disk operations',
     unit: 'ops/s',
-    keys: ['diskReadOpsPerSecond', 'diskWriteOpsPerSecond'],
-    labels: ['Read', 'Write'],
+    series: [
+      {
+        id: 'diskReadOpsPerSecond',
+        label: 'Read',
+        read: metric('diskReadOpsPerSecond'),
+      },
+      {
+        id: 'diskWriteOpsPerSecond',
+        label: 'Write',
+        read: metric('diskWriteOpsPerSecond'),
+      },
+    ],
     yFormat: (v) => formatOpsPerSecond(v),
   },
   {
-    id: 'network',
-    title: 'Network throughput',
-    unit: 'B/s',
-    keys: [
-      'networkReceiveBytesPerSecond',
-      'networkTransmitBytesPerSecond',
+    id: 'disk-latency',
+    title: 'Disk latency',
+    unit: 'ms',
+    series: [
+      {
+        id: 'diskReadLatencyMs',
+        label: 'Read',
+        read: metric('diskReadLatencyMs'),
+      },
+      {
+        id: 'diskWriteLatencyMs',
+        label: 'Write',
+        read: metric('diskWriteLatencyMs'),
+      },
     ],
-    labels: ['Receive', 'Transmit'],
+    yFormat: (v) => formatMilliseconds(v),
+  },
+  {
+    id: 'network-uplink',
+    title: 'Datacenter uplink',
+    unit: 'B/s',
+    series: [
+      {
+        id: 'uplinkReceiveBytesPerSecond',
+        label: 'Receive',
+        read: metric('uplinkReceiveBytesPerSecond'),
+      },
+      {
+        id: 'uplinkTransmitBytesPerSecond',
+        label: 'Transmit',
+        read: metric('uplinkTransmitBytesPerSecond'),
+      },
+    ],
     yFormat: (v) => formatBytesPerSecond(v),
+  },
+  {
+    id: 'network-fabric',
+    title: TURBOFABRIC_PRODUCT_NAME,
+    unit: 'B/s',
+    series: [
+      {
+        id: 'fabricReceiveBytesPerSecond',
+        label: 'Receive',
+        read: metric('fabricReceiveBytesPerSecond'),
+      },
+      {
+        id: 'fabricTransmitBytesPerSecond',
+        label: 'Transmit',
+        read: metric('fabricTransmitBytesPerSecond'),
+      },
+    ],
+    yFormat: (v) => formatBytesPerSecond(v),
+  },
+  {
+    id: 'temperature',
+    title: 'Temperatures',
+    unit: '°C',
+    series: [
+      {
+        id: 'cpuTemperatureCelsius',
+        label: 'CPU',
+        read: metric('cpuTemperatureCelsius'),
+      },
+      {
+        id: 'gpuTemperatureCelsius',
+        label: 'GPU',
+        read: metric('gpuTemperatureCelsius'),
+      },
+    ],
+    yFormat: (v) => formatCelsius(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'power',
+    title: 'Power draw',
+    unit: 'W',
+    series: [
+      { id: 'cpuPowerWatts', label: 'CPU', read: metric('cpuPowerWatts') },
+      { id: 'gpuPowerWatts', label: 'GPU', read: metric('gpuPowerWatts') },
+    ],
+    yFormat: (v) => formatWatts(v),
+    hideWhenEmpty: true,
   },
   {
     id: 'processes',
     title: 'Process count',
     unit: 'count',
-    keys: ['processCount'],
-    labels: ['Processes'],
+    series: [
+      { id: 'processCount', label: 'Processes', read: metric('processCount') },
+    ],
     yFormat: (v) => formatCount(v),
   },
   {
     id: 'uptime',
     title: 'Uptime',
     unit: 'duration',
-    keys: ['uptimeSeconds'],
-    labels: ['Uptime'],
+    series: [
+      { id: 'uptimeSeconds', label: 'Uptime', read: metric('uptimeSeconds') },
+    ],
     yFormat: (v) => formatUptimeSeconds(v),
   },
 ]
@@ -181,32 +501,48 @@ type ChartGroupDefinition = Readonly<{
   label: string
   hint: string
   chartIds: readonly string[]
+  /** Muted caveat shown above the charts while expanded. */
+  note?: string
 }>
 
 const CHART_GROUPS: readonly ChartGroupDefinition[] = [
   {
-    id: 'compute',
-    label: 'Compute',
-    hint: 'CPU and load average',
+    id: 'cpu',
+    label: 'CPU',
+    hint: 'CPU modes and load average',
     chartIds: ['cpu', 'load'],
   },
   {
     id: 'memory',
     label: 'Memory',
-    hint: 'RAM and swap utilization',
-    chartIds: ['memory-percent', 'memory-bytes'],
+    hint: 'RAM and swap capacity and utilization',
+    chartIds: ['memory-bytes', 'memory-percent', 'swap-bytes', 'swap-percent'],
   },
   {
-    id: 'disk',
-    label: 'Disk',
-    hint: 'Usage, throughput, and I/O ops',
-    chartIds: ['disk-percent', 'disk-throughput', 'disk-ops'],
+    id: 'storage',
+    label: 'Storage',
+    hint: 'Capacity, throughput, I/O ops, and latency',
+    chartIds: [
+      'storage-system',
+      'storage-hosting',
+      'storage-docker',
+      'disk-throughput',
+      'disk-ops',
+      'disk-latency',
+    ],
   },
   {
     id: 'network',
     label: 'Network',
-    hint: 'Receive and transmit throughput',
-    chartIds: ['network'],
+    hint: `Datacenter uplink and ${TURBOFABRIC_PRODUCT_NAME} throughput`,
+    chartIds: ['network-uplink', 'network-fabric'],
+    note: `Datacenter uplink and ${TURBOFABRIC_PRODUCT_NAME} are measured on separate interfaces — the two are not additive.`,
+  },
+  {
+    id: 'hardware',
+    label: 'Hardware',
+    hint: 'Temperatures and power draw — shown only when sensors report',
+    chartIds: ['temperature', 'power'],
   },
   {
     id: 'system',
@@ -224,10 +560,17 @@ function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
+/**
+ * Baseline (non-live) refetch cadence. Live ranges fall back to this when the
+ * lease is denied, expired, or the server is offline.
+ */
 function rangeQueryTiming(rangeId: MetricsRangeId): {
   refetchInterval: number | false
   staleTime: number
 } {
+  if (isLiveRange(rangeId)) {
+    return { refetchInterval: 60_000, staleTime: 5_000 }
+  }
   if (rangeId === '1h' || rangeId === '6h') {
     return { refetchInterval: 60_000, staleTime: 30_000 }
   }
@@ -352,15 +695,25 @@ function buildChartSeries(
   points: MetricsSeriesPoint[],
   definition: ChartDefinition,
 ): MetricLineSeries[] {
-  return definition.keys.map((key, index) => ({
-    key,
-    label: definition.labels[index] ?? key,
-    color: SERIES_COLORS[index % SERIES_COLORS.length]!,
+  return definition.series.map((entry, index) => ({
+    key: entry.id,
+    label: entry.label,
+    color: entry.color ?? SERIES_COLORS[index % SERIES_COLORS.length]!,
     points: points.map((point) => ({
       tMs: Date.parse(point.at),
-      value: point.values[key] ?? null,
+      value: entry.read(point.values),
     })),
   }))
+}
+
+/** True when any series in the chart has at least one non-null sample. */
+function chartHasAnyData(
+  points: MetricsSeriesPoint[],
+  definition: ChartDefinition,
+): boolean {
+  return definition.series.some((entry) =>
+    points.some((point) => entry.read(point.values) != null),
+  )
 }
 
 function isChartUnavailable(
@@ -399,8 +752,8 @@ function metricsBackendLabel(backend: MetricsBackendKind): string {
   switch (backend) {
     case 'analytics-engine':
       return 'Analytics Engine'
-    case 'clickhouse':
-      return 'ClickHouse'
+    case 'duckdb':
+      return 'DuckDB'
     default:
       return 'metrics storage'
   }
@@ -410,8 +763,8 @@ function metricsNotConfiguredCopy(backend: MetricsBackendKind): string {
   if (backend === 'analytics-engine') {
     return `Metrics charts are unavailable. ${HA_METRICS_LOCAL_NOTE}`
   }
-  if (backend === 'clickhouse') {
-    return 'Metrics storage is still starting up (ClickHouse). Retry in a moment.'
+  if (backend === 'duckdb') {
+    return 'Metrics storage is still starting up (DuckDB). Retry in a moment.'
   }
   return 'Metrics storage is not configured for this runtime yet.'
 }
@@ -682,6 +1035,7 @@ function MetricsChartCard({
         yFormat={definition.yFormat}
         yDomain={definition.yDomain}
         area={definition.area}
+        stacked={definition.stacked}
         gapBands={gapBands}
         xTickFormat={xTickFormat}
       />
@@ -707,9 +1061,15 @@ function CollapsibleChartGroup({
   xTickFormat: (ms: number) => string
 }>) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  // hideWhenEmpty cards (docker storage, hardware sensors) drop out entirely
+  // when nothing reported in range — a missing sensor is absence, not zero.
   const charts = group.chartIds
     .map((id) => CHARTS_BY_ID.get(id))
     .filter((entry): entry is ChartDefinition => entry != null)
+    .filter(
+      (definition) =>
+        !definition.hideWhenEmpty || chartHasAnyData(points, definition),
+    )
 
   if (charts.length === 0) return null
 
@@ -741,21 +1101,268 @@ function CollapsibleChartGroup({
         </View>
       </Pressable>
       {expanded ? (
-        <View style={[styles.chartGrid, twoColumn ? styles.chartGridTwo : null]}>
-          {charts.map((definition) => (
-            <MetricsChartCard
-              key={definition.id}
-              definition={definition}
-              points={points}
-              chartDomainMs={chartDomainMs}
-              gapBands={gapBands}
-              xTickFormat={xTickFormat}
-            />
-          ))}
-        </View>
+        <>
+          {group.note ? (
+            <Text style={styles.chartGroupNote}>{group.note}</Text>
+          ) : null}
+          <View style={[styles.chartGrid, twoColumn ? styles.chartGridTwo : null]}>
+            {charts.map((definition) => (
+              <MetricsChartCard
+                key={definition.id}
+                definition={definition}
+                points={points}
+                chartDomainMs={chartDomainMs}
+                gapBands={gapBands}
+                xTickFormat={xTickFormat}
+              />
+            ))}
+          </View>
+        </>
       ) : null}
     </View>
   )
+}
+
+function latestReadValue(
+  points: MetricsSeriesPoint[],
+  read: MetricValueReader,
+): number | null {
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const value = read(points[index]!.values)
+    if (value != null) return value
+  }
+  return null
+}
+
+/** Latest-value rollup above the chart groups — derived numbers, not a chart. */
+function MetricsOverviewTiles({
+  points,
+}: Readonly<{ points: MetricsSeriesPoint[] }>) {
+  const cpuBusy = latestReadValue(points, readCpuBusy)
+  const memoryUsed = latestReadValue(points, (values) =>
+    memoryUsedPercentFrom(
+      values.memoryTotalBytes ?? null,
+      values.memoryAvailableBytes ?? null,
+    ),
+  )
+  const hostingUsed = latestReadValue(
+    points,
+    usedPercent('hostingStorageTotalBytes', 'hostingStorageAvailableBytes'),
+  )
+  const uplinkRx = latestReadValue(points, metric('uplinkReceiveBytesPerSecond'))
+  const uplinkTx = latestReadValue(
+    points,
+    metric('uplinkTransmitBytesPerSecond'),
+  )
+  const uplink =
+    uplinkRx == null && uplinkTx == null
+      ? null
+      : (uplinkRx ?? 0) + (uplinkTx ?? 0)
+  const processes = latestReadValue(points, metric('processCount'))
+  const uptime = latestReadValue(points, metric('uptimeSeconds'))
+
+  return (
+    <StatTiles
+      accessibilityLabel="Latest server metrics"
+      items={[
+        {
+          key: 'cpu',
+          icon: CpuMetricIcon,
+          value: formatPercent(cpuBusy),
+          label: 'CPU BUSY',
+          accessibilityLabel: `CPU busy ${formatPercent(cpuBusy)}`,
+        },
+        {
+          key: 'memory',
+          icon: MemoryMetricIcon,
+          value: formatPercent(memoryUsed),
+          label: 'MEMORY USED',
+          accessibilityLabel: `Memory used ${formatPercent(memoryUsed)}`,
+        },
+        {
+          key: 'hosting',
+          icon: StorageMetricIcon,
+          value: formatPercent(hostingUsed),
+          label: 'HOSTING USED',
+          accessibilityLabel: `Hosting storage used ${formatPercent(hostingUsed)}`,
+        },
+        {
+          key: 'uplink',
+          icon: NetworkMetricIcon,
+          value: formatBytesPerSecond(uplink),
+          label: 'UPLINK',
+          accessibilityLabel: `Uplink throughput ${formatBytesPerSecond(uplink)}`,
+        },
+        {
+          key: 'processes',
+          icon: ProcessMetricIcon,
+          value: formatCount(processes),
+          label: 'PROCESSES',
+          accessibilityLabel: `${formatCount(processes)} processes`,
+        },
+        {
+          key: 'uptime',
+          icon: UptimeMetricIcon,
+          value: formatUptimeSeconds(uptime),
+          label: 'UPTIME',
+          accessibilityLabel: `Uptime ${formatUptimeSeconds(uptime)}`,
+        },
+      ]}
+    />
+  )
+}
+
+type LiveSessionState =
+  | { kind: 'idle' }
+  | { kind: 'starting' }
+  | {
+      kind: 'live'
+      leaseId: string
+      intervalSeconds: number
+      expiresAtMs: number
+    }
+  | { kind: 'ended' }
+  | { kind: 'disabled' }
+  | { kind: 'offline' }
+
+/**
+ * Live-metrics lease lifecycle for the 5m/10m ranges. Acquires a lease while
+ * `active`, tracks its expiry, and releases it (fire-and-forget) as soon as
+ * the range changes or the screen unmounts. The session is keyed on `rangeId`,
+ * not just live eligibility, so switching between the live ranges (5m ↔ 10m)
+ * stops the current lease before starting one for the new range. This hook
+ * must only ever run on the single-server Metrics screen — never in fleet
+ * views.
+ */
+function useLiveMetricsSession(
+  orgId: string,
+  serverId: string,
+  active: boolean,
+  rangeId: MetricsRangeId,
+): { state: LiveSessionState; restart: () => void } {
+  const startMutation = useStartServerMetricsLive(orgId, serverId)
+  const stopMutation = useStopServerMetricsLive(orgId, serverId)
+  // React Query mutate functions are referentially stable — safe effect deps.
+  const startLive = startMutation.mutateAsync
+  const stopLive = stopMutation.mutateAsync
+
+  const [state, setState] = useState<LiveSessionState>({ kind: 'idle' })
+  const [attempt, setAttempt] = useState(0)
+  const leaseRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    setState({ kind: 'starting' })
+    void (async () => {
+      let outcome: MetricsLiveStartOutcome
+      try {
+        outcome = await startLive(undefined)
+      } catch {
+        // Transport failure — quietly stay on baseline sampling.
+        if (!cancelled) setState({ kind: 'idle' })
+        return
+      }
+      if (cancelled) {
+        // Left live mode before the lease landed — release it immediately.
+        if (outcome.kind === 'started') {
+          stopLive(outcome.leaseId).catch(() => {})
+        }
+        return
+      }
+      if (outcome.kind === 'started') {
+        leaseRef.current = outcome.leaseId
+        setState({
+          kind: 'live',
+          leaseId: outcome.leaseId,
+          intervalSeconds: outcome.intervalSeconds,
+          expiresAtMs: Date.parse(outcome.expiresAt),
+        })
+        return
+      }
+      setState({ kind: outcome.kind })
+    })()
+    return () => {
+      cancelled = true
+      const leaseId = leaseRef.current
+      leaseRef.current = null
+      if (leaseId) {
+        stopLive(leaseId).catch(() => {
+          // Best effort — the daemon's local expiry timer is the backstop.
+        })
+      }
+      setState({ kind: 'idle' })
+    }
+  }, [active, rangeId, orgId, serverId, attempt, startLive, stopLive])
+
+  useEffect(() => {
+    if (state.kind !== 'live') return
+    const delayMs = state.expiresAtMs - Date.now()
+    if (!Number.isFinite(delayMs) || delayMs <= 0) {
+      leaseRef.current = null
+      setState({ kind: 'ended' })
+      return
+    }
+    const timer = setTimeout(() => {
+      leaseRef.current = null
+      setState({ kind: 'ended' })
+    }, delayMs)
+    return () => clearTimeout(timer)
+  }, [state])
+
+  const restart = useCallback(() => setAttempt((n) => n + 1), [])
+  return { state, restart }
+}
+
+function LiveModeIndicator({
+  state,
+  onRestart,
+}: Readonly<{ state: LiveSessionState; onRestart: () => void }>) {
+  if (state.kind === 'starting') {
+    return (
+      <View style={styles.liveRow}>
+        <ActivityIndicator size="small" color={colors.green} />
+        <Text style={panelStyles.muted}>Starting live session…</Text>
+      </View>
+    )
+  }
+  if (state.kind === 'live') {
+    return (
+      <View style={styles.liveRow}>
+        <View style={styles.liveDot} />
+        <Text style={styles.liveText}>LIVE</Text>
+        <Text style={styles.liveMeta}>
+          · {state.intervalSeconds} second sampling
+        </Text>
+      </View>
+    )
+  }
+  if (state.kind === 'ended') {
+    return (
+      <View style={styles.liveRow}>
+        <View style={styles.liveDotEnded} />
+        <Text style={styles.liveMeta}>
+          Live session ended · 1 minute sampling
+        </Text>
+        <Button
+          label="Restart live session"
+          variant="secondary"
+          onPress={onRestart}
+        />
+      </View>
+    )
+  }
+  if (state.kind === 'offline') {
+    return (
+      <InlineNotice
+        tone="warning"
+        title="Server offline"
+        body="Live 10-second sampling is unavailable until the host reconnects. Charts stay at 1 minute sampling."
+      />
+    )
+  }
+  // 'disabled' (admin cap is 0) and 'idle' fall back silently to baseline.
+  return null
 }
 
 function MetricsCharts({
@@ -789,6 +1396,8 @@ function MetricsCharts({
 
   return (
     <>
+      <MetricsOverviewTiles points={points} />
+
       <View style={styles.coverageStrip}>
         <View style={styles.coverageHeader}>
           <Text style={styles.coverageText}>
@@ -893,6 +1502,27 @@ function resolveChartDomainMs(
   return [bounds.fromMs, bounds.toMs]
 }
 
+function resolveSampleStats(
+  data: MetricsSeriesResponse | undefined,
+  normalizedMetrics: ReturnType<typeof normalizeMetricsGrid> | null,
+): Readonly<{
+  expectedSamples: number
+  presentSamples: number
+  coverageLabel: string | null
+}> {
+  if (!data) {
+    return { expectedSamples: 0, presentSamples: 0, coverageLabel: null }
+  }
+  const expectedSamples =
+    normalizedMetrics?.expectedSamples ?? data.sampleCount + data.gapCount
+  const presentSamples = presentSamplesFromGaps(expectedSamples, data.gapCount)
+  const coverageLabel =
+    expectedSamples > 0
+      ? formatCoveragePercent(presentSamples, expectedSamples)
+      : null
+  return { expectedSamples, presentSamples, coverageLabel }
+}
+
 export function ServerMetricsSection({
   orgId,
   serverId,
@@ -902,20 +1532,28 @@ export function ServerMetricsSection({
   const [rangeId, setRangeId] = useState<MetricsRangeId>('1h')
   const timing = rangeQueryTiming(rangeId)
   const twoColumn = width >= layout.desktopBreakpoint
-  const bounds = useMemo(() => computeRangeBounds(rangeId), [rangeId])
 
   const serversQuery = useOrgServers(orgId)
+
+  // Live sampling is scoped to this single-server screen at 5m/10m only —
+  // fleet/overview surfaces never acquire a lease.
+  const liveEligible = isLiveRange(rangeId)
+  const live = useLiveMetricsSession(orgId, serverId, liveEligible, rangeId)
+  const liveActive = live.state.kind === 'live'
 
   const metricsQuery = useServerMetricsSeries(
     orgId,
     serverId,
-    {
-      fromIso: bounds.fromIso,
-      toIso: bounds.toIso,
+    // Getter + stable rangeKey: interval refetches advance the window to
+    // "now" instead of re-reading the window frozen at range selection.
+    () => {
+      const bounds = computeRangeBounds(rangeId)
+      return { fromIso: bounds.fromIso, toIso: bounds.toIso }
     },
     {
-      refetchInterval: timing.refetchInterval,
-      staleTime: timing.staleTime,
+      refetchInterval: liveActive ? LIVE_REFETCH_MS : timing.refetchInterval,
+      staleTime: liveActive ? LIVE_REFETCH_MS / 2 : timing.staleTime,
+      rangeKey: rangeId,
     },
   )
 
@@ -935,16 +1573,10 @@ export function ServerMetricsSection({
     [data, normalizedMetrics, rangeId],
   )
 
-  const expectedSamples =
-    normalizedMetrics?.expectedSamples ??
-    (data ? data.sampleCount + data.gapCount : 0)
-  const presentSamples = data
-    ? presentSamplesFromGaps(expectedSamples, data.gapCount)
-    : 0
-  const coverageLabel =
-    data && expectedSamples > 0
-      ? formatCoveragePercent(presentSamples, expectedSamples)
-      : null
+  const { expectedSamples, presentSamples, coverageLabel } = resolveSampleStats(
+    data,
+    normalizedMetrics,
+  )
 
   const resolutionLabel =
     data?.resolutionSeconds != null
@@ -965,14 +1597,17 @@ export function ServerMetricsSection({
             {server ? serverTitle(server) : 'Server'} · Metrics
           </Text>
           <Text style={panelStyles.pageCopy}>
-            Host metrics sampled about once per minute. Charts use the backend
-            resolution for this range — not live sub-second data.
+            Host metrics sampled about once per minute. The 5m and 10m ranges
+            switch to 10-second live sampling while this page is open.
           </Text>
         </>
       ) : null}
 
       <SectionPanel title="Time range" hint="Auto-refresh on shorter ranges" accent>
         <RangePicker rangeId={rangeId} onChange={setRangeId} />
+        {liveEligible ? (
+          <LiveModeIndicator state={live.state} onRestart={live.restart} />
+        ) : null}
       </SectionPanel>
 
       {metricsQuery.isFetching && data ? (
@@ -1175,6 +1810,39 @@ const styles = StyleSheet.create({
   },
   chartGroup: {
     gap: spacing.sm,
+  },
+  chartGroupNote: {
+    color: colors.textFaint,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  liveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.green,
+  },
+  liveDotEnded: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textFaint,
+  },
+  liveText: {
+    color: colors.green,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  liveMeta: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
   chartGroupHeader: {
     flexDirection: 'row',

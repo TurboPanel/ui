@@ -7,11 +7,13 @@ import {
   deletePrincipalSshKey,
   deleteProject,
   deleteProjectPrincipal,
+  disablePrincipalPassword,
   fetchPrincipalSshKeys,
   fetchProject,
   fetchProjectCatalog,
   fetchProjectPrincipals,
   fetchVisibleProjects,
+  setPrincipalPassword,
   updateProject,
   updateProjectPrincipal,
   type ConfigureProjectBody,
@@ -268,6 +270,44 @@ export function useDeletePrincipalSshKey(
       deletePrincipalSshKey(projectId, principalId, keyId),
     onSuccess: async () => {
       await invalidatePrincipalKeys(queryClient, orgId, projectId, principalId)
+    },
+  })
+}
+
+/**
+ * Enable or rotate password sign-in. Invalidates the principals list because
+ * it carries `passwordAuth`, and effective access flips the moment the first
+ * credential of either kind exists.
+ */
+export function useSetPrincipalPassword(
+  orgId: string,
+  projectId: string,
+  principalId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: { password?: string }) =>
+      setPrincipalPassword(projectId, principalId, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.principals(projectId),
+      })
+    },
+  })
+}
+
+export function useDisablePrincipalPassword(
+  orgId: string,
+  projectId: string,
+  principalId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => disablePrincipalPassword(projectId, principalId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.principals(projectId),
+      })
     },
   })
 }

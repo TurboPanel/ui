@@ -163,7 +163,7 @@ export function ManagedUsersPanel({
     username: string
     databases: string[]
     connectionRole: ManagedConnectionRole
-  }) => Promise<{ password: string } | null>
+  }) => Promise<{ password: string; appliedUsername?: string } | null>
   onDeleteUser: (principalId: string) => Promise<void>
   onRotateUserPassword: (principalId: string) => Promise<{
     password: string
@@ -285,7 +285,8 @@ export function ManagedUsersPanel({
         connectionRole,
       })
       if (result?.password) {
-        setRevealedUsername(trimmed)
+        // Reveal the applied login — the name the engine actually accepts.
+        setRevealedUsername(result.appliedUsername ?? trimmed)
         setRevealedPassword(result.password)
       }
       setUsername('')
@@ -439,6 +440,11 @@ export function ManagedUsersPanel({
           return (
             <View key={user.id} style={styles.userCard}>
               <Text style={styles.rowLabel}>{user.username}</Text>
+              {user.appliedUsername !== user.username ? (
+                <Text style={panelStyles.muted}>
+                  Login: {user.appliedUsername}
+                </Text>
+              ) : null}
               <View style={styles.chipRow}>
                 {user.databases.map((db) => (
                   <Chip key={db} label={db} />
@@ -467,7 +473,7 @@ export function ManagedUsersPanel({
                     size="sm"
                     disabled={disabled}
                     onPress={() => {
-                      void rotateUser(user.id, user.username)
+                      void rotateUser(user.id, user.appliedUsername)
                     }}
                   />
                   {deleteBlocked ? (

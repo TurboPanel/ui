@@ -15,6 +15,10 @@ import {
 } from '@/components/ui'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
 import {
+  memoryUsedPercentFrom,
+  swapUsedPercentFrom,
+} from '@/lib/server-usage'
+import {
   indexFleetUsageByServerId,
   serverCpuThreads,
 } from '@/lib/fleet-capacity'
@@ -487,15 +491,22 @@ function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
 
 function usageBarMetrics(usage: FleetServerUsageRecord | null) {
   return {
-    cpuUsagePercent: usage?.values.cpuUsagePercent,
+    cpuIdlePercent: usage?.values.cpuIdlePercent,
     cpuUserPercent: usage?.values.cpuUserPercent,
     cpuSystemPercent: usage?.values.cpuSystemPercent,
     cpuIowaitPercent: usage?.values.cpuIowaitPercent,
     load1: usage?.values.load1,
     load5: usage?.values.load5,
     load15: usage?.values.load15,
-    memoryPercent: usage?.values.memoryUsedPercent,
-    swapPercent: usage?.values.swapUsedPercent,
+    // v2 stores raw byte counters only — used % is derived here.
+    memoryPercent: memoryUsedPercentFrom(
+      usage?.values.memoryTotalBytes,
+      usage?.values.memoryAvailableBytes,
+    ),
+    swapPercent: swapUsedPercentFrom(
+      usage?.values.swapTotalBytes,
+      usage?.values.swapFreeBytes,
+    ),
   }
 }
 

@@ -130,7 +130,7 @@ export function filterSetupCatalog(
   return []
 }
 
-/** Managed engines ship in waves — unreleased ones stay visible but unpickable. */
+/** Managed engines ship in waves — only released (`available`) ones are pickable. */
 export function isCatalogEntrySelectable(
   entry: CatalogSummary,
   type: SetupType,

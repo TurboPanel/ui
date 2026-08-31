@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import {
   Button,
   ConfirmButton,
-  EmptyState,
+  CopyButton,
   InlineNotice,
   LoadingState,
   MonoText,
@@ -16,7 +16,9 @@ import type { PrincipalAccessLevel } from '@/lib/instance-api'
 import {
   useAddPrincipalSshKey,
   useDeletePrincipalSshKey,
+  useDisablePrincipalPassword,
   usePrincipalSshKeys,
+  useSetPrincipalPassword,
 } from '@/lib/queries/projects'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { colors, spacing } from '@/lib/theme'
@@ -43,7 +45,7 @@ function accessExplanation(level: PrincipalAccessLevel): string {
     case 'sftp':
       return 'Transfer files over SFTP. No shell, no port forwarding.'
     default:
-      return 'Cannot sign in. Keys stay on file, so access can be restored without re-adding them.'
+      return 'Cannot sign in. Credentials stay on file, so access can be restored without re-adding them.'
   }
 }
 
@@ -53,6 +55,7 @@ export function PrincipalAccessPanel({
   principalId,
   username,
   access,
+  passwordAuth,
   canManage,
   onChangeAccess,
   savingAccess,
@@ -62,20 +65,96 @@ export function PrincipalAccessPanel({
   principalId: string
   username: string
   access: PrincipalAccessLevel
+  passwordAuth: boolean
   canManage: boolean
   onChangeAccess: (next: PrincipalAccessLevel) => void
   savingAccess: boolean
 }>) {
   const keysQuery = usePrincipalSshKeys(orgId, projectId, principalId)
-  const addKey = useAddPrincipalSshKey(orgId, projectId, principalId)
-  const removeKey = useDeletePrincipalSshKey(orgId, projectId, principalId)
-
-  const [name, setName] = useState('')
-  const [publicKey, setPublicKey] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
   const keys = orEmptyArray(keysQuery.data?.keys)
   const loading = keysQuery.isLoading
+
+  return (
+    <View style={styles.root}>
+      <Text style={panelStyles.detailLabel}>Access</Text>
+      <SegmentedControl
+        options={ACCESS_OPTIONS}
+        value={access}
+        onChange={onChangeAccess}
+        disabled={!canManage || savingAccess}
+        accessibilityLabel={`SSH access for ${username}`}
+      />
+      <Text style={panelStyles.muted}>{accessExplanation(access)}</Text>
+
+      {/* Two different states, and conflating them is what sends an operator
+          hunting through sshd logs: "set to Shell but holds no credential" is
+          not the same as "set to No access". */}
+      {access !== 'none' && keys.length === 0 && !passwordAuth && !loading ? (
+        <InlineNotice
+          tone="warning"
+          title="No credentials yet"
+          body={`${username} cannot sign in until a key is added or password sign-in is enabled.`}
+        />
+      ) : null}
+
+      {loading ? <LoadingState /> : null}
+      <PrincipalKeysSection
+        orgId={orgId}
+        projectId={projectId}
+        principalId={principalId}
+        keys={keys}
+        loading={loading}
+        canManage={canManage}
+      />
+      <PrincipalPasswordSection
+        orgId={orgId}
+        projectId={projectId}
+        principalId={principalId}
+        username={username}
+        passwordAuth={passwordAuth}
+        canManage={canManage}
+      />
+    </View>
+  )
+}
+
+type PrincipalKey = {
+  id: string
+  name: string
+  fingerprint: string
+  keyType: string
+  bits: number | null
+  comment: string | null
+}
+
+/**
+ * Keys on file as a compact list; the paste form stays hidden behind one
+ * "Add key" action, because most visits to this row are not about enrolling a
+ * new device.
+ */
+function PrincipalKeysSection({
+  orgId,
+  projectId,
+  principalId,
+  keys,
+  loading,
+  canManage,
+}: Readonly<{
+  orgId: string
+  projectId: string
+  principalId: string
+  keys: readonly PrincipalKey[]
+  loading: boolean
+  canManage: boolean
+}>) {
+  const addKey = useAddPrincipalSshKey(orgId, projectId, principalId)
+  const removeKey = useDeletePrincipalSshKey(orgId, projectId, principalId)
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [publicKey, setPublicKey] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   const handleAdd = async () => {
     const trimmedName = name.trim()
@@ -98,6 +177,7 @@ export function PrincipalAccessPanel({
     }
     setName('')
     setPublicKey('')
+    setFormOpen(false)
   }
 
   const handleRemove = async (keyId: string) => {
@@ -109,32 +189,23 @@ export function PrincipalAccessPanel({
   }
 
   return (
-    <View style={styles.root}>
-      <Text style={panelStyles.detailLabel}>Access</Text>
-      <SegmentedControl
-        options={ACCESS_OPTIONS}
-        value={access}
-        onChange={onChangeAccess}
-        disabled={!canManage || savingAccess}
-        accessibilityLabel={`SSH access for ${username}`}
-      />
-      <Text style={panelStyles.muted}>{accessExplanation(access)}</Text>
-
-      {/* Two different states, and conflating them is what sends an operator
-          hunting through sshd logs: "set to Shell but holds no key" is not the
-          same as "set to No access". */}
-      {access !== 'none' && keys.length === 0 && !loading ? (
-        <InlineNotice
-          tone="warning"
-          title="No keys yet"
-          body={`${username} cannot sign in until a key is added. Password sign-in is off for these accounts.`}
-        />
-      ) : null}
-
+    <View style={styles.credentialBlock}>
+      <View style={styles.credentialHeader}>
+        <Text style={panelStyles.detailLabel}>
+          SSH keys{keys.length > 0 ? ` · ${keys.length}` : ''}
+        </Text>
+        {canManage && !formOpen ? (
+          <Button
+            label="Add key"
+            variant="secondary"
+            size="sm"
+            onPress={() => setFormOpen(true)}
+          />
+        ) : null}
+      </View>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {loading ? <LoadingState /> : null}
-      {!loading && keys.length === 0 ? (
-        <EmptyState title="No keys on file." />
+      {!loading && keys.length === 0 && !formOpen ? (
+        <Text style={panelStyles.muted}>No keys on file.</Text>
       ) : null}
 
       {keys.map((key) => (
@@ -168,7 +239,7 @@ export function PrincipalAccessPanel({
         </View>
       ))}
 
-      {canManage ? (
+      {canManage && formOpen ? (
         <View style={styles.form}>
           <TextField
             label="Key name"
@@ -192,15 +263,193 @@ export function PrincipalAccessPanel({
             <MonoText>~/.ssh</MonoText>, so removing one here removes it on the
             server.
           </Text>
-          <Button
-            label="Add key"
-            busyLabel="Adding…"
-            size="sm"
-            busy={addKey.isPending}
-            onPress={() => {
-              void handleAdd()
-            }}
+          <View style={styles.formActions}>
+            <Button
+              label="Add key"
+              busyLabel="Adding…"
+              size="sm"
+              busy={addKey.isPending}
+              onPress={() => {
+                void handleAdd()
+              }}
+            />
+            <Button
+              label="Cancel"
+              variant="secondary"
+              size="sm"
+              disabled={addKey.isPending}
+              onPress={() => {
+                setFormOpen(false)
+                setError(null)
+              }}
+            />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * Password sign-in for one account.
+ *
+ * The server stores only the crypt hash, so a generated password is shown
+ * exactly once, here, and can only ever be rotated — never read back. Custom
+ * passwords are accepted for the operator who must match an existing tool,
+ * but Generate is the offered default.
+ */
+function PrincipalPasswordSection({
+  orgId,
+  projectId,
+  principalId,
+  username,
+  passwordAuth,
+  canManage,
+}: Readonly<{
+  orgId: string
+  projectId: string
+  principalId: string
+  username: string
+  passwordAuth: boolean
+  canManage: boolean
+}>) {
+  const setPassword = useSetPrincipalPassword(orgId, projectId, principalId)
+  const disablePassword = useDisablePrincipalPassword(
+    orgId,
+    projectId,
+    principalId,
+  )
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [customPassword, setCustomPassword] = useState('')
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(
+    null,
+  )
+  const [error, setError] = useState<string | null>(null)
+
+  const busy = setPassword.isPending || disablePassword.isPending
+  const hasCustomPassword = customPassword.length > 0
+  const submitLabel = hasCustomPassword ? 'Set password' : 'Generate'
+  const submitBody = hasCustomPassword ? { password: customPassword } : {}
+
+  const submit = async (body: { password?: string }) => {
+    setError(null)
+    const result = await setPassword.run(body)
+    if (!result.ok) {
+      setError(setPassword.actionError ?? 'The password was not accepted.')
+      return
+    }
+    setGeneratedPassword(result.value.generatedPassword ?? null)
+    setCustomPassword('')
+    setFormOpen(false)
+  }
+
+  const handleDisable = async () => {
+    setError(null)
+    setGeneratedPassword(null)
+    const result = await disablePassword.run()
+    if (!result.ok) {
+      setError(
+        disablePassword.actionError ?? 'Password sign-in could not be disabled.',
+      )
+    }
+  }
+
+  return (
+    <View style={styles.credentialBlock}>
+      <View style={styles.credentialHeader}>
+        <Text style={panelStyles.detailLabel}>
+          Password sign-in{passwordAuth ? ' · on' : ''}
+        </Text>
+        {canManage && !formOpen ? (
+          <View style={styles.formActions}>
+            <Button
+              label={passwordAuth ? 'Rotate' : 'Enable'}
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onPress={() => {
+                setGeneratedPassword(null)
+                setFormOpen(true)
+              }}
+            />
+            {passwordAuth ? (
+              <ConfirmButton
+                label="Disable"
+                prompt={`Disable password sign-in for ${username}?`}
+                confirmLabel="Disable"
+                size="sm"
+                busy={disablePassword.isPending}
+                onConfirm={() => {
+                  void handleDisable()
+                }}
+              />
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {!passwordAuth && !formOpen && generatedPassword === null ? (
+        <Text style={panelStyles.muted}>
+          Off — this account signs in with keys only.
+        </Text>
+      ) : null}
+
+      {generatedPassword !== null ? (
+        <>
+          <View style={styles.generatedRow}>
+            <MonoText style={styles.generatedPassword}>
+              {generatedPassword}
+            </MonoText>
+            <CopyButton value={generatedPassword} />
+            <Button
+              label="Done"
+              variant="secondary"
+              size="sm"
+              onPress={() => setGeneratedPassword(null)}
+            />
+          </View>
+          <Text style={panelStyles.muted}>
+            Shown once — only a hash is stored. Copy it now; later you can only
+            rotate it.
+          </Text>
+        </>
+      ) : null}
+
+      {canManage && formOpen ? (
+        <View style={styles.form}>
+          <TextField
+            label="Password"
+            value={customPassword}
+            onChangeText={setCustomPassword}
+            placeholder="Leave empty to generate"
+            hint="8–128 characters. Leave empty and Generate makes a strong one, shown once."
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
           />
+          <View style={styles.formActions}>
+            <Button
+              label={submitLabel}
+              busyLabel="Saving…"
+              size="sm"
+              busy={setPassword.isPending}
+              onPress={() => {
+                void submit(submitBody)
+              }}
+            />
+            <Button
+              label="Cancel"
+              variant="secondary"
+              size="sm"
+              disabled={setPassword.isPending}
+              onPress={() => {
+                setFormOpen(false)
+                setCustomPassword('')
+                setError(null)
+              }}
+            />
+          </View>
         </View>
       ) : null}
     </View>
@@ -210,6 +459,16 @@ export function PrincipalAccessPanel({
 const styles = StyleSheet.create({
   root: {
     gap: spacing.xs,
+  },
+  credentialBlock: {
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  credentialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   keyRow: {
     flexDirection: 'row',
@@ -228,5 +487,20 @@ const styles = StyleSheet.create({
   form: {
     gap: spacing.xs,
     paddingTop: spacing.xs,
+  },
+  formActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  generatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  generatedPassword: {
+    color: colors.text,
+    fontSize: 14,
   },
 })

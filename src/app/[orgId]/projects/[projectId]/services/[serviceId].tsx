@@ -1,6 +1,7 @@
 import { Redirect, type Href, useLocalSearchParams } from 'expo-router'
 import { Text, View } from 'react-native'
 import { SectionPanel } from '@/components/ui'
+import { NodeSettingsPanel } from '@/components/org/node-settings-panel'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -49,6 +50,14 @@ export default function ProjectServiceDetailScreen() {
 
   return (
     <View style={{ gap: spacing.lg }}>
+      {/* Renders only when the compose service is `serviceKind: node`. */}
+      <NodeSettingsPanel
+        orgId={orgId}
+        projectId={projectId}
+        environmentId={selectedEnvironmentId}
+        service={service}
+        canManage={canManage && projectAllowsMutations}
+      />
       <SectionPanel
         title={service.name?.trim() || composeName}
         hint="Per-service operational settings"

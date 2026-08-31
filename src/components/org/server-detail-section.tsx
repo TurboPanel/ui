@@ -31,6 +31,7 @@ import {
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
+import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
@@ -999,6 +1000,12 @@ function ServerOverviewTab({
       </SectionPanel>
 
       <ServerSshPortPanel
+        orgId={orgId}
+        server={server}
+        canManage={canManage}
+      />
+
+      <ServerMetricsSensorsPanel
         orgId={orgId}
         server={server}
         canManage={canManage}

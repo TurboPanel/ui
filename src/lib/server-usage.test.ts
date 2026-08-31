@@ -8,6 +8,9 @@ import {
   formatPercent,
   hasUsageMetrics,
   loadPercentOfCores,
+  memoryUsedPercentFrom,
+  swapUsedPercentFrom,
+  usedPercentFromBytes,
 } from './server-usage'
 
 describe('formatLoad', () => {
@@ -34,6 +37,8 @@ describe('loadPercentOfCores', () => {
 
 describe('buildCpuStackSegments', () => {
   it('stacks user system residual iowait', () => {
+    // usage is derived busy (100 − idle), so it already includes iowait;
+    // residual active = usage − user − system − iowait.
     const stack = buildCpuStackSegments({
       usage: 60,
       user: 40,
@@ -43,7 +48,7 @@ describe('buildCpuStackSegments', () => {
     expect(stack).toEqual({
       user: 40,
       system: 10,
-      other: 10,
+      other: 5,
       iowait: 5,
     })
   })
@@ -94,7 +99,7 @@ describe('hasUsageMetrics', () => {
     expect(hasUsageMetrics({})).toBe(false)
     expect(
       hasUsageMetrics({
-        cpuUsagePercent: null,
+        cpuIdlePercent: null,
         load1: undefined,
         memoryPercent: null,
       }),
@@ -102,7 +107,7 @@ describe('hasUsageMetrics', () => {
   })
 
   it('treats zero as a real sample', () => {
-    expect(hasUsageMetrics({ cpuUsagePercent: 0 })).toBe(true)
+    expect(hasUsageMetrics({ cpuIdlePercent: 0 })).toBe(true)
     expect(hasUsageMetrics({ memoryPercent: 0 })).toBe(true)
     expect(hasUsageMetrics({ load1: 0 })).toBe(true)
   })
@@ -113,7 +118,28 @@ describe('hasUsageMetrics', () => {
   })
 
   it('ignores non-finite numbers', () => {
-    expect(hasUsageMetrics({ cpuUsagePercent: Number.NaN })).toBe(false)
+    expect(hasUsageMetrics({ cpuIdlePercent: Number.NaN })).toBe(false)
     expect(hasUsageMetrics({ load1: Number.POSITIVE_INFINITY })).toBe(false)
+  })
+})
+
+describe('used-percent derivation from byte pairs', () => {
+  it('derives used % from total/free', () => {
+    expect(usedPercentFromBytes(1000, 250)).toBe(75)
+    expect(memoryUsedPercentFrom(16_000, 4_000)).toBe(75)
+    expect(swapUsedPercentFrom(8_000, 8_000)).toBe(0)
+  })
+
+  it('returns null without a usable capacity pair', () => {
+    expect(usedPercentFromBytes(null, 250)).toBeNull()
+    expect(usedPercentFromBytes(1000, null)).toBeNull()
+    expect(usedPercentFromBytes(0, 0)).toBeNull()
+    expect(usedPercentFromBytes(Number.NaN, 10)).toBeNull()
+    expect(memoryUsedPercentFrom(undefined, undefined)).toBeNull()
+    expect(swapUsedPercentFrom(0, 0)).toBeNull()
+  })
+
+  it('clamps free above total to 0% used', () => {
+    expect(usedPercentFromBytes(1000, 1500)).toBe(0)
   })
 })

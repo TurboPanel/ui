@@ -368,8 +368,8 @@ describe('path-based environment selection', () => {
       'overview',
       'compose',
       'services',
-      'hosting',
       'bindings',
+      'hosting',
       'storage',
       'settings',
     ])
@@ -387,8 +387,8 @@ describe('path-based environment selection', () => {
       'overview',
       'compose',
       'services',
-      'hosting',
       'bindings',
+      'hosting',
     ])
     expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual([
       'storage',

@@ -650,15 +650,15 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         ok: true,
         from: '2026-01-01T00:00:00.000Z',
         to: '2026-01-01T00:01:00.000Z',
-        backend: 'clickhouse',
+        backend: 'duckdb',
         available: true,
-        metrics: ['cpuUsagePercent'],
+        metrics: ['cpuUserPercent'],
         servers: [],
       }),
     )
     await expect(fetchFleetMetricsLatest()).resolves.toMatchObject({
       ok: true,
-      backend: 'clickhouse',
+      backend: 'duckdb',
     })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).headers).toMatchObject({

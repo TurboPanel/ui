@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { DefaultEnvironmentSettingsSection } from '@/components/org/default-environment-settings-section'
+import { PrincipalDefaultsSettingsSection } from '@/components/org/principal-defaults-settings-section'
 import { colors, spacing } from '@/lib/theme'
 
 export default function ProjectSettingsScreen() {
@@ -15,6 +16,7 @@ export default function ProjectSettingsScreen() {
         their current environments and names.
       </Text>
       <DefaultEnvironmentSettingsSection orgId={id} />
+      <PrincipalDefaultsSettingsSection orgId={id} />
     </View>
   )
 }

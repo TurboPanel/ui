@@ -17,6 +17,8 @@ import {
   fetchOrgFabric,
   fetchOrgServers,
   fetchServer,
+  fetchServerMetricsCapabilities,
+  fetchServerMetricsLiveSettings,
   fetchServerMetricsSeries,
   fetchSession,
   formatServerDeleteBlockedError,
@@ -24,8 +26,12 @@ import {
   IP_IN_USE_ERROR,
   MetricsBackendUnavailableError,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
+  saveServerMetricsLiveSettings,
+  saveServerMetricsSensorOverrides,
   ServerCapacityExceededError,
   ServerDeleteBlockedError,
+  startServerMetricsLive,
+  stopServerMetricsLive,
   toRelayRecord,
   type FabricRelayWireRow,
   type OrgServerRecord,
@@ -57,11 +63,18 @@ describe('error code constants', () => {
 })
 
 describe('HOST_METRIC_KEYS', () => {
-  it('lists the twenty host metrics in contract order', () => {
-    expect(HOST_METRIC_KEYS).toHaveLength(20)
-    expect(HOST_METRIC_KEYS[0]).toBe('cpuUsagePercent')
+  it('lists the thirty-eight v2 host metrics in contract order', () => {
+    expect(HOST_METRIC_KEYS).toHaveLength(38)
+    expect(HOST_METRIC_KEYS[0]).toBe('cpuUserPercent')
     expect(HOST_METRIC_KEYS[HOST_METRIC_KEYS.length - 1]).toBe('uptimeSeconds')
-    expect(new Set(HOST_METRIC_KEYS).size).toBe(20)
+    expect(new Set(HOST_METRIC_KEYS).size).toBe(38)
+  })
+
+  it('carries no derived percentages — v2 stores raw measurements only', () => {
+    expect(HOST_METRIC_KEYS).not.toContain('cpuUsagePercent')
+    expect(HOST_METRIC_KEYS).not.toContain('memoryUsedPercent')
+    expect(HOST_METRIC_KEYS).not.toContain('swapUsedPercent')
+    expect(HOST_METRIC_KEYS).not.toContain('diskUsedPercent')
   })
 })
 
@@ -225,10 +238,10 @@ describe('error classes', () => {
   })
 
   it('MetricsBackendUnavailableError defaults message from backend kind', () => {
-    const err = new MetricsBackendUnavailableError('clickhouse')
+    const err = new MetricsBackendUnavailableError('duckdb')
     expect(err.code).toBe('metrics_backend_unavailable')
-    expect(err.backend).toBe('clickhouse')
-    expect(err.message).toContain('clickhouse')
+    expect(err.backend).toBe('duckdb')
+    expect(err.message).toContain('duckdb')
 
     const custom = new MetricsBackendUnavailableError(
       'analytics-engine',
@@ -693,7 +706,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       jsonResponse(
         {
           error: 'metrics_backend_unavailable',
-          backend: 'clickhouse',
+          backend: 'duckdb',
         },
         503,
       ),
@@ -702,7 +715,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       await fetchServerMetricsSeries('srv-1', {
         fromIso: '2026-01-01T00:00:00.000Z',
         toIso: '2026-01-01T01:00:00.000Z',
-        metrics: ['cpuUsagePercent'],
+        metrics: ['cpuUserPercent'],
         resolution: 60,
         maxPoints: 60,
       })
@@ -712,7 +725,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       if (!(err instanceof MetricsBackendUnavailableError)) {
         throw new TypeError('expected MetricsBackendUnavailableError')
       }
-      expect(err.backend).toBe('clickhouse')
+      expect(err.backend).toBe('duckdb')
     }
   })
 
@@ -742,6 +755,162 @@ describe('fetch wrappers (mocked fetch)', () => {
         toIso: '2026-01-01T01:00:00.000Z',
       }),
     ).rejects.toThrow(/metrics\/series\?.*failed: HTTP 403: forbidden/)
+  })
+
+  it('startServerMetricsLive returns the lease and maps 409 outcomes', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        leaseId: 'lease-1',
+        intervalSeconds: 10,
+        expiresAt: '2026-01-01T01:00:00.000Z',
+      }),
+    )
+    await expect(startServerMetricsLive('srv-1')).resolves.toEqual({
+      kind: 'started',
+      leaseId: 'lease-1',
+      intervalSeconds: 10,
+      expiresAt: '2026-01-01T01:00:00.000Z',
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/servers/srv-1/metrics/live',
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'live_metrics_disabled' }, 409),
+    )
+    await expect(startServerMetricsLive('srv-1')).resolves.toEqual({
+      kind: 'disabled',
+    })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'server_offline' }, 409),
+    )
+    await expect(startServerMetricsLive('srv-1')).resolves.toEqual({
+      kind: 'offline',
+    })
+
+    fetchMock.mockResolvedValueOnce(textResponse('down', 503))
+    await expect(startServerMetricsLive('srv-1')).rejects.toThrow(
+      /metrics\/live failed: HTTP 503/,
+    )
+  })
+
+  it('startServerMetricsLive renews when a leaseId is passed', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        leaseId: 'lease-9',
+        intervalSeconds: 10,
+        expiresAt: '2026-01-01T02:00:00.000Z',
+      }),
+    )
+    await expect(
+      startServerMetricsLive('srv-1', 'lease-9'),
+    ).resolves.toMatchObject({ kind: 'started', leaseId: 'lease-9' })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ leaseId: 'lease-9' }),
+    )
+  })
+
+  it('stopServerMetricsLive posts the leaseId as a DELETE body', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(
+      stopServerMetricsLive('srv-1', 'lease-1'),
+    ).resolves.toEqual({ ok: true })
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain('/servers/srv-1/metrics/live')
+    expect((init as RequestInit).method).toBe('DELETE')
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ leaseId: 'lease-1' }),
+    )
+  })
+
+  it('fetchServerMetricsCapabilities maps ok, offline, and failure', async () => {
+    const capabilities = {
+      sensors: {
+        cpuTemperature: [
+          { chip: 'k10temp', label: 'Tctl', path: '/sys/class/hwmon/hwmon2/temp1_input' },
+        ],
+        gpuTemperature: [],
+        cpuPower: [],
+        gpuPower: [],
+        gpuDevices: [],
+      },
+      storageMounts: {
+        system: { path: '/', totalBytes: 100, availableBytes: 40 },
+        hosting: null,
+        docker: null,
+        candidates: [],
+      },
+      networkInterfaces: [
+        { name: 'eth0', classification: 'uplink' },
+      ],
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, capabilities }))
+    await expect(
+      fetchServerMetricsCapabilities('srv-1'),
+    ).resolves.toEqual({ kind: 'ok', capabilities })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/servers/srv-1/metrics/capabilities',
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'server_offline' }, 409),
+    )
+    await expect(
+      fetchServerMetricsCapabilities('srv-1'),
+    ).resolves.toEqual({ kind: 'offline' })
+
+    fetchMock.mockResolvedValueOnce(textResponse('gone', 503))
+    await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
+      /metrics\/capabilities failed: HTTP 503/,
+    )
+  })
+
+  it('saveServerMetricsSensorOverrides PUTs the patch body', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        overrides: { cpuTemperature: '/sys/class/hwmon/hwmon2/temp1_input' },
+        pushed: true,
+      }),
+    )
+    await expect(
+      saveServerMetricsSensorOverrides('srv-1', {
+        cpuTemperature: '/sys/class/hwmon/hwmon2/temp1_input',
+        gpuTemperature: null,
+      }),
+    ).resolves.toMatchObject({ ok: true, pushed: true })
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain('/servers/srv-1/metrics/sensor-overrides')
+    expect((init as RequestInit).method).toBe('PUT')
+  })
+
+  it('server metrics live settings round-trip through the admin surface', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ maxMinutes: 60 }))
+    await expect(fetchServerMetricsLiveSettings()).resolves.toEqual({
+      maxMinutes: 60,
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/settings/server-metrics-live',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ maxMinutes: 0 }))
+    await expect(saveServerMetricsLiveSettings(0)).resolves.toEqual({
+      maxMinutes: 0,
+    })
+    const [, init] = fetchMock.mock.calls[1] ?? []
+    expect((init as RequestInit).method).toBe('PUT')
+    expect((init as RequestInit).body).toBe(JSON.stringify({ maxMinutes: 0 }))
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'maxMinutes must be 0 or an integer between 5 and 240' }, 400),
+    )
+    await expect(saveServerMetricsLiveSettings(3)).rejects.toThrow(
+      /server-metrics-live failed/,
+    )
   })
 
   it('apiFetch compose_invalid joins issue messages', async () => {

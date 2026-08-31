@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   ALLOWED_PHP_EXTENSIONS,
   BASELINE_PHP_EXTENSIONS,
+  DEFAULT_NODE_SERIES,
   DEFAULT_PHP_SERIES,
   OPTIONAL_PHP_EXTENSIONS,
+  SUPPORTED_NODE_SERIES,
   SUPPORTED_PHP_SERIES,
   isHostNativeServiceKind,
   isNodeComposeService,
@@ -70,6 +72,44 @@ describe('serviceKind: node', () => {
     expect(parsed?.nodeVersion).toBeUndefined()
   })
 
+  it('parses the package manager, app mode, enabled flag, and paths', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      serviceKind: 'node',
+      packageManager: 'pnpm',
+      appMode: 'development',
+      enabled: false,
+      documentRoot: '  public  ',
+      startupFile: 'index.mjs',
+    })
+    expect(parsed).toEqual({
+      serviceKind: 'node',
+      packageManager: 'pnpm',
+      appMode: 'development',
+      enabled: false,
+      documentRoot: 'public',
+      startupFile: 'index.mjs',
+    })
+  })
+
+  it('keeps enabled only when it is a real boolean', () => {
+    // `false` is a real value: it must survive the falsy-dropping field
+    // collapse, or "stopped" would silently read back as "running".
+    expect(parseServiceTurbopanelExtension({ enabled: false })?.enabled).toBe(false)
+    expect(parseServiceTurbopanelExtension({ enabled: true })?.enabled).toBe(true)
+    expect(parseServiceTurbopanelExtension({ enabled: 'yes' })?.enabled).toBeUndefined()
+    expect(parseServiceTurbopanelExtension({ enabled: 1 })?.enabled).toBeUndefined()
+  })
+
+  it('drops an unknown package manager and app mode', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      serviceKind: 'node',
+      packageManager: 'bun',
+      appMode: 'staging',
+    })
+    expect(parsed?.packageManager).toBeUndefined()
+    expect(parsed?.appMode).toBeUndefined()
+  })
+
   it('clears node-only fields when the kind changes away from node', () => {
     const service = patchServiceTurbopanelExtension(
       {},
@@ -77,12 +117,26 @@ describe('serviceKind: node', () => {
         serviceKind: 'node',
         framework: 'next',
         nodeVersion: '24',
+        packageManager: 'yarn',
+        appMode: 'development',
+        enabled: false,
+        documentRoot: 'public',
+        startupFile: 'index.mjs',
       }
     )
     const reverted = patchServiceTurbopanelExtension(service, {
       serviceKind: 'container',
     })
     expect(reverted['x-turbopanel']).toEqual({ serviceKind: 'container' })
+    const asSite = patchServiceTurbopanelExtension(service, {
+      serviceKind: 'site',
+      engine: 'caddy',
+    })
+    expect(asSite['x-turbopanel']).toEqual({ serviceKind: 'site', engine: 'caddy' })
+  })
+
+  it('offers only node series the instance supports', () => {
+    expect(SUPPORTED_NODE_SERIES).toContain(DEFAULT_NODE_SERIES)
   })
 
   it('recognizes node as a host-native kind that needs no image or build', () => {
@@ -90,6 +144,58 @@ describe('serviceKind: node', () => {
     expect(isHostNativeServiceKind('node')).toBe(true)
     expect(isHostNativeServiceKind('site')).toBe(true)
     expect(isHostNativeServiceKind('container')).toBe(false)
+  })
+})
+
+describe('patchServiceTurbopanelExtension node fields', () => {
+  it('persists enabled only when false and removes the key when true', () => {
+    const stopped = patchServiceTurbopanelExtension(
+      {},
+      { serviceKind: 'node', enabled: false }
+    )
+    expect(stopped['x-turbopanel']).toEqual({ serviceKind: 'node', enabled: false })
+    // Toggling back on collapses to the default rather than writing `true`,
+    // which would just be noise in the YAML.
+    const restarted = patchServiceTurbopanelExtension(stopped, { enabled: true })
+    expect(restarted['x-turbopanel']).toEqual({ serviceKind: 'node' })
+  })
+
+  it('round-trips documentRoot and startupFile through the patch layer', () => {
+    const patched = patchServiceTurbopanelExtension(
+      {},
+      {
+        serviceKind: 'node',
+        documentRoot: 'public',
+        startupFile: 'index.mjs',
+      }
+    )
+    expect(patched['x-turbopanel']).toEqual({
+      serviceKind: 'node',
+      documentRoot: 'public',
+      startupFile: 'index.mjs',
+    })
+    const extension = patched['x-turbopanel'] as Record<string, unknown>
+    expect(parseServiceTurbopanelExtension(extension)).toEqual({
+      serviceKind: 'node',
+      documentRoot: 'public',
+      startupFile: 'index.mjs',
+    })
+  })
+
+  it('clears a previously set field with an explicit undefined in the patch', () => {
+    const pinned = patchServiceTurbopanelExtension(
+      {},
+      { serviceKind: 'node', nodeVersion: '22', packageManager: 'npm' }
+    )
+    // `nodeVersion: undefined` means "back to the host default": the spread
+    // overwrites the stored value and the whitelist then drops the key.
+    const unpinned = patchServiceTurbopanelExtension(pinned, {
+      nodeVersion: undefined,
+    })
+    expect(unpinned['x-turbopanel']).toEqual({
+      serviceKind: 'node',
+      packageManager: 'npm',
+    })
   })
 })
 

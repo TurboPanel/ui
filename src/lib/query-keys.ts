@@ -105,6 +105,9 @@ export const queryKeys = {
           ['org', orgId, 'server', serverId, 'metrics', 'series', rangeId] as const,
         metricsSummary: (serverId: string, rangeId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'summary', rangeId] as const,
+        /** Sensor/mount capability discovery — fetched on demand, never polled. */
+        metricsCapabilities: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'metrics', 'capabilities'] as const,
         ips: (serverId: string, filters?: IpListFilters) =>
           ['org', orgId, 'server', serverId, 'ips', filters ?? {}] as const,
         /**
@@ -123,6 +126,7 @@ export const queryKeys = {
         hostDefaults: ['org', orgId, 'host-defaults'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
+        principalDefaults: ['org', orgId, 'principal-defaults'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,
       },
@@ -370,6 +374,8 @@ export const queryKeys = {
     publicUrls: ['admin', 'public-urls'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
     email: ['admin', 'settings', 'email'] as const,
+    /** Live-metrics session cap (SERVER_METRICS_LIVE_MAX_MINUTES). */
+    metricsLiveSettings: ['admin', 'settings', 'metrics-live'] as const,
     /** Instance-wide Git provider applications. The org-scoped list is `org(id).forges`. */
     forges: ['admin', 'settings', 'forges'] as const,
   },

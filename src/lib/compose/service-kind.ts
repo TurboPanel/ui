@@ -14,6 +14,18 @@ export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'openlitespeed'
 export type NativeRuntimeFramework = 'auto' | 'node' | 'next'
 
 /**
+ * Package manager used to install a `serviceKind: node` build. Mirrors the
+ * instance type. Omitted means auto-detect from the lockfile at build time.
+ */
+export type NodePackageManager = 'npm' | 'yarn' | 'pnpm'
+
+/**
+ * `NODE_ENV` for a `serviceKind: node` service (build + unit). Mirrors the
+ * instance type. Omitted means `production`.
+ */
+export type NodeAppMode = 'production' | 'development'
+
+/**
  * Build backend for a `x-turbopanel.source` binding. Mirrors the instance type.
  *
  * `native` (the default when omitted) is the checkout → build → promote
@@ -73,6 +85,29 @@ export type ComposeServiceTurbopanelExtension = {
   framework?: NativeRuntimeFramework
   /** Pinned Node series for `serviceKind: node` (`24`, `24.17`, `24.17.0`). */
   nodeVersion?: string
+  /**
+   * Package manager for a `serviceKind: node` build. Omitted means
+   * auto-detect from the lockfile at build time.
+   */
+  packageManager?: NodePackageManager
+  /** `NODE_ENV` for a `serviceKind: node` service. Omitted means `production`. */
+  appMode?: NodeAppMode
+  /**
+   * Whether a `serviceKind: node` process should run. Omitted means `true`.
+   * When `false` the release still builds; the daemon stops and disables the
+   * unit instead of starting it.
+   */
+  enabled?: boolean
+  /**
+   * Document root for a `serviceKind: node` service (relative only).
+   * Informational this pass: recorded and shown, not yet served.
+   */
+  documentRoot?: string
+  /**
+   * Script the vendored Node runs when `source.startCommand` is absent.
+   * Omitted means `server.js`; an explicit `startCommand` always wins.
+   */
+  startupFile?: string
   /**
    * Document-root segment under the daemon site directory (relative only).
    * Default `public` when omitted for site.
@@ -169,6 +204,8 @@ const SITE_ENGINES = new Set<SiteEngine>([
   'openlitespeed',
 ])
 const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
+const NODE_PACKAGE_MANAGERS = new Set<NodePackageManager>(['npm', 'yarn', 'pnpm'])
+const NODE_APP_MODES = new Set<NodeAppMode>(['production', 'development'])
 
 /** Where a site's content comes from. Omitted means `release`. */
 export type SiteSourceKind = 'release' | 'managed-directory'
@@ -244,6 +281,20 @@ function readNodeVersion(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   return NODE_VERSION_RE.test(trimmed) ? trimmed : undefined
+}
+
+function readNodePackageManager(value: unknown): NodePackageManager | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!NODE_PACKAGE_MANAGERS.has(trimmed as NodePackageManager)) return undefined
+  return trimmed as NodePackageManager
+}
+
+function readNodeAppMode(value: unknown): NodeAppMode | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!NODE_APP_MODES.has(trimmed as NodeAppMode)) return undefined
+  return trimmed as NodeAppMode
 }
 
 const SOURCE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -327,11 +378,15 @@ export function parseServiceTurbopanelExtension(
 
   // `parseServiceSourceExtension` already refuses a non-mapping, `null`
   // included, so the source key needs no guard of its own.
-  return withoutEmptyFields<ComposeServiceTurbopanelExtension>({
+  const extension = withoutEmptyFields<ComposeServiceTurbopanelExtension>({
     serviceKind: readServiceKind(value.serviceKind),
     engine: readSiteEngine(value.engine),
     framework: readNativeRuntimeFramework(value.framework),
     nodeVersion: readNodeVersion(value.nodeVersion),
+    packageManager: readNodePackageManager(value.packageManager),
+    appMode: readNodeAppMode(value.appMode),
+    documentRoot: readBoundedString(value.documentRoot, 200),
+    startupFile: readBoundedString(value.startupFile, 200),
     root: readBoundedString(value.root, Number.POSITIVE_INFINITY),
     sourceKind: readSiteSourceKind(value.sourceKind),
     cron: parseServiceCronJobs(value.cron) ?? undefined,
@@ -339,6 +394,10 @@ export function parseServiceTurbopanelExtension(
     source: parseServiceSourceExtension(value.source) ?? undefined,
     php: parseServicePhpExtension(value.php) ?? undefined,
   })
+  // Outside the falsy-dropping helper on purpose: `enabled: false` is a real
+  // value and must survive the round-trip.
+  if (typeof value.enabled === 'boolean') extension.enabled = value.enabled
+  return extension
 }
 
 function parsePhpExtensionNames(value: unknown): string[] | undefined {
@@ -449,6 +508,11 @@ function dropFieldsForOtherKinds(
   if (next.serviceKind !== 'node') {
     delete next.framework
     delete next.nodeVersion
+    delete next.packageManager
+    delete next.appMode
+    delete next.enabled
+    delete next.documentRoot
+    delete next.startupFile
   }
   // A container has no principal to run as and no tree to run in; both
   // host-native kinds have exactly one of each.
@@ -488,24 +552,35 @@ export function patchServiceTurbopanelExtension(
   // `source: null` in a patch clears the binding; omitting it keeps it.
   if (!next.source) delete next.source
 
-  const cleaned: Record<string, unknown> = {}
-  if (next.serviceKind) cleaned.serviceKind = next.serviceKind
-  if (next.engine) cleaned.engine = next.engine
-  if (next.root) cleaned.root = next.root
-  // Whitelisted like every other field — a key missing from this list is
-  // silently dropped on every patch, which is how `php` was once being lost.
-  if (next.sourceKind) cleaned.sourceKind = next.sourceKind
-  if (next.framework) cleaned.framework = next.framework
-  if (next.nodeVersion) cleaned.nodeVersion = next.nodeVersion
-  if (next.description) cleaned.description = next.description
-  if (next.source) cleaned.source = { ...next.source }
-  // Whitelisted like every other field: a key missing from this list is
-  // silently dropped on every patch, which is how `php` was being lost.
-  if (next.php && Object.keys(next.php).length > 0) {
-    cleaned.php = { ...next.php }
+  // Every persisted field is whitelisted here — a key missing from this
+  // mapping is silently dropped on every patch, which is how `php` was once
+  // being lost. Unset and empty values are pruned below, so key order here is
+  // the persisted YAML key order.
+  const cleaned: Record<string, unknown> = {
+    serviceKind: next.serviceKind,
+    engine: next.engine,
+    root: next.root,
+    sourceKind: next.sourceKind,
+    framework: next.framework,
+    nodeVersion: next.nodeVersion,
+    packageManager: next.packageManager,
+    appMode: next.appMode,
+    // Only `false` is persisted — `true` is the default and would just be
+    // noise in the YAML; toggling back on removes the key.
+    enabled: next.enabled === false ? false : undefined,
+    documentRoot: next.documentRoot,
+    startupFile: next.startupFile,
+    description: next.description,
+    source: next.source ? { ...next.source } : undefined,
+    php:
+      next.php && Object.keys(next.php).length > 0 ? { ...next.php } : undefined,
+    cron:
+      next.cron && next.cron.length > 0
+        ? next.cron.map((job) => ({ ...job }))
+        : undefined,
   }
-  if (next.cron && next.cron.length > 0) {
-    cleaned.cron = next.cron.map((job) => ({ ...job }))
+  for (const key of Object.keys(cleaned)) {
+    if (cleaned[key] == null || cleaned[key] === '') delete cleaned[key]
   }
 
   if (Object.keys(cleaned).length === 0) {
@@ -590,7 +665,17 @@ export const ALLOWED_PHP_EXTENSIONS: readonly string[] = [
 ]
 
 /** Series a PHP site gets when it names none. Mirrors the instance default. */
-export const DEFAULT_PHP_SERIES = '8.4' 
+export const DEFAULT_PHP_SERIES = '8.4'
+
+/**
+ * Node series TurboPanel offers in pickers. Mirrors `SUPPORTED_NODE_SERIES`
+ * on the instance, which mirrors the daemon's runtime registry. Advisory like
+ * the PHP list: the deploy vendors what the operator picked.
+ */
+export const SUPPORTED_NODE_SERIES: readonly string[] = ['22', '24']
+
+/** Series a node app gets when it pins none. Mirrors the instance default. */
+export const DEFAULT_NODE_SERIES = '24'
 
 export const SITE_ENGINE_OPTIONS: readonly {
   value: SiteEngine

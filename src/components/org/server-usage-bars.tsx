@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import { colors, spacing } from '@/lib/theme'
+import { derivedCpuBusyPercent } from '@/lib/format-metrics'
 import {
   buildCpuStackSegments,
   clampPercent,
@@ -168,7 +169,7 @@ export function ServerUsageBars({
   }
 
   const {
-    cpuUsagePercent,
+    cpuIdlePercent,
     cpuUserPercent,
     cpuSystemPercent,
     cpuIowaitPercent,
@@ -179,13 +180,14 @@ export function ServerUsageBars({
     swapPercent,
   } = metrics
 
+  const cpuBusyPercent = derivedCpuBusyPercent(cpuIdlePercent)
   const stack = buildCpuStackSegments({
-    usage: cpuUsagePercent,
+    usage: cpuBusyPercent,
     user: cpuUserPercent,
     system: cpuSystemPercent,
     iowait: cpuIowaitPercent,
   })
-  const usage = clampPercent(cpuUsagePercent)
+  const usage = clampPercent(cpuBusyPercent)
   const cpuLabel = formatPercent(usage)
 
   const load1n = finiteMetric(load1)

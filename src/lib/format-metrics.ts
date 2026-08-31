@@ -69,6 +69,50 @@ export function formatCount(value: number | null | undefined): string {
   return String(Math.round(value))
 }
 
+export function formatCelsius(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—'
+  }
+  return `${value.toFixed(1)} °C`
+}
+
+export function formatWatts(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—'
+  }
+  return `${value.toFixed(1)} W`
+}
+
+export function formatMilliseconds(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—'
+  }
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ms`
+}
+
+/**
+ * CPU busy % derived from stored idle — the v2 contract keeps no
+ * `cpuUsagePercent`; this is the single place it is computed.
+ */
+export function derivedCpuBusyPercent(
+  cpuIdlePercent: number | null | undefined,
+): number | null {
+  if (
+    cpuIdlePercent === null ||
+    cpuIdlePercent === undefined ||
+    !Number.isFinite(cpuIdlePercent)
+  ) {
+    return null
+  }
+  return Math.min(100, Math.max(0, 100 - cpuIdlePercent))
+}
+
+export function formatDerivedCpuBusyPercent(
+  cpuIdlePercent: number | null | undefined,
+): string {
+  return formatPercent(derivedCpuBusyPercent(cpuIdlePercent))
+}
+
 export function formatUptimeSeconds(
   value: number | null | undefined,
 ): string {
@@ -90,6 +134,8 @@ export function formatUptimeSeconds(
 }
 
 export type MetricsRangeId =
+  | '5m'
+  | '10m'
   | '1h'
   | '6h'
   | '24h'
@@ -102,7 +148,12 @@ export function formatAxisTime(
   ms: number,
   rangeId: MetricsRangeId,
 ): string {
-  const shortRange = rangeId === '1h' || rangeId === '6h' || rangeId === '24h'
+  const shortRange =
+    rangeId === '5m' ||
+    rangeId === '10m' ||
+    rangeId === '1h' ||
+    rangeId === '6h' ||
+    rangeId === '24h'
   // Omit zone — gifted-charts clips each tick to ~point spacing; "1:05 PM CDT"
   // collapses to "1" on a 60-point 1h chart.
   return formatLocalDateTime(ms, {

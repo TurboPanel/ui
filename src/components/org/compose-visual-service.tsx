@@ -47,10 +47,12 @@ import {
   isSiteComposeService,
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
+  DEFAULT_NODE_SERIES,
   SERVICE_DESCRIPTION_MAX_LENGTH,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
   SITE_ENGINE_OPTIONS,
+  SUPPORTED_NODE_SERIES,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
   type ComposeServiceKind,
   type ComposeServiceSourceExtension,
@@ -931,19 +933,25 @@ function NodeRuntimeBlock({
       {activeHint ? <Text style={styles.hint}>{activeHint}</Text> : null}
       <View style={styles.nativeFieldBlock}>
         <Text style={styles.label}>Node version</Text>
-        <TextInput
+        <OptionSelect
           value={nodeVersion ?? ''}
-          onChangeText={onNodeVersionChange}
-          editable={!disabled}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="24"
-          placeholderTextColor={colors.textDim}
-          style={styles.input}
+          options={[
+            { value: '', label: `Host default (${DEFAULT_NODE_SERIES}.x)` },
+            // A pinned value outside the offered series still displays as itself.
+            ...(nodeVersion && !SUPPORTED_NODE_SERIES.includes(nodeVersion)
+              ? [{ value: nodeVersion, label: nodeVersion }]
+              : []),
+            ...SUPPORTED_NODE_SERIES.map((series) => ({
+              value: series,
+              label: `${series}.x`,
+            })),
+          ]}
+          disabled={disabled}
+          onChange={onNodeVersionChange}
         />
         <Text style={styles.hint}>
-          Optional. A pinned series the host runs this service under (24, 24.17,
-          or 24.17.0). Leave empty to use the server default.
+          Series the host runs this service under. Version, package manager, and
+          mode are also on the service's Node.js settings page.
         </Text>
       </View>
     </View>
@@ -1628,6 +1636,21 @@ export function ComposeVisualServiceCard({
         onChange={(source) => applyExtension({ source })}
         onDisconnect={() => applyExtension({ source: null })}
       />
+
+      {extension.serviceKind === 'node' ? (
+        // Schema allows cron on both host-native kinds; the site lane mounts
+        // its copy below alongside the document root.
+        <CronFields
+          jobs={extension.cron}
+          disabled={saving}
+          onChange={(cron) =>
+            applyExtension({
+              serviceKind: 'node',
+              framework: extension.framework ?? 'auto',
+              cron,
+            })}
+        />
+      ) : null}
 
       {isSite ? (
         <>

@@ -7,12 +7,14 @@ import {
   fetchEmailSettings,
   fetchForges,
   fetchPublicUrls,
+  fetchServerMetricsLiveSettings,
   fetchSignupSettings,
   type ForgeCreate,
   type ForgeUpdate,
   isForbiddenError,
   saveEmailSettings,
   savePublicUrls,
+  saveServerMetricsLiveSettings,
   saveSignupSettings,
   type GithubManifestStartInput,
   startGithubAppManifest,
@@ -171,6 +173,26 @@ export function useApplyReencryptSecrets() {
   return useApiMutation({
     mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) =>
       applyReencryptSecrets(body),
+  })
+}
+
+export function useServerMetricsLiveSettings(
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.admin.metricsLiveSettings,
+    queryFn: fetchServerMetricsLiveSettings,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveServerMetricsLiveSettings() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveServerMetricsLiveSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.admin.metricsLiveSettings, data)
+    },
   })
 }
 

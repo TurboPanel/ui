@@ -58,10 +58,10 @@ function NavTabFace({
 }
 
 /**
- * Surface nav: **Overview · Compose · Services · Hosting · Bindings** — the
- * three lenses on one compose artifact, plus Hosting (server placement and
- * exposure: hostnames / proxying / TLS) and Bindings (system users and bound
- * databases: what a service deploys as and connects to).
+ * Surface nav: **Overview · Compose · Services · Bindings · Hosting** — the
+ * three lenses on one compose artifact, plus Bindings (system users and bound
+ * databases: what a service deploys as and connects to) and Hosting (server
+ * placement and exposure: hostnames / proxying / TLS).
  *
  * Storage and Settings stay off this bar — they are reached from the object
  * they belong to (a service's gutter fact in the Services lens, or the

@@ -134,12 +134,9 @@ export type ManagedServiceCatalogEntry = {
   /**
    * Every image reference this engine's settings parser will accept
    * (`settings.image`), in display order — derived from the release catalog
-   * mirror in `./managed-releases.ts`. Engines without a catalog yet
-   * (`redis` / `clickhouse`) list only their default.
+   * mirror in `./managed-releases.ts`.
    */
   allowedImages: readonly string[]
-  /** Default root username shown in create/credential UX. */
-  rootUsername: string
   /** `true` when the backend engine spec declares a `backup` descriptor (see instance `getManagedBackupDescriptor`). */
   supportsBackup: boolean
 }
@@ -167,7 +164,6 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     defaultPort: 5432,
     defaultImage: releaseDefaultImage('postgres'),
     allowedImages: managedAllowedImagesForEngine('postgres'),
-    rootUsername: 'postgres',
     supportsBackup: true,
   },
   {
@@ -178,7 +174,6 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     defaultPort: 3306,
     defaultImage: releaseDefaultImage('mysql'),
     allowedImages: managedAllowedImagesForEngine('mysql'),
-    rootUsername: 'root',
     supportsBackup: true,
   },
   {
@@ -189,30 +184,7 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     defaultPort: 3306,
     defaultImage: releaseDefaultImage('mariadb'),
     allowedImages: managedAllowedImagesForEngine('mariadb'),
-    rootUsername: 'root',
     supportsBackup: true,
-  },
-  {
-    engine: 'redis',
-    label: 'Redis',
-    description: 'In-memory cache, queues, and pub/sub.',
-    status: 'coming-soon',
-    defaultPort: 6379,
-    defaultImage: 'docker.io/library/redis:7-alpine',
-    allowedImages: ['docker.io/library/redis:7-alpine'],
-    rootUsername: 'default',
-    supportsBackup: false,
-  },
-  {
-    engine: 'clickhouse',
-    label: 'ClickHouse',
-    description: 'Columnar analytics for metrics and logs.',
-    status: 'coming-soon',
-    defaultPort: 8123,
-    defaultImage: 'docker.io/clickhouse/clickhouse-server:24',
-    allowedImages: ['docker.io/clickhouse/clickhouse-server:24'],
-    rootUsername: 'default',
-    supportsBackup: false,
   },
 ]
 
@@ -288,6 +260,12 @@ export type ManagedConnectionRole = 'read-write' | 'read-only'
 export type ManagedUserRecord = {
   id: string
   username: string
+  /**
+   * Engine login actually created — the short `username` plus a random
+   * `_<11 chars>` suffix when the org randomized-usernames default was on at
+   * create. Connect with this name.
+   */
+  appliedUsername: string
   databases: string[]
   privileges: string[]
   connectionRole: ManagedConnectionRole

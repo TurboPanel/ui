@@ -27,6 +27,12 @@ type MetricLineChartProps = Readonly<{
   yFormat: (value: number) => string
   yDomain?: readonly [number, number]
   area?: boolean
+  /**
+   * Render multi-series data as a cumulative stacked area chart: each band's
+   * visual thickness is its own value, composition sums bottom-up in series
+   * order. The tooltip and legend keep per-series (non-cumulative) values.
+   */
+  stacked?: boolean
   gapBands?: readonly MetricGapBand[]
   xTickFormat?: (ms: number) => string
 }>
@@ -132,6 +138,60 @@ function toChartData(points: MetricLineSeries['points']): ChartPoint[] {
   return points.map((point) => ({ value: point.value ?? undefined }))
 }
 
+/**
+ * Cumulative transform for stacked rendering: series[i] plots as the sum of
+ * series[0..i] at each point. A point where the series' own sample is missing
+ * stays null (a gap, never zero); other series' nulls contribute nothing.
+ */
+function toStackedSeries(series: MetricLineSeries[]): MetricLineSeries[] {
+  const pointCount = series[0]?.points.length ?? 0
+  const running = new Array<number>(pointCount).fill(0)
+  return series.map((entry) => ({
+    ...entry,
+    points: entry.points.map((point, index) => {
+      if (point.value === null || point.value === undefined) {
+        return { tMs: point.tMs, value: null }
+      }
+      running[index] = (running[index] ?? 0) + point.value
+      return { tMs: point.tMs, value: running[index] }
+    }),
+  }))
+}
+
+/**
+ * Stacked bands are area fills from each cumulative line down to the axis.
+ * Painting the largest cumulative area first lets every smaller one cover
+ * it, so the visible band between two lines keeps its own series color.
+ */
+function buildDataProps(
+  isSingle: boolean,
+  isStacked: boolean,
+  firstSeries: MetricLineSeries | undefined,
+  plotted: MetricLineSeries[],
+) {
+  if (isSingle) {
+    return { data: firstSeries ? toChartData(firstSeries.points) : [] }
+  }
+  const ordered = isStacked ? [...plotted].reverse() : plotted
+  return {
+    dataSet: ordered.map((entry) => ({
+      data: toChartData(entry.points),
+      color: entry.color,
+      thickness: isStacked ? 1 : 2,
+      hideDataPoints: true,
+      ...(isStacked
+        ? {
+            areaChart: true,
+            startFillColor: entry.color,
+            endFillColor: entry.color,
+            startOpacity: 0.9,
+            endOpacity: 0.9,
+          }
+        : {}),
+    })),
+  }
+}
+
 function gapBandLayout(
   band: MetricGapBand,
   xDomainMs: readonly [number, number],
@@ -185,10 +245,71 @@ const pointerStyles = StyleSheet.create({
   },
 })
 
+function PointerRow({
+  label,
+  color,
+  text,
+}: Readonly<{ label: string; color: string; text: string }>) {
+  return (
+    <View style={pointerStyles.row}>
+      <View style={[pointerStyles.swatch, { backgroundColor: color }]} />
+      <Text style={pointerStyles.label} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={[pointerStyles.value, { color }]}>{text}</Text>
+    </View>
+  )
+}
+
 function buildPointerConfig(
   legend: readonly Readonly<{ key: string; label: string; color: string }>[],
   yFormat: (value: number) => string,
+  /**
+   * When set (stacked mode), the tooltip reads per-series values from these
+   * source series at the pointed index — the chart's own items carry the
+   * cumulative values, which must never be shown.
+   */
+  sourceSeries?: MetricLineSeries[],
 ) {
+  const pointerLabelComponent = sourceSeries
+    ? (
+        _items: unknown,
+        _secondaryItems: unknown,
+        pointerIndex: number,
+      ) => (
+        <View style={pointerStyles.card}>
+          {sourceSeries.map((entry) => {
+            const value = entry.points[pointerIndex]?.value
+            if (value === undefined || value === null) return null
+            return (
+              <PointerRow
+                key={entry.key}
+                label={entry.label}
+                color={entry.color}
+                text={yFormat(value)}
+              />
+            )
+          })}
+        </View>
+      )
+    : (items: readonly ({ value?: number } | undefined)[]) => (
+        <View style={pointerStyles.card}>
+          {items.map((item, index) => {
+            const value = item?.value
+            if (value === undefined || value === null) return null
+            const entry = legend[index]
+            return (
+              <PointerRow
+                key={entry?.key ?? `series-${index}`}
+                label={entry?.label ?? 'Value'}
+                color={entry?.color ?? colors.textBody}
+                text={yFormat(value)}
+              />
+            )
+          })}
+        </View>
+      )
+
   return {
     pointerStripColor: colors.borderMuted,
     pointerStripWidth: 1,
@@ -197,38 +318,7 @@ function buildPointerConfig(
     radius: 4,
     pointerLabelWidth: 120,
     autoAdjustPointerLabelPosition: true,
-    pointerLabelComponent: (
-      items: readonly ({ value?: number } | undefined)[],
-    ) => (
-      <View style={pointerStyles.card}>
-        {items.map((item, index) => {
-          const value = item?.value
-          if (value === undefined || value === null) return null
-          const entry = legend[index]
-          return (
-            <View key={entry?.key ?? `series-${index}`} style={pointerStyles.row}>
-              <View
-                style={[
-                  pointerStyles.swatch,
-                  { backgroundColor: entry?.color ?? colors.textBody },
-                ]}
-              />
-              <Text style={pointerStyles.label} numberOfLines={1}>
-                {entry?.label ?? 'Value'}
-              </Text>
-              <Text
-                style={[
-                  pointerStyles.value,
-                  { color: entry?.color ?? colors.textBody },
-                ]}
-              >
-                {yFormat(value)}
-              </Text>
-            </View>
-          )
-        })}
-      </View>
-    ),
+    pointerLabelComponent,
   }
 }
 
@@ -239,6 +329,7 @@ export function MetricLineChart({
   yFormat,
   yDomain,
   area = false,
+  stacked = false,
   gapBands,
   xTickFormat,
 }: MetricLineChartProps) {
@@ -250,6 +341,8 @@ export function MetricLineChart({
   }, [])
 
   const isSingle = series.length === 1
+  const isStacked = stacked && !isSingle
+  const plotted = isStacked ? toStackedSeries(series) : series
   const firstSeries = series[0]
   const pointCount = firstSeries ? firstSeries.points.length : 0
 
@@ -257,19 +350,10 @@ export function MetricLineChart({
   const chartHeight = Math.max(1, height - 44)
   const spacing = Math.max(1, chartWidth / Math.max(1, pointCount - 1))
 
-  const yAxis = computeYAxisConfig(series, yDomain, yFormat)
+  const yAxis = computeYAxisConfig(plotted, yDomain, yFormat)
   const xAxisTicks = buildXAxisTicks(xDomainMs, chartWidth, xTickFormat)
 
-  const dataProps = isSingle
-    ? { data: firstSeries ? toChartData(firstSeries.points) : [] }
-    : {
-        dataSet: series.map((entry) => ({
-          data: toChartData(entry.points),
-          color: entry.color,
-          thickness: 2,
-          hideDataPoints: true,
-        })),
-      }
+  const dataProps = buildDataProps(isSingle, isStacked, firstSeries, plotted)
 
   const areaProps =
     area && isSingle && firstSeries
@@ -292,6 +376,11 @@ export function MetricLineChart({
     label: entry.label,
     color: entry.color,
   }))
+  const pointerConfig = buildPointerConfig(
+    pointerLegend,
+    yFormat,
+    isStacked ? series : undefined,
+  )
 
   return (
     <View style={{ width: '100%', height }} onLayout={handleLayout}>
@@ -334,7 +423,9 @@ export function MetricLineChart({
             endSpacing={0}
             adjustToWidth
             disableScroll
-            curved
+            // Cubic overshoot can make cumulative bands cross — stacked
+            // charts draw straight segments.
+            curved={!isStacked}
             hideDataPoints
             hideRules={false}
             rulesType="solid"
@@ -356,7 +447,7 @@ export function MetricLineChart({
             xAxisThickness={1}
             backgroundColor="transparent"
             yAxisTextStyle={styles.yAxisText}
-            pointerConfig={buildPointerConfig(pointerLegend, yFormat)}
+            pointerConfig={pointerConfig}
           />
           <View
             style={[

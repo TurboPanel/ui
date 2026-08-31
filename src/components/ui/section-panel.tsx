@@ -12,6 +12,7 @@ export function SectionPanel({
   headerRight,
   collapsible = false,
   defaultCollapsed = false,
+  onToggle,
   children,
 }: Readonly<{
   title?: string
@@ -26,6 +27,8 @@ export function SectionPanel({
    */
   collapsible?: boolean
   defaultCollapsed?: boolean
+  /** Fires after a collapsible header toggle with the new expanded state. */
+  onToggle?: (expanded: boolean) => void
   children: ReactNode
 }>) {
   const [collapsed, setCollapsed] = useState(collapsible && defaultCollapsed)
@@ -52,7 +55,11 @@ export function SectionPanel({
           {collapsible ? (
             <Pressable
               style={[styles.headerToggle, webPointer]}
-              onPress={() => setCollapsed((prev) => !prev)}
+              onPress={() => {
+                const nextCollapsed = !collapsed
+                setCollapsed(nextCollapsed)
+                onToggle?.(!nextCollapsed)
+              }}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
               accessibilityLabel={

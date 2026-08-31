@@ -34,6 +34,13 @@ export const ADMIN_AREAS = [
     hint: 'Rotate at-rest secret encryption',
     subRoutes: [],
   },
+  {
+    id: 'metrics',
+    label: 'Server metrics',
+    pathSegment: 'metrics',
+    hint: 'Live-session sampling limits',
+    subRoutes: [],
+  },
 ] as const
 
 export type AdminAreaId = (typeof ADMIN_AREAS)[number]['id']

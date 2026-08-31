@@ -9,6 +9,7 @@ import {
   fetchOrgServers,
   fetchServer,
   fetchServerLabels,
+  fetchServerMetricsCapabilities,
   fetchServerMetricsSeries,
   fetchServersUpdateStatus,
   fetchServerUpdate,
@@ -18,7 +19,10 @@ import {
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
+  startServerMetricsLive,
+  stopServerMetricsLive,
   saveServerLabels,
+  saveServerMetricsSensorOverrides,
   setServerHostname,
   setServerNtp,
   setServerTimezone,
@@ -27,7 +31,10 @@ import {
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
   type LicenseRecord,
+  type MetricsCapabilitiesOutcome,
+  type MetricsLiveStartOutcome,
   type MetricsSeriesResponse,
+  type ServerMetricsOverridesUpdate,
   type OrgServerRecord,
   type ServerDetailRecord,
 } from '@/lib/instance-api'
@@ -198,24 +205,101 @@ export function useTimezones(options?: Readonly<{ enabled?: boolean }>) {
 export function useServerMetricsSeries(
   orgId: string,
   serverId: string,
-  seriesOptions: FetchServerMetricsSeriesOptions,
+  /**
+   * Pass a getter to recompute the window at fetch time — with a stable
+   * `rangeKey`, interval refetches then advance the window instead of
+   * re-reading a frozen one (required for live mode's 10 s cadence).
+   */
+  seriesOptions:
+    | FetchServerMetricsSeriesOptions
+    | (() => FetchServerMetricsSeriesOptions),
   options?: Readonly<{
     enabled?: boolean
     refetchInterval?: number | false
     staleTime?: number
+    /** Stable cache-key segment (e.g. the range id). Defaults to `fromIso`. */
+    rangeKey?: string
   }>,
 ) {
+  const resolveOptions = () =>
+    typeof seriesOptions === 'function' ? seriesOptions() : seriesOptions
   return useQuery({
     queryKey: queryKeys
       .org(orgId)
-      .servers.metricsSeries(serverId, seriesOptions.fromIso),
-    queryFn: () => fetchServerMetricsSeries(serverId, seriesOptions, orgId),
+      .servers.metricsSeries(
+        serverId,
+        options?.rangeKey ?? resolveOptions().fromIso,
+      ),
+    queryFn: () => fetchServerMetricsSeries(serverId, resolveOptions(), orgId),
     enabled:
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
       serverId.length > 0,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
+  })
+}
+
+/**
+ * Sensor/mount/interface capability discovery — a live daemon round trip.
+ * Enable only while the settings panel is actually open; never poll.
+ */
+export function useServerMetricsCapabilities(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery<MetricsCapabilitiesOutcome>({
+    queryKey: queryKeys.org(orgId).servers.metricsCapabilities(serverId),
+    queryFn: () => fetchServerMetricsCapabilities(serverId, orgId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      serverId.length > 0,
+    retry: false,
+  })
+}
+
+export function useSaveServerMetricsSensorOverrides(
+  orgId: string,
+  serverId: string,
+) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (overrides: ServerMetricsOverridesUpdate) =>
+      saveServerMetricsSensorOverrides(serverId, overrides, orgId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.metricsCapabilities(serverId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.detail(serverId),
+        }),
+      ])
+    },
+    fallbackError: 'Failed to save sensor overrides',
+  })
+}
+
+/**
+ * Start (or renew) a live-metrics lease. `disabled` / `offline` come back as
+ * typed outcomes, not thrown errors, so the metrics screen can branch.
+ */
+export function useStartServerMetricsLive(orgId: string, serverId: string) {
+  return useApiMutation<MetricsLiveStartOutcome, string | undefined>({
+    mutationFn: (leaseId?: string) =>
+      startServerMetricsLive(serverId, leaseId, orgId),
+    fallbackError: 'Failed to start live metrics',
+  })
+}
+
+/** Best-effort lease stop — callers may fire-and-forget on unmount. */
+export function useStopServerMetricsLive(orgId: string, serverId: string) {
+  return useApiMutation({
+    mutationFn: (leaseId: string) =>
+      stopServerMetricsLive(serverId, leaseId, orgId),
+    fallbackError: 'Failed to stop live metrics',
   })
 }
 

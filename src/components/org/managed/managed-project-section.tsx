@@ -194,7 +194,7 @@ function ManagedSetupPanel({
   environmentId: string
   engineCode: string | null
   canManage: boolean
-  onCreated: (rootPassword?: string) => void
+  onCreated: (rootPassword?: string, rootUsername?: string) => void
 }>) {
   const [serverId, setServerId] = useState<string | null>(null)
   const [version, setVersion] = useState<ManagedVersionSelection | null>(() =>
@@ -244,7 +244,7 @@ function ManagedSetupPanel({
         }
         return
       }
-      onCreated(result.value.rootPassword)
+      onCreated(result.value.rootPassword, result.value.rootUsername)
     } finally {
       submitGuard.current = false
     }
@@ -329,12 +329,13 @@ export function ManagedEnvironmentBody({
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [revealPassword, setRevealPassword] = useState<string | null>(null)
-  const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
+  const [revealUsername, setRevealUsername] = useState<string | null>(null)
 
   // Show-once passwords stay in local state only; clear on dismiss and unmount.
   useEffect(() => {
     return () => {
       setRevealPassword(null)
+      setRevealUsername(null)
     }
   }, [])
 
@@ -370,9 +371,12 @@ export function ManagedEnvironmentBody({
     return (
       <SectionPanel title="Root password" hint="Shown once" accent>
         <SecretReveal
-          username={detail?.rootUsername ?? catalog?.rootUsername}
+          username={revealUsername ?? detail?.rootUsername ?? undefined}
           password={revealPassword}
-          onContinue={() => setRevealPassword(null)}
+          onContinue={() => {
+            setRevealPassword(null)
+            setRevealUsername(null)
+          }}
           continueLabel="Continue"
         />
       </SectionPanel>
@@ -387,9 +391,10 @@ export function ManagedEnvironmentBody({
         environmentId={environmentId}
         engineCode={engineCode}
         canManage={canManage}
-        onCreated={(rootPassword) => {
+        onCreated={(rootPassword, rootUsername) => {
           if (rootPassword) {
             setRevealPassword(rootPassword)
+            setRevealUsername(rootUsername ?? null)
           }
           invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
           ignorePromise(environmentQuery.refetch())
@@ -760,7 +765,10 @@ function ManagedDataPanels({
             throw new Error(createUserMutation.actionError ?? 'Failed to create user')
           }
           registerCommand(result.value.commandId, 'Create user')
-          return { password: result.value.password }
+          return {
+            password: result.value.password,
+            appliedUsername: result.value.user.appliedUsername,
+          }
         }}
         onDeleteUser={async (principalId) => {
           const result = await deleteUserMutation.run(principalId)

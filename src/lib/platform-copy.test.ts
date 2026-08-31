@@ -14,7 +14,7 @@ describe('platform-copy', () => {
     expect(HA_PRODUCT_TAGLINE).toContain('distributed network')
     expect(HA_CERT_APPLY_NOTE).toContain('self-hosted instance')
     expect(HA_SIGNUP_SETTINGS_NOTE).toContain('no redeploy required')
-    expect(HA_METRICS_LOCAL_NOTE).toContain('ClickHouse')
+    expect(HA_METRICS_LOCAL_NOTE).toContain('DuckDB')
   })
 
   it('exports the TurboFabric product name', () => {

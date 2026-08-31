@@ -132,7 +132,9 @@ describe('filterSetupCatalog', () => {
     const codes = filterSetupCatalog(CATALOG, 'managed').map((e) => e.code)
     expect(codes).not.toContain('cockroach')
     expect(codes[0]).toBe('postgres')
-    expect(codes).toContain('redis')
+    // `redis` is in the backend catalog but has no UI catalog entry yet, so
+    // the picker drops it rather than showing an unpickable card.
+    expect(codes).not.toContain('redis')
   })
 
   it('offers nothing for compose, which has no catalog', () => {

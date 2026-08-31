@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View, type TextStyle 
 import {
   Badge,
   Button,
+  ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
@@ -11,6 +12,7 @@ import {
   TextField,
   Toggle,
 } from '@/components/ui'
+import { HeaderChevron } from '@/components/header-chevron'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
@@ -23,6 +25,7 @@ import {
   type ComposeDocument,
   type EnvironmentRecord,
   type PrincipalAccessLevel,
+  type ProjectPrincipalRecord,
   type ProjectRecord,
   type ServiceRecord,
   type WorkspaceRecord,
@@ -43,7 +46,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 type ProjectServiceOption = {
   id: string
@@ -117,6 +120,21 @@ export function ProjectPrincipalsSection({
   const [savingAssignments, setSavingAssignments] = useState<Set<string>>(
     () => new Set(),
   )
+  // Collapsed by default: the list is for scanning; one row expands in place
+  // when it is being worked on (MASTER: expand-in-place, not a page of forms).
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+
+  const toggleExpanded = (principalId: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      if (next.has(principalId)) {
+        next.delete(principalId)
+      } else {
+        next.add(principalId)
+      }
+      return next
+    })
+  }
 
   /**
    * Uploaded-directory sites with no account to own them.
@@ -303,9 +321,41 @@ export function ProjectPrincipalsSection({
         <EmptyState title="No principals yet." />
       ) : null}
       <View style={styles.principalList}>
-        {principals.map((row) => (
+        {principals.map((row) => {
+          const expanded = expandedIds.has(row.id)
+          const header = (
+            <Pressable
+              style={[styles.principalHeader, webPointer]}
+              onPress={() => toggleExpanded(row.id)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={
+                expanded
+                  ? `Collapse ${row.username}`
+                  : `Expand ${row.username}`
+              }
+            >
+              <View style={styles.principalHeaderText}>
+                <Text style={panelStyles.detailTitle}>{row.username}</Text>
+                <Text style={styles.principalSummary} numberOfLines={1}>
+                  {principalRowSummary(row)}
+                </Text>
+              </View>
+              <HeaderChevron size={12} color={colors.textMuted} open={expanded} />
+            </Pressable>
+          )
+
+          if (!expanded) {
+            return (
+              <View key={row.id} style={panelStyles.detailCard}>
+                {header}
+              </View>
+            )
+          }
+
+          return (
           <View key={row.id} style={panelStyles.detailCard}>
-            <Text style={panelStyles.detailTitle}>{row.username}</Text>
+            {header}
             <Text style={panelStyles.detailLine}>
               <Text style={panelStyles.detailLabel}>UID/GID: </Text>
               {row.metadata?.uid ?? '—'} / {row.metadata?.gid ?? '—'}
@@ -409,8 +459,9 @@ export function ProjectPrincipalsSection({
                 orgId={orgId}
                 projectId={projectId}
                 principalId={row.id}
-                username={row.username}
+                username={row.appliedUsername}
                 access={row.access}
+                passwordAuth={row.passwordAuth}
                 canManage={canManage}
                 savingAccess={savingAccess.has(row.id)}
                 onChangeAccess={(next) => {
@@ -420,39 +471,43 @@ export function ProjectPrincipalsSection({
             </View>
             {canManage ? (
               <View style={styles.principalDeleteRow}>
-                <Button
+                <ConfirmButton
                   label="Delete"
-                  busyLabel="Deleting…"
-                  variant="secondary"
+                  prompt={`Delete ${row.username}?`}
+                  confirmLabel="Delete"
                   size="sm"
                   busy={deleting.has(row.id)}
-                  accessibilityLabel={`Delete ${row.username}`}
-                  onPress={() => {
+                  onConfirm={() => {
                     void handleDelete(row.id)
                   }}
                 />
               </View>
             ) : null}
           </View>
-        ))}
+          )
+        })}
       </View>
       {canManage ? (
         <View style={styles.principalForm}>
-          <TextField
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-            onBlur={() => setUsername((current) => current.trim())}
-            placeholder="Username (e.g. appuser)"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!adding}
-          />
+          <View style={styles.principalFormField}>
+            <TextField
+              label="Add system user"
+              value={username}
+              onChangeText={setUsername}
+              onBlur={() => setUsername((current) => current.trim())}
+              placeholder="Username (e.g. appuser)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!adding}
+            />
+          </View>
           <Button
-            label="Add principal"
+            label="Add"
             busyLabel="Adding…"
             variant="primary"
+            size="sm"
             busy={adding}
+            accessibilityLabel="Add system user"
             onPress={() => {
               void handleAdd()
             }}
@@ -477,6 +532,47 @@ export function ProjectPrincipalsSection({
 }
 
 type RuntimeGrant = { runtime: string; series: string; label: string }
+
+const ACCESS_SUMMARY_LABELS: Record<PrincipalAccessLevel, string> = {
+  none: 'No access',
+  sftp: 'Files only',
+  shell: 'Shell',
+}
+
+/**
+ * One scannable line for a collapsed principal row: access, credentials,
+ * assignments. "No credentials" earns a place because a level with nothing to
+ * present is the row an operator is usually hunting for.
+ */
+function principalRowSummary(row: ProjectPrincipalRecord): string {
+  const parts: string[] = []
+  // The login differs from the panel name when the org randomizes usernames —
+  // surface it here since it's what SSH/SFTP actually accepts.
+  if (row.appliedUsername !== row.username) parts.push(row.appliedUsername)
+  parts.push(ACCESS_SUMMARY_LABELS[row.access])
+  if (row.sshKeyCount > 0) {
+    parts.push(row.sshKeyCount === 1 ? '1 key' : `${row.sshKeyCount} keys`)
+  }
+  if (row.passwordAuth) parts.push('password')
+  if (row.access !== 'none' && row.sshKeyCount === 0 && !row.passwordAuth) {
+    parts.push('no credentials')
+  }
+  if (row.serviceIds.length > 0) {
+    parts.push(
+      row.serviceIds.length === 1
+        ? '1 service'
+        : `${row.serviceIds.length} services`,
+    )
+  }
+  const runtimeLabels = row.entitlements.map((entry) => {
+    const grant = RUNTIME_GRANTS.find(
+      (g) => g.runtime === entry.runtime && g.series === entry.series,
+    )
+    return grant?.label ?? `${entry.runtime} ${entry.series}`
+  })
+  if (runtimeLabels.length > 0) parts.push(runtimeLabels.join(', '))
+  return parts.join(' · ')
+}
 
 /**
  * Runtime grants an operator can hand out.
@@ -1044,6 +1140,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
+  principalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  principalHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  principalSummary: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
   serviceAssignRow: {
     marginTop: spacing.sm,
     gap: spacing.xs,
@@ -1074,7 +1184,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   principalForm: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: spacing.sm,
+  },
+  principalFormField: {
+    flex: 1,
   },
   principalDeleteRow: {
     marginTop: spacing.sm,
