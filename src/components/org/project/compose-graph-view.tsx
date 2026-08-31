@@ -39,6 +39,69 @@ function nodeSize(kind: ComposeGraphNode['kind']): { w: number; h: number } {
   return { w: RESOURCE_W, h: RESOURCE_H }
 }
 
+/** Per-row max node height, plus the topmost row that isn't a hosting node (the frame's start). */
+function computeRowHeights(nodes: ComposeGraphNode[]): {
+  rowHeights: Map<number, number>
+  frameStartRow: number
+} {
+  const rowHeights = new Map<number, number>()
+  let frameStartRow = Number.POSITIVE_INFINITY
+  for (const node of nodes) {
+    const { h } = nodeSize(node.kind)
+    rowHeights.set(node.row, Math.max(rowHeights.get(node.row) ?? 0, h))
+    if (node.kind !== 'hosting') {
+      frameStartRow = Math.min(frameStartRow, node.row)
+    }
+  }
+  return { rowHeights, frameStartRow }
+}
+
+/** Y-offset of each row, plus the frame's top edge and the diagram's overall vertical extent. */
+function computeRowTops(
+  rows: number,
+  rowHeights: Map<number, number>,
+  hasFrame: boolean,
+  frameStartRow: number,
+): { rowTop: Map<number, number>; frameTop: number; bottom: number; totalHeight: number } {
+  const rowTop = new Map<number, number>()
+  let cursorY = PADDING
+  let frameTop = 0
+  for (let row = 0; row < rows; row += 1) {
+    if (hasFrame && row === frameStartRow) {
+      frameTop = cursorY
+      cursorY += FRAME_LABEL_H + FRAME_INSET
+    }
+    rowTop.set(row, cursorY)
+    cursorY += (rowHeights.get(row) ?? SERVICE_H) + ROW_GAP
+  }
+  let bottom = rows > 0 ? cursorY - ROW_GAP : cursorY
+  if (hasFrame) bottom += FRAME_INSET
+  const totalHeight = rows > 0 ? bottom + PADDING : PADDING * 2
+  return { rowTop, frameTop, bottom, totalHeight }
+}
+
+/** Absolute pixel rect for every node, plus the rightmost edge overall and within the frame. */
+function computeNodeRects(
+  nodes: ComposeGraphNode[],
+  rowTop: Map<number, number>,
+  hasFrame: boolean,
+): { rects: Map<string, PixelRect>; maxRight: number; maxFramedRight: number } {
+  const rects = new Map<string, PixelRect>()
+  let maxRight = 0
+  let maxFramedRight = 0
+  for (const node of nodes) {
+    const { w, h } = nodeSize(node.kind)
+    const framedNode = hasFrame && node.kind !== 'hosting'
+    const x =
+      PADDING + (framedNode ? FRAME_INSET : 0) + node.column * (w + COL_GAP)
+    const y = rowTop.get(node.row) ?? PADDING
+    rects.set(node.id, { x, y, w, h })
+    maxRight = Math.max(maxRight, x + w)
+    if (framedNode) maxFramedRight = Math.max(maxFramedRight, x + w)
+  }
+  return { rects, maxRight, maxFramedRight }
+}
+
 /**
  * Absolute pixel rects for every node, plus the canvas size that contains
  * them. When `framed`, everything except the hosting row is wrapped in a
@@ -54,45 +117,21 @@ function computeLayout(
   totalHeight: number
   frame: PixelRect | null
 } {
-  const rowHeights = new Map<number, number>()
-  let frameStartRow = Number.POSITIVE_INFINITY
-  for (const node of graph.nodes) {
-    const { h } = nodeSize(node.kind)
-    rowHeights.set(node.row, Math.max(rowHeights.get(node.row) ?? 0, h))
-    if (node.kind !== 'hosting') {
-      frameStartRow = Math.min(frameStartRow, node.row)
-    }
-  }
+  const { rowHeights, frameStartRow } = computeRowHeights(graph.nodes)
   const hasFrame = framed && Number.isFinite(frameStartRow)
 
-  const rowTop = new Map<number, number>()
-  let cursorY = PADDING
-  let frameTop = 0
-  for (let row = 0; row < graph.rows; row += 1) {
-    if (hasFrame && row === frameStartRow) {
-      frameTop = cursorY
-      cursorY += FRAME_LABEL_H + FRAME_INSET
-    }
-    rowTop.set(row, cursorY)
-    cursorY += (rowHeights.get(row) ?? SERVICE_H) + ROW_GAP
-  }
-  let bottom = graph.rows > 0 ? cursorY - ROW_GAP : cursorY
-  if (hasFrame) bottom += FRAME_INSET
-  const totalHeight = graph.rows > 0 ? bottom + PADDING : PADDING * 2
+  const { rowTop, frameTop, bottom, totalHeight } = computeRowTops(
+    graph.rows,
+    rowHeights,
+    hasFrame,
+    frameStartRow,
+  )
 
-  const rects = new Map<string, PixelRect>()
-  let maxRight = 0
-  let maxFramedRight = 0
-  for (const node of graph.nodes) {
-    const { w, h } = nodeSize(node.kind)
-    const framedNode = hasFrame && node.kind !== 'hosting'
-    const x =
-      PADDING + (framedNode ? FRAME_INSET : 0) + node.column * (w + COL_GAP)
-    const y = rowTop.get(node.row) ?? PADDING
-    rects.set(node.id, { x, y, w, h })
-    maxRight = Math.max(maxRight, x + w)
-    if (framedNode) maxFramedRight = Math.max(maxFramedRight, x + w)
-  }
+  const { rects, maxRight, maxFramedRight } = computeNodeRects(
+    graph.nodes,
+    rowTop,
+    hasFrame,
+  )
 
   const frame: PixelRect | null = hasFrame
     ? {
