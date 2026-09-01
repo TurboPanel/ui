@@ -23,6 +23,12 @@ export const ORG_AREAS = [
         hint: 'GitHub Apps and GitLab applications this organization connects through',
       },
       {
+        id: 'repositories',
+        label: 'Repositories',
+        pathSegment: 'repositories',
+        hint: 'Git repositories connected to this organization and what uses them',
+      },
+      {
         id: 'settings',
         label: 'Settings',
         pathSegment: 'settings',
@@ -283,18 +289,31 @@ export function serverDetailHref(
   return `/${orgId}/servers/${serverId}`
 }
 
-/** Connected Git accounts and repositories for the organization. */
 /**
  * Where Git applications are managed.
  *
- * Replaces the old `projects/sources` and `projects/git-apps` pair. There is no
- * repository list any more: a repository binding is created when it is attached
- * to a project, and is never managed on its own.
+ * Replaces the old `projects/sources` and `projects/git-apps` pair. This page
+ * stops at applications and their connected accounts; the repository rows those
+ * connections attach live on {@link projectRepositoriesHref}.
  */
 export function projectGitSourcesHref(
   orgId: string,
 ): `/${string}/projects/git-sources` {
   return `/${orgId}/projects/git-sources`
+}
+
+/**
+ * The organization's connected Git repositories.
+ *
+ * Rows are created implicitly — attached from a project flow or added by clone
+ * URL — and deduplicated per organization, so this screen is where an operator
+ * sees what accumulated, refreshes provider facts, and deletes rows nothing
+ * references any more.
+ */
+export function projectRepositoriesHref(
+  orgId: string,
+): `/${string}/projects/repositories` {
+  return `/${orgId}/projects/repositories`
 }
 
 /** Organization-owned GitHub Apps and GitLab applications. */

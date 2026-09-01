@@ -94,6 +94,8 @@ export const NO_PENDING_ROTATION_ERROR = 'no_pending_rotation'
 export const CA_ROTATION_NOT_CONVERGED_ERROR = 'ca_rotation_not_converged'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
 export const REPOSITORY_REFERENCED_BY_COMPOSE_ERROR = 'source_referenced_by_compose'
+export const REPOSITORY_URL_CONFLICT_ERROR = 'source_url_conflict'
+export const REPOSITORY_REFRESH_NOT_SUPPORTED_ERROR = 'source_refresh_not_supported'
 export const TAG_NAME_IN_USE_ERROR = 'tag_name_in_use'
 export const TASK_NAME_IN_USE_ERROR = 'task_name_in_use'
 export const TASK_SCHEDULE_INVALID_ERROR = 'task_schedule_invalid'
@@ -3270,13 +3272,30 @@ export const REPOSITORY_PROVIDER_OPTIONS: readonly {
   },
 ]
 
-/** An org-owned Git repository binding services attach to by `sourceId`. */
+/**
+ * Provider-observed facts the instance refreshes over time — as opposed to
+ * `options`, which holds operator policy. All optional: a row that has never
+ * been refreshed or inspected carries none of them.
+ */
+export type RepositoryMetadata = {
+  /** What the provider reported as the default branch on the last refresh. */
+  detectedDefaultBranch?: string | null
+  defaultBranchCheckedAt?: string
+  lastInspectedAt?: string
+  lastInspectedCommitSha?: string
+}
+
+/**
+ * An org-owned Git repository binding services attach to by `sourceId`.
+ *
+ * Exactly one row per repository per organization: `repositoryUrl` is stored
+ * canonicalized (lower-cased host, `.git` suffix) and deduplicated
+ * server-side, and both create lanes are idempotent against it.
+ */
 export type RepositoryRecord = {
   id: string
   organizationId: string
   connectionId: string | null
-  serviceId: string | null
-  environmentId: string | null
   secretId: string | null
   provider: RepositoryProvider
   repositoryUrl: string
@@ -3284,7 +3303,7 @@ export type RepositoryRecord = {
   defaultBranch: string | null
   subdirectory: string | null
   autoDeploy: RepositoryAutoDeploy
-  metadata: Record<string, unknown> | null
+  metadata: (Record<string, unknown> & RepositoryMetadata) | null
   options: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
@@ -3415,8 +3434,9 @@ export async function fetchConnectionRepositories(
  *
  * This is how a repository gets attached now: the operator picks
  * **forge -> account -> repository** while creating or editing a project, and
- * this resolves that to a `repository` row underneath. The row itself never
- * appears in the console as a thing to manage.
+ * this resolves that to a `repository` row underneath. The rows are listed and
+ * managed afterwards on the org-level Repositories screen
+ * (`projects/repositories`).
  *
  * **Idempotent.** Two projects on the same repository share one row rather than
  * making two — which matters because auto-deploy and the default branch live on
@@ -3442,6 +3462,12 @@ export async function attachRepository(input: {
 /**
  * Register a repository as an org-owned binding a compose service can bind to.
  *
+ * **Idempotent**, like {@link attachRepository}: the instance keys on the
+ * canonical clone URL, so posting a URL the organization already holds — even
+ * one attached through a provider connection — answers with the existing row's
+ * id and `reused: true` instead of minting a duplicate. A reuse never mutates
+ * the existing row.
+ *
  * `connectionId` is what makes a GitHub repository cloneable — the instance
  * mints a short-lived installation token per deploy from it, so a repository
  * created without one cannot be built. A GitLab repository is cloneable through
@@ -3462,10 +3488,29 @@ export async function createRepository(
     defaultBranch?: string | null
     autoDeploy?: RepositoryAutoDeploy
   }>
-): Promise<{ ok: true; id: string }> {
+): Promise<{ ok: true; id: string; reused: boolean }> {
   return await apiFetch(`${CLIENT_API}/repositories`, {
     method: 'POST',
     body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Re-read provider facts — the default branch above all — for one repository.
+ *
+ * A default branch is recorded once at attach time and the upstream value can
+ * change afterwards. The refresh records what the provider reports now in
+ * `metadata` (`detectedDefaultBranch` / `defaultBranchCheckedAt`) and moves the
+ * `defaultBranch` column with it only while the operator has not set an
+ * explicit branch of their own. Answers **400**
+ * {@link REPOSITORY_REFRESH_NOT_SUPPORTED_ERROR} for deploy-key / generic git
+ * rows — there is no provider to ask.
+ */
+export async function refreshRepository(
+  repositoryId: string
+): Promise<{ ok: true; repository: RepositoryRecord }> {
+  return await apiFetch(`${CLIENT_API}/repositories/${repositoryId}/refresh`, {
+    method: 'POST',
   })
 }
 

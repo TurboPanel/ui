@@ -72,8 +72,13 @@ export function DeployKeySource({
 }: Readonly<{
   orgId: string
   disabled?: boolean
-  /** Receives the resolved `source.id` once the binding exists. */
-  onConnect: (sourceId: string) => void
+  /**
+   * Receives the resolved `source.id` once the binding exists. `reused` is
+   * true when the organization already held this clone URL — the create is
+   * idempotent, so no second row was made — and callers say so rather than
+   * letting the operator believe a duplicate now exists.
+   */
+  onConnect: (sourceId: string, reused?: boolean) => void
   onCancel?: () => void
 }>) {
   const [provider, setProvider] = useState<'gitlab' | 'git'>('git')
@@ -118,7 +123,7 @@ export function DeployKeySource({
       defaultBranch: defaultBranch.trim().length > 0 ? defaultBranch.trim() : null,
     })
     if (!created.ok) return
-    onConnect(created.value.id)
+    onConnect(created.value.id, created.value.reused)
   }
 
   return (

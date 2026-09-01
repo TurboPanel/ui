@@ -19,8 +19,6 @@ function source(overrides: Partial<RepositoryRecord> = {}): RepositoryRecord {
     id: SOURCE_ID,
     organizationId: 'org',
     connectionId: null,
-    serviceId: null,
-    environmentId: null,
     secretId: null,
     provider: 'github',
     repositoryUrl: 'https://github.com/turbopanel/Storefront-API.git',

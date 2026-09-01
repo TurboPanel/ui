@@ -19,21 +19,24 @@
 
 **Job:** answer "which Git **applications** can this organization use, and what
 has each one actually been allowed to see" — nothing more. Repositories are
-deliberately absent.
+deliberately absent from *this* page; their ledger lives at
+**Projects → Repositories** (`pages/repositories.md`).
 
 ---
 
 ## The page lists applications. It does not list repositories.
 
-This reverses the previous design and the reversal is the point. A `repository` row
-is created when a project attaches a repository and is reused when a second
-project attaches the same one; it is never registered in advance, never listed,
-and never disconnected from a page of its own. An operator who has to connect a
+A `repository` row is created when a project attaches a repository and is
+reused when a second project attaches the same one; it is never registered in
+advance, and this page never lists it. An operator who has to connect a
 repository *before* they can use it has to guess which repositories a project
 will want, and the list they build is stale the moment they finish.
 
-So: no **Connected repositories** panel, anywhere. If a screen needs to name a
-repository, it names the one that service is bound to, in place.
+So: no **Connected repositories** panel *here*. If a screen needs to name a
+repository, it names the one that service is bound to, in place. What *does*
+exist — since the org-level Repositories screen landed — is a ledger of the
+rows that accumulated, for refresh and cleanup, not a registration step. It
+lives on its own page precisely so this one stays about applications.
 
 ## Registering and installing are two acts, and the gap is the failure
 
@@ -154,7 +157,7 @@ has no account list of its own — showing one would show somebody else's.
 
 ## Anti-patterns (page-specific)
 
-- ❌ A **Connected repositories** panel, or any surface for managing `repository` rows
+- ❌ A **Connected repositories** panel on this page — the ledger is `pages/repositories.md`, not here
 - ❌ A flat repository list instead of application → account → repository
 - ❌ A default App name that is not unique, or one the operator cannot edit
 - ❌ Landing the operator on API JSON after a provider round-trip

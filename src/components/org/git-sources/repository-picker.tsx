@@ -38,12 +38,15 @@ export function RepositoryPicker({
    * is `null` on the deploy-key lane, where the instance never saw the provider
    * — all it was given is a clone URL. The attached row is passed when attach
    * fetched it, so callers that gate on `useRepositories()` do not wait on a
-   * list that still lacks the new id.
+   * list that still lacks the new id. `reused` is true when an existing binding
+   * answered — both lanes are idempotent — so callers can say the repository
+   * was already connected instead of implying a new row appeared.
    */
   onPick: (
     sourceId: string,
     repository: GitRepositorySummary | null,
     record?: RepositoryRecord,
+    reused?: boolean,
   ) => void
   /** Nothing to pick from yet — the caller decides where to send the operator. */
   onNeedsApp?: () => void
@@ -105,7 +108,7 @@ export function RepositoryPicker({
           if (result.error) setError(result.error)
           return
         }
-        onPick(result.value.id, repo, result.value.repository)
+        onPick(result.value.id, repo, result.value.repository, result.value.reused)
       })
   }
 
@@ -118,7 +121,7 @@ export function RepositoryPicker({
       <DeployKeySource
         orgId={orgId}
         disabled={disabled}
-        onConnect={(sourceId) => onPick(sourceId, null)}
+        onConnect={(sourceId, reused) => onPick(sourceId, null, undefined, reused)}
         onCancel={() => setDeployKeyLane(false)}
       />
     )

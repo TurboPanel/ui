@@ -6,8 +6,6 @@ const listed: RepositoryRecord = {
   id: 'listed-id',
   organizationId: 'org',
   connectionId: null,
-  serviceId: null,
-  environmentId: null,
   secretId: null,
   provider: 'github',
   repositoryUrl: 'https://github.com/acme/listed.git',

@@ -3,11 +3,12 @@ import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
-import { Button, MonoText, TextField } from '@/components/ui'
+import { Button, InlineNotice, MonoText, TextField } from '@/components/ui'
 import { SOURCE_BRANCH_MAX_LENGTH } from '@/lib/compose/service-kind'
 import type { RepositoryRecord } from '@/lib/instance-api'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
 import { useRepositories } from '@/lib/queries'
+import { repositoryLabel } from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
 
 /**
@@ -43,6 +44,7 @@ export function RepositoryStep({
   const router = useRouter()
   const repositoriesQuery = useRepositories(orgId)
   const [pickedLabel, setPickedLabel] = useState('')
+  const [pickedReused, setPickedReused] = useState(false)
 
   const sources = useMemo(
     () => repositoriesQuery.data?.repositories ?? [],
@@ -56,8 +58,9 @@ export function RepositoryStep({
         <RepositoryPicker
           orgId={orgId}
           disabled={disabled}
-          onPick={(sourceId, repository, record) => {
+          onPick={(sourceId, repository, record, reused) => {
             setPickedLabel(repository?.fullName ?? '')
+            setPickedReused(reused === true)
             onSelectSourceId(sourceId, record)
           }}
           onNeedsApp={() => router.push(projectGitSourcesHref(orgId) as Href)}
@@ -66,10 +69,19 @@ export function RepositoryStep({
     )
   }
 
-  const label = pickedLabel || selected?.repositoryUrl || 'Selected repository'
+  const label = pickedLabel ||
+    (selected ? repositoryLabel(selected) : 'Selected repository')
 
   return (
     <View style={styles.root}>
+      {pickedReused
+        ? (
+          <InlineNotice
+            title="Already connected"
+            body="This organization already holds this repository, so the existing connection is reused — its auto-deploy policy and branch settings apply here too."
+          />
+        )
+        : null}
       <View style={styles.picked}>
         <Text style={styles.pickedLabel}>Repository</Text>
         <View style={styles.pickedRow}>
@@ -81,6 +93,7 @@ export function RepositoryStep({
             disabled={disabled}
             onPress={() => {
               setPickedLabel('')
+              setPickedReused(false)
               onSelectSourceId('')
             }}
           />

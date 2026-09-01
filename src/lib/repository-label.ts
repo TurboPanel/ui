@@ -3,10 +3,10 @@ import type { RepositoryRecord } from '@/lib/instance-api'
 /**
  * `https://github.com/owner/repo(.git)` → `owner/repo`, else the URL itself.
  *
- * Lives here rather than beside a screen because the repository binding is no
- * longer a thing an operator manages on one page — it is created on attach and
- * displayed wherever a service names its source. The compose document key is
- * intentionally still `x-turbopanel.source`.
+ * Lives here rather than beside a screen because the label renders in several
+ * places — the Repositories screen, the Services form, the create wizard —
+ * wherever a repository is named. The compose document key is intentionally
+ * still `x-turbopanel.source`.
  */
 export function repositoryLabel(row: RepositoryRecord): string {
   const trimmed = row.repositoryUrl.replace(/\.git$/, '')

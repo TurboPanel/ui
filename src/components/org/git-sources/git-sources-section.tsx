@@ -154,8 +154,10 @@ function GitAppRow({
  * shared one — the latter marked `readOnly`, usable but not editable.
  *
  * Repositories are deliberately **not** listed here. A repository binding is
- * created when it is attached to a project and never managed on its own, so
- * this screen stops at the application and its connected accounts.
+ * created when it is attached to a project, so this screen stops at the
+ * application and its connected accounts; the accumulated rows are listed and
+ * cleaned up on the org-level **Repositories** screen
+ * (`repositories-section.tsx`) instead.
  */
 export function GitSourcesSection({
   scope = 'admin',
@@ -197,7 +199,7 @@ export function GitSourcesSection({
       <Text style={panelStyles.pageCopy}>
         {scope === 'admin'
           ? 'Applications the whole instance shares. Every organization can connect accounts through these.'
-          : 'Applications this organization connects repositories through, plus any the instance shares. Repositories themselves are attached when you create or edit a project.'}
+          : 'Applications this organization connects repositories through, plus any the instance shares. Repositories themselves are attached when you create or edit a project, and listed under Repositories.'}
       </Text>
 
       {returnNotice

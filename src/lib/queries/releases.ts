@@ -10,6 +10,7 @@ import {
   fetchServiceReleases,
   fetchRepository,
   fetchRepositories,
+  refreshRepository,
   rollbackEnvironment,
   updateRepository,
   type RepositoryRecord,
@@ -197,6 +198,10 @@ export function useConnectionRepositories(
  * intentionally still named `source`), so connecting a repository to a
  * service is two steps: create the row here, then write the id into
  * `x-turbopanel.source` on the service.
+ *
+ * Idempotent server-side: the result carries `reused: true` when the
+ * organization already held this URL, and callers surface that rather than
+ * pretending a new row appeared.
  */
 export function useCreateRepository(orgId: string) {
   const queryClient = useQueryClient()
@@ -286,6 +291,38 @@ export function useUpdateRepository(orgId: string) {
     }) => updateRepository(vars.repositoryId, vars.patch),
     fallbackError: 'Failed to update repository',
     onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).repositories.all,
+      })
+    },
+  })
+}
+
+/**
+ * Re-read the provider's current facts (default branch) for one repository.
+ *
+ * Manage-gated server-side; only meaningful for rows with a `connectionId`.
+ * The refreshed row comes back in the response, so the list cache is patched
+ * in place before the invalidation refetch settles.
+ */
+export function useRefreshRepository(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (repositoryId: string) => refreshRepository(repositoryId),
+    fallbackError: 'Failed to refresh repository',
+    onSuccess: async (data) => {
+      const listKey = queryKeys.org(orgId).repositories.list
+      queryClient.setQueryData(
+        listKey,
+        (current: { repositories: RepositoryRecord[] } | undefined) => {
+          if (!current) return current
+          return {
+            repositories: current.repositories.map((row) =>
+              row.id === data.repository.id ? data.repository : row,
+            ),
+          }
+        },
+      )
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).repositories.all,
       })

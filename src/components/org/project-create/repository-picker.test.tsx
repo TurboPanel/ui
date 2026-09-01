@@ -41,8 +41,6 @@ const attached: RepositoryRecord = {
   id: 'src-new',
   organizationId: orgId,
   connectionId: 'conn-1',
-  serviceId: null,
-  environmentId: null,
   secretId: null,
   provider: 'github',
   repositoryUrl: 'https://github.com/acme/api.git',
