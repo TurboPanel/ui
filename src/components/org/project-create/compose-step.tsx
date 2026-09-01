@@ -35,6 +35,7 @@ export function ComposeStep({
   repositoryId = null,
   compose,
   initialSection,
+  sections,
   creating,
   error,
   onNameChange,
@@ -58,6 +59,12 @@ export function ComposeStep({
   compose: ComposeDocument
   /** Tab this step opens on — Compose for the Compose card, Services for Services. */
   initialSection: ComposeProjectTabId
+  /**
+   * Lenses the draft surface offers. Omitted means the full
+   * Overview · Compose · Services; the repository App lane narrows it to
+   * Overview only, since its compose document is synthesized from the binding.
+   */
+  sections?: readonly ComposeProjectTabId[]
   creating: boolean
   error?: string | null
   onNameChange: (name: string) => void
@@ -92,13 +99,14 @@ export function ComposeStep({
       project,
       section,
       setSection,
+      sections,
       onProjectNameChange: onNameChange,
       onDraftChange: (next) => {
         setYamlBroken(next == null)
         onDraftChange(next)
       },
     }),
-    [project, section, onNameChange, onDraftChange],
+    [project, section, sections, onNameChange, onDraftChange],
   )
 
   return (

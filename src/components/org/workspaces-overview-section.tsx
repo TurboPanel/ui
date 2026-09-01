@@ -30,12 +30,6 @@ import { validateWorkspaceName } from '@/lib/workspace-validation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
-const CREATE_WORKSPACE_NOTES = [
-  'Group projects by team, client, environment, or however you like.',
-  'You can create as many workspaces as you want.',
-  'Projects can be moved between workspaces at any time.',
-] as const
-
 function workspaceDescriptionText(
   system: boolean,
   description: string | null | undefined,
@@ -187,16 +181,11 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Workspaces</Text>
-      <Text style={panelStyles.pageCopy}>
-        New organizations start with a Default Workspace. Create more here, then
-        use the workspace switcher on Projects to filter by workspace.
-      </Text>
 
       {canOwn ? (
         <FirstRunWizard
           title="Create a workspace"
-          description="A workspace is a place to organize projects — by team, client, environment, or however you like."
-          notes={CREATE_WORKSPACE_NOTES}
+          description="Organize your projects into groups — clients, websites, teams, anything you like."
           nameValue={createName}
           onNameChange={(text) => {
             setCreateName(text)

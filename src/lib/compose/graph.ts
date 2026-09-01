@@ -23,6 +23,8 @@ export type ComposeGraphNode = {
   image?: string
   serviceKind?: ComposeServiceKind
   ports?: string[]
+  /** Present when the service builds from a bound Git repository (`x-turbopanel.source`). */
+  gitSource?: { branch?: string }
 }
 
 export type ComposeGraphEdgeKind = 'depends_on' | 'network' | 'volume' | 'hosting'
@@ -209,6 +211,7 @@ function collectServiceGraph(
     const column = rowColumnCounters.get(row) ?? 0
     rowColumnCounters.set(row, column + 1)
     const extension = readServiceTurbopanelExtension(service)
+    const source = extension?.source
 
     nodes.push({
       id: `service:${name}`,
@@ -219,6 +222,7 @@ function collectServiceGraph(
       image: serviceImage(service),
       serviceKind: extension?.serviceKind ?? 'container',
       ports: servicePorts(service),
+      ...(source ? { gitSource: { branch: source.branch } } : {}),
     })
 
     for (const net of stringListOrMapKeys(service.networks)) {
@@ -369,37 +373,57 @@ export function buildComposeGraph(
 }
 
 /**
+ * Names of the nodes joined to `nodeId` by edges of `kind`. `incoming` edges
+ * point at the node (the neighbor is `edge.from`); `outgoing` edges leave it
+ * (the neighbor is `edge.to`).
+ */
+function neighborNames(
+  graph: ComposeGraph,
+  byId: Map<string, ComposeGraphNode>,
+  nodeId: string,
+  kind: ComposeGraphEdgeKind,
+  direction: 'incoming' | 'outgoing',
+): string[] {
+  return graph.edges
+    .filter((edge) =>
+      edge.kind === kind && (direction === 'incoming' ? edge.to : edge.from) === nodeId
+    )
+    .map((edge) => byId.get(direction === 'incoming' ? edge.from : edge.to)?.name)
+    .filter((name): name is string => Boolean(name))
+}
+
+function describeServiceNode(
+  graph: ComposeGraph,
+  byId: Map<string, ComposeGraphNode>,
+  node: ComposeGraphNode,
+): string {
+  const hostnames = neighborNames(graph, byId, node.id, 'hosting', 'incoming')
+  const dependsOn = neighborNames(graph, byId, node.id, 'depends_on', 'incoming')
+  const networks = neighborNames(graph, byId, node.id, 'network', 'outgoing')
+  const volumes = neighborNames(graph, byId, node.id, 'volume', 'outgoing')
+
+  const parts = [node.name]
+  if (hostnames.length > 0) parts.push(`served at ${hostnames.join(', ')}`)
+  if (dependsOn.length > 0) parts.push(`depends on ${dependsOn.join(', ')}`)
+  if (networks.length > 0) parts.push(`on network ${networks.join(', ')}`)
+  if (volumes.length > 0) parts.push(`mounts volume ${volumes.join(', ')}`)
+  if (node.gitSource) {
+    parts.push(
+      node.gitSource.branch
+        ? `builds from a Git repository, branch ${node.gitSource.branch}`
+        : 'builds from a Git repository',
+    )
+  }
+  return parts.length > 1 ? `${parts[0]} — ${parts.slice(1).join('; ')}` : parts[0]
+}
+
+/**
  * Plain-text adjacency description of a graph (accessibility fallback per
  * ui-ux-pro-max chart guidance — network graphs grade D without one).
  */
 export function describeComposeGraph(graph: ComposeGraph): string[] {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-  const lines: string[] = []
-  for (const node of graph.nodes) {
-    if (node.kind !== 'service') continue
-    const dependsOn = graph.edges
-      .filter((edge) => edge.kind === 'depends_on' && edge.to === node.id)
-      .map((edge) => byId.get(edge.from)?.name)
-      .filter((name): name is string => Boolean(name))
-    const networks = graph.edges
-      .filter((edge) => edge.kind === 'network' && edge.from === node.id)
-      .map((edge) => byId.get(edge.to)?.name)
-      .filter((name): name is string => Boolean(name))
-    const volumes = graph.edges
-      .filter((edge) => edge.kind === 'volume' && edge.from === node.id)
-      .map((edge) => byId.get(edge.to)?.name)
-      .filter((name): name is string => Boolean(name))
-    const hostnames = graph.edges
-      .filter((edge) => edge.kind === 'hosting' && edge.to === node.id)
-      .map((edge) => byId.get(edge.from)?.name)
-      .filter((name): name is string => Boolean(name))
-
-    const parts = [node.name]
-    if (hostnames.length > 0) parts.push(`served at ${hostnames.join(', ')}`)
-    if (dependsOn.length > 0) parts.push(`depends on ${dependsOn.join(', ')}`)
-    if (networks.length > 0) parts.push(`on network ${networks.join(', ')}`)
-    if (volumes.length > 0) parts.push(`mounts volume ${volumes.join(', ')}`)
-    lines.push(parts.length > 1 ? `${parts[0]} — ${parts.slice(1).join('; ')}` : parts[0])
-  }
-  return lines
+  return graph.nodes
+    .filter((node) => node.kind === 'service')
+    .map((node) => describeServiceNode(graph, byId, node))
 }

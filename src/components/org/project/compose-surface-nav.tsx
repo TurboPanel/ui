@@ -75,8 +75,11 @@ export function ComposeSurfaceNav() {
     ? draft.section
     : parseComposeProjectTab(pathname, projectId)
   const tabIds = draft
-    ? DRAFT_COMPOSE_PROJECT_TAB_IDS
+    ? draft.sections ?? DRAFT_COMPOSE_PROJECT_TAB_IDS
     : COMPOSE_PROJECT_SURFACE_TAB_IDS
+
+  // A single lens is not a choice — drop the bar instead of rendering one tab.
+  if (tabIds.length < 2) return null
 
   return (
     <View style={styles.bar}>

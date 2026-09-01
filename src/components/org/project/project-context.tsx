@@ -49,6 +49,12 @@ export type ProjectDraft = {
   project: ProjectRecord
   section: ComposeProjectTabId
   setSection: (section: ComposeProjectTabId) => void
+  /**
+   * Lenses this draft's nav offers. Omitted means the three compose lenses;
+   * repository **app** drafts narrow it to Overview only, because their whole
+   * document is synthesized from the repository binding.
+   */
+  sections?: readonly ComposeProjectTabId[]
   /** Header title edits feed back into the wizard's name field. */
   onProjectNameChange: (name: string) => void
   /**

@@ -54,7 +54,10 @@ import {
   useWorkspaces,
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import { projectOverviewHref } from '@/lib/project-navigation'
+import {
+  DRAFT_REPOSITORY_APP_TAB_IDS,
+  projectOverviewHref,
+} from '@/lib/project-navigation'
 import type {
   RepositoryInspection,
   RepositoryRecord,
@@ -598,6 +601,11 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   if (step === 'compose') {
+    // The App lane's document is synthesized wholesale from the repository
+    // binding — nothing in it is worth hand-editing before create, so the
+    // draft surface shows the topology diagram alone.
+    const repositoryAppDraft =
+      selectedChoice === 'repository' && selectedLane === 'app'
     return (
       <ComposeStep
         orgId={orgId}
@@ -609,7 +617,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
         // on create. Empty for every other card, which stays unbound.
         repositoryId={selectedSourceId || null}
         compose={composeDoc}
-        initialSection={selectedOption?.section ?? 'compose'}
+        initialSection={
+          repositoryAppDraft ? 'overview' : selectedOption?.section ?? 'compose'
+        }
+        sections={repositoryAppDraft ? DRAFT_REPOSITORY_APP_TAB_IDS : undefined}
         creating={submitting}
         error={apiError ?? loadError}
         onNameChange={setDisplayName}

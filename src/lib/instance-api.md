@@ -43,7 +43,7 @@ Authorization helpers:
 - `fetchProject(id)` → `GET /api/client/v1/projects/:id`
 - `createProject(body: CreateProjectBody)` → `POST /api/client/v1/projects`
 - `updateProject(id, body)` → `PATCH /api/client/v1/projects/:id` — body accepts optional `workspaceId` (moves the project to another same-org workspace)
-- `deleteProject(id)` → `DELETE /api/client/v1/projects/:id` — cascade-deletes environments/services/hostings/containers (variables/`managed` cascade via FK); returns **409** `project_has_running_services` (`PROJECT_HAS_RUNNING_SERVICES_ERROR`) when any non-stopped containers remain. Projects overview uses a two-step wizard (`project-delete-panel.tsx`): stop each environment with active containers, then type the project display name to confirm irreversible delete.
+- `deleteProject(id)` → `DELETE /api/client/v1/projects/:id` — cascade-deletes environments/services/hostings/containers/tenancy/bindings (variables/`managed`/`principal` cascade via FK); returns **409** `project_has_running_services` (`PROJECT_HAS_RUNNING_SERVICES_ERROR`) when any non-stopped containers remain. Projects overview uses a two-step wizard (`project-delete-panel.tsx`): stop each environment with active containers, then type the project display name to confirm irreversible delete.
 - `fetchVisibleEnvironments(projectId?)` → `GET /api/client/v1/environments`
 - `fetchEnvironment(id)` → `GET /api/client/v1/environments/:id`
 - `createEnvironment(body)` → `POST /api/client/v1/environments`

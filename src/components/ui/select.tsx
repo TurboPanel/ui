@@ -54,6 +54,9 @@ function SelectSearchField({
         placeholder={placeholder}
         placeholderTextColor={colors.textDim}
         style={styles.searchInput}
+        // Type-to-filter with no extra click on web; native keeps the field
+        // unfocused so opening a picker never pops the keyboard over the list.
+        autoFocus={Platform.OS === 'web'}
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="off"

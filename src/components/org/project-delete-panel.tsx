@@ -713,7 +713,7 @@ export function ProjectDeletePanel({
     setDeleteError(null)
     const result = await deleteProjectMutation.run(project.id)
     if (!result.ok) {
-      const message = deleteProjectMutation.actionError ?? 'Failed to delete project'
+      const message = result.error ?? 'Failed to delete project'
       const failure = projectDeleteFailureCopy(message)
       setDeleteError(failure.text)
       if (failure.kind === 'managed') void orgManagedQuery.refetch()

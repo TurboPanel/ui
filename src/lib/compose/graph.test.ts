@@ -170,6 +170,32 @@ describe('buildComposeGraph', () => {
     )
   })
 
+  it('marks services bound to a Git source, carrying the pinned branch', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          app: {
+            'x-turbopanel': {
+              serviceKind: 'node',
+              principal: 'app',
+              source: {
+                sourceId: '123e4567-e89b-12d3-a456-426614174000',
+                branch: 'main',
+              },
+            },
+          },
+          web: { image: 'nginx' },
+        },
+      }),
+    )
+    expect(graph.nodes.find((n) => n.id === 'service:app')?.gitSource).toEqual({
+      branch: 'main',
+    })
+    expect(
+      graph.nodes.find((n) => n.id === 'service:web')?.gitSource,
+    ).toBeUndefined()
+  })
+
   it('skips non-map services and volumes', () => {
     const graph = buildComposeGraph(
       doc({
@@ -313,6 +339,28 @@ describe('describeComposeGraph', () => {
     )
     expect(describeComposeGraph(graph)).toEqual([
       'web — served at app.example.com',
+    ])
+  })
+
+  it('mentions the Git repository a service builds from', () => {
+    const source = { sourceId: '123e4567-e89b-12d3-a456-426614174000' }
+    const serviceDoc = (binding: Record<string, unknown>) =>
+      doc({
+        services: {
+          app: {
+            'x-turbopanel': {
+              serviceKind: 'node',
+              principal: 'app',
+              source: binding,
+            },
+          },
+        },
+      })
+    expect(
+      describeComposeGraph(buildComposeGraph(serviceDoc({ ...source, branch: 'main' }))),
+    ).toEqual(['app — builds from a Git repository, branch main'])
+    expect(describeComposeGraph(buildComposeGraph(serviceDoc(source)))).toEqual([
+      'app — builds from a Git repository',
     ])
   })
 })

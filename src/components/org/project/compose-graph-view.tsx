@@ -216,6 +216,17 @@ function joinPorts(ports: string[] | undefined): string | null {
   return ports.length > 2 ? `${shown} +${ports.length - 2}` : shown
 }
 
+/**
+ * Subtitle naming the Git repository a service builds from, for services with
+ * no image line to show instead (a bound source is what *replaces* the image).
+ */
+function gitSourceLabel(node: ComposeGraphNode): string | null {
+  if (!node.gitSource) return null
+  return node.gitSource.branch
+    ? `git · ${node.gitSource.branch}`
+    : 'git repository'
+}
+
 function ServiceNodeOverlay({
   node,
   rect,
@@ -234,7 +245,7 @@ function ServiceNodeOverlay({
   showStatus: boolean
 }>) {
   const tone = showStatus ? serviceStatusTone(containers) : null
-  const subtitle = node.image
+  const subtitle = node.image ?? gitSourceLabel(node)
   const ports = joinPorts(node.ports)
   const kindLabel = node.serviceKind === 'site' ? 'site' : 'service'
 

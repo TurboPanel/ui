@@ -74,6 +74,13 @@ export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
   'services',
 ] as const
 
+/**
+ * Repository **app** drafts synthesize their whole compose document from the
+ * repository binding — there is no YAML or service card worth editing before
+ * create, so the topology diagram is the only lens the draft shows.
+ */
+export const DRAFT_REPOSITORY_APP_TAB_IDS = ['overview'] as const
+
 /** Platform projects never accept mutations from the UI. */
 export function systemProjectAllowsMutations(): boolean {
   return false

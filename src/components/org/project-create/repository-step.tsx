@@ -3,12 +3,16 @@ import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
-import { Button, InlineNotice, MonoText, TextField } from '@/components/ui'
+import { Badge, Button, InlineNotice, MonoText, TextField } from '@/components/ui'
 import { SOURCE_BRANCH_MAX_LENGTH } from '@/lib/compose/service-kind'
 import type { RepositoryRecord } from '@/lib/instance-api'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
 import { useRepositories } from '@/lib/queries'
-import { repositoryLabel } from '@/lib/repository-label'
+import {
+  repositoryAccessLabel,
+  repositoryLabel,
+  repositoryProviderLabel,
+} from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
 
 /**
@@ -45,6 +49,11 @@ export function RepositoryStep({
   const repositoriesQuery = useRepositories(orgId)
   const [pickedLabel, setPickedLabel] = useState('')
   const [pickedReused, setPickedReused] = useState(false)
+  // The App lane's summary knows visibility (`private`) and the attach hands
+  // back the row before the list query catches up — both are kept so the
+  // locked-in card can badge the pick immediately, not once the refetch lands.
+  const [pickedRecord, setPickedRecord] = useState<RepositoryRecord | null>(null)
+  const [pickedPrivate, setPickedPrivate] = useState<boolean | null>(null)
 
   const sources = useMemo(
     () => repositoriesQuery.data?.repositories ?? [],
@@ -61,6 +70,8 @@ export function RepositoryStep({
           onPick={(sourceId, repository, record, reused) => {
             setPickedLabel(repository?.fullName ?? '')
             setPickedReused(reused === true)
+            setPickedRecord(record ?? null)
+            setPickedPrivate(repository ? repository.private : null)
             onSelectSourceId(sourceId, record)
           }}
           onNeedsApp={() => router.push(projectGitSourcesHref(orgId) as Href)}
@@ -69,8 +80,19 @@ export function RepositoryStep({
     )
   }
 
+  const record = selected ?? pickedRecord
   const label = pickedLabel ||
-    (selected ? repositoryLabel(selected) : 'Selected repository')
+    (record ? repositoryLabel(record) : 'Selected repository')
+  const providerLabel = record ? repositoryProviderLabel(record) : null
+  // The picker's summary is the provider's own word on visibility; the row
+  // only implies it (deploy key ⇒ private, anonymous ⇒ public), so the summary
+  // wins when the pick came through the App lane.
+  let accessLabel: string | null = null
+  if (pickedPrivate !== null) {
+    accessLabel = pickedPrivate ? 'Private' : 'Public'
+  } else if (record) {
+    accessLabel = repositoryAccessLabel(record)
+  }
 
   return (
     <View style={styles.root}>
@@ -86,6 +108,15 @@ export function RepositoryStep({
         <Text style={styles.pickedLabel}>Repository</Text>
         <View style={styles.pickedRow}>
           <MonoText style={styles.pickedName} numberOfLines={1}>{label}</MonoText>
+          {providerLabel ? <Badge label={providerLabel} /> : null}
+          {accessLabel
+            ? (
+              <Badge
+                label={accessLabel}
+                tone={accessLabel === 'Private' ? 'info' : 'muted'}
+              />
+            )
+            : null}
           <Button
             label="Change"
             variant="ghost"
@@ -94,6 +125,8 @@ export function RepositoryStep({
             onPress={() => {
               setPickedLabel('')
               setPickedReused(false)
+              setPickedRecord(null)
+              setPickedPrivate(null)
               onSelectSourceId('')
             }}
           />
@@ -108,10 +141,10 @@ export function RepositoryStep({
         maxLength={SOURCE_BRANCH_MAX_LENGTH}
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder={selected?.defaultBranch ?? 'main'}
+        placeholder={record?.defaultBranch ?? 'main'}
         accessibilityLabel="Branch"
-        hint={selected?.defaultBranch
-          ? `Leave empty to use the repository's default branch (${selected.defaultBranch}).`
+        hint={record?.defaultBranch
+          ? `Leave empty to use the repository's default branch (${record.defaultBranch}).`
           // No fallback exists on deploy for a repository with no recorded
           // default branch — an empty binding is `source_ref_unresolved`.
           : 'This repository records no default branch — name one to deploy.'}
