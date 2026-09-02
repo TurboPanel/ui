@@ -46,6 +46,7 @@ import {
   NetworkResourceIcon,
   VolumeResourceIcon,
 } from '@/components/icons/resource-icons'
+import { DraftEnvironmentNotice } from '@/components/org/project/draft-environment-notice'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { composePrincipalAliases } from '@/lib/compose/principals-document'
@@ -971,7 +972,7 @@ export function ComposeServicesTab() {
             onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
           />,
         )}
-        {draft ? null : <OverviewEnvironmentsPanel />}
+        {draft ? <DraftEnvironmentNotice /> : <OverviewEnvironmentsPanel />}
       </View>
     </View>
   )

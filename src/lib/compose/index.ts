@@ -238,7 +238,11 @@ export type {
   ComposeGraphNode,
   ComposeGraphNodeKind,
 } from './graph'
-export { buildComposeGraph, describeComposeGraph } from './graph'
+export {
+  annotateComposeGraphSources,
+  buildComposeGraph,
+  describeComposeGraph,
+} from './graph'
 export type {
   ComposeRestartPolicy,
   ParsedComposeRestart,

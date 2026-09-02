@@ -77,7 +77,8 @@ export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
 /**
  * Repository **app** drafts synthesize their whole compose document from the
  * repository binding — there is no YAML or service card worth editing before
- * create, so the topology diagram is the only lens the draft shows.
+ * create, so the topology diagram is the only lens the draft *enables*. The
+ * surface nav still renders the full tab bar with the rest dimmed.
  */
 export const DRAFT_REPOSITORY_APP_TAB_IDS = ['overview'] as const
 

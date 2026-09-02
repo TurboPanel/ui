@@ -24,8 +24,10 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useSaveServerLabels,
+  useSaveServerMetricsSensorOverrides,
   useServerDetail,
   useServerLabels,
+  useServerMetricsCapabilities,
   useServerMetricsSeries,
   useServerReporting,
   useServerUpdateStatus,
@@ -33,6 +35,8 @@ import {
   useSetServerHostname,
   useSetServerNtp,
   useSetServerTimezone,
+  useStartServerMetricsLive,
+  useStopServerMetricsLive,
   useTimezones,
   useTriggerServerUpdate,
   useUpdateServer,
@@ -61,6 +65,10 @@ const {
   saveServerLabels,
   createLicense,
   deleteLicense,
+  fetchServerMetricsCapabilities,
+  saveServerMetricsSensorOverrides,
+  startServerMetricsLive,
+  stopServerMetricsLive,
 } = vi.hoisted(() => ({
   fetchOrgServers: vi.fn(),
   fetchLicenses: vi.fn(),
@@ -84,6 +92,10 @@ const {
   saveServerLabels: vi.fn(),
   createLicense: vi.fn(),
   deleteLicense: vi.fn(),
+  fetchServerMetricsCapabilities: vi.fn(),
+  saveServerMetricsSensorOverrides: vi.fn(),
+  startServerMetricsLive: vi.fn(),
+  stopServerMetricsLive: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -112,6 +124,10 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     saveServerLabels,
     createLicense,
     deleteLicense,
+    fetchServerMetricsCapabilities,
+    saveServerMetricsSensorOverrides,
+    startServerMetricsLive,
+    stopServerMetricsLive,
   }
 })
 
@@ -889,5 +905,124 @@ describe('servers query hooks', () => {
     await result.current.run(serverId)
     expect(deleteServer).toHaveBeenCalledWith(serverId, orgId)
     expect(invalidateSpy).toHaveBeenCalled()
+  })
+
+  it('useOrgLicenses rethrows non-403 failures as query errors', async () => {
+    fetchLicenses.mockRejectedValue(new Error('licenses failed: HTTP 500'))
+    const client = createTestQueryClient()
+
+    renderHook(() => useOrgLicenses(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      const query = client
+        .getQueryCache()
+        .find({ queryKey: queryKeys.org(orgId).servers.licenses })
+      expect(query?.state.status).toBe('error')
+    })
+  })
+
+  it('useServerMetricsCapabilities fetches while the panel is open', async () => {
+    fetchServerMetricsCapabilities.mockResolvedValueOnce({
+      ok: true,
+      capabilities: { sensors: [] },
+    })
+    const { result } = renderHook(
+      () => useServerMetricsCapabilities(orgId, serverId),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({
+        ok: true,
+        capabilities: { sensors: [] },
+      })
+    })
+    expect(fetchServerMetricsCapabilities).toHaveBeenCalledWith(
+      serverId,
+      orgId,
+    )
+  })
+
+  it('useServerMetricsCapabilities stays idle while disabled or unscoped', () => {
+    const disabled = renderHook(
+      () => useServerMetricsCapabilities(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    const unscoped = renderHook(() => useServerMetricsCapabilities(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+
+    expect(disabled.result.current.fetchStatus).toBe('idle')
+    expect(unscoped.result.current.fetchStatus).toBe('idle')
+    expect(fetchServerMetricsCapabilities).not.toHaveBeenCalled()
+  })
+
+  it('useSaveServerMetricsSensorOverrides saves and refreshes capability + detail reads', async () => {
+    saveServerMetricsSensorOverrides.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useSaveServerMetricsSensorOverrides(orgId, serverId),
+      { wrapper: createWrapper(client) },
+    )
+
+    const overrides = { disabledSensors: ['coretemp'] }
+    await result.current.run(
+      overrides as Parameters<typeof result.current.run>[0],
+    )
+
+    expect(saveServerMetricsSensorOverrides).toHaveBeenCalledWith(
+      serverId,
+      overrides,
+      orgId,
+    )
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.metricsCapabilities(serverId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+  })
+
+  it('useStartServerMetricsLive starts or renews a lease', async () => {
+    startServerMetricsLive.mockResolvedValueOnce({
+      ok: true,
+      leaseId: 'lease-1',
+    })
+
+    const { result } = renderHook(
+      () => useStartServerMetricsLive(orgId, serverId),
+      { wrapper: createWrapper() },
+    )
+
+    const outcome = await result.current.run('lease-1')
+    expect(startServerMetricsLive).toHaveBeenCalledWith(
+      serverId,
+      'lease-1',
+      orgId,
+    )
+    expect(outcome).toEqual({
+      ok: true,
+      value: { ok: true, leaseId: 'lease-1' },
+    })
+  })
+
+  it('useStopServerMetricsLive releases the lease', async () => {
+    stopServerMetricsLive.mockResolvedValueOnce({ ok: true })
+
+    const { result } = renderHook(
+      () => useStopServerMetricsLive(orgId, serverId),
+      { wrapper: createWrapper() },
+    )
+
+    await result.current.run('lease-1')
+    expect(stopServerMetricsLive).toHaveBeenCalledWith(
+      serverId,
+      'lease-1',
+      orgId,
+    )
   })
 })

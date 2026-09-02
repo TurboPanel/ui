@@ -4,6 +4,7 @@ import {
   repositoryAccessLabel,
   repositoryLabel,
   repositoryProviderLabel,
+  repositoryShortName,
 } from '@/lib/repository-label'
 
 function row(repositoryUrl: string): RepositoryRecord {
@@ -73,6 +74,44 @@ describe('repositoryLabel', () => {
     expect(repositoryLabel(row('https://github.com/owner/repo/'))).toBe(
       'owner/repo',
     )
+  })
+})
+
+describe('repositoryShortName', () => {
+  it('reduces a clone URL to the bare repository name', () => {
+    expect(repositoryShortName(row('https://github.com/owner/repo'))).toBe(
+      'repo',
+    )
+    expect(repositoryShortName(row('https://gitlab.com/group/sub/repo'))).toBe(
+      'repo',
+    )
+  })
+
+  it('strips a trailing .git suffix', () => {
+    expect(repositoryShortName(row('https://github.com/owner/repo.git'))).toBe(
+      'repo',
+    )
+    expect(repositoryShortName(row('git@github.com:owner/repo.git'))).toBe(
+      'repo',
+    )
+  })
+
+  it('parses SSH and scp-style URLs the same way', () => {
+    expect(repositoryShortName(row('ssh://git@github.com/owner/repo'))).toBe(
+      'repo',
+    )
+    expect(repositoryShortName(row('git@github.com:owner/repo'))).toBe('repo')
+  })
+
+  it('ignores empty segments from a trailing slash', () => {
+    expect(repositoryShortName(row('https://github.com/owner/repo/'))).toBe(
+      'repo',
+    )
+  })
+
+  it('returns the original URL when no path segment remains', () => {
+    expect(repositoryShortName(row('owner'))).toBe('owner')
+    expect(repositoryShortName(row(''))).toBe('')
   })
 })
 

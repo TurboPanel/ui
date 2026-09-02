@@ -11,10 +11,12 @@ import {
   type InventoryStripItem,
 } from '@/components/org/project/compose-inventory-strip'
 import {
+  annotateComposeGraphSources,
   buildComposeGraph,
   isBlankComposeData,
   normalizeCompose,
 } from '@/lib/compose'
+import { useRepositoryLabelsById } from '@/lib/queries/releases'
 import type {
   ContainerRecord,
   ServiceRecord,
@@ -85,9 +87,22 @@ export function ComposeSavedView({
     }
     return out
   }, [byService])
-  const graph = useMemo(
+  const topologyGraph = useMemo(
     () => buildComposeGraph(diagramSource, { hostnamesByService }),
     [diagramSource, hostnamesByService],
+  )
+  // The repositories read only fires when a service actually binds a source —
+  // it resolves the binding's opaque id to the repository name the diagram
+  // prints on the service box.
+  const hasGitSources = topologyGraph.nodes.some(
+    (node) => node.gitSource?.sourceId,
+  )
+  const repositoryLabelsById = useRepositoryLabelsById(orgId, {
+    enabled: hasGitSources,
+  })
+  const graph = useMemo(
+    () => annotateComposeGraphSources(topologyGraph, repositoryLabelsById),
+    [topologyGraph, repositoryLabelsById],
   )
   const hasDiagram = graph.nodes.length > 0
   const showSourceToggle =

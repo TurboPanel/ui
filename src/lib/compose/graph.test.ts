@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildComposeGraph, describeComposeGraph } from './graph'
+import {
+  annotateComposeGraphSources,
+  buildComposeGraph,
+  describeComposeGraph,
+} from './graph'
 
 function doc(data: Record<string, unknown>) {
   return { version: 1 as const, data, presentation: { keyOrder: [], comments: {} } }
@@ -189,6 +193,7 @@ describe('buildComposeGraph', () => {
       }),
     )
     expect(graph.nodes.find((n) => n.id === 'service:app')?.gitSource).toEqual({
+      sourceId: '123e4567-e89b-12d3-a456-426614174000',
       branch: 'main',
     })
     expect(
@@ -362,5 +367,55 @@ describe('describeComposeGraph', () => {
     expect(describeComposeGraph(buildComposeGraph(serviceDoc(source)))).toEqual([
       'app — builds from a Git repository',
     ])
+  })
+})
+
+describe('annotateComposeGraphSources', () => {
+  const sourceId = '123e4567-e89b-12d3-a456-426614174000'
+  const boundGraph = () =>
+    buildComposeGraph(
+      doc({
+        services: {
+          app: {
+            'x-turbopanel': {
+              serviceKind: 'node',
+              principal: 'app',
+              source: { sourceId, branch: 'main' },
+            },
+          },
+          web: { image: 'nginx' },
+        },
+      }),
+    )
+
+  it('overlays repository names onto bound service nodes', () => {
+    const graph = annotateComposeGraphSources(boundGraph(), {
+      [sourceId]: 'storefront',
+    })
+    expect(graph.nodes.find((n) => n.id === 'service:app')?.gitSource).toEqual({
+      sourceId,
+      branch: 'main',
+      repoLabel: 'storefront',
+    })
+    expect(
+      graph.nodes.find((n) => n.id === 'service:web')?.gitSource,
+    ).toBeUndefined()
+  })
+
+  it('names the repository in the plain-text description', () => {
+    const graph = annotateComposeGraphSources(boundGraph(), {
+      [sourceId]: 'storefront',
+    })
+    expect(describeComposeGraph(graph).join('; ')).toContain(
+      'builds from the storefront Git repository, branch main',
+    )
+  })
+
+  it('returns the graph untouched when nothing resolves', () => {
+    const graph = boundGraph()
+    expect(annotateComposeGraphSources(graph, {})).toBe(graph)
+    expect(
+      annotateComposeGraphSources(graph, { 'other-id': 'other' }),
+    ).toBe(graph)
   })
 })

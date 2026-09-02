@@ -10,11 +10,13 @@ import {
   fetchServiceReleases,
   fetchRepository,
   fetchRepositories,
+  isForbiddenError,
   refreshRepository,
   rollbackEnvironment,
   updateRepository,
   type RepositoryRecord,
 } from '@/lib/instance-api'
+import { repositoryShortName } from '@/lib/repository-label'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 
 /**
@@ -96,6 +98,42 @@ export function useRollbackEnvironment(orgId: string, environmentId: string) {
       ])
     },
   })
+}
+
+/** Stable empty result so a disabled/forbidden read never thrashes consumers. */
+const EMPTY_REPOSITORY_LABELS: Readonly<Record<string, string>> = {}
+
+/**
+ * Repository short names (`repo`, `.git` stripped) keyed by repository id,
+ * for surfaces every member can see — the Overview diagram names the
+ * repository a service builds from. The repositories read can be
+ * manage-gated, so a forbidden response resolves to an empty map instead of
+ * reaching the global forbidden recovery; the diagram then falls back to its
+ * compose-only wording. Uses its own query key: the strict
+ * {@link useRepositories} list must never be served this hook's
+ * swallowed-403 empty result.
+ */
+export function useRepositoryLabelsById(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+): Readonly<Record<string, string>> {
+  const query = useQuery({
+    queryKey: queryKeys.org(orgId).repositories.labels,
+    queryFn: async (): Promise<Record<string, string>> => {
+      try {
+        const { repositories } = await fetchRepositories()
+        return Object.fromEntries(
+          repositories.map((row) => [row.id, repositoryShortName(row)]),
+        )
+      } catch (err) {
+        if (isForbiddenError(err)) return {}
+        throw err
+      }
+    },
+    retry: false,
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+  })
+  return query.data ?? EMPTY_REPOSITORY_LABELS
 }
 
 /** Org-owned Git repository bindings a compose service can attach to. */
@@ -203,12 +241,35 @@ export function useConnectionRepositories(
  * organization already held this URL, and callers surface that rather than
  * pretending a new row appeared.
  */
+/**
+ * Bind a clone URL to this organization and return the row.
+ *
+ * Create only returns `{ id }`, same as attach — the clone-URL lane fetches
+ * the row the same way `useAttachRepository` does so the picked-repository
+ * card can show the same label and access badge immediately, instead of
+ * waiting on the list refetch below to catch up.
+ */
 export function useCreateRepository(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: Parameters<typeof createRepository>[0]) => createRepository(body),
+    mutationFn: async (body: Parameters<typeof createRepository>[0]) => {
+      const created = await createRepository(body)
+      const { repository } = await fetchRepository(created.id)
+      return { ...created, repository }
+    },
     fallbackError: 'Failed to connect repository',
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      const listKey = queryKeys.org(orgId).repositories.list
+      queryClient.setQueryData(
+        listKey,
+        (current: { repositories: RepositoryRecord[] } | undefined) => {
+          const repositories = current?.repositories ?? []
+          if (repositories.some((row) => row.id === data.repository.id)) {
+            return current ?? { repositories }
+          }
+          return { repositories: [...repositories, data.repository] }
+        },
+      )
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).repositories.all,
       })

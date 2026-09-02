@@ -49,6 +49,7 @@ export function RepositoryPicker({
   disabled = false,
   onPick,
   onNeedsApp,
+  onCloneUrlLaneChange,
 }: Readonly<{
   orgId: string
   disabled?: boolean
@@ -71,6 +72,14 @@ export function RepositoryPicker({
   ) => void
   /** Nothing to pick from yet — the caller decides where to send the operator. */
   onNeedsApp?: () => void
+  /**
+   * Fires whenever the clone-URL lane opens or closes, including once on
+   * mount. A caller with its own footer (the project-create wizard) uses this
+   * to hide its Continue/Back while the lane owns the screen — that lane ends
+   * in its own Connect and Back, and a wizard footer stacked on top of those
+   * is what read as sloppy.
+   */
+  onCloneUrlLaneChange?: (open: boolean) => void
 }>) {
   const appsQuery = useForges('org')
   const connectionsQuery = useGitConnections(orgId, { enabled: orgId.length > 0 })
@@ -79,6 +88,14 @@ export function RepositoryPicker({
 
   const [deployKeyLane, setDeployKeyLane] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Reports on mount too (the effect runs once with the initial `false`), so a
+  // caller's stale "lane open" from a previous mount is corrected rather than
+  // left stuck hiding its own footer.
+  useEffect(() => {
+    onCloneUrlLaneChange?.(deployKeyLane)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onCloneUrlLaneChange is a setState setter, stable enough not to re-run on
+  }, [deployKeyLane])
 
   const apps = useMemo(() => appsQuery.data ?? [], [appsQuery.data])
   const connections = useMemo(
@@ -141,7 +158,7 @@ export function RepositoryPicker({
       <DeployKeySource
         orgId={orgId}
         disabled={disabled}
-        onConnect={(sourceId, reused) => onPick(sourceId, null, undefined, reused)}
+        onConnect={(sourceId, record, reused) => onPick(sourceId, null, record, reused)}
         onCancel={() => setDeployKeyLane(false)}
       />
     )

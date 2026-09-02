@@ -23,8 +23,14 @@ export type ComposeGraphNode = {
   image?: string
   serviceKind?: ComposeServiceKind
   ports?: string[]
-  /** Present when the service builds from a bound Git repository (`x-turbopanel.source`). */
-  gitSource?: { branch?: string }
+  /**
+   * Present when the service builds from a bound Git repository
+   * (`x-turbopanel.source`). `repoLabel` is the human short name (`repo`,
+   * `.git` stripped), resolved from the repository row by
+   * {@link annotateComposeGraphSources} — the document itself only carries
+   * the opaque `sourceId`.
+   */
+  gitSource?: { sourceId?: string; branch?: string; repoLabel?: string }
 }
 
 export type ComposeGraphEdgeKind = 'depends_on' | 'network' | 'volume' | 'hosting'
@@ -222,7 +228,9 @@ function collectServiceGraph(
       image: serviceImage(service),
       serviceKind: extension?.serviceKind ?? 'container',
       ports: servicePorts(service),
-      ...(source ? { gitSource: { branch: source.branch } } : {}),
+      ...(source
+        ? { gitSource: { sourceId: source.sourceId, branch: source.branch } }
+        : {}),
     })
 
     for (const net of stringListOrMapKeys(service.networks)) {
@@ -373,6 +381,30 @@ export function buildComposeGraph(
 }
 
 /**
+ * Overlay repository display names onto a built graph's service nodes,
+ * matched by the `sourceId` their binding names. Kept separate
+ * from {@link buildComposeGraph} so a renderer can build the topology first,
+ * see whether any service binds a source at all, and only then pay for the
+ * repositories read that resolves ids to labels. Returns the graph untouched
+ * when the map resolves nothing.
+ */
+export function annotateComposeGraphSources(
+  graph: ComposeGraph,
+  repositoryLabelsById: Readonly<Record<string, string>>,
+): ComposeGraph {
+  if (Object.keys(repositoryLabelsById).length === 0) return graph
+  let changed = false
+  const nodes = graph.nodes.map((node) => {
+    const sourceId = node.gitSource?.sourceId
+    const repoLabel = sourceId ? repositoryLabelsById[sourceId] : undefined
+    if (!repoLabel || !node.gitSource) return node
+    changed = true
+    return { ...node, gitSource: { ...node.gitSource, repoLabel } }
+  })
+  return changed ? { ...graph, nodes } : graph
+}
+
+/**
  * Names of the nodes joined to `nodeId` by edges of `kind`. `incoming` edges
  * point at the node (the neighbor is `edge.from`); `outgoing` edges leave it
  * (the neighbor is `edge.to`).
@@ -408,10 +440,13 @@ function describeServiceNode(
   if (networks.length > 0) parts.push(`on network ${networks.join(', ')}`)
   if (volumes.length > 0) parts.push(`mounts volume ${volumes.join(', ')}`)
   if (node.gitSource) {
+    const repository = node.gitSource.repoLabel
+      ? `the ${node.gitSource.repoLabel} Git repository`
+      : 'a Git repository'
     parts.push(
       node.gitSource.branch
-        ? `builds from a Git repository, branch ${node.gitSource.branch}`
-        : 'builds from a Git repository',
+        ? `builds from ${repository}, branch ${node.gitSource.branch}`
+        : `builds from ${repository}`,
     )
   }
   return parts.length > 1 ? `${parts[0]} — ${parts.slice(1).join('; ')}` : parts[0]

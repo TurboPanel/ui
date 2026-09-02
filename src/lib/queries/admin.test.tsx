@@ -17,7 +17,9 @@ import {
   usePublicUrlsOptional,
   useSaveEmailSettings,
   useSavePublicUrls,
+  useSaveServerMetricsLiveSettings,
   useSaveSignupSettings,
+  useServerMetricsLiveSettings,
   useSignupSettings,
   useStartGithubAppManifest,
   useSyncForge,
@@ -39,6 +41,8 @@ const {
   updateForge,
   startGithubAppManifest,
   syncForge,
+  fetchServerMetricsLiveSettings,
+  saveServerMetricsLiveSettings,
 } = vi.hoisted(() => ({
   fetchPublicUrls: vi.fn(),
   fetchSignupSettings: vi.fn(),
@@ -54,6 +58,8 @@ const {
   updateForge: vi.fn(),
   startGithubAppManifest: vi.fn(),
   syncForge: vi.fn(),
+  fetchServerMetricsLiveSettings: vi.fn(),
+  saveServerMetricsLiveSettings: vi.fn(),
 }))
 
 vi.mock('../instance-api', async (importOriginal) => {
@@ -74,6 +80,8 @@ vi.mock('../instance-api', async (importOriginal) => {
     updateForge,
     startGithubAppManifest,
     syncForge,
+    fetchServerMetricsLiveSettings,
+    saveServerMetricsLiveSettings,
   }
 })
 
@@ -590,5 +598,48 @@ describe('admin query hooks', () => {
         queryKey: queryKeys.org('org-1').forges,
       })
     })
+  })
+
+  it('useServerMetricsLiveSettings loads the instance-wide settings', async () => {
+    fetchServerMetricsLiveSettings.mockResolvedValueOnce({ maxMinutes: 30 })
+
+    const { result } = renderHook(() => useServerMetricsLiveSettings(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({ maxMinutes: 30 })
+    })
+    expect(fetchServerMetricsLiveSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('useServerMetricsLiveSettings stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useServerMetricsLiveSettings({ enabled: false }),
+      { wrapper: createWrapper() },
+    )
+
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerMetricsLiveSettings).not.toHaveBeenCalled()
+  })
+
+  it('useSaveServerMetricsLiveSettings writes the saved value into the cache', async () => {
+    const saved = { maxMinutes: 15 }
+    saveServerMetricsLiveSettings.mockResolvedValueOnce(saved)
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useSaveServerMetricsLiveSettings(), {
+      wrapper: createWrapper(client),
+    })
+
+    const outcome = await result.current.run(15)
+    if (!outcome.ok) {
+      throw new TypeError('expected save mutation to succeed')
+    }
+
+    expect(saveServerMetricsLiveSettings.mock.calls[0]?.[0]).toBe(15)
+    expect(
+      client.getQueryData(queryKeys.admin.metricsLiveSettings),
+    ).toEqual(saved)
   })
 })

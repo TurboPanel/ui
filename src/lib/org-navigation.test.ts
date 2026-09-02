@@ -22,7 +22,9 @@ import {
   serverMetricsHref,
   serversDatacentersHref,
   serversPendingKeysHref,
+  orgAreaHref,
   projectGitSourcesHref,
+  projectRepositoriesHref,
 } from './org-navigation'
 
 describe('orgAreaFromPathname', () => {
@@ -262,6 +264,10 @@ describe('remaining org href builders', () => {
       '/org-1/servers/srv-9?tab=control',
     )
     expect(projectGitSourcesHref('org-1')).toBe('/org-1/projects/git-sources')
+    expect(projectRepositoriesHref('org-1')).toBe(
+      '/org-1/projects/repositories',
+    )
+    expect(orgAreaHref('org-1', 'network')).toBe('/org-1/network')
     expect(networkFabricHref('org-1')).toBe('/org-1/network/fabric')
     expect(orgRouteHref('org-1', 'network', 'addresses')).toBe(
       '/org-1/network/addresses',

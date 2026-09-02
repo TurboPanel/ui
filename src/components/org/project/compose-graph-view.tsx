@@ -3,6 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { StatusDot } from '@/components/ui'
 import { Link, type Href } from 'expo-router'
 import Svg, { Path, Polygon, Rect } from 'react-native-svg'
+import { ComposeVisualIcon } from '@/components/org/compose-view-icons'
+import { GitNavIcon } from '@/components/icons/nav-icons'
 import { serviceStatusTone } from '@/lib/container-status'
 import {
   describeComposeGraph,
@@ -217,14 +219,24 @@ function joinPorts(ports: string[] | undefined): string | null {
 }
 
 /**
- * Subtitle naming the Git repository a service builds from, for services with
- * no image line to show instead (a bound source is what *replaces* the image).
+ * `via ⎇ repo-name` row for services that build from a bound Git repository
+ * — shown instead of an image line (a bound source is what *replaces* the
+ * image). Falls back to the pinned branch, then a plain "repository", while
+ * the repository row's name has not resolved.
  */
-function gitSourceLabel(node: ComposeGraphNode): string | null {
-  if (!node.gitSource) return null
-  return node.gitSource.branch
-    ? `git · ${node.gitSource.branch}`
-    : 'git repository'
+function ServiceGitSourceRow({
+  gitSource,
+}: Readonly<{ gitSource: NonNullable<ComposeGraphNode['gitSource']> }>) {
+  const label = gitSource.repoLabel ?? gitSource.branch ?? 'repository'
+  return (
+    <View style={styles.serviceSourceRow}>
+      <Text style={styles.serviceSourceVia}>via</Text>
+      <GitNavIcon size={11} color={colors.textMuted} />
+      <Text style={styles.serviceSubtitle} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  )
 }
 
 function ServiceNodeOverlay({
@@ -245,7 +257,7 @@ function ServiceNodeOverlay({
   showStatus: boolean
 }>) {
   const tone = showStatus ? serviceStatusTone(containers) : null
-  const subtitle = node.image ?? gitSourceLabel(node)
+  const subtitle = node.image ?? null
   const ports = joinPorts(node.ports)
   const kindLabel = node.serviceKind === 'site' ? 'site' : 'service'
 
@@ -259,6 +271,7 @@ function ServiceNodeOverlay({
       <View style={styles.serviceAccent} />
       <View style={styles.serviceBody}>
         <View style={styles.serviceTitleRow}>
+          <ComposeVisualIcon size={12} color={colors.textMuted} />
           {tone ? (
             <StatusDot size="sm" color={tone.color} />
           ) : null}
@@ -271,6 +284,9 @@ function ServiceNodeOverlay({
           <Text style={styles.serviceSubtitle} numberOfLines={1}>
             {subtitle}
           </Text>
+        ) : null}
+        {!subtitle && node.gitSource ? (
+          <ServiceGitSourceRow gitSource={node.gitSource} />
         ) : null}
         {ports ? (
           <Text style={styles.servicePorts} numberOfLines={1}>
@@ -575,6 +591,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     fontFamily: 'monospace',
+    flexShrink: 1,
+  },
+  serviceSourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  serviceSourceVia: {
+    color: colors.textFaint,
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   servicePorts: {
     color: colors.textDim,

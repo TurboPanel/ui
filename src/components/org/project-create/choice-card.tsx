@@ -2,12 +2,23 @@ import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import type { ReactNode } from 'react'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
-/** Vertical stack of {@link ChoiceCard}s — type cards, catalog cards. */
+/** Vertical stack of {@link ChoiceCard}s — catalog cards, lane cards. */
 export function ChoiceGrid({
   children,
   style,
 }: Readonly<{ children: ReactNode; style?: ViewStyle }>) {
   return <View style={[styles.grid, style]}>{children}</View>
+}
+
+/**
+ * Wrapping two-up grid for tile-shaped choices (the setup type picker). Tiles
+ * size themselves via `flexBasis`, so wider containers get more columns.
+ */
+export function ChoiceTileGrid({
+  children,
+  style,
+}: Readonly<{ children: ReactNode; style?: ViewStyle }>) {
+  return <View style={[styles.tileGrid, style]}>{children}</View>
 }
 
 /**
@@ -71,6 +82,11 @@ export function ChoiceCard({
 
 const styles = StyleSheet.create({
   grid: {
+    gap: spacing.sm,
+  },
+  tileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   card: {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 import {
   BINDING_KEY_PREFIX_IN_USE_ERROR,
+  DOCKER_RUN_UNSUPPORTED_ERROR,
   MANAGED_DATABASE_HAS_BINDINGS_ERROR,
   MANAGED_MEMBER_EXISTS_ERROR,
   MANAGED_NO_READ_TARGETS_ERROR,
@@ -29,9 +30,11 @@ import {
   fetchManagedStatus,
   fetchManagedUsers,
   fetchOrganizationManaged,
+  importDockerRunCommand,
   promoteManagedDisasterRecovery,
   promoteManagedMember,
   removeManagedMember,
+  resyncManagedMember,
   restoreManagedBackup,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
@@ -734,5 +737,110 @@ describe('instance-api managed-engine fetch wrappers', () => {
     await expect(downloadOrganizationCaPem()).rejects.toThrow(
       '/api/client/v1/tls/ca/download failed: HTTP 403: forbidden',
     )
+  })
+
+  it('resyncManagedMember posts to the member resync endpoint', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commandId: 'cmd-1' }))
+
+    await expect(resyncManagedMember('env-1', 'member/1')).resolves.toEqual({
+      ok: true,
+      commandId: 'cmd-1',
+    })
+
+    const { url, init } = lastFetch()
+    expect(url).toContain('/environments/env-1/managed/members/member%2F1/resync')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe('{}')
+  })
+
+  it('importDockerRunCommand posts the command with the org header', async () => {
+    setActiveOrganizationId('org-99')
+    const imported = {
+      ok: true,
+      compose: { services: {} },
+      image: 'nginx',
+      command: [],
+      diagnostics: [],
+      riskFlags: [],
+      composeIssues: [],
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(imported))
+
+    await expect(
+      importDockerRunCommand({
+        serviceName: 'web',
+        argv: 'docker run nginx',
+        projectId: 'proj-1',
+      }),
+    ).resolves.toEqual(imported)
+
+    const { url, init } = lastFetch()
+    expect(url).toContain('/docker-run/import')
+    expect(init.method).toBe('POST')
+    expect(init.headers).toMatchObject({ [ORG_ID_HEADER]: 'org-99' })
+    expect(lastJsonBody()).toEqual({
+      serviceName: 'web',
+      argv: 'docker run nginx',
+      projectId: 'proj-1',
+    })
+  })
+
+  it('importDockerRunCommand returns the 422 diagnostics instead of throwing', async () => {
+    const diagnostics = [
+      { code: 'unsupported_flag', flag: '--privileged', message: 'no', blocking: true },
+    ]
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { ok: false, error: DOCKER_RUN_UNSUPPORTED_ERROR, diagnostics },
+        422,
+      ),
+    )
+
+    await expect(
+      importDockerRunCommand({ serviceName: 'web', argv: 'docker run x' }),
+    ).resolves.toEqual({
+      ok: false,
+      error: DOCKER_RUN_UNSUPPORTED_ERROR,
+      diagnostics,
+    })
+    expect(lastJsonBody()).toEqual({
+      serviceName: 'web',
+      argv: 'docker run x',
+    })
+  })
+
+  it('importDockerRunCommand falls back to empty diagnostics on a bare 422', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: false, error: DOCKER_RUN_UNSUPPORTED_ERROR }, 422),
+    )
+
+    await expect(
+      importDockerRunCommand({ serviceName: 'web', argv: 'docker run x' }),
+    ).resolves.toEqual({
+      ok: false,
+      error: DOCKER_RUN_UNSUPPORTED_ERROR,
+      diagnostics: [],
+    })
+  })
+
+  it('importDockerRunCommand throws the error body detail on other failures', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'boom' }, 500))
+
+    await expect(
+      importDockerRunCommand({ serviceName: 'web', argv: 'docker run x' }),
+    ).rejects.toThrow('/docker-run/import failed: HTTP 500: boom')
+  })
+
+  it('importDockerRunCommand keeps the status-only message on a non-JSON error body', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('bad gateway', {
+        status: 502,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    )
+
+    await expect(
+      importDockerRunCommand({ serviceName: 'web', argv: 'docker run x' }),
+    ).rejects.toThrow('/docker-run/import failed: HTTP 502')
   })
 })

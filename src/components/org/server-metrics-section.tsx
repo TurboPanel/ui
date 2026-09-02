@@ -31,6 +31,7 @@ import {
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { formatCoresTotal, serverInventoryCpuCores } from '@/lib/fleet-capacity'
 import {
   derivedCpuBusyPercent,
   formatAxisTime,
@@ -177,7 +178,7 @@ type ChartDefinition = Readonly<{
 const CHART_DEFINITIONS: readonly ChartDefinition[] = [
   {
     id: 'cpu',
-    title: 'CPU usage',
+    title: 'CPU utilization',
     unit: '%',
     // Stacked bottom-up in this order. Idle is deliberately excluded — it's
     // headroom, not usage, and including it would flatten the busy bands
@@ -1018,6 +1019,13 @@ function MetricsStatusMessages({
   )
 }
 
+/**
+ * Legend chips beyond this count collapse into a single "Other" chip — past
+ * a handful of bands you can't tell them apart on the chart anyway, and a
+ * long tail of tiny chips just wraps the legend onto extra rows.
+ */
+const MAX_VISIBLE_LEGEND_ENTRIES = 5
+
 function MetricsChartCard({
   definition,
   points,
@@ -1035,13 +1043,16 @@ function MetricsChartCard({
     () => new Set(),
   )
   const toggleSeries = useCallback(
-    (key: string) => {
+    (keys: readonly string[]) => {
       setHiddenKeys((prev) => {
+        const allHidden = keys.every((key) => prev.has(key))
         const next = new Set(prev)
-        if (next.has(key)) {
-          next.delete(key)
-        } else {
-          next.add(key)
+        for (const key of keys) {
+          if (allHidden) {
+            next.delete(key)
+          } else {
+            next.add(key)
+          }
         }
         // Never let the last visible series be toggled off.
         if (next.size >= definition.series.length) return prev
@@ -1057,28 +1068,44 @@ function MetricsChartCard({
     series.length > 1
       ? series.filter((entry) => !hiddenKeys.has(entry.key))
       : series
-  const legendEntries = series.map((entry) => ({
+  const headline = definition.stacked
+    ? lastStackedTotal(visibleSeries, definition.yFormat)
+    : lastFormattedValue(visibleSeries, definition.yFormat)
+
+  const overflowAt =
+    series.length > MAX_VISIBLE_LEGEND_ENTRIES
+      ? MAX_VISIBLE_LEGEND_ENTRIES - 1
+      : series.length
+  const primarySeries = series.slice(0, overflowAt)
+  const overflowSeries = series.slice(overflowAt)
+
+  const legendEntries = primarySeries.map((entry) => ({
     key: entry.key,
     label: entry.label,
     color: entry.color,
     lastValue: lastFormattedValue([entry], definition.yFormat),
     hidden: hiddenKeys.has(entry.key),
+    onPress:
+      series.length > 1 ? () => toggleSeries([entry.key]) : undefined,
   }))
-  const headline = definition.stacked
-    ? lastStackedTotal(visibleSeries, definition.yFormat)
-    : lastFormattedValue(visibleSeries, definition.yFormat)
+  if (overflowSeries.length > 0) {
+    const overflowKeys = overflowSeries.map((entry) => entry.key)
+    legendEntries.push({
+      key: '__other__',
+      label: `Other (${overflowSeries.length})`,
+      color: colors.textMuted,
+      lastValue: lastStackedTotal(overflowSeries, definition.yFormat),
+      hidden: overflowKeys.every((key) => hiddenKeys.has(key)),
+      onPress: () => toggleSeries(overflowKeys),
+    })
+  }
 
   return (
     <ChartCard
       title={definition.title}
       subtitle={definition.unit}
       headline={unavailable ? undefined : headline}
-      legend={
-        <ChartLegend
-          entries={legendEntries}
-          onToggle={series.length > 1 ? toggleSeries : undefined}
-        />
-      }
+      legend={<ChartLegend entries={legendEntries} />}
       unavailable={unavailable}
     >
       <MetricLineChart
@@ -1190,8 +1217,20 @@ function latestReadValue(
 /** Latest-value rollup above the chart groups — derived numbers, not a chart. */
 function MetricsOverviewTiles({
   points,
-}: Readonly<{ points: MetricsSeriesPoint[] }>) {
+  server,
+}: Readonly<{
+  points: MetricsSeriesPoint[]
+  server: OrgServerRecord | null
+}>) {
   const cpuBusy = latestReadValue(points, readCpuBusy)
+  const cpuCores = server ? serverInventoryCpuCores(server) : null
+  const cpuModel = server?.resources?.cpus?.[0]?.name ?? null
+  const cpuHardwareLabel = [
+    cpuCores != null ? `${formatCoresTotal(cpuCores)} cores` : null,
+    cpuModel,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' \u00b7 ')
   const memoryUsed = latestReadValue(points, (values) =>
     memoryUsedPercentFrom(
       values.memoryTotalBytes ?? null,
@@ -1215,53 +1254,60 @@ function MetricsOverviewTiles({
   const uptime = latestReadValue(points, metric('uptimeSeconds'))
 
   return (
-    <StatTiles
-      accessibilityLabel="Latest server metrics"
-      items={[
-        {
-          key: 'cpu',
-          icon: CpuMetricIcon,
-          value: formatPercent(cpuBusy),
-          label: 'CPU BUSY',
-          accessibilityLabel: `CPU busy ${formatPercent(cpuBusy)}`,
-        },
-        {
-          key: 'memory',
-          icon: MemoryMetricIcon,
-          value: formatPercent(memoryUsed),
-          label: 'MEMORY USED',
-          accessibilityLabel: `Memory used ${formatPercent(memoryUsed)}`,
-        },
-        {
-          key: 'hosting',
-          icon: StorageMetricIcon,
-          value: formatPercent(hostingUsed),
-          label: 'HOSTING USED',
-          accessibilityLabel: `Hosting storage used ${formatPercent(hostingUsed)}`,
-        },
-        {
-          key: 'uplink',
-          icon: NetworkMetricIcon,
-          value: formatBytesPerSecond(uplink),
-          label: 'UPLINK',
-          accessibilityLabel: `Uplink throughput ${formatBytesPerSecond(uplink)}`,
-        },
-        {
-          key: 'processes',
-          icon: ProcessMetricIcon,
-          value: formatCount(processes),
-          label: 'PROCESSES',
-          accessibilityLabel: `${formatCount(processes)} processes`,
-        },
-        {
-          key: 'uptime',
-          icon: UptimeMetricIcon,
-          value: formatUptimeSeconds(uptime),
-          label: 'UPTIME',
-          accessibilityLabel: `Uptime ${formatUptimeSeconds(uptime)}`,
-        },
-      ]}
-    />
+    <>
+      <StatTiles
+        accessibilityLabel="Latest server metrics"
+        items={[
+          {
+            key: 'cpu',
+            icon: CpuMetricIcon,
+            value: formatPercent(cpuBusy),
+            label: 'CPU UTILIZATION',
+            accessibilityLabel: `CPU utilization ${formatPercent(cpuBusy)}`,
+          },
+          {
+            key: 'memory',
+            icon: MemoryMetricIcon,
+            value: formatPercent(memoryUsed),
+            label: 'MEMORY USED',
+            accessibilityLabel: `Memory used ${formatPercent(memoryUsed)}`,
+          },
+          {
+            key: 'hosting',
+            icon: StorageMetricIcon,
+            value: formatPercent(hostingUsed),
+            label: 'HOSTING USED',
+            accessibilityLabel: `Hosting storage used ${formatPercent(hostingUsed)}`,
+          },
+          {
+            key: 'uplink',
+            icon: NetworkMetricIcon,
+            value: formatBytesPerSecond(uplink),
+            label: 'UPLINK',
+            accessibilityLabel: `Uplink throughput ${formatBytesPerSecond(uplink)}`,
+          },
+          {
+            key: 'processes',
+            icon: ProcessMetricIcon,
+            value: formatCount(processes),
+            label: 'PROCESSES',
+            accessibilityLabel: `${formatCount(processes)} processes`,
+          },
+          {
+            key: 'uptime',
+            icon: UptimeMetricIcon,
+            value: formatUptimeSeconds(uptime),
+            label: 'UPTIME',
+            accessibilityLabel: `Uptime ${formatUptimeSeconds(uptime)}`,
+          },
+        ]}
+      />
+      {cpuHardwareLabel ? (
+        <Text style={styles.hardwareCaption} numberOfLines={1}>
+          {cpuHardwareLabel}
+        </Text>
+      ) : null}
+    </>
   )
 }
 
@@ -1428,6 +1474,7 @@ function MetricsCharts({
   resolutionLabel,
   twoColumn,
   rangeId,
+  server,
 }: Readonly<{
   data: MetricsSeriesResponse
   normalizedMetrics: ReturnType<typeof normalizeMetricsGrid> | null
@@ -1438,6 +1485,7 @@ function MetricsCharts({
   resolutionLabel: string
   twoColumn: boolean
   rangeId: MetricsRangeId
+  server: OrgServerRecord | null
 }>) {
   const points = normalizedMetrics?.points ?? data.points
   const gapBands = normalizedMetrics?.gapBands ?? []
@@ -1449,7 +1497,7 @@ function MetricsCharts({
 
   return (
     <>
-      <MetricsOverviewTiles points={points} />
+      <MetricsOverviewTiles points={points} server={server} />
 
       <View style={styles.coverageStrip}>
         <View style={styles.coverageHeader}>
@@ -1702,6 +1750,7 @@ export function ServerMetricsSection({
           resolutionLabel={resolutionLabel}
           twoColumn={twoColumn}
           rangeId={rangeId}
+          server={server}
         />
       ) : null}
     </View>
@@ -1785,6 +1834,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     lineHeight: 17,
+  },
+  hardwareCaption: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
   },
   coverageStrip: {
     borderRadius: 10,

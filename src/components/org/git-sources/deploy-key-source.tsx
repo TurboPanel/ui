@@ -10,6 +10,7 @@ import {
   SegmentedControl,
   TextField,
 } from '@/components/ui'
+import type { RepositoryRecord } from '@/lib/instance-api'
 import { useCreateGitlabDeployKey, useCreateRepository } from '@/lib/queries/releases'
 import { spacing } from '@/lib/theme'
 
@@ -22,6 +23,20 @@ const SCP_LIKE_SSH_RE = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s]+$/
  */
 function isSshCloneUrl(url: string): boolean {
   return url.startsWith('ssh://') || SCP_LIKE_SSH_RE.test(url)
+}
+
+/**
+ * A public clone resolves its default branch anonymously the moment it
+ * connects — the same `ls-remote` the connected-account lane gets from its
+ * provider, just run against the URL instead of an API. A private one still
+ * needs a name here: resolving it would mean running that same read with the
+ * deploy key before the operator has confirmed it is even added.
+ */
+function defaultBranchHint(access: RepositoryAccess): string {
+  if (access === 'public') {
+    return 'Leave empty to detect it automatically once connected.'
+  }
+  return "Deploys build this branch when a service doesn't name one. Leave empty to watch every pushed branch — services must then name their branch to deploy."
 }
 
 /**
@@ -73,12 +88,15 @@ export function DeployKeySource({
   orgId: string
   disabled?: boolean
   /**
-   * Receives the resolved `source.id` once the binding exists. `reused` is
-   * true when the organization already held this clone URL — the create is
-   * idempotent, so no second row was made — and callers say so rather than
-   * letting the operator believe a duplicate now exists.
+   * Receives the resolved `source.id` and its row once the binding exists —
+   * the row, not just the id, is what lets the picked-repository card show
+   * the same label and access badge the connected-account lane shows
+   * immediately, rather than waiting on a list refetch. `reused` is true when
+   * the organization already held this clone URL — the create is idempotent,
+   * so no second row was made — and callers say so rather than letting the
+   * operator believe a duplicate now exists.
    */
-  onConnect: (sourceId: string, reused?: boolean) => void
+  onConnect: (sourceId: string, record: RepositoryRecord, reused?: boolean) => void
   onCancel?: () => void
 }>) {
   const [provider, setProvider] = useState<'gitlab' | 'git'>('git')
@@ -123,7 +141,7 @@ export function DeployKeySource({
       defaultBranch: defaultBranch.trim().length > 0 ? defaultBranch.trim() : null,
     })
     if (!created.ok) return
-    onConnect(created.value.id, created.value.reused)
+    onConnect(created.value.id, created.value.repository, created.value.reused)
   }
 
   return (
@@ -194,7 +212,7 @@ export function DeployKeySource({
         autoCorrect={false}
         placeholder="main"
         mono
-        hint="Deploys build this branch when a service doesn't name one. Leave empty to watch every pushed branch — services must then name their branch to deploy."
+        hint={defaultBranchHint(effectiveAccess)}
       />
 
       <DeployKeyConnectAction
@@ -260,7 +278,7 @@ function DeployKeyConnectAction({
   if (access === 'public') {
     return (
       <Button
-        label="Connect"
+        label="Connect repo to organization"
         busyLabel="Connecting…"
         variant="primary"
         busy={connectPending}
@@ -297,7 +315,7 @@ function DeployKeyConnectAction({
         body="Add it to the project as a read-only Deploy Key — it is shown once and cannot be retrieved again. The private half never leaves this instance."
       />
       <Button
-        label="I have added the key — connect"
+        label="I've added the key — connect repo to organization"
         busyLabel="Connecting…"
         variant="primary"
         busy={connectPending}

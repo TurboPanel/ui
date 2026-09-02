@@ -10,10 +10,12 @@ import {
   useCreateProjectPrincipal,
   useDeleteProject,
   useDeleteProjectPrincipal,
+  useDisablePrincipalPassword,
   useProject,
   useProjectCatalog,
   useProjectPrincipals,
   useProjects,
+  useSetPrincipalPassword,
   useUpdateProject,
   useUpdateProjectPrincipalAssignments,
 } from '@/lib/queries/projects'
@@ -30,6 +32,8 @@ const {
   createProjectPrincipal,
   updateProjectPrincipal,
   deleteProjectPrincipal,
+  setPrincipalPassword,
+  disablePrincipalPassword,
 } = vi.hoisted(() => ({
   fetchVisibleProjects: vi.fn(),
   fetchProject: vi.fn(),
@@ -42,6 +46,8 @@ const {
   createProjectPrincipal: vi.fn(),
   updateProjectPrincipal: vi.fn(),
   deleteProjectPrincipal: vi.fn(),
+  setPrincipalPassword: vi.fn(),
+  disablePrincipalPassword: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', () => ({
@@ -56,6 +62,8 @@ vi.mock('@/lib/instance-api', () => ({
   createProjectPrincipal,
   updateProjectPrincipal,
   deleteProjectPrincipal,
+  setPrincipalPassword,
+  disablePrincipalPassword,
   addPrincipalSshKey: vi.fn(),
   deletePrincipalSshKey: vi.fn(),
   fetchPrincipalSshKeys: vi.fn(),
@@ -296,6 +304,50 @@ describe('projects query hooks', () => {
     })
 
     expect(deleteProjectPrincipal).toHaveBeenCalledWith(projectId, 'pr-1')
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).projects.principals(projectId),
+      })
+    })
+  })
+
+  it('useSetPrincipalPassword rotates the credential and refreshes principals', async () => {
+    setPrincipalPassword.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useSetPrincipalPassword(orgId, projectId, 'pr-1'),
+      { wrapper: createWrapper(client) },
+    )
+
+    await expect(
+      result.current.run({ password: 'hunter2hunter2' }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(setPrincipalPassword).toHaveBeenCalledWith(projectId, 'pr-1', {
+      password: 'hunter2hunter2',
+    })
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).projects.principals(projectId),
+      })
+    })
+  })
+
+  it('useDisablePrincipalPassword drops the credential and refreshes principals', async () => {
+    disablePrincipalPassword.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useDisablePrincipalPassword(orgId, projectId, 'pr-1'),
+      { wrapper: createWrapper(client) },
+    )
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+
+    expect(disablePrincipalPassword).toHaveBeenCalledWith(projectId, 'pr-1')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),

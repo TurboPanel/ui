@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAppQueryClient, queryKeys } from '@/lib/query-client'
+import type { RepositoryRecord } from '../instance-api'
+import { createAppQueryClient } from '../query-client'
+import { queryKeys } from '../query-keys'
 import {
   invalidateEnvironmentReleases,
   useCreateGitlabDeployKey,
@@ -12,12 +15,14 @@ import {
   useConnectionRepositories,
   useRollbackEnvironment,
   useServiceReleases,
+  useRefreshRepository,
   useRepositoryDetail,
   useRepositoryInspection,
+  useRepositoryLabelsById,
   useRepositories,
   useUpdateRepository,
   useAttachRepository,
-} from '@/lib/queries/releases'
+} from './releases'
 
 const {
   fetchServiceReleases,
@@ -31,6 +36,7 @@ const {
   attachRepository,
   createGitlabDeployKey,
   updateRepository,
+  refreshRepository,
   deleteRepository,
 } = vi.hoisted(() => ({
   fetchServiceReleases: vi.fn(),
@@ -44,11 +50,12 @@ const {
   attachRepository: vi.fn(),
   createGitlabDeployKey: vi.fn(),
   updateRepository: vi.fn(),
+  refreshRepository: vi.fn(),
   deleteRepository: vi.fn(),
 }))
 
-vi.mock('@/lib/instance-api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/instance-api')>()
+vi.mock('../instance-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../instance-api')>()
   return {
     ...actual,
     fetchServiceReleases,
@@ -62,13 +69,44 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     attachRepository,
     createGitlabDeployKey,
     updateRepository,
+    refreshRepository,
     deleteRepository,
   }
 })
 
+function createTestQueryClient(): ReturnType<typeof createAppQueryClient> {
+  const client = createAppQueryClient()
+  client.setDefaultOptions({
+    queries: { retry: false },
+  })
+  return client
+}
+
 function createWrapper(client = createAppQueryClient()) {
-  return function Wrapper({ children }: Readonly<{ children: React.ReactNode }>) {
+  return function Wrapper({ children }: Readonly<{ children: ReactNode }>) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
+
+function repositoryRow(
+  id: string,
+  repositoryUrl: string,
+): RepositoryRecord {
+  return {
+    id,
+    organizationId: 'org1',
+    connectionId: null,
+    secretId: null,
+    provider: 'github',
+    repositoryUrl,
+    repositoryExternalId: null,
+    defaultBranch: 'main',
+    subdirectory: null,
+    autoDeploy: 'disabled',
+    metadata: null,
+    options: null,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   }
 }
 
@@ -276,79 +314,6 @@ describe('releases query hooks', () => {
     expect(fetchConnectionRepositories).toHaveBeenCalledWith(connectionId)
   })
 
-  it('useCreateRepository invalidates the repositories cache', async () => {
-    createRepository.mockResolvedValueOnce({ ok: true, id: 'src-2' })
-    const client = createAppQueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useCreateRepository(orgId), {
-      wrapper: createWrapper(client),
-    })
-
-    await expect(
-      result.current.run({
-        provider: 'github',
-        connectionId,
-        repositoryUrl: 'https://github.com/org/repo.git',
-      }),
-    ).resolves.toMatchObject({ ok: true })
-
-    await waitFor(() => {
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).repositories.all,
-      })
-    })
-  })
-
-  it('useCreateGitlabDeployKey invalidates the repositories cache', async () => {
-    createGitlabDeployKey.mockResolvedValueOnce({
-      secretId: 'cred-1',
-      publicKey: 'ssh-ed25519 AAAA',
-    })
-    const client = createAppQueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useCreateGitlabDeployKey(orgId), {
-      wrapper: createWrapper(client),
-    })
-
-    await expect(
-      result.current.run({ name: 'deploy' }),
-    ).resolves.toMatchObject({ ok: true })
-
-    await waitFor(() => {
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).repositories.all,
-      })
-    })
-  })
-
-  it('useUpdateRepository patches a repository row', async () => {
-    updateRepository.mockResolvedValueOnce({ ok: true })
-    const client = createAppQueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useUpdateRepository(orgId), {
-      wrapper: createWrapper(client),
-    })
-
-    await expect(
-      result.current.run({
-        repositoryId,
-        patch: { autoDeploy: 'disabled' },
-      }),
-    ).resolves.toMatchObject({ ok: true })
-
-    expect(updateRepository).toHaveBeenCalledWith(repositoryId, {
-      autoDeploy: 'disabled',
-    })
-    await waitFor(() => {
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).repositories.all,
-      })
-    })
-  })
-
   it('useDeleteRepository disconnects a repository', async () => {
     deleteRepository.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()
@@ -369,64 +334,283 @@ describe('releases query hooks', () => {
       })
     })
   })
+})
 
-  it('useAttachRepository fetches the row and invalidates the list', async () => {
-    const attached = {
-      id: 'src-new',
-      organizationId: orgId,
-      connectionId,
-      serviceId: null,
-      environmentId: null,
-      secretId: null,
-      provider: 'github' as const,
-      repositoryUrl: 'https://github.com/acme/api.git',
-      repositoryExternalId: 'ext-1',
-      defaultBranch: 'main',
-      subdirectory: null,
-      autoDeploy: 'immediate' as const,
-      metadata: null,
-      options: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
-    attachRepository.mockResolvedValueOnce({
-      ok: true,
-      id: attached.id,
-      reused: false,
+describe('useRepositoryLabelsById', () => {
+  it('maps repository rows to short names keyed by id', async () => {
+    fetchRepositories.mockResolvedValue({
+      repositories: [
+        repositoryRow('r1', 'https://github.com/acme/web-api.git'),
+        repositoryRow('r2', 'git@gitlab.com:acme/worker.git'),
+      ],
     })
-    fetchRepository.mockResolvedValue({ repository: attached })
-    fetchRepositories.mockResolvedValue({ repositories: [attached] })
-    const client = createAppQueryClient()
-    const invalidate = vi
-      .spyOn(client, 'invalidateQueries')
-      .mockResolvedValue(undefined)
 
-    const { result } = renderHook(() => useAttachRepository(orgId), {
+    const { result } = renderHook(() => useRepositoryLabelsById('org1'), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current).toEqual({ r1: 'web-api', r2: 'worker' })
+    })
+  })
+
+  it('resolves an empty map when the repositories read is forbidden', async () => {
+    fetchRepositories.mockRejectedValue(new Error('repositories failed: HTTP 403'))
+
+    const { result } = renderHook(() => useRepositoryLabelsById('org1'), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(fetchRepositories).toHaveBeenCalled()
+    })
+    expect(result.current).toEqual({})
+  })
+
+  it('surfaces non-403 failures as query errors, keeping the stable empty map', async () => {
+    fetchRepositories.mockRejectedValue(new Error('repositories failed: HTTP 500'))
+    const client = createTestQueryClient()
+
+    const { result } = renderHook(() => useRepositoryLabelsById('org1'), {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({
-        connectionId,
-        repositoryExternalId: 'ext-1',
-        repositoryUrl: attached.repositoryUrl,
-        defaultBranch: 'main',
-      }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: { id: attached.id, repository: attached },
-    })
-    expect(attachRepository).toHaveBeenCalledWith({
-      connectionId,
-      repositoryExternalId: 'ext-1',
-      repositoryUrl: attached.repositoryUrl,
-      defaultBranch: 'main',
-    })
-    expect(fetchRepository).toHaveBeenCalledWith(attached.id)
     await waitFor(() => {
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.org(orgId).repositories.all,
+      const query = client
+        .getQueryCache()
+        .find({ queryKey: queryKeys.org('org1').repositories.labels })
+      expect(query?.state.status).toBe('error')
+    })
+    expect(result.current).toEqual({})
+  })
+
+  it('never fetches without an organization id', () => {
+    const { result } = renderHook(() => useRepositoryLabelsById(''), {
+      wrapper: createWrapper(),
+    })
+
+    expect(fetchRepositories).not.toHaveBeenCalled()
+    expect(result.current).toEqual({})
+  })
+})
+
+describe('useCreateRepository', () => {
+  it('fetches the created row and appends it to the cached list', async () => {
+    const created = repositoryRow('r1', 'https://github.com/acme/web-api.git')
+    createRepository.mockResolvedValue({ id: 'r1', reused: false })
+    fetchRepository.mockResolvedValue({ repository: created })
+    const client = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+    const listKey = queryKeys.org('org1').repositories.list
+
+    const { result } = renderHook(() => useCreateRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        provider: 'github',
+        repositoryUrl: 'https://github.com/acme/web-api.git',
       })
     })
+
+    expect(createRepository).toHaveBeenCalledWith({
+      provider: 'github',
+      repositoryUrl: 'https://github.com/acme/web-api.git',
+    })
+    expect(fetchRepository).toHaveBeenCalledWith('r1')
+    expect(client.getQueryData(listKey)).toEqual({ repositories: [created] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org('org1').repositories.all,
+    })
+  })
+
+  it('keeps the cached list unchanged when the row is already present', async () => {
+    const created = repositoryRow('r1', 'https://github.com/acme/web-api.git')
+    createRepository.mockResolvedValue({ id: 'r1', reused: true })
+    fetchRepository.mockResolvedValue({ repository: created })
+    const client = createTestQueryClient()
+    const listKey = queryKeys.org('org1').repositories.list
+    client.setQueryData(listKey, { repositories: [created] })
+
+    const { result } = renderHook(() => useCreateRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        provider: 'git',
+        repositoryUrl: 'https://github.com/acme/web-api.git',
+      })
+    })
+
+    expect(client.getQueryData(listKey)).toEqual({ repositories: [created] })
+  })
+})
+
+describe('useAttachRepository', () => {
+  it('fetches the attached row and appends it to the cached list', async () => {
+    const attached = repositoryRow('r2', 'https://github.com/acme/worker.git')
+    attachRepository.mockResolvedValue({ id: 'r2' })
+    fetchRepository.mockResolvedValue({ repository: attached })
+    const client = createTestQueryClient()
+    const listKey = queryKeys.org('org1').repositories.list
+    const existing = repositoryRow('r1', 'https://github.com/acme/web-api.git')
+    client.setQueryData(listKey, { repositories: [existing] })
+
+    const { result } = renderHook(() => useAttachRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        connectionId: 'conn1',
+        repositoryExternalId: '42',
+        repositoryUrl: 'https://github.com/acme/attached.git',
+      })
+    })
+
+    expect(client.getQueryData(listKey)).toEqual({
+      repositories: [existing, attached],
+    })
+  })
+
+  it('keeps the cached list unchanged when the row is already present', async () => {
+    const attached = repositoryRow('r1', 'https://github.com/acme/web-api.git')
+    attachRepository.mockResolvedValue({ id: 'r1' })
+    fetchRepository.mockResolvedValue({ repository: attached })
+    const client = createTestQueryClient()
+    const listKey = queryKeys.org('org1').repositories.list
+    client.setQueryData(listKey, { repositories: [attached] })
+
+    const { result } = renderHook(() => useAttachRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        connectionId: 'conn1',
+        repositoryExternalId: '42',
+        repositoryUrl: 'https://github.com/acme/attached.git',
+      })
+    })
+
+    expect(client.getQueryData(listKey)).toEqual({ repositories: [attached] })
+  })
+
+  it('seeds the list from scratch when nothing is cached yet', async () => {
+    const attached = repositoryRow('r3', 'https://github.com/acme/api.git')
+    attachRepository.mockResolvedValue({ id: 'r3' })
+    fetchRepository.mockResolvedValue({ repository: attached })
+    const client = createTestQueryClient()
+    const listKey = queryKeys.org('org1').repositories.list
+
+    const { result } = renderHook(() => useAttachRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        connectionId: 'conn1',
+        repositoryExternalId: '7',
+        repositoryUrl: 'https://github.com/acme/api.git',
+      })
+    })
+
+    expect(client.getQueryData(listKey)).toEqual({ repositories: [attached] })
+  })
+})
+
+describe('useCreateGitlabDeployKey', () => {
+  it('mints the key and invalidates the repositories subtree', async () => {
+    createGitlabDeployKey.mockResolvedValue({
+      secretId: 's1',
+      publicKey: 'ssh-ed25519 AAAA',
+    })
+    const client = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useCreateGitlabDeployKey('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({ name: 'worker deploy key' })
+    })
+
+    expect(createGitlabDeployKey).toHaveBeenCalledWith({
+      name: 'worker deploy key',
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org('org1').repositories.all,
+    })
+  })
+})
+
+describe('useUpdateRepository', () => {
+  it('patches the row and invalidates the repositories subtree', async () => {
+    updateRepository.mockResolvedValue({ ok: true })
+    const client = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUpdateRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        repositoryId: 'r1',
+        patch: { autoDeploy: 'immediate' },
+      })
+    })
+
+    expect(updateRepository).toHaveBeenCalledWith('r1', {
+      autoDeploy: 'immediate',
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org('org1').repositories.all,
+    })
+  })
+})
+
+describe('useRefreshRepository', () => {
+  it('patches the refreshed row into the cached list before refetch', async () => {
+    const stale = repositoryRow('r1', 'https://github.com/acme/web-api.git')
+    const refreshed = { ...stale, defaultBranch: 'trunk' }
+    refreshRepository.mockResolvedValue({ repository: refreshed })
+    const client = createTestQueryClient()
+    const listKey = queryKeys.org('org1').repositories.list
+    const other = repositoryRow('r2', 'https://github.com/acme/worker.git')
+    client.setQueryData(listKey, { repositories: [stale, other] })
+
+    const { result } = renderHook(() => useRefreshRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync('r1')
+    })
+
+    expect(refreshRepository).toHaveBeenCalledWith('r1')
+    expect(client.getQueryData(listKey)).toEqual({
+      repositories: [refreshed, other],
+    })
+  })
+
+  it('leaves the cache alone when no list was fetched yet', async () => {
+    const refreshed = repositoryRow('r1', 'https://github.com/acme/web-api.git')
+    refreshRepository.mockResolvedValue({ repository: refreshed })
+    const client = createTestQueryClient()
+    const listKey = queryKeys.org('org1').repositories.list
+
+    const { result } = renderHook(() => useRefreshRepository('org1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync('r1')
+    })
+
+    expect(client.getQueryData(listKey)).toBeUndefined()
   })
 })

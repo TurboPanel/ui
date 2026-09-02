@@ -20,7 +20,10 @@ import {
   type GitConnectionRecord,
   type RepositoryRecord,
 } from '@/lib/instance-api'
-import { repositoryLabel } from '@/lib/repository-label'
+import {
+  repositoryLabel,
+  repositoryProviderLabel,
+} from '@/lib/repository-label'
 import {
   repositoryAuthLane,
   repositoryBranchDisplay,
@@ -61,6 +64,7 @@ function deleteErrorMessage(code: string): string {
 
 const REPOSITORY_COLUMNS = [
   { key: 'repository', header: 'Repository', flex: 2.4, minWidth: 240 },
+  { key: 'source', header: 'Source', flex: 0.9, minWidth: 100 },
   { key: 'auth', header: 'Access', flex: 1.1, minWidth: 110 },
   { key: 'branch', header: 'Branch', flex: 1.1, minWidth: 110 },
   { key: 'autoDeploy', header: 'Auto-deploy', flex: 1.2, minWidth: 130 },
@@ -91,6 +95,7 @@ function RepositoryRow({
 }>) {
   const [
     repositoryColumn,
+    sourceColumn,
     authColumn,
     branchColumn,
     autoDeployColumn,
@@ -113,6 +118,9 @@ function RepositoryRow({
             {row.repositoryUrl}
           </MonoText>
         </View>
+      </DataTableCell>
+      <DataTableCell column={sourceColumn}>
+        <Badge label={repositoryProviderLabel(row)} />
       </DataTableCell>
       <DataTableCell column={authColumn}>
         <Badge label={lane.label} tone={AUTH_LANE_TONES[lane.kind] ?? 'muted'} />
@@ -193,6 +201,17 @@ function RepositoryRow({
  * (`source_referenced_by_compose`) stays authoritative for compose references
  * the column misses.
  */
+/** `repositoriesQuery.isError` case, unwrapped to a message worth showing. */
+function resolveQueryError(isError: boolean, error: unknown): string | null {
+  if (!isError) return null
+  return error instanceof Error ? error.message : 'Failed to load repositories'
+}
+
+/** The row id a mutation is in flight for, so its own row can show a spinner. */
+function pendingRowId(isPending: boolean, variables: unknown): string | null {
+  return isPending && typeof variables === 'string' ? variables : null
+}
+
 export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const repositoriesQuery = useRepositories(orgId)
@@ -215,21 +234,19 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
   })
 
   const loading = repositoriesQuery.isLoading && rows.length === 0
-  let queryError: string | null = null
-  if (repositoriesQuery.isError) {
-    queryError = repositoriesQuery.error instanceof Error
-      ? repositoriesQuery.error.message
-      : 'Failed to load repositories'
-  }
+  const queryError = resolveQueryError(
+    repositoriesQuery.isError,
+    repositoriesQuery.error,
+  )
 
-  const refreshingId =
-    refreshMutation.isPending && typeof refreshMutation.variables === 'string'
-      ? refreshMutation.variables
-      : null
-  const deletingId =
-    deleteMutation.isPending && typeof deleteMutation.variables === 'string'
-      ? deleteMutation.variables
-      : null
+  const refreshingId = pendingRowId(
+    refreshMutation.isPending,
+    refreshMutation.variables,
+  )
+  const deletingId = pendingRowId(
+    deleteMutation.isPending,
+    deleteMutation.variables,
+  )
 
   const onRefresh = async (row: RepositoryRecord) => {
     setActionError(null)
@@ -297,7 +314,7 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
 
         {rows.length > 0
           ? (
-            <DataTable columns={REPOSITORY_COLUMNS} minWidth={920}>
+            <DataTable columns={REPOSITORY_COLUMNS} minWidth={1020}>
               {rows.map((row, index) => (
                 <RepositoryRow
                   key={row.id}

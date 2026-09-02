@@ -16,6 +16,20 @@ export function repositoryLabel(row: RepositoryRecord): string {
 }
 
 /**
+ * `https://github.com/owner/repo(.git)` → `repo`, else the URL itself.
+ *
+ * The tightest form a repository can be named by — for chrome with no room
+ * for the owner half, like the Overview diagram's service boxes.
+ */
+export function repositoryShortName(row: RepositoryRecord): string {
+  const trimmed = row.repositoryUrl.replace(/\.git$/, '')
+  const segments = trimmed.split(/[/:]/).filter((part) => part.length > 0)
+  // A bare host with no path is not a name; fall back to the URL as typed.
+  if (segments.length < 2) return row.repositoryUrl
+  return segments.at(-1) ?? row.repositoryUrl
+}
+
+/**
  * Host of a clone URL, lower-cased — `https://`, `ssh://`, and the scp-like
  * `git@host:path` form all yield the bare host, user and port stripped.
  */

@@ -1,11 +1,11 @@
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import { ComposeVisualIcon } from '@/components/org/compose-view-icons'
-import { ChoiceCard } from '@/components/org/project-create/choice-card'
 import type {
   SetupChoice,
   SetupTypeOption,
 } from '@/components/org/project-create/setup-types'
-import { chrome, colors } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 type IconProps = Readonly<{
   size?: number
@@ -154,7 +154,11 @@ function SetupTypeGlyph({
   return <ComposeFeatherGlyph size={size} color={color} />
 }
 
-/** Type card with a module-level glyph — never an inline component in the parent. */
+/**
+ * Setup type tile: a large glyph in a rounded well with the name beneath it.
+ * The title carries the card alone — the option's description is spoken to
+ * screen readers but never drawn. Render inside {@link ChoiceTileGrid}.
+ */
 export function SetupTypeChoiceCard({
   option,
   selected,
@@ -166,15 +170,77 @@ export function SetupTypeChoiceCard({
   disabled?: boolean
   onPress: () => void
 }>) {
-  const iconColor = selected ? chrome.accent : colors.textMuted
+  const iconColor = selected ? chrome.accent : colors.textBody
   return (
-    <ChoiceCard
-      label={option.label}
-      description={option.description}
-      selected={selected}
+    <Pressable
+      style={[
+        styles.tile,
+        webPointer,
+        selected && styles.tileSelected,
+        disabled && styles.tileDisabled,
+      ]}
       disabled={disabled}
-      icon={<SetupTypeGlyph choice={option.choice} color={iconColor} />}
       onPress={onPress}
-    />
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      accessibilityLabel={option.label}
+      accessibilityHint={option.description}
+    >
+      <View
+        style={[styles.iconWell, selected && styles.iconWellSelected]}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
+        <SetupTypeGlyph choice={option.choice} size={26} color={iconColor} />
+      </View>
+      <Text style={[styles.label, selected && styles.labelSelected]}>
+        {option.label}
+      </Text>
+    </Pressable>
   )
 }
+
+const styles = StyleSheet.create({
+  tile: {
+    flexGrow: 1,
+    flexBasis: 150,
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    borderRadius: 14,
+    backgroundColor: colors.bgSecondary,
+  },
+  tileSelected: {
+    borderColor: chrome.accent,
+    backgroundColor: chrome.bgActive,
+  },
+  tileDisabled: {
+    opacity: 0.55,
+  },
+  iconWell: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgInput,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  iconWellSelected: {
+    borderColor: chrome.accent,
+    backgroundColor: 'transparent',
+  },
+  label: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  labelSelected: {
+    color: chrome.accent,
+  },
+})

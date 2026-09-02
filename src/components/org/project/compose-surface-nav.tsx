@@ -65,7 +65,11 @@ function NavTabFace({
  *
  * Storage and Settings stay off this bar — they are reached from the object
  * they belong to (a service's gutter fact in the Services lens, or the
- * scope-strip gear). Create-wizard drafts show the lenses only.
+ * scope-strip gear). Create-wizard drafts render the same five tabs an
+ * existing project shows, with the ones a draft cannot open yet (no row, no
+ * environments — or lenses a synthesized document hides) dimmed rather than
+ * dropped, so the final wizard screen reads as the project screen it is about
+ * to become — the active tab plainly Overview among its siblings.
  */
 export function ComposeSurfaceNav() {
   const pathname = usePathname()
@@ -74,37 +78,39 @@ export function ComposeSurfaceNav() {
   const activeTab = draft
     ? draft.section
     : parseComposeProjectTab(pathname, projectId)
-  const tabIds = draft
+  const enabledTabIds: readonly ComposeProjectTabId[] = draft
     ? draft.sections ?? DRAFT_COMPOSE_PROJECT_TAB_IDS
     : COMPOSE_PROJECT_SURFACE_TAB_IDS
-
-  // A single lens is not a choice — drop the bar instead of rendering one tab.
-  if (tabIds.length < 2) return null
 
   return (
     <View style={styles.bar}>
       <View style={[panelStyles.segmentGroup, styles.group]}>
-        {tabIds.filter(isNavTab).map((tabId) => {
+        {COMPOSE_PROJECT_SURFACE_TAB_IDS.filter(isNavTab).map((tabId) => {
+          const enabled = enabledTabIds.includes(tabId)
           // An off-bar route (Storage, Settings) keeps Services lit: those
           // are configuration reached from a service row, not a fifth tab.
-          const active = isNavTab(activeTab)
-            ? activeTab === tabId
-            : tabId === 'services'
+          const active =
+            enabled &&
+            (isNavTab(activeTab) ? activeTab === tabId : tabId === 'services')
           const style = StyleSheet.flatten([
             styles.lens,
             active && styles.lensActive,
-            webPointer,
+            !enabled && styles.lensDisabled,
+            enabled && webPointer,
           ])
 
-          if (draft) {
+          if (draft || !enabled) {
             return (
               <Pressable
                 key={tabId}
                 accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
+                accessibilityState={{ selected: active, disabled: !enabled }}
                 accessibilityLabel={COMPOSE_PROJECT_TAB_LABELS[tabId]}
+                disabled={!enabled}
                 style={style}
-                onPress={() => draft.setSection(tabId)}
+                onPress={
+                  enabled && draft ? () => draft.setSection(tabId) : undefined
+                }
               >
                 <NavTabFace tabId={tabId} active={active} />
               </Pressable>
@@ -160,6 +166,10 @@ const styles = StyleSheet.create({
   },
   lensActive: {
     backgroundColor: chrome.bgActive,
+  },
+  // Same container-opacity convention every disabled control uses.
+  lensDisabled: {
+    opacity: 0.5,
   },
   face: {
     flexDirection: 'row',

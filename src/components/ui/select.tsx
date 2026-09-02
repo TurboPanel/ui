@@ -34,6 +34,7 @@ type PickerRow = Readonly<{
   value: string | null
   label: string
   detail?: string | null
+  disabled?: boolean
 }>
 
 function SelectSearchField({
@@ -78,19 +79,21 @@ function SelectRow({
   mono: boolean
   onSelect: () => void
 }>) {
+  const disabled = row.disabled === true
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+      accessibilityState={{ selected: active, disabled }}
       accessibilityLabel={
         row.detail ? `${row.label}, ${row.detail}` : row.label
       }
+      disabled={disabled}
       style={({ pressed }) => [
         styles.row,
         row.detail != null && styles.rowWithDetail,
         active && styles.rowActive,
-        pressed && styles.rowPressed,
-        webPointer,
+        pressed && !disabled && styles.rowPressed,
+        !disabled && webPointer,
       ]}
       onPress={onSelect}
     >
@@ -100,6 +103,7 @@ function SelectRow({
             styles.rowLabel,
             mono && styles.rowLabelMono,
             active && styles.rowLabelActive,
+            disabled && styles.rowLabelDisabled,
           ]}
           numberOfLines={1}
         >
@@ -478,6 +482,9 @@ const styles = StyleSheet.create({
   rowLabelActive: {
     color: chrome.accent,
     fontWeight: '600',
+  },
+  rowLabelDisabled: {
+    color: colors.textDim,
   },
   rowDetail: {
     color: colors.textMuted,

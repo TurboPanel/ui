@@ -224,6 +224,8 @@ export const queryKeys = {
       repositories: {
         all: ['org', orgId, 'repositories'] as const,
         list: ['org', orgId, 'repositories'] as const,
+        /** Display labels only — separate from `list` so its forbidden-tolerant read never poisons the strict list. */
+        labels: ['org', orgId, 'repositories', 'labels'] as const,
         detail: (repositoryId: string) =>
           ['org', orgId, 'repositories', 'detail', repositoryId] as const,
         connections: ['org', orgId, 'repositories', 'connections'] as const,

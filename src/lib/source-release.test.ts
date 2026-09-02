@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatVersionBuild,
   isFullGitCommit,
+  isReleaseSourceConfig,
   readAppSourceRelease,
   sourceReleaseUrl,
   UI_LICENSE,
@@ -90,5 +91,33 @@ describe('readAppSourceRelease', () => {
         extra: { release: true, gitCommit: 'deadbeef' },
       }),
     ).toThrow(TypeError)
+  })
+
+  it('uses the Android versionCode as the build when no iOS build number exists', () => {
+    const release = readAppSourceRelease({
+      version: '0.1.0',
+      android: { versionCode: 42 },
+      extra: {},
+    })
+    expect(release.build).toBe('42')
+    expect(formatVersionBuild(release)).toBe('0.1.0 (42)')
+  })
+
+  it('defaults version and build when the config is absent', () => {
+    const release = readAppSourceRelease(null)
+    expect(release.version).toBe('0.0.0')
+    expect(release.build).toBe('')
+    expect(release.license).toBe(UI_LICENSE)
+  })
+})
+
+describe('isReleaseSourceConfig', () => {
+  it('is true only for an explicit extra.release === true', () => {
+    expect(isReleaseSourceConfig({ extra: { release: true } })).toBe(true)
+    expect(isReleaseSourceConfig({ extra: { release: 'true' } })).toBe(false)
+    expect(isReleaseSourceConfig({ extra: {} })).toBe(false)
+    expect(isReleaseSourceConfig({})).toBe(false)
+    expect(isReleaseSourceConfig(null)).toBe(false)
+    expect(isReleaseSourceConfig(undefined)).toBe(false)
   })
 })

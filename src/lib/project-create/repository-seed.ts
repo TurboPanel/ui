@@ -12,6 +12,7 @@ import {
   DEFAULT_SITE_ENGINE,
   patchServiceTurbopanelExtension,
   SOURCE_BRANCH_MAX_LENGTH,
+  SOURCE_COMMAND_MAX_LENGTH,
   type ComposeServiceSourceExtension,
 } from '@/lib/compose/service-kind'
 import { writeComposePrincipals } from '@/lib/compose/principals-document'
@@ -97,6 +98,19 @@ export function seedComposeForLane(params: {
   root?: string
   /** Engine for the PHP lane. */
   engine?: 'caddy' | 'nginx' | 'apache' | 'openlitespeed'
+  /**
+   * Simple-application fields the repository screen collects for the `app` and
+   * `static` lanes. Empty strings mean "platform default" and are written as
+   * nothing at all: the daemon derives the install command, falls back to
+   * `server.js`, and a key that says the default out loud would pin it.
+   */
+  simple?: {
+    buildCommand?: string
+    /** `app` lane only — a static site has no process to start. */
+    startCommand?: string
+    /** Directory the build runs in, relative to the checkout root. */
+    subdirectory?: string
+  }
 }): ComposeDocument {
   const { source, branch, lane } = params
   // The repository's own document IS the project compose — no synthesized
@@ -107,9 +121,23 @@ export function seedComposeForLane(params: {
   }
 
   const trimmedBranch = branch.trim().slice(0, SOURCE_BRANCH_MAX_LENGTH)
+  const capped = (value: string | undefined): string | undefined => {
+    const trimmed = value?.trim().slice(0, SOURCE_COMMAND_MAX_LENGTH)
+    return trimmed || undefined
+  }
+  // Build fields apply to the two lanes the Simple form configures; the
+  // compose lane ships the repository's own document and the PHP lane serves
+  // the tree as checked out, so neither takes a build.
+  const simple = lane === 'app' || lane === 'static' ? params.simple : undefined
+  const buildCommand = capped(simple?.buildCommand)
+  const startCommand = lane === 'app' ? capped(simple?.startCommand) : undefined
+  const subdirectory = capped(simple?.subdirectory)
   const binding: ComposeServiceSourceExtension = {
     sourceId: source.id,
     ...(trimmedBranch ? { branch: trimmedBranch } : {}),
+    ...(subdirectory ? { subdirectory } : {}),
+    ...(buildCommand ? { buildCommand } : {}),
+    ...(startCommand ? { startCommand } : {}),
   }
 
   const extension = lane === 'app'

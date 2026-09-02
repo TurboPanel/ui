@@ -127,6 +127,83 @@ describe('seedComposeForLane', () => {
       'services',
     ])
   })
+
+  it('writes the Simple-application fields onto the source binding', () => {
+    const { service } = seededService(
+      seedComposeForLane({
+        source: source(),
+        branch: 'main',
+        lane: 'app',
+        simple: {
+          buildCommand: '  pnpm run build  ',
+          startCommand: 'pnpm start',
+          subdirectory: 'apps/web',
+        },
+      }),
+    )
+    expect(readServiceTurbopanelExtension(service)?.source).toEqual({
+      sourceId: SOURCE_ID,
+      branch: 'main',
+      subdirectory: 'apps/web',
+      buildCommand: 'pnpm run build',
+      startCommand: 'pnpm start',
+    })
+  })
+
+  it('writes nothing for empty Simple fields — empty means platform default', () => {
+    const { service } = seededService(
+      seedComposeForLane({
+        source: source(),
+        branch: '',
+        lane: 'app',
+        simple: { buildCommand: '   ', startCommand: '', subdirectory: '' },
+      }),
+    )
+    expect(readServiceTurbopanelExtension(service)?.source).toEqual({
+      sourceId: SOURCE_ID,
+    })
+  })
+
+  it('gives a static site its build but never a start command', () => {
+    const { service } = seededService(
+      seedComposeForLane({
+        source: source(),
+        branch: '',
+        lane: 'static',
+        root: 'dist',
+        simple: {
+          buildCommand: 'npm run build',
+          startCommand: 'npm start',
+          subdirectory: '',
+        },
+      }),
+    )
+    const extension = readServiceTurbopanelExtension(service)
+    expect(extension?.serviceKind).toBe('site')
+    expect(extension?.root).toBe('dist')
+    expect(extension?.source?.buildCommand).toBe('npm run build')
+    // A static site has no process to start; writing one would be a lie the
+    // daemon has to ignore.
+    expect(extension?.source?.startCommand).toBeUndefined()
+  })
+
+  it('keeps the PHP and compose lanes free of Simple fields', () => {
+    const { service } = seededService(
+      seedComposeForLane({
+        source: source(),
+        branch: '',
+        lane: 'site-php',
+        simple: {
+          buildCommand: 'npm run build',
+          startCommand: 'npm start',
+          subdirectory: 'web',
+        },
+      }),
+    )
+    expect(readServiceTurbopanelExtension(service)?.source).toEqual({
+      sourceId: SOURCE_ID,
+    })
+  })
 })
 
 describe('seedComposeForLane produces a valid document for every lane', () => {

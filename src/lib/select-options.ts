@@ -15,6 +15,8 @@ export type SelectOption = Readonly<{
   label: string
   /** Secondary line in the picker row (status, placement, …). */
   detail?: string | null
+  /** Visible but unselectable — a roadmap row, not a dead end. */
+  disabled?: boolean
 }>
 
 /**
