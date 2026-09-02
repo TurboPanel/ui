@@ -179,8 +179,9 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'cpu',
     title: 'CPU usage',
     unit: '%',
-    // Stacked bottom-up in this order, idle on top — the stack sums to ~100%
-    // so idle headroom is the visible remainder, never a hidden derived line.
+    // Stacked bottom-up in this order. Idle is deliberately excluded — it's
+    // headroom, not usage, and including it would flatten the busy bands
+    // against a mostly-idle y-axis instead of zooming in on real load.
     stacked: true,
     series: [
       {
@@ -225,15 +226,11 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
         color: colors.log,
         read: metric('cpuStealPercent'),
       },
-      {
-        id: 'cpuIdlePercent',
-        label: 'Idle',
-        color: colors.textChip,
-        read: metric('cpuIdlePercent'),
-      },
     ],
+    // No fixed 0–100 domain: the axis auto-scales to whatever's actually
+    // plotted, so a mostly-idle host zooms in on its real (small) usage
+    // instead of compressing it against 100% of mostly-unused headroom.
     yFormat: (v) => formatPercent(v),
-    yDomain: [0, 100],
   },
   {
     id: 'load',
@@ -740,6 +737,30 @@ function lastFormattedValue(
   return '—'
 }
 
+/**
+ * Headline for a stacked chart: the sum of every visible series at the most
+ * recent index where at least one has a sample — e.g. CPU utilization%, the
+ * total of the busy bands, rather than any single band's own last value.
+ */
+function lastStackedTotal(
+  series: MetricLineSeries[],
+  yFormat: (value: number) => string,
+): string {
+  const pointCount = series[0]?.points.length ?? 0
+  for (let index = pointCount - 1; index >= 0; index -= 1) {
+    let sum = 0
+    let any = false
+    for (const entry of series) {
+      const value = entry.points[index]?.value
+      if (value === null || value === undefined) continue
+      sum += value
+      any = true
+    }
+    if (any) return yFormat(sum)
+  }
+  return '—'
+}
+
 type MetricsViewState =
   | 'loading'
   | 'unsupported-os'
@@ -1010,26 +1031,58 @@ function MetricsChartCard({
   gapBands: MetricGapBand[]
   xTickFormat: (ms: number) => string
 }>) {
+  const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const toggleSeries = useCallback(
+    (key: string) => {
+      setHiddenKeys((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) {
+          next.delete(key)
+        } else {
+          next.add(key)
+        }
+        // Never let the last visible series be toggled off.
+        if (next.size >= definition.series.length) return prev
+        return next
+      })
+    },
+    [definition.series.length],
+  )
+
   const series = buildChartSeries(points, definition)
   const unavailable = isChartUnavailable(series)
+  const visibleSeries =
+    series.length > 1
+      ? series.filter((entry) => !hiddenKeys.has(entry.key))
+      : series
   const legendEntries = series.map((entry) => ({
     key: entry.key,
     label: entry.label,
     color: entry.color,
     lastValue: lastFormattedValue([entry], definition.yFormat),
+    hidden: hiddenKeys.has(entry.key),
   }))
-  const headline = lastFormattedValue(series, definition.yFormat)
+  const headline = definition.stacked
+    ? lastStackedTotal(visibleSeries, definition.yFormat)
+    : lastFormattedValue(visibleSeries, definition.yFormat)
 
   return (
     <ChartCard
       title={definition.title}
       subtitle={definition.unit}
       headline={unavailable ? undefined : headline}
-      legend={<ChartLegend entries={legendEntries} />}
+      legend={
+        <ChartLegend
+          entries={legendEntries}
+          onToggle={series.length > 1 ? toggleSeries : undefined}
+        />
+      }
       unavailable={unavailable}
     >
       <MetricLineChart
-        series={series}
+        series={visibleSeries}
         xDomainMs={chartDomainMs}
         height={220}
         yFormat={definition.yFormat}
