@@ -19,12 +19,14 @@ import {
   useOrgLicenses,
   useOrgServerCapacity,
   useOrgServers,
+  useOrgTemperatureUnit,
   usePatchServer,
   usePingDaemon,
   useRebootServer,
   useResetServerUpdateStatus,
+  useSaveOrgTemperatureUnit,
   useSaveServerLabels,
-  useSaveServerMetricsSensorOverrides,
+  useSaveServerHardwareProfile,
   useServerDetail,
   useServerLabels,
   useServerMetricsCapabilities,
@@ -66,9 +68,11 @@ const {
   createLicense,
   deleteLicense,
   fetchServerMetricsCapabilities,
-  saveServerMetricsSensorOverrides,
+  saveServerHardwareProfile,
   startServerMetricsLive,
   stopServerMetricsLive,
+  fetchOrgTemperatureUnit,
+  saveOrgTemperatureUnit,
 } = vi.hoisted(() => ({
   fetchOrgServers: vi.fn(),
   fetchLicenses: vi.fn(),
@@ -93,9 +97,11 @@ const {
   createLicense: vi.fn(),
   deleteLicense: vi.fn(),
   fetchServerMetricsCapabilities: vi.fn(),
-  saveServerMetricsSensorOverrides: vi.fn(),
+  saveServerHardwareProfile: vi.fn(),
   startServerMetricsLive: vi.fn(),
   stopServerMetricsLive: vi.fn(),
+  fetchOrgTemperatureUnit: vi.fn(),
+  saveOrgTemperatureUnit: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -125,9 +131,11 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     createLicense,
     deleteLicense,
     fetchServerMetricsCapabilities,
-    saveServerMetricsSensorOverrides,
+    saveServerHardwareProfile,
     startServerMetricsLive,
     stopServerMetricsLive,
+    fetchOrgTemperatureUnit,
+    saveOrgTemperatureUnit,
   }
 })
 
@@ -959,13 +967,13 @@ describe('servers query hooks', () => {
     expect(fetchServerMetricsCapabilities).not.toHaveBeenCalled()
   })
 
-  it('useSaveServerMetricsSensorOverrides saves and refreshes capability + detail reads', async () => {
-    saveServerMetricsSensorOverrides.mockResolvedValueOnce({ ok: true })
+  it('useSaveServerHardwareProfile saves and refreshes the metrics subtree + detail reads', async () => {
+    saveServerHardwareProfile.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
     const { result } = renderHook(
-      () => useSaveServerMetricsSensorOverrides(orgId, serverId),
+      () => useSaveServerHardwareProfile(orgId, serverId),
       { wrapper: createWrapper(client) },
     )
 
@@ -974,17 +982,30 @@ describe('servers query hooks', () => {
       overrides as Parameters<typeof result.current.run>[0],
     )
 
-    expect(saveServerMetricsSensorOverrides).toHaveBeenCalledWith(
+    expect(saveServerHardwareProfile).toHaveBeenCalledWith(
       serverId,
       overrides,
       orgId,
     )
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.metricsCapabilities(serverId),
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
+    // One prefix invalidation covers series/summary/capabilities/connection —
+    // all of them depend on the hardware profile (cpuLimits, disk/NIC
+    // labels, hardware-profile generation).
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.metrics(serverId),
+    })
+    expect(
+      queryKeys.org(orgId).servers.metricsCapabilities(serverId),
+    ).toEqual([...queryKeys.org(orgId).servers.metrics(serverId), 'capabilities'])
+    expect(
+      queryKeys.org(orgId).servers.metricsSummary(serverId, 'cpu-limits'),
+    ).toEqual([
+      ...queryKeys.org(orgId).servers.metrics(serverId),
+      'summary',
+      'cpu-limits',
+    ])
   })
 
   it('useStartServerMetricsLive starts or renews a lease', async () => {
@@ -1024,5 +1045,83 @@ describe('servers query hooks', () => {
       'lease-1',
       orgId,
     )
+  })
+
+  it('useOrgTemperatureUnit loads the org display setting', async () => {
+    fetchOrgTemperatureUnit.mockResolvedValueOnce({
+      temperatureUnit: 'fahrenheit',
+    })
+
+    const { result } = renderHook(() => useOrgTemperatureUnit(orgId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({ temperatureUnit: 'fahrenheit' })
+    })
+    expect(fetchOrgTemperatureUnit).toHaveBeenCalledWith(orgId)
+  })
+
+  it('useSaveOrgTemperatureUnit saves and invalidates every server metrics subtree in the org', async () => {
+    saveOrgTemperatureUnit.mockResolvedValueOnce({
+      temperatureUnit: 'fahrenheit',
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSaveOrgTemperatureUnit(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run({ temperatureUnit: 'fahrenheit' })
+
+    expect(saveOrgTemperatureUnit).toHaveBeenCalledWith(orgId, {
+      temperatureUnit: 'fahrenheit',
+    })
+    expect(
+      client.getQueryData(queryKeys.org(orgId).settings.temperatureUnit),
+    ).toEqual({ temperatureUnit: 'fahrenheit' })
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ predicate: expect.any(Function) }),
+    )
+    const call = invalidateSpy.mock.calls.find(
+      ([opts]) => typeof (opts as { predicate?: unknown })?.predicate === 'function',
+    )
+    const predicate = (
+      call?.[0] as { predicate: (q: { queryKey: readonly unknown[] }) => boolean }
+    ).predicate
+    // Matches this server's metrics subtree regardless of which server...
+    expect(
+      predicate({
+        queryKey: queryKeys.org(orgId).servers.metrics(serverId),
+      }),
+    ).toBe(true)
+    expect(
+      predicate({
+        queryKey: queryKeys
+          .org(orgId)
+          .servers.metricsSeries('other-server', 'range-1'),
+      }),
+    ).toBe(true)
+    // The CPU-limits summary read (useServerMetricsCpuLimits) carries
+    // temperatureUnit too via buildCpuLimitsEnvelope — its TDP/Tjmax prefill
+    // must go stale-free on a unit change same as the charts do.
+    expect(
+      predicate({
+        queryKey: queryKeys
+          .org(orgId)
+          .servers.metricsSummary(serverId, 'cpu-limits'),
+      }),
+    ).toBe(true)
+    // ...but not an unrelated subtree (labels) or another org's server.
+    expect(
+      predicate({ queryKey: queryKeys.org(orgId).servers.labels(serverId) }),
+    ).toBe(false)
+    expect(
+      predicate({
+        queryKey: queryKeys.org('other-org').servers.metrics(serverId),
+      }),
+    ).toBe(false)
   })
 })

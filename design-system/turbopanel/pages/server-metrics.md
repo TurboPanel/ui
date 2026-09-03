@@ -3,7 +3,7 @@
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/servers/[serverId]/metrics`.
 
 **Route:** `src/app/[orgId]/servers/[serverId]/metrics` → `server-metrics-section.tsx`  
-**Job:** Historical host metrics (v2 contract, 38 named metrics) — grouped charts, coverage honesty, range selection, opt-in live sampling.
+**Job:** Historical host metrics (v3 contract, 68 named metrics) — grouped charts, coverage honesty, range selection, opt-in live sampling, plus conditional hardware-sensor and Caddy/ProxySQL traffic parts that only appear when the host actually reports them.
 
 ---
 
@@ -22,8 +22,9 @@
 - **CPU:** cumulative stacked-area CPU-mode chart, stacked bottom-up as `cpuUserPercent`, `cpuSystemPercent`, `cpuNicePercent`, `cpuIowaitPercent`, `cpuIrqPercent`, `cpuSoftirqPercent`, `cpuStealPercent` with `cpuIdlePercent` explicit on top (muted band) — the stack sums to ~100% so idle headroom is directly visible, never a derived busy-line substitute; separate Load chart (`load1/5/15`)  
 - **Memory:** bytes chart (`memoryTotalBytes` / `memoryAvailableBytes` / `memoryFreeBytes`) + derived used-% chart; Swap bytes (`swapTotalBytes` / `swapFreeBytes`) + derived used-%  
 - **Storage:** capacity pairs for system / hosting / docker (`*TotalBytes` / `*AvailableBytes`), disk throughput, IOPS, latency (`diskRead/WriteLatencyMs`, ms formatter). The docker capacity card renders only when at least one non-null sample exists in the range  
-- **Network:** `uplink*BytesPerSecond` chart labeled **Datacenter uplink**; `fabric*BytesPerSecond` chart labeled **TurboFabric** (`TURBOFABRIC_PRODUCT_NAME`); inline note that the two are measured independently and are non-additive  
-- **Hardware:** temperatures (`cpu/gpuTemperatureCelsius`, °C formatter) and power (`cpu/gpuPowerWatts`, W formatter). **Null-hiding rule:** a hardware card renders only when at least one series has a non-null sample in the current range — a missing sensor must never paint a 0-value flatline; when every card in the group is hidden the whole group disappears  
+- **Network:** `interface*BytesPerSecond` chart labeled **Primary interface** (the host's aggregate uplink); `nic1*`/`nic2*BytesPerSecond` charts titled from `server.hardwareProfile.nic1Interface`/`nic2Interface` (falling back to **NIC 1**/**NIC 2** when unbound), hidden when empty; `fabric*BytesPerSecond` chart labeled **TurboFabric** (`TURBOFABRIC_PRODUCT_NAME`). Inline note: NIC 1/2 are taps of the same traffic the primary-interface chart aggregates, not additional throughput, and TurboFabric is a separate interface entirely — none of the four are additive  
+- **Hardware:** temperatures (`cpu/gpuTemperatureCelsius`, unit-aware formatter) and power (`cpu/gpuPowerWatts`, W formatter), plus GPU utilization, fan speeds (CPU/GPU/system 1/2), disk temperatures (labelled from `server.hardwareProfile.disk1Temperature`/`disk2Temperature` sensor identity, else "Disk 1"/"Disk 2"), and ambient/board temperatures. The CPU line on the Temperatures and Power charts draws a dashed reference line at the resolved Tjmax/TDP (`data.cpuLimits`, override → catalog-exact → catalog-family → none) with a "N% headroom to Tjmax/TDP" caption under the legend, computed from the latest `derived.cpuThermalHeadroomPercent`/`cpuPowerHeadroomPercent` sample — GPU has no catalog limit in this phase. **Null-hiding rule:** a hardware card renders only when at least one series has a non-null sample in the current range. **Group-hiding rule:** when `data.sensorsAvailable` is `false` (the host has never once reported the `sensors` metrics part — common for VMs), the whole Hardware group is hidden regardless of per-chart data, and a muted line explains why  
+- **Traffic:** requests, response status classes (2xx/3xx/4xx/5xx, stacked), HTTP error rate (`derived.httpErrorRatePercent`), request/response bytes (per-interval sums, not a rate — labelled accordingly), HTTP latency (`derived.httpAverageLatencyMs` plus a client-computed "under 100ms %"), requests in flight, and two ProxySQL charts (queries/slow-queries; client/backend connections + backends-up). Every traffic chart hides when empty, so the group naturally shows only the sources (Caddy, ProxySQL) that actually reported. Sum-aggregated charts (requests, status classes, bytes, ProxySQL queries) still carry the shared `gapBands` overlay, so a partially-sampled bucket reads as an amber coverage gap, never a smooth dip  
 - **System:** `processCount`, `uptimeSeconds`
 
 Derived percentages (CPU busy, memory/swap/storage used %) are computed client-side — the v2 contract stores no derived values.
@@ -37,6 +38,10 @@ Derived percentages (CPU busy, memory/swap/storage used %) are computed client-s
 - Area fill on single-series percent charts — accent gradient fade  
 - Legend: swatch + label + monospace last-value pill per series  
 - Two-column grid on web (`layout.desktopBreakpoint`); single column on narrow viewports
+
+**Temperature units:** every temperature is stored and compared in Celsius. Display converts to the organization's configured unit (`data.temperatureUnit`, riding on the `/series` and `/summary` responses) only at render time — axis labels, tooltips, the headline value, and the Tjmax reference-line label all go through the same unit-aware formatter. Headroom math and the reference-line's plotted Y value always stay in raw Celsius/Watts; only the rendered text converts. The unit itself is edited on `/[orgId]/servers/settings` (`ServerTemperatureUnitSettingsSection`, manage-gated) — this page is read-only with respect to it.
+
+**Generation breaks:** `data.generationBreaks` marks point indices where the hardware-profile generation changed (a sensor identity or NIC binding was reassigned). The UI renders these as solid vertical dividers — distinct from the amber gap-band tint for missing samples — on every chart, so a sensor swap never reads as a continuous trend line spanning two different pieces of hardware.
 
 ## Range picker & live mode
 
@@ -71,6 +76,8 @@ Derived percentages (CPU busy, memory/swap/storage used %) are computed client-s
 
 - ❌ Live sampling anywhere but the single-server Metrics screen (fleet views stay ~1 min)  
 - ❌ Rendering a hardware sensor chart with all-null samples (hide the card)  
-- ❌ Summing uplink and TurboFabric throughput  
+- ❌ Summing the primary interface, NIC 1/2, and TurboFabric throughput  
+- ❌ Converting Celsius before a Tjmax/TDP comparison — compare in raw Celsius/Watts, convert only the rendered string  
+- ❌ Rendering a traffic chart's sum-aggregated gap as a smooth dip instead of an amber coverage-gap band  
 - ❌ DO/cell reads for status  
 - ❌ Raw hex outside `theme.ts`

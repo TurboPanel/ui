@@ -105,6 +105,14 @@ export const queryKeys = {
           ['org', orgId, 'server', serverId, 'metrics', 'series', rangeId] as const,
         metricsSummary: (serverId: string, rangeId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'summary', rangeId] as const,
+        /**
+         * Shared prefix for every `/metrics/*` query on one server — series,
+         * summary, capabilities, connection. Invalidate this whole subtree
+         * (rather than one leaf key) on a mutation that reshapes metrics
+         * payloads for this server (e.g. saving its hardware profile).
+         */
+        metrics: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'metrics'] as const,
         /** Sensor/mount capability discovery — fetched on demand, never polled. */
         metricsCapabilities: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'capabilities'] as const,
@@ -123,6 +131,7 @@ export const queryKeys = {
       settings: {
         all: ['org', orgId, 'settings'] as const,
         defaultTimezone: ['org', orgId, 'default-timezone'] as const,
+        temperatureUnit: ['org', orgId, 'temperature-unit'] as const,
         hostDefaults: ['org', orgId, 'host-defaults'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
@@ -394,6 +403,28 @@ export function isVisibilityQuery(query: {
   queryKey: readonly unknown[]
 }): boolean {
   return VISIBILITY_ROOTS.has(query.queryKey[0])
+}
+
+/**
+ * True when `query` is some server's `/metrics/*` subtree query (series,
+ * summary, capabilities, connection) under `orgId` — regardless of which
+ * server. Used to invalidate every server's metrics after an org-wide
+ * setting change (e.g. the temperature-unit display setting) without
+ * enumerating server ids, which `queryKeys.org(orgId).servers.metrics(id)`
+ * cannot express since the server id sits between the `server` and
+ * `metrics` key segments.
+ */
+export function isServerMetricsQuery(
+  query: { queryKey: readonly unknown[] },
+  orgId: string,
+): boolean {
+  const key = query.queryKey
+  return (
+    key[0] === 'org' &&
+    key[1] === orgId &&
+    key[2] === 'server' &&
+    key[4] === 'metrics'
+  )
 }
 
 /** Mirrors instance `getAccessManagementPermission()` in access-management.ts. */

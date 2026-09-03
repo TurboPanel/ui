@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  celsiusToDisplay,
   derivedCpuBusyPercent,
   formatAxisTime,
   formatBytes,
   formatBytesPerSecond,
   formatCelsius,
+  formatCelsiusAs,
   formatCoveragePercent,
   formatCount,
   formatDerivedCpuBusyPercent,
@@ -108,6 +110,40 @@ describe('formatCelsius', () => {
   it('formats one decimal with a degree unit', () => {
     expect(formatCelsius(56.25)).toBe('56.3 °C')
     expect(formatCelsius(0)).toBe('0.0 °C')
+  })
+})
+
+describe('celsiusToDisplay', () => {
+  it('returns null for null, undefined, and non-finite values', () => {
+    expect(celsiusToDisplay(null, 'celsius')).toBeNull()
+    expect(celsiusToDisplay(undefined, 'fahrenheit')).toBeNull()
+    expect(celsiusToDisplay(Number.NaN, 'celsius')).toBeNull()
+  })
+
+  it('passes Celsius through unchanged', () => {
+    expect(celsiusToDisplay(0, 'celsius')).toBe(0)
+    expect(celsiusToDisplay(100, 'celsius')).toBe(100)
+  })
+
+  it('converts to Fahrenheit at the boundary values', () => {
+    expect(celsiusToDisplay(0, 'fahrenheit')).toBe(32)
+    expect(celsiusToDisplay(100, 'fahrenheit')).toBe(212)
+  })
+})
+
+describe('formatCelsiusAs', () => {
+  it('returns em dash for null and non-finite values', () => {
+    expect(formatCelsiusAs(null, 'celsius')).toBe('—')
+    expect(formatCelsiusAs(Number.NaN, 'fahrenheit')).toBe('—')
+  })
+
+  it('formats Celsius with the °C unit', () => {
+    expect(formatCelsiusAs(56.25, 'celsius')).toBe('56.3 °C')
+  })
+
+  it('formats Fahrenheit with the °F unit', () => {
+    expect(formatCelsiusAs(0, 'fahrenheit')).toBe('32.0 °F')
+    expect(formatCelsiusAs(100, 'fahrenheit')).toBe('212.0 °F')
   })
 })
 

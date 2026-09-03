@@ -9,8 +9,10 @@ import {
   fetchOrgServers,
   fetchServer,
   fetchServerLabels,
+  fetchOrgTemperatureUnit,
   fetchServerMetricsCapabilities,
   fetchServerMetricsSeries,
+  fetchServerMetricsSummary,
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchTimezones,
@@ -19,27 +21,31 @@ import {
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
+  saveOrgTemperatureUnit,
   startServerMetricsLive,
   stopServerMetricsLive,
   saveServerLabels,
-  saveServerMetricsSensorOverrides,
+  saveServerHardwareProfile,
   setServerHostname,
   setServerNtp,
   setServerTimezone,
   triggerServerUpdate,
   updateServer,
+  type EffectiveCpuThermalLimits,
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
   type LicenseRecord,
   type MetricsCapabilitiesOutcome,
   type MetricsLiveStartOutcome,
   type MetricsSeriesResponse,
-  type ServerMetricsOverridesUpdate,
+  type OrgTemperatureUnitSettings,
+  type ServerHardwareProfileUpdate,
   type OrgServerRecord,
   type ServerDetailRecord,
 } from '@/lib/instance-api'
 import { unboundPendingKeys } from '@/lib/pending-keys'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { isServerMetricsQuery } from '@/lib/query-keys'
 import { serversPresenceRefetchMs } from '@/lib/server-connection-status'
 
 export const SERVERS_REFRESH_MS = 30_000
@@ -260,25 +266,97 @@ export function useServerMetricsCapabilities(
   })
 }
 
-export function useSaveServerMetricsSensorOverrides(
+/**
+ * Resolved CPU thermal/power limits for the hardware-profile panel's
+ * TDP/Tjmax prefill. There is no dedicated capability endpoint for this —
+ * it rides the summary endpoint's `cpuLimits` envelope over a narrow window.
+ */
+export function useServerMetricsCpuLimits(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys
+      .org(orgId)
+      .servers.metricsSummary(serverId, 'cpu-limits'),
+    queryFn: async (): Promise<EffectiveCpuThermalLimits | null> => {
+      const toMs = Date.now()
+      try {
+        const summary = await fetchServerMetricsSummary(
+          serverId,
+          {
+            fromIso: new Date(toMs - 5 * 60 * 1000).toISOString(),
+            toIso: new Date(toMs).toISOString(),
+          },
+          orgId,
+        )
+        return summary.cpuLimits
+      } catch (error) {
+        if (error instanceof MetricsBackendUnavailableError) return null
+        throw error
+      }
+    },
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      serverId.length > 0,
+  })
+}
+
+export function useSaveServerHardwareProfile(
   orgId: string,
   serverId: string,
 ) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (overrides: ServerMetricsOverridesUpdate) =>
-      saveServerMetricsSensorOverrides(serverId, overrides, orgId),
+    mutationFn: (profile: ServerHardwareProfileUpdate) =>
+      saveServerHardwareProfile(serverId, profile, orgId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.metricsCapabilities(serverId),
-        }),
-        queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).servers.detail(serverId),
+        }),
+        // Series/summary/capabilities/connection all depend on this
+        // server's hardware profile (cpuLimits, disk/NIC labels, the
+        // hardware-profile generation stamped on each sample) — invalidate
+        // the whole `/metrics/*` subtree, not just capabilities.
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.metrics(serverId),
         }),
       ])
     },
     fallbackError: 'Failed to save sensor overrides',
+  })
+}
+
+/** Org-wide display setting for how temperatures render (metrics are always stored/compared in Celsius). */
+export function useOrgTemperatureUnit(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).settings.temperatureUnit,
+    queryFn: () => fetchOrgTemperatureUnit(orgId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+  })
+}
+
+export function useSaveOrgTemperatureUnit(orgId: string) {
+  const queryClient = useQueryClient()
+  const settingsKey = queryKeys.org(orgId).settings.temperatureUnit
+  return useApiMutation({
+    mutationFn: (patch: OrgTemperatureUnitSettings) =>
+      saveOrgTemperatureUnit(orgId, patch),
+    onSuccess: async (data) => {
+      queryClient.setQueryData(settingsKey, data)
+      // Every server's /metrics/* payload (series/summary) embeds this
+      // display unit — reach across the whole org, not just one server.
+      await queryClient.invalidateQueries({
+        predicate: (query) => isServerMetricsQuery(query, orgId),
+      })
+    },
+    fallbackError: 'Failed to save temperature display setting',
   })
 }
 

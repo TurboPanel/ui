@@ -43,6 +43,16 @@
 - Manage-gated (`organization:manage` display hint). Non-managers see a read-only list.
 - Visible labels, errors adjacent to the editor, `toolbarBtn*` for Add/Save/Remove. Monospace keys/values.
 
+## Hardware profile panel (Overview tab)
+
+- Collapsible; capability discovery (`GET …/metrics/capabilities`) is a live daemon round trip that fires only once the panel is expanded — opened deliberately, never polled.
+- **VM / no-hwmon empty state:** when discovery returns zero sensor and GPU candidates, the sensor-slot + GPU section collapses to a single `EmptyState` ("No hardware sensors detected") instead of a row of empty pickers. NIC bindings, hosting storage path, and manual CPU TDP/Tjmax overrides stay visible below it — those aren't hwmon-dependent.
+- **Disk temperature has no auto-default:** unlike every other slot (which falls back to the daemon's first-match candidate and reads "Auto detected"), the Disk 1/2 temperature pickers read "Not selected" and sit under an `InlineNotice` explaining there is no automatic default — the operator must pick one explicitly per disk.
+- **Reassignment breaks continuity:** when any populated sensor slot or NIC field actually changes value, the plain Save button is swapped for `ConfirmButton`, warning that reassigning breaks chart continuity for the changed series (mirrors the Metrics screen's generation-break dividers).
+- **Drivetemp is opt-in:** the toggle sits under an `InlineNotice` explaining it loads the `drivetemp` kernel module (persists across reboot). A save that newly enables it explicitly refetches capabilities so newly-discovered chips appear without collapsing/reopening the panel.
+- **CPU TDP/Tjmax prefill:** when no manual override is set, the placeholder shows the resolved catalog value (`EffectiveCpuThermalLimits`, read from the summary endpoint) and the hint notes whether it's an exact catalog match or a family-regex estimate.
+- **Hosting storage path** is a `Select` over `capabilities.storageMounts.candidates`, never free text — the stored override is injected as an extra option when the daemon no longer discovers it, so it never silently disappears from the picker.
+
 ## Server proxy (Control tab)
 
 - Read-only panel between Commands and Daemon update: status dot + label, container name (mono), compose service name, link into the System workspace project/environment.

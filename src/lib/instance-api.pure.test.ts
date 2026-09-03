@@ -27,7 +27,7 @@ import {
   MetricsBackendUnavailableError,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   saveServerMetricsLiveSettings,
-  saveServerMetricsSensorOverrides,
+  saveServerHardwareProfile,
   ServerCapacityExceededError,
   ServerDeleteBlockedError,
   startServerMetricsLive,
@@ -63,18 +63,67 @@ describe('error code constants', () => {
 })
 
 describe('HOST_METRIC_KEYS', () => {
-  it('lists the thirty-eight v2 host metrics in contract order', () => {
-    expect(HOST_METRIC_KEYS).toHaveLength(38)
+  it('lists the sixty-eight v3 host metrics in contract order', () => {
+    expect(HOST_METRIC_KEYS).toHaveLength(68)
     expect(HOST_METRIC_KEYS[0]).toBe('cpuUserPercent')
-    expect(HOST_METRIC_KEYS[HOST_METRIC_KEYS.length - 1]).toBe('uptimeSeconds')
-    expect(new Set(HOST_METRIC_KEYS).size).toBe(38)
+    expect(HOST_METRIC_KEYS[HOST_METRIC_KEYS.length - 1]).toBe('proxysqlBackendsUp')
+    expect(new Set(HOST_METRIC_KEYS).size).toBe(68)
   })
 
-  it('carries no derived percentages — v2 stores raw measurements only', () => {
+  it('carries no derived percentages — v3 stores raw measurements only', () => {
     expect(HOST_METRIC_KEYS).not.toContain('cpuUsagePercent')
     expect(HOST_METRIC_KEYS).not.toContain('memoryUsedPercent')
     expect(HOST_METRIC_KEYS).not.toContain('swapUsedPercent')
     expect(HOST_METRIC_KEYS).not.toContain('diskUsedPercent')
+  })
+
+  it('drops the removed v2 memoryFreeBytes key', () => {
+    expect(HOST_METRIC_KEYS).not.toContain('memoryFreeBytes')
+  })
+
+  it('renames the v2 uplink keys to interfaceReceive/TransmitBytesPerSecond', () => {
+    expect(HOST_METRIC_KEYS).not.toContain('uplinkReceiveBytesPerSecond')
+    expect(HOST_METRIC_KEYS).not.toContain('uplinkTransmitBytesPerSecond')
+    expect(HOST_METRIC_KEYS).toContain('interfaceReceiveBytesPerSecond')
+    expect(HOST_METRIC_KEYS).toContain('interfaceTransmitBytesPerSecond')
+  })
+
+  it('adds the v3 NIC slot, sensor, and traffic keys', () => {
+    expect(HOST_METRIC_KEYS).toEqual(
+      expect.arrayContaining([
+        'nic1ReceiveBytesPerSecond',
+        'nic1TransmitBytesPerSecond',
+        'nic2ReceiveBytesPerSecond',
+        'nic2TransmitBytesPerSecond',
+        'gpuUtilizationPercent',
+        'gpuFanRpm',
+        'disk1TemperatureCelsius',
+        'disk2TemperatureCelsius',
+        'ambient1TemperatureCelsius',
+        'ambient2TemperatureCelsius',
+        'boardTemperatureCelsius',
+        'cpuFanRpm',
+        'systemFan1Rpm',
+        'systemFan2Rpm',
+        'caddyRequestsTotal',
+        'caddyResponses2xxTotal',
+        'caddyResponses3xxTotal',
+        'caddyResponses4xxTotal',
+        'caddyResponses5xxTotal',
+        'caddyRequestBytesTotal',
+        'caddyResponseBytesTotal',
+        'caddyRequestDurationSecondsSum',
+        'caddyRequestsUnder100msTotal',
+        'caddyRequestsUnder1sTotal',
+        'caddyRequestsInFlight',
+        'proxysqlQueriesTotal',
+        'proxysqlSlowQueriesTotal',
+        'proxysqlConnectionErrorsTotal',
+        'proxysqlClientConnections',
+        'proxysqlBackendConnections',
+        'proxysqlBackendsUp',
+      ]),
+    )
   })
 })
 
@@ -831,22 +880,35 @@ describe('fetch wrappers (mocked fetch)', () => {
     const capabilities = {
       sensors: {
         cpuTemperature: [
-          { chip: 'k10temp', label: 'Tctl', path: '/sys/class/hwmon/hwmon2/temp1_input' },
+          {
+            chip: 'k10temp',
+            label: 'Tctl',
+            path: '/sys/class/hwmon/hwmon2/temp1_input',
+            reading: { value: 52.25, unit: 'celsius' },
+          },
         ],
-        gpuTemperature: [],
         cpuPower: [],
-        gpuPower: [],
+        cpuFan: [],
+        gpuFan: [],
+        boardTemperature: [],
+        ambient1Temperature: [],
+        ambient2Temperature: [],
+        disk1Temperature: [],
+        disk2Temperature: [],
+        systemFan1: [],
+        systemFan2: [],
         gpuDevices: [],
       },
       storageMounts: {
         system: { path: '/', totalBytes: 100, availableBytes: 40 },
-        hosting: null,
-        docker: null,
+        hosting: { probedPath: null, result: null, reason: 'path_not_found' },
+        docker: { probedPath: null, result: null, reason: 'docker_absent' },
         candidates: [],
       },
       networkInterfaces: [
         { name: 'eth0', classification: 'uplink' },
       ],
+      process: { probedPath: '/proc' },
     }
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, capabilities }))
     await expect(
@@ -869,22 +931,25 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
   })
 
-  it('saveServerMetricsSensorOverrides PUTs the patch body', async () => {
+  it('saveServerHardwareProfile PUTs the patch body', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        overrides: { cpuTemperature: '/sys/class/hwmon/hwmon2/temp1_input' },
+        profile: {
+          cpuTemperature: { chip: 'k10temp', label: 'Tctl' },
+          generation: 1,
+        },
         pushed: true,
       }),
     )
     await expect(
-      saveServerMetricsSensorOverrides('srv-1', {
-        cpuTemperature: '/sys/class/hwmon/hwmon2/temp1_input',
-        gpuTemperature: null,
+      saveServerHardwareProfile('srv-1', {
+        cpuTemperature: { chip: 'k10temp', label: 'Tctl' },
+        gpuDevice: null,
       }),
     ).resolves.toMatchObject({ ok: true, pushed: true })
     const [url, init] = fetchMock.mock.calls[0] ?? []
-    expect(String(url)).toContain('/servers/srv-1/metrics/sensor-overrides')
+    expect(String(url)).toContain('/servers/srv-1/metrics/hardware-profile')
     expect((init as RequestInit).method).toBe('PUT')
   })
 

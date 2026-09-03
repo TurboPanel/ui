@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -37,7 +38,7 @@ import {
   formatAxisTime,
   formatBytes,
   formatBytesPerSecond,
-  formatCelsius,
+  formatCelsiusAs,
   formatCount,
   formatCoveragePercent,
   formatMilliseconds,
@@ -47,15 +48,19 @@ import {
   formatWatts,
   presentSamplesFromGaps,
   type MetricsRangeId,
+  type TemperatureUnit,
 } from '@/lib/format-metrics'
 import {
   MetricsBackendUnavailableError,
+  type EffectiveCpuThermalLimits,
+  type HostMetricDerivedValues,
   type MetricsBackendKind,
   type HostMetricKey,
   type MetricsLiveStartOutcome,
   type OrgServerRecord,
   type MetricsSeriesPoint,
   type MetricsSeriesResponse,
+  type ServerHardwareProfile,
 } from '@/lib/instance-api'
 import {
   HA_METRICS_LOCAL_NOTE,
@@ -63,6 +68,7 @@ import {
 } from '@/lib/platform-copy'
 import {
   useOrgServers,
+  useServerDetail,
   useServerMetricsSeries,
   useStartServerMetricsLive,
   useStopServerMetricsLive,
@@ -125,14 +131,21 @@ const SERIES_COLORS = [
   LOAD_FILL,
 ] as const
 
-type MetricValueReader = (
-  values: MetricsSeriesPoint['values'],
-) => number | null
+type PointValueReader = (point: MetricsSeriesPoint) => number | null
 
 /** Read one stored metric; missing/non-finite → null (never 0). */
-function metric(key: HostMetricKey): MetricValueReader {
-  return (values) => {
-    const value = values[key]
+function metric(key: HostMetricKey): PointValueReader {
+  return (point) => {
+    const value = point.values[key]
+    if (value == null || !Number.isFinite(value)) return null
+    return value
+  }
+}
+
+/** Read one server-computed `derived.*` value; missing/non-finite → null. */
+function derived(key: keyof HostMetricDerivedValues): PointValueReader {
+  return (point) => {
+    const value = point.derived?.[key]
     if (value == null || !Number.isFinite(value)) return null
     return value
   }
@@ -142,21 +155,39 @@ function metric(key: HostMetricKey): MetricValueReader {
 function usedPercent(
   totalKey: HostMetricKey,
   freeKey: HostMetricKey,
-): MetricValueReader {
-  return (values) =>
-    usedPercentFromBytes(values[totalKey] ?? null, values[freeKey] ?? null)
+): PointValueReader {
+  return (point) =>
+    usedPercentFromBytes(point.values[totalKey] ?? null, point.values[freeKey] ?? null)
 }
 
-const readCpuBusy: MetricValueReader = (values) =>
-  derivedCpuBusyPercent(values.cpuIdlePercent ?? null)
+const readCpuBusy: PointValueReader = (point) =>
+  derivedCpuBusyPercent(point.values.cpuIdlePercent ?? null)
+
+/** Share of requests served under 100ms — client-computed, guards ÷0. */
+const readFastRequestPercent: PointValueReader = (point) => {
+  const under100 = point.values.caddyRequestsUnder100msTotal
+  const total = point.values.caddyRequestsTotal
+  if (
+    under100 == null ||
+    total == null ||
+    !Number.isFinite(under100) ||
+    !Number.isFinite(total) ||
+    total === 0
+  ) {
+    return null
+  }
+  return (under100 / total) * 100
+}
 
 type ChartSeriesDefinition = Readonly<{
   id: string
   label: string
-  read: MetricValueReader
+  read: PointValueReader
   /** Explicit series color; falls back to the shared palette by position. */
   color?: string
 }>
+
+type ChartReferenceLine = Readonly<{ value: number; label: string }>
 
 type ChartDefinition = Readonly<{
   id: string
@@ -173,6 +204,10 @@ type ChartDefinition = Readonly<{
    * a missing sensor/mount must never paint a 0-value flatline.
    */
   hideWhenEmpty?: boolean
+  /** Dashed horizontal limit line (Tjmax/TDP) — raw units, matching the plotted series. */
+  referenceLine?: ChartReferenceLine
+  /** Muted caption under the legend — e.g. a headroom-to-limit readout. */
+  computeCaption?: (points: MetricsSeriesPoint[]) => string | null
 }>
 
 const CHART_DEFINITIONS: readonly ChartDefinition[] = [
@@ -255,7 +290,6 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'Available',
         read: metric('memoryAvailableBytes'),
       },
-      { id: 'memoryFreeBytes', label: 'Free', read: metric('memoryFreeBytes') },
     ],
     yFormat: (v) => formatBytes(v),
   },
@@ -409,22 +443,64 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatMilliseconds(v),
   },
   {
+    // Title kept generic — this is one measured interface among several
+    // (see `network-nic1`/`network-nic2`), not necessarily "the" uplink.
     id: 'network-uplink',
-    title: 'Datacenter uplink',
+    title: 'Primary interface',
     unit: 'B/s',
     series: [
       {
-        id: 'uplinkReceiveBytesPerSecond',
+        id: 'interfaceReceiveBytesPerSecond',
         label: 'Receive',
-        read: metric('uplinkReceiveBytesPerSecond'),
+        read: metric('interfaceReceiveBytesPerSecond'),
       },
       {
-        id: 'uplinkTransmitBytesPerSecond',
+        id: 'interfaceTransmitBytesPerSecond',
         label: 'Transmit',
-        read: metric('uplinkTransmitBytesPerSecond'),
+        read: metric('interfaceTransmitBytesPerSecond'),
       },
     ],
     yFormat: (v) => formatBytesPerSecond(v),
+  },
+  {
+    // Title resolved per-render from `server.hardwareProfile.nic1`.
+    id: 'network-nic1',
+    title: 'NIC 1',
+    unit: 'B/s',
+    series: [
+      {
+        id: 'nic1ReceiveBytesPerSecond',
+        label: 'Receive',
+        read: metric('nic1ReceiveBytesPerSecond'),
+      },
+      {
+        id: 'nic1TransmitBytesPerSecond',
+        label: 'Transmit',
+        read: metric('nic1TransmitBytesPerSecond'),
+      },
+    ],
+    yFormat: (v) => formatBytesPerSecond(v),
+    hideWhenEmpty: true,
+  },
+  {
+    // Title resolved per-render from `server.hardwareProfile.nic2`.
+    id: 'network-nic2',
+    title: 'NIC 2',
+    unit: 'B/s',
+    series: [
+      {
+        id: 'nic2ReceiveBytesPerSecond',
+        label: 'Receive',
+        read: metric('nic2ReceiveBytesPerSecond'),
+      },
+      {
+        id: 'nic2TransmitBytesPerSecond',
+        label: 'Transmit',
+        read: metric('nic2TransmitBytesPerSecond'),
+      },
+    ],
+    yFormat: (v) => formatBytesPerSecond(v),
+    hideWhenEmpty: true,
   },
   {
     id: 'network-fabric',
@@ -445,6 +521,8 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatBytesPerSecond(v),
   },
   {
+    // yFormat/referenceLine/computeCaption resolved per-render from
+    // `data.temperatureUnit` and `data.cpuLimits`.
     id: 'temperature',
     title: 'Temperatures',
     unit: '°C',
@@ -460,10 +538,11 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
         read: metric('gpuTemperatureCelsius'),
       },
     ],
-    yFormat: (v) => formatCelsius(v),
+    yFormat: (v) => formatCelsiusAs(v, 'celsius'),
     hideWhenEmpty: true,
   },
   {
+    // referenceLine/computeCaption resolved per-render from `data.cpuLimits`.
     id: 'power',
     title: 'Power draw',
     unit: 'W',
@@ -472,6 +551,259 @@ const CHART_DEFINITIONS: readonly ChartDefinition[] = [
       { id: 'gpuPowerWatts', label: 'GPU', read: metric('gpuPowerWatts') },
     ],
     yFormat: (v) => formatWatts(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'gpu-utilization',
+    title: 'GPU utilization',
+    unit: '%',
+    series: [
+      {
+        id: 'gpuUtilizationPercent',
+        label: 'GPU',
+        read: metric('gpuUtilizationPercent'),
+      },
+    ],
+    yFormat: (v) => formatPercent(v),
+    yDomain: [0, 100],
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'fan-speeds',
+    title: 'Fan speeds',
+    unit: 'RPM',
+    series: [
+      { id: 'cpuFanRpm', label: 'CPU', read: metric('cpuFanRpm') },
+      { id: 'gpuFanRpm', label: 'GPU', read: metric('gpuFanRpm') },
+      {
+        id: 'systemFan1Rpm',
+        label: 'System 1',
+        read: metric('systemFan1Rpm'),
+      },
+      {
+        id: 'systemFan2Rpm',
+        label: 'System 2',
+        read: metric('systemFan2Rpm'),
+      },
+    ],
+    yFormat: (v) => `${formatCount(v)} RPM`,
+    hideWhenEmpty: true,
+  },
+  {
+    // Series labels resolved per-render from `server.hardwareProfile.disk1Temperature`/`disk2Temperature`.
+    id: 'disk-temperatures',
+    title: 'Disk temperatures',
+    unit: '°C',
+    series: [
+      {
+        id: 'disk1TemperatureCelsius',
+        label: 'Disk 1',
+        read: metric('disk1TemperatureCelsius'),
+      },
+      {
+        id: 'disk2TemperatureCelsius',
+        label: 'Disk 2',
+        read: metric('disk2TemperatureCelsius'),
+      },
+    ],
+    yFormat: (v) => formatCelsiusAs(v, 'celsius'),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'ambient-board-temperatures',
+    title: 'Ambient & board temperatures',
+    unit: '°C',
+    series: [
+      {
+        id: 'ambient1TemperatureCelsius',
+        label: 'Ambient 1',
+        read: metric('ambient1TemperatureCelsius'),
+      },
+      {
+        id: 'ambient2TemperatureCelsius',
+        label: 'Ambient 2',
+        read: metric('ambient2TemperatureCelsius'),
+      },
+      {
+        id: 'boardTemperatureCelsius',
+        label: 'Board',
+        read: metric('boardTemperatureCelsius'),
+      },
+    ],
+    yFormat: (v) => formatCelsiusAs(v, 'celsius'),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-requests',
+    title: 'Requests',
+    unit: 'req',
+    series: [
+      {
+        id: 'caddyRequestsTotal',
+        label: 'Requests',
+        read: metric('caddyRequestsTotal'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-status-classes',
+    title: 'Response status classes',
+    unit: 'req',
+    stacked: true,
+    series: [
+      {
+        id: 'caddyResponses2xxTotal',
+        label: '2xx',
+        color: colors.green,
+        read: metric('caddyResponses2xxTotal'),
+      },
+      {
+        id: 'caddyResponses3xxTotal',
+        label: '3xx',
+        color: colors.command,
+        read: metric('caddyResponses3xxTotal'),
+      },
+      {
+        id: 'caddyResponses4xxTotal',
+        label: '4xx',
+        color: colors.pending,
+        read: metric('caddyResponses4xxTotal'),
+      },
+      {
+        id: 'caddyResponses5xxTotal',
+        label: '5xx',
+        color: colors.errorSoft,
+        read: metric('caddyResponses5xxTotal'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-error-rate',
+    title: 'HTTP error rate',
+    unit: '%',
+    series: [
+      {
+        id: 'httpErrorRatePercent',
+        label: 'Errors',
+        read: derived('httpErrorRatePercent'),
+      },
+    ],
+    yFormat: (v) => formatPercent(v),
+    yDomain: [0, 100],
+    area: true,
+    hideWhenEmpty: true,
+  },
+  {
+    // Per-interval sums, not a rate — labelled accordingly.
+    id: 'traffic-bandwidth',
+    title: 'Request/response bytes',
+    unit: 'bytes',
+    series: [
+      {
+        id: 'caddyRequestBytesTotal',
+        label: 'Request',
+        read: metric('caddyRequestBytesTotal'),
+      },
+      {
+        id: 'caddyResponseBytesTotal',
+        label: 'Response',
+        read: metric('caddyResponseBytesTotal'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-latency',
+    title: 'HTTP latency',
+    unit: 'ms',
+    series: [
+      {
+        id: 'httpAverageLatencyMs',
+        label: 'Avg latency',
+        read: derived('httpAverageLatencyMs'),
+      },
+    ],
+    yFormat: (v) => formatMilliseconds(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-fast-request-rate',
+    title: 'Requests under 100ms',
+    unit: '%',
+    series: [
+      {
+        id: 'fastRequestPercent',
+        label: 'Under 100ms',
+        read: readFastRequestPercent,
+      },
+    ],
+    yFormat: (v) => formatPercent(v),
+    yDomain: [0, 100],
+    area: true,
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-concurrency',
+    title: 'Requests in flight',
+    unit: 'count',
+    series: [
+      {
+        id: 'caddyRequestsInFlight',
+        label: 'In flight',
+        read: metric('caddyRequestsInFlight'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-proxysql-queries',
+    title: 'ProxySQL queries',
+    unit: 'queries',
+    series: [
+      {
+        id: 'proxysqlQueriesTotal',
+        label: 'Queries',
+        read: metric('proxysqlQueriesTotal'),
+      },
+      {
+        id: 'proxysqlSlowQueriesTotal',
+        label: 'Slow queries',
+        color: colors.pending,
+        read: metric('proxysqlSlowQueriesTotal'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'traffic-proxysql-connections',
+    title: 'ProxySQL connections',
+    unit: 'count',
+    series: [
+      {
+        id: 'proxysqlClientConnections',
+        label: 'Client',
+        read: metric('proxysqlClientConnections'),
+      },
+      {
+        id: 'proxysqlBackendConnections',
+        label: 'Backend',
+        read: metric('proxysqlBackendConnections'),
+      },
+      {
+        id: 'proxysqlBackendsUp',
+        label: 'Backends up',
+        color: colors.green,
+        read: metric('proxysqlBackendsUp'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
   {
@@ -532,15 +864,38 @@ const CHART_GROUPS: readonly ChartGroupDefinition[] = [
   {
     id: 'network',
     label: 'Network',
-    hint: `Datacenter uplink and ${TURBOFABRIC_PRODUCT_NAME} throughput`,
-    chartIds: ['network-uplink', 'network-fabric'],
-    note: `Datacenter uplink and ${TURBOFABRIC_PRODUCT_NAME} are measured on separate interfaces — the two are not additive.`,
+    hint: `Primary interface, NIC taps, and ${TURBOFABRIC_PRODUCT_NAME} throughput`,
+    chartIds: ['network-uplink', 'network-nic1', 'network-nic2', 'network-fabric'],
+    note: `The primary interface, NIC 1, and NIC 2 charts are measured on the host's network interfaces and may overlap — NIC 1/2 are taps of the same traffic the primary-interface chart aggregates, not additional throughput. ${TURBOFABRIC_PRODUCT_NAME} is a separate interface entirely; none of these are additive.`,
   },
   {
     id: 'hardware',
     label: 'Hardware',
-    hint: 'Temperatures and power draw — shown only when sensors report',
-    chartIds: ['temperature', 'power'],
+    hint: 'Temperatures, power draw, and fan speeds — shown only when sensors report',
+    chartIds: [
+      'temperature',
+      'power',
+      'gpu-utilization',
+      'fan-speeds',
+      'disk-temperatures',
+      'ambient-board-temperatures',
+    ],
+  },
+  {
+    id: 'traffic',
+    label: 'Traffic',
+    hint: 'HTTP (Caddy) and database-proxy (ProxySQL) traffic — shown only for sources that reported',
+    chartIds: [
+      'traffic-requests',
+      'traffic-status-classes',
+      'traffic-error-rate',
+      'traffic-bandwidth',
+      'traffic-latency',
+      'traffic-fast-request-rate',
+      'traffic-concurrency',
+      'traffic-proxysql-queries',
+      'traffic-proxysql-connections',
+    ],
   },
   {
     id: 'system',
@@ -550,9 +905,101 @@ const CHART_GROUPS: readonly ChartGroupDefinition[] = [
   },
 ]
 
-const CHARTS_BY_ID = new Map(
-  CHART_DEFINITIONS.map((definition) => [definition.id, definition]),
-)
+/** Latest reading for a `derived.*` key across the visible points, or null. */
+function latestDerivedValue(
+  points: MetricsSeriesPoint[],
+  key: keyof HostMetricDerivedValues,
+): number | null {
+  return latestReadValue(points, derived(key))
+}
+
+/** "12% headroom to Tjmax" style caption — omitted when no sample has a headroom reading. */
+function headroomCaption(
+  key: keyof HostMetricDerivedValues,
+  limitLabel: string,
+): (points: MetricsSeriesPoint[]) => string | null {
+  return (points) => {
+    const value = latestDerivedValue(points, key)
+    if (value == null) return null
+    return `${formatPercent(value)} headroom to ${limitLabel}`
+  }
+}
+
+/**
+ * Resolves the handful of chart definitions whose title, y-format, or
+ * reference line depend on per-render data (hardware-profile labels, the
+ * organization's temperature unit, resolved CPU thermal/power limits) —
+ * everything else in `CHART_DEFINITIONS` passes through unchanged. Collapsing
+ * these into one map keeps title/format/reference-line resolution on a single
+ * path instead of three separate ones.
+ */
+function resolveChartDefinitions(
+  hardwareProfile: ServerHardwareProfile | null | undefined,
+  temperatureUnit: TemperatureUnit,
+  cpuLimits: EffectiveCpuThermalLimits,
+): Map<string, ChartDefinition> {
+  const celsiusFormat = (value: number) => formatCelsiusAs(value, temperatureUnit)
+  const temperatureDisplayUnit = temperatureUnit === 'fahrenheit' ? '°F' : '°C'
+
+  const overrides: Partial<Record<string, (definition: ChartDefinition) => ChartDefinition>> = {
+    'network-nic1': (definition) => ({
+      ...definition,
+      title: hardwareProfile?.nic1?.trim() || 'NIC 1',
+    }),
+    'network-nic2': (definition) => ({
+      ...definition,
+      title: hardwareProfile?.nic2?.trim() || 'NIC 2',
+    }),
+    'disk-temperatures': (definition) => ({
+      ...definition,
+      unit: temperatureDisplayUnit,
+      yFormat: celsiusFormat,
+      series: definition.series.map((entry, index) => ({
+        ...entry,
+        label:
+          index === 0
+            ? hardwareProfile?.disk1Temperature?.chip?.trim() || 'Disk 1'
+            : hardwareProfile?.disk2Temperature?.chip?.trim() || 'Disk 2',
+      })),
+    }),
+    'ambient-board-temperatures': (definition) => ({
+      ...definition,
+      unit: temperatureDisplayUnit,
+      yFormat: celsiusFormat,
+    }),
+    temperature: (definition) => ({
+      ...definition,
+      unit: temperatureDisplayUnit,
+      yFormat: celsiusFormat,
+      referenceLine:
+        cpuLimits.tjMaxCelsius != null
+          ? { value: cpuLimits.tjMaxCelsius, label: `Tjmax ${celsiusFormat(cpuLimits.tjMaxCelsius)}` }
+          : undefined,
+      computeCaption:
+        cpuLimits.source !== 'none'
+          ? headroomCaption('cpuThermalHeadroomPercent', 'Tjmax')
+          : undefined,
+    }),
+    power: (definition) => ({
+      ...definition,
+      referenceLine:
+        cpuLimits.tdpWatts != null
+          ? { value: cpuLimits.tdpWatts, label: `TDP ${formatWatts(cpuLimits.tdpWatts)}` }
+          : undefined,
+      computeCaption:
+        cpuLimits.source !== 'none'
+          ? headroomCaption('cpuPowerHeadroomPercent', 'TDP')
+          : undefined,
+    }),
+  }
+
+  return new Map(
+    CHART_DEFINITIONS.map((definition) => [
+      definition.id,
+      overrides[definition.id]?.(definition) ?? definition,
+    ]),
+  )
+}
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
@@ -689,18 +1136,28 @@ function normalizeMetricsGrid(data: MetricsSeriesResponse): {
   }
 }
 
+/**
+ * Builds each series' plotted points, nulling out the sample at a
+ * hardware-profile generation boundary — the vertical divider alone only
+ * decorates the transition, so every affected series must also gap here to
+ * stop two different physical sensors from reading as one continuous trend.
+ */
 function buildChartSeries(
   points: MetricsSeriesPoint[],
   definition: ChartDefinition,
+  breakMs?: ReadonlySet<number>,
 ): MetricLineSeries[] {
   return definition.series.map((entry, index) => ({
     key: entry.id,
     label: entry.label,
     color: entry.color ?? SERIES_COLORS[index % SERIES_COLORS.length]!,
-    points: points.map((point) => ({
-      tMs: Date.parse(point.at),
-      value: entry.read(point.values),
-    })),
+    points: points.map((point) => {
+      const tMs = Date.parse(point.at)
+      return {
+        tMs,
+        value: breakMs?.has(tMs) ? null : entry.read(point),
+      }
+    }),
   }))
 }
 
@@ -710,7 +1167,7 @@ function chartHasAnyData(
   definition: ChartDefinition,
 ): boolean {
   return definition.series.some((entry) =>
-    points.some((point) => entry.read(point.values) != null),
+    points.some((point) => entry.read(point) != null),
   )
 }
 
@@ -1026,18 +1483,30 @@ function MetricsStatusMessages({
  */
 const MAX_VISIBLE_LEGEND_ENTRIES = 5
 
+/** Fallback for `MetricsSeriesResponse.cpuLimits` on a stale cache predating the field. */
+const DEFAULT_CPU_LIMITS: EffectiveCpuThermalLimits = {
+  tdpWatts: null,
+  tjMaxCelsius: null,
+  source: 'none',
+}
+
+/** Fallback for `MetricsSeriesResponse.generationBreaks` on a stale cache predating the field. */
+const EMPTY_GENERATION_BREAKS: readonly number[] = []
+
 function MetricsChartCard({
   definition,
   points,
   chartDomainMs,
   gapBands,
   xTickFormat,
+  breakLines,
 }: Readonly<{
   definition: ChartDefinition
   points: MetricsSeriesPoint[]
   chartDomainMs: readonly [number, number]
   gapBands: MetricGapBand[]
   xTickFormat: (ms: number) => string
+  breakLines?: readonly number[]
 }>) {
   const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1062,7 +1531,11 @@ function MetricsChartCard({
     [definition.series.length],
   )
 
-  const series = buildChartSeries(points, definition)
+  const breakMs = useMemo(
+    () => (breakLines && breakLines.length > 0 ? new Set(breakLines) : undefined),
+    [breakLines],
+  )
+  const series = buildChartSeries(points, definition, breakMs)
   const unavailable = isChartUnavailable(series)
   const visibleSeries =
     series.length > 1
@@ -1100,11 +1573,21 @@ function MetricsChartCard({
     })
   }
 
+  const caption = unavailable ? undefined : (definition.computeCaption?.(points) ?? undefined)
+  const referenceLine = definition.referenceLine
+    ? {
+        valueY: definition.referenceLine.value,
+        label: definition.referenceLine.label,
+        color: colors.pending,
+      }
+    : undefined
+
   return (
     <ChartCard
       title={definition.title}
       subtitle={definition.unit}
       headline={unavailable ? undefined : headline}
+      caption={caption}
       legend={<ChartLegend entries={legendEntries} />}
       unavailable={unavailable}
     >
@@ -1118,6 +1601,8 @@ function MetricsChartCard({
         stacked={definition.stacked}
         gapBands={gapBands}
         xTickFormat={xTickFormat}
+        referenceLine={referenceLine}
+        breakLines={breakLines}
       />
     </ChartCard>
   )
@@ -1131,6 +1616,9 @@ function CollapsibleChartGroup({
   chartDomainMs,
   gapBands,
   xTickFormat,
+  chartsById,
+  breakLines,
+  forceHidden,
 }: Readonly<{
   group: ChartGroupDefinition
   defaultExpanded: boolean
@@ -1139,19 +1627,23 @@ function CollapsibleChartGroup({
   chartDomainMs: readonly [number, number]
   gapBands: MetricGapBand[]
   xTickFormat: (ms: number) => string
+  chartsById: Map<string, ChartDefinition>
+  breakLines?: readonly number[]
+  /** Hides the whole group regardless of per-chart data — e.g. hardware sensors never reported. */
+  forceHidden?: boolean
 }>) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   // hideWhenEmpty cards (docker storage, hardware sensors) drop out entirely
   // when nothing reported in range — a missing sensor is absence, not zero.
   const charts = group.chartIds
-    .map((id) => CHARTS_BY_ID.get(id))
+    .map((id) => chartsById.get(id))
     .filter((entry): entry is ChartDefinition => entry != null)
     .filter(
       (definition) =>
         !definition.hideWhenEmpty || chartHasAnyData(points, definition),
     )
 
-  if (charts.length === 0) return null
+  if (forceHidden || charts.length === 0) return null
 
   return (
     <View style={styles.chartGroup}>
@@ -1194,6 +1686,7 @@ function CollapsibleChartGroup({
                 chartDomainMs={chartDomainMs}
                 gapBands={gapBands}
                 xTickFormat={xTickFormat}
+                breakLines={breakLines}
               />
             ))}
           </View>
@@ -1205,10 +1698,10 @@ function CollapsibleChartGroup({
 
 function latestReadValue(
   points: MetricsSeriesPoint[],
-  read: MetricValueReader,
+  read: PointValueReader,
 ): number | null {
   for (let index = points.length - 1; index >= 0; index -= 1) {
-    const value = read(points[index]!.values)
+    const value = read(points[index]!)
     if (value != null) return value
   }
   return null
@@ -1231,20 +1724,23 @@ function MetricsOverviewTiles({
   ]
     .filter((part): part is string => Boolean(part))
     .join(' \u00b7 ')
-  const memoryUsed = latestReadValue(points, (values) =>
+  const memoryUsed = latestReadValue(points, (point) =>
     memoryUsedPercentFrom(
-      values.memoryTotalBytes ?? null,
-      values.memoryAvailableBytes ?? null,
+      point.values.memoryTotalBytes ?? null,
+      point.values.memoryAvailableBytes ?? null,
     ),
   )
   const hostingUsed = latestReadValue(
     points,
     usedPercent('hostingStorageTotalBytes', 'hostingStorageAvailableBytes'),
   )
-  const uplinkRx = latestReadValue(points, metric('uplinkReceiveBytesPerSecond'))
+  const uplinkRx = latestReadValue(
+    points,
+    metric('interfaceReceiveBytesPerSecond'),
+  )
   const uplinkTx = latestReadValue(
     points,
-    metric('uplinkTransmitBytesPerSecond'),
+    metric('interfaceTransmitBytesPerSecond'),
   )
   const uplink =
     uplinkRx == null && uplinkTx == null
@@ -1475,6 +1971,7 @@ function MetricsCharts({
   twoColumn,
   rangeId,
   server,
+  hardwareProfile,
 }: Readonly<{
   data: MetricsSeriesResponse
   normalizedMetrics: ReturnType<typeof normalizeMetricsGrid> | null
@@ -1486,10 +1983,32 @@ function MetricsCharts({
   twoColumn: boolean
   rangeId: MetricsRangeId
   server: OrgServerRecord | null
+  hardwareProfile: ServerHardwareProfile | null | undefined
 }>) {
   const points = normalizedMetrics?.points ?? data.points
   const gapBands = normalizedMetrics?.gapBands ?? []
   const xTickFormat = (ms: number) => formatAxisTime(ms, rangeId)
+
+  // Defensive against a stale cache from an older instance predating these
+  // fields (same discipline as `normalizeOrgServer`) — never let a missing
+  // field throw mid-render.
+  const cpuLimits = data.cpuLimits ?? DEFAULT_CPU_LIMITS
+  const generationBreaks = data.generationBreaks ?? EMPTY_GENERATION_BREAKS
+
+  const chartsById = useMemo(
+    () => resolveChartDefinitions(hardwareProfile, data.temperatureUnit, cpuLimits),
+    [hardwareProfile, data.temperatureUnit, cpuLimits],
+  )
+
+  // Hardware-profile generation boundaries — mapped from the server's own
+  // point order (not the client-normalized grid, whose indices shift after
+  // gap-filling) to timestamps every chart understands.
+  const breakLines = useMemo(() => {
+    if (generationBreaks.length === 0) return undefined
+    return generationBreaks
+      .map((index) => Date.parse(data.points[index]?.at ?? ''))
+      .filter((ms) => Number.isFinite(ms))
+  }, [generationBreaks, data.points])
 
   const coveragePercent =
     expectedSamples > 0 ? (presentSamples / expectedSamples) * 100 : 0
@@ -1541,18 +2060,32 @@ function MetricsCharts({
         </View>
       </View>
 
-      {CHART_GROUPS.map((group, index) => (
-        <CollapsibleChartGroup
-          key={group.id}
-          group={group}
-          defaultExpanded={index < 2}
-          twoColumn={twoColumn}
-          points={points}
-          chartDomainMs={chartDomainMs}
-          gapBands={gapBands}
-          xTickFormat={xTickFormat}
-        />
-      ))}
+      {CHART_GROUPS.map((group, index) => {
+        const isHardwareGroup = group.id === 'hardware'
+        const forceHidden = isHardwareGroup && !data.sensorsAvailable
+        return (
+          <Fragment key={group.id}>
+            <CollapsibleChartGroup
+              group={group}
+              defaultExpanded={index < 2}
+              twoColumn={twoColumn}
+              points={points}
+              chartDomainMs={chartDomainMs}
+              gapBands={gapBands}
+              xTickFormat={xTickFormat}
+              chartsById={chartsById}
+              breakLines={breakLines}
+              forceHidden={forceHidden}
+            />
+            {forceHidden ? (
+              <Text style={styles.chartGroupNote}>
+                Hardware sensors are not available on this host (common for
+                virtual machines).
+              </Text>
+            ) : null}
+          </Fragment>
+        )
+      })}
 
       <SectionPanel title="Coverage detail" hint="Gap accounting for this range">
         <View style={styles.coverageChartMeta}>
@@ -1635,6 +2168,11 @@ export function ServerMetricsSection({
   const twoColumn = width >= layout.desktopBreakpoint
 
   const serversQuery = useOrgServers(orgId)
+  // Hardware-profile labels (NIC/disk sensor identities) live only on the
+  // detail record — `useOrgServers` is the list shape and omits them. When
+  // embedded on the server detail screen this is a cache hit, not an extra
+  // round trip.
+  const serverDetailQuery = useServerDetail(orgId, serverId)
 
   // Live sampling is scoped to this single-server screen at 5m/10m only —
   // fleet/overview surfaces never acquire a lease.
@@ -1660,6 +2198,7 @@ export function ServerMetricsSection({
 
   const server =
     serversQuery.data?.servers.find((row) => row.id === serverId) ?? null
+  const hardwareProfile = serverDetailQuery.data?.hardwareProfile
   const data = metricsQuery.data
   const viewState = resolveViewState(server, data, metricsQuery.error)
   const stale = isServerStale(server)
@@ -1751,6 +2290,7 @@ export function ServerMetricsSection({
           twoColumn={twoColumn}
           rangeId={rangeId}
           server={server}
+          hardwareProfile={hardwareProfile}
         />
       ) : null}
     </View>

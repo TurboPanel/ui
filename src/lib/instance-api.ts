@@ -428,10 +428,10 @@ export type ServerDetailRecord = OrgServerRecord & {
   colocatedWithInstance: boolean
   labels?: { key: string; value: string }[]
   /**
-   * Stored sensor / hosting-path overrides
-   * (`server.metadata.metricsOverrides`); `null`/absent when none are set.
+   * Stored sensor identities, NIC bindings, and manual power/thermal limits
+   * (`server.metadata.hardwareProfile`); `null`/absent when none are set.
    */
-  metricsOverrides?: ServerMetricsOverrides | null
+  hardwareProfile?: ServerHardwareProfile | null
 }
 
 export type NtpSetInput = {
@@ -547,6 +547,26 @@ export async function saveOrgDefaultTimezone(
   patch: Partial<OrgDefaultTimezoneSettings>
 ): Promise<OrgDefaultTimezoneSettings> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/default-timezone`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
+export type OrgTemperatureUnitSettings = {
+  temperatureUnit: 'celsius' | 'fahrenheit'
+}
+
+export async function fetchOrgTemperatureUnit(
+  orgId: string
+): Promise<OrgTemperatureUnitSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/temperature-unit`)
+}
+
+export async function saveOrgTemperatureUnit(
+  orgId: string,
+  patch: OrgTemperatureUnitSettings
+): Promise<OrgTemperatureUnitSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/temperature-unit`, {
     method: 'PUT',
     body: JSON.stringify(patch),
   })
@@ -4583,10 +4603,13 @@ export async function stopEnvironment(environmentId: string): Promise<CommandEnq
 }
 
 /**
- * Named metric keys — mirrors instance v2 `HOST_METRIC_KEYS`
+ * Named metric keys — mirrors instance v3 `HOST_METRIC_KEYS`
  * (`turbopanel/src/daemon/metrics/contract.ts`). Raw measurements only: the
- * v2 contract stores no derived percentages or usage bytes — CPU busy and
- * memory/swap/storage used % are computed client-side.
+ * v3 contract stores no derived percentages or usage bytes — CPU busy and
+ * memory/swap/storage used % are computed client-side. A key may be absent
+ * from a given sample's `metrics` object when its `MetricPart` was not
+ * collected that tick — this array is the full wire allowlist, not a
+ * per-sample guarantee.
  */
 export const HOST_METRIC_KEYS = [
   'cpuUserPercent',
@@ -4602,9 +4625,11 @@ export const HOST_METRIC_KEYS = [
   'load15',
   'memoryTotalBytes',
   'memoryAvailableBytes',
-  'memoryFreeBytes',
   'swapTotalBytes',
   'swapFreeBytes',
+  'cpuTemperatureCelsius',
+  'processCount',
+  'uptimeSeconds',
   'systemStorageTotalBytes',
   'systemStorageAvailableBytes',
   'hostingStorageTotalBytes',
@@ -4617,29 +4642,98 @@ export const HOST_METRIC_KEYS = [
   'diskWriteOpsPerSecond',
   'diskReadLatencyMs',
   'diskWriteLatencyMs',
-  'uplinkReceiveBytesPerSecond',
-  'uplinkTransmitBytesPerSecond',
+  'interfaceReceiveBytesPerSecond',
+  'interfaceTransmitBytesPerSecond',
   'fabricReceiveBytesPerSecond',
   'fabricTransmitBytesPerSecond',
-  'cpuTemperatureCelsius',
   'gpuTemperatureCelsius',
   'cpuPowerWatts',
   'gpuPowerWatts',
-  'processCount',
-  'uptimeSeconds',
+  'nic1ReceiveBytesPerSecond',
+  'nic1TransmitBytesPerSecond',
+  'nic2ReceiveBytesPerSecond',
+  'nic2TransmitBytesPerSecond',
+  'gpuUtilizationPercent',
+  'gpuFanRpm',
+  'disk1TemperatureCelsius',
+  'disk2TemperatureCelsius',
+  'ambient1TemperatureCelsius',
+  'ambient2TemperatureCelsius',
+  'boardTemperatureCelsius',
+  'cpuFanRpm',
+  'systemFan1Rpm',
+  'systemFan2Rpm',
+  'caddyRequestsTotal',
+  'caddyResponses2xxTotal',
+  'caddyResponses3xxTotal',
+  'caddyResponses4xxTotal',
+  'caddyResponses5xxTotal',
+  'caddyRequestBytesTotal',
+  'caddyResponseBytesTotal',
+  'caddyRequestDurationSecondsSum',
+  'caddyRequestsUnder100msTotal',
+  'caddyRequestsUnder1sTotal',
+  'caddyRequestsInFlight',
+  'proxysqlQueriesTotal',
+  'proxysqlSlowQueriesTotal',
+  'proxysqlConnectionErrorsTotal',
+  'proxysqlClientConnections',
+  'proxysqlBackendConnections',
+  'proxysqlBackendsUp',
 ] as const
 
 export type HostMetricKey = (typeof HOST_METRIC_KEYS)[number]
 
 export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'
 
+/**
+ * Server-computed presentation values for one series point — mirrors
+ * `HostSeriesChartPointDerived` (`turbopanel/src/daemon/metrics/query/series-response.ts`).
+ * Every field is `null` when an input it needs is missing or a denominator
+ * would be zero — never coerced to `0`. Optional on the point type because
+ * this client also synthesizes gap-filler points (`normalizeMetricsGrid`)
+ * that carry no server-computed values.
+ */
+export type HostMetricDerivedValues = {
+  cpuUsagePercent: number | null
+  memoryUsedBytes: number | null
+  memoryUsedPercent: number | null
+  swapUsedBytes: number | null
+  swapUsedPercent: number | null
+  systemStorageUsedBytes: number | null
+  systemStorageUsedPercent: number | null
+  hostingStorageUsedBytes: number | null
+  hostingStorageUsedPercent: number | null
+  dockerStorageUsedBytes: number | null
+  dockerStorageUsedPercent: number | null
+  httpErrorRatePercent: number | null
+  httpAverageLatencyMs: number | null
+  /** `null` when `cpuLimits` has no resolved Tjmax for this host, or the point has no temperature reading. */
+  cpuThermalHeadroomPercent: number | null
+  /** `null` when `cpuLimits` has no resolved TDP for this host, or the point has no power reading. */
+  cpuPowerHeadroomPercent: number | null
+}
+
 export type MetricsSeriesPoint = {
   at: string
   values: Partial<Record<HostMetricKey, number | null>>
   minimums?: Partial<Record<HostMetricKey, number | null>>
   maximums?: Partial<Record<HostMetricKey, number | null>>
+  derived?: HostMetricDerivedValues
   sampleCount: number
   expectedSampleCount?: number
+  /**
+   * Hardware-profile generation shared by every contributing sample in this
+   * bucket. `null`/absent when unknown; see `MetricsSeriesResponse.generationBreaks`.
+   */
+  hardwareProfileGeneration?: number | null
+}
+
+/** Resolved CPU thermal/power limits for headroom display. Mirrors `EffectiveCpuThermalLimits`. */
+export type EffectiveCpuThermalLimits = {
+  tdpWatts: number | null
+  tjMaxCelsius: number | null
+  source: 'override' | 'catalog-exact' | 'catalog-family' | 'none'
 }
 
 export type MetricsSeriesResponse = {
@@ -4654,6 +4748,22 @@ export type MetricsSeriesResponse = {
   sampleCount: number
   gapCount: number
   points: MetricsSeriesPoint[]
+  /**
+   * Point indices where `hardwareProfileGeneration` differs from the
+   * previous known generation — a boundary marker for segmenting chart
+   * continuity without inferring it from raw generation numbers.
+   */
+  generationBreaks: number[]
+  /** Distinct hardware-profile generations observed anywhere in the queried range. */
+  hardwareProfileGenerations?: number[]
+  /**
+   * True when at least one point in the queried range declared the
+   * `"sensors"` part — lets the UI hide the hardware group when the daemon
+   * never once reported hardware sensors.
+   */
+  sensorsAvailable: boolean
+  cpuLimits: EffectiveCpuThermalLimits
+  temperatureUnit: 'celsius' | 'fahrenheit'
 }
 
 export type MetricsSummaryResponse = {
@@ -4665,6 +4775,8 @@ export type MetricsSummaryResponse = {
   available: boolean
   sampleCount: number
   latestAt: string | null
+  cpuLimits: EffectiveCpuThermalLimits
+  temperatureUnit: 'celsius' | 'fahrenheit'
 }
 
 export type FleetServerUsageRecord = {
@@ -4954,11 +5066,19 @@ export async function stopServerMetricsLive(
   )
 }
 
+/** A candidate's current live value — lets the picker show which physical device is moving. */
+export type MetricsSensorReading = {
+  value: number
+  unit: 'celsius' | 'rpm' | 'watts'
+}
+
 /** Stable sensor identity — chip + label + sysfs path, never a bare index. */
 export type MetricsSensorCandidate = {
   chip: string
   label: string
   path: string
+  /** `null` when the sysfs read failed or was out of the plausible range. */
+  reading: MetricsSensorReading | null
 }
 
 export type MetricsStorageMountCapability = {
@@ -4966,6 +5086,29 @@ export type MetricsStorageMountCapability = {
   totalBytes: number
   availableBytes: number
 } | null
+
+/** Why a `MetricsStorageProbeOutcome.result` came back `null`. */
+export type MetricsStorageProbeReason = 'path_not_found' | 'docker_absent' | 'statfs_unsupported'
+
+/**
+ * A hosting/Docker storage probe's full outcome — preserves the path that
+ * was actually probed even when the probe failed, unlike the bare
+ * `MetricsStorageMountCapability` that `system` still carries.
+ */
+export type MetricsStorageProbeOutcome = {
+  probedPath: string | null
+  result: MetricsStorageMountCapability
+  reason?: MetricsStorageProbeReason
+}
+
+/** Why {@link MetricsProcessCapability}'s process count would come back `null`. */
+export type MetricsProcessProbeReason = 'proc_unreadable'
+
+/** `/proc` process-count probe outcome — explains a blank process-count chart. */
+export type MetricsProcessCapability = {
+  probedPath: string
+  reason?: MetricsProcessProbeReason
+}
 
 /** One block-backed mount selectable as the hosting filesystem. */
 export type MetricsStorageMountCandidate = {
@@ -4987,24 +5130,54 @@ export type MetricsGpuDeviceCandidates = {
   chip: string
   temperature: MetricsSensorCandidate[]
   power: MetricsSensorCandidate[]
+  fan: MetricsSensorCandidate[]
+}
+
+/** Why an empty `sensors.disk1Temperature`/`disk2Temperature` pool came back that way. */
+export type MetricsDiskTemperatureReason =
+  | 'no_hwmon'
+  | 'drivetemp_not_loaded'
+  | 'no_disk_temperature_source'
+
+/**
+ * Sensor candidates in the same slots `ServerHardwareProfile` assigns.
+ * `ambient1Temperature`/`ambient2Temperature`/`boardTemperature` share one
+ * candidate pool (as do `disk1Temperature`/`disk2Temperature` and
+ * `systemFan1`/`systemFan2`) — the daemon doesn't further disambiguate them
+ * at discovery time, so any candidate in the shared pool may be assigned to
+ * any of those slots.
+ */
+export type MetricsSensorCapabilities = {
+  cpuTemperature: MetricsSensorCandidate[]
+  cpuPower: MetricsSensorCandidate[]
+  cpuFan: MetricsSensorCandidate[]
+  /** Flattened across every discovered GPU device. */
+  gpuFan: MetricsSensorCandidate[]
+  boardTemperature: MetricsSensorCandidate[]
+  ambient1Temperature: MetricsSensorCandidate[]
+  ambient2Temperature: MetricsSensorCandidate[]
+  disk1Temperature: MetricsSensorCandidate[]
+  disk2Temperature: MetricsSensorCandidate[]
+  systemFan1: MetricsSensorCandidate[]
+  systemFan2: MetricsSensorCandidate[]
+  gpuDevices: MetricsGpuDeviceCandidates[]
+  /** Explanation for an empty disk-temperature pool, when known. */
+  reasons?: {
+    diskTemperature?: MetricsDiskTemperatureReason
+  }
 }
 
 /** Mirrors daemon `MetricsCapabilities` (capability discovery round trip). */
 export type MetricsCapabilities = {
-  sensors: {
-    cpuTemperature: MetricsSensorCandidate[]
-    gpuTemperature: MetricsSensorCandidate[]
-    cpuPower: MetricsSensorCandidate[]
-    gpuPower: MetricsSensorCandidate[]
-    gpuDevices: MetricsGpuDeviceCandidates[]
-  }
+  sensors: MetricsSensorCapabilities
   storageMounts: {
     system: MetricsStorageMountCapability
-    hosting: MetricsStorageMountCapability
-    docker: MetricsStorageMountCapability
+    hosting: MetricsStorageProbeOutcome
+    docker: MetricsStorageProbeOutcome
     candidates: MetricsStorageMountCandidate[]
   }
   networkInterfaces: MetricsNetworkInterfaceCapability[]
+  process: MetricsProcessCapability
 }
 
 export type MetricsCapabilitiesOutcome =
@@ -5056,32 +5229,80 @@ export async function fetchServerMetricsCapabilities(
 }
 
 /**
- * Persisted sensor / hosting-path overrides. Mirrors instance
- * `ServerMetricsOverrides` (`server.metadata.metricsOverrides`).
+ * One conditional sensor slot: a stable candidate identity — `chip` + `label`
+ * from the daemon's sensor discovery, never a raw sysfs path (paths reindex
+ * across reboots). Mirrors instance `ServerSensorSlotAssignment`.
  */
-export type ServerMetricsOverrides = {
-  cpuTemperature?: string
-  gpuTemperature?: string
-  cpuPower?: string
-  gpuPower?: string
+export type MetricsSensorSlot = {
+  chip: string
+  label: string
+}
+
+/**
+ * Persisted hardware profile: sensor identity overrides, NIC bindings, and
+ * manual power/thermal limits. Mirrors instance `ServerHardwareProfile`
+ * (`server.metadata.hardwareProfile`).
+ */
+export type ServerHardwareProfile = {
+  cpuTemperature?: MetricsSensorSlot
+  cpuPower?: MetricsSensorSlot
+  gpuDevice?: MetricsSensorSlot
+  gpuFan?: MetricsSensorSlot
+  disk1Temperature?: MetricsSensorSlot
+  disk2Temperature?: MetricsSensorSlot
+  ambient1Temperature?: MetricsSensorSlot
+  ambient2Temperature?: MetricsSensorSlot
+  boardTemperature?: MetricsSensorSlot
+  cpuFan?: MetricsSensorSlot
+  systemFan1?: MetricsSensorSlot
+  systemFan2?: MetricsSensorSlot
+  nic1?: string
+  nic2?: string
   hostingPath?: string
+  drivetempEnabled?: boolean
+  cpuTdpWattsOverride?: number
+  cpuTjMaxCelsiusOverride?: number
+  /** Bumped server-side whenever a slot identity or NIC interface changes. */
+  generation?: number
+  generationAppliedAt?: string
 }
 
-/** Per-field patch: `null` clears an override, `undefined` leaves it alone. */
-export type ServerMetricsOverridesUpdate = {
-  [K in keyof ServerMetricsOverrides]?: string | null
+/**
+ * Per-field patch: `null` clears a slot/field, `undefined` leaves it alone.
+ * Full-replacement semantics for slot objects — submitting a slot replaces it
+ * wholesale, it is never merged with the stored one.
+ */
+export type ServerHardwareProfileUpdate = {
+  cpuTemperature?: MetricsSensorSlot | null
+  cpuPower?: MetricsSensorSlot | null
+  gpuDevice?: MetricsSensorSlot | null
+  gpuFan?: MetricsSensorSlot | null
+  disk1Temperature?: MetricsSensorSlot | null
+  disk2Temperature?: MetricsSensorSlot | null
+  ambient1Temperature?: MetricsSensorSlot | null
+  ambient2Temperature?: MetricsSensorSlot | null
+  boardTemperature?: MetricsSensorSlot | null
+  cpuFan?: MetricsSensorSlot | null
+  systemFan1?: MetricsSensorSlot | null
+  systemFan2?: MetricsSensorSlot | null
+  nic1?: string | null
+  nic2?: string | null
+  hostingPath?: string | null
+  drivetempEnabled?: boolean | null
+  cpuTdpWattsOverride?: number | null
+  cpuTjMaxCelsiusOverride?: number | null
 }
 
-export async function saveServerMetricsSensorOverrides(
+export async function saveServerHardwareProfile(
   serverId: string,
-  overrides: ServerMetricsOverridesUpdate,
+  profile: ServerHardwareProfileUpdate,
   organizationId?: string | null
-): Promise<{ ok: true; overrides: ServerMetricsOverrides; pushed: boolean }> {
+): Promise<{ ok: true; profile: ServerHardwareProfile; pushed: boolean }> {
   return await apiFetch(
-    `${CLIENT_API}/servers/${serverId}/metrics/sensor-overrides`,
+    `${CLIENT_API}/servers/${serverId}/metrics/hardware-profile`,
     {
       method: 'PUT',
-      body: JSON.stringify(overrides),
+      body: JSON.stringify(profile),
     },
     organizationId
   )

@@ -35,23 +35,29 @@ type MetricLineChartProps = Readonly<{
   stacked?: boolean
   gapBands?: readonly MetricGapBand[]
   xTickFormat?: (ms: number) => string
+  /** Dashed horizontal reference line (e.g. Tjmax/TDP limit) at a fixed Y value. */
+  referenceLine?: Readonly<{ valueY: number; label: string; color?: string }>
+  /**
+   * Vertical dividers marking hardware-profile generation boundaries —
+   * distinct from gap bands (missing samples vs. a sensor-identity change).
+   */
+  breakLines?: readonly number[]
 }>
 
 const Y_AXIS_WIDTH = 52
 const Y_SECTIONS = 4
 const X_LABEL_COUNT = 5
+// Matches the gap-band layer's `top: spacing.xs` (accounts for `plotFrame`'s
+// paddingTop) — captured at module scope because the component below shadows
+// the `spacing` import with a local pixel-spacing variable of the same name.
+const PLOT_TOP_OFFSET = spacing.xs
 const X_AXIS_LABELS_HEIGHT = 28
 const X_TICK_WIDTH = 68
 const X_TICK_MARK_HEIGHT = 5
 
 type ChartPoint = Readonly<{ value: number | undefined }>
 
-function computeYDomain(
-  series: MetricLineSeries[],
-  yDomain: readonly [number, number] | undefined,
-): [number, number] {
-  if (yDomain) return [yDomain[0], yDomain[1]]
-
+function computeSeriesExtent(series: MetricLineSeries[]): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
 
@@ -63,16 +69,50 @@ function computeYDomain(
     }
   }
 
-  if (!Number.isFinite(min) || !Number.isFinite(max)) {
-    return [0, 1]
+  return { min, max }
+}
+
+/**
+ * Folds the reference line into the extent so a limit above the plotted
+ * data (e.g. Tjmax on a cool CPU) still renders on-chart.
+ */
+function foldReferenceIntoExtent(
+  min: number,
+  max: number,
+  referenceValueY: number | undefined,
+): { min: number; max: number } {
+  if (referenceValueY === undefined || !Number.isFinite(referenceValueY)) {
+    return { min, max }
   }
+  return {
+    min: Number.isFinite(min) ? Math.min(min, referenceValueY) : referenceValueY,
+    max: Number.isFinite(max) ? Math.max(max, referenceValueY) : referenceValueY,
+  }
+}
+
+function padDomain(min: number, max: number): [number, number] {
   if (min === max) {
     const pad = min === 0 ? 1 : Math.abs(min) * 0.1
     return [Math.max(0, min - pad), max + pad]
   }
-
   const pad = (max - min) * 0.08
   return [Math.max(0, min - pad), max + pad]
+}
+
+function computeYDomain(
+  series: MetricLineSeries[],
+  yDomain: readonly [number, number] | undefined,
+  referenceValueY: number | undefined,
+): [number, number] {
+  if (yDomain) return [yDomain[0], yDomain[1]]
+
+  const extent = computeSeriesExtent(series)
+  const { min, max } = foldReferenceIntoExtent(extent.min, extent.max, referenceValueY)
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return [0, 1]
+  }
+  return padDomain(min, max)
 }
 
 type YAxisConfig = Readonly<{
@@ -87,8 +127,9 @@ function computeYAxisConfig(
   series: MetricLineSeries[],
   yDomain: readonly [number, number] | undefined,
   yFormat: (value: number) => string,
+  referenceValueY: number | undefined,
 ): YAxisConfig {
-  const [domainMin, domainMax] = computeYDomain(series, yDomain)
+  const [domainMin, domainMax] = computeYDomain(series, yDomain, referenceValueY)
   const rawRange = domainMax - domainMin
   const range = Number.isFinite(rawRange) && rawRange > 0 ? rawRange : 1
   const stepValue = range / Y_SECTIONS
@@ -210,6 +251,30 @@ function gapBandLayout(
   return { left, width }
 }
 
+/** Pixel offset from the top of the plot area for a value on the Y axis. */
+function referenceLineTop(valueY: number, yAxis: YAxisConfig, chartHeight: number): number | null {
+  if (yAxis.maxValue <= 0) return null
+  const domainMin = yAxis.yAxisOffset
+  const domainMax = yAxis.yAxisOffset + yAxis.maxValue
+  const clamped = Math.max(domainMin, Math.min(domainMax, valueY))
+  const fraction = (clamped - domainMin) / yAxis.maxValue
+  return chartHeight * (1 - fraction)
+}
+
+/** Same X-position math as {@link gapBandLayout}, for a single timestamp. */
+function breakLineLeft(
+  tMs: number,
+  xDomainMs: readonly [number, number],
+  plotWidth: number,
+): number | null {
+  const [startMs, endMs] = xDomainMs
+  const domain = endMs - startMs
+  if (domain <= 0 || plotWidth <= 0) return null
+  const raw = ((tMs - startMs) / domain) * plotWidth
+  if (raw < 0 || raw > plotWidth) return null
+  return raw
+}
+
 const pointerStyles = StyleSheet.create({
   card: {
     minWidth: 72,
@@ -322,6 +387,128 @@ function buildPointerConfig(
   }
 }
 
+function GapBandsLayer({
+  gapBands,
+  xDomainMs,
+  chartWidth,
+  chartHeight,
+}: Readonly<{
+  gapBands: readonly MetricGapBand[] | undefined
+  xDomainMs: readonly [number, number]
+  chartWidth: number
+  chartHeight: number
+}>) {
+  if (!gapBands || gapBands.length === 0) return null
+  return (
+    <View
+      style={[
+        styles.gapLayer,
+        { left: Y_AXIS_WIDTH, width: chartWidth, height: chartHeight },
+      ]}
+    >
+      {gapBands.map((band) => {
+        const layout = gapBandLayout(band, xDomainMs, chartWidth)
+        if (!layout) return null
+        return (
+          <View
+            key={`${band.fromMs}-${band.toMs}`}
+            style={[styles.gapBand, { left: layout.left, width: layout.width }]}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
+function BreakLinesLayer({
+  breakLines,
+  xDomainMs,
+  chartWidth,
+  chartHeight,
+}: Readonly<{
+  breakLines: readonly number[] | undefined
+  xDomainMs: readonly [number, number]
+  chartWidth: number
+  chartHeight: number
+}>) {
+  if (!breakLines || breakLines.length === 0) return null
+  return (
+    <View
+      style={[
+        styles.gapLayer,
+        { left: Y_AXIS_WIDTH, width: chartWidth, height: chartHeight },
+      ]}
+    >
+      {breakLines.map((tMs) => {
+        const left = breakLineLeft(tMs, xDomainMs, chartWidth)
+        if (left === null) return null
+        return (
+          <View key={tMs} style={[styles.breakLine, { left }]}>
+            <Text style={styles.breakLineLabel} numberOfLines={1}>
+              Hardware change
+            </Text>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+function ReferenceLineOverlay({
+  referenceLine,
+  topPx,
+  chartWidth,
+}: Readonly<{
+  referenceLine: MetricLineChartProps['referenceLine']
+  topPx: number | null
+  chartWidth: number
+}>) {
+  if (!referenceLine || topPx === null) return null
+  const color = referenceLine.color ?? colors.pending
+  return (
+    <View
+      style={[
+        styles.referenceLineLayer,
+        { left: Y_AXIS_WIDTH, width: chartWidth, top: PLOT_TOP_OFFSET + topPx },
+      ]}
+    >
+      <View style={[styles.referenceLine, { backgroundColor: color }]} />
+      <Text style={[styles.referenceLineLabel, { color }]} numberOfLines={1}>
+        {referenceLine.label}
+      </Text>
+    </View>
+  )
+}
+
+function XAxisTicksOverlay({
+  ticks,
+  chartWidth,
+}: Readonly<{ ticks: XAxisTick[]; chartWidth: number }>) {
+  return (
+    <View
+      style={[
+        styles.xAxisOverlay,
+        { left: Y_AXIS_WIDTH, width: chartWidth, height: X_AXIS_LABELS_HEIGHT },
+      ]}
+    >
+      {ticks.map((tick) => (
+        <View
+          key={tick.key}
+          style={[
+            styles.xAxisTick,
+            { left: tick.left, transform: [{ translateX: -X_TICK_WIDTH / 2 }] },
+          ]}
+        >
+          <View style={styles.xAxisTickMark} />
+          <Text style={styles.xAxisTickText} numberOfLines={1}>
+            {tick.label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
 export function MetricLineChart({
   series,
   xDomainMs,
@@ -332,6 +519,8 @@ export function MetricLineChart({
   stacked = false,
   gapBands,
   xTickFormat,
+  referenceLine,
+  breakLines,
 }: MetricLineChartProps) {
   const [measuredWidth, setMeasuredWidth] = useState(0)
 
@@ -350,8 +539,10 @@ export function MetricLineChart({
   const chartHeight = Math.max(1, height - 44)
   const spacing = Math.max(1, chartWidth / Math.max(1, pointCount - 1))
 
-  const yAxis = computeYAxisConfig(plotted, yDomain, yFormat)
+  const yAxis = computeYAxisConfig(plotted, yDomain, yFormat, referenceLine?.valueY)
   const xAxisTicks = buildXAxisTicks(xDomainMs, chartWidth, xTickFormat)
+  const referenceLineTopPx =
+    referenceLine !== undefined ? referenceLineTop(referenceLine.valueY, yAxis, chartHeight) : null
 
   const dataProps = buildDataProps(isSingle, isStacked, firstSeries, plotted)
 
@@ -386,32 +577,18 @@ export function MetricLineChart({
     <View style={{ width: '100%', height }} onLayout={handleLayout}>
       {measuredWidth > 0 ? (
         <View style={styles.chartFrame}>
-          {gapBands && gapBands.length > 0 ? (
-            <View
-              style={[
-                styles.gapLayer,
-                {
-                  left: Y_AXIS_WIDTH,
-                  width: chartWidth,
-                  height: chartHeight,
-                },
-              ]}
-            >
-              {gapBands.map((band) => {
-                const layout = gapBandLayout(band, xDomainMs, chartWidth)
-                if (!layout) return null
-                return (
-                  <View
-                    key={`${band.fromMs}-${band.toMs}`}
-                    style={[
-                      styles.gapBand,
-                      { left: layout.left, width: layout.width },
-                    ]}
-                  />
-                )
-              })}
-            </View>
-          ) : null}
+          <GapBandsLayer
+            gapBands={gapBands}
+            xDomainMs={xDomainMs}
+            chartWidth={chartWidth}
+            chartHeight={chartHeight}
+          />
+          <BreakLinesLayer
+            breakLines={breakLines}
+            xDomainMs={xDomainMs}
+            chartWidth={chartWidth}
+            chartHeight={chartHeight}
+          />
           <LineChart
             {...dataProps}
             {...areaProps}
@@ -449,34 +626,12 @@ export function MetricLineChart({
             yAxisTextStyle={styles.yAxisText}
             pointerConfig={pointerConfig}
           />
-          <View
-            style={[
-              styles.xAxisOverlay,
-              {
-                left: Y_AXIS_WIDTH,
-                width: chartWidth,
-                height: X_AXIS_LABELS_HEIGHT,
-              },
-            ]}
-          >
-            {xAxisTicks.map((tick) => (
-              <View
-                key={tick.key}
-                style={[
-                  styles.xAxisTick,
-                  {
-                    left: tick.left,
-                    transform: [{ translateX: -X_TICK_WIDTH / 2 }],
-                  },
-                ]}
-              >
-                <View style={styles.xAxisTickMark} />
-                <Text style={styles.xAxisTickText} numberOfLines={1}>
-                  {tick.label}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <ReferenceLineOverlay
+            referenceLine={referenceLine}
+            topPx={referenceLineTopPx}
+            chartWidth={chartWidth}
+          />
+          <XAxisTicksOverlay ticks={xAxisTicks} chartWidth={chartWidth} />
         </View>
       ) : null}
     </View>
@@ -502,6 +657,43 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: 'rgba(224, 179, 65, 0.28)',
+  },
+  breakLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: colors.borderMuted,
+  },
+  breakLineLabel: {
+    position: 'absolute',
+    top: -12,
+    left: 3,
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textDim,
+    fontFamily: 'monospace',
+    letterSpacing: -0.2,
+  },
+  referenceLineLayer: {
+    position: 'absolute',
+    zIndex: 2,
+    pointerEvents: 'none',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  referenceLine: {
+    flex: 1,
+    height: 1,
+    opacity: 0.7,
+  },
+  referenceLineLabel: {
+    position: 'absolute',
+    right: 0,
+    top: -14,
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: 'monospace',
   },
   xAxisOverlay: {
     position: 'absolute',

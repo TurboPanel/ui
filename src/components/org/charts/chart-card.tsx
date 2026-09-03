@@ -8,6 +8,7 @@ export function ChartCard({
   subtitle,
   legend,
   headline,
+  caption,
   unavailable,
   accent = true,
   children,
@@ -16,6 +17,8 @@ export function ChartCard({
   subtitle?: string
   legend?: ReactNode
   headline?: string
+  /** Muted line under the legend — e.g. a Tjmax/TDP headroom readout. */
+  caption?: string
   unavailable?: boolean
   accent?: boolean
   children?: ReactNode
@@ -38,6 +41,7 @@ export function ChartCard({
       </View>
       <View style={styles.body}>
         {legend}
+        {caption ? <Text style={styles.caption}>{caption}</Text> : null}
         {unavailable ? (
           <View style={styles.unavailableBlock}>
             <View style={styles.unavailableDot} />
@@ -115,6 +119,11 @@ const styles = StyleSheet.create({
   body: {
     padding: 14,
     gap: spacing.sm,
+  },
+  caption: {
+    color: colors.textFaint,
+    fontSize: 11,
+    lineHeight: 15,
   },
   plotFrame: {
     borderRadius: 8,

@@ -76,6 +76,37 @@ export function formatCelsius(value: number | null | undefined): string {
   return `${value.toFixed(1)} °C`
 }
 
+/** Organization-configured display unit for stored Celsius readings. */
+export type TemperatureUnit = 'celsius' | 'fahrenheit'
+
+/**
+ * Convert a stored Celsius reading to the display unit. `null`/non-finite
+ * input stays `null` — never coerced to `0`. Comparisons against a limit
+ * (Tjmax/TDP headroom) must always happen in Celsius/Watts *before* calling
+ * this — it is a render-time conversion only.
+ */
+export function celsiusToDisplay(
+  value: number | null | undefined,
+  unit: TemperatureUnit,
+): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return null
+  }
+  return unit === 'fahrenheit' ? (value * 9) / 5 + 32 : value
+}
+
+/** Unit-aware temperature formatter — layers on {@link celsiusToDisplay}. */
+export function formatCelsiusAs(
+  value: number | null | undefined,
+  unit: TemperatureUnit,
+): string {
+  const displayValue = celsiusToDisplay(value, unit)
+  if (displayValue === null) return '—'
+  return unit === 'fahrenheit'
+    ? `${displayValue.toFixed(1)} °F`
+    : `${displayValue.toFixed(1)} °C`
+}
+
 export function formatWatts(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return '—'
