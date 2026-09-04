@@ -61,7 +61,7 @@ Derived percentages (CPU busy, memory/swap/storage used %) are computed client-s
 | Unsupported OS | `statePanel` — non-Linux only |
 | Backend unavailable | `statePanel` + Retry (DuckDB / Analytics Engine label) |
 | Not configured | TurboPanel High Availability vs self-hosted copy via `platform-copy` patterns |
-| No data | Waiting for first samples (immediate on connect; rates in ~2 s) |
+| No data | Waiting for first samples (immediate on connect; rates in ~2 s). If the host is connected but sending an older metrics protocol, **Daemon update required** with an **Update daemon** action (same as Control → Daemon update) |
 | Offline server | Pending left-border banner when charts still render |
 | Per-chart unavailable | Muted inline message inside card — not empty plot (hardware cards hide instead) |
 | Live ended | Muted inline row + Restart live session button |

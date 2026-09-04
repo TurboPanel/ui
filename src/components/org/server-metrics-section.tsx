@@ -66,12 +66,15 @@ import {
   HA_METRICS_LOCAL_NOTE,
   TURBOFABRIC_PRODUCT_NAME,
 } from '@/lib/platform-copy'
+import { useCan } from '@/lib/query-client'
 import {
   useOrgServers,
   useServerDetail,
   useServerMetricsSeries,
+  useServerUpdateStatus,
   useStartServerMetricsLive,
   useStopServerMetricsLive,
+  useTriggerServerUpdate,
 } from '@/lib/queries/servers'
 import {
   CPU_IOWAIT,
@@ -1271,6 +1274,34 @@ function resolveViewState(
   return 'charts'
 }
 
+function noDataCopy(
+  updateAvailable: boolean,
+  updating: boolean,
+): {
+  title: string
+  body: string
+} {
+  if (updating) {
+    return {
+      title: 'Daemon is updating',
+      body:
+        'The daemon on this host is installing a new build. Metrics will appear after it reconnects.',
+    }
+  }
+  if (updateAvailable) {
+    return {
+      title: 'Daemon update required',
+      body:
+        'This host is connected, but it is sending an older metrics protocol that this control plane cannot store. Update the daemon, then samples will appear.',
+    }
+  }
+  return {
+    title: 'Waiting for first samples',
+    body:
+      'No server metrics yet. Samples appear about one minute after the daemon connects and begins reporting.',
+  }
+}
+
 function metricsErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return 'Failed to load metrics'
@@ -1397,6 +1428,11 @@ function MetricsStatusMessages({
   hasData,
   queryError,
   onRetry,
+  updateAvailable,
+  updating,
+  canUpdate,
+  updateBusy,
+  onUpdate,
 }: Readonly<{
   viewState: MetricsViewState
   backend: MetricsBackendKind
@@ -1404,6 +1440,11 @@ function MetricsStatusMessages({
   hasData: boolean
   queryError: unknown
   onRetry: () => void
+  updateAvailable: boolean
+  updating: boolean
+  canUpdate: boolean
+  updateBusy: boolean
+  onUpdate: () => void
 }>) {
   const showGenericError =
     queryError != null &&
@@ -1412,6 +1453,8 @@ function MetricsStatusMessages({
     queryError instanceof MetricsBackendUnavailableError
       ? queryError.backend
       : backend
+  const emptyCopy = noDataCopy(updateAvailable, updating)
+  const showUpdateAction = updateAvailable && canUpdate && !updating
 
   return (
     <>
@@ -1468,8 +1511,20 @@ function MetricsStatusMessages({
 
       {viewState === 'no-data' ? (
         <MetricsStateBlock
-          title="Waiting for first samples"
-          body="No server metrics yet. Samples appear about one minute after the daemon connects and begins reporting."
+          tone={updateAvailable || updating ? 'warn' : 'neutral'}
+          title={emptyCopy.title}
+          body={emptyCopy.body}
+          action={
+            showUpdateAction ? (
+              <Button
+                label="Update daemon"
+                variant="primary"
+                busy={updateBusy}
+                busyLabel="Updating…"
+                onPress={onUpdate}
+              />
+            ) : undefined
+          }
         />
       ) : null}
     </>
@@ -2173,6 +2228,9 @@ export function ServerMetricsSection({
   // embedded on the server detail screen this is a cache hit, not an extra
   // round trip.
   const serverDetailQuery = useServerDetail(orgId, serverId)
+  const updateStatusQuery = useServerUpdateStatus(orgId, serverId)
+  const triggerUpdateMutation = useTriggerServerUpdate(orgId, serverId)
+  const canManage = useCan('organization', orgId, 'organization:manage')
 
   // Live sampling is scoped to this single-server screen at 5m/10m only —
   // fleet/overview surfaces never acquire a lease.
@@ -2202,6 +2260,10 @@ export function ServerMetricsSection({
   const data = metricsQuery.data
   const viewState = resolveViewState(server, data, metricsQuery.error)
   const stale = isServerStale(server)
+  const updateAvailable = updateStatusQuery.data?.updateAvailable === true
+  const updating =
+    triggerUpdateMutation.isPending ||
+    updateStatusQuery.data?.status === 'updating'
 
   const normalizedMetrics = useMemo(
     () => (data ? normalizeMetricsGrid(data) : null),
@@ -2276,6 +2338,13 @@ export function ServerMetricsSection({
         hasData={data != null}
         queryError={metricsQuery.error}
         onRetry={handleRetry}
+        updateAvailable={updateAvailable}
+        updating={updating}
+        canUpdate={canManage && server?.connected === true}
+        updateBusy={triggerUpdateMutation.isPending}
+        onUpdate={() => {
+          triggerUpdateMutation.mutate()
+        }}
       />
 
       {viewState === 'charts' && data ? (

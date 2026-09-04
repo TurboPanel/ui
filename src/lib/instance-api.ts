@@ -4884,12 +4884,13 @@ export async function fetchServerMetricsSeries(
     query.set('maxPoints', String(options.maxPoints))
   }
 
-  return await fetchServerMetricsJson<MetricsSeriesResponse>(
+  const series = await fetchServerMetricsJson<MetricsSeriesResponse>(
     serverId,
     'series',
     query,
     organizationId
   )
+  return series
 }
 
 export async function fetchServerMetricsSummary(
