@@ -135,12 +135,91 @@ export function isDockerProgressLine(message: string): boolean {
   return false
 }
 
+/** Git progress and checkout messages are written to stderr by design. */
+function isGitStderrLine(message: string): boolean {
+  const trimmed = message.trimStart()
+  if (trimmed.startsWith('Cloning into ')) return true
+  if (trimmed.startsWith('From https://') || trimmed.startsWith('From git@')) {
+    return true
+  }
+  if (/^\* branch\s/.test(trimmed)) return true
+  if (trimmed.startsWith('HEAD is now at ')) return true
+  if (trimmed.startsWith('remote:')) return true
+  if (trimmed.startsWith('Switched to a new branch')) return true
+  if (trimmed.startsWith('Already on ')) return true
+  return false
+}
+
 /**
- * A row is an error when it came from stderr **and** is not Docker progress.
- * Never `stream === 'stderr'` on its own — see {@link DOCKER_PROGRESS_STATUSES}.
+ * Leading phrases Node toolchains print on stderr during a successful build.
+ * `$ ` is pnpm/npm command echo; the rest are Next.js / pnpm / Corepack
+ * progress and telemetry banners.
+ */
+const NODE_TOOLCHAIN_STDERR_PREFIXES = [
+  '$ ',
+  '▲ Next.js',
+  '✓ ',
+  '○ ',
+  '⚠ ',
+  'Route (app)',
+  'Progress: resolved',
+  'Packages:',
+  'Done in ',
+  'Lockfile is up to date',
+  'dependencies:',
+  'devDependencies:',
+  'Content-addressable store',
+  'Virtual store',
+  '? Verifying lockfile',
+  'Attention: Next.js now collects',
+  'This information is used to shape',
+  'You can learn more, including how to opt-out',
+  'https://nextjs.org/telemetry',
+  'Finalizing page optimization',
+  'Collecting page data',
+  'Linting and checking validity',
+]
+
+/**
+ * Substrings that appear mid-line in Next.js / pnpm progress (indented or
+ * prefixed by a spinner), so a starts-with match would miss them.
+ */
+const NODE_TOOLCHAIN_STDERR_SNIPPETS = [
+  'Creating an optimized production build',
+  'Generating static pages',
+  'Running TypeScript',
+  'Packages are hard linked',
+]
+
+/**
+ * Node package managers and frameworks (Next.js, pnpm, Corepack) routinely log
+ * progress to stderr even on success — same class of noise as Docker progress.
+ */
+function isNodeToolchainStderrLine(message: string): boolean {
+  const trimmed = message.trimStart()
+  return (
+    NODE_TOOLCHAIN_STDERR_PREFIXES.some((prefix) =>
+      trimmed.startsWith(prefix),
+    ) ||
+    NODE_TOOLCHAIN_STDERR_SNIPPETS.some((snippet) => trimmed.includes(snippet))
+  )
+}
+
+/** stderr that is informational progress, not a deploy failure. */
+export function isBenignStderrLine(message: string): boolean {
+  return (
+    isDockerProgressLine(message) ||
+    isGitStderrLine(message) ||
+    isNodeToolchainStderrLine(message)
+  )
+}
+
+/**
+ * A row is an error when it came from stderr **and** is not benign progress.
+ * Never `stream === 'stderr'` on its own — see {@link isBenignStderrLine}.
  */
 export function isErrorLine(line: LogTranscriptLine): boolean {
-  return line.stream === 'stderr' && !isDockerProgressLine(line.message)
+  return line.stream === 'stderr' && !isBenignStderrLine(line.message)
 }
 
 /** Trim trailing space and Compose's meaningless `0B` / `1B` counter. */

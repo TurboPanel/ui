@@ -26,20 +26,6 @@ function isSshCloneUrl(url: string): boolean {
 }
 
 /**
- * A public clone resolves its default branch anonymously the moment it
- * connects — the same `ls-remote` the connected-account lane gets from its
- * provider, just run against the URL instead of an API. A private one still
- * needs a name here: resolving it would mean running that same read with the
- * deploy key before the operator has confirmed it is even added.
- */
-function defaultBranchHint(access: RepositoryAccess): string {
-  if (access === 'public') {
-    return 'Leave empty to detect it automatically once connected.'
-  }
-  return "Deploys build this branch when a service doesn't name one. Leave empty to watch every pushed branch — services must then name their branch to deploy."
-}
-
-/**
  * How the instance will authenticate the clone.
  *
  * `public` is a real binding, not an absence of one: the row is written with a
@@ -101,7 +87,6 @@ export function DeployKeySource({
 }>) {
   const [provider, setProvider] = useState<'gitlab' | 'git'>('git')
   const [repositoryUrl, setRepositoryUrl] = useState('')
-  const [defaultBranch, setDefaultBranch] = useState('')
   const [access, setAccess] = useState<RepositoryAccess>('public')
   const [deployKey, setDeployKey] = useState<GeneratedDeployKey | null>(null)
   const createDeployKeyMutation = useCreateGitlabDeployKey(orgId)
@@ -136,9 +121,10 @@ export function DeployKeySource({
       provider: effectiveAccess === 'public' ? 'git' : provider,
       repositoryUrl: trimmedUrl,
       // Null, not omitted: a public repository binds with no credential at all
-      // and clones anonymously.
+      // and clones anonymously. The default branch is always detected on
+      // connect — github.com over anonymous REST, other remotes via the daemon.
       secretId: effectiveAccess === 'private' ? deployKey!.secretId : null,
-      defaultBranch: defaultBranch.trim().length > 0 ? defaultBranch.trim() : null,
+      defaultBranch: null,
     })
     if (!created.ok) return
     onConnect(created.value.id, created.value.repository, created.value.reused)
@@ -202,18 +188,6 @@ export function DeployKeySource({
           </FormField>
         )
         : null}
-
-      <TextField
-        label="Default branch"
-        value={defaultBranch}
-        onChangeText={setDefaultBranch}
-        editable={!busy}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="main"
-        mono
-        hint={defaultBranchHint(effectiveAccess)}
-      />
 
       <DeployKeyConnectAction
         access={effectiveAccess}

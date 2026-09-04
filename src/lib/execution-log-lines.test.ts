@@ -284,6 +284,58 @@ describe('docker progress lines', () => {
     expect(isErrorLine({ ...progress, seq: 2, message: 'boom' })).toBe(true)
     expect(isErrorLine({ ...progress, seq: 3, stream: 'stdout' })).toBe(false)
   })
+
+  it('does not flag git clone and Next.js build stderr as errors', () => {
+    const git: LogTranscriptLine = {
+      seq: 1,
+      timestamp: null,
+      stream: 'stderr',
+      phase: 'fetch',
+      message:
+        "Cloning into '/var/lib/turbopanel/release-build/…/source'...",
+    }
+    expect(isErrorLine(git)).toBe(false)
+    expect(
+      isErrorLine({
+        ...git,
+        seq: 2,
+        message: '▲ Next.js 16.3.3 (Turbopack)',
+      }),
+    ).toBe(false)
+    expect(
+      isErrorLine({
+        ...git,
+        seq: 3,
+        message: '$ next build',
+      }),
+    ).toBe(false)
+    expect(
+      isErrorLine({
+        ...git,
+        seq: 4,
+        message:
+          'Error: ENOENT: no such file or directory, mkdir',
+      }),
+    ).toBe(true)
+  })
+
+  it.each([
+    '  Creating an optimized production build ...',
+    '  Content-addressable store is at "/home/node"',
+    'Progress: resolved 12, reused 12, downloaded 0, added 12',
+    'Packages: +12',
+    'Done in 1.2s',
+  ])('does not flag node toolchain stderr %s as an error', (message) => {
+    expect(
+      isErrorLine({
+        seq: 1,
+        timestamp: null,
+        stream: 'stderr',
+        phase: 'build',
+        message,
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('normalizeTranscriptMessage', () => {
