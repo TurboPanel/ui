@@ -74,6 +74,44 @@ export function writeComposePrincipals(
   return { ...document, data: data as ComposeDocument['data'] }
 }
 
+/** `principals` with `from` renamed to `to` — key order preserved, a rename is not a move. */
+function renamePrincipalKey(
+  principals: Record<string, PrincipalSpec>,
+  from: string,
+  to: string,
+): Record<string, PrincipalSpec> {
+  const renamed: Record<string, PrincipalSpec> = {}
+  for (const [name, spec] of Object.entries(principals)) {
+    renamed[name === from ? to : name] = spec
+  }
+  return renamed
+}
+
+/** Every service's `x-turbopanel.principal` reference repointed from `from` to `to`. */
+function repointServicePrincipals(
+  services: Record<string, unknown>,
+  from: string,
+  to: string,
+): { services: Record<string, unknown>; changed: boolean } {
+  let changed = false
+  const patched: Record<string, unknown> = {}
+  for (const [name, raw] of Object.entries(services)) {
+    const extension = isPlainMapping(raw)
+      ? raw[TURBOPANEL_SERVICE_EXTENSION_KEY]
+      : undefined
+    if (!isPlainMapping(extension) || extension.principal !== from) {
+      patched[name] = raw
+      continue
+    }
+    changed = true
+    patched[name] = {
+      ...(raw as Record<string, unknown>),
+      [TURBOPANEL_SERVICE_EXTENSION_KEY]: { ...extension, principal: to },
+    }
+  }
+  return { services: patched, changed }
+}
+
 /**
  * Rename a declared alias, everywhere the document says it.
  *
@@ -94,38 +132,17 @@ export function renameComposePrincipal(
   if (!Object.hasOwn(principals, from)) return document
   if (!isPrincipalAlias(to) || Object.hasOwn(principals, to)) return document
 
-  const renamed: Record<string, PrincipalSpec> = {}
-  for (const [name, spec] of Object.entries(principals)) {
-    renamed[name === from ? to : name] = spec
-  }
-  let next = writeComposePrincipals(document, renamed)
+  const next = writeComposePrincipals(document, renamePrincipalKey(principals, from, to))
 
   const services = next.data.services
-  if (isPlainMapping(services)) {
-    let changed = false
-    const patched: Record<string, unknown> = {}
-    for (const [name, raw] of Object.entries(services)) {
-      const extension = isPlainMapping(raw)
-        ? raw[TURBOPANEL_SERVICE_EXTENSION_KEY]
-        : undefined
-      if (isPlainMapping(extension) && extension.principal === from) {
-        patched[name] = {
-          ...(raw as Record<string, unknown>),
-          [TURBOPANEL_SERVICE_EXTENSION_KEY]: { ...extension, principal: to },
-        }
-        changed = true
-      } else {
-        patched[name] = raw
-      }
-    }
-    if (changed) {
-      next = {
-        ...next,
-        data: { ...next.data, services: patched } as ComposeDocument['data'],
-      }
-    }
+  if (!isPlainMapping(services)) return next
+
+  const { services: patched, changed } = repointServicePrincipals(services, from, to)
+  if (!changed) return next
+  return {
+    ...next,
+    data: { ...next.data, services: patched } as ComposeDocument['data'],
   }
-  return next
 }
 
 /**
