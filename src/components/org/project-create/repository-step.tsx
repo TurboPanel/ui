@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
-import { panelStyles } from '@/components/ui/panel-styles'
 import { RepositoryPicker } from '@/components/org/git-sources/repository-picker'
 import {
   Badge,
@@ -10,6 +9,7 @@ import {
   InlineNotice,
   LoadingState,
   MonoText,
+  SectionPanel,
   SegmentedControl,
   Select,
   TextField,
@@ -100,21 +100,22 @@ const SIMPLE_KIND_OPTIONS: readonly {
 
 /**
  * Wizard step for the **Repository** card, now the whole "what happens to this
- * repository" screen: pick it, **check** it, then — underneath the same repo —
- * choose the production branch, the builder, and the Simple-application
- * settings, all before the next screen.
+ * repository" screen: pick it — the read starts the instant it's picked, no
+ * separate confirmation click — then, underneath the same repo, choose the
+ * production branch, the builder, and the Simple-application settings, all
+ * before the next screen.
  *
- * The check is an explicit act rather than a side effect of Continue: reading
- * a repository costs a provider round-trip or a clone on a connected server,
- * and the results (detected app type, package manager, suggested commands) are
- * what the rest of the form is built from, so the operator sees the read
- * happen and sees what it found.
+ * The read still shows itself rather than hiding behind Continue: it costs a
+ * provider round-trip or a clone on a connected server, and the results
+ * (detected app type, package manager, suggested commands) are what the rest
+ * of the form is built from, so the operator sees the read happen and sees
+ * what it found — just without a redundant button between picking the
+ * repository and seeing that happen.
  */
 export function RepositoryStep({
   orgId,
   selectedSourceId,
   branch,
-  checked,
   inspection,
   inspectionLoading,
   inspectionError,
@@ -124,7 +125,6 @@ export function RepositoryStep({
   disabled = false,
   onSelectSourceId,
   onBranchChange,
-  onCheck,
   onSelectBuilder,
   onSimpleChange,
   onCloneUrlLaneChange,
@@ -132,8 +132,6 @@ export function RepositoryStep({
   orgId: string
   selectedSourceId: string
   branch: string
-  /** True once the operator pressed Check repository for this pick. */
-  checked: boolean
   inspection: RepositoryInspection | undefined
   inspectionLoading: boolean
   inspectionError: Error | null
@@ -144,7 +142,6 @@ export function RepositoryStep({
   disabled?: boolean
   onSelectSourceId: (sourceId: string, record?: RepositoryRecord) => void
   onBranchChange: (branch: string) => void
-  onCheck: () => void
   onSelectBuilder: (builder: RepositoryBuilder) => void
   onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
   /** Forwarded to the picker — see its own doc for why the wizard needs this. */
@@ -244,7 +241,6 @@ export function RepositoryStep({
       </View>
 
       <CheckedRepositoryDetails
-        checked={checked}
         inspectionLoading={inspectionLoading}
         inspectionError={inspectionError}
         inspection={inspection}
@@ -258,7 +254,6 @@ export function RepositoryStep({
         onSelectBuilder={onSelectBuilder}
         simple={simple}
         onSimpleChange={onSimpleChange}
-        onCheck={onCheck}
       />
     </View>
   )
@@ -274,7 +269,6 @@ function resolveAccessLabel(
 }
 
 type CheckedRepositoryDetailsProps = Readonly<{
-  checked: boolean
   inspectionLoading: boolean
   inspectionError: Error | null
   inspection: RepositoryInspection | undefined
@@ -288,50 +282,33 @@ type CheckedRepositoryDetailsProps = Readonly<{
   onSelectBuilder: (builder: RepositoryBuilder) => void
   simple: SimpleAppConfig
   onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
-  onCheck: () => void
 }>
 
 /**
- * Everything below the picked-repository card: the Check button, its loading
- * and error states, and — once checked — the branch, builder, and Simple
- * fields. Split out of `RepositoryStep` because these render states are
- * mutually exclusive on `checked`/`inspectionLoading`, not a single flow.
+ * Everything below the picked-repository card: the read's loading state, then
+ * — once it lands, one way or the other — the branch, builder, and Simple
+ * fields. `inspectionLoading` is the query's `isPending` (has neither data
+ * nor an error yet), not `isFetching` — it is true for the whole gap between
+ * a fresh pick and the read landing, including the tick before the fetch
+ * itself has actually started, so the form never flashes ahead of it.
  */
 function CheckedRepositoryDetails({
-  checked,
   inspectionLoading,
-  onCheck,
+  inspectionError,
+  inspection,
   disabled,
   ...form
 }: CheckedRepositoryDetailsProps) {
-  if (!checked) {
-    return <CheckPrompt disabled={disabled} onCheck={onCheck} />
-  }
   if (inspectionLoading) {
     return <LoadingState label="Reading the repository…" />
   }
-  return <CheckedRepositoryForm disabled={disabled} {...form} />
-}
-
-function CheckPrompt({
-  disabled,
-  onCheck,
-}: Readonly<{ disabled: boolean; onCheck: () => void }>) {
   return (
-    <View style={styles.checkBlock}>
-      <Button
-        label="Check repository"
-        variant="primary"
-        disabled={disabled}
-        onPress={onCheck}
-        accessibilityLabel="Check repository"
-      />
-      <Text style={panelStyles.muted}>
-        Reads the repository so TurboPanel can see what it holds — its app
-        type, package manager, and compose file — and suggest how to build
-        and run it.
-      </Text>
-    </View>
+    <CheckedRepositoryForm
+      disabled={disabled}
+      inspection={inspection}
+      inspectionError={inspectionError}
+      {...form}
+    />
   )
 }
 
@@ -348,7 +325,7 @@ function CheckedRepositoryForm({
   onSelectBuilder,
   simple,
   onSimpleChange,
-}: Omit<CheckedRepositoryDetailsProps, 'checked' | 'inspectionLoading' | 'onCheck'>) {
+}: Omit<CheckedRepositoryDetailsProps, 'inspectionLoading'>) {
   const readable = inspectionError === null && inspection !== undefined
 
   return (
@@ -443,6 +420,11 @@ function CheckSummary({
 /**
  * The Simple-application form: what it produces, where it builds, how it
  * builds, and how it runs — everything still on the repository screen.
+ *
+ * Grouped into titled sections rather than one flat stack of fields: "what it
+ * produces" is a single up-front choice, and "Build" and "Run" (or "Output",
+ * for a static site) are two different phases of a deploy that happen to
+ * share a screen, not one undifferentiated list.
  */
 function SimpleAppFields({
   simple,
@@ -457,9 +439,9 @@ function SimpleAppFields({
   onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
 }>) {
   return (
-    <>
-      <FormField
-        label="What does it produce?"
+    <View style={styles.simpleFields}>
+      <SectionPanel
+        title="What does it produce?"
         hint={simple.kind === 'web'
           ? 'A process TurboPanel builds, supervises, and restarts on each deploy.'
           : 'Files the build writes once; Caddy serves them with nothing to run.'}
@@ -471,38 +453,43 @@ function SimpleAppFields({
           disabled={disabled}
           accessibilityLabel="Application kind"
         />
-      </FormField>
+      </SectionPanel>
 
-      <TextField
-        label="Build root"
-        value={simple.buildRoot}
-        onChangeText={(buildRoot) => onSimpleChange({ buildRoot })}
-        editable={!disabled}
-        mono
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="."
-        accessibilityLabel="Build root"
-        hint="Directory the build runs in, relative to the repository root. Leave empty for the root."
-      />
+      <SectionPanel
+        title="Build"
+        hint="Dependencies install first, from your lockfile — this is what runs after."
+      >
+        <TextField
+          label="Build root"
+          value={simple.buildRoot}
+          onChangeText={(buildRoot) => onSimpleChange({ buildRoot })}
+          editable={!disabled}
+          mono
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="."
+          accessibilityLabel="Build root"
+          hint="Directory the build runs in, relative to the repository root. Leave empty for the root."
+        />
 
-      <TextField
-        label="Build command"
-        value={simple.buildCommand}
-        onChangeText={(buildCommand) => onSimpleChange({ buildCommand })}
-        editable={!disabled}
-        mono
-        maxLength={SOURCE_COMMAND_MAX_LENGTH}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder={`${manager ?? 'npm'} run build`}
-        accessibilityLabel="Build command"
-        hint="Dependencies are installed first from your lockfile — this runs after. Leave empty to skip the build step."
-      />
+        <TextField
+          label="Build command"
+          value={simple.buildCommand}
+          onChangeText={(buildCommand) => onSimpleChange({ buildCommand })}
+          editable={!disabled}
+          mono
+          maxLength={SOURCE_COMMAND_MAX_LENGTH}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder={`${manager ?? 'npm'} run build`}
+          accessibilityLabel="Build command"
+          hint="Leave empty to skip the build step."
+        />
+      </SectionPanel>
 
       {simple.kind === 'web'
         ? (
-          <>
+          <SectionPanel title="Run" hint="Starts your app after each deploy, and keeps it running.">
             <TextField
               label="Start command"
               value={simple.startCommand}
@@ -514,7 +501,7 @@ function SimpleAppFields({
               autoCorrect={false}
               placeholder={`${manager ?? 'npm'} start`}
               accessibilityLabel="Start command"
-              hint="Runs your app after each deploy. Leave empty to run server.js with the vendored Node."
+              hint="Leave empty to run server.js with the vendored Node."
             />
             <FormField
               label="Port"
@@ -528,23 +515,25 @@ function SimpleAppFields({
                 accessibilityLabel="Port"
               />
             </FormField>
-          </>
+          </SectionPanel>
         )
         : (
-          <TextField
-            label="Output directory"
-            value={simple.outputDirectory}
-            onChangeText={(outputDirectory) => onSimpleChange({ outputDirectory })}
-            editable={!disabled}
-            mono
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="dist"
-            accessibilityLabel="Output directory"
-            hint="Directory the build writes the site into — Caddy serves it as the document root."
-          />
+          <SectionPanel title="Output" hint="Where the build writes the site, for Caddy to serve.">
+            <TextField
+              label="Output directory"
+              value={simple.outputDirectory}
+              onChangeText={(outputDirectory) => onSimpleChange({ outputDirectory })}
+              editable={!disabled}
+              mono
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="dist"
+              accessibilityLabel="Output directory"
+              hint="Directory the build writes the site into — Caddy serves it as the document root."
+            />
+          </SectionPanel>
         )}
-    </>
+    </View>
   )
 }
 
@@ -631,13 +620,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  checkBlock: {
-    gap: spacing.sm,
-  },
   summaryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  simpleFields: {
+    gap: spacing.md,
   },
 })

@@ -149,8 +149,7 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   },
   repository: {
     title: 'Link a repository',
-    hint:
-      'Pick it, check it, and set up how it builds and runs. Nothing is created yet.',
+    hint: 'Pick it, then set up how it builds and runs. Nothing is created yet.',
   },
   catalog: { title: 'Choose a service', hint: '' },
   compose: { title: '', hint: '' },
@@ -200,27 +199,23 @@ function canContinueFromStep(
   step: Step,
   selectedOption: SetupTypeOption | null,
   builder: RepositoryBuilder | null,
-  checked: boolean,
   selectedSource: RepositoryRecord | null,
 ): boolean {
   if (step === 'type') return selectedOption != null
-  // The repository step ends only once the repository has been checked and a
-  // builder chosen — everything the seed needs lives on this one screen.
-  return selectedSource != null && checked && builder != null
+  // The repository step ends only once a builder is chosen, which itself
+  // waits on the read — everything the seed needs lives on this one screen.
+  return selectedSource != null && builder != null
 }
 
 /**
- * The read fires when the operator presses Check repository, never from
- * rendering the picker — it costs a provider round-trip or a clone on a
- * connected server. Keyed by branch, so editing the production branch
- * afterwards re-reads at the new ref.
+ * The read fires the moment a repository is picked — it costs a provider
+ * round-trip or a clone on a connected server, but making the operator press
+ * a second button to start it, right after the pick that already committed
+ * them to this repository, was pure friction. Keyed by branch, so editing
+ * the production branch afterwards re-reads at the new ref.
  */
-function sourceInspectionEnabled(
-  step: Step,
-  checked: boolean,
-  sourceId: string,
-): boolean {
-  return step === 'repository' && checked && sourceId.length > 0
+function sourceInspectionEnabled(step: Step, sourceId: string): boolean {
+  return step === 'repository' && sourceId.length > 0
 }
 
 /** The compose lane the chosen builder seeds. */
@@ -384,8 +379,6 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
    * source the org no longer has.
    */
   const repositoriesQuery = useRepositories(orgId, { enabled: step === 'repository' })
-  /** True once Check repository was pressed for the current pick. */
-  const [repositoryChecked, setRepositoryChecked] = useState(false)
   /**
    * True while the repository picker's clone-URL lane owns the screen. That
    * lane ends in its own Connect and Back, so the wizard's own footer is
@@ -408,7 +401,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     selectedSourceId,
     repositoryBranch.trim(),
     {
-      enabled: sourceInspectionEnabled(step, repositoryChecked, selectedSourceId),
+      enabled: sourceInspectionEnabled(step, selectedSourceId),
     },
   )
   const selectedSource = useMemo(
@@ -570,7 +563,7 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   // Simple form is prefilled in the same pass, but only while pristine — a
   // re-read must not overwrite what the operator typed.
   useEffect(() => {
-    if (step !== 'repository' || !repositoryChecked) return
+    if (step !== 'repository') return
     if (!inspection.isSuccess || !inspection.data) return
     const suggested = suggestedSimpleAppConfig(inspection.data)
     if (!simpleConfigTouched) setSimpleConfig(suggested)
@@ -586,18 +579,11 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     else setBuilder('simple')
   }, [
     step,
-    repositoryChecked,
     builder,
     simpleConfigTouched,
     inspection.isSuccess,
     inspection.data,
   ])
-
-  /** The explicit read: what turns a picked repository into a configurable one. */
-  const checkRepository = () => {
-    setApiError(null)
-    setRepositoryChecked(true)
-  }
 
   const changeSimpleConfig = (patch: Partial<SimpleAppConfig>) => {
     setSimpleConfigTouched(true)
@@ -803,9 +789,12 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
             orgId={orgId}
             selectedSourceId={selectedSourceId}
             branch={repositoryBranch}
-            checked={repositoryChecked}
             inspection={inspection.data}
-            inspectionLoading={inspection.isLoading}
+            // `isPending`, not `isFetching`: true for the whole gap between a
+            // fresh pick and the read landing (data or error), including the
+            // one tick before TanStack Query's fetch has actually started —
+            // `isFetching` alone would let the form flash ahead of it.
+            inspectionLoading={inspection.isPending}
             inspectionError={asError(inspection.error)}
             defaultEnvironmentName={defaultEnvironmentName}
             builder={builder}
@@ -818,16 +807,15 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
               // clone-URL-lane effect getting a last word, so the wizard's
               // footer is restored explicitly rather than staying hidden.
               setCloneUrlLaneOpen(false)
-              // A different repository is a different read: the check, the
-              // detected builder, and the prefilled commands all belonged to
-              // the previous pick.
-              setRepositoryChecked(false)
+              // A different repository is a different read: the detected
+              // builder and the prefilled commands all belonged to the
+              // previous pick. The read itself starts as soon as this state
+              // update makes `sourceInspectionEnabled` true.
               setBuilder(null)
               setSimpleConfig(suggestedSimpleAppConfig(undefined))
               setSimpleConfigTouched(false)
             }}
             onBranchChange={setRepositoryBranch}
-            onCheck={checkRepository}
             onSelectBuilder={setBuilder}
             onSimpleChange={changeSimpleConfig}
             onCloneUrlLaneChange={setCloneUrlLaneOpen}
@@ -873,7 +861,6 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
               step,
               selectedOption,
               builder,
-              repositoryChecked,
               selectedSource,
             )}
             onBack={goBack}
