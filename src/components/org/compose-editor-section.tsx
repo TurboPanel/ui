@@ -62,6 +62,7 @@ import {
   composePrincipalAliases,
   nextPrincipalAlias,
   readComposePrincipals,
+  renameComposePrincipal,
   writeComposePrincipals,
 } from '@/lib/compose/principals-document'
 import type { PrincipalSpec } from '@/lib/compose/root-extension'
@@ -540,6 +541,7 @@ function ComposeDocumentBody({
   serviceCard,
   principals,
   onPrincipalsChange,
+  onPrincipalRename,
   networks,
   networkIssues,
   onNetworksChange,
@@ -555,6 +557,7 @@ function ComposeDocumentBody({
   serviceCard: (name: string) => ReactNode
   principals: Readonly<Record<string, PrincipalSpec>>
   onPrincipalsChange: (next: Record<string, PrincipalSpec>) => void
+  onPrincipalRename: (from: string, to: string) => void
   networks: Readonly<Record<string, ComposeNetworkEntry>>
   networkIssues: readonly ComposeLintIssue[]
   onNetworksChange: (next: Record<string, ComposeNetworkEntry>) => void
@@ -587,6 +590,7 @@ function ComposeDocumentBody({
           principals={principals}
           disabled={saving || hideSave}
           onChange={onPrincipalsChange}
+          onRename={onPrincipalRename}
         />
       </View>
       <View style={styles.documentFooter}>
@@ -1140,17 +1144,23 @@ export function ComposeEditorSection({
     updateDraft(writeComposePrincipals(draft, next))
   }
 
+  /** Rename an alias everywhere at once — declaration and service references. */
+  const renamePrincipal = (from: string, to: string) => {
+    updateDraft(renameComposePrincipal(draft, from, to))
+  }
+
   /**
    * Declare a fresh alias and hand its name back so the caller can select it.
    *
-   * Seeded from nothing in particular — the service editor is the only caller
-   * and it wants "an account for this service", which `nextPrincipalAlias`
-   * turns into the first free `app`, `app-2`, … . Returning the name rather
-   * than taking a callback is what lets the picker set the service's field in
-   * the same press.
+   * Seeded from the compose service the press came from — `web` gets `web`, and
+   * a second service that wants its own account gets `web-2` — because that is
+   * the name the operator already chose for the thing the account runs.
+   * Returning the name rather than taking a callback is what lets the picker
+   * set the service's field in the same press. Renaming afterwards is one
+   * control away in the Accounts section.
    */
-  const declarePrincipalAlias = (): string => {
-    const alias = nextPrincipalAlias(principalAliases, 'app')
+  const declarePrincipalAlias = (serviceName: string): string => {
+    const alias = nextPrincipalAlias(principalAliases, serviceName)
     setPrincipals({ ...principals, [alias]: {} })
     return alias
   }
@@ -1253,7 +1263,9 @@ export function ComposeEditorSection({
         nameDraft={serviceNameDrafts[name] ?? name}
         saving={saving}
         principalAliases={principalAliases}
-        {...(hideSave ? {} : { onDeclarePrincipalAlias: declarePrincipalAlias })}
+        {...(hideSave
+          ? {}
+          : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
         onNameDraftChange={(value) =>
           setServiceNameDrafts((current) => ({ ...current, [name]: value }))
         }
@@ -1289,6 +1301,7 @@ export function ComposeEditorSection({
         serviceCard={serviceCard}
         principals={principals}
         onPrincipalsChange={setPrincipals}
+        onPrincipalRename={renamePrincipal}
         networks={networks}
         networkIssues={networkLintIssues}
         onNetworksChange={setNetworks}
@@ -1311,6 +1324,7 @@ export function ComposeEditorSection({
           principals={principals}
           disabled={saving || hideSave}
           onChange={setPrincipals}
+          onRename={renamePrincipal}
         />
         {Object.keys(servicesFrom(draft)).map((name) => (
           <View key={name}>{serviceCard(name)}</View>

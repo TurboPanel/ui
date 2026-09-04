@@ -6,6 +6,7 @@ import {
   seedHostingCompose,
 } from '@/lib/project-create/repository-seed'
 import { lintComposeYaml, composeDocumentToYaml } from '@/lib/compose'
+import { readComposePrincipals } from '@/lib/compose/principals-document'
 import {
   DEFAULT_PHP_SERIES,
   readServiceTurbopanelExtension,
@@ -259,6 +260,61 @@ describe('seedComposeForLane produces a valid document for every lane', () => {
   })
 })
 
+describe('seeded principal is the operator’s choice', () => {
+  // The account name is a decision, not a default: a seed that invented one
+  // would name a Linux user nobody chose. Blank seeds none at all — valid at
+  // create, asked for during setup before the first deploy.
+  it('declares no principal when none was chosen', () => {
+    const document = seedComposeForLane({ source: source(), branch: '', lane: 'app' })
+    const { service } = seededService(document)
+    expect(readServiceTurbopanelExtension(service)?.principal).toBeUndefined()
+    expect(readComposePrincipals(document)).toEqual({})
+    expect('x-turbopanel' in document.data).toBe(false)
+  })
+
+  it('seeds the chosen alias on the service and at the root, together', () => {
+    for (const lane of ['app', 'static', 'site-php'] as const) {
+      const document = seedComposeForLane({
+        source: source(),
+        branch: '',
+        lane,
+        principalAlias: '  storefront  ',
+      })
+      const { service } = seededService(document)
+      expect(readServiceTurbopanelExtension(service)?.principal).toBe('storefront')
+      expect(readComposePrincipals(document)).toEqual({ storefront: {} })
+    }
+  })
+
+  it('drops an invalid alias rather than seeding a document the save rejects', () => {
+    const document = seedComposeForLane({
+      source: source(),
+      branch: '',
+      lane: 'app',
+      principalAlias: '9lives',
+    })
+    expect(readComposePrincipals(document)).toEqual({})
+    expect(
+      readServiceTurbopanelExtension(seededService(document).service)?.principal,
+    ).toBeUndefined()
+  })
+
+  it('still lints clean with and without an account', () => {
+    for (const principalAlias of [undefined, 'storefront']) {
+      const document = seedComposeForLane({
+        source: source(),
+        branch: 'main',
+        lane: 'app',
+        ...(principalAlias ? { principalAlias } : {}),
+      })
+      const blocking = lintComposeYaml(composeDocumentToYaml(document)).filter(
+        (issue) => issue.level === 'error',
+      )
+      expect(blocking).toEqual([])
+    }
+  })
+})
+
 describe('parseRepositoryCompose', () => {
   it('parses a repository compose file into a document', () => {
     const document = parseRepositoryCompose('services:\n  web:\n    image: nginx\n')
@@ -325,5 +381,23 @@ describe('seedHostingCompose', () => {
     const extension = readServiceTurbopanelExtension(services.blog!)
     expect(extension?.engine).toBe('apache')
     expect(extension?.root).toBe('www')
+  })
+
+  it('invents no account — the operator declares one, or seeds a chosen name', () => {
+    const bare = seedHostingCompose({})
+    expect(readComposePrincipals(bare)).toEqual({})
+    expect(
+      readServiceTurbopanelExtension(
+        (bare.data.services as Record<string, Record<string, unknown>>).site!,
+      )?.principal,
+    ).toBeUndefined()
+
+    const chosen = seedHostingCompose({ principalAlias: 'blog' })
+    expect(readComposePrincipals(chosen)).toEqual({ blog: {} })
+    expect(
+      readServiceTurbopanelExtension(
+        (chosen.data.services as Record<string, Record<string, unknown>>).site!,
+      )?.principal,
+    ).toBe('blog')
   })
 })

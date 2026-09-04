@@ -28,6 +28,9 @@ const ACCESS_OPTIONS = PRINCIPAL_ACCESS_VALUES.map((value) => ({
   label: ACCESS_LABELS[value],
 }))
 
+const ALIAS_RULE =
+  'An alias starts with a letter and uses letters, digits, “-”, and “_” (at most 64 characters).'
+
 /**
  * The document's accounts — the root `x-turbopanel.principals` block.
  *
@@ -47,22 +50,31 @@ export function ComposePrincipalsFields({
   principals,
   disabled,
   onChange,
+  onRename,
 }: Readonly<{
   principals: Readonly<Record<string, PrincipalSpec>>
   disabled: boolean
   /** Replaces the whole map — an empty one removes the block. */
   onChange: (next: Record<string, PrincipalSpec>) => void
+  /**
+   * Rename an alias, including every service that references it. The caller
+   * owns the document walk (`renameComposePrincipal`); this only collects a
+   * valid, collision-free name.
+   */
+  onRename?: (from: string, to: string) => void
 }>) {
   const [alias, setAlias] = useState('')
   const [error, setError] = useState<string | null>(null)
+  /** Alias whose row is showing the rename field, and the draft typed so far. */
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
   const entries = Object.entries(principals)
 
   const handleAdd = () => {
     const trimmed = alias.trim()
     if (!isPrincipalAlias(trimmed)) {
-      setError(
-        'An alias starts with a letter and uses letters, digits, “-”, and “_” (at most 64 characters).'
-      )
+      setError(ALIAS_RULE)
       return
     }
     if (Object.hasOwn(principals, trimmed)) {
@@ -72,6 +84,36 @@ export function ComposePrincipalsFields({
     setError(null)
     setAlias('')
     onChange({ ...principals, [trimmed]: {} })
+  }
+
+  const startRename = (name: string) => {
+    setRenaming(name)
+    setRenameDraft(name)
+    setRenameError(null)
+  }
+
+  const cancelRename = () => {
+    setRenaming(null)
+    setRenameDraft('')
+    setRenameError(null)
+  }
+
+  const commitRename = (from: string) => {
+    const trimmed = renameDraft.trim()
+    if (trimmed === from) {
+      cancelRename()
+      return
+    }
+    if (!isPrincipalAlias(trimmed)) {
+      setRenameError(ALIAS_RULE)
+      return
+    }
+    if (Object.hasOwn(principals, trimmed)) {
+      setRenameError(`There is already an account called “${trimmed}”.`)
+      return
+    }
+    cancelRename()
+    onRename?.(from, trimmed)
   }
 
   const setAccess = (name: string, access: PrincipalAccess) => {
@@ -107,7 +149,35 @@ export function ComposePrincipalsFields({
       {entries.map(([name, spec]) => (
         <View key={name} style={styles.row}>
           <View style={styles.rowText}>
-            <MonoText style={styles.alias}>{name}</MonoText>
+            {renaming === name ? (
+              <View style={styles.renameForm}>
+                {renameError ? (
+                  <Text style={panelStyles.error}>{renameError}</Text>
+                ) : null}
+                <TextField
+                  label={`Rename ${name}`}
+                  value={renameDraft}
+                  onChangeText={setRenameDraft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <View style={styles.renameActions}>
+                  <Button
+                    label="Rename"
+                    size="sm"
+                    onPress={() => commitRename(name)}
+                  />
+                  <Button
+                    label="Cancel"
+                    size="sm"
+                    variant="secondary"
+                    onPress={cancelRename}
+                  />
+                </View>
+              </View>
+            ) : (
+              <MonoText style={styles.alias}>{name}</MonoText>
+            )}
             {spec.description ? (
               <Text style={panelStyles.muted}>{spec.description}</Text>
             ) : null}
@@ -124,13 +194,23 @@ export function ComposePrincipalsFields({
             />
           </View>
           {!disabled ? (
-            <ConfirmButton
-              label="Remove"
-              prompt={`Remove ${name}? Services that name it will need another account.`}
-              confirmLabel="Remove"
-              size="sm"
-              onConfirm={() => remove(name)}
-            />
+            <View style={styles.rowActions}>
+              {onRename && renaming !== name ? (
+                <Button
+                  label="Rename"
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => startRename(name)}
+                />
+              ) : null}
+              <ConfirmButton
+                label="Remove"
+                prompt={`Remove ${name}? Services that name it will need another account.`}
+                confirmLabel="Remove"
+                size="sm"
+                onConfirm={() => remove(name)}
+              />
+            </View>
           ) : null}
         </View>
       ))}
@@ -168,8 +248,19 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs,
   },
+  rowActions: {
+    gap: spacing.xs,
+    alignItems: 'flex-end',
+  },
   alias: {
     color: colors.text,
+  },
+  renameForm: {
+    gap: spacing.xs,
+  },
+  renameActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   form: {
     gap: spacing.xs,

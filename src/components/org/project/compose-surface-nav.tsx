@@ -82,6 +82,9 @@ export function ComposeSurfaceNav() {
     ? draft.sections ?? DRAFT_COMPOSE_PROJECT_TAB_IDS
     : COMPOSE_PROJECT_SURFACE_TAB_IDS
 
+  // A single lens is not a choice — drop the bar instead of rendering one tab.
+  if (enabledTabIds.length < 2) return null
+
   return (
     <View style={styles.bar}>
       <View style={[panelStyles.segmentGroup, styles.group]}>

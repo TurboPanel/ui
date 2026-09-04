@@ -17,7 +17,10 @@ import {
   TURBOPANEL_ROOT_EXTENSION_KEY,
   type PrincipalSpec,
 } from '@/lib/compose/root-extension'
-import { isPrincipalAlias } from '@/lib/compose/service-kind'
+import {
+  isPrincipalAlias,
+  TURBOPANEL_SERVICE_EXTENSION_KEY,
+} from '@/lib/compose/service-kind'
 import type { ComposeDocument } from '@/lib/compose/types'
 
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
@@ -69,6 +72,60 @@ export function writeComposePrincipals(
   }
 
   return { ...document, data: data as ComposeDocument['data'] }
+}
+
+/**
+ * Rename a declared alias, everywhere the document says it.
+ *
+ * One operation on purpose: the alias is declared once at the root and
+ * *referenced* per service, so a rename that touched only the declaration
+ * would leave every referencing service dangling — which the linter flags and
+ * deploy-prepare refuses. Key order is preserved (a rename is not a move), and
+ * an unknown `from`, an invalid `to`, or a collision returns the document
+ * unchanged — the caller validates and says why, this only has to be safe.
+ */
+export function renameComposePrincipal(
+  document: ComposeDocument,
+  from: string,
+  to: string,
+): ComposeDocument {
+  const principals = readComposePrincipals(document)
+  if (from === to) return document
+  if (!Object.hasOwn(principals, from)) return document
+  if (!isPrincipalAlias(to) || Object.hasOwn(principals, to)) return document
+
+  const renamed: Record<string, PrincipalSpec> = {}
+  for (const [name, spec] of Object.entries(principals)) {
+    renamed[name === from ? to : name] = spec
+  }
+  let next = writeComposePrincipals(document, renamed)
+
+  const services = next.data.services
+  if (isPlainMapping(services)) {
+    let changed = false
+    const patched: Record<string, unknown> = {}
+    for (const [name, raw] of Object.entries(services)) {
+      const extension = isPlainMapping(raw)
+        ? raw[TURBOPANEL_SERVICE_EXTENSION_KEY]
+        : undefined
+      if (isPlainMapping(extension) && extension.principal === from) {
+        patched[name] = {
+          ...(raw as Record<string, unknown>),
+          [TURBOPANEL_SERVICE_EXTENSION_KEY]: { ...extension, principal: to },
+        }
+        changed = true
+      } else {
+        patched[name] = raw
+      }
+    }
+    if (changed) {
+      next = {
+        ...next,
+        data: { ...next.data, services: patched } as ComposeDocument['data'],
+      }
+    }
+  }
+  return next
 }
 
 /**

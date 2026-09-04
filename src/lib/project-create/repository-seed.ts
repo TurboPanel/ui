@@ -10,6 +10,7 @@ import { yamlToComposeDocument } from '@/lib/compose/convert'
 import {
   DEFAULT_PHP_SERIES,
   DEFAULT_SITE_ENGINE,
+  isPrincipalAlias,
   patchServiceTurbopanelExtension,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
@@ -21,17 +22,6 @@ import type { RepositoryRecord } from '@/lib/instance-api'
 
 /** Compose key when the repository name yields nothing usable. */
 const FALLBACK_SERVICE_NAME = 'app'
-
-/**
- * Alias every seeded host-native service runs as.
- *
- * Sites and Node apps require one — the document root, the release tree, and
- * any scheduled jobs belong to an account — so a seed that declared none would
- * hand the operator a draft the save rejects. One account for the one service a
- * seed creates is also the right default: a second is a decision, and the
- * Accounts section is where it gets made.
- */
-const SEED_PRINCIPAL_ALIAS = 'app'
 
 /** Docker keeps service keys short; this is well past anything readable. */
 const SERVICE_NAME_MAX_LENGTH = 63
@@ -75,6 +65,20 @@ export function repositoryServiceName(source: RepositoryRecord): string {
 }
 
 /**
+ * The alias to seed, or `undefined` for "declare none".
+ *
+ * The account name is the operator's decision, never the seed's: an invented
+ * default would name a Linux user nobody chose. A blank field is a real answer
+ * — "I will decide during setup" — and the draft stays valid without one
+ * because the principal requirement is enforced pre-deploy (the lifecycle bar
+ * and `principal-required.ts`), not at create.
+ */
+function seedableAlias(alias: string | undefined): string | undefined {
+  const trimmed = alias?.trim()
+  return trimmed && isPrincipalAlias(trimmed) ? trimmed : undefined
+}
+
+/**
  * Seed a compose draft for one repository lane.
  *
  * The compose document key is intentionally still `x-turbopanel.source`.
@@ -111,6 +115,12 @@ export function seedComposeForLane(params: {
     /** Directory the build runs in, relative to the checkout root. */
     subdirectory?: string
   }
+  /**
+   * Account the service runs as, when the operator already chose one.
+   * Omitted or invalid seeds no principal at all — the operator declares one
+   * during setup instead, and the lifecycle bar asks before the first deploy.
+   */
+  principalAlias?: string
 }): ComposeDocument {
   const { source, branch, lane } = params
   // The repository's own document IS the project compose — no synthesized
@@ -120,6 +130,7 @@ export function seedComposeForLane(params: {
     return params.repositoryCompose
   }
 
+  const alias = seedableAlias(params.principalAlias)
   const trimmedBranch = branch.trim().slice(0, SOURCE_BRANCH_MAX_LENGTH)
   const capped = (value: string | undefined): string | undefined => {
     const trimmed = value?.trim().slice(0, SOURCE_COMMAND_MAX_LENGTH)
@@ -143,14 +154,14 @@ export function seedComposeForLane(params: {
   const extension = lane === 'app'
     ? {
       serviceKind: 'node' as const,
-      principal: SEED_PRINCIPAL_ALIAS,
+      ...(alias ? { principal: alias } : {}),
       source: binding,
     }
     : {
       serviceKind: 'site' as const,
       engine: params.engine ?? DEFAULT_SITE_ENGINE,
       root: params.root ?? 'public',
-      principal: SEED_PRINCIPAL_ALIAS,
+      ...(alias ? { principal: alias } : {}),
       source: binding,
       // An empty `php: {}` would be a no-op twice over: the extension parser
       // drops an empty block, and the daemon's `siteNeedsPhp` requires a
@@ -159,22 +170,29 @@ export function seedComposeForLane(params: {
     }
 
   const service = patchServiceTurbopanelExtension({}, extension)
-  return withSeedPrincipal({
-    version: 1,
-    data: { services: { [repositoryServiceName(source)]: service } },
-    presentation: { keyOrder: ['services'], comments: {} },
-  })
+  return withSeedPrincipal(
+    {
+      version: 1,
+      data: { services: { [repositoryServiceName(source)]: service } },
+      presentation: { keyOrder: ['services'], comments: {} },
+    },
+    alias,
+  )
 }
 
 /**
- * Declare the alias the seeded service names.
+ * Declare the alias the seeded service names, when the operator chose one.
  *
  * A per-service `principal` that resolves to nothing is a dangling reference —
  * the linter says so, and deploy-prepare refuses it — so the two are written
  * together or not at all.
  */
-function withSeedPrincipal(document: ComposeDocument): ComposeDocument {
-  return writeComposePrincipals(document, { [SEED_PRINCIPAL_ALIAS]: {} })
+function withSeedPrincipal(
+  document: ComposeDocument,
+  alias: string | undefined,
+): ComposeDocument {
+  if (!alias) return document
+  return writeComposePrincipals(document, { [alias]: {} })
 }
 
 /**
@@ -216,6 +234,10 @@ export function parseRepositoryCompose(
  *
  * Caddy by default: a static site then needs no engine choice, no PHP pool, and
  * no vhost tuning at all. PHP is one field away on the Services tab.
+ *
+ * No account is invented here either: the operator declares one in the
+ * Accounts section of the draft (or after create), same as the repository
+ * lanes.
  */
 export function seedHostingCompose(params: {
   serviceName?: string
@@ -223,7 +245,10 @@ export function seedHostingCompose(params: {
   engine?: 'caddy' | 'nginx' | 'apache' | 'openlitespeed'
   /** Turn PHP on with the default series. Omit for a static site. */
   php?: boolean
+  /** Account the site runs as, when the operator already chose one. */
+  principalAlias?: string
 }): ComposeDocument {
+  const alias = seedableAlias(params.principalAlias)
   const service = patchServiceTurbopanelExtension(
     {},
     {
@@ -231,16 +256,19 @@ export function seedHostingCompose(params: {
       engine: params.engine ?? DEFAULT_SITE_ENGINE,
       root: params.root ?? 'public',
       sourceKind: 'managed-directory',
-      principal: SEED_PRINCIPAL_ALIAS,
+      ...(alias ? { principal: alias } : {}),
       // An empty `php: {}` is a no-op twice over — the extension parser drops an
       // empty block and the daemon's `siteNeedsPhp` requires a non-empty one —
       // so naming the default series is what actually turns PHP on.
       ...(params.php ? { php: { version: DEFAULT_PHP_SERIES } } : {}),
     },
   )
-  return withSeedPrincipal({
-    version: 1,
-    data: { services: { [params.serviceName ?? 'site']: service } },
-    presentation: { keyOrder: ['services'], comments: {} },
-  })
+  return withSeedPrincipal(
+    {
+      version: 1,
+      data: { services: { [params.serviceName ?? 'site']: service } },
+      presentation: { keyOrder: ['services'], comments: {} },
+    },
+    alias,
+  )
 }
