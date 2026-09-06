@@ -699,12 +699,7 @@ export type OrgFabricRecord = {
 export type RelayRole = 'gateway' | 'member'
 
 export type FabricRelayPathKind =
-  | 'direct_lan'
-  | 'direct_public'
-  | 'direct_nat'
-  | 'gateway'
-  | 'relay'
-  | 'unreachable'
+  'direct_lan' | 'direct_public' | 'direct_nat' | 'gateway' | 'relay' | 'unreachable'
 
 export type FabricRelayPathState = {
   peerServerId: string
@@ -3970,13 +3965,7 @@ export type StorageRetention = 'retain' | 'delete'
 export type CopyProvider = 'docker' | 'path'
 export type CopyRole = 'primary' | 'replica' | 'scratch' | 'archive'
 export type CopyState =
-  | 'pending'
-  | 'materializing'
-  | 'ready'
-  | 'syncing'
-  | 'stale'
-  | 'failed'
-  | 'retiring'
+  'pending' | 'materializing' | 'ready' | 'syncing' | 'stale' | 'failed' | 'retiring'
 
 export type StorageCopyRecord = {
   id: string
@@ -4684,17 +4673,33 @@ export type PerEntityHostedFamily =
   | 'managed.database_proxy'
   | 'cpu.core.live'
 
-/** Role of a network device relative to the current `SlotMapping` — `'other'` means it pages as a standalone `network` entity. */
-export type NetworkEntityRole = 'normalNicSlot1' | 'normalNicSlot2' | 'fabric' | 'other'
-export type NetworkDeviceKind = 'uplink' | 'fabric' | 'container-bridge' | 'loopback'
+/**
+ * Role of a network device relative to the current `SlotMapping` — `'nic'` is
+ * a monitored NIC slot (its 1-based `slot` rides alongside), `'fabric'` a
+ * TurboFabric mesh device, `'other'` a device the daemon enumerates but never
+ * samples (members, VLAN children, tunnels, container bridges, loopback, or
+ * an uplink not on the monitored list).
+ */
+export type NetworkEntityRole = 'nic' | 'fabric' | 'other'
+/**
+ * The daemon's classification — only `'uplink'` (a hardware-backed NIC or the
+ * bond/bridge/team stacked on one) can be monitored; `'member'` ports and
+ * `'virtual'` children/tunnels roll into an uplink.
+ */
+export type NetworkDeviceKind =
+  'uplink' | 'member' | 'virtual' | 'fabric' | 'container-bridge' | 'loopback'
 
 export type NetworkInventoryEntry = {
   deviceId: string
   name: string
   kind: NetworkDeviceKind
   role: NetworkEntityRole
+  /** 1-based NIC slot when `role === 'nic'`. */
+  slot?: number
   speedMbps?: number
   mtu?: number
+  /** The gateway uplink — what auto selection monitors when no list is pinned. */
+  defaultRoute?: boolean
 }
 
 export type FilesystemRole = 'root' | 'hosting' | 'docker' | 'application' | 'custom'
@@ -4872,6 +4877,8 @@ export type MetricsSeriesResponse = {
   topologyGeneration: number | null
   cpuLimits: EffectiveCpuThermalLimits
   temperatureUnit: 'celsius' | 'fahrenheit'
+  /** How many network interfaces this server may monitor (its effective NIC-slot count). */
+  nicSlotLimit: number
 }
 
 export type MetricsSummaryResponse = {
@@ -4885,6 +4892,8 @@ export type MetricsSummaryResponse = {
   latestAt: string | null
   cpuLimits: EffectiveCpuThermalLimits
   temperatureUnit: 'celsius' | 'fahrenheit'
+  /** How many network interfaces this server may monitor (its effective NIC-slot count). */
+  nicSlotLimit: number
 }
 
 export type FleetServerUsageRecord = {
@@ -5358,9 +5367,7 @@ export type MetricsGpuDeviceCandidates = {
 
 /** Why an empty `sensors.disk1Temperature`/`disk2Temperature` pool came back that way. */
 export type MetricsDiskTemperatureReason =
-  | 'no_hwmon'
-  | 'drivetemp_not_loaded'
-  | 'no_disk_temperature_source'
+  'no_hwmon' | 'drivetemp_not_loaded' | 'no_disk_temperature_source'
 
 /**
  * Sensor candidates in the same slots `ServerHardwareProfile` assigns.
@@ -5404,8 +5411,7 @@ export type MetricsCapabilities = {
 }
 
 export type MetricsCapabilitiesOutcome =
-  | { kind: 'ok'; capabilities: MetricsCapabilities }
-  | { kind: 'offline' }
+  { kind: 'ok'; capabilities: MetricsCapabilities } | { kind: 'offline' }
 
 /**
  * Capability discovery — a correlated daemon round trip. Opened deliberately
@@ -5481,6 +5487,12 @@ export type ServerHardwareProfile = {
   systemFan2?: MetricsSensorSlot
   nic1?: string
   nic2?: string
+  /**
+   * Monitored network interfaces in slot order (slot 1 first) — opaque
+   * topology device ids of physical uplinks. Absent/empty means auto: only
+   * the default-route uplink is monitored.
+   */
+  nicSlotDeviceIds?: string[]
   hostingPath?: string
   drivetempEnabled?: boolean
   cpuTdpWattsOverride?: number
@@ -5510,6 +5522,8 @@ export type ServerHardwareProfileUpdate = {
   systemFan2?: MetricsSensorSlot | null
   nic1?: string | null
   nic2?: string | null
+  /** Full replacement of the monitored-NIC list; `null` returns the server to auto selection. */
+  nicSlotDeviceIds?: string[] | null
   hostingPath?: string | null
   drivetempEnabled?: boolean | null
   cpuTdpWattsOverride?: number | null
@@ -5950,9 +5964,7 @@ export async function promoteManagedDisasterRecovery(
 }
 
 export type BindingListFilter =
-  | { serviceId: string }
-  | { environmentId: string }
-  | { managedEnvironmentId: string }
+  { serviceId: string } | { environmentId: string } | { managedEnvironmentId: string }
 
 function bindingListQueryParams(filter: BindingListFilter): URLSearchParams {
   if ('serviceId' in filter) {

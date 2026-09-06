@@ -13,6 +13,7 @@ import type {
   MetricsSensorCandidate,
   MetricsSensorReading,
   MetricsSensorSlot,
+  NetworkInventoryEntry,
   ServerHardwareProfile,
 } from '@/lib/instance-api'
 
@@ -50,12 +51,15 @@ export const REGULAR_SLOT_FIELDS = SLOT_FIELDS.filter(
   ({ field }) => field !== 'disk1Temperature' && field !== 'disk2Temperature'
 )
 
-export type NicField = 'nic1' | 'nic2'
+/** Mirrors the daemon's `MAX_NIC_SLOTS` — the hard ceiling on monitored NIC slots per server. */
+export const MAX_NIC_SLOTS = 8
 
-export const NIC_FIELDS: readonly { field: NicField; label: string }[] = [
-  { field: 'nic1', label: 'NIC 1 interface' },
-  { field: 'nic2', label: 'NIC 2 interface' },
-]
+/**
+ * One row per NIC slot the operator may fill (index = slot − 1); `null` is
+ * an empty row. Row 1 left empty means "auto" — the daemon monitors the
+ * default-route uplink.
+ */
+export type NicSlotSelection = readonly (string | null)[]
 
 /**
  * Stable, encodable identity for a Select option — mirrors the daemon's own
@@ -156,25 +160,136 @@ export function gpuDeviceOptions(capabilities: MetricsCapabilities): SelectOptio
   return options
 }
 
-export function nicOptions(
-  capabilities: MetricsCapabilities,
-  current: string | null
+/** The interfaces the daemon classified as monitorable — physical uplinks (a NIC, or the bond/bridge stacked on one). */
+export function monitorableNics(
+  networks: readonly NetworkInventoryEntry[]
+): NetworkInventoryEntry[] {
+  return networks.filter((device) => device.kind === 'uplink')
+}
+
+/**
+ * Mirrors the daemon's auto rule (`slot-mapping.ts`): the uplink carrying
+ * the default route, else the first uplink by sorted device id. What slot 1
+ * monitors while the operator hasn't pinned a list.
+ */
+export function autoPrimaryNic(
+  networks: readonly NetworkInventoryEntry[]
+): NetworkInventoryEntry | null {
+  const uplinks = monitorableNics(networks)
+  const gateway = uplinks.find((device) => device.defaultRoute === true)
+  if (gateway) return gateway
+  return [...uplinks].sort((a, b) => a.deviceId.localeCompare(b.deviceId))[0] ?? null
+}
+
+function nicDetail(device: NetworkInventoryEntry): string {
+  const parts: string[] = []
+  if (device.defaultRoute) parts.push('Default route')
+  if (device.speedMbps != null) parts.push(`${device.speedMbps} Mb/s`)
+  parts.push(device.deviceId)
+  return parts.join(' · ')
+}
+
+/**
+ * Picker rows for one NIC slot: every monitorable uplink not already chosen
+ * in another slot, plus the slot's current value when it is no longer
+ * offered (unplugged, or reclassified as a bond member) so the operator can
+ * see and clear it.
+ */
+export function nicSlotOptions(
+  networks: readonly NetworkInventoryEntry[],
+  selection: NicSlotSelection,
+  slotIndex: number
 ): SelectOption[] {
-  const options: SelectOption[] = capabilities.networkInterfaces
-    .filter((iface) => iface.classification === 'uplink')
-    .map((iface) => ({
-      value: iface.name,
-      label: iface.name,
-      detail: iface.classification,
+  const current = selection[slotIndex] ?? null
+  const taken = new Set(selection.filter((id, index) => id != null && index !== slotIndex))
+  const options: SelectOption[] = monitorableNics(networks)
+    .filter((device) => !taken.has(device.deviceId))
+    .map((device) => ({
+      value: device.deviceId,
+      label: device.name || device.deviceId,
+      detail: nicDetail(device),
     }))
   if (current != null && !options.some((option) => option.value === current)) {
+    const known = networks.find((device) => device.deviceId === current)
     options.push({
       value: current,
-      label: current,
-      detail: 'Current binding — no longer classified as uplink',
+      label: known?.name || current,
+      detail: known
+        ? `Current selection — now classified as ${known.kind}, no longer monitorable`
+        : 'Current selection — not in the current topology',
     })
   }
   return options
+}
+
+/** How many slot rows to render: the server's limit, or more when a saved list already exceeds it (so those rows can be cleared). */
+export function nicSlotRowCount(nicSlotLimit: number | null, selection: NicSlotSelection): number {
+  const lastFilled = selection.reduce((last, id, index) => (id != null ? index + 1 : last), 0)
+  return Math.max(nicSlotLimit ?? 0, lastFilled, 1)
+}
+
+export function nicSlotSelectionFromProfile(
+  profile: ServerHardwareProfile | null | undefined,
+  rows = MAX_NIC_SLOTS
+): NicSlotSelection {
+  const ids = profile?.nicSlotDeviceIds ?? []
+  return Array.from({ length: Math.max(rows, ids.length) }, (_, index) => ids[index] ?? null)
+}
+
+export function applyNicSlotChange(
+  selection: NicSlotSelection,
+  slotIndex: number,
+  value: string | null
+): NicSlotSelection {
+  const next = [...selection]
+  while (next.length <= slotIndex) next.push(null)
+  next[slotIndex] = value
+  return next
+}
+
+/**
+ * The wire list for a selection: empty rows drop out, order is kept. When
+ * the operator filled a later slot but left slot 1 on "auto", the auto
+ * primary is pinned into slot 1 first — adding a second NIC must never
+ * demote the gateway NIC out of slot 1 (which is what the stored series are
+ * keyed by).
+ */
+export function nicSlotListFromSelection(
+  selection: NicSlotSelection,
+  autoPrimaryId: string | null
+): string[] {
+  const explicit: string[] = []
+  for (const id of selection) {
+    if (id != null && !explicit.includes(id)) explicit.push(id)
+  }
+  if (explicit.length === 0) return []
+  if (selection[0] == null && autoPrimaryId && !explicit.includes(autoPrimaryId)) {
+    return [autoPrimaryId, ...explicit]
+  }
+  return explicit
+}
+
+/** Tri-state update for the monitored-NIC list — same rule as {@link buildSlotProfileUpdates}: omitted when never configured and untouched, `null` when cleared. */
+export function buildNicSlotProfileUpdate(
+  selection: NicSlotSelection,
+  initial: readonly string[],
+  touched: boolean,
+  autoPrimaryId: string | null
+): string[] | null | undefined {
+  if (initial.length === 0 && !touched) return undefined
+  const list = nicSlotListFromSelection(selection, autoPrimaryId)
+  return list.length === 0 ? null : list
+}
+
+/** A previously pinned list changing membership or order breaks chart continuity for the moved slots. */
+export function nicSlotsReassigned(
+  initial: readonly string[],
+  selection: NicSlotSelection,
+  autoPrimaryId: string | null
+): boolean {
+  if (initial.length === 0) return false
+  const next = nicSlotListFromSelection(selection, autoPrimaryId)
+  return next.length !== initial.length || next.some((id, index) => id !== initial[index])
 }
 
 export function hostingPathOptions(
@@ -253,15 +368,6 @@ export function gpuDeviceSelectionFromProfile(
   return slot ? candidateKey(slot) : null
 }
 
-export function nicSelectionFromProfile(
-  profile: ServerHardwareProfile | null | undefined
-): Record<NicField, string | null> {
-  return {
-    nic1: profile?.nic1 ?? null,
-    nic2: profile?.nic2 ?? null,
-  }
-}
-
 /** Decodes a Select option's `chip:label` key back to the wire slot shape. */
 export function slotUpdate(key: string | null): MetricsSensorSlot | null {
   if (key == null) return null
@@ -280,7 +386,8 @@ export function parseNumericDraft(draft: string): number | null | undefined {
 export type SelectionSnapshot = {
   slots: Record<SlotField, string | null>
   gpu: string | null
-  nic: Record<NicField, string | null>
+  /** The saved monitored-NIC list (slot order); empty means auto. */
+  nicSlots: readonly string[]
 }
 
 export function snapshotFromProfile(
@@ -289,7 +396,7 @@ export function snapshotFromProfile(
   return {
     slots: slotSelectionFromProfile(profile),
     gpu: gpuDeviceSelectionFromProfile(profile),
-    nic: nicSelectionFromProfile(profile),
+    nicSlots: [...(profile?.nicSlotDeviceIds ?? [])],
   }
 }
 
@@ -303,11 +410,11 @@ export function snapshotFromProfile(
 export type TouchedSelection = {
   slots: ReadonlySet<SlotField>
   gpu: boolean
-  nic: ReadonlySet<NicField>
+  nicSlots: boolean
 }
 
 export function emptyTouchedSelection(): TouchedSelection {
-  return { slots: new Set(), gpu: false, nic: new Set() }
+  return { slots: new Set(), gpu: false, nicSlots: false }
 }
 
 /**
@@ -342,19 +449,4 @@ export function buildGpuDeviceProfileUpdate(
 ): MetricsSensorSlot | null | undefined {
   if (initial == null && !touched) return undefined
   return slotUpdate(selection)
-}
-
-/** Tri-state update payload for NIC bindings — same rule as {@link buildSlotProfileUpdates}. */
-export function buildNicProfileUpdates(
-  selection: Record<NicField, string | null>,
-  initial: Record<NicField, string | null>,
-  touched: ReadonlySet<NicField>
-): Partial<Record<NicField, string | null>> {
-  const updates: Partial<Record<NicField, string | null>> = {}
-  for (const { field } of NIC_FIELDS) {
-    const wasConfigured = initial[field] != null
-    if (!wasConfigured && !touched.has(field)) continue
-    updates[field] = selection[field]
-  }
-  return updates
 }

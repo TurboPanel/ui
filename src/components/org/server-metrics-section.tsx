@@ -972,52 +972,42 @@ function buildEntityMetricPlan(
 ): string[][] {
   const groups: EntityRequestGroup[] = inventory
     ? [
-        ...inventory.gpus.map(
-          (gpu): EntityRequestGroup => ({
-            scope: 'gpu',
-            entityId: gpu.gpuId,
-            fields: GPU_FIELDS,
-          })
-        ),
+        ...inventory.gpus.map((gpu): EntityRequestGroup => ({
+          scope: 'gpu',
+          entityId: gpu.gpuId,
+          fields: GPU_FIELDS,
+        })),
         ...inventory.networks
-          // A TurboFabric mesh device has no reconstruction path on either
-          // backend (never embedded, never paged) and stays unqueryable —
-          // every other role (including a normal-NIC-slot device, now
-          // reconstructed from host.io on Cloudflare) renders like any other
-          // network entity.
-          .filter((device) => device.role !== 'fabric')
-          .map(
-            (device): EntityRequestGroup => ({
-              scope: 'network',
-              entityId: device.deviceId,
-              fields: NETWORK_FIELDS,
-            })
-          ),
+          // Only monitored NIC slots have a stored series: the daemon samples
+          // just those (plus fabric, which has no reconstruction path on
+          // either backend and stays unqueryable); every other enumerated
+          // device — bond members, VLAN children, tunnels, container bridges,
+          // an uplink not on the monitored list — is never sampled.
+          .filter((device) => device.role === 'nic')
+          .map((device): EntityRequestGroup => ({
+            scope: 'network',
+            entityId: device.deviceId,
+            fields: NETWORK_FIELDS,
+          })),
         ...inventory.filesystems
           .filter((fs) => !fs.isRoot)
-          .map(
-            (fs): EntityRequestGroup => ({
-              scope: 'filesystem',
-              entityId: fs.filesystemId,
-              fields: FILESYSTEM_FIELDS,
-            })
-          ),
+          .map((fs): EntityRequestGroup => ({
+            scope: 'filesystem',
+            entityId: fs.filesystemId,
+            fields: FILESYSTEM_FIELDS,
+          })),
         ...inventory.blockDevices
           .filter((device) => device.isServiceDevice)
-          .map(
-            (device): EntityRequestGroup => ({
-              scope: 'block',
-              entityId: device.deviceId,
-              fields: BLOCK_FIELDS,
-            })
-          ),
-        ...inventory.hardwareSignals.map(
-          (signal): EntityRequestGroup => ({
-            scope: 'hardwareSignal',
-            entityId: signal.signalId,
-            fields: HARDWARE_SIGNAL_FIELDS,
-          })
-        ),
+          .map((device): EntityRequestGroup => ({
+            scope: 'block',
+            entityId: device.deviceId,
+            fields: BLOCK_FIELDS,
+          })),
+        ...inventory.hardwareSignals.map((signal): EntityRequestGroup => ({
+          scope: 'hardwareSignal',
+          entityId: signal.signalId,
+          fields: HARDWARE_SIGNAL_FIELDS,
+        })),
       ]
     : []
 
@@ -1026,27 +1016,21 @@ function buildEntityMetricPlan(
   // requested, inventory or not; a source that isn't running just comes back
   // absent from the response.
   groups.push(
-    ...INGRESS_SOURCE_IDS.map(
-      (entityId): EntityRequestGroup => ({
-        scope: 'ingress',
-        entityId,
-        fields: INGRESS_FIELDS,
-      })
-    ),
-    ...DATABASE_PROXY_SOURCE_IDS.map(
-      (entityId): EntityRequestGroup => ({
-        scope: 'databaseProxy',
-        entityId,
-        fields: DATABASE_PROXY_FIELDS,
-      })
-    ),
-    ...liveCoreIds.map(
-      (entityId): EntityRequestGroup => ({
-        scope: 'cpuCore',
-        entityId,
-        fields: CPU_CORE_LIVE_FIELDS,
-      })
-    )
+    ...INGRESS_SOURCE_IDS.map((entityId): EntityRequestGroup => ({
+      scope: 'ingress',
+      entityId,
+      fields: INGRESS_FIELDS,
+    })),
+    ...DATABASE_PROXY_SOURCE_IDS.map((entityId): EntityRequestGroup => ({
+      scope: 'databaseProxy',
+      entityId,
+      fields: DATABASE_PROXY_FIELDS,
+    })),
+    ...liveCoreIds.map((entityId): EntityRequestGroup => ({
+      scope: 'cpuCore',
+      entityId,
+      fields: CPU_CORE_LIVE_FIELDS,
+    }))
   )
 
   const batches: string[][] = []
@@ -1559,12 +1543,12 @@ function buildEntityChartGroups(
       })
     }
 
-    const queryableNetworkDevices = inventory.networks.filter((device) => device.role !== 'fabric')
+    const queryableNetworkDevices = inventory.networks.filter((device) => device.role === 'nic')
     if (queryableNetworkDevices.length > 0) {
       groups.push({
         id: 'network-devices',
         label: 'Network devices',
-        hint: `${TURBOFABRIC_PRODUCT_NAME} mesh interfaces are embedded in host metrics on this version and have no independent series; every other device — including the host's primary NIC slots — has its own throughput and error/drop series below`,
+        hint: `Monitored network interfaces (the default-route NIC by default; add more under the server's hardware profile) each have their own throughput and error/drop series below. ${TURBOFABRIC_PRODUCT_NAME} mesh interfaces are embedded in host metrics and have no independent series.`,
         charts: queryableNetworkDevices.flatMap((device) =>
           networkDeviceChartDefinitions(device).map((definition) => ({
             definition,
@@ -1899,12 +1883,7 @@ function lastStackedTotal(series: MetricLineSeries[], yFormat: (value: number) =
 }
 
 type MetricsViewState =
-  | 'loading'
-  | 'unsupported-os'
-  | 'backend-unavailable'
-  | 'not-configured'
-  | 'no-data'
-  | 'charts'
+  'loading' | 'unsupported-os' | 'backend-unavailable' | 'not-configured' | 'no-data' | 'charts'
 
 function metricsBackendLabel(backend: MetricsBackendKind): string {
   switch (backend) {

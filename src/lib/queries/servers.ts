@@ -18,6 +18,7 @@ import {
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchTimezones,
+  formatEntityMetricId,
   isForbiddenError,
   MetricsBackendUnavailableError,
   pingDaemon,
@@ -313,6 +314,41 @@ export function useServerMetricsCpuLimits(
     },
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
   })
+}
+
+/**
+ * What the hardware-profile panel's monitored-NIC picker needs: the current
+ * topology's network inventory (which devices are physical uplinks, which one
+ * carries the default route, which slots are assigned today) plus the
+ * server's effective NIC-slot limit. Both ride the series envelope, so this
+ * is one narrow `/series` call over a short window — the same seeding trick
+ * the sensors panel uses — rather than a dedicated endpoint.
+ */
+export function useServerNicSlotContext(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  const query = useServerMetricsSeries(
+    orgId,
+    serverId,
+    () => {
+      const toMs = Date.now()
+      return {
+        fromIso: new Date(toMs - 5 * 60 * 1000).toISOString(),
+        toIso: new Date(toMs).toISOString(),
+        metrics: [formatEntityMetricId({ scope: 'host.cpu', field: 'busyPercent' })],
+      }
+    },
+    { rangeKey: 'nic-slots', staleTime: 30_000, enabled: options?.enabled }
+  )
+  return {
+    networks: query.data?.inventory?.networks ?? [],
+    nicSlotLimit: query.data?.nicSlotLimit ?? null,
+    isReady: query.data !== undefined,
+    isLoading: query.isLoading,
+    error: query.error,
+  }
 }
 
 export function useSaveServerHardwareProfile(orgId: string, serverId: string) {

@@ -14,8 +14,10 @@ import {
   Toggle,
 } from '@/components/ui'
 import {
+  applyNicSlotChange,
+  autoPrimaryNic,
   buildGpuDeviceProfileUpdate,
-  buildNicProfileUpdates,
+  buildNicSlotProfileUpdate,
   buildSlotProfileUpdates,
   cpuLimitPrefill,
   DISK_SLOT_FIELDS,
@@ -24,10 +26,12 @@ import {
   gpuDeviceOptions,
   gpuDeviceSelectionFromProfile,
   hostingPathOptions,
-  type NicField,
-  NIC_FIELDS,
-  nicOptions,
-  nicSelectionFromProfile,
+  monitorableNics,
+  type NicSlotSelection,
+  nicSlotOptions,
+  nicSlotRowCount,
+  nicSlotSelectionFromProfile,
+  nicSlotsReassigned,
   parseNumericDraft,
   REGULAR_SLOT_FIELDS,
   resolveSensorsPanelViewState,
@@ -43,6 +47,7 @@ import {
 } from '@/lib/hardware-profile-picker'
 import type {
   MetricsCapabilities,
+  NetworkInventoryEntry,
   ServerDetailRecord,
   ServerHardwareProfile,
   ServerHardwareProfileUpdate,
@@ -51,6 +56,7 @@ import {
   useSaveServerHardwareProfile,
   useServerMetricsCapabilities,
   useServerMetricsCpuLimits,
+  useServerNicSlotContext,
 } from '@/lib/queries/servers'
 import { spacing } from '@/lib/theme'
 
@@ -86,8 +92,8 @@ export function ServerHardwareProfileEditor({
   const [gpuDeviceSelection, setGpuDeviceSelection] = useState<string | null>(() =>
     gpuDeviceSelectionFromProfile(server.hardwareProfile)
   )
-  const [nicSelection, setNicSelection] = useState<Record<NicField, string | null>>(() =>
-    nicSelectionFromProfile(server.hardwareProfile)
+  const [nicSlotSelection, setNicSlotSelection] = useState<NicSlotSelection>(() =>
+    nicSlotSelectionFromProfile(server.hardwareProfile)
   )
   const [hostingPathSelection, setHostingPathSelection] = useState<string | null>(
     server.hardwareProfile?.hostingPath ?? null
@@ -122,6 +128,7 @@ export function ServerHardwareProfileEditor({
   const cpuLimitsQuery = useServerMetricsCpuLimits(orgId, server.id, {
     enabled: expanded,
   })
+  const nicContext = useServerNicSlotContext(orgId, server.id, { enabled: expanded })
   const mutation = useSaveServerHardwareProfile(orgId, server.id)
 
   const outcome = capabilitiesQuery.data
@@ -130,12 +137,14 @@ export function ServerHardwareProfileEditor({
   const cpuLimits = cpuLimitsQuery.data ?? null
   const pending = mutation.isPending
   const readOnly = !canManage
+  const autoPrimary = autoPrimaryNic(nicContext.networks)
+  const autoPrimaryId = autoPrimary?.deviceId ?? null
 
   const applyProfile = (profile: ServerHardwareProfile) => {
     const snapshot = snapshotFromProfile(profile)
     setSlotSelection(snapshot.slots)
     setGpuDeviceSelection(snapshot.gpu)
-    setNicSelection(snapshot.nic)
+    setNicSlotSelection(nicSlotSelectionFromProfile(profile))
     setInitialSelection(snapshot)
     setTouched(emptyTouchedSelection())
     setHostingPathSelection(profile.hostingPath ?? null)
@@ -160,9 +169,10 @@ export function ServerHardwareProfileEditor({
         initialSelection.slots[field] !== slotSelection[field]
     )
     const gpuChanged = initialSelection.gpu != null && initialSelection.gpu !== gpuDeviceSelection
-    const nicChanged = NIC_FIELDS.some(
-      ({ field }) =>
-        initialSelection.nic[field] != null && initialSelection.nic[field] !== nicSelection[field]
+    const nicChanged = nicSlotsReassigned(
+      initialSelection.nicSlots,
+      nicSlotSelection,
+      autoPrimaryId
     )
     return slotChanged || gpuChanged || nicChanged
   }
@@ -185,10 +195,16 @@ export function ServerHardwareProfileEditor({
       initialSelection.gpu,
       touched.gpu
     )
+    const nicSlotUpdate = buildNicSlotProfileUpdate(
+      nicSlotSelection,
+      initialSelection.nicSlots,
+      touched.nicSlots,
+      autoPrimaryId
+    )
     const updates: ServerHardwareProfileUpdate = {
       ...buildSlotProfileUpdates(slotSelection, initialSelection.slots, touched.slots),
       ...(gpuDeviceUpdate !== undefined ? { gpuDevice: gpuDeviceUpdate } : {}),
-      ...buildNicProfileUpdates(nicSelection, initialSelection.nic, touched.nic),
+      ...(nicSlotUpdate !== undefined ? { nicSlotDeviceIds: nicSlotUpdate } : {}),
       hostingPath: hostingPathSelection,
       drivetempEnabled,
       cpuTdpWattsOverride,
@@ -214,7 +230,8 @@ export function ServerHardwareProfileEditor({
     })
   }
 
-  const reassigning = capabilities != null && hasReassignment()
+  const canSave = capabilities != null || nicContext.isReady
+  const reassigning = canSave && hasReassignment()
   const viewState = capabilities
     ? resolveSensorsPanelViewState(capabilities, drivetempEnabled)
     : null
@@ -229,10 +246,10 @@ export function ServerHardwareProfileEditor({
     setSlotSelection((prev) => ({ ...prev, [field]: value }))
     setTouched((prev) => ({ ...prev, slots: new Set(prev.slots).add(field) }))
   }
-  const handleNicChange = (field: NicField, value: string | null) => {
+  const handleNicSlotChange = (slotIndex: number, value: string | null) => {
     setSaved(false)
-    setNicSelection((prev) => ({ ...prev, [field]: value }))
-    setTouched((prev) => ({ ...prev, nic: new Set(prev.nic).add(field) }))
+    setNicSlotSelection((prev) => applyNicSlotChange(prev, slotIndex, value))
+    setTouched((prev) => ({ ...prev, nicSlots: true }))
   }
   const handleHostingPathChange = (value: string | null) => {
     setSaved(false)
@@ -265,7 +282,7 @@ export function ServerHardwareProfileEditor({
   return (
     <SectionPanel
       title="Hardware profile"
-      hint="Sensor sources, NIC bindings, hosting storage path, and manual limits"
+      hint="Sensor sources, monitored network interfaces, hosting storage path, and manual limits"
       collapsible
       defaultCollapsed
       onToggle={setExpanded}
@@ -291,13 +308,24 @@ export function ServerHardwareProfileEditor({
         </Text>
       ) : null}
 
+      <MonitoredNicsSection
+        networks={nicContext.networks}
+        nicSlotLimit={nicContext.nicSlotLimit}
+        isLoading={nicContext.isLoading && expanded}
+        error={nicContext.error}
+        selection={nicSlotSelection}
+        autoPrimary={autoPrimary}
+        readOnly={readOnly}
+        pending={pending}
+        onChange={handleNicSlotChange}
+      />
+
       {capabilities && viewState ? (
         <SensorFieldsSection
           capabilities={capabilities}
           viewState={viewState}
           slotSelection={slotSelection}
           gpuDeviceSelection={gpuDeviceSelection}
-          nicSelection={nicSelection}
           hostingPathSelection={hostingPathSelection}
           drivetempEnabled={drivetempEnabled}
           cpuTdpDraft={cpuTdpDraft}
@@ -308,7 +336,6 @@ export function ServerHardwareProfileEditor({
           pending={pending}
           onGpuChange={handleGpuChange}
           onSlotChange={handleSlotChange}
-          onNicChange={handleNicChange}
           onHostingPathChange={handleHostingPathChange}
           onDrivetempChange={handleDrivetempChange}
           onCpuTdpChange={handleCpuTdpChange}
@@ -320,12 +347,98 @@ export function ServerHardwareProfileEditor({
         error={error}
         saved={saved}
         readOnly={readOnly}
-        capabilities={capabilities}
+        canSave={canSave}
         reassigning={reassigning}
         pending={pending}
         onSave={save}
       />
     </SectionPanel>
+  )
+}
+
+/**
+ * Monitored network interfaces — one picker per NIC slot the server may fill
+ * (`nicSlotLimit`: 2 by default on the hosted platform, up to 8 self-hosted).
+ * Slot 1 left on "auto" monitors the default-route uplink; filling any slot
+ * pins an explicit list, in which case slot 1 is pinned to the auto primary
+ * so the gateway NIC keeps its series. Only physical uplinks are offered —
+ * the daemon hides bond/bridge member ports, VLAN children, tunnels, and
+ * container bridges, whose traffic is already counted on an uplink.
+ */
+function MonitoredNicsSection({
+  networks,
+  nicSlotLimit,
+  isLoading,
+  error,
+  selection,
+  autoPrimary,
+  readOnly,
+  pending,
+  onChange,
+}: Readonly<{
+  networks: readonly NetworkInventoryEntry[]
+  nicSlotLimit: number | null
+  isLoading: boolean
+  error: unknown
+  selection: NicSlotSelection
+  autoPrimary: NetworkInventoryEntry | null
+  readOnly: boolean
+  pending: boolean
+  onChange: (slotIndex: number, value: string | null) => void
+}>) {
+  if (isLoading) {
+    return <Text style={panelStyles.muted}>Loading network interfaces…</Text>
+  }
+  if (error) {
+    return (
+      <Text style={panelStyles.error}>
+        {errorMessage(error, 'Failed to load network interfaces')}
+      </Text>
+    )
+  }
+  if (nicSlotLimit === null) return null
+  if (monitorableNics(networks).length === 0) {
+    return (
+      <EmptyState
+        panel
+        title="No physical network interfaces reported yet"
+        hint="The server has not reported a topology with a physical uplink. Sensor sources, hosting storage, and manual CPU limits below are unaffected."
+      />
+    )
+  }
+  const rows = nicSlotRowCount(nicSlotLimit, selection)
+  const autoLabel = autoPrimary ? `Auto detected (${autoPrimary.name})` : 'Auto detected'
+  return (
+    <>
+      <Text style={panelStyles.muted}>
+        {`Monitored network interfaces — this server may monitor up to ${nicSlotLimit}. Slot 1 follows the default route unless you pick one; only physical uplinks (or the bond/bridge on top of them) are offered.`}
+      </Text>
+      {Array.from({ length: rows }, (_, index) => {
+        const label = `NIC slot ${index + 1}`
+        const overLimit = index >= nicSlotLimit
+        return (
+          <FormField
+            key={label}
+            label={label}
+            hint={
+              overLimit
+                ? 'Above this server’s limit — clear it or it will not be stored.'
+                : undefined
+            }
+          >
+            <Select
+              value={selection[index] ?? null}
+              options={nicSlotOptions(networks, selection, index)}
+              placeholder={index === 0 ? autoLabel : 'Not monitored'}
+              noneLabel={index === 0 ? autoLabel : 'Not monitored'}
+              disabled={readOnly || pending}
+              accessibilityLabel={`${label} interface`}
+              onChange={(value) => onChange(index, value)}
+            />
+          </FormField>
+        )
+      })}
+    </>
   )
 }
 
@@ -423,7 +536,6 @@ function SensorFieldsSection({
   viewState,
   slotSelection,
   gpuDeviceSelection,
-  nicSelection,
   hostingPathSelection,
   drivetempEnabled,
   cpuTdpDraft,
@@ -434,7 +546,6 @@ function SensorFieldsSection({
   pending,
   onGpuChange,
   onSlotChange,
-  onNicChange,
   onHostingPathChange,
   onDrivetempChange,
   onCpuTdpChange,
@@ -444,7 +555,6 @@ function SensorFieldsSection({
   viewState: SensorsPanelViewState
   slotSelection: Record<SlotField, string | null>
   gpuDeviceSelection: string | null
-  nicSelection: Record<NicField, string | null>
   hostingPathSelection: string | null
   drivetempEnabled: boolean
   cpuTdpDraft: string
@@ -455,7 +565,6 @@ function SensorFieldsSection({
   pending: boolean
   onGpuChange: (value: string | null) => void
   onSlotChange: (field: SlotField, value: string | null) => void
-  onNicChange: (field: NicField, value: string | null) => void
   onHostingPathChange: (value: string | null) => void
   onDrivetempChange: (next: boolean) => void
   onCpuTdpChange: (next: string) => void
@@ -473,20 +582,6 @@ function SensorFieldsSection({
         onGpuChange={onGpuChange}
         onSlotChange={onSlotChange}
       />
-
-      {NIC_FIELDS.map(({ field, label }) => (
-        <FormField key={field} label={label}>
-          <Select
-            value={nicSelection[field]}
-            options={nicOptions(capabilities, nicSelection[field])}
-            placeholder="Auto detected"
-            noneLabel="Auto detected"
-            disabled={readOnly || pending}
-            accessibilityLabel={`${label} binding`}
-            onChange={(value) => onNicChange(field, value)}
-          />
-        </FormField>
-      ))}
 
       <FormField
         label="Hosting storage path"
@@ -554,7 +649,7 @@ function PanelFooter({
   error,
   saved,
   readOnly,
-  capabilities,
+  canSave,
   reassigning,
   pending,
   onSave,
@@ -562,7 +657,8 @@ function PanelFooter({
   error: string | null
   saved: boolean
   readOnly: boolean
-  capabilities: MetricsCapabilities | null
+  /** Something editable has loaded (sensor capabilities or the NIC inventory) — until then there is nothing to save. */
+  canSave: boolean
   reassigning: boolean
   pending: boolean
   onSave: () => void
@@ -573,13 +669,13 @@ function PanelFooter({
       {saved && !error ? <Text style={panelStyles.muted}>Hardware profile saved.</Text> : null}
 
       {readOnly ? <Text style={panelStyles.muted}>Manage permission required.</Text> : null}
-      {!readOnly && capabilities ? (
+      {!readOnly && canSave ? (
         <ButtonRow>
           {reassigning ? (
             <ConfirmButton
               label="Save hardware profile"
               confirmLabel="Confirm reassignment"
-              prompt="Reassigning breaks chart continuity for the changed sensor/NIC."
+              prompt="Reassigning breaks chart continuity for the changed sensor or NIC slot."
               busy={pending}
               disabled={pending}
               onConfirm={onSave}

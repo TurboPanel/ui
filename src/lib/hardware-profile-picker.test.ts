@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import type { MetricsCapabilities, MetricsSensorCandidate } from '@/lib/instance-api'
+import type {
+  MetricsCapabilities,
+  MetricsSensorCandidate,
+  NetworkInventoryEntry,
+} from '@/lib/instance-api'
 import {
+  applyNicSlotChange,
+  autoPrimaryNic,
   buildGpuDeviceProfileUpdate,
-  buildNicProfileUpdates,
+  buildNicSlotProfileUpdate,
   buildSlotProfileUpdates,
+  monitorableNics,
+  nicSlotListFromSelection,
+  nicSlotOptions,
+  nicSlotRowCount,
+  nicSlotSelectionFromProfile,
+  nicSlotsReassigned,
   gpuDeviceOptions,
   resolveSensorsPanelViewState,
   sensorOptions,
@@ -310,26 +322,94 @@ describe('buildGpuDeviceProfileUpdate', () => {
   })
 })
 
-describe('buildNicProfileUpdates', () => {
-  it('omits a NIC binding that was never configured and was left untouched', () => {
-    const initial = { nic1: null, nic2: null }
-    const updates = buildNicProfileUpdates(initial, initial, new Set())
-    expect('nic1' in updates).toBe(false)
-    expect('nic2' in updates).toBe(false)
+describe('monitored NIC slots', () => {
+  const nic = (
+    deviceId: string,
+    kind: NetworkInventoryEntry['kind'],
+    extra: Partial<NetworkInventoryEntry> = {}
+  ): NetworkInventoryEntry => ({
+    deviceId,
+    name: deviceId.replace(/^mac:/, ''),
+    kind,
+    role: 'other',
+    ...extra,
+  })
+  const networks: NetworkInventoryEntry[] = [
+    nic('virtual:lo', 'loopback'),
+    nic('mac:eth1', 'uplink', { speedMbps: 1000 }),
+    nic('mac:eth0', 'uplink', { defaultRoute: true, role: 'nic', slot: 1 }),
+    nic('mac:port', 'member'),
+    nic('virtual:vlan', 'virtual'),
+    nic('virtual:bond0', 'uplink'),
+  ]
+
+  it('offers only physical uplinks, and mirrors the daemon auto rule (default route first, then sorted id)', () => {
+    expect(monitorableNics(networks).map((d) => d.deviceId)).toEqual([
+      'mac:eth1',
+      'mac:eth0',
+      'virtual:bond0',
+    ])
+    expect(autoPrimaryNic(networks)?.deviceId).toBe('mac:eth0')
+    expect(autoPrimaryNic(networks.filter((d) => d.deviceId !== 'mac:eth0'))?.deviceId).toBe(
+      'mac:eth1'
+    )
+    expect(autoPrimaryNic([nic('mac:port', 'member')])).toBeNull()
   })
 
-  it('resends an already-bound NIC even when untouched', () => {
-    const initial = { nic1: 'eth0', nic2: null }
-    const updates = buildNicProfileUpdates(initial, initial, new Set())
-    expect(updates.nic1).toBe('eth0')
-    expect('nic2' in updates).toBe(false)
+  it('excludes uplinks already chosen in another slot, but keeps a stale current value visible', () => {
+    const selection = ['mac:eth0', 'mac:gone', null]
+    expect(nicSlotOptions(networks, selection, 2).map((o) => o.value)).toEqual([
+      'mac:eth1',
+      'virtual:bond0',
+    ])
+    const slot2 = nicSlotOptions(networks, selection, 1)
+    expect(slot2.map((o) => o.value)).toEqual(['mac:eth1', 'virtual:bond0', 'mac:gone'])
+    expect(slot2[2]?.detail).toContain('not in the current topology')
+    const reclassified = nicSlotOptions(networks, ['mac:port'], 0)
+    expect(reclassified.at(-1)?.detail).toContain('member')
   })
 
-  it('sends null for a never-configured NIC the operator explicitly touched', () => {
-    const initial = { nic1: null, nic2: null }
-    const updates = buildNicProfileUpdates(initial, initial, new Set(['nic1' as const]))
-    expect('nic1' in updates).toBe(true)
-    expect(updates.nic1).toBeNull()
+  it('renders the server limit worth of rows, or more when a saved list already exceeds it', () => {
+    expect(nicSlotRowCount(2, [null, null, null, null])).toBe(2)
+    expect(nicSlotRowCount(2, ['a', 'b', 'c', null])).toBe(3)
+    expect(nicSlotRowCount(null, [])).toBe(1)
+    expect(nicSlotSelectionFromProfile({ nicSlotDeviceIds: ['a', 'b'] }, 4)).toEqual([
+      'a',
+      'b',
+      null,
+      null,
+    ])
+    expect(applyNicSlotChange(['a'], 2, 'c')).toEqual(['a', null, 'c'])
+  })
+
+  it('compacts a selection to the wire list and pins the auto primary into slot 1 when only a later slot was filled', () => {
+    expect(nicSlotListFromSelection([null, null], 'mac:eth0')).toEqual([])
+    expect(nicSlotListFromSelection(['mac:eth1', null, 'mac:eth1'], 'mac:eth0')).toEqual([
+      'mac:eth1',
+    ])
+    expect(nicSlotListFromSelection([null, 'mac:eth1'], 'mac:eth0')).toEqual([
+      'mac:eth0',
+      'mac:eth1',
+    ])
+    // The auto primary picked explicitly in a later slot is not duplicated.
+    expect(nicSlotListFromSelection([null, 'mac:eth0'], 'mac:eth0')).toEqual(['mac:eth0'])
+  })
+
+  it('builds a tri-state update: omitted when never configured and untouched, null when cleared', () => {
+    expect(buildNicSlotProfileUpdate([null, null], [], false, 'mac:eth0')).toBeUndefined()
+    expect(buildNicSlotProfileUpdate([null, null], [], true, 'mac:eth0')).toBeNull()
+    expect(buildNicSlotProfileUpdate([null, null], ['mac:eth0'], false, 'mac:eth0')).toBeNull()
+    expect(buildNicSlotProfileUpdate(['mac:eth0', 'mac:eth1'], [], true, null)).toEqual([
+      'mac:eth0',
+      'mac:eth1',
+    ])
+  })
+
+  it('flags a reassignment only when a previously pinned list changes membership or order', () => {
+    expect(nicSlotsReassigned([], ['mac:eth1'], 'mac:eth0')).toBe(false)
+    expect(nicSlotsReassigned(['mac:eth0'], ['mac:eth0', null], 'mac:eth0')).toBe(false)
+    expect(nicSlotsReassigned(['mac:eth0', 'mac:eth1'], ['mac:eth1', 'mac:eth0'], null)).toBe(true)
+    expect(nicSlotsReassigned(['mac:eth0'], [null, null], 'mac:eth0')).toBe(true)
   })
 })
 
