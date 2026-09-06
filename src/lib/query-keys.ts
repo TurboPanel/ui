@@ -53,9 +53,7 @@ export type StorageParentFilter =
   | { projectId: string }
   | { serviceId: string }
 
-function storageParentKey(
-  filter: StorageParentFilter,
-): readonly [string, string] {
+function storageParentKey(filter: StorageParentFilter): readonly [string, string] {
   if ('environmentId' in filter) return ['environmentId', filter.environmentId]
   if ('projectId' in filter) return ['projectId', filter.projectId]
   return ['serviceId', filter.serviceId]
@@ -68,12 +66,10 @@ export const queryKeys = {
     session: ['auth', 'session'] as const,
     organizations: ['auth', 'organizations'] as const,
     permissions: ['auth', 'permissions'] as const,
-    resourceId: (kind: string, itemId: string) =>
-      ['auth', 'resource-id', kind, itemId] as const,
+    resourceId: (kind: string, itemId: string) => ['auth', 'resource-id', kind, itemId] as const,
     can: (resourceId: string, permissionKey: string) =>
       ['auth', 'can', resourceId, permissionKey] as const,
-    accessGrants: (resourceId: string) =>
-      ['auth', 'access-grants', resourceId] as const,
+    accessGrants: (resourceId: string) => ['auth', 'access-grants', resourceId] as const,
     teams: ['auth', 'teams'] as const,
   },
 
@@ -88,31 +84,29 @@ export const queryKeys = {
       servers: {
         /** Canonical org servers list — single O(1) fleet read. */
         list: ['org', orgId, 'servers'] as const,
-        detail: (serverId: string) =>
-          ['org', orgId, 'server', serverId] as const,
-        status: (serverId: string) =>
-          ['org', orgId, 'server', serverId, 'status'] as const,
-        updateStatus: (serverId: string) =>
-          ['org', orgId, 'server', serverId, 'update'] as const,
+        detail: (serverId: string) => ['org', orgId, 'server', serverId] as const,
+        status: (serverId: string) => ['org', orgId, 'server', serverId, 'status'] as const,
+        updateStatus: (serverId: string) => ['org', orgId, 'server', serverId, 'update'] as const,
         updatesBatch: ['org', orgId, 'servers', 'updates'] as const,
         /** One O(1) fleet usage snapshot (CPU stack / load / memory / swap). */
         fleetUsage: ['org', orgId, 'servers', 'fleet-usage'] as const,
         /** Active registration keys (owner-only GET /licenses). */
         licenses: ['org', orgId, 'servers', 'licenses'] as const,
-        reporting: (serverId: string, window: string) =>
-          ['org', orgId, 'server', serverId, 'reporting', window] as const,
         metricsSeries: (serverId: string, rangeId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'series', rangeId] as const,
         metricsSummary: (serverId: string, rangeId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'summary', rangeId] as const,
+        metricsEvents: (serverId: string, rangeId: string) =>
+          ['org', orgId, 'server', serverId, 'metrics', 'events', rangeId] as const,
+        metricsConnection: (serverId: string, rangeId: string) =>
+          ['org', orgId, 'server', serverId, 'metrics', 'connection', rangeId] as const,
         /**
          * Shared prefix for every `/metrics/*` query on one server — series,
          * summary, capabilities, connection. Invalidate this whole subtree
          * (rather than one leaf key) on a mutation that reshapes metrics
          * payloads for this server (e.g. saving its hardware profile).
          */
-        metrics: (serverId: string) =>
-          ['org', orgId, 'server', serverId, 'metrics'] as const,
+        metrics: (serverId: string) => ['org', orgId, 'server', serverId, 'metrics'] as const,
         /** Sensor/mount capability discovery — fetched on demand, never polled. */
         metricsCapabilities: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'capabilities'] as const,
@@ -124,8 +118,7 @@ export const queryKeys = {
          */
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
-        labels: (serverId: string) =>
-          ['org', orgId, 'server', serverId, 'labels'] as const,
+        labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
       },
 
       settings: {
@@ -145,16 +138,9 @@ export const queryKeys = {
         datacenters: ['org', orgId, 'topology', 'datacenters'] as const,
         datacenter: (datacenterId: string) =>
           ['org', orgId, 'topology', 'datacenter', datacenterId] as const,
-        nameSuggestions: [
-          'org',
-          orgId,
-          'topology',
-          'datacenter-name-suggestions',
-        ] as const,
-        ips: (filters?: IpListFilters) =>
-          ['org', orgId, 'topology', 'ips', filters ?? {}] as const,
-        ip: (ipId: string) =>
-          ['org', orgId, 'topology', 'ip', ipId] as const,
+        nameSuggestions: ['org', orgId, 'topology', 'datacenter-name-suggestions'] as const,
+        ips: (filters?: IpListFilters) => ['org', orgId, 'topology', 'ips', filters ?? {}] as const,
+        ip: (ipId: string) => ['org', orgId, 'topology', 'ip', ipId] as const,
         networksAll: ['org', orgId, 'topology', 'networks'] as const,
         networks: (filters?: NetworkListFilters) =>
           ['org', orgId, 'topology', 'networks', filters ?? {}] as const,
@@ -168,37 +154,24 @@ export const queryKeys = {
       workspaces: {
         all: ['org', orgId, 'workspaces'] as const,
         list: ['org', orgId, 'workspaces'] as const,
-        detail: (workspaceId: string) =>
-          ['org', orgId, 'workspace', workspaceId] as const,
+        detail: (workspaceId: string) => ['org', orgId, 'workspace', workspaceId] as const,
       },
 
       projects: {
         all: ['org', orgId, 'projects'] as const,
-        list: (workspaceId?: string) =>
-          ['org', orgId, 'projects', workspaceId ?? 'all'] as const,
-        detail: (projectId: string) =>
-          ['org', orgId, 'project', projectId] as const,
+        list: (workspaceId?: string) => ['org', orgId, 'projects', workspaceId ?? 'all'] as const,
+        detail: (projectId: string) => ['org', orgId, 'project', projectId] as const,
         catalog: ['org', orgId, 'project-catalog'] as const,
         principals: (projectId: string) =>
           ['org', orgId, 'project', projectId, 'principals'] as const,
         principalSshKeys: (projectId: string, principalId: string) =>
-          [
-            'org',
-            orgId,
-            'project',
-            projectId,
-            'principals',
-            principalId,
-            'ssh-keys',
-          ] as const,
+          ['org', orgId, 'project', projectId, 'principals', principalId, 'ssh-keys'] as const,
       },
 
       environments: {
         all: ['org', orgId, 'environments'] as const,
-        list: (projectId?: string) =>
-          ['org', orgId, 'environments', projectId ?? 'all'] as const,
-        detail: (environmentId: string) =>
-          ['org', orgId, 'environment', environmentId] as const,
+        list: (projectId?: string) => ['org', orgId, 'environments', projectId ?? 'all'] as const,
+        detail: (environmentId: string) => ['org', orgId, 'environment', environmentId] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
         /** Deploy history page (no interval — invalidated by deploy mutations). */
@@ -239,14 +212,7 @@ export const queryKeys = {
           ['org', orgId, 'repositories', 'detail', repositoryId] as const,
         connections: ['org', orgId, 'repositories', 'connections'] as const,
         connectionRepositories: (connectionId: string) =>
-          [
-            'org',
-            orgId,
-            'repositories',
-            'connections',
-            connectionId,
-            'repositories',
-          ] as const,
+          ['org', orgId, 'repositories', 'connections', connectionId, 'repositories'] as const,
       },
 
       tags: {
@@ -254,8 +220,7 @@ export const queryKeys = {
         list: ['org', orgId, 'tags'] as const,
         forEntity: (kind: TaggableParentKey, id: string) =>
           ['org', orgId, 'tags', 'entity', kind, id] as const,
-        markers: (tagId: string) =>
-          ['org', orgId, 'tags', tagId, 'markers'] as const,
+        markers: (tagId: string) => ['org', orgId, 'tags', tagId, 'markers'] as const,
       },
 
       tasks: {
@@ -264,8 +229,7 @@ export const queryKeys = {
           'serviceId' in filter
             ? (['org', orgId, 'tasks', 'serviceId', filter.serviceId] as const)
             : (['org', orgId, 'tasks', 'environmentId', filter.environmentId] as const),
-        detail: (taskId: string) =>
-          ['org', orgId, 'tasks', 'detail', taskId] as const,
+        detail: (taskId: string) => ['org', orgId, 'tasks', 'detail', taskId] as const,
       },
 
       services: {
@@ -276,16 +240,14 @@ export const queryKeys = {
 
       hostings: {
         all: ['org', orgId, 'hostings'] as const,
-        list: (serviceId: string) =>
-          ['org', orgId, 'hostings', serviceId] as const,
+        list: (serviceId: string) => ['org', orgId, 'hostings', serviceId] as const,
       },
 
       containers: {
         all: ['org', orgId, 'containers'] as const,
         list: (filters?: ContainerListFilters) =>
           ['org', orgId, 'containers', filters ?? {}] as const,
-        detail: (containerId: string) =>
-          ['org', orgId, 'container', containerId] as const,
+        detail: (containerId: string) => ['org', orgId, 'container', containerId] as const,
         logs: (containerId: string, tail?: number) =>
           ['org', orgId, 'container', containerId, 'logs', tail ?? 200] as const,
       },
@@ -294,8 +256,7 @@ export const queryKeys = {
         all: ['org', orgId, 'variables'] as const,
         list: (filter: VariableParentFilter) =>
           ['org', orgId, 'variables', ...variableParentKey(filter)] as const,
-        detail: (variableId: string) =>
-          ['org', orgId, 'variable', variableId] as const,
+        detail: (variableId: string) => ['org', orgId, 'variable', variableId] as const,
       },
 
       storage: {
@@ -307,8 +268,7 @@ export const queryKeys = {
       managed: {
         all: ['org', orgId, 'managed'] as const,
         orgList: ['org', orgId, 'managed'] as const,
-        environment: (environmentId: string) =>
-          ['org', orgId, 'managed', environmentId] as const,
+        environment: (environmentId: string) => ['org', orgId, 'managed', environmentId] as const,
         status: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'status'] as const,
         /** Identity-only cache key — members ride environment + status queries. */
@@ -320,8 +280,7 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'backups'] as const,
-        logs: (environmentId: string) =>
-          ['org', orgId, 'managed', environmentId, 'logs'] as const,
+        logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
       },
 
       bindings: {
@@ -330,16 +289,10 @@ export const queryKeys = {
           filter:
             | { serviceId: string }
             | { environmentId: string }
-            | { managedEnvironmentId: string },
+            | { managedEnvironmentId: string }
         ) => {
           if ('serviceId' in filter) {
-            return [
-              'org',
-              orgId,
-              'bindings',
-              'serviceId',
-              filter.serviceId,
-            ] as const
+            return ['org', orgId, 'bindings', 'serviceId', filter.serviceId] as const
           }
           if ('managedEnvironmentId' in filter) {
             return [
@@ -350,13 +303,7 @@ export const queryKeys = {
               filter.managedEnvironmentId,
             ] as const
           }
-          return [
-            'org',
-            orgId,
-            'bindings',
-            'environmentId',
-            filter.environmentId,
-          ] as const
+          return ['org', orgId, 'bindings', 'environmentId', filter.environmentId] as const
         },
       },
 
@@ -399,9 +346,7 @@ const VISIBILITY_ROOTS = new Set<unknown>(['org', 'auth'])
  * invalidated on 403 recovery (org / project / workspace / server roots, plus
  * auth permission / grant keys).
  */
-export function isVisibilityQuery(query: {
-  queryKey: readonly unknown[]
-}): boolean {
+export function isVisibilityQuery(query: { queryKey: readonly unknown[] }): boolean {
   return VISIBILITY_ROOTS.has(query.queryKey[0])
 }
 
@@ -416,22 +361,17 @@ export function isVisibilityQuery(query: {
  */
 export function isServerMetricsQuery(
   query: { queryKey: readonly unknown[] },
-  orgId: string,
+  orgId: string
 ): boolean {
   const key = query.queryKey
-  return (
-    key[0] === 'org' &&
-    key[1] === orgId &&
-    key[2] === 'server' &&
-    key[4] === 'metrics'
-  )
+  return key[0] === 'org' && key[1] === orgId && key[2] === 'server' && key[4] === 'metrics'
 }
 
 /** Mirrors instance `getAccessManagementPermission()` in access-management.ts. */
 export const ACCESS_MANAGEMENT_PERMISSION = 'organization:own' as const
 
 export function getAccessManagementPermissionKey(
-  _kind: AccessScopeKind,
+  _kind: AccessScopeKind
 ): typeof ACCESS_MANAGEMENT_PERMISSION {
   return ACCESS_MANAGEMENT_PERMISSION
 }

@@ -10,14 +10,7 @@ import {
 } from 'react'
 import { Link, useRouter, useLocalSearchParams } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { TurboPanelLogoMark } from '@/components/brand/turbopanel-logo'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
@@ -30,6 +23,7 @@ import {
 } from '@/components/org/server-commands-panel'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
+import { ServerHardwareProfileEditor } from '@/components/org/server-hardware-profile-editor'
 import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
@@ -105,13 +99,7 @@ type UpdateState = {
   error: string | null
 }
 
-type UpdateBadgeVariant =
-  | 'updating'
-  | 'error'
-  | 'colocated'
-  | 'unknown'
-  | 'available'
-  | 'current'
+type UpdateBadgeVariant = 'updating' | 'error' | 'colocated' | 'unknown' | 'available' | 'current'
 
 function parseTabParam(raw: string | string[] | undefined): ServerDetailTabId {
   const value = Array.isArray(raw) ? raw[0] : raw
@@ -131,7 +119,7 @@ function shortCommit(commit?: string | null): string {
 
 function isColocatedServer(
   server: ServerDetailRecord,
-  updateData?: ServerUpdateStatus | null,
+  updateData?: ServerUpdateStatus | null
 ): boolean {
   return (
     server.colocatedWithInstance === true ||
@@ -158,10 +146,7 @@ function resolveUpdateBadgeVariant(input: {
   return 'current'
 }
 
-function updateBadgeLabel(
-  variant: UpdateBadgeVariant,
-  runningVersionUnknown: boolean,
-): string {
+function updateBadgeLabel(variant: UpdateBadgeVariant, runningVersionUnknown: boolean): string {
   switch (variant) {
     case 'updating':
       return 'Update in progress'
@@ -182,7 +167,7 @@ function applyDetailCommandPollResult(
   current: ServerCommandState,
   activeCommand: DetailActiveCommand,
   record: CommandRecord,
-  onSucceeded: () => void,
+  onSucceeded: () => void
 ): ServerCommandState | null {
   if (current.activeCommand?.commandId !== activeCommand.commandId) {
     return null
@@ -269,7 +254,7 @@ function DetailTabBody({
   onEnqueueCommand: (
     response: CommandEnqueueResponse,
     kind: 'timezone' | 'ntp' | 'systemRestart',
-    meta?: Readonly<{ environmentId?: string }>,
+    meta?: Readonly<{ environmentId?: string }>
   ) => void
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
@@ -277,13 +262,7 @@ function DetailTabBody({
 }>): ReactNode {
   switch (tab) {
     case 'overview':
-      return (
-        <ServerOverviewTab
-          orgId={orgId}
-          server={server}
-          canManage={canManage}
-        />
-      )
+      return <ServerOverviewTab orgId={orgId} server={server} canManage={canManage} />
     case 'control':
       return (
         <ServerControlTab
@@ -322,33 +301,21 @@ function DetailTabBody({
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
     case 'metrics':
-      return (
-        <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
-      )
+      return <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
   }
 }
 
-function deriveServerUpdateViewModel(
-  server: ServerDetailRecord,
-  updateState: UpdateState,
-) {
+function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: UpdateState) {
   const updateData = updateState.data
   const colocated = isColocatedServer(server, updateData)
   const isUpdateStatusLoading = updateState.loading && updateData === null
   const isUpdateInProgress =
-    updateState.triggering ||
-    updateState.resetting ||
-    updateData?.status === 'updating'
-  const canResetUpdateStatus =
-    updateData?.canResetUpdateStatus === true && !updateState.resetting
-  const showUpdateErrorBadge =
-    updateData?.status === 'error' && !updateData?.updateAvailable
+    updateState.triggering || updateState.resetting || updateData?.status === 'updating'
+  const canResetUpdateStatus = updateData?.canResetUpdateStatus === true && !updateState.resetting
+  const showUpdateErrorBadge = updateData?.status === 'error' && !updateData?.updateAvailable
   const targetKnown = updateData?.targetStatus === 'ok'
   const runningVersionUnknown =
-    targetKnown &&
-    server.connected &&
-    !colocated &&
-    !updateData?.current?.commit
+    targetKnown && server.connected && !colocated && !updateData?.current?.commit
   const badgeVariant = resolveUpdateBadgeVariant({
     status: updateData?.status,
     targetStatus: updateData?.targetStatus,
@@ -370,16 +337,11 @@ function deriveServerUpdateViewModel(
   }
 }
 
-function isControlCommandKind(
-  kind: DetailPollCommand['kind'],
-): kind is ActiveCommand['kind'] {
+function isControlCommandKind(kind: DetailPollCommand['kind']): kind is ActiveCommand['kind'] {
   return kind === 'ping' || kind === 'hostname' || kind === 'reboot'
 }
 
-function removePollCommandById(
-  prev: DetailPollCommand[],
-  commandId: string,
-): DetailPollCommand[] {
+function removePollCommandById(prev: DetailPollCommand[], commandId: string): DetailPollCommand[] {
   return prev.filter((item) => item.commandId !== commandId)
 }
 
@@ -393,7 +355,7 @@ function applyTerminalPollSuccess(
     setNtpPollError: (error: string | null) => void
     setSystemRestartPollError: (error: string | null) => void
     invalidateSystemContainers: (environmentId: string | undefined) => void
-  }>,
+  }>
 ): void {
   if (isControlCommandKind(entry.kind)) {
     handlers.setCommandState((prev) => {
@@ -401,10 +363,7 @@ function applyTerminalPollSuccess(
       if (active?.commandId !== entry.commandId) {
         return prev
       }
-      return (
-        applyDetailCommandPollResult(prev, active, record, handlers.onRefreshServer) ??
-        prev
-      )
+      return applyDetailCommandPollResult(prev, active, record, handlers.onRefreshServer) ?? prev
     })
     return
   }
@@ -415,9 +374,7 @@ function applyTerminalPollSuccess(
       handlers.onRefreshServer()
       return
     }
-    handlers.setTimezonePollError(
-      record.error ?? `Timezone change ${record.status}`,
-    )
+    handlers.setTimezonePollError(record.error ?? `Timezone change ${record.status}`)
     return
   }
 
@@ -427,9 +384,7 @@ function applyTerminalPollSuccess(
       handlers.invalidateSystemContainers(entry.environmentId)
       return
     }
-    handlers.setSystemRestartPollError(
-      record.error ?? `System restart ${record.status}`,
-    )
+    handlers.setSystemRestartPollError(record.error ?? `System restart ${record.status}`)
     return
   }
 
@@ -449,7 +404,7 @@ function applyPollFailure(
     setTimezonePollError: (error: string | null) => void
     setNtpPollError: (error: string | null) => void
     setSystemRestartPollError: (error: string | null) => void
-  }>,
+  }>
 ): void {
   if (isControlCommandKind(entry.kind)) {
     handlers.patchCommand({
@@ -462,19 +417,17 @@ function applyPollFailure(
   }
   if (entry.kind === 'timezone') {
     handlers.setTimezonePollError(
-      err instanceof Error ? err.message : 'Failed to poll timezone command',
+      err instanceof Error ? err.message : 'Failed to poll timezone command'
     )
     return
   }
   if (entry.kind === 'systemRestart') {
     handlers.setSystemRestartPollError(
-      err instanceof Error ? err.message : 'Failed to poll system restart',
+      err instanceof Error ? err.message : 'Failed to poll system restart'
     )
     return
   }
-  handlers.setNtpPollError(
-    err instanceof Error ? err.message : 'Failed to poll NTP command',
-  )
+  handlers.setNtpPollError(err instanceof Error ? err.message : 'Failed to poll NTP command')
 }
 
 type PollHandlers = Readonly<{
@@ -487,19 +440,19 @@ type PollHandlers = Readonly<{
   patchCommand: (patch: Partial<ServerCommandState>) => void
 }>
 
-function renderServerDeletePanel(input: Readonly<{
-  canManage: boolean
-  colocated: boolean
-  deleting: boolean
-  deleteError: string | null
-  onConfirm: () => void
-}>): ReactNode {
+function renderServerDeletePanel(
+  input: Readonly<{
+    canManage: boolean
+    colocated: boolean
+    deleting: boolean
+    deleteError: string | null
+    onConfirm: () => void
+  }>
+): ReactNode {
   if (!input.canManage) return null
   if (input.colocated) {
     return (
-      <Text style={panelStyles.muted}>
-        The co-located control plane server cannot be deleted.
-      </Text>
+      <Text style={panelStyles.muted}>The co-located control plane server cannot be deleted.</Text>
     )
   }
   return (
@@ -538,15 +491,11 @@ export function ServerDetailSection({
   const rebootMutation = useRebootServer(orgId, serverId)
   const deleteMutation = useDeleteServer(orgId)
 
-  const [commandState, setCommandState] = useState<ServerCommandState>(
-    defaultServerCommandState(),
-  )
+  const [commandState, setCommandState] = useState<ServerCommandState>(defaultServerCommandState())
   const [pollCommands, setPollCommands] = useState<DetailPollCommand[]>([])
   const [timezonePollError, setTimezonePollError] = useState<string | null>(null)
   const [ntpPollError, setNtpPollError] = useState<string | null>(null)
-  const [systemRestartPollError, setSystemRestartPollError] = useState<
-    string | null
-  >(null)
+  const [systemRestartPollError, setSystemRestartPollError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const server = serverQuery.data
@@ -563,8 +512,7 @@ export function ServerDetailSection({
     }
     return {
       loading: updateStatusQuery.isLoading,
-      triggering:
-        triggerUpdateMutation.isPending || data?.status === 'updating',
+      triggering: triggerUpdateMutation.isPending || data?.status === 'updating',
       resetting: resetUpdateMutation.isPending,
       data,
       error,
@@ -585,7 +533,7 @@ export function ServerDetailSection({
         serverId,
         commandId: entry.commandId,
       })),
-    [pollCommands, serverId],
+    [pollCommands, serverId]
   )
 
   const commandsQuery = useCommandRecordsBatch(orgId, commandBatchEntries)
@@ -604,17 +552,13 @@ export function ServerDetailSection({
   const registerPollCommand = (entry: DetailPollCommand) => {
     processedCommandIdsRef.current.delete(entry.commandId)
     setPollCommands((prev) =>
-      prev.some((item) => item.commandId === entry.commandId)
-        ? prev
-        : [...prev, entry],
+      prev.some((item) => item.commandId === entry.commandId) ? prev : [...prev, entry]
     )
   }
 
   const timezoneCommandInFlight = pollCommands.some((item) => item.kind === 'timezone')
   const ntpCommandInFlight = pollCommands.some((item) => item.kind === 'ntp')
-  const systemRestartInFlight = pollCommands.some(
-    (item) => item.kind === 'systemRestart',
-  )
+  const systemRestartInFlight = pollCommands.some((item) => item.kind === 'systemRestart')
 
   const invalidateSystemContainers = useCallback(
     (environmentId: string | undefined) => {
@@ -623,7 +567,7 @@ export function ServerDetailSection({
         queryKey: queryKeys.org(orgId).containers.list({ environmentId }),
       })
     },
-    [queryClient, orgId],
+    [queryClient, orgId]
   )
 
   useEffect(() => {
@@ -670,12 +614,7 @@ export function ServerDetailSection({
       applyPollFailure(entry, commandsQuery.error, pollHandlers)
     }
     setPollCommands([])
-  }, [
-    commandsQuery.error,
-    pollCommands,
-    invalidateServer,
-    invalidateSystemContainers,
-  ])
+  }, [commandsQuery.error, pollCommands, invalidateServer, invalidateSystemContainers])
 
   const setTab = (tabId: ServerDetailTabId) => {
     router.setParams({ tab: tabId })
@@ -687,9 +626,7 @@ export function ServerDetailSection({
 
   if (serverQuery.isError || !server) {
     const message =
-      serverQuery.error instanceof Error
-        ? serverQuery.error.message
-        : 'Failed to load server'
+      serverQuery.error instanceof Error ? serverQuery.error.message : 'Failed to load server'
     return <ServerDetailError message={message} />
   }
 
@@ -736,8 +673,7 @@ export function ServerDetailSection({
       onError: (err) => {
         if (isForbiddenError(err)) return
         patchCommand({
-          hostnameError:
-            err instanceof Error ? err.message : 'Hostname change failed',
+          hostnameError: err instanceof Error ? err.message : 'Hostname change failed',
           hostnameRunning: false,
         })
       },
@@ -810,9 +746,7 @@ export function ServerDetailSection({
           ) : null}
           <View style={styles.headerMeta}>
             <ConnectionStatusDot status={connectionStatus} size={8} />
-            <Text style={styles.statusLabel}>
-              {serverConnectionStatusLabel(connectionStatus)}
-            </Text>
+            <Text style={styles.statusLabel}>{serverConnectionStatusLabel(connectionStatus)}</Text>
             {flag ? <Text style={styles.flag}>{flag}</Text> : null}
             {updateVm.colocated ? (
               <View
@@ -820,18 +754,12 @@ export function ServerDetailSection({
                 accessibilityRole="text"
                 accessibilityLabel="Platform Server"
               >
-                <TurboPanelLogoMark
-                  size={12}
-                  square
-                  accessibilityLabel=""
-                />
+                <TurboPanelLogoMark size={12} square accessibilityLabel="" />
                 <Text style={styles.instanceDaemonBadgeText}>Platform Server</Text>
               </View>
             ) : null}
           </View>
-          {connectedVia ? (
-            <MonoText style={styles.connectedVia}>{connectedVia}</MonoText>
-          ) : null}
+          {connectedVia ? <MonoText style={styles.connectedVia}>{connectedVia}</MonoText> : null}
         </View>
       </View>
 
@@ -922,10 +850,7 @@ function ServerOverviewTab({
   const asn = formatServerGeoAsn(server.geo)
   const hasGeo = Boolean(geoLine || country || asn)
   const timezoneSource = configuredSourceLabel(server.timezoneSource)
-  const groupStyle = [
-    styles.detailGroup,
-    twoColumn && styles.detailGroupHalf,
-  ]
+  const groupStyle = [styles.detailGroup, twoColumn && styles.detailGroupHalf]
 
   return (
     <View style={styles.tabBody}>
@@ -949,30 +874,20 @@ function ServerOverviewTab({
 
           <View style={groupStyle}>
             <Text style={panelStyles.detailTitle}>Operating system</Text>
-            <Text style={panelStyles.detailLine}>
-              {server.osDisplay ?? 'Not reported yet'}
-            </Text>
+            <Text style={panelStyles.detailLine}>{server.osDisplay ?? 'Not reported yet'}</Text>
             {server.os?.architecture ? (
-              <Text style={panelStyles.muted}>
-                Arch: {server.os.architecture}
-              </Text>
+              <Text style={panelStyles.muted}>Arch: {server.os.architecture}</Text>
             ) : null}
             {server.os?.codename ? (
-              <Text style={panelStyles.muted}>
-                Codename: {server.os.codename}
-              </Text>
+              <Text style={panelStyles.muted}>Codename: {server.os.codename}</Text>
             ) : null}
           </View>
 
           {hasGeo ? (
             <View style={groupStyle}>
               <Text style={panelStyles.detailTitle}>Geo</Text>
-              {geoLine ? (
-                <Text style={panelStyles.detailLine}>{geoLine}</Text>
-              ) : null}
-              {country ? (
-                <Text style={panelStyles.detailLine}>{country}</Text>
-              ) : null}
+              {geoLine ? <Text style={panelStyles.detailLine}>{geoLine}</Text> : null}
+              {country ? <Text style={panelStyles.detailLine}>{country}</Text> : null}
               {asn ? <Text style={panelStyles.muted}>{asn}</Text> : null}
             </View>
           ) : null}
@@ -989,8 +904,7 @@ function ServerOverviewTab({
                 Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
               </Text>
             ) : null}
-            {!server.datacenterEnforceServerTimezone &&
-            server.enforceServerTimezone ? (
+            {!server.datacenterEnforceServerTimezone && server.enforceServerTimezone ? (
               <Text style={panelStyles.muted}>
                 Organization enforces {server.orgDefaultTimezone ?? 'its default'}.
               </Text>
@@ -999,17 +913,11 @@ function ServerOverviewTab({
         </View>
       </SectionPanel>
 
-      <ServerSshPortPanel
-        orgId={orgId}
-        server={server}
-        canManage={canManage}
-      />
+      <ServerSshPortPanel orgId={orgId} server={server} canManage={canManage} />
 
-      <ServerMetricsSensorsPanel
-        orgId={orgId}
-        server={server}
-        canManage={canManage}
-      />
+      <ServerMetricsSensorsPanel orgId={orgId} server={server} />
+
+      <ServerHardwareProfileEditor orgId={orgId} server={server} canManage={canManage} />
 
       <ServerLabelsEditor
         orgId={orgId}
@@ -1051,10 +959,7 @@ function ServerControlTab({
   onResetUpdate: () => void
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
-  onEnqueueRestart: (
-    response: CommandEnqueueResponse,
-    environmentId: string | undefined,
-  ) => void
+  onEnqueueRestart: (response: CommandEnqueueResponse, environmentId: string | undefined) => void
   deletePanel: ReactNode
 }>) {
   return (
@@ -1127,9 +1032,7 @@ function ServerControlTab({
             ) : null}
           </ButtonRow>
         ) : null}
-        {updateState.error ? (
-          <Text style={panelStyles.error}>{updateState.error}</Text>
-        ) : null}
+        {updateState.error ? <Text style={panelStyles.error}>{updateState.error}</Text> : null}
       </SectionPanel>
 
       <SectionPanel title="Delete server" hint="Two-step confirm">

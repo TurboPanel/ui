@@ -1,7 +1,4 @@
-import type {
-  FleetServerUsageRecord,
-  ServerHostResources,
-} from '@/lib/instance-api'
+import type { FleetServerUsageRecord, ServerHostResources } from '@/lib/instance-api'
 import { resolveServerConnectionStatus } from '@/lib/server-connection-status'
 
 /** Fields needed to roll up fleet capacity + online count. */
@@ -43,7 +40,7 @@ export function formatCoresTotal(value: number | null): string {
 }
 
 export function indexFleetUsageByServerId(
-  rows: readonly FleetServerUsageRecord[] | undefined,
+  rows: readonly FleetServerUsageRecord[] | undefined
 ): Map<string, FleetServerUsageRecord> {
   const map = new Map<string, FleetServerUsageRecord>()
   for (const entry of rows ?? []) {
@@ -52,20 +49,10 @@ export function indexFleetUsageByServerId(
   return map
 }
 
-function memoryTotalFromUsage(
-  usage: FleetServerUsageRecord | undefined,
-): number | null {
-  if (!usage || usage.sampleCount <= 0) return null
-  // v2 stores the total directly — no used+available reconstruction.
-  const total = usage.values.memoryTotalBytes
-  if (total == null || !Number.isFinite(total)) return null
-  return total > 0 ? total : null
-}
-
 function sumSocketTotals(
   sockets: NonNullable<ServerHostResources['cpus']>,
   field: 'cores' | 'threads',
-  fallback: 'cores' | 'threads',
+  fallback: 'cores' | 'threads'
 ): number | null {
   let total = 0
   let known = false
@@ -80,9 +67,7 @@ function sumSocketTotals(
 }
 
 /** Physical cores for inventory totals; falls back to threads when unknown. */
-export function serverInventoryCpuCores(
-  server: FleetCapacityServer,
-): number | null {
+export function serverInventoryCpuCores(server: FleetCapacityServer): number | null {
   const sockets = server.resources?.cpus
   if (sockets && sockets.length > 0) {
     return sumSocketTotals(sockets, 'cores', 'threads')
@@ -99,21 +84,15 @@ export function serverCpuThreads(server: FleetCapacityServer): number | null {
   return null
 }
 
-function serverMemoryTotal(
-  server: FleetCapacityServer,
-  usage: FleetServerUsageRecord | undefined,
-): number | null {
+function serverMemoryTotal(server: FleetCapacityServer): number | null {
   const fromResources = server.resources?.memory?.totalBytes
   if (fromResources != null && Number.isFinite(fromResources) && fromResources > 0) {
     return fromResources
   }
-  return memoryTotalFromUsage(usage)
+  return null
 }
 
-export function computeFleetStatus(
-  servers: readonly FleetCapacityServer[],
-  usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>,
-): FleetStatus {
+export function computeFleetStatus(servers: readonly FleetCapacityServer[]): FleetStatus {
   let cores = 0
   let coresKnown = false
   let memory = 0
@@ -139,7 +118,7 @@ export function computeFleetStatus(
       cores += c
       coresKnown = true
     }
-    const mem = serverMemoryTotal(server, usageByServerId.get(server.id))
+    const mem = serverMemoryTotal(server)
     if (mem != null) {
       memory += mem
       memoryKnown = true

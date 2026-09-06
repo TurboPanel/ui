@@ -30,8 +30,9 @@ import {
   useServerDetail,
   useServerLabels,
   useServerMetricsCapabilities,
+  useServerMetricsConnection,
+  useServerMetricsEvents,
   useServerMetricsSeries,
-  useServerReporting,
   useServerUpdateStatus,
   useServersUpdateStatus,
   useSetServerHostname,
@@ -49,6 +50,8 @@ const {
   fetchLicenses,
   fetchFleetMetricsLatest,
   fetchServerMetricsSeries,
+  fetchServerMetricsEvents,
+  fetchServerMetricsConnection,
   pingDaemon,
   fetchServer,
   fetchServerLabels,
@@ -78,6 +81,8 @@ const {
   fetchLicenses: vi.fn(),
   fetchFleetMetricsLatest: vi.fn(),
   fetchServerMetricsSeries: vi.fn(),
+  fetchServerMetricsEvents: vi.fn(),
+  fetchServerMetricsConnection: vi.fn(),
   pingDaemon: vi.fn(),
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
@@ -112,6 +117,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchLicenses,
     fetchFleetMetricsLatest,
     fetchServerMetricsSeries,
+    fetchServerMetricsEvents,
+    fetchServerMetricsConnection,
     pingDaemon,
     fetchServer,
     fetchServerLabels,
@@ -156,13 +163,11 @@ function createWrapper(client = createAppQueryClient()) {
 function resolveRefetchInterval(
   client: ReturnType<typeof createAppQueryClient>,
   queryKey: readonly unknown[],
-  data?: unknown,
+  data?: unknown
 ): number | false | undefined {
   const query = client.getQueryCache().find({ queryKey })
   if (!query) throw new TypeError('expected query in cache')
-  const interval = (
-    query.options as { refetchInterval?: unknown }
-  ).refetchInterval
+  const interval = (query.options as { refetchInterval?: unknown }).refetchInterval
   if (typeof interval === 'function') {
     if (data !== undefined) {
       query.setState({ ...query.state, data })
@@ -206,10 +211,9 @@ describe('servers query hooks', () => {
   })
 
   it('useOrgServers respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useOrgServers(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useOrgServers(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchOrgServers).not.toHaveBeenCalled()
@@ -268,7 +272,7 @@ describe('servers query hooks', () => {
               boundServer: null,
             },
           ],
-        }),
+        })
       ).toBe(SERVERS_REFRESH_MS)
     })
     expect(
@@ -282,14 +286,12 @@ describe('servers query hooks', () => {
             boundServer: { id: 'srv-1', name: 'edge', connected: true },
           },
         ],
-      }),
+      })
     ).toBe(false)
   })
 
   it('useFleetServerUsage returns null when metrics backend is unavailable', async () => {
-    fetchFleetMetricsLatest.mockRejectedValueOnce(
-      new MetricsBackendUnavailableError('duckdb'),
-    )
+    fetchFleetMetricsLatest.mockRejectedValueOnce(new MetricsBackendUnavailableError('duckdb'))
 
     const { result } = renderHook(() => useFleetServerUsage(orgId), {
       wrapper: createWrapper(),
@@ -315,100 +317,33 @@ describe('servers query hooks', () => {
   })
 
   it('useFleetServerUsage stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useFleetServerUsage(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
-
-    expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchFleetMetricsLatest).not.toHaveBeenCalled()
-  })
-
-  it('useServerReporting returns null when metrics backend is unavailable', async () => {
-    fetchServerMetricsSeries.mockRejectedValueOnce(
-      new MetricsBackendUnavailableError('duckdb'),
-    )
-
-    const { result } = renderHook(
-      () => useServerReporting(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
-    expect(result.current.data).toBeNull()
-  })
-
-  it('useServerReporting loads uptime series when backend is available', async () => {
-    fetchServerMetricsSeries.mockResolvedValueOnce({
-      series: [{ metric: 'uptimeSeconds', points: [] }],
-    })
-
-    const { result } = renderHook(
-      () => useServerReporting(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
-    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
-      serverId,
-      expect.objectContaining({ metrics: ['uptimeSeconds'] }),
-      orgId,
-    )
-    if (!result.current.data || !('series' in result.current.data)) {
-      throw new TypeError('expected metrics series response')
-    }
-    expect(result.current.data.series).toHaveLength(1)
-  })
-
-  it('useServerReporting propagates non-backend errors', async () => {
-    fetchServerMetricsSeries.mockRejectedValue(new Error('HTTP 500: boom'))
-
-    const { result } = renderHook(
-      () => useServerReporting(orgId, serverId),
-      { wrapper: createWrapper(createTestQueryClient()) },
-    )
-
-    await waitFor(() => {
-      expect(result.current.isError).toBe(true)
-    })
-  })
-
-  it('useServerReporting stays idle when serverId is empty', () => {
-    const { result } = renderHook(() => useServerReporting(orgId, ''), {
+    const { result } = renderHook(() => useFleetServerUsage(orgId, { enabled: false }), {
       wrapper: createWrapper(),
     })
 
     expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchServerMetricsSeries).not.toHaveBeenCalled()
+    expect(fetchFleetMetricsLatest).not.toHaveBeenCalled()
   })
 
   it('useServerMetricsSeries loads metrics for a range', async () => {
     const seriesOptions: FetchServerMetricsSeriesOptions = {
       fromIso: '2026-01-01T00:00:00.000Z',
       toIso: '2026-01-02T00:00:00.000Z',
-      metrics: ['cpuUserPercent'],
+      metrics: ['host.cpu.userPercent'],
     }
     fetchServerMetricsSeries.mockResolvedValueOnce({
-      series: [{ metric: 'cpuUserPercent', points: [] }],
+      host: { points: [] },
+      entities: [],
     })
 
-    const { result } = renderHook(
-      () => useServerMetricsSeries(orgId, serverId, seriesOptions),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerMetricsSeries(orgId, serverId, seriesOptions), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
-      serverId,
-      seriesOptions,
-      orgId,
-    )
+    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(serverId, seriesOptions, orgId)
   })
 
   it('useServerMetricsSeries stays idle when disabled', () => {
@@ -420,15 +355,88 @@ describe('servers query hooks', () => {
           {
             fromIso: '2026-01-01T00:00:00.000Z',
             toIso: '2026-01-02T00:00:00.000Z',
-            metrics: ['cpuUserPercent'],
+            metrics: ['host.cpu.userPercent'],
           },
-          { enabled: false },
+          { enabled: false }
         ),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerMetricsSeries).not.toHaveBeenCalled()
+  })
+
+  it('useServerMetricsEvents loads events for a range', async () => {
+    const range = {
+      fromIso: '2026-01-01T00:00:00.000Z',
+      toIso: '2026-01-02T00:00:00.000Z',
+    }
+    fetchServerMetricsEvents.mockResolvedValueOnce({
+      ok: true,
+      events: [],
+      truncated: false,
+    })
+
+    const { result } = renderHook(() => useServerMetricsEvents(orgId, serverId, range), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchServerMetricsEvents).toHaveBeenCalledWith(serverId, range, orgId)
+  })
+
+  it('useServerMetricsEvents returns null when metrics backend is unavailable', async () => {
+    fetchServerMetricsEvents.mockRejectedValueOnce(new MetricsBackendUnavailableError('duckdb'))
+
+    const { result } = renderHook(
+      () =>
+        useServerMetricsEvents(orgId, serverId, {
+          fromIso: '2026-01-01T00:00:00.000Z',
+          toIso: '2026-01-02T00:00:00.000Z',
+        }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toBeNull()
+  })
+
+  it('useServerMetricsConnection loads uptime totals for a range', async () => {
+    const range = {
+      fromIso: '2026-01-01T00:00:00.000Z',
+      toIso: '2026-01-02T00:00:00.000Z',
+    }
+    fetchServerMetricsConnection.mockResolvedValueOnce({
+      ok: true,
+      uptimeSeconds: 3600,
+    })
+
+    const { result } = renderHook(() => useServerMetricsConnection(orgId, serverId, range), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchServerMetricsConnection).toHaveBeenCalledWith(serverId, range, orgId)
+  })
+
+  it('useFleetServerUsage never takes per-server ids — one batched call regardless of fleet size', async () => {
+    fetchFleetMetricsLatest.mockResolvedValueOnce({ ok: true, servers: [] })
+
+    const { result } = renderHook(() => useFleetServerUsage(orgId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchFleetMetricsLatest).toHaveBeenCalledTimes(1)
+    expect(fetchFleetMetricsLatest).toHaveBeenCalledWith(orgId)
   })
 
   it('useServersUpdateStatus loads batch update status', async () => {
@@ -452,27 +460,19 @@ describe('servers query hooks', () => {
       servers: [{ serverId, status: 'updating' }],
     })
 
-    renderHook(
-      () => useServersUpdateStatus(orgId, { pollWhileUpdating: true }),
-      { wrapper: createWrapper(client) },
-    )
+    renderHook(() => useServersUpdateStatus(orgId, { pollWhileUpdating: true }), {
+      wrapper: createWrapper(client),
+    })
 
     await waitFor(() => {
-      expect(
-        resolveRefetchInterval(
-          client,
-          queryKeys.org(orgId).servers.updatesBatch,
-        ),
-      ).toBe(false)
+      expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.updatesBatch)).toBe(false)
     })
 
     await waitFor(() => {
       expect(
-        resolveRefetchInterval(
-          client,
-          queryKeys.org(orgId).servers.updatesBatch,
-          { servers: [{ serverId, status: 'updating' }] },
-        ),
+        resolveRefetchInterval(client, queryKeys.org(orgId).servers.updatesBatch, {
+          servers: [{ serverId, status: 'updating' }],
+        })
       ).toBe(UPDATE_PROGRESS_POLL_MS)
     })
   })
@@ -495,10 +495,9 @@ describe('servers query hooks', () => {
       updateAvailable: false,
     })
 
-    const { result } = renderHook(
-      () => useServerUpdateStatus(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerUpdateStatus(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -522,20 +521,18 @@ describe('servers query hooks', () => {
 
     await waitFor(() => {
       expect(
-        resolveRefetchInterval(
-          client,
-          queryKeys.org(orgId).servers.updateStatus(serverId),
-          { serverId, status: 'updating' },
-        ),
+        resolveRefetchInterval(client, queryKeys.org(orgId).servers.updateStatus(serverId), {
+          serverId,
+          status: 'updating',
+        })
       ).toBe(UPDATE_PROGRESS_POLL_MS)
     })
 
     expect(
-      resolveRefetchInterval(
-        client,
-        queryKeys.org(orgId).servers.updateStatus(serverId),
-        { serverId, status: 'idle' },
-      ),
+      resolveRefetchInterval(client, queryKeys.org(orgId).servers.updateStatus(serverId), {
+        serverId,
+        status: 'idle',
+      })
     ).toBe(false)
   })
 
@@ -563,10 +560,9 @@ describe('servers query hooks', () => {
   })
 
   it('useOrgServerCapacity respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useOrgServerCapacity(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useOrgServerCapacity(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchOrgServerCapacity).not.toHaveBeenCalled()
@@ -596,10 +592,9 @@ describe('servers query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useTriggerServerUpdate(orgId, serverId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useTriggerServerUpdate(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run()
     expect(triggerServerUpdate).toHaveBeenCalledWith(serverId)
@@ -616,10 +611,9 @@ describe('servers query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useResetServerUpdateStatus(orgId, serverId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useResetServerUpdateStatus(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run()
     expect(resetServerUpdateStatus).toHaveBeenCalledWith(serverId)
@@ -658,10 +652,9 @@ describe('servers query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useSetServerHostname(orgId, serverId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useSetServerHostname(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run('edge.example')
     expect(setServerHostname).toHaveBeenCalledWith(serverId, 'edge.example')
@@ -677,16 +670,12 @@ describe('servers query hooks', () => {
       status: 'queued',
     })
 
-    const { result } = renderHook(
-      () => useSetServerTimezone(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useSetServerTimezone(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.run('America/Chicago')
-    expect(setServerTimezone).toHaveBeenCalledWith(
-      serverId,
-      'America/Chicago',
-    )
+    expect(setServerTimezone).toHaveBeenCalledWith(serverId, 'America/Chicago')
   })
 
   it('useSetServerNtp enqueues NTP change', async () => {
@@ -730,10 +719,9 @@ describe('servers query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useSaveServerLabels(orgId, serverId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useSaveServerLabels(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run({ role: 'gateway' })
     expect(saveServerLabels).toHaveBeenCalledWith(serverId, {
@@ -772,10 +760,9 @@ describe('servers query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useBatchTriggerServerUpdates(orgId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useBatchTriggerServerUpdates(orgId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run(['srv-1', 'srv-2'])
     expect(triggerServerUpdate).toHaveBeenCalledTimes(2)
@@ -801,10 +788,7 @@ describe('servers query hooks', () => {
       name: 'edge',
       installBaseUrl: 'https://203.0.113.1:8443',
     })
-    expect(createLicense).toHaveBeenCalledWith(
-      'edge',
-      'https://203.0.113.1:8443',
-    )
+    expect(createLicense).toHaveBeenCalledWith('edge', 'https://203.0.113.1:8443')
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).settings.serverCapacity,
     })
@@ -855,9 +839,7 @@ describe('servers query hooks', () => {
   })
 
   it('useServerLabels loads label map', async () => {
-    fetchServerLabels.mockResolvedValueOnce([
-      { key: 'role', value: 'gateway' },
-    ])
+    fetchServerLabels.mockResolvedValueOnce([{ key: 'role', value: 'gateway' }])
 
     const { result } = renderHook(() => useServerLabels(orgId, serverId), {
       wrapper: createWrapper(),
@@ -870,10 +852,9 @@ describe('servers query hooks', () => {
   })
 
   it('useServerLabels respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useServerLabels(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerLabels(orgId, serverId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerLabels).not.toHaveBeenCalled()
@@ -924,9 +905,7 @@ describe('servers query hooks', () => {
     })
 
     await waitFor(() => {
-      const query = client
-        .getQueryCache()
-        .find({ queryKey: queryKeys.org(orgId).servers.licenses })
+      const query = client.getQueryCache().find({ queryKey: queryKeys.org(orgId).servers.licenses })
       expect(query?.state.status).toBe('error')
     })
   })
@@ -936,10 +915,9 @@ describe('servers query hooks', () => {
       ok: true,
       capabilities: { sensors: [] },
     })
-    const { result } = renderHook(
-      () => useServerMetricsCapabilities(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerMetricsCapabilities(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.data).toEqual({
@@ -947,16 +925,13 @@ describe('servers query hooks', () => {
         capabilities: { sensors: [] },
       })
     })
-    expect(fetchServerMetricsCapabilities).toHaveBeenCalledWith(
-      serverId,
-      orgId,
-    )
+    expect(fetchServerMetricsCapabilities).toHaveBeenCalledWith(serverId, orgId)
   })
 
   it('useServerMetricsCapabilities stays idle while disabled or unscoped', () => {
     const disabled = renderHook(
       () => useServerMetricsCapabilities(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     const unscoped = renderHook(() => useServerMetricsCapabilities(orgId, ''), {
       wrapper: createWrapper(),
@@ -972,21 +947,14 @@ describe('servers query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useSaveServerHardwareProfile(orgId, serverId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useSaveServerHardwareProfile(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
 
     const overrides = { disabledSensors: ['coretemp'] }
-    await result.current.run(
-      overrides as Parameters<typeof result.current.run>[0],
-    )
+    await result.current.run(overrides as Parameters<typeof result.current.run>[0])
 
-    expect(saveServerHardwareProfile).toHaveBeenCalledWith(
-      serverId,
-      overrides,
-      orgId,
-    )
+    expect(saveServerHardwareProfile).toHaveBeenCalledWith(serverId, overrides, orgId)
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
@@ -996,12 +964,11 @@ describe('servers query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.metrics(serverId),
     })
-    expect(
-      queryKeys.org(orgId).servers.metricsCapabilities(serverId),
-    ).toEqual([...queryKeys.org(orgId).servers.metrics(serverId), 'capabilities'])
-    expect(
-      queryKeys.org(orgId).servers.metricsSummary(serverId, 'cpu-limits'),
-    ).toEqual([
+    expect(queryKeys.org(orgId).servers.metricsCapabilities(serverId)).toEqual([
+      ...queryKeys.org(orgId).servers.metrics(serverId),
+      'capabilities',
+    ])
+    expect(queryKeys.org(orgId).servers.metricsSummary(serverId, 'cpu-limits')).toEqual([
       ...queryKeys.org(orgId).servers.metrics(serverId),
       'summary',
       'cpu-limits',
@@ -1014,17 +981,12 @@ describe('servers query hooks', () => {
       leaseId: 'lease-1',
     })
 
-    const { result } = renderHook(
-      () => useStartServerMetricsLive(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useStartServerMetricsLive(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
 
     const outcome = await result.current.run('lease-1')
-    expect(startServerMetricsLive).toHaveBeenCalledWith(
-      serverId,
-      'lease-1',
-      orgId,
-    )
+    expect(startServerMetricsLive).toHaveBeenCalledWith(serverId, 'lease-1', orgId)
     expect(outcome).toEqual({
       ok: true,
       value: { ok: true, leaseId: 'lease-1' },
@@ -1034,17 +996,12 @@ describe('servers query hooks', () => {
   it('useStopServerMetricsLive releases the lease', async () => {
     stopServerMetricsLive.mockResolvedValueOnce({ ok: true })
 
-    const { result } = renderHook(
-      () => useStopServerMetricsLive(orgId, serverId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useStopServerMetricsLive(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.run('lease-1')
-    expect(stopServerMetricsLive).toHaveBeenCalledWith(
-      serverId,
-      'lease-1',
-      orgId,
-    )
+    expect(stopServerMetricsLive).toHaveBeenCalledWith(serverId, 'lease-1', orgId)
   })
 
   it('useOrgTemperatureUnit loads the org display setting', async () => {
@@ -1078,50 +1035,43 @@ describe('servers query hooks', () => {
     expect(saveOrgTemperatureUnit).toHaveBeenCalledWith(orgId, {
       temperatureUnit: 'fahrenheit',
     })
-    expect(
-      client.getQueryData(queryKeys.org(orgId).settings.temperatureUnit),
-    ).toEqual({ temperatureUnit: 'fahrenheit' })
+    expect(client.getQueryData(queryKeys.org(orgId).settings.temperatureUnit)).toEqual({
+      temperatureUnit: 'fahrenheit',
+    })
 
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ predicate: expect.any(Function) }),
+      expect.objectContaining({ predicate: expect.any(Function) })
     )
     const call = invalidateSpy.mock.calls.find(
-      ([opts]) => typeof (opts as { predicate?: unknown })?.predicate === 'function',
+      ([opts]) => typeof (opts as { predicate?: unknown })?.predicate === 'function'
     )
-    const predicate = (
-      call?.[0] as { predicate: (q: { queryKey: readonly unknown[] }) => boolean }
-    ).predicate
+    const predicate = (call?.[0] as { predicate: (q: { queryKey: readonly unknown[] }) => boolean })
+      .predicate
     // Matches this server's metrics subtree regardless of which server...
     expect(
       predicate({
         queryKey: queryKeys.org(orgId).servers.metrics(serverId),
-      }),
+      })
     ).toBe(true)
     expect(
       predicate({
-        queryKey: queryKeys
-          .org(orgId)
-          .servers.metricsSeries('other-server', 'range-1'),
-      }),
+        queryKey: queryKeys.org(orgId).servers.metricsSeries('other-server', 'range-1'),
+      })
     ).toBe(true)
     // The CPU-limits summary read (useServerMetricsCpuLimits) carries
     // temperatureUnit too via buildCpuLimitsEnvelope — its TDP/Tjmax prefill
     // must go stale-free on a unit change same as the charts do.
     expect(
       predicate({
-        queryKey: queryKeys
-          .org(orgId)
-          .servers.metricsSummary(serverId, 'cpu-limits'),
-      }),
+        queryKey: queryKeys.org(orgId).servers.metricsSummary(serverId, 'cpu-limits'),
+      })
     ).toBe(true)
     // ...but not an unrelated subtree (labels) or another org's server.
-    expect(
-      predicate({ queryKey: queryKeys.org(orgId).servers.labels(serverId) }),
-    ).toBe(false)
+    expect(predicate({ queryKey: queryKeys.org(orgId).servers.labels(serverId) })).toBe(false)
     expect(
       predicate({
         queryKey: queryKeys.org('other-org').servers.metrics(serverId),
-      }),
+      })
     ).toBe(false)
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   celsiusToDisplay,
-  derivedCpuBusyPercent,
+  cpuBusyPercent,
   formatAxisTime,
   formatBytes,
   formatBytesPerSecond,
@@ -9,12 +9,14 @@ import {
   formatCelsiusAs,
   formatCoveragePercent,
   formatCount,
-  formatDerivedCpuBusyPercent,
+  formatCpuBusyPercent,
   formatMilliseconds,
   formatOpsPerSecond,
   formatPercent,
+  formatPhysicalSignalValue,
   formatUptimeSeconds,
   formatWatts,
+  physicalSignalUnitLabel,
   presentSamplesFromGaps,
   type MetricsRangeId,
 } from '@/lib/format-metrics'
@@ -158,6 +160,39 @@ describe('formatWatts', () => {
   })
 })
 
+describe('physicalSignalUnitLabel', () => {
+  it('renders celsius as the org-configured temperature unit', () => {
+    expect(physicalSignalUnitLabel('celsius', 'celsius')).toBe('°C')
+    expect(physicalSignalUnitLabel('celsius', 'fahrenheit')).toBe('°F')
+  })
+
+  it('renders known non-temperature units and passes through unknown ones', () => {
+    expect(physicalSignalUnitLabel('watts', 'celsius')).toBe('W')
+    expect(physicalSignalUnitLabel('rpm', 'celsius')).toBe('RPM')
+    expect(physicalSignalUnitLabel('percent', 'celsius')).toBe('%')
+    expect(physicalSignalUnitLabel('volts', 'celsius')).toBe('volts')
+  })
+})
+
+describe('formatPhysicalSignalValue', () => {
+  it('returns em dash for null and non-finite values', () => {
+    expect(formatPhysicalSignalValue(null, 'celsius', 'celsius')).toBe('—')
+    expect(formatPhysicalSignalValue(Number.NaN, 'watts', 'celsius')).toBe('—')
+  })
+
+  it('converts celsius readings to the org-configured display unit', () => {
+    expect(formatPhysicalSignalValue(85, 'celsius', 'celsius')).toBe('85.0 °C')
+    expect(formatPhysicalSignalValue(85, 'celsius', 'fahrenheit')).toBe('185.0 °F')
+  })
+
+  it('formats other known units and falls back to a bare count for unknown units', () => {
+    expect(formatPhysicalSignalValue(35.04, 'watts', 'celsius')).toBe('35.0 W')
+    expect(formatPhysicalSignalValue(1200, 'rpm', 'celsius')).toBe('1200 RPM')
+    expect(formatPhysicalSignalValue(42.5, 'percent', 'celsius')).toBe('42.5%')
+    expect(formatPhysicalSignalValue(7, 'volts', 'celsius')).toBe('7')
+  })
+})
+
 describe('formatMilliseconds', () => {
   it('returns em dash for null and non-finite values', () => {
     expect(formatMilliseconds(null)).toBe('—')
@@ -171,24 +206,24 @@ describe('formatMilliseconds', () => {
   })
 })
 
-describe('derivedCpuBusyPercent', () => {
-  it('derives busy as 100 minus idle, clamped', () => {
-    expect(derivedCpuBusyPercent(80)).toBe(20)
-    expect(derivedCpuBusyPercent(0)).toBe(100)
-    expect(derivedCpuBusyPercent(100)).toBe(0)
-    expect(derivedCpuBusyPercent(120)).toBe(0)
-    expect(derivedCpuBusyPercent(-5)).toBe(100)
+describe('cpuBusyPercent', () => {
+  it('clamps the server-computed busy percent into [0, 100]', () => {
+    expect(cpuBusyPercent(20)).toBe(20)
+    expect(cpuBusyPercent(0)).toBe(0)
+    expect(cpuBusyPercent(100)).toBe(100)
+    expect(cpuBusyPercent(120)).toBe(100)
+    expect(cpuBusyPercent(-5)).toBe(0)
   })
 
-  it('returns null when idle is missing', () => {
-    expect(derivedCpuBusyPercent(null)).toBeNull()
-    expect(derivedCpuBusyPercent(undefined)).toBeNull()
-    expect(derivedCpuBusyPercent(Number.NaN)).toBeNull()
+  it('returns null when the value is missing', () => {
+    expect(cpuBusyPercent(null)).toBeNull()
+    expect(cpuBusyPercent(undefined)).toBeNull()
+    expect(cpuBusyPercent(Number.NaN)).toBeNull()
   })
 
-  it('formats through formatDerivedCpuBusyPercent', () => {
-    expect(formatDerivedCpuBusyPercent(80)).toBe('20.0%')
-    expect(formatDerivedCpuBusyPercent(null)).toBe('—')
+  it('formats through formatCpuBusyPercent', () => {
+    expect(formatCpuBusyPercent(20)).toBe('20.0%')
+    expect(formatCpuBusyPercent(null)).toBe('—')
   })
 })
 
@@ -219,7 +254,7 @@ describe('formatAxisTime', () => {
           includeDate: false,
           includeSeconds: false,
           timeZoneName: null,
-        }),
+        })
       )
     }
   })
@@ -231,7 +266,7 @@ describe('formatAxisTime', () => {
           includeDate: true,
           includeSeconds: false,
           timeZoneName: null,
-        }),
+        })
       )
     }
   })

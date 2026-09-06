@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createLicense,
   deleteLicense,
@@ -11,6 +11,8 @@ import {
   fetchServerLabels,
   fetchOrgTemperatureUnit,
   fetchServerMetricsCapabilities,
+  fetchServerMetricsConnection,
+  fetchServerMetricsEvents,
   fetchServerMetricsSeries,
   fetchServerMetricsSummary,
   fetchServersUpdateStatus,
@@ -31,10 +33,12 @@ import {
   setServerTimezone,
   triggerServerUpdate,
   updateServer,
+  type ConnectionHistoryChartResponse,
   type EffectiveCpuThermalLimits,
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
   type LicenseRecord,
+  type MetricEventsResponse,
   type MetricsCapabilitiesOutcome,
   type MetricsLiveStartOutcome,
   type MetricsSeriesResponse,
@@ -52,8 +56,6 @@ export const SERVERS_REFRESH_MS = 30_000
 export const UPDATE_PROGRESS_POLL_MS = 5000
 /** Fleet usage tracks ~1 sample/min host metrics — refresh once a minute. */
 export const FLEET_USAGE_REFRESH_MS = 60_000
-const REPORTING_WINDOW_MS = 24 * 60 * 60 * 1000
-const REPORTING_REFRESH_MS = 300_000
 
 export function useOrgServers(
   orgId: string,
@@ -68,10 +70,10 @@ export function useOrgServers(
             state: {
               data?: { servers?: readonly OrgServerRecord[] }
             }
-          }>,
+          }>
         ) => number | false | undefined)
     retry?: boolean | number
-  }>,
+  }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.list,
@@ -94,17 +96,14 @@ export function useServerDetail(
       | ((
           query: Readonly<{
             state: { data?: ServerDetailRecord }
-          }>,
+          }>
         ) => number | false | undefined)
-  }>,
+  }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.detail(serverId),
     queryFn: () => fetchServer(serverId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval:
       options?.refetchInterval ??
       ((query) =>
@@ -118,21 +117,18 @@ export function useServerDetail(
 export function useServerLabels(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.labels(serverId),
     queryFn: () => fetchServerLabels(serverId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
   })
 }
 
 export function useServersUpdateStatus(
   orgId: string,
-  options?: Readonly<{ enabled?: boolean; pollWhileUpdating?: boolean }>,
+  options?: Readonly<{ enabled?: boolean; pollWhileUpdating?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.updatesBatch,
@@ -152,15 +148,12 @@ export function useServersUpdateStatus(
 export function useServerUpdateStatus(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
     queryFn: () => fetchServerUpdate(serverId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: (query) => {
       const status = query.state.data?.status
       if (status !== 'updating') return false
@@ -169,10 +162,7 @@ export function useServerUpdateStatus(
   })
 }
 
-export function useOrgServerCapacity(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrgServerCapacity(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).settings.serverCapacity,
     queryFn: () => fetchOrgServerCapacity(orgId),
@@ -180,10 +170,7 @@ export function useOrgServerCapacity(
   })
 }
 
-export function useFleetServerUsage(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useFleetServerUsage(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.fleetUsage,
     queryFn: async (): Promise<FleetMetricsLatestResponse | null> => {
@@ -216,33 +203,65 @@ export function useServerMetricsSeries(
    * `rangeKey`, interval refetches then advance the window instead of
    * re-reading a frozen one (required for live mode's 10 s cadence).
    */
-  seriesOptions:
-    | FetchServerMetricsSeriesOptions
-    | (() => FetchServerMetricsSeriesOptions),
+  seriesOptions: FetchServerMetricsSeriesOptions | (() => FetchServerMetricsSeriesOptions),
   options?: Readonly<{
     enabled?: boolean
     refetchInterval?: number | false
     staleTime?: number
     /** Stable cache-key segment (e.g. the range id). Defaults to `fromIso`. */
     rangeKey?: string
-  }>,
+  }>
 ) {
   const resolveOptions = () =>
     typeof seriesOptions === 'function' ? seriesOptions() : seriesOptions
   return useQuery({
     queryKey: queryKeys
       .org(orgId)
-      .servers.metricsSeries(
-        serverId,
-        options?.rangeKey ?? resolveOptions().fromIso,
-      ),
+      .servers.metricsSeries(serverId, options?.rangeKey ?? resolveOptions().fromIso),
     queryFn: () => fetchServerMetricsSeries(serverId, resolveOptions(), orgId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
+  })
+}
+
+/**
+ * Same series endpoint as {@link useServerMetricsSeries}, issued as several
+ * parallel requests instead of one — each `metricBatches` entry becomes its
+ * own request, letting a caller stay under the server's per-request selector
+ * cap (`MAX_SERIES_METRIC_SELECTORS_V4`) without dropping any entity. Uses
+ * `useQueries` rather than one `useServerMetricsSeries` call per batch since
+ * the batch count itself varies (topology size), which rules out calling a
+ * hook a variable number of times.
+ */
+export function useServerMetricsSeriesBatches(
+  orgId: string,
+  serverId: string,
+  metricBatches: readonly (readonly string[])[],
+  rangeOptions: () => { fromIso: string; toIso: string },
+  options?: Readonly<{
+    enabled?: boolean
+    refetchInterval?: number | false
+    staleTime?: number
+    /** Stable cache-key segment (e.g. the range id + topology generation). */
+    rangeKey?: string
+  }>
+) {
+  return useQueries({
+    queries: metricBatches.map((metrics, index) => ({
+      queryKey: queryKeys
+        .org(orgId)
+        .servers.metricsSeries(
+          serverId,
+          `${options?.rangeKey ?? rangeOptions().fromIso}:entities:${index}`
+        ),
+      queryFn: (): Promise<MetricsSeriesResponse> =>
+        fetchServerMetricsSeries(serverId, { ...rangeOptions(), metrics }, orgId),
+      enabled:
+        (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0 && metrics.length > 0,
+      refetchInterval: options?.refetchInterval,
+      staleTime: options?.staleTime,
+    })),
   })
 }
 
@@ -253,15 +272,12 @@ export function useServerMetricsSeries(
 export function useServerMetricsCapabilities(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery<MetricsCapabilitiesOutcome>({
     queryKey: queryKeys.org(orgId).servers.metricsCapabilities(serverId),
     queryFn: () => fetchServerMetricsCapabilities(serverId, orgId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     retry: false,
   })
 }
@@ -274,12 +290,10 @@ export function useServerMetricsCapabilities(
 export function useServerMetricsCpuLimits(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys
-      .org(orgId)
-      .servers.metricsSummary(serverId, 'cpu-limits'),
+    queryKey: queryKeys.org(orgId).servers.metricsSummary(serverId, 'cpu-limits'),
     queryFn: async (): Promise<EffectiveCpuThermalLimits | null> => {
       const toMs = Date.now()
       try {
@@ -289,7 +303,7 @@ export function useServerMetricsCpuLimits(
             fromIso: new Date(toMs - 5 * 60 * 1000).toISOString(),
             toIso: new Date(toMs).toISOString(),
           },
-          orgId,
+          orgId
         )
         return summary.cpuLimits
       } catch (error) {
@@ -297,17 +311,11 @@ export function useServerMetricsCpuLimits(
         throw error
       }
     },
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
   })
 }
 
-export function useSaveServerHardwareProfile(
-  orgId: string,
-  serverId: string,
-) {
+export function useSaveServerHardwareProfile(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (profile: ServerHardwareProfileUpdate) =>
@@ -331,10 +339,7 @@ export function useSaveServerHardwareProfile(
 }
 
 /** Org-wide display setting for how temperatures render (metrics are always stored/compared in Celsius). */
-export function useOrgTemperatureUnit(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrgTemperatureUnit(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).settings.temperatureUnit,
     queryFn: () => fetchOrgTemperatureUnit(orgId),
@@ -346,8 +351,7 @@ export function useSaveOrgTemperatureUnit(orgId: string) {
   const queryClient = useQueryClient()
   const settingsKey = queryKeys.org(orgId).settings.temperatureUnit
   return useApiMutation({
-    mutationFn: (patch: OrgTemperatureUnitSettings) =>
-      saveOrgTemperatureUnit(orgId, patch),
+    mutationFn: (patch: OrgTemperatureUnitSettings) => saveOrgTemperatureUnit(orgId, patch),
     onSuccess: async (data) => {
       queryClient.setQueryData(settingsKey, data)
       // Every server's /metrics/* payload (series/summary) embeds this
@@ -366,8 +370,7 @@ export function useSaveOrgTemperatureUnit(orgId: string) {
  */
 export function useStartServerMetricsLive(orgId: string, serverId: string) {
   return useApiMutation<MetricsLiveStartOutcome, string | undefined>({
-    mutationFn: (leaseId?: string) =>
-      startServerMetricsLive(serverId, leaseId, orgId),
+    mutationFn: (leaseId?: string) => startServerMetricsLive(serverId, leaseId, orgId),
     fallbackError: 'Failed to start live metrics',
   })
 }
@@ -375,48 +378,73 @@ export function useStartServerMetricsLive(orgId: string, serverId: string) {
 /** Best-effort lease stop — callers may fire-and-forget on unmount. */
 export function useStopServerMetricsLive(orgId: string, serverId: string) {
   return useApiMutation({
-    mutationFn: (leaseId: string) =>
-      stopServerMetricsLive(serverId, leaseId, orgId),
+    mutationFn: (leaseId: string) => stopServerMetricsLive(serverId, leaseId, orgId),
     fallbackError: 'Failed to stop live metrics',
   })
 }
 
-export function useServerReporting(
+/** Point-in-time hardware-health / lifecycle events for the currently viewed range. */
+export function useServerMetricsEvents(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  seriesOptions: { fromIso: string; toIso: string },
+  options?: Readonly<{
+    enabled?: boolean
+    refetchInterval?: number | false
+    /** Stable cache-key segment (e.g. the range id). Defaults to `fromIso`. */
+    rangeKey?: string
+  }>
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).servers.reporting(serverId, '24h'),
-    queryFn: async (): Promise<MetricsSeriesResponse | null> => {
-      const toMs = Date.now()
+    queryKey: queryKeys
+      .org(orgId)
+      .servers.metricsEvents(serverId, options?.rangeKey ?? seriesOptions.fromIso),
+    queryFn: async (): Promise<MetricEventsResponse | null> => {
       try {
-        return await fetchServerMetricsSeries(
-          serverId,
-          {
-            fromIso: new Date(toMs - REPORTING_WINDOW_MS).toISOString(),
-            toIso: new Date(toMs).toISOString(),
-            metrics: ['uptimeSeconds'],
-          },
-          orgId,
-        )
+        return await fetchServerMetricsEvents(serverId, seriesOptions, orgId)
       } catch (error) {
         if (error instanceof MetricsBackendUnavailableError) return null
         throw error
       }
     },
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serverId.length > 0,
-    refetchInterval: REPORTING_REFRESH_MS,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: options?.refetchInterval,
+  })
+}
+
+/** Connection history + uptime totals for the currently viewed range. */
+export function useServerMetricsConnection(
+  orgId: string,
+  serverId: string,
+  seriesOptions: { fromIso: string; toIso: string },
+  options?: Readonly<{
+    enabled?: boolean
+    refetchInterval?: number | false
+    /** Stable cache-key segment (e.g. the range id). Defaults to `fromIso`. */
+    rangeKey?: string
+  }>
+) {
+  return useQuery({
+    queryKey: queryKeys
+      .org(orgId)
+      .servers.metricsConnection(serverId, options?.rangeKey ?? seriesOptions.fromIso),
+    queryFn: async (): Promise<ConnectionHistoryChartResponse | null> => {
+      try {
+        return await fetchServerMetricsConnection(serverId, seriesOptions, orgId)
+      } catch (error) {
+        if (error instanceof MetricsBackendUnavailableError) return null
+        throw error
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: options?.refetchInterval,
   })
 }
 
 async function invalidateServerQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   orgId: string,
-  serverId?: string,
+  serverId?: string
 ) {
   const tasks = [
     queryClient.invalidateQueries({
@@ -427,7 +455,7 @@ async function invalidateServerQueries(
     tasks.push(
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).servers.detail(serverId),
-      }),
+      })
     )
   }
   await Promise.all(tasks)
@@ -539,8 +567,7 @@ export function useSetServerTimezone(orgId: string, serverId: string) {
 export function useSetServerNtp(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (input: Parameters<typeof setServerNtp>[1]) =>
-      setServerNtp(serverId, input),
+    mutationFn: (input: Parameters<typeof setServerNtp>[1]) => setServerNtp(serverId, input),
     onSuccess: async () => {
       await Promise.all([
         invalidateServerQueries(queryClient, orgId, serverId),
@@ -555,8 +582,7 @@ export function useSetServerNtp(orgId: string, serverId: string) {
 export function useUpdateServer(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: Parameters<typeof updateServer>[1]) =>
-      updateServer(serverId, body),
+    mutationFn: (body: Parameters<typeof updateServer>[1]) => updateServer(serverId, body),
     onSuccess: async () => {
       await invalidateServerQueries(queryClient, orgId, serverId)
     },
@@ -566,8 +592,7 @@ export function useUpdateServer(orgId: string, serverId: string) {
 export function useSaveServerLabels(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (labels: Record<string, string>) =>
-      saveServerLabels(serverId, labels),
+    mutationFn: (labels: Record<string, string>) => saveServerLabels(serverId, labels),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -609,7 +634,7 @@ export function useBatchTriggerServerUpdates(orgId: string) {
   return useApiMutation({
     mutationFn: async (serverIds: readonly string[]) => {
       const results = await Promise.allSettled(
-        serverIds.map((serverId) => triggerServerUpdate(serverId)),
+        serverIds.map((serverId) => triggerServerUpdate(serverId))
       )
       return results
     },
@@ -618,7 +643,7 @@ export function useBatchTriggerServerUpdates(orgId: string) {
         ...serverIds.map((serverId) =>
           queryClient.invalidateQueries({
             queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-          }),
+          })
         ),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).servers.updatesBatch,
@@ -632,13 +657,8 @@ export function useBatchTriggerServerUpdates(orgId: string) {
 export function useCreateLicense(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({
-      name,
-      installBaseUrl,
-    }: {
-      name?: string
-      installBaseUrl?: string
-    }) => createLicense(name, installBaseUrl),
+    mutationFn: ({ name, installBaseUrl }: { name?: string; installBaseUrl?: string }) =>
+      createLicense(name, installBaseUrl),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -657,10 +677,7 @@ export function useCreateLicense(orgId: string) {
  * Owner-only registration keys. Manage-gated 403 is swallowed so non-owners
  * are not signed out by the global forbidden handler.
  */
-export function useOrgLicenses(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrgLicenses(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.licenses,
     queryFn: async () => {

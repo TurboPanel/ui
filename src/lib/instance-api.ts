@@ -556,9 +556,7 @@ export type OrgTemperatureUnitSettings = {
   temperatureUnit: 'celsius' | 'fahrenheit'
 }
 
-export async function fetchOrgTemperatureUnit(
-  orgId: string
-): Promise<OrgTemperatureUnitSettings> {
+export async function fetchOrgTemperatureUnit(orgId: string): Promise<OrgTemperatureUnitSettings> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/temperature-unit`)
 }
 
@@ -677,9 +675,7 @@ export type OrgPrincipalDefaults = {
   effectiveRandomizedUsernames: boolean
 }
 
-export async function fetchOrgPrincipalDefaults(
-  orgId: string
-): Promise<OrgPrincipalDefaults> {
+export async function fetchOrgPrincipalDefaults(orgId: string): Promise<OrgPrincipalDefaults> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principal-defaults`)
 }
 
@@ -703,7 +699,12 @@ export type OrgFabricRecord = {
 export type RelayRole = 'gateway' | 'member'
 
 export type FabricRelayPathKind =
-  'direct_lan' | 'direct_public' | 'direct_nat' | 'gateway' | 'relay' | 'unreachable'
+  | 'direct_lan'
+  | 'direct_public'
+  | 'direct_nat'
+  | 'gateway'
+  | 'relay'
+  | 'unreachable'
 
 export type FabricRelayPathState = {
   peerServerId: string
@@ -2829,10 +2830,7 @@ export async function fetchForges(scope: ForgeScope): Promise<ForgeSummary[]> {
   return raw.apps
 }
 
-export async function createForge(
-  scope: ForgeScope,
-  input: ForgeCreate
-): Promise<ForgeSummary> {
+export async function createForge(scope: ForgeScope, input: ForgeCreate): Promise<ForgeSummary> {
   const raw = await apiFetch<{ app: ForgeSummary }>(forgesUrl(scope), {
     method: 'POST',
     body: JSON.stringify(input),
@@ -2902,13 +2900,10 @@ export async function startGithubAppManifest(
   scope: ForgeScope,
   input: GithubManifestStartInput
 ): Promise<GithubManifestStart> {
-  return await apiFetch<GithubManifestStart>(
-    forgesUrl(scope, '/github/manifest'),
-    {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }
-  )
+  return await apiFetch<GithubManifestStart>(forgesUrl(scope, '/github/manifest'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 /** What the provider currently holds for an app, as of a sync. */
@@ -3397,7 +3392,7 @@ export async function inspectRepository(
   repositoryId: string,
   ref?: string,
   /** Directory the `entries` listing reads; default the repository root. */
-  listPath?: string,
+  listPath?: string
 ): Promise<RepositoryInspection> {
   const params = new URLSearchParams()
   if (ref && ref.length > 0) params.set('ref', ref)
@@ -3444,9 +3439,7 @@ export async function fetchGitConnections(): Promise<{
 export async function fetchConnectionRepositories(
   connectionId: string
 ): Promise<{ repositories: GitRepositorySummary[] }> {
-  return await apiFetch(
-    `${CLIENT_API}/repositories/connections/${connectionId}/repositories`,
-  )
+  return await apiFetch(`${CLIENT_API}/repositories/connections/${connectionId}/repositories`)
 }
 
 /**
@@ -3977,7 +3970,13 @@ export type StorageRetention = 'retain' | 'delete'
 export type CopyProvider = 'docker' | 'path'
 export type CopyRole = 'primary' | 'replica' | 'scratch' | 'archive'
 export type CopyState =
-  'pending' | 'materializing' | 'ready' | 'syncing' | 'stale' | 'failed' | 'retiring'
+  | 'pending'
+  | 'materializing'
+  | 'ready'
+  | 'syncing'
+  | 'stale'
+  | 'failed'
+  | 'retiring'
 
 export type StorageCopyRecord = {
   id: string
@@ -4172,7 +4171,7 @@ export type MarkerRecord = {
  */
 export function requireExclusiveQueryEntry<K extends string>(
   record: Readonly<Record<string, unknown>>,
-  allowedKeys: readonly K[],
+  allowedKeys: readonly K[]
 ): readonly [K, string] {
   const populated: K[] = []
   for (const key of allowedKeys) {
@@ -4182,14 +4181,12 @@ export function requireExclusiveQueryEntry<K extends string>(
   }
   if (populated.length !== 1) {
     throw new TypeError(
-      `Expected exactly one of ${allowedKeys.join(', ')}; received ${String(populated.length)}`,
+      `Expected exactly one of ${allowedKeys.join(', ')}; received ${String(populated.length)}`
     )
   }
   const key = populated[0]
   if (!key) {
-    throw new TypeError(
-      `Expected exactly one of ${allowedKeys.join(', ')}; received 0`,
-    )
+    throw new TypeError(`Expected exactly one of ${allowedKeys.join(', ')}; received 0`)
   }
   const value = record[key]
   if (typeof value !== 'string' || value.length === 0) {
@@ -4198,14 +4195,9 @@ export function requireExclusiveQueryEntry<K extends string>(
   return [key, value]
 }
 
-export async function fetchTags(
-  scope?: TaggableParentFilter,
-): Promise<{ tags: TagRecord[] }> {
+export async function fetchTags(scope?: TaggableParentFilter): Promise<{ tags: TagRecord[] }> {
   if (!scope) return await apiFetch(`${CLIENT_API}/tags`)
-  const [key, value] = requireExclusiveQueryEntry(
-    { ...scope },
-    TAGGABLE_PARENT_KEYS,
-  )
+  const [key, value] = requireExclusiveQueryEntry({ ...scope }, TAGGABLE_PARENT_KEYS)
   const params = new URLSearchParams({ [key]: value })
   return await apiFetch(`${CLIENT_API}/tags?${params.toString()}`)
 }
@@ -4219,7 +4211,7 @@ export async function createTag(
     name: string
     description?: string | null
     color?: string | null
-  }>,
+  }>
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/tags`, {
     method: 'POST',
@@ -4233,7 +4225,7 @@ export async function updateTag(
     name?: string
     description?: string | null
     color?: string | null
-  }>,
+  }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/tags/${id}`, {
     method: 'PATCH',
@@ -4247,15 +4239,13 @@ export async function deleteTag(id: string): Promise<{ ok: true }> {
   })
 }
 
-export async function fetchMarkers(
-  tagId: string,
-): Promise<{ markers: MarkerRecord[] }> {
+export async function fetchMarkers(tagId: string): Promise<{ markers: MarkerRecord[] }> {
   const params = new URLSearchParams({ tagId })
   return await apiFetch(`${CLIENT_API}/markers?${params.toString()}`)
 }
 
 export async function setEntityTags(
-  body: TaggableParentFilter & { tagIds: string[] },
+  body: TaggableParentFilter & { tagIds: string[] }
 ): Promise<{ ok: true; tags: TagRecord[] }> {
   requireExclusiveQueryEntry({ ...body }, TAGGABLE_PARENT_KEYS)
   return await apiFetch(`${CLIENT_API}/markers`, {
@@ -4288,9 +4278,7 @@ export type TaskRecord = {
 
 export type TaskListFilter = ExclusiveStringKeys<TaskListKey>
 
-export async function fetchTasks(
-  filter: TaskListFilter,
-): Promise<{ tasks: TaskRecord[] }> {
+export async function fetchTasks(filter: TaskListFilter): Promise<{ tasks: TaskRecord[] }> {
   const [key, value] = requireExclusiveQueryEntry({ ...filter }, TASK_LIST_KEYS)
   const params = new URLSearchParams({ [key]: value })
   return await apiFetch(`${CLIENT_API}/tasks?${params.toString()}`)
@@ -4312,7 +4300,7 @@ export async function createTask(
     timeoutSeconds?: number | null
     metadata?: Record<string, unknown> | null
     options?: Record<string, unknown> | null
-  }>,
+  }>
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/tasks`, {
     method: 'POST',
@@ -4332,7 +4320,7 @@ export async function updateTask(
     timeoutSeconds?: number | null
     metadata?: Record<string, unknown> | null
     options?: Record<string, unknown> | null
-  }>,
+  }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/tasks/${id}`, {
     method: 'PATCH',
@@ -4430,9 +4418,7 @@ export async function fetchPrincipalSshKeys(
   projectId: string,
   principalId: string
 ): Promise<{ keys: PrincipalSshKey[] }> {
-  return await apiFetch(
-    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys`
-  )
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys`)
 }
 
 export async function addPrincipalSshKey(
@@ -4440,10 +4426,10 @@ export async function addPrincipalSshKey(
   principalId: string,
   body: { name: string; publicKey: string }
 ): Promise<{ key: PrincipalSshKey; reconciled: PrincipalsReconcileOutcome }> {
-  return await apiFetch(
-    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys`,
-    { method: 'POST', body: JSON.stringify(body) }
-  )
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}/ssh-keys`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deletePrincipalSshKey(
@@ -4534,10 +4520,10 @@ export async function setPrincipalPassword(
   generatedPassword?: string
   reconciled: PrincipalsReconcileOutcome
 }> {
-  return await apiFetch(
-    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/password`,
-    { method: 'POST', body: JSON.stringify(body) }
-  )
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}/password`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 /** Disable password sign-in; the host locks the account password. */
@@ -4545,10 +4531,9 @@ export async function disablePrincipalPassword(
   projectId: string,
   principalId: string
 ): Promise<{ ok: true; reconciled: PrincipalsReconcileOutcome }> {
-  return await apiFetch(
-    `${CLIENT_API}/projects/${projectId}/principals/${principalId}/password`,
-    { method: 'DELETE' }
-  )
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${principalId}/password`, {
+    method: 'DELETE',
+  })
 }
 
 export async function deleteProjectPrincipal(projectId: string, id: string): Promise<{ ok: true }> {
@@ -4602,131 +4587,219 @@ export async function stopEnvironment(environmentId: string): Promise<CommandEnq
   })
 }
 
-/**
- * Named metric keys — mirrors instance v3 `HOST_METRIC_KEYS`
- * (`turbopanel/src/daemon/metrics/contract.ts`). Raw measurements only: the
- * v3 contract stores no derived percentages or usage bytes — CPU busy and
- * memory/swap/storage used % are computed client-side. A key may be absent
- * from a given sample's `metrics` object when its `MetricPart` was not
- * collected that tick — this array is the full wire allowlist, not a
- * per-sample guarantee.
- */
-export const HOST_METRIC_KEYS = [
-  'cpuUserPercent',
-  'cpuSystemPercent',
-  'cpuNicePercent',
-  'cpuIdlePercent',
-  'cpuIowaitPercent',
-  'cpuIrqPercent',
-  'cpuSoftirqPercent',
-  'cpuStealPercent',
-  'load1',
-  'load5',
-  'load15',
-  'memoryTotalBytes',
-  'memoryAvailableBytes',
-  'swapTotalBytes',
-  'swapFreeBytes',
-  'cpuTemperatureCelsius',
-  'processCount',
-  'uptimeSeconds',
-  'systemStorageTotalBytes',
-  'systemStorageAvailableBytes',
-  'hostingStorageTotalBytes',
-  'hostingStorageAvailableBytes',
-  'dockerStorageTotalBytes',
-  'dockerStorageAvailableBytes',
-  'diskReadBytesPerSecond',
-  'diskWriteBytesPerSecond',
-  'diskReadOpsPerSecond',
-  'diskWriteOpsPerSecond',
-  'diskReadLatencyMs',
-  'diskWriteLatencyMs',
-  'interfaceReceiveBytesPerSecond',
-  'interfaceTransmitBytesPerSecond',
-  'fabricReceiveBytesPerSecond',
-  'fabricTransmitBytesPerSecond',
-  'gpuTemperatureCelsius',
-  'cpuPowerWatts',
-  'gpuPowerWatts',
-  'nic1ReceiveBytesPerSecond',
-  'nic1TransmitBytesPerSecond',
-  'nic2ReceiveBytesPerSecond',
-  'nic2TransmitBytesPerSecond',
-  'gpuUtilizationPercent',
-  'gpuFanRpm',
-  'disk1TemperatureCelsius',
-  'disk2TemperatureCelsius',
-  'ambient1TemperatureCelsius',
-  'ambient2TemperatureCelsius',
-  'boardTemperatureCelsius',
-  'cpuFanRpm',
-  'systemFan1Rpm',
-  'systemFan2Rpm',
-  'caddyRequestsTotal',
-  'caddyResponses2xxTotal',
-  'caddyResponses3xxTotal',
-  'caddyResponses4xxTotal',
-  'caddyResponses5xxTotal',
-  'caddyRequestBytesTotal',
-  'caddyResponseBytesTotal',
-  'caddyRequestDurationSecondsSum',
-  'caddyRequestsUnder100msTotal',
-  'caddyRequestsUnder1sTotal',
-  'caddyRequestsInFlight',
-  'proxysqlQueriesTotal',
-  'proxysqlSlowQueriesTotal',
-  'proxysqlConnectionErrorsTotal',
-  'proxysqlClientConnections',
-  'proxysqlBackendConnections',
-  'proxysqlBackendsUp',
-] as const
-
-export type HostMetricKey = (typeof HOST_METRIC_KEYS)[number]
-
 export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'
 
 /**
- * Server-computed presentation values for one series point — mirrors
- * `HostSeriesChartPointDerived` (`turbopanel/src/daemon/metrics/query/series-response.ts`).
- * Every field is `null` when an input it needs is missing or a denominator
- * would be zero — never coerced to `0`. Optional on the point type because
- * this client also synthesizes gap-filler points (`normalizeMetricsGrid`)
- * that carry no server-computed values.
+ * Wire-facing identity for a single v4 metric on a single entity instance —
+ * mirrors `turbopanel/src/daemon/metrics/entity-metric-id.ts`. Host-singleton
+ * scopes (`host.cpu`/`host.kernel`/`host.memory`/`host.storage`/`host.network`)
+ * have exactly one instance per server, so their identity is just
+ * `<scope>.<field>` (`host.cpu.busyPercent`) — no entity id. Per-entity scopes
+ * (`network`/`filesystem`/`block`/`gpu`/`hardwareSignal`/`ingress`/
+ * `databaseProxy`) prefix an alias + entity id: `network:eth0.receiveBytesPerSecond`,
+ * `hardware:psu1.value`. `hardwareSignal` uses the short alias `hardware` for
+ * wire brevity; every other scope's alias matches its scope name.
+ *
+ * `cpuDetail`/`memoryDetail` are host-singleton too (one `cpu.detail`/
+ * `memory.detail` row per server) but capability-gated — a plan without the
+ * capability just never returns their fields. `cpuCore` is per-entity
+ * (`cpuCore:cpu3.busyPercent`) and live-session-only: the daemon only emits
+ * `cpu.core.live` rows while a live metrics lease is active. `cpuHotspot` is
+ * deliberately NOT a scope here — `cpuDetail`'s 4 embedded hotspot slots are
+ * surfaced as part of that singleton's response payload instead, see
+ * `HostSeriesChartPoint.cpuHotspots`.
  */
-export type HostMetricDerivedValues = {
+export type EntityMetricScope =
+  | 'host.cpu'
+  | 'host.kernel'
+  | 'host.memory'
+  | 'host.storage'
+  | 'host.network'
+  | 'cpuDetail'
+  | 'memoryDetail'
+  | 'network'
+  | 'filesystem'
+  | 'block'
+  | 'gpu'
+  | 'hardwareSignal'
+  | 'ingress'
+  | 'databaseProxy'
+  | 'cpuCore'
+
+const HOST_SINGLETON_ENTITY_SCOPES: ReadonlySet<EntityMetricScope> = new Set([
+  'host.cpu',
+  'host.kernel',
+  'host.memory',
+  'host.storage',
+  'host.network',
+  'cpuDetail',
+  'memoryDetail',
+])
+
+/** Per-entity scope -> wire alias. Only `hardwareSignal` differs from its scope name. */
+const ENTITY_METRIC_SCOPE_ALIAS: Partial<Record<EntityMetricScope, string>> = {
+  network: 'network',
+  filesystem: 'filesystem',
+  block: 'block',
+  gpu: 'gpu',
+  hardwareSignal: 'hardware',
+  ingress: 'ingress',
+  databaseProxy: 'databaseProxy',
+  cpuCore: 'cpuCore',
+}
+
+/**
+ * Builds the wire identity for a metric selector. Client-side only: builds
+ * the string, never validates it against the server's descriptor map (the
+ * server is authoritative and rejects unknown fields with a 400).
+ */
+export function formatEntityMetricId(selector: {
+  scope: EntityMetricScope
+  entityId?: string
+  field: string
+}): string {
+  if (HOST_SINGLETON_ENTITY_SCOPES.has(selector.scope)) {
+    if (selector.entityId !== undefined) {
+      throw new TypeError(
+        `entity scope "${selector.scope}" is host-singleton and takes no entityId`
+      )
+    }
+    return `${selector.scope}.${selector.field}`
+  }
+  const alias = ENTITY_METRIC_SCOPE_ALIAS[selector.scope]
+  if (!alias || !selector.entityId) {
+    throw new TypeError(`entity scope "${selector.scope}" requires a non-empty entityId`)
+  }
+  return `${alias}:${selector.entityId}.${selector.field}`
+}
+
+/** Conceptual per-entity metric grouping — mirrors `HostedFamilyV4`'s per-entity subset. */
+export type PerEntityHostedFamily =
+  | 'gpu'
+  | 'network'
+  | 'filesystem'
+  | 'block'
+  | 'hardware.physical'
+  | 'managed.ingress'
+  | 'managed.database_proxy'
+  | 'cpu.core.live'
+
+/** Role of a network device relative to the current `SlotMapping` — `'other'` means it pages as a standalone `network` entity. */
+export type NetworkEntityRole = 'normalNicSlot1' | 'normalNicSlot2' | 'fabric' | 'other'
+export type NetworkDeviceKind = 'uplink' | 'fabric' | 'container-bridge' | 'loopback'
+
+export type NetworkInventoryEntry = {
+  deviceId: string
+  name: string
+  kind: NetworkDeviceKind
+  role: NetworkEntityRole
+  speedMbps?: number
+  mtu?: number
+}
+
+export type FilesystemRole = 'root' | 'hosting' | 'docker' | 'application' | 'custom'
+
+export type FilesystemInventoryEntry = {
+  filesystemId: string
+  mountpoint: string
+  roles: FilesystemRole[]
+  totalBytes: number | null
+  /** Whether this is the current `SlotMapping.rootFilesystemId`. */
+  isRoot: boolean
+}
+
+export type BlockDeviceType = 'physical' | 'virtual' | 'partition'
+
+export type BlockDeviceInventoryEntry = {
+  deviceId: string
+  kernelName: string
+  model?: string
+  deviceType: BlockDeviceType
+  isServiceDevice: boolean
+}
+
+export type GpuKind = 'sysfs' | 'drm'
+
+export type GpuInventoryEntry = {
+  gpuId: string
+  kind: GpuKind
+  vendor: string
+  chip: string
+}
+
+export type PhysicalSignalThresholds = {
+  warning?: number
+  critical?: number
+}
+
+export type HardwareSignalInventoryEntry = {
+  signalId: string
+  kind: string
+  unit: string
+  label: string
+  thresholds?: PhysicalSignalThresholds
+}
+
+/**
+ * Entity inventory for a server's current topology generation — labels/roles
+ * the v4 metrics routes attach to `network`/`filesystem`/`block`/`gpu`/
+ * `hardwareSignal` entity series so a chart never has to show a bare device
+ * id with no name or role context. `null` when the server has never reported
+ * a usable topology snapshot. `managed.ingress`/`managed.database_proxy` have
+ * no inventory concept — those sources are presence-only, discovered from
+ * `entities` itself.
+ */
+export type TopologyInventory = {
+  networks: NetworkInventoryEntry[]
+  filesystems: FilesystemInventoryEntry[]
+  blockDevices: BlockDeviceInventoryEntry[]
+  gpus: GpuInventoryEntry[]
+  hardwareSignals: HardwareSignalInventoryEntry[]
+}
+
+/**
+ * Server-computed presentation values for one host series point — mirrors
+ * `DerivedHostValuesV4` (`turbopanel/src/daemon/metrics/query/derived-metrics-v4.ts`).
+ * Every field is `null` when an input it needs is missing or a denominator
+ * would be zero — never coerced to `0`.
+ */
+export type DerivedHostValues = {
   cpuUsagePercent: number | null
   memoryUsedBytes: number | null
   memoryUsedPercent: number | null
-  swapUsedBytes: number | null
   swapUsedPercent: number | null
-  systemStorageUsedBytes: number | null
-  systemStorageUsedPercent: number | null
-  hostingStorageUsedBytes: number | null
-  hostingStorageUsedPercent: number | null
-  dockerStorageUsedBytes: number | null
-  dockerStorageUsedPercent: number | null
-  httpErrorRatePercent: number | null
-  httpAverageLatencyMs: number | null
-  /** `null` when `cpuLimits` has no resolved Tjmax for this host, or the point has no temperature reading. */
-  cpuThermalHeadroomPercent: number | null
-  /** `null` when `cpuLimits` has no resolved TDP for this host, or the point has no power reading. */
-  cpuPowerHeadroomPercent: number | null
+  rootFilesystemUsedBytes: number | null
+  rootFilesystemUsedPercent: number | null
 }
 
-export type MetricsSeriesPoint = {
+/**
+ * One `cpu.detail` embedded hotspot slot's last-observed values within a
+ * bucket, plus the `coreId` it was reporting for at that observation —
+ * `coreId` can legitimately change bucket-to-bucket (the daemon re-selects
+ * the busiest cores every interval). `null` `coreId` means the slot had no
+ * hotspot at the last-observed sample in this bucket. Mirrors
+ * `CpuHotspotPointV4`.
+ */
+export type CpuHotspotPoint = {
+  coreId: string | null
+  values: Partial<Record<string, number | null>>
+}
+
+export type HostSeriesChartPoint = {
   at: string
-  values: Partial<Record<HostMetricKey, number | null>>
-  minimums?: Partial<Record<HostMetricKey, number | null>>
-  maximums?: Partial<Record<HostMetricKey, number | null>>
-  derived?: HostMetricDerivedValues
+  /** Keyed by requested canonical name (`host.cpu.busyPercent`, …). */
+  values: Partial<Record<string, number | null>>
+  derived: DerivedHostValues
   sampleCount: number
   expectedSampleCount?: number
+  /** `null`/absent means unknown or a mixed-generation bucket. */
+  topologyGeneration?: number | null
   /**
-   * Hardware-profile generation shared by every contributing sample in this
-   * bucket. `null`/absent when unknown; see `MetricsSeriesResponse.generationBreaks`.
+   * `cpu.detail`'s 4 embedded hotspot slots, present only when the request's
+   * `metrics` included a `cpuDetail.*` field and a `cpu.detail` row exists in
+   * this bucket. Mirrors `HostSeriesPointV4.cpuHotspots`.
    */
-  hardwareProfileGeneration?: number | null
+  cpuHotspots?: CpuHotspotPoint[]
 }
 
 /** Resolved CPU thermal/power limits for headroom display. Mirrors `EffectiveCpuThermalLimits`. */
@@ -4736,7 +4809,7 @@ export type EffectiveCpuThermalLimits = {
   source: 'override' | 'catalog-exact' | 'catalog-family' | 'none'
 }
 
-export type MetricsSeriesResponse = {
+export type HostSeriesChartResponse = {
   ok: true
   serverId: string
   from: string
@@ -4744,24 +4817,59 @@ export type MetricsSeriesResponse = {
   resolutionSeconds: number | null
   backend: MetricsBackendKind
   available: boolean
-  metrics: HostMetricKey[]
+  metrics: readonly string[]
   sampleCount: number
   gapCount: number
-  points: MetricsSeriesPoint[]
+  points: HostSeriesChartPoint[]
   /**
-   * Point indices where `hardwareProfileGeneration` differs from the
-   * previous known generation — a boundary marker for segmenting chart
-   * continuity without inferring it from raw generation numbers.
+   * Point indices where `topologyGeneration` differs from the previous known
+   * generation — a boundary marker for segmenting chart continuity without
+   * inferring it from raw generation numbers. Replaces v3's `generationBreaks`.
    */
-  generationBreaks: number[]
-  /** Distinct hardware-profile generations observed anywhere in the queried range. */
-  hardwareProfileGenerations?: number[]
-  /**
-   * True when at least one point in the queried range declared the
-   * `"sensors"` part — lets the UI hide the hardware group when the daemon
-   * never once reported hardware sensors.
-   */
-  sensorsAvailable: boolean
+  topologyGenerationBreaks: number[]
+  /** Distinct topology generations observed anywhere in the queried range. */
+  topologyGenerations?: number[]
+}
+
+export type EntitySeriesPoint = {
+  at: string
+  /** Keyed by bare field name (`utilizationPercent`, `receiveBytesPerSecond`, …) — never a canonical name, since these scopes always carry an entity id separately. */
+  values: Partial<Record<string, number | null>>
+  sampleCount?: number
+  expectedSampleCount?: number
+}
+
+export type EntitySeriesEntityResult = {
+  entityId: string
+  points: EntitySeriesPoint[]
+  sampleCount: number
+  gapCount: number
+}
+
+export type EntitySeriesResult = {
+  kind: MetricsBackendKind
+  available: boolean
+  serverId: string
+  family: PerEntityHostedFamily
+  metrics: readonly string[]
+  resolutionSeconds: number | null
+  entities: EntitySeriesEntityResult[]
+}
+
+export type MetricsSeriesResponse = {
+  ok: true
+  serverId: string
+  from: string
+  to: string
+  backend: MetricsBackendKind
+  available: boolean
+  resolutionSeconds: number | null
+  /** `null` when no `host.*` metric was requested. */
+  host: HostSeriesChartResponse | null
+  /** One entry per requested per-entity family. */
+  entities: EntitySeriesResult[]
+  inventory: TopologyInventory | null
+  topologyGeneration: number | null
   cpuLimits: EffectiveCpuThermalLimits
   temperatureUnit: 'celsius' | 'fahrenheit'
 }
@@ -4783,7 +4891,10 @@ export type FleetServerUsageRecord = {
   serverId: string
   latestAt: string | null
   sampleCount: number
-  values: Partial<Record<HostMetricKey, number | null>>
+  /** Keyed by canonical name — see `FLEET_HOST_METRICS` for the requested set. */
+  values: Partial<Record<string, number | null>>
+  topologyGeneration?: number | null
+  derived: DerivedHostValues
 }
 
 export type FleetMetricsLatestResponse = {
@@ -4792,8 +4903,78 @@ export type FleetMetricsLatestResponse = {
   to: string
   backend: MetricsBackendKind
   available: boolean
-  metrics: HostMetricKey[]
+  metrics: readonly string[]
   servers: FleetServerUsageRecord[]
+}
+
+/**
+ * Host metrics requested for the org servers overview (CPU stack + memory/
+ * swap). v3's `load1`/`load5`/`load15` have no v4 analogue — the daemon
+ * contract carries no load-average metric at all — so the fleet overview's
+ * load column has nothing to show; this is a known, deliberate capability
+ * gap, not an oversight. Mirrors the server's own `FLEET_HOST_METRICS_V4`.
+ */
+export const FLEET_HOST_METRICS = [
+  'host.cpu.busyPercent',
+  'host.cpu.userPercent',
+  'host.cpu.systemPercent',
+  'host.cpu.iowaitPercent',
+  'host.memory.availableBytes',
+  'host.memory.swapUsedBytes',
+] as const
+
+export type MetricEventSeverity = 'info' | 'warning' | 'critical'
+
+/** Hardware-health / lifecycle notice — mirrors `MetricEventV4`. */
+export type MetricEvent = {
+  eventId: string
+  at: string
+  kind: string
+  severity: MetricEventSeverity
+  entityId?: string
+  source?: string
+  payload?: Record<string, string | number | boolean | null>
+}
+
+export type MetricEventsResponse = {
+  ok: true
+  serverId: string
+  from: string
+  to: string
+  backend: MetricsBackendKind
+  available: boolean
+  events: MetricEvent[]
+  /** `true` when more events exist in range than the backend's cap returned. */
+  truncated: boolean
+}
+
+/** One connection-status transition within a `/metrics/connection` range. */
+export type ConnectionStatusEvent = {
+  at: string
+  connected: boolean
+  reason: string
+}
+
+/**
+ * Connection history + uptime totals for a range — unaffected by the v3→v4
+ * metrics cutover (status events are a separate write path from host
+ * metrics samples). `initialConnected === null` means state before `from` is
+ * unknown; that span accrues to `unknownSeconds`, never to uptime/downtime.
+ */
+export type ConnectionHistoryChartResponse = {
+  ok: true
+  serverId: string
+  from: string
+  to: string
+  backend: MetricsBackendKind
+  available: boolean
+  initialConnected: boolean | null
+  uptimeSeconds: number
+  downtimeSeconds: number
+  unknownSeconds: number
+  uptimePercent: number | null
+  truncated: boolean
+  events: ConnectionStatusEvent[]
 }
 
 export class MetricsBackendUnavailableError extends Error {
@@ -4810,7 +4991,8 @@ export class MetricsBackendUnavailableError extends Error {
 export type FetchServerMetricsSeriesOptions = {
   fromIso: string
   toIso: string
-  metrics?: HostMetricKey[]
+  /** Pre-formatted entity-metric-id strings — build with {@link formatEntityMetricId}. */
+  metrics?: readonly string[]
   resolution?: number
   maxPoints?: number
 }
@@ -4906,6 +5088,44 @@ export async function fetchServerMetricsSummary(
   return await fetchServerMetricsJson<MetricsSummaryResponse>(
     serverId,
     'summary',
+    query,
+    organizationId
+  )
+}
+
+/** Hardware-health / lifecycle events (`sample.events`) for a range — point-in-time rows, never bucketed. */
+export async function fetchServerMetricsEvents(
+  serverId: string,
+  options: { fromIso: string; toIso: string },
+  organizationId?: string | null
+): Promise<MetricEventsResponse> {
+  const query = new URLSearchParams({
+    from: options.fromIso,
+    to: options.toIso,
+  })
+
+  return await fetchServerMetricsJson<MetricEventsResponse>(
+    serverId,
+    'events',
+    query,
+    organizationId
+  )
+}
+
+/** Connection history + uptime totals for a range — separate write path from host metrics samples. */
+export async function fetchServerMetricsConnection(
+  serverId: string,
+  options: { fromIso: string; toIso: string },
+  organizationId?: string | null
+): Promise<ConnectionHistoryChartResponse> {
+  const query = new URLSearchParams({
+    from: options.fromIso,
+    to: options.toIso,
+  })
+
+  return await fetchServerMetricsJson<ConnectionHistoryChartResponse>(
+    serverId,
+    'connection',
     query,
     organizationId
   )
@@ -5131,6 +5351,8 @@ export type MetricsGpuDeviceCandidates = {
   chip: string
   temperature: MetricsSensorCandidate[]
   power: MetricsSensorCandidate[]
+  /** DRM engine busy identities or vendor busy-percent gauges; no live reading (delta). */
+  utilization?: MetricsSensorCandidate[]
   fan: MetricsSensorCandidate[]
 }
 
@@ -5320,21 +5542,16 @@ export const SERVER_METRICS_LIVE_MAX_MINUTES = 240
 const ADMIN_SERVER_METRICS_LIVE_URL = `${ADMIN_API}/settings/server-metrics-live`
 
 export async function fetchServerMetricsLiveSettings(): Promise<ServerMetricsLiveSettingsResponse> {
-  return await apiFetch<ServerMetricsLiveSettingsResponse>(
-    ADMIN_SERVER_METRICS_LIVE_URL
-  )
+  return await apiFetch<ServerMetricsLiveSettingsResponse>(ADMIN_SERVER_METRICS_LIVE_URL)
 }
 
 export async function saveServerMetricsLiveSettings(
   maxMinutes: number
 ): Promise<ServerMetricsLiveSettingsResponse> {
-  return await apiFetch<ServerMetricsLiveSettingsResponse>(
-    ADMIN_SERVER_METRICS_LIVE_URL,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ maxMinutes }),
-    }
-  )
+  return await apiFetch<ServerMetricsLiveSettingsResponse>(ADMIN_SERVER_METRICS_LIVE_URL, {
+    method: 'PUT',
+    body: JSON.stringify({ maxMinutes }),
+  })
 }
 
 export async function fetchEnvironmentManaged(
@@ -5733,7 +5950,9 @@ export async function promoteManagedDisasterRecovery(
 }
 
 export type BindingListFilter =
-  { serviceId: string } | { environmentId: string } | { managedEnvironmentId: string }
+  | { serviceId: string }
+  | { environmentId: string }
+  | { managedEnvironmentId: string }
 
 function bindingListQueryParams(filter: BindingListFilter): URLSearchParams {
   if ('serviceId' in filter) {
@@ -5899,9 +6118,7 @@ export type DockerRunUnsupportedResponse = {
   diagnostics: DockerRunDiagnostic[]
 }
 
-export type DockerRunImportResult =
-  | DockerRunImportResponse
-  | DockerRunUnsupportedResponse
+export type DockerRunImportResult = DockerRunImportResponse | DockerRunUnsupportedResponse
 
 /**
  * Unlike every other helper here this one does **not** throw on its 422.

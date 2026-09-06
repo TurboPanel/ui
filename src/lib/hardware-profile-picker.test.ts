@@ -13,7 +13,7 @@ import {
 } from '@/lib/hardware-profile-picker'
 
 function candidate(
-  overrides: Partial<MetricsSensorCandidate> & { chip: string; label: string; path: string },
+  overrides: Partial<MetricsSensorCandidate> & { chip: string; label: string; path: string }
 ): MetricsSensorCandidate {
   return { reading: null, ...overrides }
 }
@@ -45,9 +45,7 @@ const EMPTY_CAPABILITIES: MetricsCapabilities = {
   process: { probedPath: '/proc' },
 }
 
-function capabilitiesWith(
-  sensors: Partial<MetricsCapabilities['sensors']>,
-): MetricsCapabilities {
+function capabilitiesWith(sensors: Partial<MetricsCapabilities['sensors']>): MetricsCapabilities {
   return {
     ...EMPTY_CAPABILITIES,
     sensors: { ...EMPTY_SENSORS, ...sensors },
@@ -99,24 +97,18 @@ describe('resolveSensorsPanelViewState', () => {
 
   it('keeps showing the drivetemp control once enabled, even after the reason clears', () => {
     const capabilities = capabilitiesWith({
-      disk1Temperature: [
-        candidate({ chip: 'sda', label: 'temp1', path: '/sys/.../temp1_input' }),
-      ],
+      disk1Temperature: [candidate({ chip: 'sda', label: 'temp1', path: '/sys/.../temp1_input' })],
       // drivetemp loaded successfully — the pool is no longer empty, so the
       // daemon no longer reports a reason at all.
     })
-    expect(resolveSensorsPanelViewState(capabilities, true).showDrivetempControl).toBe(
-      true,
-    )
+    expect(resolveSensorsPanelViewState(capabilities, true).showDrivetempControl).toBe(true)
   })
 
   it('falls back to the generic empty state when nothing is discovered for a reason other than no_hwmon', () => {
     const capabilities = capabilitiesWith({
       reasons: { diskTemperature: 'no_disk_temperature_source' },
     })
-    expect(resolveSensorsPanelViewState(capabilities, false).emptyStateVariant).toBe(
-      'generic',
-    )
+    expect(resolveSensorsPanelViewState(capabilities, false).emptyStateVariant).toBe('generic')
   })
 })
 
@@ -216,6 +208,34 @@ describe('gpuDeviceOptions', () => {
     })
     expect(gpuDeviceOptions(capabilities)).toEqual([])
   })
+
+  it('uses a DRM engine-busy candidate as the device identity when temp and power are absent', () => {
+    const capabilities = capabilitiesWith({
+      gpuDevices: [
+        {
+          path: '/sys/class/drm/card0',
+          chip: 'i915',
+          temperature: [],
+          power: [],
+          utilization: [
+            candidate({
+              chip: 'i915',
+              label: 'rcs0',
+              path: '/sys/class/drm/card0/engine/rcs0/busy',
+            }),
+          ],
+          fan: [],
+        },
+      ],
+    })
+    expect(gpuDeviceOptions(capabilities)).toEqual([
+      {
+        value: 'i915:rcs0',
+        label: 'i915',
+        detail: '/sys/class/drm/card0',
+      },
+    ])
+  })
 })
 
 describe('buildSlotProfileUpdates', () => {
@@ -241,7 +261,11 @@ describe('buildSlotProfileUpdates', () => {
   it('sends null for a never-configured slot the operator explicitly touched', () => {
     const initial = baseSelection()
     const selection = baseSelection() // still null — operator opened it and left "Auto detected"
-    const updates = buildSlotProfileUpdates(selection, initial, new Set<SlotField>(['cpuTemperature']))
+    const updates = buildSlotProfileUpdates(
+      selection,
+      initial,
+      new Set<SlotField>(['cpuTemperature'])
+    )
     expect('cpuTemperature' in updates).toBe(true)
     expect(updates.cpuTemperature).toBeNull()
   })

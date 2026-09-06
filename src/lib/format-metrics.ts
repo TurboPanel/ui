@@ -2,11 +2,7 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 
 const BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
 
-function formatScaled(
-  value: number,
-  units: readonly string[],
-  divisor: number,
-): string {
+function formatScaled(value: number, units: readonly string[], divisor: number): string {
   if (!Number.isFinite(value)) return '—'
   let scaled = value
   let unitIndex = 0
@@ -87,7 +83,7 @@ export type TemperatureUnit = 'celsius' | 'fahrenheit'
  */
 export function celsiusToDisplay(
   value: number | null | undefined,
-  unit: TemperatureUnit,
+  unit: TemperatureUnit
 ): number | null {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return null
@@ -96,15 +92,10 @@ export function celsiusToDisplay(
 }
 
 /** Unit-aware temperature formatter — layers on {@link celsiusToDisplay}. */
-export function formatCelsiusAs(
-  value: number | null | undefined,
-  unit: TemperatureUnit,
-): string {
+export function formatCelsiusAs(value: number | null | undefined, unit: TemperatureUnit): string {
   const displayValue = celsiusToDisplay(value, unit)
   if (displayValue === null) return '—'
-  return unit === 'fahrenheit'
-    ? `${displayValue.toFixed(1)} °F`
-    : `${displayValue.toFixed(1)} °C`
+  return unit === 'fahrenheit' ? `${displayValue.toFixed(1)} °F` : `${displayValue.toFixed(1)} °C`
 }
 
 export function formatWatts(value: number | null | undefined): string {
@@ -112,6 +103,40 @@ export function formatWatts(value: number | null | undefined): string {
     return '—'
   }
   return `${value.toFixed(1)} W`
+}
+
+/**
+ * Unit-aware axis/label suffix for a physical signal — `hardwareSignals[].unit`
+ * is a free-form discriminator (`celsius`/`watts`/`rpm`/`percent`/other), not a
+ * fixed enum, so anything unrecognized just renders as-is.
+ */
+export function physicalSignalUnitLabel(unit: string, temperatureUnit: TemperatureUnit): string {
+  if (unit === 'celsius') return temperatureUnit === 'fahrenheit' ? '°F' : '°C'
+  if (unit === 'watts') return 'W'
+  if (unit === 'rpm') return 'RPM'
+  if (unit === 'percent') return '%'
+  return unit
+}
+
+/** Unit-aware value formatter for a physical signal — see {@link physicalSignalUnitLabel}. */
+export function formatPhysicalSignalValue(
+  value: number | null | undefined,
+  unit: string,
+  temperatureUnit: TemperatureUnit
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
+  switch (unit) {
+    case 'celsius':
+      return formatCelsiusAs(value, temperatureUnit)
+    case 'watts':
+      return formatWatts(value)
+    case 'rpm':
+      return `${formatCount(value)} RPM`
+    case 'percent':
+      return formatPercent(value)
+    default:
+      return formatCount(value)
+  }
 }
 
 export function formatMilliseconds(value: number | null | undefined): string {
@@ -122,31 +147,23 @@ export function formatMilliseconds(value: number | null | undefined): string {
 }
 
 /**
- * CPU busy % derived from stored idle — the v2 contract keeps no
- * `cpuUsagePercent`; this is the single place it is computed.
+ * CPU busy % — the v4 contract stores `host.cpu.busyPercent` directly
+ * (computed server-side from `1 − idle`), so this is a clamping passthrough,
+ * not a derivation. Kept as a named helper so call sites read the same as
+ * they did pre-cutover.
  */
-export function derivedCpuBusyPercent(
-  cpuIdlePercent: number | null | undefined,
-): number | null {
-  if (
-    cpuIdlePercent === null ||
-    cpuIdlePercent === undefined ||
-    !Number.isFinite(cpuIdlePercent)
-  ) {
+export function cpuBusyPercent(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return null
   }
-  return Math.min(100, Math.max(0, 100 - cpuIdlePercent))
+  return Math.min(100, Math.max(0, value))
 }
 
-export function formatDerivedCpuBusyPercent(
-  cpuIdlePercent: number | null | undefined,
-): string {
-  return formatPercent(derivedCpuBusyPercent(cpuIdlePercent))
+export function formatCpuBusyPercent(value: number | null | undefined): string {
+  return formatPercent(cpuBusyPercent(value))
 }
 
-export function formatUptimeSeconds(
-  value: number | null | undefined,
-): string {
+export function formatUptimeSeconds(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return '—'
   }
@@ -164,21 +181,10 @@ export function formatUptimeSeconds(
   return `${minutes}m`
 }
 
-export type MetricsRangeId =
-  | '5m'
-  | '10m'
-  | '1h'
-  | '6h'
-  | '24h'
-  | '7d'
-  | '30d'
-  | '90d'
+export type MetricsRangeId = '5m' | '10m' | '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 
 /** Compact x-axis label: time-only for short ranges, date for long ranges. */
-export function formatAxisTime(
-  ms: number,
-  rangeId: MetricsRangeId,
-): string {
+export function formatAxisTime(ms: number, rangeId: MetricsRangeId): string {
   const shortRange =
     rangeId === '5m' ||
     rangeId === '10m' ||
@@ -194,10 +200,7 @@ export function formatAxisTime(
   })
 }
 
-export function formatCoveragePercent(
-  presentSamples: number,
-  expectedSamples: number,
-): string {
+export function formatCoveragePercent(presentSamples: number, expectedSamples: number): string {
   if (expectedSamples <= 0) return '—'
   // Coverage is grid fill rate, not raw AE SUM(_sample_interval). Extra samples
   // in one bucket must not push coverage above 100% or past (expected - gaps).
@@ -208,10 +211,7 @@ export function formatCoveragePercent(
 }
 
 /** Slots on the resolution grid that have at least the expected samples. */
-export function presentSamplesFromGaps(
-  expectedSamples: number,
-  gapCount: number,
-): number {
+export function presentSamplesFromGaps(expectedSamples: number, gapCount: number): number {
   if (expectedSamples <= 0) return 0
   return Math.max(0, expectedSamples - Math.max(0, gapCount))
 }

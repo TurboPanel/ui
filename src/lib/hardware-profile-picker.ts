@@ -1,6 +1,6 @@
 /**
  * Pure logic behind the server hardware-profile sensor/NIC pickers
- * (`server-metrics-sensors-panel.tsx`) — kept in a plain `.ts` module, apart
+ * (`server-hardware-profile-editor.tsx`) — kept in a plain `.ts` module, apart
  * from the React Native component, so it can be unit-tested without pulling
  * `react-native` into the test's module graph.
  */
@@ -44,10 +44,10 @@ export const SLOT_FIELDS: readonly { field: SlotField; label: string }[] = [
 ]
 
 export const DISK_SLOT_FIELDS = SLOT_FIELDS.filter(
-  ({ field }) => field === 'disk1Temperature' || field === 'disk2Temperature',
+  ({ field }) => field === 'disk1Temperature' || field === 'disk2Temperature'
 )
 export const REGULAR_SLOT_FIELDS = SLOT_FIELDS.filter(
-  ({ field }) => field !== 'disk1Temperature' && field !== 'disk2Temperature',
+  ({ field }) => field !== 'disk1Temperature' && field !== 'disk2Temperature'
 )
 
 export type NicField = 'nic1' | 'nic2'
@@ -74,9 +74,7 @@ function formatSensorReading(reading: MetricsSensorReading | null): string | und
   return `${formatCount(reading.value)} RPM`
 }
 
-export function sensorOptions(
-  candidates: readonly MetricsSensorCandidate[],
-): SelectOption[] {
+export function sensorOptions(candidates: readonly MetricsSensorCandidate[]): SelectOption[] {
   return candidates.map((candidate) => {
     const reading = formatSensorReading(candidate.reading)
     return {
@@ -89,17 +87,14 @@ export function sensorOptions(
 
 export function slotCandidatesFor(
   capabilities: MetricsCapabilities,
-  field: SlotField,
+  field: SlotField
 ): readonly MetricsSensorCandidate[] {
   return capabilities.sensors[field]
 }
 
 function hasAnySensorCandidates(capabilities: MetricsCapabilities): boolean {
   const sensors = capabilities.sensors
-  return (
-    SLOT_FIELDS.some(({ field }) => sensors[field].length > 0) ||
-    sensors.gpuDevices.length > 0
-  )
+  return SLOT_FIELDS.some(({ field }) => sensors[field].length > 0) || sensors.gpuDevices.length > 0
 }
 
 export type SensorsPanelViewState = {
@@ -118,7 +113,7 @@ export type SensorsPanelViewState = {
  */
 export function resolveSensorsPanelViewState(
   capabilities: MetricsCapabilities,
-  drivetempEnabled: boolean,
+  drivetempEnabled: boolean
 ): SensorsPanelViewState {
   const showSensorCandidates = hasAnySensorCandidates(capabilities)
   const diskTemperatureReason = capabilities.sensors.reasons?.diskTemperature
@@ -131,23 +126,19 @@ export function resolveSensorsPanelViewState(
     // disk-temperature pool, and keep showing it once enabled so the
     // operator can still turn it back off after drivetemp starts reporting
     // (at which point the pool is no longer empty and the reason disappears).
-    showDrivetempControl:
-      diskTemperatureReason === 'drivetemp_not_loaded' || drivetempEnabled,
+    showDrivetempControl: diskTemperatureReason === 'drivetemp_not_loaded' || drivetempEnabled,
   }
 }
 
 /**
  * The `{chip,label}` candidate that names this GPU device for the
- * `gpuDevice` hardware-profile slot — the daemon's `selectGpuDevice()` only
- * matches against a device's temperature/power pools (never fan/utilization),
- * so a device with neither has no valid representative identity and is
- * omitted from the picker entirely rather than offering a selection that can
- * never actually resolve.
+ * `gpuDevice` hardware-profile slot — the daemon's `selectGpuDevice()`
+ * matches temperature, power, *and* utilization pools. A device with only
+ * DRM engine-busy counters (Intel iGPU with no i915 hwmon) still has a
+ * valid identity. Fan-only devices are omitted — they cannot resolve.
  */
-function gpuDeviceIdentity(
-  device: MetricsGpuDeviceCandidates,
-): MetricsSensorCandidate | null {
-  return device.temperature[0] ?? device.power[0] ?? null
+function gpuDeviceIdentity(device: MetricsGpuDeviceCandidates): MetricsSensorCandidate | null {
+  return device.temperature[0] ?? device.power[0] ?? device.utilization?.[0] ?? null
 }
 
 export function gpuDeviceOptions(capabilities: MetricsCapabilities): SelectOption[] {
@@ -167,7 +158,7 @@ export function gpuDeviceOptions(capabilities: MetricsCapabilities): SelectOptio
 
 export function nicOptions(
   capabilities: MetricsCapabilities,
-  current: string | null,
+  current: string | null
 ): SelectOption[] {
   const options: SelectOption[] = capabilities.networkInterfaces
     .filter((iface) => iface.classification === 'uplink')
@@ -188,7 +179,7 @@ export function nicOptions(
 
 export function hostingPathOptions(
   capabilities: MetricsCapabilities,
-  current: string | null,
+  current: string | null
 ): SelectOption[] {
   const options = capabilities.storageMounts.candidates.map((mount) => ({
     value: mount.path,
@@ -206,9 +197,7 @@ export function hostingPathOptions(
 }
 
 /** `catalog-family`/`catalog-exact` provenance note shown beside a CPU limit prefill. */
-function cpuLimitSourceHint(
-  source: EffectiveCpuThermalLimits['source'],
-): string | undefined {
+function cpuLimitSourceHint(source: EffectiveCpuThermalLimits['source']): string | undefined {
   if (source === 'catalog-family') {
     return 'Estimated from CPU family — set an exact value if you know it.'
   }
@@ -228,7 +217,7 @@ const AUTO_DETECTED_HINT = 'Empty uses auto-detection.'
 export function cpuLimitPrefill(
   draftEmpty: boolean,
   limits: EffectiveCpuThermalLimits | null,
-  pick: (limits: EffectiveCpuThermalLimits) => number | null,
+  pick: (limits: EffectiveCpuThermalLimits) => number | null
 ): { placeholder: string; hint: string } {
   if (draftEmpty && limits && limits.source !== 'none') {
     const value = pick(limits)
@@ -247,7 +236,7 @@ export function errorMessage(err: unknown, fallback: string): string {
 }
 
 export function slotSelectionFromProfile(
-  profile: ServerHardwareProfile | null | undefined,
+  profile: ServerHardwareProfile | null | undefined
 ): Record<SlotField, string | null> {
   const result = {} as Record<SlotField, string | null>
   for (const { field } of SLOT_FIELDS) {
@@ -258,14 +247,14 @@ export function slotSelectionFromProfile(
 }
 
 export function gpuDeviceSelectionFromProfile(
-  profile: ServerHardwareProfile | null | undefined,
+  profile: ServerHardwareProfile | null | undefined
 ): string | null {
   const slot = profile?.gpuDevice
   return slot ? candidateKey(slot) : null
 }
 
 export function nicSelectionFromProfile(
-  profile: ServerHardwareProfile | null | undefined,
+  profile: ServerHardwareProfile | null | undefined
 ): Record<NicField, string | null> {
   return {
     nic1: profile?.nic1 ?? null,
@@ -295,7 +284,7 @@ export type SelectionSnapshot = {
 }
 
 export function snapshotFromProfile(
-  profile: ServerHardwareProfile | null | undefined,
+  profile: ServerHardwareProfile | null | undefined
 ): SelectionSnapshot {
   return {
     slots: slotSelectionFromProfile(profile),
@@ -334,7 +323,7 @@ export function emptyTouchedSelection(): TouchedSelection {
 export function buildSlotProfileUpdates(
   selection: Record<SlotField, string | null>,
   initial: Record<SlotField, string | null>,
-  touched: ReadonlySet<SlotField>,
+  touched: ReadonlySet<SlotField>
 ): Partial<Record<SlotField, MetricsSensorSlot | null>> {
   const updates: Partial<Record<SlotField, MetricsSensorSlot | null>> = {}
   for (const { field } of SLOT_FIELDS) {
@@ -349,7 +338,7 @@ export function buildSlotProfileUpdates(
 export function buildGpuDeviceProfileUpdate(
   selection: string | null,
   initial: string | null,
-  touched: boolean,
+  touched: boolean
 ): MetricsSensorSlot | null | undefined {
   if (initial == null && !touched) return undefined
   return slotUpdate(selection)
@@ -359,7 +348,7 @@ export function buildGpuDeviceProfileUpdate(
 export function buildNicProfileUpdates(
   selection: Record<NicField, string | null>,
   initial: Record<NicField, string | null>,
-  touched: ReadonlySet<NicField>,
+  touched: ReadonlySet<NicField>
 ): Partial<Record<NicField, string | null>> {
   const updates: Partial<Record<NicField, string | null>> = {}
   for (const { field } of NIC_FIELDS) {

@@ -8,14 +8,9 @@ import {
   fleetStatusAccessibilityLabel,
   formatCoresTotal,
   formatSiBytes,
-  indexFleetUsageByServerId,
 } from '@/lib/fleet-capacity'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
-import {
-  SERVERS_REFRESH_MS,
-  useFleetServerUsage,
-  useOrgServers,
-} from '@/lib/queries/servers'
+import { SERVERS_REFRESH_MS, useOrgServers } from '@/lib/queries/servers'
 import { serversPresenceRefetchMs } from '@/lib/server-connection-status'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { spacing } from '@/lib/theme'
@@ -30,23 +25,12 @@ export function OverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         idleMs: SERVERS_REFRESH_MS,
       }),
   })
-  const fleetUsageQuery = useFleetServerUsage(orgId, {
-    enabled: !serversQuery.isLoading,
-  })
-
   usePullToRefresh(async () => {
-    await Promise.all([serversQuery.refetch(), fleetUsageQuery.refetch()])
+    await serversQuery.refetch()
   })
 
   const servers = orEmptyArray(serversQuery.data?.servers)
-  const usageByServerId = useMemo(
-    () => indexFleetUsageByServerId(fleetUsageQuery.data?.servers),
-    [fleetUsageQuery.data],
-  )
-  const fleetStatus = useMemo(
-    () => computeFleetStatus(servers, usageByServerId),
-    [servers, usageByServerId],
-  )
+  const fleetStatus = useMemo(() => computeFleetStatus(servers), [servers])
   const showStatus = !serversQuery.isLoading || servers.length > 0
 
   return (

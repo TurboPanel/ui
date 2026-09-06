@@ -14,14 +14,7 @@ import {
   SectionPanel,
 } from '@/components/ui'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
-import {
-  memoryUsedPercentFrom,
-  swapUsedPercentFrom,
-} from '@/lib/server-usage'
-import {
-  indexFleetUsageByServerId,
-  serverCpuThreads,
-} from '@/lib/fleet-capacity'
+import { indexFleetUsageByServerId } from '@/lib/fleet-capacity'
 import {
   getStoredServersLayout,
   resolveServersFleetSurface,
@@ -40,10 +33,7 @@ import {
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
-import {
-  unboundPendingKeys,
-  unusedRegistrationKeysLabel,
-} from '@/lib/pending-keys'
+import { unboundPendingKeys, unusedRegistrationKeysLabel } from '@/lib/pending-keys'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import {
   SERVERS_REFRESH_MS,
@@ -250,19 +240,14 @@ function AddServerToolbarButton({
       disabled={disabled}
       onPress={onPress}
     >
-      <Text
-        style={open ? panelStyles.toolbarBtnTextSecondary : panelStyles.toolbarBtnTextPrimary}
-      >
+      <Text style={open ? panelStyles.toolbarBtnTextSecondary : panelStyles.toolbarBtnTextPrimary}>
         {open ? 'Close' : '+ Server'}
       </Text>
     </Pressable>
   )
 }
 
-function UnusedKeysHint({
-  orgId,
-  count,
-}: Readonly<{ orgId: string; count: number }>) {
+function UnusedKeysHint({ orgId, count }: Readonly<{ orgId: string; count: number }>) {
   const router = useRouter()
   if (count <= 0) return null
   const label = unusedRegistrationKeysLabel(count)
@@ -270,11 +255,7 @@ function UnusedKeysHint({
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={`${label}. Open pending keys.`}
-      style={({ pressed }) => [
-        styles.unusedKeysLink,
-        pressed && styles.buttonPressed,
-        webPointer,
-      ]}
+      style={({ pressed }) => [styles.unusedKeysLink, pressed && styles.buttonPressed, webPointer]}
       onPress={() => router.push(serversPendingKeysHref(orgId))}
     >
       <Text style={styles.unusedKeysLinkText}>{label} — view and delete</Text>
@@ -321,11 +302,7 @@ function ServersOverviewToolbar({
 }>) {
   const addDisabled = !addServerEligibility.canAdd
   const updateDisabled = anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
-  const showUpdate = showServersToolbarUpdate(
-    canManage,
-    compactChrome,
-    selectedCount,
-  )
+  const showUpdate = showServersToolbarUpdate(canManage, compactChrome, selectedCount)
 
   return (
     <View style={styles.toolbarActions}>
@@ -399,14 +376,7 @@ const SERVER_COLUMNS = [
   { key: 'check', header: 'Select', width: 40, align: 'center' },
 ] as const satisfies readonly DataTableColumn[]
 
-const [
-  SV_NAME,
-  SV_STATUS,
-  SV_LOCATION,
-  SV_USAGE,
-  SV_MESH,
-  SV_CHECK,
-] = SERVER_COLUMNS
+const [SV_NAME, SV_STATUS, SV_LOCATION, SV_USAGE, SV_MESH, SV_CHECK] = SERVER_COLUMNS
 
 function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
@@ -491,35 +461,21 @@ function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
 
 function usageBarMetrics(usage: FleetServerUsageRecord | null) {
   return {
-    cpuIdlePercent: usage?.values.cpuIdlePercent,
-    cpuUserPercent: usage?.values.cpuUserPercent,
-    cpuSystemPercent: usage?.values.cpuSystemPercent,
-    cpuIowaitPercent: usage?.values.cpuIowaitPercent,
-    load1: usage?.values.load1,
-    load5: usage?.values.load5,
-    load15: usage?.values.load15,
-    // v2 stores raw byte counters only — used % is derived here.
-    memoryPercent: memoryUsedPercentFrom(
-      usage?.values.memoryTotalBytes,
-      usage?.values.memoryAvailableBytes,
-    ),
-    swapPercent: swapUsedPercentFrom(
-      usage?.values.swapTotalBytes,
-      usage?.values.swapFreeBytes,
-    ),
+    cpuBusyPercent: usage?.values['host.cpu.busyPercent'],
+    // Derived server-side from topology capacity — never re-derived here.
+    memoryPercent: usage?.derived.memoryUsedPercent,
+    swapPercent: usage?.derived.swapUsedPercent,
   }
 }
 
 function ServerUsageCell({
   usage,
-  cpuCores,
 }: Readonly<{
   usage: FleetServerUsageRecord | null
-  cpuCores: number | null
 }>) {
   return (
     <DataTableCell column={SV_USAGE}>
-      <ServerUsageBars density="list" cpuCores={cpuCores} {...usageBarMetrics(usage)} />
+      <ServerUsageBars density="list" {...usageBarMetrics(usage)} />
     </DataTableCell>
   )
 }
@@ -566,7 +522,7 @@ function OrgServerTableRow({
       <ServerNameCell server={server} />
       <ServerStatusCell server={server} />
       <ServerLocationCell server={server} />
-      <ServerUsageCell usage={usage} cpuCores={serverCpuThreads(server)} />
+      <ServerUsageCell usage={usage} />
       <ServerMeshCell overlayAddress={overlayAddress} />
       <DataTableCell column={SV_CHECK}>
         <Checkbox
@@ -624,11 +580,7 @@ function OrgServerCompactRow({
         </View>
       </View>
       <View style={styles.compactStats}>
-        <ServerUsageBars
-          density="list"
-          cpuCores={serverCpuThreads(server)}
-          {...usageBarMetrics(usage)}
-        />
+        <ServerUsageBars density="list" {...usageBarMetrics(usage)} />
         <Text style={styles.meshText} numberOfLines={1}>
           {overlayAddress ?? '—'}
         </Text>
@@ -710,19 +662,19 @@ function ServersFleetTable({
         ) : undefined
       }
     >
-        {servers.map((server, index) => (
-          <OrgServerTableRow
-            key={server.id}
-            orgId={orgId}
-            server={server}
-            rowIndex={index}
-            isLast={index === servers.length - 1}
-            selected={selectedIds.has(server.id)}
-            overlayAddress={meshOverlayByServer.get(server.id) ?? null}
-            usage={usageByServerId.get(server.id) ?? null}
-            onToggleSelected={() => onToggleSelected(server.id)}
-          />
-        ))}
+      {servers.map((server, index) => (
+        <OrgServerTableRow
+          key={server.id}
+          orgId={orgId}
+          server={server}
+          rowIndex={index}
+          isLast={index === servers.length - 1}
+          selected={selectedIds.has(server.id)}
+          overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+          usage={usageByServerId.get(server.id) ?? null}
+          onToggleSelected={() => onToggleSelected(server.id)}
+        />
+      ))}
     </DataTable>
   )
 }
@@ -779,11 +731,7 @@ function OrgServerTile({
         <ServerCountryLine server={server} />
       </View>
       <View style={styles.tileUsage}>
-        <ServerUsageBars
-          density="tile"
-          cpuCores={serverCpuThreads(server)}
-          {...usageBarMetrics(usage)}
-        />
+        <ServerUsageBars density="tile" {...usageBarMetrics(usage)} />
       </View>
       <Text style={styles.meshText} numberOfLines={1}>
         {overlayAddress ?? '—'}
@@ -863,7 +811,7 @@ function ServersOverviewFleet({
 }
 
 function indexUpdatesByServerId(
-  entries: readonly ServerUpdateStatus[] | undefined,
+  entries: readonly ServerUpdateStatus[] | undefined
 ): Map<string, ServerUpdateStatus> {
   const map = new Map<string, ServerUpdateStatus>()
   for (const entry of entries ?? []) {
@@ -875,7 +823,7 @@ function indexUpdatesByServerId(
 function collectTriggeringServerIds(
   pending: boolean,
   variables: readonly string[] | undefined,
-  updates: readonly ServerUpdateStatus[] | undefined,
+  updates: readonly ServerUpdateStatus[] | undefined
 ): Set<string> {
   const ids = new Set<string>()
   if (pending && variables) {
@@ -895,7 +843,7 @@ function countSelectedUpdatable(
   servers: readonly OrgServerRecord[],
   selectedIds: ReadonlySet<string>,
   updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>,
+  triggeringServerIds: ReadonlySet<string>
 ): number {
   let count = 0
   for (const server of servers) {
@@ -952,9 +900,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [serversLayout, setServersLayout] = useState<ServersLayout>(() =>
-    getStoredServersLayout()
-  )
+  const [serversLayout, setServersLayout] = useState<ServersLayout>(() => getStoredServersLayout())
 
   const handleLayoutChange = (next: ServersLayout): void => {
     setServersLayout(next)
@@ -962,9 +908,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   const servers = orEmptyArray(serversQuery.data?.servers)
-  const pendingKeyCount = unboundPendingKeys(
-    licensesQuery.data?.licenses ?? [],
-  ).length
+  const pendingKeyCount = unboundPendingKeys(licensesQuery.data?.licenses ?? []).length
   const loading = serversQuery.isLoading
   const error = serversQuery.isError
     ? serversRefreshErrorMessage(serversQuery.error, isForbiddenError(serversQuery.error))
@@ -982,7 +926,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const updateByServerId = useMemo(
     () => indexUpdatesByServerId(updatesQuery.data?.servers),
-    [updatesQuery.data],
+    [updatesQuery.data]
   )
 
   const triggeringServerIds = useMemo(
@@ -990,9 +934,9 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       collectTriggeringServerIds(
         batchUpdateMutation.isPending,
         batchUpdateMutation.variables,
-        updatesQuery.data?.servers,
+        updatesQuery.data?.servers
       ),
-    [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data],
+    [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data]
   )
 
   useEffect(() => {
@@ -1013,7 +957,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     servers,
     selectedIds,
     updateByServerId,
-    triggeringServerIds,
+    triggeringServerIds
   )
 
   const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
@@ -1061,13 +1005,8 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <View
-        style={[styles.titleRow, selectedIds.size > 0 && styles.titleRowPinned]}
-      >
-        <Text
-          style={[panelStyles.pageTitle, styles.titleText]}
-          numberOfLines={1}
-        >
+      <View style={[styles.titleRow, selectedIds.size > 0 && styles.titleRowPinned]}>
+        <Text style={[panelStyles.pageTitle, styles.titleText]} numberOfLines={1}>
           Servers
         </Text>
         <ServersOverviewToolbar

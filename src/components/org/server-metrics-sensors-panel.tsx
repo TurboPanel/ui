@@ -1,619 +1,313 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { EmptyState, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { formatPhysicalSignalValue, type TemperatureUnit } from '@/lib/format-metrics'
 import {
-  Button,
-  ButtonRow,
-  ConfirmButton,
-  EmptyState,
-  FormField,
-  InlineNotice,
-  SectionPanel,
-  Select,
-  TextField,
-  Toggle,
-} from '@/components/ui'
-import {
-  buildGpuDeviceProfileUpdate,
-  buildNicProfileUpdates,
-  buildSlotProfileUpdates,
-  cpuLimitPrefill,
-  DISK_SLOT_FIELDS,
-  emptyTouchedSelection,
-  errorMessage,
-  gpuDeviceOptions,
-  gpuDeviceSelectionFromProfile,
-  hostingPathOptions,
-  type NicField,
-  NIC_FIELDS,
-  nicOptions,
-  nicSelectionFromProfile,
-  parseNumericDraft,
-  REGULAR_SLOT_FIELDS,
-  resolveSensorsPanelViewState,
-  type SelectionSnapshot,
-  sensorOptions,
-  type SensorsPanelViewState,
-  type SlotField,
-  SLOT_FIELDS,
-  slotCandidatesFor,
-  slotSelectionFromProfile,
-  type TouchedSelection,
-  snapshotFromProfile,
-} from '@/lib/hardware-profile-picker'
-import type {
-  MetricsCapabilities,
-  ServerDetailRecord,
-  ServerHardwareProfile,
-  ServerHardwareProfileUpdate,
+  formatEntityMetricId,
+  MetricsBackendUnavailableError,
+  type EntitySeriesResult,
+  type GpuInventoryEntry,
+  type HardwareSignalInventoryEntry,
+  type PerEntityHostedFamily,
+  type ServerDetailRecord,
 } from '@/lib/instance-api'
-import {
-  useSaveServerHardwareProfile,
-  useServerMetricsCapabilities,
-  useServerMetricsCpuLimits,
-} from '@/lib/queries/servers'
-import { spacing } from '@/lib/theme'
+import { useServerMetricsSeries } from '@/lib/queries/servers'
+import { colors, spacing } from '@/lib/theme'
 
-/**
- * Hardware profile for one server: conditional sensor slots, NIC bindings,
- * hosting storage path, and manual power/thermal limits. Capability
- * discovery is a live daemon round trip, so it runs only once the panel is
- * expanded — opened deliberately, never polled (backend contract).
- *
- * The form initializes from the stored profile (`server.hardwareProfile`),
- * so saving posts the full resolved set: untouched fields re-assert their
- * saved value, and only a field the operator moved to "Auto detected" (null)
- * clears its override.
- */
-export function ServerMetricsSensorsPanel({
-  orgId,
-  server,
-  canManage,
-}: Readonly<{
-  orgId: string
-  server: ServerDetailRecord
-  canManage: boolean
-}>) {
-  const [expanded, setExpanded] = useState(false)
-  const [slotSelection, setSlotSelection] = useState<
-    Record<SlotField, string | null>
-  >(() => slotSelectionFromProfile(server.hardwareProfile))
-  const [gpuDeviceSelection, setGpuDeviceSelection] = useState<string | null>(
-    () => gpuDeviceSelectionFromProfile(server.hardwareProfile),
-  )
-  const [nicSelection, setNicSelection] = useState<
-    Record<NicField, string | null>
-  >(() => nicSelectionFromProfile(server.hardwareProfile))
-  const [hostingPathSelection, setHostingPathSelection] = useState<
-    string | null
-  >(server.hardwareProfile?.hostingPath ?? null)
-  const [drivetempEnabled, setDrivetempEnabled] = useState(
-    server.hardwareProfile?.drivetempEnabled ?? false,
-  )
-  const [cpuTdpDraft, setCpuTdpDraft] = useState(
-    server.hardwareProfile?.cpuTdpWattsOverride != null
-      ? String(server.hardwareProfile.cpuTdpWattsOverride)
-      : '',
-  )
-  const [cpuTjMaxDraft, setCpuTjMaxDraft] = useState(
-    server.hardwareProfile?.cpuTjMaxCelsiusOverride != null
-      ? String(server.hardwareProfile.cpuTjMaxCelsiusOverride)
-      : '',
-  )
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+/** Short recent window — this is a latest-reading summary, not a chart; the Metrics tab owns history. */
+const SENSORS_PANEL_RANGE_MS = 10 * 60 * 1000
 
-  const [initialSelection, setInitialSelection] = useState<SelectionSnapshot>(
-    () => snapshotFromProfile(server.hardwareProfile),
-  )
-  const [touched, setTouched] = useState<TouchedSelection>(emptyTouchedSelection)
-  const [drivetempPersisted, setDrivetempPersisted] = useState(
-    () => server.hardwareProfile?.drivetempEnabled ?? false,
-  )
+const GPU_SUMMARY_FIELDS = ['utilizationPercent', 'temperatureCelsius', 'powerWatts'] as const
+const HARDWARE_SIGNAL_SUMMARY_FIELDS = ['value'] as const
 
-  const capabilitiesQuery = useServerMetricsCapabilities(orgId, server.id, {
-    enabled: expanded,
-  })
-  const cpuLimitsQuery = useServerMetricsCpuLimits(orgId, server.id, {
-    enabled: expanded,
-  })
-  const mutation = useSaveServerHardwareProfile(orgId, server.id)
-
-  const outcome = capabilitiesQuery.data
-  const capabilities = outcome?.kind === 'ok' ? outcome.capabilities : null
-  const offline = outcome?.kind === 'offline'
-  const cpuLimits = cpuLimitsQuery.data ?? null
-  const pending = mutation.isPending
-  const readOnly = !canManage
-
-  const applyProfile = (profile: ServerHardwareProfile) => {
-    const snapshot = snapshotFromProfile(profile)
-    setSlotSelection(snapshot.slots)
-    setGpuDeviceSelection(snapshot.gpu)
-    setNicSelection(snapshot.nic)
-    setInitialSelection(snapshot)
-    setTouched(emptyTouchedSelection())
-    setHostingPathSelection(profile.hostingPath ?? null)
-    setDrivetempEnabled(profile.drivetempEnabled ?? false)
-    setDrivetempPersisted(profile.drivetempEnabled ?? false)
-    setCpuTdpDraft(
-      profile.cpuTdpWattsOverride != null
-        ? String(profile.cpuTdpWattsOverride)
-        : '',
-    )
-    setCpuTjMaxDraft(
-      profile.cpuTjMaxCelsiusOverride != null
-        ? String(profile.cpuTjMaxCelsiusOverride)
-        : '',
-    )
+function computeSensorsPanelRange(): { fromIso: string; toIso: string } {
+  const toMs = Date.now()
+  return {
+    fromIso: new Date(toMs - SENSORS_PANEL_RANGE_MS).toISOString(),
+    toIso: new Date(toMs).toISOString(),
   }
-
-  /**
-   * A previously-populated slot/NIC field moving to a *different* value
-   * (set or cleared) breaks chart continuity for that series. A field with
-   * no prior identity — the common first-time-selection path — has nothing
-   * to break, so it never counts.
-   */
-  const hasReassignment = (): boolean => {
-    const slotChanged = SLOT_FIELDS.some(
-      ({ field }) =>
-        initialSelection.slots[field] != null &&
-        initialSelection.slots[field] !== slotSelection[field],
-    )
-    const gpuChanged =
-      initialSelection.gpu != null && initialSelection.gpu !== gpuDeviceSelection
-    const nicChanged = NIC_FIELDS.some(
-      ({ field }) =>
-        initialSelection.nic[field] != null &&
-        initialSelection.nic[field] !== nicSelection[field],
-    )
-    return slotChanged || gpuChanged || nicChanged
-  }
-
-  const save = () => {
-    if (readOnly) return
-    setError(null)
-    setSaved(false)
-
-    const cpuTdpWattsOverride = parseNumericDraft(cpuTdpDraft)
-    const cpuTjMaxCelsiusOverride = parseNumericDraft(cpuTjMaxDraft)
-    if (cpuTdpWattsOverride === undefined || cpuTjMaxCelsiusOverride === undefined) {
-      setError('Enter a valid number, or clear the field.')
-      return
-    }
-
-    const drivetempWasEnabled = drivetempPersisted
-    const gpuDeviceUpdate = buildGpuDeviceProfileUpdate(
-      gpuDeviceSelection,
-      initialSelection.gpu,
-      touched.gpu,
-    )
-    const updates: ServerHardwareProfileUpdate = {
-      ...buildSlotProfileUpdates(slotSelection, initialSelection.slots, touched.slots),
-      ...(gpuDeviceUpdate !== undefined ? { gpuDevice: gpuDeviceUpdate } : {}),
-      ...buildNicProfileUpdates(nicSelection, initialSelection.nic, touched.nic),
-      hostingPath: hostingPathSelection,
-      drivetempEnabled,
-      cpuTdpWattsOverride,
-      cpuTjMaxCelsiusOverride,
-    }
-    mutation.mutate(updates, {
-      onSuccess: (result) => {
-        setSaved(true)
-        // Reflect server-side normalization (trimming, cleared fields).
-        applyProfile(result.profile)
-        if (!drivetempWasEnabled && result.profile.drivetempEnabled) {
-          capabilitiesQuery.refetch()
-        }
-        if (!result.pushed) {
-          setError(
-            'Saved, but the server is offline — re-save once it reconnects to apply on the host.',
-          )
-        }
-      },
-      onError: (err) => {
-        setError(errorMessage(err, 'Failed to save hardware profile'))
-      },
-    })
-  }
-
-  const reassigning = capabilities != null && hasReassignment()
-  const viewState = capabilities
-    ? resolveSensorsPanelViewState(capabilities, drivetempEnabled)
-    : null
-
-  const handleGpuChange = (value: string | null) => {
-    setSaved(false)
-    setGpuDeviceSelection(value)
-    setTouched((prev) => ({ ...prev, gpu: true }))
-  }
-  const handleSlotChange = (field: SlotField, value: string | null) => {
-    setSaved(false)
-    setSlotSelection((prev) => ({ ...prev, [field]: value }))
-    setTouched((prev) => ({ ...prev, slots: new Set(prev.slots).add(field) }))
-  }
-  const handleNicChange = (field: NicField, value: string | null) => {
-    setSaved(false)
-    setNicSelection((prev) => ({ ...prev, [field]: value }))
-    setTouched((prev) => ({ ...prev, nic: new Set(prev.nic).add(field) }))
-  }
-  const handleHostingPathChange = (value: string | null) => {
-    setSaved(false)
-    setHostingPathSelection(value)
-  }
-  const handleDrivetempChange = (next: boolean) => {
-    setSaved(false)
-    setDrivetempEnabled(next)
-  }
-  const handleCpuTdpChange = (next: string) => {
-    setSaved(false)
-    setCpuTdpDraft(next)
-  }
-  const handleCpuTjMaxChange = (next: string) => {
-    setSaved(false)
-    setCpuTjMaxDraft(next)
-  }
-
-  const tdpPrefill = cpuLimitPrefill(
-    cpuTdpDraft.trim().length === 0,
-    cpuLimits,
-    (limits) => limits.tdpWatts,
-  )
-  const tjMaxPrefill = cpuLimitPrefill(
-    cpuTjMaxDraft.trim().length === 0,
-    cpuLimits,
-    (limits) => limits.tjMaxCelsius,
-  )
-
-  return (
-    <SectionPanel
-      title="Hardware profile"
-      hint="Sensor sources, NIC bindings, hosting storage path, and manual limits"
-      collapsible
-      defaultCollapsed
-      onToggle={setExpanded}
-    >
-      <Text style={panelStyles.muted}>
-        Auto-detection picks the first matching sensor. Override it when the
-        host exposes several, or point hosting storage at a different mount.
-      </Text>
-
-      {capabilitiesQuery.isLoading && expanded ? (
-        <Text style={panelStyles.muted}>Discovering host sensors…</Text>
-      ) : null}
-
-      {offline ? (
-        <Text style={panelStyles.muted}>
-          Server offline — capability discovery unavailable until the host
-          reconnects.
-        </Text>
-      ) : null}
-
-      {capabilitiesQuery.isError ? (
-        <Text style={panelStyles.error}>
-          {errorMessage(
-            capabilitiesQuery.error,
-            'Failed to discover sensor capabilities',
-          )}
-        </Text>
-      ) : null}
-
-      {capabilities && viewState ? (
-        <SensorFieldsSection
-          capabilities={capabilities}
-          viewState={viewState}
-          slotSelection={slotSelection}
-          gpuDeviceSelection={gpuDeviceSelection}
-          nicSelection={nicSelection}
-          hostingPathSelection={hostingPathSelection}
-          drivetempEnabled={drivetempEnabled}
-          cpuTdpDraft={cpuTdpDraft}
-          cpuTjMaxDraft={cpuTjMaxDraft}
-          tdpPrefill={tdpPrefill}
-          tjMaxPrefill={tjMaxPrefill}
-          readOnly={readOnly}
-          pending={pending}
-          onGpuChange={handleGpuChange}
-          onSlotChange={handleSlotChange}
-          onNicChange={handleNicChange}
-          onHostingPathChange={handleHostingPathChange}
-          onDrivetempChange={handleDrivetempChange}
-          onCpuTdpChange={handleCpuTdpChange}
-          onCpuTjMaxChange={handleCpuTjMaxChange}
-        />
-      ) : null}
-
-      <PanelFooter
-        error={error}
-        saved={saved}
-        readOnly={readOnly}
-        capabilities={capabilities}
-        reassigning={reassigning}
-        pending={pending}
-        onSave={save}
-      />
-    </SectionPanel>
-  )
 }
 
-function SensorCandidatesFields({
-  capabilities,
-  viewState,
-  slotSelection,
-  gpuDeviceSelection,
-  readOnly,
-  pending,
-  onGpuChange,
-  onSlotChange,
-}: Readonly<{
-  capabilities: MetricsCapabilities
-  viewState: SensorsPanelViewState
-  slotSelection: Record<SlotField, string | null>
-  gpuDeviceSelection: string | null
-  readOnly: boolean
-  pending: boolean
-  onGpuChange: (value: string | null) => void
-  onSlotChange: (field: SlotField, value: string | null) => void
-}>) {
-  if (viewState.showSensorCandidates) {
-    return (
-      <>
-        <FormField label="GPU device">
-          <Select
-            value={gpuDeviceSelection}
-            options={gpuDeviceOptions(capabilities)}
-            placeholder="Auto detected"
-            noneLabel="Auto detected"
-            disabled={readOnly || pending}
-            accessibilityLabel="GPU device sensor source"
-            onChange={onGpuChange}
-          />
-        </FormField>
-
-        {REGULAR_SLOT_FIELDS.map(({ field, label }) => (
-          <FormField key={field} label={label}>
-            <Select
-              value={slotSelection[field]}
-              options={sensorOptions(slotCandidatesFor(capabilities, field))}
-              placeholder="Auto detected"
-              noneLabel="Auto detected"
-              disabled={readOnly || pending}
-              accessibilityLabel={`${label} sensor source`}
-              onChange={(value) => onSlotChange(field, value)}
-            />
-          </FormField>
-        ))}
-
-        <InlineNotice
-          title="Disk temperature has no automatic default"
-          body="Unlike other sensors, the daemon never guesses a disk temperature source — pick one explicitly for each disk you want to chart."
-        />
-
-        {DISK_SLOT_FIELDS.map(({ field, label }) => (
-          <FormField key={field} label={label}>
-            <Select
-              value={slotSelection[field]}
-              options={sensorOptions(slotCandidatesFor(capabilities, field))}
-              placeholder="Not selected"
-              noneLabel="Not selected"
-              disabled={readOnly || pending}
-              accessibilityLabel={`${label} sensor source`}
-              onChange={(value) => onSlotChange(field, value)}
-            />
-          </FormField>
-        ))}
-      </>
-    )
+/** Most recent non-null sample for one entity field, or `null` if none reported in range. */
+function latestEntityValue(
+  entities: readonly EntitySeriesResult[] | undefined,
+  family: PerEntityHostedFamily,
+  entityId: string,
+  field: string
+): number | null {
+  const result = entities?.find((entry) => entry.family === family)
+  const entity = result?.entities.find((entry) => entry.entityId === entityId)
+  if (!entity) return null
+  for (let index = entity.points.length - 1; index >= 0; index -= 1) {
+    const value = entity.points[index]?.values[field]
+    if (value != null && Number.isFinite(value)) return value
   }
-
-  if (viewState.emptyStateVariant === 'vm') {
-    return (
-      <EmptyState
-        panel
-        title="No hardware sensors detected"
-        hint="Virtual machines and some hosts don't expose hwmon sensors, so there's nothing to pick from here. NIC bindings, hosting storage, and manual CPU limits below are unaffected."
-      />
-    )
-  }
-
-  return (
-    <EmptyState
-      panel
-      title="No sensor candidates found"
-      hint="This host didn't report any sensor candidates for these slots. NIC bindings, hosting storage, and manual CPU limits below are unaffected."
-    />
-  )
+  return null
 }
 
-function SensorFieldsSection({
-  capabilities,
-  viewState,
-  slotSelection,
-  gpuDeviceSelection,
-  nicSelection,
-  hostingPathSelection,
-  drivetempEnabled,
-  cpuTdpDraft,
-  cpuTjMaxDraft,
-  tdpPrefill,
-  tjMaxPrefill,
-  readOnly,
-  pending,
-  onGpuChange,
-  onSlotChange,
-  onNicChange,
-  onHostingPathChange,
-  onDrivetempChange,
-  onCpuTdpChange,
-  onCpuTjMaxChange,
+function GpuRow({
+  gpu,
+  utilizationPercent,
+  temperatureCelsius,
+  powerWatts,
+  temperatureUnit,
 }: Readonly<{
-  capabilities: MetricsCapabilities
-  viewState: SensorsPanelViewState
-  slotSelection: Record<SlotField, string | null>
-  gpuDeviceSelection: string | null
-  nicSelection: Record<NicField, string | null>
-  hostingPathSelection: string | null
-  drivetempEnabled: boolean
-  cpuTdpDraft: string
-  cpuTjMaxDraft: string
-  tdpPrefill: { placeholder: string; hint: string }
-  tjMaxPrefill: { placeholder: string; hint: string }
-  readOnly: boolean
-  pending: boolean
-  onGpuChange: (value: string | null) => void
-  onSlotChange: (field: SlotField, value: string | null) => void
-  onNicChange: (field: NicField, value: string | null) => void
-  onHostingPathChange: (value: string | null) => void
-  onDrivetempChange: (next: boolean) => void
-  onCpuTdpChange: (next: string) => void
-  onCpuTjMaxChange: (next: string) => void
+  gpu: GpuInventoryEntry
+  utilizationPercent: number | null
+  temperatureCelsius: number | null
+  powerWatts: number | null
+  temperatureUnit: TemperatureUnit
 }>) {
+  const title = `${gpu.vendor} ${gpu.chip}`.trim() || gpu.gpuId
   return (
-    <View style={styles.fields}>
-      <SensorCandidatesFields
-        capabilities={capabilities}
-        viewState={viewState}
-        slotSelection={slotSelection}
-        gpuDeviceSelection={gpuDeviceSelection}
-        readOnly={readOnly}
-        pending={pending}
-        onGpuChange={onGpuChange}
-        onSlotChange={onSlotChange}
-      />
-
-      {NIC_FIELDS.map(({ field, label }) => (
-        <FormField key={field} label={label}>
-          <Select
-            value={nicSelection[field]}
-            options={nicOptions(capabilities, nicSelection[field])}
-            placeholder="Auto detected"
-            noneLabel="Auto detected"
-            disabled={readOnly || pending}
-            accessibilityLabel={`${label} binding`}
-            onChange={(value) => onNicChange(field, value)}
-          />
-        </FormField>
-      ))}
-
-      <FormField
-        label="Hosting storage path"
-        hint="Mount that should host application storage. Empty uses auto-detection."
-      >
-        <Select
-          value={hostingPathSelection}
-          options={hostingPathOptions(capabilities, hostingPathSelection)}
-          placeholder={
-            capabilities.storageMounts.hosting.result?.path ?? 'Auto detected'
-          }
-          noneLabel={
-            capabilities.storageMounts.hosting.result?.path
-              ? `Auto detected (${capabilities.storageMounts.hosting.result.path})`
-              : 'Auto detected'
-          }
-          disabled={readOnly || pending}
-          accessibilityLabel="Hosting storage path override"
-          onChange={onHostingPathChange}
-        />
-      </FormField>
-
-      {viewState.showDrivetempControl ? (
-        <>
-          <InlineNotice
-            title="Drive temperature reporting is opt-in"
-            body="Enabling this loads the drivetemp kernel module so SATA/SAS disks report temperature. It persists across reboot."
-          />
-
-          <FormField label="Drive temperature reporting (drivetemp)">
-            <Toggle
-              value={drivetempEnabled}
-              onValueChange={onDrivetempChange}
-              disabled={readOnly || pending}
-              accessibilityLabel="Enable drivetemp kernel module reporting"
-            />
-          </FormField>
-        </>
-      ) : null}
-
-      <TextField
-        label="CPU TDP override (W)"
-        value={cpuTdpDraft}
-        onChangeText={onCpuTdpChange}
-        editable={!readOnly && !pending}
-        placeholder={tdpPrefill.placeholder}
-        keyboardType="numeric"
-        accessibilityLabel="CPU TDP watts override"
-        hint={tdpPrefill.hint}
-      />
-
-      <TextField
-        label="CPU Tjmax override (°C)"
-        value={cpuTjMaxDraft}
-        onChangeText={onCpuTjMaxChange}
-        editable={!readOnly && !pending}
-        placeholder={tjMaxPrefill.placeholder}
-        keyboardType="numeric"
-        accessibilityLabel="CPU Tjmax celsius override"
-        hint={tjMaxPrefill.hint}
-      />
+    <View style={styles.row}>
+      <View style={styles.rowHeader}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowMeta}>{gpu.kind}</Text>
+      </View>
+      <View style={styles.rowValues}>
+        <Text style={styles.rowValue}>
+          Utilization {formatPhysicalSignalValue(utilizationPercent, 'percent', temperatureUnit)}
+        </Text>
+        <Text style={styles.rowValue}>
+          Temp {formatPhysicalSignalValue(temperatureCelsius, 'celsius', temperatureUnit)}
+        </Text>
+        <Text style={styles.rowValue}>
+          Power {formatPhysicalSignalValue(powerWatts, 'watts', temperatureUnit)}
+        </Text>
+      </View>
     </View>
   )
 }
 
-function PanelFooter({
-  error,
-  saved,
-  readOnly,
-  capabilities,
-  reassigning,
-  pending,
-  onSave,
+function SignalRow({
+  signal,
+  value,
+  temperatureUnit,
 }: Readonly<{
-  error: string | null
-  saved: boolean
-  readOnly: boolean
-  capabilities: MetricsCapabilities | null
-  reassigning: boolean
-  pending: boolean
-  onSave: () => void
+  signal: HardwareSignalInventoryEntry
+  value: number | null
+  temperatureUnit: TemperatureUnit
 }>) {
+  const threshold = signal.thresholds?.critical ?? signal.thresholds?.warning
+  let thresholdLabel: string | null = null
+  if (threshold != null) {
+    const severity = signal.thresholds?.critical != null ? 'Critical' : 'Warning'
+    thresholdLabel = `${severity} ${formatPhysicalSignalValue(threshold, signal.unit, temperatureUnit)}`
+  }
+
   return (
-    <>
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {saved && !error ? (
-        <Text style={panelStyles.muted}>Hardware profile saved.</Text>
+    <View style={styles.row}>
+      <View style={styles.rowHeader}>
+        <Text style={styles.rowTitle}>{signal.label || signal.signalId}</Text>
+        <Text style={styles.rowMeta}>{signal.kind}</Text>
+      </View>
+      <View style={styles.rowValues}>
+        <Text style={styles.rowValue}>
+          {formatPhysicalSignalValue(value, signal.unit, temperatureUnit)}
+        </Text>
+        {thresholdLabel ? <Text style={styles.rowMeta}>{thresholdLabel}</Text> : null}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * Read-only, topology-labeled summary of this server's GPU and physical
+ * (temperature/power/fan/etc.) signals — every entry comes from the current
+ * topology inventory, keyed by its own reported label/kind/unit, never a
+ * fixed disk1/disk2/ambient slot. No chart surface here (that lives on the
+ * Metrics tab's GPU/Physical signals groups) — this is a latest-reading
+ * glance. Sensor-source overrides live in `ServerHardwareProfileEditor`.
+ */
+export function ServerMetricsSensorsPanel({
+  orgId,
+  server,
+}: Readonly<{
+  orgId: string
+  server: ServerDetailRecord
+}>) {
+  const hostQuery = useServerMetricsSeries(
+    orgId,
+    server.id,
+    // A single cheap host id, not the full default set — this call exists only to seed
+    // `inventory`/`temperatureUnit`, not to plot a host series.
+    () => ({
+      ...computeSensorsPanelRange(),
+      metrics: [formatEntityMetricId({ scope: 'host.cpu', field: 'busyPercent' })],
+    }),
+    { rangeKey: 'sensors-panel-host', staleTime: 30_000, refetchInterval: 60_000 }
+  )
+  const inventory = hostQuery.data?.inventory ?? null
+  const temperatureUnit: TemperatureUnit = hostQuery.data?.temperatureUnit ?? 'celsius'
+  const topologyGeneration = hostQuery.data?.topologyGeneration ?? null
+
+  const entityMetricIds = useMemo(() => {
+    if (!inventory) return []
+    const ids: string[] = []
+    for (const gpu of inventory.gpus) {
+      for (const field of GPU_SUMMARY_FIELDS) {
+        ids.push(formatEntityMetricId({ scope: 'gpu', entityId: gpu.gpuId, field }))
+      }
+    }
+    for (const signal of inventory.hardwareSignals) {
+      for (const field of HARDWARE_SIGNAL_SUMMARY_FIELDS) {
+        ids.push(
+          formatEntityMetricId({ scope: 'hardwareSignal', entityId: signal.signalId, field })
+        )
+      }
+    }
+    return ids
+  }, [inventory])
+
+  const entityQuery = useServerMetricsSeries(
+    orgId,
+    server.id,
+    () => ({ ...computeSensorsPanelRange(), metrics: entityMetricIds }),
+    {
+      enabled: entityMetricIds.length > 0,
+      rangeKey: `sensors-panel-entities:${topologyGeneration ?? 'none'}`,
+      staleTime: 30_000,
+      refetchInterval: 60_000,
+    }
+  )
+
+  const gpus = inventory?.gpus ?? []
+  const hardwareSignals = inventory?.hardwareSignals ?? []
+  const entities = entityQuery.data?.entities
+  const noDevices = gpus.length === 0 && hardwareSignals.length === 0
+
+  const backendUnavailable = hostQuery.error instanceof MetricsBackendUnavailableError
+  const otherError = hostQuery.isError && !backendUnavailable
+  const notConfigured = hostQuery.data?.available === false
+  const showEmptyState = !hostQuery.isLoading && !hostQuery.isError && !notConfigured && noDevices
+  const empty = showEmptyState || hostQuery.isError || notConfigured
+
+  return (
+    <SectionPanel
+      title="Physical signals & GPUs"
+      hint="Latest topology-reported temperatures, power, and GPU readings"
+    >
+      {hostQuery.isLoading ? <Text style={panelStyles.muted}>Loading…</Text> : null}
+
+      {backendUnavailable ? (
+        <Text style={panelStyles.muted}>
+          Metrics store unavailable — this summary will resume when storage is reachable.
+        </Text>
       ) : null}
 
-      {readOnly ? (
-        <Text style={panelStyles.muted}>Manage permission required.</Text>
+      {otherError ? (
+        <Text style={panelStyles.error}>Failed to load physical signals and GPUs.</Text>
       ) : null}
-      {!readOnly && capabilities ? (
-        <ButtonRow>
-          {reassigning ? (
-            <ConfirmButton
-              label="Save hardware profile"
-              confirmLabel="Confirm reassignment"
-              prompt="Reassigning breaks chart continuity for the changed sensor/NIC."
-              busy={pending}
-              disabled={pending}
-              onConfirm={onSave}
-            />
-          ) : (
-            <Button
-              label="Save hardware profile"
-              variant="primary"
-              busy={pending}
-              disabled={pending}
-              onPress={onSave}
-            />
-          )}
-        </ButtonRow>
+
+      {!hostQuery.isError && notConfigured ? (
+        <Text style={panelStyles.muted}>
+          Metrics storage is not configured for this runtime yet.
+        </Text>
       ) : null}
-    </>
+
+      {showEmptyState ? (
+        <EmptyState
+          panel
+          title="No physical signals or GPUs detected"
+          hint="This host hasn't reported any GPU devices or hardware sensor signals yet."
+        />
+      ) : null}
+
+      {gpus.length > 0 ? (
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>GPU</Text>
+          {gpus.map((gpu) => (
+            <GpuRow
+              key={gpu.gpuId}
+              gpu={gpu}
+              utilizationPercent={latestEntityValue(
+                entities,
+                'gpu',
+                gpu.gpuId,
+                'utilizationPercent'
+              )}
+              temperatureCelsius={latestEntityValue(
+                entities,
+                'gpu',
+                gpu.gpuId,
+                'temperatureCelsius'
+              )}
+              powerWatts={latestEntityValue(entities, 'gpu', gpu.gpuId, 'powerWatts')}
+              temperatureUnit={temperatureUnit}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {hardwareSignals.length > 0 ? (
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>Physical signals</Text>
+          {hardwareSignals.map((signal) => (
+            <SignalRow
+              key={signal.signalId}
+              signal={signal}
+              value={latestEntityValue(entities, 'hardware.physical', signal.signalId, 'value')}
+              temperatureUnit={temperatureUnit}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {!empty ? <Text style={styles.footnote}>See the Metrics tab for history charts.</Text> : null}
+    </SectionPanel>
   )
 }
 
 const styles = StyleSheet.create({
-  fields: {
+  group: {
+    gap: spacing.xs,
+  },
+  groupTitle: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  row: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgInset,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    gap: 4,
+  },
+  rowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  rowTitle: {
+    color: colors.textTitle,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  rowMeta: {
+    color: colors.textDim,
+    fontSize: 11,
+  },
+  rowValues: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  rowValue: {
+    color: colors.textBody,
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  footnote: {
+    color: colors.textFaint,
+    fontSize: 11,
+    lineHeight: 15,
   },
 })

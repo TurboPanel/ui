@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { FleetServerUsageRecord } from '@/lib/instance-api'
 import {
   computeFleetStatus,
   fleetServersStatSuffix,
@@ -12,10 +11,7 @@ import {
   type FleetCapacityServer,
 } from './fleet-capacity'
 
-function server(
-  id: string,
-  overrides: Partial<FleetCapacityServer> = {},
-): FleetCapacityServer {
+function server(id: string, overrides: Partial<FleetCapacityServer> = {}): FleetCapacityServer {
   return {
     id,
     connected: false,
@@ -23,14 +19,6 @@ function server(
     resources: null,
     ...overrides,
   }
-}
-
-function usage(
-  serverId: string,
-  values: FleetServerUsageRecord['values'],
-  sampleCount = 1,
-): FleetServerUsageRecord {
-  return { serverId, latestAt: '2026-08-17T00:00:00.000Z', sampleCount, values }
 }
 
 describe('formatCoresTotal', () => {
@@ -76,15 +64,15 @@ describe('serverInventoryCpuCores', () => {
           resources: {
             cpus: [{ cores: { total: 8 }, threads: { total: 16 } }],
           },
-        }),
-      ),
+        })
+      )
     ).toBe(8)
     expect(
       serverInventoryCpuCores(
         server('a', {
           resources: { cpus: [{ threads: { total: 16 } }] },
-        }),
-      ),
+        })
+      )
     ).toBe(16)
     expect(serverInventoryCpuCores(server('a'))).toBeNull()
   })
@@ -99,8 +87,8 @@ describe('serverInventoryCpuCores', () => {
               { cores: { total: 8 }, threads: { total: 16 } },
             ],
           },
-        }),
-      ),
+        })
+      )
     ).toBe(16)
   })
 })
@@ -113,14 +101,12 @@ describe('serverCpuThreads', () => {
           resources: {
             cpus: [{ cores: { total: 8 }, threads: { total: 16 } }],
           },
-        }),
-      ),
+        })
+      )
     ).toBe(16)
-    expect(
-      serverCpuThreads(
-        server('a', { resources: { cpus: [{ cores: { total: 8 } }] } }),
-      ),
-    ).toBe(8)
+    expect(serverCpuThreads(server('a', { resources: { cpus: [{ cores: { total: 8 } }] } }))).toBe(
+      8
+    )
   })
 })
 
@@ -147,7 +133,7 @@ describe('computeFleetStatus', () => {
         statusChangedAt: null,
       }),
     ]
-    const status = computeFleetStatus(servers, new Map())
+    const status = computeFleetStatus(servers)
     expect(status).toEqual({
       serverCount: 3,
       onlineCount: 1,
@@ -158,38 +144,8 @@ describe('computeFleetStatus', () => {
     })
   })
 
-  it('falls back to metrics RAM when inventory is absent', () => {
-    const servers = [server('a')]
-    const usageByServerId = indexFleetUsageByServerId([
-      usage('a', {
-        memoryTotalBytes: 8 * 1024 * 1024 * 1024,
-      }),
-    ])
-    expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBe(
-      8 * 1024 * 1024 * 1024,
-    )
-  })
-
-  it('ignores metrics RAM when the sample count is zero', () => {
-    const servers = [server('a')]
-    const usageByServerId = indexFleetUsageByServerId([
-      usage('a', {
-        memoryTotalBytes: 8 * 1024 * 1024 * 1024,
-      }, 0),
-    ])
-    expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBeNull()
-  })
-
-  it('ignores metrics memory when the total is missing', () => {
-    const servers = [server('a')]
-    const usageByServerId = indexFleetUsageByServerId([
-      usage('a', { memoryAvailableBytes: 1024 }),
-    ])
-    expect(computeFleetStatus(servers, usageByServerId).totalMemoryBytes).toBeNull()
-  })
-
   it('returns null capacity when nothing is known', () => {
-    const status = computeFleetStatus([server('a')], new Map())
+    const status = computeFleetStatus([server('a')])
     expect(status.totalCores).toBeNull()
     expect(status.totalMemoryBytes).toBeNull()
     expect(status.serverCount).toBe(1)
@@ -209,7 +165,7 @@ describe('fleetServersStatSuffix', () => {
         initializingCount: 0,
         totalCores: null,
         totalMemoryBytes: null,
-      }),
+      })
     ).toBeUndefined()
   })
 
@@ -222,7 +178,7 @@ describe('fleetServersStatSuffix', () => {
         initializingCount: 0,
         totalCores: null,
         totalMemoryBytes: null,
-      }),
+      })
     ).toBe('2 offline')
   })
 
@@ -235,7 +191,7 @@ describe('fleetServersStatSuffix', () => {
         initializingCount: 1,
         totalCores: null,
         totalMemoryBytes: null,
-      }),
+      })
     ).toBe('1 initializing')
   })
 
@@ -248,7 +204,7 @@ describe('fleetServersStatSuffix', () => {
         initializingCount: 1,
         totalCores: null,
         totalMemoryBytes: null,
-      }),
+      })
     ).toBe('1 offline · 1 initializing')
   })
 })
@@ -263,9 +219,7 @@ describe('fleetStatusAccessibilityLabel', () => {
         initializingCount: 0,
         totalCores: 8,
         totalMemoryBytes: 1024,
-      }),
-    ).toBe(
-      '1 of 2 servers online, 1 offline, total 8 cores, total 1.00 KB RAM',
-    )
+      })
+    ).toBe('1 of 2 servers online, 1 offline, total 8 cores, total 1.00 KB RAM')
   })
 })
