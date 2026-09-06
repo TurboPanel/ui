@@ -80,7 +80,7 @@ Derived percentages (CPU busy, memory/swap/root-filesystem used %) are computed 
 | Unsupported OS | `statePanel` — non-Linux only |
 | Backend unavailable | `statePanel` + Retry (DuckDB / Analytics Engine label) |
 | Not configured | Generic "metrics storage not configured" copy (the v3 TurboPanel-HA-vs-self-hosted branch collapsed since the v4 cutover dropped the Analytics-Engine-specific message) |
-| No data | Waiting for first samples (immediate on connect; rates in ~2 s). If the host is connected but sending an older metrics protocol, **Daemon update required** with an **Update daemon** action |
+| No data | Waiting for first samples (immediate on connect; rates in ~2 s). When a newer daemon build is available, the empty state can recommend updating to the current build |
 | Offline server | Pending left-border banner when charts still render |
 | Per-chart unavailable | Muted inline message inside card — not empty plot (entity/hideWhenEmpty cards hide instead) |
 | Live ended | Muted inline row + Restart live session button |

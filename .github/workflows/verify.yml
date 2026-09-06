@@ -86,7 +86,7 @@ jobs:
   # Analytics Engine replaced it). The guard lives in TurboPanel/turbopaneld
   # (scripts/check-metrics-legacy.ts) and scans sibling checkouts when present,
   # so check this repo out next to it — a clean single-repo turbopaneld CI run
-  # cannot see PRs made here.
+  # cannot see PRs made here. This job covers ui/src and ui/design-system.
   metrics-legacy:
     runs-on: ubuntu-latest
     concurrency:

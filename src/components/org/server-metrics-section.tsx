@@ -1980,8 +1980,8 @@ function noDataCopy(
   }
   if (updateAvailable) {
     return {
-      title: 'Daemon update required',
-      body: 'This host is connected, but it is sending an older metrics protocol that this control plane cannot store. Update the daemon, then samples will appear.',
+      title: 'Daemon update available',
+      body: 'A newer daemon build is available. Update this host to the current build; samples appear after it reconnects and begins reporting.',
     }
   }
   return {
