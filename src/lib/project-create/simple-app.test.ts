@@ -75,7 +75,7 @@ describe('detectPackageManager', () => {
 
   it('falls back to the packageManager pin when no lockfile speaks', () => {
     const files = [
-      found('package.json', JSON.stringify({ packageManager: 'pnpm@11.22.0' })),
+      found('package.json', JSON.stringify({ packageManager: 'pnpm@12.3.4' })),
     ]
     expect(detectPackageManager(files)).toEqual({
       manager: 'pnpm',
@@ -87,7 +87,7 @@ describe('detectPackageManager', () => {
     // The daemon detects from the lockfile on disk at build time, so the
     // suggestion must agree with what the build will actually do.
     const files = [
-      found('package.json', JSON.stringify({ packageManager: 'pnpm@11.22.0' })),
+      found('package.json', JSON.stringify({ packageManager: 'pnpm@12.3.4' })),
       found('yarn.lock'),
     ]
     expect(detectPackageManager(files)?.manager).toBe('yarn')
@@ -165,7 +165,7 @@ describe('suggestedSimpleAppConfig', () => {
         found(
           'package.json',
           JSON.stringify({
-            packageManager: 'pnpm@11.22.0',
+            packageManager: 'pnpm@12.3.4',
             scripts: { build: 'next build', start: 'next start' },
           }),
         ),
