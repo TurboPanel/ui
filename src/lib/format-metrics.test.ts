@@ -11,6 +11,7 @@ import {
   formatCount,
   formatCpuBusyPercent,
   formatMilliseconds,
+  hardwareSignalDisplayTitle,
   formatOpsPerSecond,
   formatPercent,
   formatPhysicalSignalValue,
@@ -157,6 +158,48 @@ describe('formatWatts', () => {
 
   it('formats one decimal with a watt unit', () => {
     expect(formatWatts(35.04)).toBe('35.0 W')
+  })
+
+  it('formats sub-50 milliwatt readings in milliwatts', () => {
+    expect(formatWatts(0.0004)).toBe('0.4 mW')
+    expect(formatWatts(0.1)).toBe('0.1 W')
+    expect(formatWatts(0)).toBe('0.0 W')
+  })
+})
+
+describe('hardwareSignalDisplayTitle', () => {
+  it('renames kernel RAPL package power and coretemp package temperature', () => {
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:intel-rapl:package-0',
+        kind: 'power',
+        label: 'package-0',
+      })
+    ).toBe('CPU package power')
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:coretemp:Package id 0',
+        kind: 'temperature',
+        label: 'Package id 0',
+      })
+    ).toBe('CPU package temperature')
+  })
+
+  it('passes through already-friendly and unrelated labels', () => {
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:cpu:hottest-core',
+        kind: 'temperature',
+        label: 'Hottest core',
+      })
+    ).toBe('Hottest core')
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:nvme:Composite',
+        kind: 'temperature',
+        label: 'Composite',
+      })
+    ).toBe('Composite')
   })
 })
 

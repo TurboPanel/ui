@@ -102,6 +102,12 @@ export function formatWatts(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return '—'
   }
+  const abs = Math.abs(value)
+  // Sub-50 mW RAPL samples (idle Intel PP1) round to "0.0 W" at one decimal
+  // and collapse the Y-axis to identical tick labels.
+  if (abs > 0 && abs < 0.05) {
+    return `${(value * 1000).toFixed(1)} mW`
+  }
   return `${value.toFixed(1)} W`
 }
 
@@ -116,6 +122,29 @@ export function physicalSignalUnitLabel(unit: string, temperatureUnit: Temperatu
   if (unit === 'rpm') return 'RPM'
   if (unit === 'percent') return '%'
   return unit
+}
+
+const CPU_PACKAGE_POWER_SIGNAL_RE = /:package-\d+$/i
+const CPU_PACKAGE_TEMP_SIGNAL_RE = /Package id \d+$/i
+
+/**
+ * Operator chart title for a physical signal. Kernel hwmon/RAPL names
+ * (`Package id 0`, `package-0`) stay in `signalId`; do not show them as titles.
+ */
+export function hardwareSignalDisplayTitle(signal: {
+  signalId: string
+  kind: string
+  label: string
+}): string {
+  if (signal.kind === 'power' && CPU_PACKAGE_POWER_SIGNAL_RE.test(signal.signalId)) {
+    return 'CPU package power'
+  }
+  if (signal.kind === 'temperature' && CPU_PACKAGE_TEMP_SIGNAL_RE.test(signal.signalId)) {
+    return 'CPU package temperature'
+  }
+  if (signal.label === 'package-0') return 'CPU package power'
+  if (/^Package id \d+$/i.test(signal.label)) return 'CPU package temperature'
+  return signal.label || signal.signalId
 }
 
 /** Unit-aware value formatter for a physical signal — see {@link physicalSignalUnitLabel}. */

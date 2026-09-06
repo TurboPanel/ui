@@ -38,6 +38,7 @@ import {
   formatPhysicalSignalValue,
   formatUptimeSeconds,
   formatWatts,
+  hardwareSignalDisplayTitle,
   physicalSignalUnitLabel,
   presentSamplesFromGaps,
   type MetricsRangeId,
@@ -165,6 +166,11 @@ type ChartSeriesDefinition = Readonly<{
   read: PointValueReader
   /** Explicit series color; falls back to the shared palette by position. */
   color?: string
+  /**
+   * Drop this series when every sample in range is null — a missing vendor
+   * field must not paint an empty legend entry on a chart that still has data.
+   */
+  hideWhenEmpty?: boolean
 }>
 
 type ChartReferenceLine = Readonly<{ value: number; label: string }>
@@ -1113,6 +1119,7 @@ function gpuChartDefinitions(
           label: 'Memory activity',
           color: colors.command,
           read: metric('memoryActivityPercent'),
+          hideWhenEmpty: true,
         },
       ],
       yFormat: (v) => formatPercent(v),
@@ -1124,6 +1131,7 @@ function gpuChartDefinitions(
       unit: 'bytes',
       series: [{ id: 'used', label: 'Used', read: metric('memoryUsedBytes') }],
       yFormat: (v) => formatBytes(v),
+      hideWhenEmpty: true,
     },
     {
       id: `gpu:${gpu.gpuId}:temperature`,
@@ -1136,6 +1144,7 @@ function gpuChartDefinitions(
           label: 'Memory',
           color: colors.command,
           read: metric('memoryTemperatureCelsius'),
+          hideWhenEmpty: true,
         },
       ],
       yFormat: (v) => formatCelsiusAs(v, temperatureUnit),
@@ -1314,11 +1323,12 @@ function hardwareSignalChartDefinition(
   temperatureUnit: TemperatureUnit
 ): ChartDefinition {
   const threshold = signal.thresholds?.critical ?? signal.thresholds?.warning
+  const title = hardwareSignalDisplayTitle(signal)
   return {
     id: `hardware:${signal.signalId}`,
-    title: signal.label || signal.signalId,
+    title,
     unit: physicalSignalUnitLabel(signal.unit, temperatureUnit),
-    series: [{ id: 'value', label: signal.label || signal.signalId, read: metric('value') }],
+    series: [{ id: 'value', label: title, read: metric('value') }],
     gapOnGenerationBreak: true,
     yFormat: (v) => formatPhysicalSignalValue(v, signal.unit, temperatureUnit),
     referenceLine:
@@ -1331,6 +1341,7 @@ function hardwareSignalChartDefinition(
                 : `Warning ${formatPhysicalSignalValue(threshold, signal.unit, temperatureUnit)}`,
           }
         : undefined,
+    hideWhenEmpty: true,
   }
 }
 
@@ -1845,15 +1856,24 @@ function buildChartSeries(
   breakMs?: ReadonlySet<number>
 ): MetricLineSeries[] {
   const nullAtBreaks = Boolean(definition.gapOnGenerationBreak && breakMs && breakMs.size > 0)
-  return definition.series.map((entry, index) => ({
-    key: entry.id,
-    label: entry.label,
-    color: entry.color ?? SERIES_COLORS[index % SERIES_COLORS.length]!,
-    points: points.map((point) => ({
-      tMs: point.tMs,
-      value: nullAtBreaks && breakMs?.has(point.tMs) ? null : entry.read(point),
-    })),
-  }))
+  return definition.series.flatMap((entry, index) => {
+    const mapped: MetricLineSeries = {
+      key: entry.id,
+      label: entry.label,
+      color: entry.color ?? SERIES_COLORS[index % SERIES_COLORS.length]!,
+      points: points.map((point) => ({
+        tMs: point.tMs,
+        value: nullAtBreaks && breakMs?.has(point.tMs) ? null : entry.read(point),
+      })),
+    }
+    if (
+      entry.hideWhenEmpty &&
+      mapped.points.every((point) => point.value === null || point.value === undefined)
+    ) {
+      return []
+    }
+    return [mapped]
+  })
 }
 
 /** True when any series in the chart has at least one non-null sample. */
@@ -2801,13 +2821,13 @@ function MetricsCharts({
         </View>
       </View>
 
-      {HOST_CHART_GROUPS.map((group, index) => (
+      {HOST_CHART_GROUPS.map((group) => (
         <CollapsibleChartGroup
           key={group.id}
           id={group.id}
           label={group.label}
           hint={group.hint}
-          defaultExpanded={index < 2}
+          defaultExpanded={true}
           twoColumn={twoColumn}
           charts={group.chartIds
             .map((id) => hostChartsById.get(id))
@@ -2825,7 +2845,7 @@ function MetricsCharts({
             id={group.id}
             label={group.label}
             hint={group.hint}
-            defaultExpanded={false}
+            defaultExpanded={true}
             twoColumn={twoColumn}
             charts={group.charts}
             chartDomainMs={chartDomainMs}
