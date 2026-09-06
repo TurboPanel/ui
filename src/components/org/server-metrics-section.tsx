@@ -1002,13 +1002,15 @@ function buildEntityMetricPlan(
               fields: FILESYSTEM_FIELDS,
             })
           ),
-        ...inventory.blockDevices.map(
-          (device): EntityRequestGroup => ({
-            scope: 'block',
-            entityId: device.deviceId,
-            fields: BLOCK_FIELDS,
-          })
-        ),
+        ...inventory.blockDevices
+          .filter((device) => device.isServiceDevice)
+          .map(
+            (device): EntityRequestGroup => ({
+              scope: 'block',
+              entityId: device.deviceId,
+              fields: BLOCK_FIELDS,
+            })
+          ),
         ...inventory.hardwareSignals.map(
           (signal): EntityRequestGroup => ({
             scope: 'hardwareSignal',
@@ -1587,12 +1589,13 @@ function buildEntityChartGroups(
       })
     }
 
-    if (inventory.blockDevices.length > 0) {
+    const serviceBlockDevices = inventory.blockDevices.filter((device) => device.isServiceDevice)
+    if (serviceBlockDevices.length > 0) {
       groups.push({
         id: 'block-devices',
         label: 'Block devices',
         hint: 'Per-device throughput, IOPS, latency, and utilization',
-        charts: inventory.blockDevices.flatMap((device) =>
+        charts: serviceBlockDevices.flatMap((device) =>
           blockDeviceChartDefinitions(device, temperatureUnit).map((definition) => ({
             definition,
             points: pointsFor('block', device.deviceId),
@@ -2371,7 +2374,7 @@ function CollapsibleChartGroup({
       {id === 'network' ? (
         <Text style={styles.chartGroupNote}>
           {TURBOFABRIC_PRODUCT_NAME} mesh interfaces are embedded in host metrics on this version
-          and have no independent series — see Network devices for the host's individual NICs.
+          and have no independent series — see Network devices for the host&apos;s individual NICs.
         </Text>
       ) : null}
     </View>
