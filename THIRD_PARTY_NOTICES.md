@@ -498,11 +498,6 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 - License: MIT
 - Homepage: http://naver.github.io/egjs
 
-### @esbuild/linux-x64@0.27.3
-
-- License: MIT
-- Homepage: https://github.com/evanw/esbuild#readme
-
 ### @expo-google-fonts/material-symbols@0.4.38
 
 - License: MIT AND Apache-2.0
@@ -1932,13 +1927,11 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 
 - License: Apache-2.0
 - Copyright: The Chromium Authors
-- Homepage: https://github.com/GoogleChrome/chrome-launcher#readme
 
 ### chromium-edge-launcher@0.3.0
 
 - License: Apache-2.0
 - Copyright: Cezar Augusto
-- Homepage: https://github.com/cezaraugusto/chromium-edge-launcher#readme
 
 ### ci-info@2.0.0
 
@@ -2648,7 +2641,6 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 
 - License: MIT
 - Copyright: Matt Perry
-- Homepage: https://github.com/motiondivision/motion#readme
 
 ### fresh@0.5.2
 
@@ -3007,11 +2999,6 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 - License: Apache-2.0
 
 ### lightningcss@1.32.0
-
-- License: MPL-2.0
-- Homepage: https://github.com/parcel-bundler/lightningcss#readme
-
-### lightningcss-linux-x64-gnu@1.32.0
 
 - License: MPL-2.0
 - Homepage: https://github.com/parcel-bundler/lightningcss#readme
@@ -4052,12 +4039,6 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 - Copyright: Nicolas Gallagher
 - Homepage: https://github.com/necolas/styleq#readme
 
-### supports-color@10.2.2
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/chalk/supports-color#readme
-
 ### supports-color@5.5.0
 
 - License: MIT
@@ -4183,12 +4164,6 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/type-fest#readme
 
-### typescript@6.0.3
-
-- License: Apache-2.0
-- Copyright: Microsoft Corp.
-- Homepage: https://www.typescriptlang.org/
-
 ### ua-parser-js@0.7.41
 
 - License: MIT
@@ -4252,7 +4227,6 @@ pnpm-lock.yaml sha256:67cb612ab9af0ca600b44806859332d8cde4eea48c1aa5a4b75a487d39
 
 - License: MIT
 - Copyright: theKashey
-- Homepage: https://github.com/theKashey/use-callback-ref#readme
 
 ### use-latest-callback@0.2.6
 
@@ -4481,6 +4455,11 @@ These packages are used for development, test, or build tooling and are not bund
 - Homepage: https://github.com/cspotcode/node-source-map-support#readme
 
 ### @esbuild/linux-x64@0.25.12
+
+- License: MIT
+- Homepage: https://github.com/evanw/esbuild#readme
+
+### @esbuild/linux-x64@0.27.3
 
 - License: MIT
 - Homepage: https://github.com/evanw/esbuild#readme
@@ -5655,6 +5634,11 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: George Zahariev
 - Homepage: https://github.com/gkz/levn
 
+### lightningcss-linux-x64-gnu@1.32.0
+
+- License: MPL-2.0
+- Homepage: https://github.com/parcel-bundler/lightningcss#readme
+
 ### locate-path@6.0.0
 
 - License: MIT
@@ -6052,6 +6036,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/strip-json-comments#readme
 
+### supports-color@10.2.2
+
+- License: MIT
+- Copyright: Sindre Sorhus
+- Homepage: https://github.com/chalk/supports-color#readme
+
 ### test-exclude@7.0.2
 
 - License: ISC
@@ -6125,6 +6115,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Jordan Harband
 - Homepage: https://github.com/inspect-js/typed-array-length#readme
+
+### typescript@6.0.3
+
+- License: Apache-2.0
+- Copyright: Microsoft Corp.
+- Homepage: https://www.typescriptlang.org/
 
 ### unbox-primitive@1.1.0
 
