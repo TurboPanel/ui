@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   collapseRepeatedProgressLines,
   groupTranscriptByPhase,
+  isBenignStderrLine,
   isDockerProgressLine,
   isErrorLine,
   normalizeTranscriptMessage,
@@ -137,6 +138,22 @@ describe('parseCommandLogChunk', () => {
       },
     ])
   })
+
+  it('skips empty lines between events and degrades broken JSON objects', () => {
+    const rows = parseCommandLogChunk(
+      event(1, 'first') + '\n' + '{not-json}\n' + event(3, 'third'),
+    )
+    expect(rows.map((row) => row.message)).toEqual([
+      'first',
+      '{not-json}',
+      'third',
+    ])
+    expect(rows[1]).toMatchObject({
+      stream: 'stdout',
+      phase: null,
+      timestamp: null,
+    })
+  })
 })
 
 describe('mergeTranscriptLines', () => {
@@ -233,6 +250,16 @@ describe('dockerTimestampTranscriptLines', () => {
       },
     ])
   })
+
+  it('accepts an RFC3339 offset instead of Z', () => {
+    const rows = dockerTimestampTranscriptLines(
+      '2026-01-01T00:00:01.5+00:00 offset line\n',
+    )
+    expect(rows[0]).toMatchObject({
+      timestamp: '2026-01-01T00:00:01.5+00:00',
+      message: 'offset line',
+    })
+  })
 })
 
 describe('transcriptPlainText', () => {
@@ -325,6 +352,25 @@ describe('docker progress lines', () => {
     'Progress: resolved 12, reused 12, downloaded 0, added 12',
     'Packages: +12',
     'Done in 1.2s',
+    '✓ Compiled successfully',
+    '○  (Static)  prerendered as static content',
+    '⚠ Slow network detected',
+    'Route (app)                              Size',
+    'Lockfile is up to date, resolution step is skipped',
+    'dependencies:',
+    'devDependencies:',
+    'Virtual store is at',
+    '? Verifying lockfile integrity',
+    'Attention: Next.js now collects completely anonymous telemetry',
+    'This information is used to shape Next.js',
+    'You can learn more, including how to opt-out',
+    'https://nextjs.org/telemetry',
+    'Finalizing page optimization',
+    'Collecting page data',
+    'Linting and checking validity of types',
+    '  Generating static pages (0/3)',
+    '  Running TypeScript ...',
+    'Packages are hard linked from the content-addressable store',
   ])('does not flag node toolchain stderr %s as an error', (message) => {
     expect(
       isErrorLine({
@@ -332,6 +378,27 @@ describe('docker progress lines', () => {
         timestamp: null,
         stream: 'stderr',
         phase: 'build',
+        message,
+      }),
+    ).toBe(false)
+  })
+
+  it.each([
+    'From https://github.com/TurboPanel/ui',
+    'From git@github.com:TurboPanel/ui.git',
+    '* branch            trunk      -> FETCH_HEAD',
+    'HEAD is now at abc1234 document coverage',
+    'remote: Enumerating objects: 12, done.',
+    'Switched to a new branch \'coverage\'',
+    'Already on trunk',
+  ])('treats git stderr %s as benign', (message) => {
+    expect(isBenignStderrLine(message)).toBe(true)
+    expect(
+      isErrorLine({
+        seq: 1,
+        timestamp: null,
+        stream: 'stderr',
+        phase: 'fetch',
         message,
       }),
     ).toBe(false)
@@ -356,6 +423,12 @@ describe('normalizeTranscriptMessage', () => {
   it('leaves non-progress text alone', () => {
     expect(normalizeTranscriptMessage('wrote 1B to disk')).toBe('wrote 1B to disk')
   })
+
+  it('keeps a glued 0B suffix that is not a Compose byte counter', () => {
+    expect(normalizeTranscriptMessage('id Downloading 2MB0B')).toBe(
+      'id Downloading 2MB0B',
+    )
+  })
 })
 
 describe('collapseRepeatedProgressLines', () => {
@@ -376,6 +449,24 @@ describe('collapseRepeatedProgressLines', () => {
       event(1, 'retrying') + event(2, 'retrying'),
     )
     expect(collapseRepeatedProgressLines(rows)).toHaveLength(2)
+  })
+
+  it('keeps identical progress text when phase or stream differs', () => {
+    const rows = parseCommandLogChunk(
+      event(1, ' 30d32a3eb4a4 Extracting 1B', {
+        stream: 'stderr',
+        phase: 'pull',
+      }) +
+        event(2, ' 30d32a3eb4a4 Extracting 1B', {
+          stream: 'stderr',
+          phase: 'compose-up',
+        }) +
+        event(3, ' 30d32a3eb4a4 Extracting 1B', {
+          stream: 'stdout',
+          phase: 'compose-up',
+        }),
+    )
+    expect(collapseRepeatedProgressLines(rows)).toHaveLength(3)
   })
 })
 

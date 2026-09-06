@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   formatVersionBuild,
   isFullGitCommit,
@@ -11,6 +11,21 @@ import {
 import * as sourceReleaseNode from '@/lib/source-release-node.mjs'
 
 const FULL_SHA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+/** Full SHA whose mocked URL omits `/tree/<sha>` so the release-mode guard fires. */
+const BAD_TREE_SHA = vi.hoisted(() => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+
+vi.mock('./source-release-node.mjs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./source-release-node.mjs')>()
+  return {
+    ...actual,
+    sourceReleaseUrl: (commit: string, options?: { release?: boolean }) => {
+      if (commit === BAD_TREE_SHA && options?.release) {
+        return 'https://github.com/TurboPanel/ui'
+      }
+      return actual.sourceReleaseUrl(commit, options)
+    },
+  }
+})
 
 describe('source-release-node.mjs (app.config Node ESM)', () => {
   it('exports the same helpers app.config imports by explicit .mjs path', () => {
@@ -89,6 +104,12 @@ describe('readAppSourceRelease', () => {
       readAppSourceRelease({
         version: '0.1.0',
         extra: { release: true, gitCommit: 'deadbeef' },
+      }),
+    ).toThrow(TypeError)
+    expect(() =>
+      readAppSourceRelease({
+        version: '0.1.0',
+        extra: { release: true, gitCommit: BAD_TREE_SHA },
       }),
     ).toThrow(TypeError)
   })

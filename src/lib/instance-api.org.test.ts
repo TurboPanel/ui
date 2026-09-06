@@ -5,13 +5,17 @@ import {
   fetchOrgDefaultEnvironment,
   fetchOrgDefaultTimezone,
   fetchOrgManagedDefaults,
+  fetchOrgPrincipalDefaults,
   fetchOrgServerCapacity,
+  fetchOrgTemperatureUnit,
   fetchServerLabels,
   fetchVisibleTeams,
   saveOrgDefaultEnvironment,
   saveOrgDefaultTimezone,
   saveOrgManagedDefaults,
+  saveOrgPrincipalDefaults,
   saveOrgServerCapacity,
+  saveOrgTemperatureUnit,
   saveServerLabels,
 } from './instance-api'
 
@@ -132,6 +136,56 @@ describe('instance-api org wrappers', () => {
     expect((saveInit as RequestInit).method).toBe('PUT')
     expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
       defaultEnvironmentName: 'Staging',
+    })
+  })
+
+  it('fetchOrgTemperatureUnit and saveOrgTemperatureUnit proxy display-unit routes', async () => {
+    const settings = { temperatureUnit: 'fahrenheit' as const }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(settings))
+    await expect(fetchOrgTemperatureUnit('org-1')).resolves.toEqual(settings)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      '/api/client/v1/organizations/org-1/temperature-unit',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ temperatureUnit: 'celsius' }))
+    await expect(
+      saveOrgTemperatureUnit('org-1', { temperatureUnit: 'celsius' }),
+    ).resolves.toEqual({ temperatureUnit: 'celsius' })
+    const [, saveInit] = fetchMock.mock.calls[1] ?? []
+    expect((saveInit as RequestInit).method).toBe('PUT')
+    expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
+      temperatureUnit: 'celsius',
+    })
+  })
+
+  it('fetchOrgPrincipalDefaults and saveOrgPrincipalDefaults proxy username defaults', async () => {
+    const defaults = {
+      randomizedUsernames: null,
+      effectiveRandomizedUsernames: true,
+    }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(defaults))
+    await expect(fetchOrgPrincipalDefaults('org-1')).resolves.toEqual(defaults)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      '/api/client/v1/organizations/org-1/principal-defaults',
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        randomizedUsernames: false,
+        effectiveRandomizedUsernames: false,
+      }),
+    )
+    await expect(saveOrgPrincipalDefaults('org-1', false)).resolves.toMatchObject({
+      ok: true,
+      randomizedUsernames: false,
+    })
+    const [, saveInit] = fetchMock.mock.calls[1] ?? []
+    expect((saveInit as RequestInit).method).toBe('PUT')
+    expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
+      randomizedUsernames: false,
     })
   })
 

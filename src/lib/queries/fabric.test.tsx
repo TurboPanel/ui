@@ -106,6 +106,23 @@ describe('fabric query hooks', () => {
     expect(fetchOrgFabric).toHaveBeenCalledTimes(1)
   })
 
+  it('useOrgFabric retries other errors twice', async () => {
+    fetchOrgFabric.mockRejectedValue(new Error('HTTP 500: boom'))
+    const client = createAppQueryClient()
+    client.setDefaultOptions({
+      queries: { retryDelay: 0 },
+    })
+
+    const { result } = renderHook(() => useOrgFabric(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+    expect(fetchOrgFabric).toHaveBeenCalledTimes(3)
+  })
+
   it('isOrgFabricUnavailable recognizes 404 and 503', () => {
     expect(isOrgFabricUnavailable(new Error('HTTP 404: missing'))).toBe(true)
     expect(isOrgFabricUnavailable(new Error('HTTP 503: unavailable'))).toBe(true)

@@ -182,6 +182,21 @@ describe('parseComposeImageRef edge cases', () => {
       digest: '',
     })
   })
+
+  it('keeps an untagged registry path without inventing a tag', () => {
+    expect(parseComposeImageRef('ghcr.io/org/app')).toEqual({
+      registry: 'ghcr.io',
+      image: 'org/app',
+      tag: '',
+      digest: '',
+    })
+    expect(parseComposeImageRef('localhost:5000/myapp')).toEqual({
+      registry: 'localhost:5000',
+      image: 'myapp',
+      tag: '',
+      digest: '',
+    })
+  })
 })
 
 describe('formatComposeImageRef edge cases', () => {

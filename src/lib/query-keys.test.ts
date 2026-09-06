@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TaggableParentKey } from '@/lib/instance-api'
 import {
   getAccessManagementPermissionKey,
+  isServerMetricsQuery,
   isVisibilityQuery,
   queryKeys,
 } from './query-keys'
@@ -289,6 +290,12 @@ describe('queryKeys.org(…) remaining factories', () => {
       'environments',
       'proj-1',
     ])
+    expect(org.environments.list()).toEqual([
+      'org',
+      'org-1',
+      'environments',
+      'all',
+    ])
     expect(org.environments.deployPreview('env-1')).toEqual([
       'org',
       'org-1',
@@ -341,6 +348,13 @@ describe('queryKeys.org(…) remaining factories', () => {
       'tasks',
       'serviceId',
       'svc-1',
+    ])
+    expect(org.tasks.list({ environmentId: 'env-1' })).toEqual([
+      'org',
+      'org-1',
+      'tasks',
+      'environmentId',
+      'env-1',
     ])
     expect(org.tasks.detail('task-1')).toEqual([
       'org',
@@ -502,6 +516,49 @@ describe('queryKeys.org(…) remaining factories', () => {
       'svc-1',
     ])
     expect(org.hostings.all).toEqual(['org', 'org-1', 'hostings'])
+  })
+
+  it('matches every /metrics/* subtree under a server, regardless of leaf', () => {
+    const org = queryKeys.org('org-1')
+    expect(
+      isServerMetricsQuery(
+        { queryKey: org.servers.metricsSeries('srv-1', '1h') },
+        'org-1',
+      ),
+    ).toBe(true)
+    expect(
+      isServerMetricsQuery(
+        { queryKey: org.servers.metricsSummary('srv-1', '1h') },
+        'org-1',
+      ),
+    ).toBe(true)
+    expect(
+      isServerMetricsQuery(
+        { queryKey: org.servers.metricsCapabilities('srv-1') },
+        'org-1',
+      ),
+    ).toBe(true)
+    expect(
+      isServerMetricsQuery(
+        { queryKey: org.servers.metricsConnection('srv-1', '1h') },
+        'org-1',
+      ),
+    ).toBe(true)
+    expect(
+      isServerMetricsQuery({ queryKey: org.servers.metrics('srv-1') }, 'org-1'),
+    ).toBe(true)
+    expect(
+      isServerMetricsQuery(
+        { queryKey: org.servers.metricsSeries('srv-1', '1h') },
+        'org-other',
+      ),
+    ).toBe(false)
+    expect(
+      isServerMetricsQuery({ queryKey: org.servers.detail('srv-1') }, 'org-1'),
+    ).toBe(false)
+    expect(isServerMetricsQuery({ queryKey: queryKeys.auth.status }, 'org-1')).toBe(
+      false,
+    )
   })
 
   it('builds topology.networks with filter identity', () => {

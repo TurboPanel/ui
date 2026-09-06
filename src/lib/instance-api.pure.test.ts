@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 import {
   DATABASE_NOT_FOUND_ERROR,
   DeployHealthCheckMissingError,
@@ -6,6 +7,7 @@ import {
   DEV_SYNC_WEB_AVAILABLE,
   FABRIC_RECONCILE_FAILED_ERROR,
   FABRIC_RECONCILE_PENDING_ERROR,
+  completeInstall,
   createLicense,
   deleteServer,
   deployEnvironment,
@@ -18,18 +20,22 @@ import {
   fetchOrgServers,
   fetchServer,
   fetchServerMetricsCapabilities,
+  fetchServerMetricsConnection,
+  fetchServerMetricsEvents,
   fetchServerMetricsLiveSettings,
   fetchServerMetricsSeries,
   fetchSession,
   formatEntityMetricId,
   formatServerDeleteBlockedError,
   IP_IN_USE_ERROR,
+  isForbiddenError,
   MetricsBackendUnavailableError,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   saveServerMetricsLiveSettings,
   saveServerHardwareProfile,
   ServerCapacityExceededError,
   ServerDeleteBlockedError,
+  signIn,
   startServerMetricsLive,
   stopServerMetricsLive,
   toRelayRecord,
@@ -293,10 +299,12 @@ describe('fetch wrappers (mocked fetch)', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    setActiveOrganizationId(null)
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    setActiveOrganizationId(null)
   })
 
   it('fetchSession returns null on 401', async () => {
@@ -334,6 +342,47 @@ describe('fetch wrappers (mocked fetch)', () => {
     await expect(fetchSession()).rejects.toThrow('/api/client/v1/authn/session failed: HTTP 504')
   })
 
+  it('fetchSession and signIn coerce missing identity fields to null', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(fetchSession()).resolves.toEqual({
+      userId: null,
+      email: null,
+      role: null,
+    })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, needsInstall: true }))
+    await expect(signIn('ops@example.com', 'secret')).resolves.toEqual({
+      userId: null,
+      email: null,
+      role: null,
+      needsInstall: true,
+    })
+  })
+
+  it('completeInstall coerces missing session fields and always clears needsInstall', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, organizationId: 'org-1' }))
+    await expect(
+      completeInstall({
+        username: 'root',
+        password: 'pw',
+        superadminEmail: 'admin@example.com',
+        superadminPassword: 'admin-pw',
+      }),
+    ).resolves.toEqual({
+      userId: null,
+      email: null,
+      role: null,
+      needsInstall: false,
+      organizationId: 'org-1',
+    })
+  })
+
+  it('re-exports isForbiddenError from the shared fetch-error helper', () => {
+    expect(isForbiddenError(new Error('GET /x failed: HTTP 403'))).toBe(true)
+    expect(isForbiddenError(new Error('GET /x failed: HTTP 500'))).toBe(false)
+    expect(isForbiddenError('HTTP 403')).toBe(false)
+  })
+
   it('fetchSession omits needsInstall when the body does not send it', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -366,6 +415,23 @@ describe('fetch wrappers (mocked fetch)', () => {
       isInstallMode: true,
       isSignupEnabled: true,
       isSignupEmailVerificationEnabled: true,
+    })
+  })
+
+  it('fetchInstallStatus derives isInstallMode from needsInstall when omitted', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        runtime: 'workers',
+        needsInstall: false,
+        isSignupEnabled: true,
+      }),
+    )
+    await expect(fetchInstallStatus()).resolves.toEqual({
+      runtime: 'workers',
+      needsInstall: false,
+      isInstallMode: false,
+      isSignupEnabled: true,
     })
   })
 
@@ -482,6 +548,13 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect(settings.relays[0]?.hasPresharedKey).toBe(true)
   })
 
+  it('fetchOrgFabric treats a missing relays array as empty', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ enabled: true }))
+    const settings = await fetchOrgFabric('org-1')
+    expect(settings.enabled).toBe(true)
+    expect(settings.relays).toEqual([])
+  })
+
   it('fetchOrgFabric keeps allowRelay false when the fabric record disables relay', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -526,6 +599,24 @@ describe('fetch wrappers (mocked fetch)', () => {
       ipId: 'srv-1:192.0.2.10',
       networkId: null,
     })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        datacenter: {
+          id: 'dc-2',
+          name: 'Empty',
+          description: null,
+          organizationId: 'org-1',
+          options: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          privateCidrs: ['203.0.113.0/24'],
+          subnets: [],
+        },
+      }),
+    )
+    const empty = await fetchDatacenter('dc-2')
+    expect(empty.members).toEqual([])
+    expect(empty.datacenter.privateCidrs).toEqual(['203.0.113.0/24'])
   })
 
   it('createLicense returns minted key material on success', async () => {
@@ -587,6 +678,22 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
   })
 
+  it('createLicense attaches the active organization header', async () => {
+    setActiveOrganizationId('org-lic')
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        licenseId: 'lic-1',
+        licenseToken: 'tok',
+        installCommand: 'curl | sh',
+      }),
+    )
+    await createLicense()
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-lic',
+    })
+  })
+
   it('createLicense maps generic and non-JSON failures', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
     await expect(createLicense()).rejects.toThrow(
@@ -620,6 +727,26 @@ describe('fetch wrappers (mocked fetch)', () => {
         'Remove 2 containers on this server before deleting it.'
       )
     }
+  })
+
+  it('deleteServer succeeds and forwards an explicit organization header', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
+    await expect(deleteServer('srv-1', 'org-del')).resolves.toEqual({
+      ok: true,
+      serverId: 'srv-1',
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).method).toBe('DELETE')
+    expect((init as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-del',
+    })
+  })
+
+  it('deleteServer keeps HTTP status when the error body is not JSON', async () => {
+    fetchMock.mockResolvedValueOnce(textResponse('nope', 500))
+    await expect(deleteServer('srv-1')).rejects.toThrow(
+      '/api/client/v1/servers/srv-1 failed: HTTP 500',
+    )
   })
 
   it('deleteServer throws a generic Error for other failures', async () => {
@@ -709,6 +836,51 @@ describe('fetch wrappers (mocked fetch)', () => {
     await expect(deployEnvironment('env-1')).rejects.toThrow(/environments\/env-1\/deploy failed/)
   })
 
+  it('fetchServerMetricsSeries returns the series payload on success', async () => {
+    const series = {
+      ok: true,
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-01-01T01:00:00.000Z',
+      series: [],
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(series))
+    await expect(
+      fetchServerMetricsSeries('srv-1', {
+        fromIso: '2026-01-01T00:00:00.000Z',
+        toIso: '2026-01-01T01:00:00.000Z',
+        metrics: ['host.cpu.userPercent'],
+        resolution: 60,
+        maxPoints: 60,
+      }),
+    ).resolves.toEqual(series)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/metrics/series')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('metrics=host.cpu.userPercent')
+  })
+
+  it('fetchServerMetricsEvents and fetchServerMetricsConnection hit their paths', async () => {
+    const range = {
+      fromIso: '2026-01-01T00:00:00.000Z',
+      toIso: '2026-01-01T01:00:00.000Z',
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, events: [] }))
+    await expect(fetchServerMetricsEvents('srv-1', range, 'org-metrics')).resolves.toEqual({
+      ok: true,
+      events: [],
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/metrics/events')
+    const [, eventsInit] = fetchMock.mock.calls[0] ?? []
+    expect((eventsInit as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-metrics',
+    })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, samples: [] }))
+    await expect(fetchServerMetricsConnection('srv-1', range)).resolves.toEqual({
+      ok: true,
+      samples: [],
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/metrics/connection')
+  })
+
   it('fetchServerMetricsSeries throws MetricsBackendUnavailableError on 503', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -794,8 +966,32 @@ describe('fetch wrappers (mocked fetch)', () => {
       kind: 'offline',
     })
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'other_conflict' }, 409))
+    await expect(startServerMetricsLive('srv-1')).rejects.toThrow(
+      /metrics\/live failed: HTTP 409: other_conflict/,
+    )
+
     fetchMock.mockResolvedValueOnce(textResponse('down', 503))
     await expect(startServerMetricsLive('srv-1')).rejects.toThrow(/metrics\/live failed: HTTP 503/)
+  })
+
+  it('startServerMetricsLive attaches an explicit organization header', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        leaseId: 'lease-org',
+        intervalSeconds: 10,
+        expiresAt: '2026-01-01T01:00:00.000Z',
+      }),
+    )
+    await expect(startServerMetricsLive('srv-1', undefined, 'org-live')).resolves.toMatchObject({
+      kind: 'started',
+      leaseId: 'lease-org',
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-live',
+    })
   })
 
   it('startServerMetricsLive renews when a leaseId is passed', async () => {
@@ -866,10 +1062,52 @@ describe('fetch wrappers (mocked fetch)', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'server_offline' }, 409))
     await expect(fetchServerMetricsCapabilities('srv-1')).resolves.toEqual({ kind: 'offline' })
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'other_conflict' }, 409))
+    await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
+      /metrics\/capabilities failed: HTTP 409: other_conflict/,
+    )
+
     fetchMock.mockResolvedValueOnce(textResponse('gone', 503))
     await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
       /metrics\/capabilities failed: HTTP 503/
     )
+  })
+
+  it('fetchServerMetricsCapabilities attaches an explicit organization header', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        capabilities: {
+          sensors: {
+            cpuTemperature: [],
+            cpuPower: [],
+            cpuFan: [],
+            gpuFan: [],
+            boardTemperature: [],
+            ambient1Temperature: [],
+            ambient2Temperature: [],
+            disk1Temperature: [],
+            disk2Temperature: [],
+            systemFan1: [],
+            systemFan2: [],
+            gpuDevices: [],
+          },
+          storageMounts: {
+            system: { path: '/', totalBytes: 1, availableBytes: 1 },
+            hosting: { probedPath: null, result: null, reason: 'path_not_found' },
+            docker: { probedPath: null, result: null, reason: 'docker_absent' },
+            candidates: [],
+          },
+          networkInterfaces: [],
+          process: { probedPath: '/proc' },
+        },
+      }),
+    )
+    await fetchServerMetricsCapabilities('srv-1', 'org-cap')
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-cap',
+    })
   })
 
   it('saveServerHardwareProfile PUTs the patch body', async () => {
@@ -913,6 +1151,21 @@ describe('fetch wrappers (mocked fetch)', () => {
       jsonResponse({ error: 'maxMinutes must be 0 or an integer between 5 and 240' }, 400)
     )
     await expect(saveServerMetricsLiveSettings(3)).rejects.toThrow(/server-metrics-live failed/)
+  })
+
+  it('apiFetch appends a distinct human message beside the error code', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: 'compose_invalid',
+          message: 'image tag is missing',
+        },
+        422,
+      ),
+    )
+    await expect(fetchHealth()).rejects.toThrow(
+      '/api/health failed: HTTP 422: compose_invalid — image tag is missing',
+    )
   })
 
   it('apiFetch compose_invalid joins issue messages', async () => {

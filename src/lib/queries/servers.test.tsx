@@ -247,6 +247,14 @@ describe('servers query hooks', () => {
     expect(fetchLicenses).not.toHaveBeenCalled()
   })
 
+  it('useOrgLicenses respects enabled:false', () => {
+    const { result } = renderHook(() => useOrgLicenses(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchLicenses).not.toHaveBeenCalled()
+  })
+
   it('useOrgLicenses polls while unbound pending keys remain', async () => {
     const client = createAppQueryClient()
     fetchLicenses.mockResolvedValue({
@@ -841,6 +849,15 @@ describe('servers query hooks', () => {
     expect(fetchServerUpdate).not.toHaveBeenCalled()
   })
 
+  it('useServerUpdateStatus respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useServerUpdateStatus(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerUpdate).not.toHaveBeenCalled()
+  })
+
   it('useOrgServerCapacity loads seat cap', async () => {
     fetchOrgServerCapacity.mockResolvedValueOnce({ maxServers: 5 })
 
@@ -1134,6 +1151,34 @@ describe('servers query hooks', () => {
     expect(fetchServer).not.toHaveBeenCalled()
   })
 
+  it('useServerDetail respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useServerDetail(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServer).not.toHaveBeenCalled()
+  })
+
+  it('useServerDetail uses an explicit refetchInterval when provided', async () => {
+    fetchServer.mockResolvedValue({ id: serverId, name: 'edge' })
+    const client = createTestQueryClient()
+
+    renderHook(
+      () => useServerDetail(orgId, serverId, { refetchInterval: 12_000 }),
+      { wrapper: createWrapper(client) },
+    )
+
+    await waitFor(() => {
+      expect(
+        resolveRefetchInterval(
+          client,
+          queryKeys.org(orgId).servers.detail(serverId),
+        ),
+      ).toBe(12_000)
+    })
+  })
+
   it('useServerLabels loads label map', async () => {
     fetchServerLabels.mockResolvedValueOnce([{ key: 'role', value: 'gateway' }])
 
@@ -1176,6 +1221,19 @@ describe('servers query hooks', () => {
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchTimezones).not.toHaveBeenCalled()
+  })
+
+  it('useTimezones fetches when options are omitted', async () => {
+    fetchTimezones.mockResolvedValueOnce({ timezones: ['UTC'] })
+
+    const { result } = renderHook(() => useTimezones(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchTimezones).toHaveBeenCalled()
   })
 
   it('useDeleteServer removes a server and invalidates fleet list', async () => {
@@ -1313,6 +1371,15 @@ describe('servers query hooks', () => {
       expect(result.current.data).toEqual({ temperatureUnit: 'fahrenheit' })
     })
     expect(fetchOrgTemperatureUnit).toHaveBeenCalledWith(orgId)
+  })
+
+  it('useOrgTemperatureUnit respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useOrgTemperatureUnit(orgId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchOrgTemperatureUnit).not.toHaveBeenCalled()
   })
 
   it('useSaveOrgTemperatureUnit saves and invalidates every server metrics subtree in the org', async () => {

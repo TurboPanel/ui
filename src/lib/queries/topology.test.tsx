@@ -134,6 +134,15 @@ describe('topology query hooks', () => {
     expect(fetchDatacenters).not.toHaveBeenCalled()
   })
 
+  it('useDatacenters respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useDatacenters(orgId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchDatacenters).not.toHaveBeenCalled()
+  })
+
   it('useDatacenter loads one datacenter', async () => {
     fetchDatacenter.mockResolvedValueOnce({
       datacenter: { id: datacenterId, name: 'LAN' },
@@ -159,6 +168,15 @@ describe('topology query hooks', () => {
     expect(fetchDatacenter).not.toHaveBeenCalled()
   })
 
+  it('useDatacenter respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useDatacenter(orgId, datacenterId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchDatacenter).not.toHaveBeenCalled()
+  })
+
   it('useDatacenterNameSuggestions loads suggestions', async () => {
     fetchDatacenterNameSuggestions.mockResolvedValueOnce({
       suggestions: [{ name: 'Chicago DC', serverCount: 2 }],
@@ -173,6 +191,22 @@ describe('topology query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchDatacenterNameSuggestions).toHaveBeenCalledWith({ limit: 5 })
+  })
+
+  it('useDatacenterNameSuggestions omits limit when unset', async () => {
+    fetchDatacenterNameSuggestions.mockResolvedValueOnce({
+      suggestions: [],
+    })
+
+    const { result } = renderHook(
+      () => useDatacenterNameSuggestions(orgId),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchDatacenterNameSuggestions).toHaveBeenCalledWith(undefined)
   })
 
   it('useDatacenterNameSuggestions respects enabled:false', () => {
@@ -257,6 +291,15 @@ describe('topology query hooks', () => {
     expect(fetchIp).not.toHaveBeenCalled()
   })
 
+  it('useIp respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useIp(orgId, ipId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchIp).not.toHaveBeenCalled()
+  })
+
   it('useNetworks loads docker networks', async () => {
     fetchNetworks.mockResolvedValueOnce({ networks: [] })
 
@@ -294,6 +337,20 @@ describe('topology query hooks', () => {
     })
 
     expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchNetworks).not.toHaveBeenCalled()
+  })
+
+  it('useNetworks respects enabled:false and can disable keepPreviousData', () => {
+    const disabled = renderHook(
+      () =>
+        useNetworks(
+          orgId,
+          { kind: 'docker' },
+          { enabled: false, keepPreviousData: false },
+        ),
+      { wrapper: createWrapper() },
+    )
+    expect(disabled.result.current.fetchStatus).toBe('idle')
     expect(fetchNetworks).not.toHaveBeenCalled()
   })
 

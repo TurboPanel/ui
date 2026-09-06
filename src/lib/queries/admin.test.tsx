@@ -311,6 +311,72 @@ describe('admin query hooks', () => {
     expect(onReconnecting).toHaveBeenCalledTimes(1)
   })
 
+  it('useApplyPublicUrls aborts a hung apply after the request deadline', async () => {
+    applyPublicUrls.mockImplementation(
+      (_urls: string[] | undefined, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          const onAbort = () => {
+            const err = new Error('The operation was aborted')
+            err.name = 'AbortError'
+            reject(err)
+          }
+          if (signal?.aborted) {
+            onAbort()
+            return
+          }
+          signal?.addEventListener('abort', onAbort, { once: true })
+        }),
+    )
+    fetchPublicUrls.mockResolvedValueOnce({
+      ok: true,
+      urls: ['https://panel.example.com'],
+    })
+
+    const { result } = renderHook(() => useApplyPublicUrls(), {
+      wrapper: createWrapper(),
+    })
+
+    vi.useFakeTimers()
+    try {
+      const pending = result.current.run({
+        urls: ['https://panel.example.com'],
+      })
+      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        value: { kind: 'reconnected', urls: ['https://panel.example.com'] },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('useApplyPublicUrls reports unreachable when the control plane never returns', async () => {
+    applyPublicUrls.mockRejectedValueOnce(
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+    )
+    fetchPublicUrls.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    const { result } = renderHook(() => useApplyPublicUrls(), {
+      wrapper: createWrapper(),
+    })
+
+    vi.useFakeTimers()
+    try {
+      const pending = result.current.run({
+        urls: ['https://panel.example.com'],
+      })
+      await vi.advanceTimersByTimeAsync(92_000)
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        value: { kind: 'unreachable' },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('useApplyPublicUrls reports a restart that did not save the change', async () => {
     applyPublicUrls.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     fetchPublicUrls.mockResolvedValueOnce({ ok: true, urls: [] })

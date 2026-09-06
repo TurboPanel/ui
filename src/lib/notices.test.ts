@@ -5,8 +5,10 @@ import {
   authorToCopyright,
   classifyLicense,
   defaultLicenseForPackageName,
+  enrichMissingPackageLicenses,
   evaluateLicensePolicy,
   fillMissingLicenses,
+  needsLicenseLookup,
   fingerprintCommentValue,
   formatPolicyFailures,
   mergeNoticePackages,
@@ -20,6 +22,7 @@ import {
   packagesFromPodfileLock,
   packagesFromPodspecJson,
   licenseFromPomXml,
+  spdxFromLicenseName,
   pnpmLicenseKeys,
   pnpmPackagePaths,
   renderThirdPartyNotices,
@@ -150,6 +153,17 @@ describe('packagesFromGradleDependencyReport', () => {
     ])
     expect(packages.every((row) => row.source === 'gradle')).toBe(true)
   })
+
+  it('reads a {strictly} version when the line has no resolved arrow', () => {
+    const packages = packagesFromGradleDependencyReport(`
++--- org.jetbrains.kotlin:kotlin-stdlib:{strictly 1.9.24}
++--- org.jetbrains.kotlin:kotlin-reflect:{STRICTLY 1.9.24}
+`)
+    expect(packages.map((row) => `${row.name}@${row.version}`)).toEqual([
+      'org.jetbrains.kotlin:kotlin-stdlib@1.9.24',
+      'org.jetbrains.kotlin:kotlin-reflect@1.9.24',
+    ])
+  })
 })
 
 describe('packagesFromMavenPom', () => {
@@ -170,6 +184,25 @@ describe('packagesFromMavenPom', () => {
       name: 'androidx.core:core',
       version: '1.13.0',
       license: 'Apache-2.0',
+      role: 'native',
+      source: 'pom',
+    })
+  })
+
+  it('inherits version from parent when the project omits it', () => {
+    const xml = `<project>
+  <parent>
+    <groupId>androidx.core</groupId>
+    <artifactId>core-parent</artifactId>
+    <version>1.13.0</version>
+  </parent>
+  <groupId>androidx.core</groupId>
+  <artifactId>core</artifactId>
+</project>`
+    expect(packagesFromMavenPom(xml)).toEqual({
+      name: 'androidx.core:core',
+      version: '1.13.0',
+      license: '',
       role: 'native',
       source: 'pom',
     })
@@ -207,6 +240,16 @@ describe('packagesFromPodspecJson', () => {
       role: 'native',
       source: 'podspec',
     })
+  })
+
+  it('accepts a string license and rejects incomplete or invalid JSON', () => {
+    expect(
+      packagesFromPodspecJson(
+        JSON.stringify({ name: 'Expo', version: '57.0.14', license: 'MIT License' }),
+      ),
+    ).toMatchObject({ license: 'MIT' })
+    expect(packagesFromPodspecJson(JSON.stringify({ name: 'Expo' }))).toBeUndefined()
+    expect(packagesFromPodspecJson('not-json')).toBeUndefined()
   })
 })
 
@@ -308,6 +351,39 @@ describe('classifyLicense', () => {
     expect(classifyLicense('MIT AND GPL-3.0-only', 'production')).toBe(
       'copyleft-production',
     )
+  })
+
+  it('returns the first custom class when every OR operand is unreviewed', () => {
+    expect(classifyLicense('LicenseRef-A OR LicenseRef-B', 'production')).toBe(
+      'custom',
+    )
+  })
+
+  it('splits nested OR/AND expressions without treating inner operators as top-level', () => {
+    expect(classifyLicense('MIT OR (Apache-2.0 OR ISC)', 'production')).toBeNull()
+    expect(classifyLicense('MIT AND (ISC)', 'production')).toBeNull()
+  })
+
+  it.each(['EUPL-1.2', 'OSL-3.0', 'CPL-1.0', 'Sleepycat', 'CDDL-1.0'])(
+    'treats %s as copyleft in production',
+    (license) => {
+      expect(classifyLicense(license, 'production')).toBe('copyleft-production')
+      expect(classifyLicense(license, 'development')).toBeNull()
+    },
+  )
+})
+
+describe('spdxFromLicenseName', () => {
+  it('maps common license titles to SPDX ids', () => {
+    expect(spdxFromLicenseName('')).toBe('')
+    expect(spdxFromLicenseName('MIT License')).toBe('MIT')
+    expect(spdxFromLicenseName('BSD 2-Clause')).toBe('BSD-2-Clause')
+    expect(spdxFromLicenseName('3-Clause BSD License')).toBe('BSD-3-Clause')
+    expect(spdxFromLicenseName('ISC License')).toBe('ISC')
+    expect(spdxFromLicenseName('SIL Open Font License')).toBe('OFL-1.1')
+    expect(spdxFromLicenseName('OFL-1.1')).toBe('OFL-1.1')
+    expect(spdxFromLicenseName('Mozilla Public License 2.0')).toBe('MPL-2.0')
+    expect(spdxFromLicenseName('Custom Title')).toBe('Custom Title')
   })
 })
 
@@ -450,6 +526,37 @@ describe('helpers', () => {
   })
 })
 
+describe('needsLicenseLookup', () => {
+  it('is true for empty and missing-license sentinels', () => {
+    expect(needsLicenseLookup('')).toBe(true)
+    expect(needsLicenseLookup('  UNKNOWN  ')).toBe(true)
+    expect(needsLicenseLookup('NONE')).toBe(true)
+    expect(needsLicenseLookup('NOASSERTION')).toBe(true)
+    expect(needsLicenseLookup('UNLICENSED LICENSE')).toBe(true)
+    expect(needsLicenseLookup('MIT')).toBe(false)
+  })
+})
+
+describe('enrichMissingPackageLicenses', () => {
+  it('fills empty licenses from the resolver or the package-name default', () => {
+    const enriched = enrichMissingPackageLicenses(
+      [
+        pkg({ name: 'react', license: 'MIT' }),
+        pkg({ name: 'yaml', license: '' }),
+        pkg({ name: '@std/assert', license: 'UNKNOWN' }),
+        pkg({ name: 'mystery', license: '' }),
+      ],
+      (row) => (row.name === 'yaml' ? '  ISC  ' : undefined),
+    )
+    expect(enriched.map((row) => `${row.name}:${row.license}`)).toEqual([
+      'react:MIT',
+      'yaml:ISC',
+      '@std/assert:MIT',
+      'mystery:',
+    ])
+  })
+})
+
 describe('fillMissingLicenses', () => {
   it('looks up only empty license strings', async () => {
     const filled = await fillMissingLicenses(
@@ -461,6 +568,18 @@ describe('fillMissingLicenses', () => {
     )
     expect(filled[0]?.license).toBe('ISC')
     expect(filled[1]?.license).toBe('MIT')
+  })
+
+  it('falls back to the package-name default when lookup is blank', async () => {
+    const filled = await fillMissingLicenses(
+      [
+        pkg({ name: '@std/assert', license: '' }),
+        pkg({ name: 'mystery', license: '' }),
+      ],
+      async () => '   ',
+    )
+    expect(filled[0]?.license).toBe('MIT')
+    expect(filled[1]?.license).toBe('')
   })
 })
 

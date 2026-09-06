@@ -62,6 +62,15 @@ describe('bindings query hooks', () => {
     expect(fetchBindings).toHaveBeenCalledWith({ serviceId })
   })
 
+  it('useServiceBindings stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useServiceBindings(orgId, serviceId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchBindings).not.toHaveBeenCalled()
+  })
+
   it('useEnvironmentBindings loads environment-scoped bindings', async () => {
     fetchBindings.mockResolvedValueOnce({ bindings: [] })
 
@@ -74,6 +83,25 @@ describe('bindings query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchBindings).toHaveBeenCalledWith({ environmentId })
+  })
+
+  it('useEnvironmentBindings stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useEnvironmentBindings(orgId, environmentId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchBindings).not.toHaveBeenCalled()
+  })
+
+  it('useManagedEnvironmentBindings stays idle when disabled', () => {
+    const { result } = renderHook(
+      () =>
+        useManagedEnvironmentBindings(orgId, environmentId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchBindings).not.toHaveBeenCalled()
   })
 
   it('useCreateBinding creates binding for service', async () => {

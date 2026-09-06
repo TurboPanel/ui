@@ -15,6 +15,7 @@ import {
   patchServiceTurbopanelExtension,
   readServiceSourceExtension,
   readServiceTurbopanelExtension,
+  serviceKindFieldMessage,
   SERVICE_DESCRIPTION_MAX_LENGTH,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
@@ -497,5 +498,46 @@ describe('patchServiceTurbopanelExtension cron and php', () => {
     expect(
       (cleared['x-turbopanel'] as { source?: unknown }).source,
     ).toBeUndefined()
+  })
+
+  it('drops an empty hosting list rather than persisting it', () => {
+    const withHosting = patchServiceTurbopanelExtension(
+      {},
+      {
+        serviceKind: 'container',
+        hosting: [{ hostname: 'app.example.com' }],
+      },
+    )
+    expect(withHosting['x-turbopanel']).toMatchObject({
+      hosting: [{ hostname: 'app.example.com' }],
+    })
+    const cleared = patchServiceTurbopanelExtension(withHosting, { hosting: [] })
+    expect(
+      (cleared['x-turbopanel'] as { hosting?: unknown }).hosting,
+    ).toBeUndefined()
+  })
+})
+
+describe('serviceKindFieldMessage', () => {
+  it('describes a single allowed kind', () => {
+    expect(serviceKindFieldMessage('engine', 'container')).toBe(
+      'engine is only valid when serviceKind is site',
+    )
+    expect(serviceKindFieldMessage('engine', 'site')).toBeNull()
+  })
+
+  it('joins two host-native kinds with or', () => {
+    expect(serviceKindFieldMessage('cron', 'container')).toBe(
+      'cron is only valid when serviceKind is site or node',
+    )
+    expect(serviceKindFieldMessage('principal', undefined)).toBe(
+      'principal is only valid when serviceKind is site or node',
+    )
+  })
+
+  it('returns null for unknown fields and fields legal on every kind', () => {
+    expect(serviceKindFieldMessage('futureField', 'container')).toBeNull()
+    expect(serviceKindFieldMessage('hosting', 'site')).toBeNull()
+    expect(serviceKindFieldMessage('source', 'node')).toBeNull()
   })
 })

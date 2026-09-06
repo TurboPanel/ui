@@ -70,6 +70,19 @@ describe('services query hooks', () => {
     expect(fetchVisibleServices).toHaveBeenCalledWith(environmentId)
   })
 
+  it('useServices stays idle when disabled or org id is empty', () => {
+    const disabled = renderHook(
+      () => useServices(orgId, environmentId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    const empty = renderHook(() => useServices('', environmentId), {
+      wrapper: createWrapper(),
+    })
+    expect(disabled.result.current.fetchStatus).toBe('idle')
+    expect(empty.result.current.fetchStatus).toBe('idle')
+    expect(fetchVisibleServices).not.toHaveBeenCalled()
+  })
+
   it('useHostings loads service hostings', async () => {
     fetchVisibleHostings.mockResolvedValueOnce({
       hostings: [{ id: 'host-1', name: 'app.example.com' }],
@@ -83,6 +96,19 @@ describe('services query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchVisibleHostings).toHaveBeenCalledWith(serviceId)
+  })
+
+  it('useHostings stays idle when disabled or service id is empty', () => {
+    const disabled = renderHook(
+      () => useHostings(orgId, serviceId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    const empty = renderHook(() => useHostings(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+    expect(disabled.result.current.fetchStatus).toBe('idle')
+    expect(empty.result.current.fetchStatus).toBe('idle')
+    expect(fetchVisibleHostings).not.toHaveBeenCalled()
   })
 
   it('useCreateService creates service in environment', async () => {
@@ -230,6 +256,52 @@ describe('services query hooks', () => {
     expect(fetchVisibleHostings).toHaveBeenCalledWith(serviceId)
   })
 
+  it('useHostingsByServices refetchAll reloads every service query', async () => {
+    fetchVisibleHostings.mockResolvedValue({
+      hostings: [{ id: 'host-1', name: 'app.example.com' }],
+    })
+
+    const { result } = renderHook(
+      () => useHostingsByServices(orgId, [serviceId]),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    fetchVisibleHostings.mockClear()
+    fetchVisibleHostings.mockResolvedValueOnce({
+      hostings: [{ id: 'host-1', name: 'app.example.com' }],
+    })
+
+    await result.current.refetchAll()
+    expect(fetchVisibleHostings).toHaveBeenCalledWith(serviceId)
+  })
+
+  it('useHostingsByServices stays idle when disabled and skips blank service ids', async () => {
+    const disabled = renderHook(
+      () => useHostingsByServices(orgId, [serviceId], { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(disabled.result.current.isLoading).toBe(false)
+    expect(fetchVisibleHostings).not.toHaveBeenCalled()
+
+    fetchVisibleHostings.mockResolvedValueOnce({
+      hostings: [{ id: 'host-1', name: 'app.example.com' }],
+    })
+    const { result } = renderHook(
+      () => useHostingsByServices(orgId, ['', serviceId]),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    expect(Object.hasOwn(result.current.hostingsByService, '')).toBe(false)
+    expect(result.current.hostingsByService[serviceId]).toHaveLength(1)
+    expect(fetchVisibleHostings).toHaveBeenCalledTimes(1)
+    expect(fetchVisibleHostings).toHaveBeenCalledWith(serviceId)
+  })
+
   it('useServicesByEnvironments maps services by environment id', async () => {
     fetchVisibleServices.mockResolvedValueOnce({
       services: [{ id: serviceId, name: 'web' }],
@@ -244,6 +316,30 @@ describe('services query hooks', () => {
       expect(result.current.isLoading).toBe(false)
     })
     expect(result.current.servicesByEnv[environmentId]).toHaveLength(1)
+    expect(fetchVisibleServices).toHaveBeenCalledWith(environmentId)
+  })
+
+  it('useServicesByEnvironments stays idle when disabled and skips blank environment ids', async () => {
+    const disabled = renderHook(
+      () => useServicesByEnvironments(orgId, [environmentId], { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(disabled.result.current.isLoading).toBe(false)
+    expect(fetchVisibleServices).not.toHaveBeenCalled()
+
+    fetchVisibleServices.mockResolvedValueOnce({
+      services: [{ id: serviceId, name: 'web' }],
+    })
+    const { result } = renderHook(
+      () => useServicesByEnvironments(orgId, ['', environmentId]),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    expect(Object.hasOwn(result.current.servicesByEnv, '')).toBe(false)
+    expect(result.current.servicesByEnv[environmentId]).toHaveLength(1)
+    expect(fetchVisibleServices).toHaveBeenCalledTimes(1)
     expect(fetchVisibleServices).toHaveBeenCalledWith(environmentId)
   })
 })

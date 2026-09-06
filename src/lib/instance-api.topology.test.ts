@@ -298,6 +298,10 @@ describe('instance-api topology fetch wrappers', () => {
     expect(listUrl).toContain('serverId=srv-1')
     expect(listUrl).toContain('kind=docker')
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ networks: [] }))
+    await expect(fetchNetworks()).resolves.toEqual({ networks: [] })
+    expect(requestUrl(fetchMock.mock.calls[1])).toMatch(/\/networks$/)
+
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'net-2' }))
     const createBody = {
       organizationId: 'org-1',
@@ -310,7 +314,7 @@ describe('instance-api topology fetch wrappers', () => {
       ok: true,
       id: 'net-2',
     })
-    const createCall = fetchMock.mock.calls[1]
+    const createCall = fetchMock.mock.calls[2]
     expect(requestUrl(createCall)).toContain('/api/client/v1/networks')
     expect(requestInit(createCall).method).toBe('POST')
     expect(requestBody(createCall)).toEqual(createBody)
@@ -319,7 +323,7 @@ describe('instance-api topology fetch wrappers', () => {
     await expect(
       updateNetwork('net-2', { name: 'lab-renamed', cidr: null }),
     ).resolves.toEqual({ ok: true })
-    const updateCall = fetchMock.mock.calls[2]
+    const updateCall = fetchMock.mock.calls[3]
     expect(requestUrl(updateCall)).toContain('/api/client/v1/networks/net-2')
     expect(requestInit(updateCall).method).toBe('PATCH')
     expect(requestBody(updateCall)).toEqual({
@@ -329,7 +333,7 @@ describe('instance-api topology fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteNetwork('net-2')).resolves.toEqual({ ok: true })
-    const deleteCall = fetchMock.mock.calls[3]
+    const deleteCall = fetchMock.mock.calls[4]
     expect(requestUrl(deleteCall)).toContain('/api/client/v1/networks/net-2')
     expect(requestInit(deleteCall).method).toBe('DELETE')
   })

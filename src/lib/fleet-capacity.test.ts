@@ -38,6 +38,26 @@ describe('indexFleetUsageByServerId', () => {
   it('returns an empty map for missing rows', () => {
     expect(indexFleetUsageByServerId(undefined).size).toBe(0)
   })
+
+  it('indexes each usage row by server id', () => {
+    const map = indexFleetUsageByServerId([
+      {
+        serverId: 'srv-a',
+        latestAt: null,
+        sampleCount: 1,
+        values: {},
+        derived: {
+          cpuUsagePercent: null,
+          memoryUsedBytes: null,
+          memoryUsedPercent: null,
+          swapUsedPercent: null,
+          rootFilesystemUsedBytes: null,
+          rootFilesystemUsedPercent: null,
+        },
+      },
+    ])
+    expect(map.get('srv-a')?.sampleCount).toBe(1)
+  })
 })
 
 describe('formatSiBytes', () => {
@@ -107,6 +127,15 @@ describe('serverCpuThreads', () => {
     expect(serverCpuThreads(server('a', { resources: { cpus: [{ cores: { total: 8 } }] } }))).toBe(
       8
     )
+    expect(serverCpuThreads(server('a'))).toBeNull()
+    expect(serverCpuThreads(server('a', { resources: { cpus: [] } }))).toBeNull()
+    expect(
+      serverCpuThreads(
+        server('a', {
+          resources: { cpus: [{ cores: { total: 0 }, threads: { total: Number.NaN } }] },
+        }),
+      ),
+    ).toBeNull()
   })
 })
 

@@ -102,6 +102,21 @@ describe('tags query hooks', () => {
     expect(fetchTags).not.toHaveBeenCalled()
   })
 
+  it('useTag and useMarkers stay idle when disabled', () => {
+    const tagHook = renderHook(
+      () => useTag(orgId, 'tag-1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    const markerHook = renderHook(
+      () => useMarkers(orgId, 'tag-1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(tagHook.result.current.fetchStatus).toBe('idle')
+    expect(markerHook.result.current.fetchStatus).toBe('idle')
+    expect(fetchTag).not.toHaveBeenCalled()
+    expect(fetchMarkers).not.toHaveBeenCalled()
+  })
+
   it('useTag and useMarkers load by id', async () => {
     fetchTag.mockResolvedValueOnce({ tag: { id: 'tag-1', name: 'prod' } })
     fetchMarkers.mockResolvedValueOnce({ markers: [{ id: 'm-1', tagId: 'tag-1' }] })

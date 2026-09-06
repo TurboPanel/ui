@@ -62,6 +62,15 @@ describe('storage query hooks', () => {
     expect(fetchStorage).toHaveBeenCalledWith(filter)
   })
 
+  it('useStorage stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useStorage(orgId, filter, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchStorage).not.toHaveBeenCalled()
+  })
+
   it('useCreateStorage creates storage row', async () => {
     createStorage.mockResolvedValueOnce({ ok: true, id: 'stor-2' })
 

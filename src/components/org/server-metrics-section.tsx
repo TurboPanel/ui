@@ -186,6 +186,12 @@ type ChartDefinition = Readonly<{
   hideWhenEmpty?: boolean
   /** Dashed horizontal limit line — raw units, matching the plotted series. */
   referenceLine?: ChartReferenceLine
+  /**
+   * Null the sample at a topology-generation boundary so a per-device series
+   * does not draw one line across two physical identities. Host-scoped charts
+   * leave this off — a NIC/GPU swap must not punch a hole in CPU or memory.
+   */
+  gapOnGenerationBreak?: boolean
 }>
 
 /** One resolved chart paired with the grid it reads from — a host chart and an entity chart never share a `points` array. */
@@ -292,7 +298,12 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Processes',
     unit: 'count',
     series: [
-      { id: 'running', label: 'Running', read: hostMetric('host.cpu', 'procsRunning') },
+      { id: 'total', label: 'Total', read: hostMetric('host.cpu', 'processCount') },
+      {
+        id: 'running',
+        label: 'Runnable',
+        read: hostMetric('host.cpu', 'procsRunning'),
+      },
       {
         id: 'blocked',
         label: 'Blocked',
@@ -1081,12 +1092,16 @@ function mergeEntityBatchResults(
   return [...byFamily.values()]
 }
 
+function asEntityCharts(definitions: ChartDefinition[]): ChartDefinition[] {
+  return definitions.map((definition) => ({ ...definition, gapOnGenerationBreak: true }))
+}
+
 function gpuChartDefinitions(
   gpu: GpuInventoryEntry,
   temperatureUnit: TemperatureUnit
 ): ChartDefinition[] {
   const title = `${gpu.vendor} ${gpu.chip}`.trim() || gpu.gpuId
-  return [
+  return asEntityCharts([
     {
       id: `gpu:${gpu.gpuId}:utilization`,
       title: `${title} · Utilization`,
@@ -1159,12 +1174,12 @@ function gpuChartDefinitions(
       yDomain: [0, 100],
       hideWhenEmpty: true,
     },
-  ]
+  ])
 }
 
 function networkDeviceChartDefinitions(device: NetworkInventoryEntry): ChartDefinition[] {
   const title = device.name || device.deviceId
-  return [
+  return asEntityCharts([
     {
       id: `network:${device.deviceId}:throughput`,
       title: `${title} · Throughput`,
@@ -1208,13 +1223,13 @@ function networkDeviceChartDefinitions(device: NetworkInventoryEntry): ChartDefi
       yFormat: (v) => `${formatCount(v)}/s`,
       hideWhenEmpty: true,
     },
-  ]
+  ])
 }
 
 function filesystemChartDefinitions(fs: FilesystemInventoryEntry): ChartDefinition[] {
   const roleSuffix = fs.roles.length > 0 ? ` (${fs.roles.join(', ')})` : ''
   const title = `${fs.mountpoint}${roleSuffix}`
-  return [
+  return asEntityCharts([
     {
       id: `filesystem:${fs.filesystemId}:available`,
       title: `${title} · Available`,
@@ -1229,7 +1244,7 @@ function filesystemChartDefinitions(fs: FilesystemInventoryEntry): ChartDefiniti
       series: [{ id: 'free', label: 'Free inodes', read: metric('freeInodes') }],
       yFormat: (v) => formatCount(v),
     },
-  ]
+  ])
 }
 
 function blockDeviceChartDefinitions(
@@ -1237,7 +1252,7 @@ function blockDeviceChartDefinitions(
   temperatureUnit: TemperatureUnit
 ): ChartDefinition[] {
   const title = device.model ? `${device.kernelName} (${device.model})` : device.kernelName
-  return [
+  return asEntityCharts([
     {
       id: `block:${device.deviceId}:throughput`,
       title: `${title} · Throughput`,
@@ -1291,7 +1306,7 @@ function blockDeviceChartDefinitions(
       series: [{ id: 'depth', label: 'Queue depth', read: metric('queueDepth') }],
       yFormat: (v) => formatCount(v),
     },
-  ]
+  ])
 }
 
 function hardwareSignalChartDefinition(
@@ -1304,6 +1319,7 @@ function hardwareSignalChartDefinition(
     title: signal.label || signal.signalId,
     unit: physicalSignalUnitLabel(signal.unit, temperatureUnit),
     series: [{ id: 'value', label: signal.label || signal.signalId, read: metric('value') }],
+    gapOnGenerationBreak: true,
     yFormat: (v) => formatPhysicalSignalValue(v, signal.unit, temperatureUnit),
     referenceLine:
       threshold != null
@@ -1320,7 +1336,7 @@ function hardwareSignalChartDefinition(
 
 function ingressChartDefinitions(entityId: string): ChartDefinition[] {
   const title = INGRESS_SOURCE_TITLES[entityId] ?? entityId
-  return [
+  return asEntityCharts([
     {
       id: `ingress:${entityId}:requests`,
       title: `${title} · Requests`,
@@ -1422,12 +1438,12 @@ function ingressChartDefinitions(entityId: string): ChartDefinition[] {
       yFormat: (v) => formatCount(v),
       hideWhenEmpty: true,
     },
-  ]
+  ])
 }
 
 function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
   const title = DATABASE_PROXY_SOURCE_TITLES[entityId] ?? entityId
-  return [
+  return asEntityCharts([
     {
       id: `databaseProxy:${entityId}:queries`,
       title: `${title} · Queries`,
@@ -1473,12 +1489,12 @@ function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
       series: [{ id: 'up', label: 'Backends up', read: metric('backendsUp') }],
       yFormat: (v) => formatCount(v),
     },
-  ]
+  ])
 }
 
 /** One chart per live-session core — see `CPU_CORE_LIVE_FIELDS`. */
 function cpuCoreLiveChartDefinitions(entityId: string): ChartDefinition[] {
-  return [
+  return asEntityCharts([
     {
       id: `cpuCore:${entityId}:busy`,
       title: `${entityId} · Busy / iowait / steal`,
@@ -1491,7 +1507,7 @@ function cpuCoreLiveChartDefinitions(entityId: string): ChartDefinition[] {
       yFormat: (v) => formatPercent(v),
       yDomain: [0, 100],
     },
-  ]
+  ])
 }
 
 type EntityChartGroup = Readonly<{
@@ -1744,6 +1760,10 @@ type NormalizedHostGrid = {
  * `bucketGrid` (and this same `gapBands`/coverage) rather than computing
  * their own — one daemon POST per sampling tick writes every family
  * together, so a host-level gap means every family's series has one too.
+ *
+ * Amber bands mark buckets with no samples (a hole in the line). A live
+ * bucket that landed some points but fewer than `expectedSampleCount` still
+ * plots — coverage accounting keeps the shortfall, the overlay does not.
  */
 function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
   const fromMs = Date.parse(data.from)
@@ -1801,7 +1821,7 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
 
     const expected = existing.expectedSampleCount ?? defaultExpected
     expectedSamples += expected
-    if (existing.sampleCount < expected) {
+    if (existing.sampleCount <= 0) {
       gapBands.push(band)
     }
     points.push({
@@ -1816,23 +1836,22 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
 }
 
 /**
- * Nulls out the sample at a topology-generation boundary — the vertical
- * divider alone only decorates the transition, so every affected series must
- * also gap here to stop two different physical entities from reading as one
- * continuous trend line.
+ * Maps grid points through a chart's readers. Per-device charts may also
+ * null the topology-generation boundary (see {@link ChartDefinition.gapOnGenerationBreak}).
  */
 function buildChartSeries(
   points: GridPoint[],
   definition: ChartDefinition,
   breakMs?: ReadonlySet<number>
 ): MetricLineSeries[] {
+  const nullAtBreaks = Boolean(definition.gapOnGenerationBreak && breakMs && breakMs.size > 0)
   return definition.series.map((entry, index) => ({
     key: entry.id,
     label: entry.label,
     color: entry.color ?? SERIES_COLORS[index % SERIES_COLORS.length]!,
     points: points.map((point) => ({
       tMs: point.tMs,
-      value: breakMs?.has(point.tMs) ? null : entry.read(point),
+      value: nullAtBreaks && breakMs?.has(point.tMs) ? null : entry.read(point),
     })),
   }))
 }
@@ -2360,6 +2379,16 @@ function CollapsibleChartGroup({
   )
 }
 
+function processOverviewLabel(
+  processCount: number | null,
+  procsRunning: number | null,
+  procsBlocked: number | null
+): string {
+  if (processCount != null) return formatCount(processCount)
+  if (procsRunning == null && procsBlocked == null) return '—'
+  return `${formatCount(procsRunning)} / ${formatCount(procsBlocked ?? 0)}`
+}
+
 function latestReadValue(points: GridPoint[], read: PointValueReader): number | null {
   for (let index = points.length - 1; index >= 0; index -= 1) {
     const value = read(points[index]!)
@@ -2467,6 +2496,10 @@ function MetricsOverviewTiles({
     return usedPercentFromBytes(hostingFilesystem.totalBytes, availableBytes)
   })()
 
+  const processCount = latestReadValue(
+    hostPoints,
+    metric(formatEntityMetricId({ scope: 'host.cpu', field: 'processCount' }))
+  )
   const procsRunning = latestReadValue(
     hostPoints,
     metric(formatEntityMetricId({ scope: 'host.cpu', field: 'procsRunning' }))
@@ -2475,10 +2508,12 @@ function MetricsOverviewTiles({
     hostPoints,
     metric(formatEntityMetricId({ scope: 'host.cpu', field: 'procsBlocked' }))
   )
-  const processesLabel =
-    procsRunning == null && procsBlocked == null
-      ? '—'
-      : `${formatCount(procsRunning)} / ${formatCount(procsBlocked ?? 0)}`
+  const processesLabel = processOverviewLabel(processCount, procsRunning, procsBlocked)
+  const processesTileLabel = processCount != null ? 'PROCESSES' : 'RUNNING / BLOCKED'
+  const processesA11y =
+    processCount != null
+      ? `${processesLabel} processes, ${formatCount(procsRunning)} runnable, ${formatCount(procsBlocked ?? 0)} blocked`
+      : `${processesLabel} running / blocked processes`
 
   return (
     <>
@@ -2510,8 +2545,8 @@ function MetricsOverviewTiles({
             key: 'processes',
             icon: ProcsMetricIcon,
             value: processesLabel,
-            label: 'RUNNING / BLOCKED',
-            accessibilityLabel: `${processesLabel} running / blocked processes`,
+            label: processesTileLabel,
+            accessibilityLabel: processesA11y,
           },
           {
             key: 'uptime',

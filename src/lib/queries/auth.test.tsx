@@ -149,6 +149,15 @@ describe('auth query hooks', () => {
     expect(result.current.data?.runtime).toBe('deno')
   })
 
+  it('useInstallStatusQuery stays idle when enabled is false', () => {
+    const { result } = renderHook(
+      () => useInstallStatusQuery({ enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchInstallStatus).not.toHaveBeenCalled()
+  })
+
   it('useOrganizationsQuery loads organizations', async () => {
     fetchOrganizations.mockResolvedValueOnce({
       organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
@@ -162,6 +171,15 @@ describe('auth query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(result.current.data?.organizations).toHaveLength(1)
+  })
+
+  it('useOrganizationsQuery stays idle when enabled is false', () => {
+    const { result } = renderHook(
+      () => useOrganizationsQuery({ enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchOrganizations).not.toHaveBeenCalled()
   })
 
   it('useSignIn mutation runs through useApiMutation', async () => {
@@ -295,7 +313,10 @@ describe('auth query hooks', () => {
     })
     const client = createAppQueryClient()
     client.setQueryData(['auth', 'organizations'], {
-      organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
+      organizations: [
+        { id: 'org-1', name: 'Acme', createdAt: 't' },
+        { id: 'org-2', name: 'Other', createdAt: 't' },
+      ],
     })
 
     const { result } = renderHook(() => useUpdateOrganization(), {
@@ -307,10 +328,15 @@ describe('auth query hooks', () => {
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
-      const cached = client.getQueryData<{ organizations: { name: string }[] }>(
-        ['auth', 'organizations'],
-      )
+      const cached = client.getQueryData<{
+        organizations: { id: string; name: string }[]
+      }>(['auth', 'organizations'])
       expect(cached?.organizations[0]?.name).toBe('Renamed')
+      expect(cached?.organizations[1]).toEqual({
+        id: 'org-2',
+        name: 'Other',
+        createdAt: 't',
+      })
     })
   })
 

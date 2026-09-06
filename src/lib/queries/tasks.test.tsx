@@ -96,6 +96,15 @@ describe('tasks query hooks', () => {
     expect(fetchTask).toHaveBeenCalledWith('task-1')
   })
 
+  it('useTask stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useTask(orgId, 'task-1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchTask).not.toHaveBeenCalled()
+  })
+
   it('useCreateTask returns ok/value on success', async () => {
     createTask.mockResolvedValueOnce({ ok: true, id: 'task-2' })
 

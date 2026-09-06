@@ -107,6 +107,15 @@ describe('projects query hooks', () => {
     expect(fetchVisibleProjects).not.toHaveBeenCalled()
   })
 
+  it('useProjects stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useProjects(orgId, 'ws-1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchVisibleProjects).not.toHaveBeenCalled()
+  })
+
   it('useProject loads a single project', async () => {
     fetchProject.mockResolvedValueOnce({
       project: { id: projectId, name: 'App' },
@@ -120,6 +129,15 @@ describe('projects query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchProject).toHaveBeenCalledWith(projectId)
+  })
+
+  it('useProject stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useProject(orgId, projectId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchProject).not.toHaveBeenCalled()
   })
 
   it('useCreateProject runs createProject mutation', async () => {
@@ -190,6 +208,15 @@ describe('projects query hooks', () => {
     expect(fetchProjectCatalog).toHaveBeenCalled()
   })
 
+  it('useProjectCatalog stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useProjectCatalog(orgId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchProjectCatalog).not.toHaveBeenCalled()
+  })
+
   it('useProjectPrincipals loads project principals', async () => {
     fetchProjectPrincipals.mockResolvedValueOnce({ principals: [] })
 
@@ -202,6 +229,15 @@ describe('projects query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchProjectPrincipals).toHaveBeenCalledWith(projectId)
+  })
+
+  it('useProjectPrincipals stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useProjectPrincipals(orgId, projectId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchProjectPrincipals).not.toHaveBeenCalled()
   })
 
   it('useProjectPrincipals stays idle without project id', () => {

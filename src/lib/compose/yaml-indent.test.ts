@@ -783,3 +783,52 @@ describe('newline auto-indent leftovers', () => {
     expect(result.text).toBe('services:\n  nginx:\n     always')
   })
 })
+
+describe('under-indented names under later top-level sections', () => {
+  it('nests a column-0 volume name under volumes', () => {
+    const lines = ['volumes:', 'media:']
+    expect(expectedIndentForLine(lines, 1)).toBe(2)
+  })
+
+  it('nests a column-0 secret name under secrets', () => {
+    const lines = ['secrets:', 'db_pass:']
+    expect(expectedIndentForLine(lines, 1)).toBe(2)
+  })
+
+  it('rewrites a column-0 volume name when fixing the document', () => {
+    const broken = `services:
+  nginx:
+    image: nginx
+volumes:
+media:`
+    const fixed = fixComposeYamlIndentation(broken)
+    if (fixed === null) {
+      throw new TypeError('expected volume name indent rewrite')
+    }
+    expect(fixed.text).toBe(`services:
+  nginx:
+    image: nginx
+volumes:
+  media:`)
+  })
+
+  it('deepens a one-space-indented top-level-looking key under services', () => {
+    const lines = ['services:', ' networks:']
+    expect(expectedIndentForLine(lines, 1)).toBe(2)
+  })
+})
+
+describe('tab indent on a last line without a trailing newline', () => {
+  it('indents the last line when the caret sits in leading whitespace', () => {
+    const text = 'services:\nnginx:'
+    const result = applyTabIndent(text, { start: 10, end: 10 })
+    expect(result.text).toBe('services:\n  nginx:')
+    expect(result.selection).toEqual({ start: 12, end: 12 })
+  })
+
+  it('outdents a selection that ends after the last character', () => {
+    const text = 'services:\n  nginx:'
+    const result = applyTabOutdent(text, { start: 10, end: text.length })
+    expect(result.text).toBe('services:\nnginx:')
+  })
+})

@@ -1113,4 +1113,362 @@ describe('native restart_policy values', () => {
       [],
     )
   })
+
+  it('accepts max_attempts as a quoted integer of at least 1', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: "3"
+        window: 1m
+`)
+    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual(
+      [],
+    )
+  })
+
+  it('skips restart_policy values that are compose interpolations', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+    deploy:
+      restart_policy:
+        condition: \${RESTART_CONDITION}
+        delay: "{$DELAY}"
+        max_attempts: \${MAX_ATTEMPTS}
+`)
+    expect(
+      issues.filter((issue) =>
+        issue.path.startsWith('services.web.deploy.restart_policy'),
+      ),
+    ).toEqual([])
+  })
+
+  it('ignores unknown restart_policy keys and tagged policy values', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        extra: ignored
+        window: !override 1m
+`)
+    expect(
+      issues.filter(
+        (issue) =>
+          issue.path === 'services.web.deploy.restart_policy.extra' ||
+          issue.path === 'services.web.deploy.restart_policy.window',
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('authored hosting lint', () => {
+  const SOURCE_ID = '11111111-2222-3333-4444-555555555555'
+
+  it('errors when hosting is not a list', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting: yes
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.web.x-turbopanel.hosting',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toContain('must be a list')
+    expect(issue?.line).toBe(5)
+  })
+
+  it('errors when a hosting entry is not a mapping', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting:
+        - app.example.com
+`)
+    const issue = issues.find(
+      (found) => found.path === 'services.web.x-turbopanel.hosting[0]',
+    )
+    expect(issue?.level).toBe('error')
+    expect(issue?.message).toContain('must be a mapping')
+    expect(typeof issue?.line).toBe('number')
+  })
+
+  it('requires a hostname and refuses targetPort on a site', () => {
+    const issues = lintComposeYaml(`services:
+  site:
+    x-turbopanel:
+      serviceKind: site
+      engine: nginx
+      hosting:
+        - pathPrefix: /blog
+          targetPort: 8080
+`)
+    expect(
+      issues.find(
+        (found) =>
+          found.path === 'services.site.x-turbopanel.hosting[0].hostname',
+      )?.message,
+    ).toContain('hostname is required')
+    expect(
+      issues.find(
+        (found) =>
+          found.path === 'services.site.x-turbopanel.hosting[0].targetPort',
+      )?.message,
+    ).toContain('not valid on a site')
+  })
+
+  it('refuses targetPort on a node service and allows it on a container', () => {
+    const nodeIssues = lintComposeYaml(`services:
+  api:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: ${SOURCE_ID}
+      hosting:
+        - hostname: api.example.com
+          targetPort: 3000
+`)
+    expect(
+      nodeIssues.find(
+        (found) =>
+          found.path === 'services.api.x-turbopanel.hosting[0].targetPort',
+      )?.message,
+    ).toContain('not valid on a node')
+
+    const containerIssues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      serviceKind: container
+      hosting:
+        - hostname: app.example.com
+          targetPort: 8080
+`)
+    expect(
+      containerIssues.filter((issue) =>
+        issue.path.includes('hosting'),
+      ),
+    ).toEqual([])
+  })
+
+  it('treats an omitted serviceKind as container for hosting targetPort', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting:
+        - hostname: app.example.com
+          targetPort: 8080
+`)
+    expect(
+      issues.filter((issue) => issue.path.includes('hosting')),
+    ).toEqual([])
+  })
+
+  it('points each hosting finding at the matching list entry', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting:
+        - hostname: first.example.com
+        - hostname: ""
+        - hostname: third.example.com
+          pathPrefix: not-a-path
+`)
+    const missing = issues.find(
+      (found) =>
+        found.path === 'services.web.x-turbopanel.hosting[1].hostname',
+    )
+    const prefix = issues.find(
+      (found) =>
+        found.path === 'services.web.x-turbopanel.hosting[2].pathPrefix',
+    )
+    expect(missing?.line).toBe(7)
+    expect(prefix?.line).toBe(8)
+    expect(prefix?.message).toContain('pathPrefix')
+  })
+
+  it('resolves tls and bind refs only when the caller supplies the sets', () => {
+    const source = `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting:
+        - hostname: app.example.com
+          tls:
+            mode: certificate
+            certificateRef: wildcard
+          bind:
+            ipRef: edge-1
+`
+
+    expect(
+      lintComposeYaml(source).filter((issue) =>
+        issue.path.includes('certificateRef') || issue.path.includes('ipRef'),
+      ),
+    ).toEqual([])
+
+    const unresolved = lintComposeYaml(source, {
+      knownTlsIds: new Set(['other-cert']),
+      knownIpIds: new Set(['other-ip']),
+    })
+    const tls = unresolved.find(
+      (issue) =>
+        issue.path ===
+        'services.web.x-turbopanel.hosting[0].tls.certificateRef',
+    )
+    const ip = unresolved.find(
+      (issue) =>
+        issue.path === 'services.web.x-turbopanel.hosting[0].bind.ipRef',
+    )
+    expect(tls?.level).toBe('error')
+    expect(tls?.message).toContain("certificate 'wildcard'")
+    expect(ip?.level).toBe('error')
+    expect(ip?.message).toContain("ip 'edge-1'")
+    expect(typeof tls?.line).toBe('number')
+    expect(typeof ip?.line).toBe('number')
+
+    expect(
+      lintComposeYaml(source, {
+        knownTlsIds: new Set(['wildcard']),
+        knownIpIds: new Set(['edge-1']),
+      }).filter((issue) =>
+        issue.path.includes('certificateRef') || issue.path.includes('ipRef'),
+      ),
+    ).toEqual([])
+  })
+
+  it('skips resolving blank hosting refs and tagged hosting blocks', () => {
+    const blankRefs = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting:
+        - hostname: app.example.com
+          tls:
+            mode: certificate
+            certificateRef: ""
+          bind:
+            ipRef: "   "
+`, {
+      knownTlsIds: new Set(['wildcard']),
+      knownIpIds: new Set(['edge-1']),
+    })
+    expect(
+      blankRefs.some((issue) => issue.message.includes('was not found')),
+    ).toBe(false)
+
+    const tagged = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting: !reset null
+`)
+    expect(
+      tagged.filter((issue) => issue.path.includes('hosting')),
+    ).toEqual([])
+  })
+
+  it('does not lint hosting when the managed extension is hidden', () => {
+    const issues = lintComposeYaml(
+      `services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting:
+        - hostname: ""
+`,
+      { managedExtensionHidden: true },
+    )
+    expect(
+      issues.some((issue) => issue.path.includes('hosting')),
+    ).toBe(false)
+  })
+})
+
+describe('cyclic and unreadable extension blocks', () => {
+  it('swallows a cyclic per-service extension instead of throwing', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel: &cycle
+      nested: *cycle
+`)
+    expect(issues.some((issue) => issue.level === 'error' && issue.path === '$')).toBe(
+      false,
+    )
+    expect(
+      issues.filter((issue) =>
+        issue.path.startsWith('services.web.x-turbopanel.'),
+      ),
+    ).toEqual([])
+  })
+
+  it('swallows a cyclic hosting block instead of throwing', () => {
+    const issues = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting: &cycle
+        nested: *cycle
+`)
+    expect(issues.some((issue) => issue.level === 'error' && issue.path === '$')).toBe(
+      false,
+    )
+  })
+
+  it('does not throw on a cyclic root extension', () => {
+    const issues = lintComposeYaml(`x-turbopanel: &cycle
+  nested: *cycle
+services:
+  web:
+    image: nginx
+`)
+    expect(Array.isArray(issues)).toBe(true)
+    expect(issues.every((issue) => typeof issue.message === 'string')).toBe(true)
+  })
+
+  it('does not throw on an unresolved alias inside an extension', () => {
+    const service = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      extra: *missing
+`)
+    const hosting = lintComposeYaml(`services:
+  web:
+    image: nginx
+    x-turbopanel:
+      hosting: *missing
+`)
+    const root = lintComposeYaml(`x-turbopanel:
+  principals: *missing
+services:
+  web:
+    image: nginx
+`)
+    expect(Array.isArray(service)).toBe(true)
+    expect(Array.isArray(hosting)).toBe(true)
+    expect(Array.isArray(root)).toBe(true)
+  })
 })

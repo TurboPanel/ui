@@ -159,6 +159,24 @@ describe('buildComposeGraph', () => {
     expect(web?.ports).toEqual(['8080:3000', '5432'])
   })
 
+  it('ignores long-syntax port fields that are not strings or numbers', () => {
+    const graph = buildComposeGraph(
+      doc({
+        services: {
+          web: {
+            image: 'app',
+            ports: [
+              { target: true },
+              { target: 80, published: { host: '127.0.0.1' } },
+            ],
+          },
+        },
+      }),
+    )
+    const web = graph.nodes.find((n) => n.id === 'service:web')
+    expect(web?.ports).toEqual(['', '80'])
+  })
+
   it('reads service kind from x-turbopanel metadata', () => {
     const graph = buildComposeGraph(
       doc({

@@ -53,7 +53,12 @@ import {
   retireOrganizationCa,
   rotateOrganizationCa,
   runEnvironmentLifecycle,
+  attachRepository,
   createForge,
+  deleteForge,
+  refreshRepository,
+  startGithubAppManifest,
+  syncForge,
   updateForge,
   saveOrgFabric,
   saveOrgHostDefaults,
@@ -302,6 +307,10 @@ describe('instance-api fetch wrappers', () => {
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('workspaceId=ws-1')
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ projects: [] }))
+    await expect(fetchVisibleProjects()).resolves.toEqual({ projects: [] })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/projects$/)
+
     fetchMock.mockResolvedValueOnce(jsonResponse({ catalog: [] }))
     await expect(fetchProjectCatalog()).resolves.toEqual({ catalog: [] })
 
@@ -335,6 +344,10 @@ describe('instance-api fetch wrappers', () => {
     await expect(fetchVisibleEnvironments('p1')).resolves.toMatchObject({
       environments: [{ id: 'env-1' }],
     })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ environments: [] }))
+    await expect(fetchVisibleEnvironments()).resolves.toEqual({ environments: [] })
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toMatch(/\/environments$/)
     const environmentsCall = fetchMock.mock.calls.find(([url]) =>
       String(url).includes('/environments'),
     )
@@ -397,6 +410,20 @@ describe('instance-api fetch wrappers', () => {
     const containerUrl = String(fetchMock.mock.calls[0]?.[0])
     expect(containerUrl).toContain('environmentId=env-1')
     expect(containerUrl).toContain('serviceId=svc-1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ containers: [] }))
+    await expect(fetchContainers('svc-2')).resolves.toEqual({ containers: [] })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('serviceId=svc-2')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ containers: [] }))
+    await expect(fetchContainers({ projectId: 'p1' })).resolves.toEqual({
+      containers: [],
+    })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('projectId=p1')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ containers: [] }))
+    await expect(fetchContainers()).resolves.toEqual({ containers: [] })
+    expect(String(fetchMock.mock.calls[3]?.[0])).toMatch(/\/containers$/)
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ licenses: [] }))
     await expect(fetchLicenses()).resolves.toEqual({ licenses: [] })
@@ -587,12 +614,21 @@ describe('instance-api fetch wrappers', () => {
     expect(suggestionUrl).toContain('unassignedOnly=0')
     expect(suggestionUrl).toContain('limit=5')
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ suggestions: [] }))
+    await expect(fetchDatacenterNameSuggestions()).resolves.toEqual({
+      suggestions: [],
+    })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toMatch(/\/name-suggestions$/)
+
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ error: IP_IN_USE_ERROR }, 409),
     )
     await expect(deleteIp('ip-1')).rejects.toThrow(
       'This address is pinned to a hosting — unassign it first.',
     )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
+    await expect(deleteIp('ip-1')).rejects.toThrow(/ips\/ip-1 failed: HTTP 403: forbidden/)
   })
 
   it('fetchServerMetricsSummary uses the metrics summary path', async () => {
@@ -802,5 +838,82 @@ describe('instance-api fetch wrappers', () => {
       name: 'Renamed',
       clientId: null,
     })
+  })
+
+  it('deletes, starts a GitHub manifest, and syncs a forge', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(deleteForge('admin', 'app-1')).resolves.toBeUndefined()
+    const [deleteUrl, deleteInit] = fetchMock.mock.calls[0] ?? []
+    expect(String(deleteUrl)).toContain('/api/admin/v1/forges/app-1')
+    expect((deleteInit as RequestInit).method).toBe('DELETE')
+
+    const manifest = {
+      manifest: { name: 'TurboPanel' },
+      createUrl: 'https://github.com/settings/apps/new',
+      state: 'state-1',
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(manifest))
+    await expect(
+      startGithubAppManifest('org', {
+        name: 'TurboPanel',
+        organizationLogin: 'acme',
+        pullRequestAccess: 'read',
+      }),
+    ).resolves.toEqual(manifest)
+    const [manifestUrl, manifestInit] = fetchMock.mock.calls[1] ?? []
+    expect(String(manifestUrl)).toContain('/forges/github/manifest')
+    expect((manifestInit as RequestInit).method).toBe('POST')
+    expect(JSON.parse(String((manifestInit as RequestInit).body))).toEqual({
+      name: 'TurboPanel',
+      organizationLogin: 'acme',
+      pullRequestAccess: 'read',
+    })
+
+    const synced = {
+      app: { id: 'app-1', name: 'Renamed' },
+      provider: { permissions: { contents: 'read' }, events: ['push'] },
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(synced))
+    await expect(syncForge('org', 'app-1')).resolves.toEqual(synced)
+    const [syncUrl, syncInit] = fetchMock.mock.calls[2] ?? []
+    expect(String(syncUrl)).toContain('/forges/app-1/sync')
+    expect((syncInit as RequestInit).method).toBe('POST')
+  })
+
+  it('attaches and refreshes repositories', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, id: 'repo-1', reused: false }),
+    )
+    await expect(
+      attachRepository({
+        connectionId: 'conn-1',
+        repositoryExternalId: '42',
+        repositoryUrl: 'https://github.com/acme/app',
+        defaultBranch: 'trunk',
+      }),
+    ).resolves.toEqual({ ok: true, id: 'repo-1', reused: false })
+    const [attachUrl, attachInit] = fetchMock.mock.calls[0] ?? []
+    expect(String(attachUrl)).toContain('/repositories/attach')
+    expect((attachInit as RequestInit).method).toBe('POST')
+    expect(JSON.parse(String((attachInit as RequestInit).body))).toEqual({
+      connectionId: 'conn-1',
+      repositoryExternalId: '42',
+      repositoryUrl: 'https://github.com/acme/app',
+      defaultBranch: 'trunk',
+    })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        repository: { id: 'repo-1', defaultBranch: 'trunk' },
+      }),
+    )
+    await expect(refreshRepository('repo-1')).resolves.toMatchObject({
+      ok: true,
+      repository: { id: 'repo-1' },
+    })
+    const [refreshUrl, refreshInit] = fetchMock.mock.calls[1] ?? []
+    expect(String(refreshUrl)).toContain('/repositories/repo-1/refresh')
+    expect((refreshInit as RequestInit).method).toBe('POST')
   })
 })

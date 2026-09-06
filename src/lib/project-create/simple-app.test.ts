@@ -99,6 +99,12 @@ describe('detectPackageManager', () => {
     ]
     expect(detectPackageManager(files)).toBeUndefined()
   })
+
+  it('ignores a package.json that is not a JSON object', () => {
+    expect(detectPackageManager([found('package.json', 'null')])).toBeUndefined()
+    expect(detectPackageManager([found('package.json', 'true')])).toBeUndefined()
+    expect(detectPackageManager([found('package.json', '{')])).toBeUndefined()
+  })
 })
 
 describe('readPackageScripts', () => {
@@ -122,6 +128,7 @@ describe('readPackageScripts', () => {
 
   it('returns undefined for unparseable or content-less package.json', () => {
     expect(readPackageScripts([found('package.json', 'not json')])).toBeUndefined()
+    expect(readPackageScripts([found('package.json', 'null')])).toBeUndefined()
     // Content omitted (e.g. too large to ride along).
     expect(readPackageScripts([found('package.json')])).toBeUndefined()
     expect(readPackageScripts([missing('package.json')])).toBeUndefined()

@@ -64,6 +64,9 @@ import {
   updateStorageMount,
   updateTag,
   updateTask,
+  disablePrincipalPassword,
+  requireExclusiveQueryEntry,
+  setPrincipalPassword,
   type TaggableParentFilter,
   type TaskListFilter,
 } from './instance-api'
@@ -170,6 +173,12 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       '/api/admin/v1/settings/email',
     )
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({}))
+    await expect(fetchEmailSettings()).resolves.toEqual({
+      ok: true,
+      settings: {},
+    })
+
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         settings: {
@@ -180,8 +189,8 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(
       saveEmailSettings({ SMTP_HOST: 'mail.example.com' }),
     ).resolves.toMatchObject({ ok: true })
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'PUT' })
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
       SMTP_HOST: 'mail.example.com',
     })
 
@@ -193,7 +202,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(signup))
     await expect(fetchSignupSettings()).resolves.toEqual(signup)
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       '/api/admin/v1/settings/signup',
     )
 
@@ -201,8 +210,8 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(saveSignupSettings(false)).resolves.toMatchObject({
       enabled: false,
     })
-    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({ method: 'PUT' })
-    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(JSON.parse(String(fetchMock.mock.calls[4]?.[1]?.body))).toEqual({
       enabled: false,
     })
   })
@@ -322,6 +331,19 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
+        deployments: [],
+        nextCursor: null,
+      }),
+    )
+    await expect(fetchEnvironmentDeployments('env-1')).resolves.toMatchObject({
+      ok: true,
+      deployments: [],
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/deployments$/)
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
         deployment: {
           id: 'dep-1',
           environmentId: 'env-1',
@@ -337,7 +359,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(
       fetchEnvironmentDeployment('env-1', 'dep-1'),
     ).resolves.toMatchObject({ ok: true, deployment: { id: 'dep-1' } })
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       '/environments/env-1/deployments/dep-1',
     )
   })
@@ -429,6 +451,34 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(gitlab).toContain('forgeId=a%26b%3Dc%2Fd')
   })
 
+  it('inspectRepository omits query params when ref and listPath are blank', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        commitSha: 'def456',
+        via: 'provider',
+        files: [],
+        entries: [],
+      }),
+    )
+    await expect(inspectRepository('src-1')).resolves.toMatchObject({
+      commitSha: 'def456',
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/inspect$/)
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        commitSha: 'ghi789',
+        via: 'provider',
+        files: [],
+        entries: [],
+      }),
+    )
+    await expect(inspectRepository('src-1', '', '')).resolves.toMatchObject({
+      commitSha: 'ghi789',
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/inspect$/)
+  })
+
   it('createGitlabDeployKey POSTs the deploy-key route', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -457,6 +507,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(releasesUrl).toContain('composeServiceName=web')
     expect(releasesUrl).toContain('limit=5')
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, releases: [] }))
+    await expect(fetchServiceReleases('env-1')).resolves.toMatchObject({
+      ok: true,
+      releases: [],
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/releases$/)
+
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-roll', status: 'queued' }),
     )
@@ -466,8 +523,8 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         releaseId: 'rel-1',
       }),
     ).resolves.toMatchObject({ commandId: 'cmd-roll' })
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/rollback')
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'POST' })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/rollback')
   })
 
   it('storage CRUD helpers build parent filters and mutation bodies', async () => {
@@ -605,6 +662,32 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       deleteProjectPrincipal('proj-1', 'principal-1'),
     ).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        generatedPassword: 'once-only',
+        reconciled: { queuedServerIds: ['srv-1'], failedServerIds: [] },
+      }),
+    )
+    await expect(setPrincipalPassword('proj-1', 'principal-1', {})).resolves.toMatchObject({
+      ok: true,
+      generatedPassword: 'once-only',
+    })
+    const [passwordUrl, passwordInit] = fetchMock.mock.calls[8] ?? []
+    expect(String(passwordUrl)).toContain('/principals/principal-1/password')
+    expect((passwordInit as RequestInit).method).toBe('POST')
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        reconciled: { queuedServerIds: [], failedServerIds: [] },
+      }),
+    )
+    await expect(
+      disablePrincipalPassword('proj-1', 'principal-1'),
+    ).resolves.toMatchObject({ ok: true })
+    expect(fetchMock.mock.calls[9]?.[1]).toMatchObject({ method: 'DELETE' })
   })
 
   it('resource limit helpers GET and PUT org/server caps', async () => {
@@ -711,6 +794,10 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     const url = String(fetchMock.mock.calls[0]?.[0])
     expect(url).toContain('/containers/ctr-1/logs')
     expect(url).toContain('tail=50')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ logs: '' }))
+    await expect(fetchContainerLogTail('ctr-1')).resolves.toEqual({ logs: '' })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/logs$/)
   })
 
   it('tag helpers list, detail, mutate, and replace markers', async () => {
@@ -841,5 +928,22 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteTask('task-1')).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('requireExclusiveQueryEntry accepts one key and rejects empty or mixed scopes', () => {
+    expect(requireExclusiveQueryEntry({ projectId: 'p1' }, ['projectId', 'serviceId'])).toEqual([
+      'projectId',
+      'p1',
+    ])
+    expect(() =>
+      requireExclusiveQueryEntry({ projectId: '', serviceId: '' }, ['projectId', 'serviceId']),
+    ).toThrow(TypeError)
+    expect(() =>
+      requireExclusiveQueryEntry(
+        { projectId: 'p1', serviceId: 's1' },
+        ['projectId', 'serviceId'],
+      ),
+    ).toThrow(TypeError)
+    expect(() => requireExclusiveQueryEntry({}, ['projectId'])).toThrow(TypeError)
   })
 })

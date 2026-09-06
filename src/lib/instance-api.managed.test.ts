@@ -229,6 +229,21 @@ describe('instance-api managed-engine fetch wrappers', () => {
       commandId: 'cmd-destroy',
     })
     expect(lastFetch().init.method).toBe('DELETE')
+    expect(String(lastFetch().url)).not.toContain('force=true')
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        deleted: true,
+        commandId: 'cmd-force',
+        serverId: 'srv-1',
+      }),
+    )
+    await expect(deleteEnvironmentManaged('env-1', { force: true })).resolves.toMatchObject({
+      deleted: true,
+      commandId: 'cmd-force',
+    })
+    expect(String(lastFetch().url)).toContain('force=true')
   })
 
   it('runEnvironmentLifecycle posts start stop and restart', async () => {

@@ -241,6 +241,23 @@ describe('useApiMutation', () => {
     })
   })
 
+  it('uses the default fallback message when none is provided', async () => {
+    const { result } = renderHook(
+      () =>
+        useApiMutation({
+          mutationFn: async () => {
+            throw 'offline'
+          },
+        }),
+      { wrapper: createWrapper() },
+    )
+
+    await expect(result.current.run()).resolves.toEqual({
+      ok: false,
+      error: 'Request failed',
+    })
+  })
+
   it('uses the fallback message when the rejection is not an Error', async () => {
     const { result } = renderHook(
       () =>

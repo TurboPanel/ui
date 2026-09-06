@@ -7,9 +7,15 @@ import {
   controlPlaneKindForOrigin,
   formatControlPlaneHostLabel,
   isMetroWebOrigin,
+  isRemoteCookieClient,
+  isStandaloneExpoWeb,
   parseControlPlaneOrigin,
+  readBrowserLocationOrigin,
+  readControlPlaneClientEnv,
   resolveApiUrl,
   resolveControlPlaneClientKind,
+  setControlPlaneEnvReader,
+  usesSameOriginApi,
 } from '@/lib/control-plane'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 
@@ -73,7 +79,10 @@ describe('resolveControlPlaneClientKind', () => {
 describe('isMetroWebOrigin', () => {
   it('matches Expo Metro ports and exp.direct hosts', () => {
     expect(isMetroWebOrigin('http://localhost:8081')).toBe(true)
+    expect(isMetroWebOrigin('http://127.0.0.1:8082')).toBe(true)
+    expect(isMetroWebOrigin('http://localhost:19000')).toBe(true)
     expect(isMetroWebOrigin('http://127.0.0.1:19006')).toBe(true)
+    expect(isMetroWebOrigin('https://exp.direct')).toBe(true)
     expect(isMetroWebOrigin('https://abc.exp.direct')).toBe(true)
     expect(isMetroWebOrigin(LOCAL_HTTPS_ORIGIN)).toBe(false)
     expect(isMetroWebOrigin(null)).toBe(false)
@@ -81,6 +90,73 @@ describe('isMetroWebOrigin', () => {
 
   it('returns false for unparseable origins', () => {
     expect(isMetroWebOrigin('not a url')).toBe(false)
+  })
+})
+
+describe('client-kind helpers', () => {
+  it('classifies same-origin, Metro web, and native from the env', () => {
+    expect(usesSameOriginApi(caddyEnv)).toBe(true)
+    expect(isStandaloneExpoWeb(caddyEnv)).toBe(false)
+    expect(isRemoteCookieClient(caddyEnv)).toBe(false)
+
+    expect(usesSameOriginApi(metroEnv)).toBe(false)
+    expect(isStandaloneExpoWeb(metroEnv)).toBe(true)
+    expect(isRemoteCookieClient(metroEnv)).toBe(false)
+
+    expect(usesSameOriginApi(nativeEnv)).toBe(false)
+    expect(isStandaloneExpoWeb(nativeEnv)).toBe(false)
+    expect(isRemoteCookieClient(nativeEnv)).toBe(true)
+  })
+
+  it('reads the registered env reader by default', () => {
+    setControlPlaneEnvReader(() => metroEnv)
+    try {
+      expect(readControlPlaneClientEnv()).toEqual(metroEnv)
+      expect(usesSameOriginApi()).toBe(false)
+      expect(isStandaloneExpoWeb()).toBe(true)
+      expect(isRemoteCookieClient()).toBe(false)
+      expect(canBootstrapAgainstControlPlane()).toBe(false)
+    } finally {
+      setControlPlaneEnvReader(() => ({
+        platformOS: 'web',
+        isDev: typeof __DEV__ !== 'undefined' && __DEV__,
+        locationOrigin: readBrowserLocationOrigin(),
+      }))
+    }
+  })
+})
+
+describe('readBrowserLocationOrigin', () => {
+  it('returns null for opaque, blank, or missing origins', () => {
+    vi.stubGlobal('location', { origin: 'null' })
+    expect(readBrowserLocationOrigin()).toBeNull()
+
+    vi.stubGlobal('location', { origin: '   ' })
+    expect(readBrowserLocationOrigin()).toBeNull()
+
+    vi.stubGlobal('location', { origin: undefined })
+    expect(readBrowserLocationOrigin()).toBeNull()
+  })
+
+  it('returns a trimmed browser origin', () => {
+    vi.stubGlobal('location', { origin: ` ${LOCAL_HTTPS_ORIGIN} ` })
+    expect(readBrowserLocationOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+  })
+})
+
+describe('default control-plane env reader', () => {
+  it('treats an unset __DEV__ identifier as not-dev web', async () => {
+    vi.resetModules()
+    delete (globalThis as { __DEV__?: boolean }).__DEV__
+    vi.stubGlobal('location', { origin: LOCAL_HTTPS_ORIGIN })
+    const { readControlPlaneClientEnv: readFreshEnv } = await import(
+      '@/lib/control-plane'
+    )
+    expect(readFreshEnv()).toEqual({
+      platformOS: 'web',
+      isDev: false,
+      locationOrigin: LOCAL_HTTPS_ORIGIN,
+    })
   })
 })
 
@@ -106,6 +182,11 @@ describe('canBootstrapAgainstControlPlane', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  setControlPlaneEnvReader(() => ({
+    platformOS: 'web',
+    isDev: typeof __DEV__ !== 'undefined' && __DEV__,
+    locationOrigin: readBrowserLocationOrigin(),
+  }))
 })
 
 describe('parseControlPlaneOrigin', () => {
@@ -118,6 +199,7 @@ describe('parseControlPlaneOrigin', () => {
 
   it('rejects empty and non-http URLs', () => {
     expect(parseControlPlaneOrigin('').ok).toBe(false)
+    expect(parseControlPlaneOrigin('   ').ok).toBe(false)
     expect(parseControlPlaneOrigin('ftp://panel.example.com').ok).toBe(false)
     expect(parseControlPlaneOrigin('not a url').ok).toBe(false)
   })

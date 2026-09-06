@@ -1,6 +1,32 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveAuthGuardHref } from '@/lib/auth-guard'
 import type { SessionInfo } from '@/lib/instance-api'
+import { dashboardHref } from '@/lib/auth-session'
+
+const dashboardHrefMock = vi.hoisted(() => {
+  const mock = vi.fn()
+  return {
+    mock,
+    restore() {
+      mock.mockReset()
+    },
+  }
+})
+
+vi.mock('@/lib/auth-session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/auth-session')>()
+  dashboardHrefMock.mock.mockImplementation(actual.dashboardHref)
+  dashboardHrefMock.restore = () => {
+    dashboardHrefMock.mock.mockReset()
+    dashboardHrefMock.mock.mockImplementation(actual.dashboardHref)
+  }
+  return {
+    ...actual,
+    dashboardHref: (
+      ...args: Parameters<typeof actual.dashboardHref>
+    ) => dashboardHrefMock.mock(...args),
+  }
+})
 
 const session: SessionInfo = {
   userId: 'user-1',
@@ -8,7 +34,17 @@ const session: SessionInfo = {
   role: 'superadmin',
 }
 
+const member: SessionInfo = {
+  userId: 'user-2',
+  email: 'member@example.com',
+  role: 'member',
+}
+
 describe('resolveAuthGuardHref', () => {
+  afterEach(() => {
+    dashboardHrefMock.restore()
+  })
+
   it('keeps recovering reachable without a session', () => {
     expect(
       resolveAuthGuardHref({
@@ -256,5 +292,110 @@ describe('resolveAuthGuardHref', () => {
         developerDevBypass: false,
       }),
     ).toBeNull()
+  })
+
+  it('keeps unsigned guests on sign-up when install is complete', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'sign-up',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('sends signed-in guests on sign-up to the dashboard', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'sign-up',
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+
+  it('leaves welcome when the dashboard is an org overview', () => {
+    dashboardHrefMock.mock.mockReturnValueOnce(
+      '/11111111-1111-1111-1111-111111111111/overview',
+    )
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'welcome',
+        developerDevBypass: false,
+      }),
+    ).toBe('/11111111-1111-1111-1111-111111111111/overview')
+    expect(dashboardHref(session, false)).toBe('/welcome')
+  })
+
+  it('lets developer bypass stay on non-install routes while setup is required', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'developer',
+        developerDevBypass: true,
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps connect when Metro web still needs a control plane', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'connect',
+        developerDevBypass: false,
+        needsControlPlane: true,
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps connect when native install is blocked', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'connect',
+        developerDevBypass: false,
+        blockNativeInstall: true,
+      }),
+    ).toBeNull()
+  })
+
+  it('sends signed-in members away from admin', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: member,
+        needsInstall: false,
+        topSegment: 'admin',
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+
+  it('sends signed-in users on unknown top-level routes to the dashboard', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: undefined,
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+
+  it('sends unsigned guests on unknown routes to sign-in', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: undefined,
+        developerDevBypass: false,
+      }),
+    ).toBe('/sign-in')
   })
 })

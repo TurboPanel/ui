@@ -333,6 +333,18 @@ describe('useCommandRecordsBatch', () => {
     expect(fetchCommand).not.toHaveBeenCalled()
   })
 
+  it('stays idle when disabled', () => {
+    const entries: TrackedCommandEntry[] = [
+      { serverId: 'srv-a', commandId: 'cmd-1' },
+    ]
+    const { result } = renderHook(
+      () => useCommandRecordsBatch(orgId, entries, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchCommand).not.toHaveBeenCalled()
+  })
+
   it('polls while any tracked record is in flight', async () => {
     const client = createAppQueryClient()
     const entries: TrackedCommandEntry[] = [

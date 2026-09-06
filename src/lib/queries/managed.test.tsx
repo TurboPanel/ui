@@ -27,6 +27,7 @@ import {
   usePromoteManagedMember,
   useRemoveManagedMember,
   useRestoreManagedBackup,
+  useResyncManagedMember,
   useRotateManagedRootPassword,
   useRotateManagedUserPassword,
   useRunManagedLifecycle,
@@ -61,6 +62,7 @@ const {
   addManagedReplica,
   updateManagedMember,
   removeManagedMember,
+  resyncManagedMember,
   promoteManagedMember,
   promoteManagedDisasterRecovery,
 } = vi.hoisted(() => ({
@@ -89,6 +91,7 @@ const {
   addManagedReplica: vi.fn(),
   updateManagedMember: vi.fn(),
   removeManagedMember: vi.fn(),
+  resyncManagedMember: vi.fn(),
   promoteManagedMember: vi.fn(),
   promoteManagedDisasterRecovery: vi.fn(),
 }))
@@ -122,6 +125,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     addManagedReplica,
     updateManagedMember,
     removeManagedMember,
+    resyncManagedMember,
     promoteManagedMember,
     promoteManagedDisasterRecovery,
   }
@@ -633,6 +637,30 @@ describe('managed query hooks', () => {
     })
   })
 
+  it('useDeleteEnvironmentManagedMutation accepts an object and omits force unless set', async () => {
+    deleteEnvironmentManaged.mockResolvedValue({
+      ok: true,
+      deleted: true,
+    })
+
+    const { result } = renderHook(
+      () => useDeleteEnvironmentManagedMutation(orgId),
+      { wrapper: createWrapper() },
+    )
+
+    await expect(
+      result.current.run({ environmentId }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {})
+
+    await expect(
+      result.current.run({ environmentId, force: true }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      force: true,
+    })
+  })
+
   it('useRotateManagedRootPassword clears show-once secret', async () => {
     rotateManagedRootPassword.mockResolvedValueOnce({
       ok: true,
@@ -657,6 +685,50 @@ describe('managed query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).commands.all,
       })
+    })
+  })
+
+  it('useRotateManagedRootPassword uses the fallback when the rejection is not an Error', async () => {
+    rotateManagedRootPassword.mockRejectedValueOnce('offline')
+
+    const { result } = renderHook(
+      () => useRotateManagedRootPassword(orgId, environmentId),
+      { wrapper: createWrapper() },
+    )
+
+    await expect(result.current.run()).resolves.toEqual({
+      ok: false,
+      error: 'Failed to rotate root password',
+    })
+    await waitFor(() => {
+      expect(result.current.actionError).toBe('Failed to rotate root password')
+    })
+  })
+
+  it('useRotateManagedRootPassword surfaces Error messages and swallows forbidden failures', async () => {
+    rotateManagedRootPassword
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockRejectedValueOnce(new Error('HTTP 403: forbidden'))
+
+    const { result } = renderHook(
+      () => useRotateManagedRootPassword(orgId, environmentId),
+      { wrapper: createWrapper() },
+    )
+
+    await expect(result.current.run()).resolves.toEqual({
+      ok: false,
+      error: 'disk full',
+    })
+    await waitFor(() => {
+      expect(result.current.actionError).toBe('disk full')
+    })
+
+    await expect(result.current.run()).resolves.toEqual({
+      ok: false,
+      error: null,
+    })
+    await waitFor(() => {
+      expect(result.current.actionError).toBeNull()
     })
   })
 
@@ -951,6 +1023,25 @@ describe('managed query hooks', () => {
 
     await expect(result.current.run('mem-1')).resolves.toMatchObject({ ok: true })
     expect(removeManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1')
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.members(environmentId),
+      })
+    })
+  })
+
+  it('useResyncManagedMember resyncs a member and invalidates the member list', async () => {
+    resyncManagedMember.mockResolvedValueOnce(commandResponse)
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useResyncManagedMember(orgId, environmentId),
+      { wrapper: createWrapper(client) },
+    )
+
+    await expect(result.current.run('mem-1')).resolves.toMatchObject({ ok: true })
+    expect(resyncManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.members(environmentId),

@@ -84,6 +84,15 @@ describe('environments query hooks', () => {
     expect(fetchVisibleEnvironments).toHaveBeenCalledWith(projectId)
   })
 
+  it('useEnvironments stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useEnvironments(orgId, projectId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchVisibleEnvironments).not.toHaveBeenCalled()
+  })
+
   it('useDeployPreview does not retry placement-required errors', async () => {
     fetchDeployPreview.mockRejectedValue(
       new Error('HTTP 409: server_placement_required'),
@@ -160,6 +169,15 @@ describe('environments query hooks', () => {
     expect(fetchDeployPreview).not.toHaveBeenCalled()
   })
 
+  it('useDeployPreview stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useDeployPreview(orgId, environmentId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchDeployPreview).not.toHaveBeenCalled()
+  })
+
   it('useEnvironment loads one environment', async () => {
     fetchEnvironment.mockResolvedValueOnce({
       environment: { id: environmentId, name: 'Production' },
@@ -174,6 +192,15 @@ describe('environments query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchEnvironment).toHaveBeenCalledWith(environmentId)
+  })
+
+  it('useEnvironment stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useEnvironment(orgId, environmentId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchEnvironment).not.toHaveBeenCalled()
   })
 
   it('useDeployEnvironment enqueues deploy', async () => {

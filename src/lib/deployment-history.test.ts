@@ -82,6 +82,21 @@ describe('worstDeploymentStatus', () => {
   it('falls back to queued for an empty fan-out', () => {
     expect(worstDeploymentStatus([])).toBe('queued')
   })
+
+  it('ranks an unlisted status between succeeded and the pre-run states', () => {
+    expect(
+      worstDeploymentStatus([
+        row({ id: 'a', status: 'succeeded' }),
+        row({ id: 'b', status: 'unknown' as CommandStatus }),
+      ]),
+    ).toBe('unknown')
+    expect(
+      worstDeploymentStatus([
+        row({ id: 'a', status: 'queued' }),
+        row({ id: 'b', status: 'unknown' as CommandStatus }),
+      ]),
+    ).toBe('queued')
+  })
 })
 
 describe('groupDeploymentsByGeneration', () => {
@@ -132,6 +147,30 @@ describe('groupDeploymentsByGeneration', () => {
     expect(groups[0]?.startedAt).toBe('2026-08-21T12:00:02.000Z')
   })
 
+  it('falls back to queuedAt and skips rows with no timestamp', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({
+        id: 'a',
+        startedAt: null,
+        queuedAt: '2026-08-21T12:00:04.000Z',
+      }),
+      row({
+        id: 'b',
+        serverId: 'srv-b',
+        startedAt: null,
+        queuedAt: null,
+      }),
+    ])
+    expect(groups[0]?.startedAt).toBe('2026-08-21T12:00:04.000Z')
+  })
+
+  it('reports a null start when no attempt carries a stamp', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'a', startedAt: null, queuedAt: null }),
+    ])
+    expect(groups[0]?.startedAt).toBeNull()
+  })
+
   it('preserves incoming (newest-first) order across groups', () => {
     const groups = groupDeploymentsByGeneration([
       row({ id: 'newer', generation: 8 }),
@@ -143,9 +182,14 @@ describe('groupDeploymentsByGeneration', () => {
 
 describe('formatDeployDuration', () => {
   it('formats sub-second, second, and minute scales', () => {
+    expect(formatDeployDuration(0)).toBe('0ms')
     expect(formatDeployDuration(420)).toBe('420ms')
+    expect(formatDeployDuration(1000)).toBe('1.0s')
     expect(formatDeployDuration(4200)).toBe('4.2s')
+    expect(formatDeployDuration(9999)).toBe('10.0s')
+    expect(formatDeployDuration(10_000)).toBe('10s')
     expect(formatDeployDuration(48_000)).toBe('48s')
+    expect(formatDeployDuration(60_000)).toBe('1m 0s')
     expect(formatDeployDuration(192_000)).toBe('3m 12s')
   })
 
@@ -181,10 +225,20 @@ describe('deploymentStatusTone', () => {
       label: 'Succeeded',
       tone: 'success',
     })
-    expect(deploymentStatusTone('timed_out').tone).toBe('failed')
+    expect(deploymentStatusTone('failed')).toEqual({
+      label: 'Failed',
+      tone: 'failed',
+    })
+    expect(deploymentStatusTone('timed_out')).toEqual({
+      label: 'Timed out',
+      tone: 'failed',
+    })
     expect(deploymentStatusTone('cancelled').tone).toBe('failed')
     expect(deploymentStatusTone('running').tone).toBe('pending')
     expect(deploymentStatusTone('queued').label).toBe('Queued')
+    expect(deploymentStatusTone('dispatching').label).toBe('Queued')
+    expect(deploymentStatusTone('sent').label).toBe('Queued')
+    expect(deploymentStatusTone('acked').label).toBe('Queued')
   })
 })
 
@@ -192,5 +246,11 @@ describe('deploymentServerLabel', () => {
   it('falls back to the server id when there is no name', () => {
     expect(deploymentServerLabel(row({ id: 'a', serverName: null }))).toBe('srv-a')
     expect(deploymentServerLabel(row({ id: 'a', serverName: '  ' }))).toBe('srv-a')
+  })
+
+  it('prefers a trimmed display name', () => {
+    expect(deploymentServerLabel(row({ id: 'a', serverName: '  web-01  ' }))).toBe(
+      'web-01',
+    )
   })
 })

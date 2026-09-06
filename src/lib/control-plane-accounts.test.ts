@@ -165,6 +165,51 @@ describe('control-plane account store', () => {
     expect(getControlPlaneAccounts()).toEqual([])
   })
 
+  it('returns null for an active origin that is missing from accounts', () => {
+    resetControlPlaneStoreForTests({
+      accounts: [],
+      activeOrigin: LOCAL_HTTPS_ORIGIN,
+    })
+    expect(getActiveControlPlaneAccount()).toBeNull()
+  })
+
+  it('creates account metadata when remembering against an orphan active origin', () => {
+    resetControlPlaneStoreForTests({
+      accounts: [],
+      activeOrigin: LOCAL_HTTPS_ORIGIN,
+    })
+    rememberSignedInAccount({})
+    expect(getActiveControlPlaneAccount()).toEqual({
+      origin: LOCAL_HTTPS_ORIGIN,
+      kind: 'self-hosted',
+      email: null,
+      runtime: null,
+      lastOrgId: null,
+    })
+  })
+
+  it('returns null when removing an account with no active origin', () => {
+    resetControlPlaneStoreForTests()
+    expect(removeActiveControlPlaneAccount()).toBeNull()
+  })
+
+  it('discards a non-active origin without changing the current one', () => {
+    resetControlPlaneStoreForTests()
+    activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    activateControlPlaneOrigin(HA_CONTROL_PLANE_ORIGIN)
+    discardControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    expect(getActiveControlPlaneOrigin()).toBe(HA_CONTROL_PLANE_ORIGIN)
+    expect(getControlPlaneAccounts()).toHaveLength(1)
+  })
+
+  it('clears the active origin when discarding the last account', () => {
+    resetControlPlaneStoreForTests()
+    activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    discardControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    expect(getActiveControlPlaneOrigin()).toBeNull()
+    expect(getControlPlaneAccounts()).toEqual([])
+  })
+
   it('subscribeControlPlaneStore notifies listeners on state changes', () => {
     resetControlPlaneStoreForTests()
     const listener = vi.fn()
@@ -309,6 +354,61 @@ describe('control-plane account store', () => {
         lastOrgId: null,
       },
     ])
+    expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+  })
+
+  it('hydrateControlPlaneStore rejects objects without an accounts array', async () => {
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () => JSON.stringify({ activeOrigin: LOCAL_HTTPS_ORIGIN }),
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getControlPlaneAccounts()).toEqual([])
+    expect(getActiveControlPlaneOrigin()).toBeNull()
+  })
+
+  it('hydrateControlPlaneStore leaves an empty stored account list inactive', async () => {
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () =>
+        JSON.stringify({
+          accounts: [],
+          activeOrigin: LOCAL_HTTPS_ORIGIN,
+        }),
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getControlPlaneAccounts()).toEqual([])
+    expect(getActiveControlPlaneOrigin()).toBeNull()
+  })
+
+  it('keeps in-memory state when persistence writes fail', async () => {
+    resetControlPlaneStoreForTests()
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () => null,
+      write: async () => {
+        throw new Error('disk full')
+      },
+    })
+    activateControlPlaneOrigin(LOCAL_HTTPS_ORIGIN)
+    await Promise.resolve()
+    await Promise.resolve()
     expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
   })
 

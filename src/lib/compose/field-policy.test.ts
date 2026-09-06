@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyDeployKey,
   classifyDeployPlacementKey,
+  classifyDeployResourcesKey,
   classifyNetworkKey,
   classifyServiceKey,
   classifyTopLevelKey,
@@ -9,6 +10,7 @@ import {
   NETWORK_FIELD_KEYS,
   SPANNING_NETWORK_DRIVER,
   unsupportedDeployReason,
+  unsupportedDeployResourcesReason,
   unsupportedNetworkReason,
 } from './field-policy'
 import { blockingComposeLintIssues, lintComposeYaml } from './lint'
@@ -76,6 +78,16 @@ describe('field policy registry', () => {
       expect(classifyNetworkKey(key)?.state).toBeTypeOf('string')
       expect(classifyNetworkKey(key, 'overlay')?.state).toBeTypeOf('string')
     }
+  })
+
+  it('returns undefined reasons for fields the platform honours', () => {
+    expect(unsupportedDeployReason('mode')).toBeUndefined()
+    expect(unsupportedDeployReason('not-a-key')).toBeUndefined()
+    expect(unsupportedDeployResourcesReason('limits')).toBeUndefined()
+    expect(unsupportedDeployResourcesReason('not-a-key')).toBeUndefined()
+    expect(classifyDeployResourcesKey('reservations')?.state).toBe('unsupported')
+    expect(unsupportedDeployResourcesReason('reservations')?.length ?? 0)
+      .toBeGreaterThan(20)
   })
 
   it('answers for top-level and service keys', () => {

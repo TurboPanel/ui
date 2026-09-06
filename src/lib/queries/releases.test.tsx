@@ -221,6 +221,15 @@ describe('releases query hooks', () => {
     expect(fetchRepositories).toHaveBeenCalled()
   })
 
+  it('useRepositories stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useRepositories(orgId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchRepositories).not.toHaveBeenCalled()
+  })
+
   it('useRepositories stays idle when orgId is empty', () => {
     const { result } = renderHook(() => useRepositories(''), {
       wrapper: createWrapper(),
@@ -291,6 +300,15 @@ describe('releases query hooks', () => {
     expect(fetchGitConnections).toHaveBeenCalled()
   })
 
+  it('useGitConnections stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useGitConnections(orgId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchGitConnections).not.toHaveBeenCalled()
+  })
+
   it('useConnectionRepositories stays idle without connection id', () => {
     const { result } = renderHook(
       () => useConnectionRepositories(orgId, ''),
@@ -312,6 +330,15 @@ describe('releases query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchConnectionRepositories).toHaveBeenCalledWith(connectionId)
+  })
+
+  it('useConnectionRepositories stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useConnectionRepositories(orgId, connectionId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchConnectionRepositories).not.toHaveBeenCalled()
   })
 
   it('useDeleteRepository disconnects a repository', async () => {
@@ -352,6 +379,15 @@ describe('useRepositoryLabelsById', () => {
     await waitFor(() => {
       expect(result.current).toEqual({ r1: 'web-api', r2: 'worker' })
     })
+  })
+
+  it('useRepositoryLabelsById stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useRepositoryLabelsById('org1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current).toEqual({})
+    expect(fetchRepositories).not.toHaveBeenCalled()
   })
 
   it('resolves an empty map when the repositories read is forbidden', async () => {

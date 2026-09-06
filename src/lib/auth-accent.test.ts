@@ -184,6 +184,13 @@ describe('auth-accent', () => {
       expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBeNull()
     })
 
+    it('skips persist when sessionStorage is missing on web', async () => {
+      Reflect.deleteProperty(globalThis, 'sessionStorage')
+      const { applyConsoleChromeRuntime } = await loadAuthAccent()
+      expect(() => applyConsoleChromeRuntime('workers')).not.toThrow()
+      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.blue)
+    })
+
     it('ignores sessionStorage write failures', async () => {
       Object.defineProperty(globalThis, 'sessionStorage', {
         configurable: true,

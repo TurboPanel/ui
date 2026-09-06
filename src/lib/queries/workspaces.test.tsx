@@ -63,6 +63,15 @@ describe('workspaces query hooks', () => {
     expect(result.current.data?.workspaces).toHaveLength(1)
   })
 
+  it('useWorkspaces stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useWorkspaces(orgId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchVisibleWorkspaces).not.toHaveBeenCalled()
+  })
+
   it('useSystemWorkspace selects the platform workspace', async () => {
     fetchVisibleWorkspaces.mockResolvedValueOnce({
       workspaces: [
@@ -112,6 +121,15 @@ describe('workspaces query hooks', () => {
     const { result } = renderHook(() => useWorkspace(orgId, ''), {
       wrapper: createWrapper(),
     })
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('useWorkspace stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useWorkspace(orgId, 'ws-1', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchWorkspace).not.toHaveBeenCalled()
   })

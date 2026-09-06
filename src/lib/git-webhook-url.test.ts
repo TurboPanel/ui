@@ -37,6 +37,13 @@ describe('gitWebhookHint', () => {
     })
   })
 
+  it('treats a malformed https origin as unreachable', () => {
+    const hint = gitWebhookHint(['https://not a host'], 'github')
+    expect(hint.reachable).toBe(false)
+    expect(hint.note).toBe(LAN_WEBHOOK_NOTE)
+    expect(hint.webhookUrl).toBe('https://not a host/webhook/github')
+  })
+
   it('still shows the endpoint shape for LAN-only origins, with the note', () => {
     for (const origin of [
       'https://panel.lan:8443',

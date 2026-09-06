@@ -358,6 +358,14 @@ describe('useCommandLog', () => {
     expect(fetchCommandLog).not.toHaveBeenCalled()
   })
 
+  it('does not fetch when both identities are missing', () => {
+    const { result } = renderHook(() => useCommandLog('org-1', null, null), {
+      wrapper: createWrapper(),
+    })
+    expect(result.current.snapshot).toEqual(EMPTY_COMMAND_LOG_SNAPSHOT)
+    expect(fetchCommandLog).not.toHaveBeenCalled()
+  })
+
   it('reads a terminal transcript once when polling is disabled', async () => {
     fetchCommandLog.mockResolvedValue(
       response({ text: logEvent(1, 'done'), nextSeq: 1, sealed: true }),
