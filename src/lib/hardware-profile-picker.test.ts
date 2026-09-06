@@ -1,25 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import type {
+  EffectiveCpuThermalLimits,
   MetricsCapabilities,
   MetricsSensorCandidate,
   NetworkInventoryEntry,
+  ServerHardwareProfile,
 } from '@/lib/instance-api'
 import {
+  DISK_SLOT_FIELDS,
+  MAX_NIC_SLOTS,
+  REGULAR_SLOT_FIELDS,
+  SLOT_FIELDS,
   applyNicSlotChange,
   autoPrimaryNic,
   buildGpuDeviceProfileUpdate,
   buildNicSlotProfileUpdate,
   buildSlotProfileUpdates,
+  cpuLimitPrefill,
+  emptyTouchedSelection,
+  errorMessage,
+  gpuDeviceOptions,
+  gpuDeviceSelectionFromProfile,
+  hostingPathOptions,
   monitorableNics,
   nicSlotListFromSelection,
   nicSlotOptions,
   nicSlotRowCount,
   nicSlotSelectionFromProfile,
   nicSlotsReassigned,
-  gpuDeviceOptions,
+  parseNumericDraft,
   resolveSensorsPanelViewState,
   sensorOptions,
+  snapshotFromProfile,
   type SlotField,
+  slotCandidatesFor,
   slotSelectionFromProfile,
   slotUpdate,
 } from '@/lib/hardware-profile-picker'
@@ -122,6 +136,27 @@ describe('resolveSensorsPanelViewState', () => {
     })
     expect(resolveSensorsPanelViewState(capabilities, false).emptyStateVariant).toBe('generic')
   })
+
+  it('treats a GPU-only discovery as having sensor candidates', () => {
+    const capabilities = capabilitiesWith({
+      gpuDevices: [
+        {
+          path: '/sys/class/hwmon/hwmon1',
+          chip: 'amdgpu',
+          temperature: [
+            candidate({ chip: 'amdgpu', label: 'edge', path: '/sys/.../temp1_input' }),
+          ],
+          power: [],
+          fan: [],
+        },
+      ],
+    })
+    expect(resolveSensorsPanelViewState(capabilities, false)).toEqual({
+      showSensorCandidates: true,
+      emptyStateVariant: null,
+      showDrivetempControl: false,
+    })
+  })
 })
 
 describe('sensorOptions', () => {
@@ -219,6 +254,34 @@ describe('gpuDeviceOptions', () => {
       ],
     })
     expect(gpuDeviceOptions(capabilities)).toEqual([])
+  })
+
+  it('uses a power candidate as the identity and shows watts when temperature is absent', () => {
+    const capabilities = capabilitiesWith({
+      gpuDevices: [
+        {
+          path: '/sys/class/hwmon/hwmon1',
+          chip: 'amdgpu',
+          temperature: [],
+          power: [
+            candidate({
+              chip: 'amdgpu',
+              label: 'PPT',
+              path: '/sys/class/hwmon/hwmon1/power1_average',
+              reading: { value: 37, unit: 'watts' },
+            }),
+          ],
+          fan: [],
+        },
+      ],
+    })
+    expect(gpuDeviceOptions(capabilities)).toEqual([
+      {
+        value: 'amdgpu:PPT',
+        label: 'amdgpu',
+        detail: '37.0 W · /sys/class/hwmon/hwmon1',
+      },
+    ])
   })
 
   it('uses a DRM engine-busy candidate as the device identity when temp and power are absent', () => {
@@ -354,6 +417,9 @@ describe('monitored NIC slots', () => {
       'mac:eth1'
     )
     expect(autoPrimaryNic([nic('mac:port', 'member')])).toBeNull()
+    expect(nicSlotOptions([nic('mac:unnamed', 'uplink', { name: '' })], [null], 0)[0]?.label).toBe(
+      'mac:unnamed'
+    )
   })
 
   it('excludes uplinks already chosen in another slot, but keeps a stale current value visible', () => {
@@ -379,6 +445,7 @@ describe('monitored NIC slots', () => {
       null,
       null,
     ])
+    expect(nicSlotSelectionFromProfile({}, 2)).toEqual([null, null])
     expect(applyNicSlotChange(['a'], 2, 'c')).toEqual(['a', null, 'c'])
   })
 
@@ -430,5 +497,220 @@ describe('slotUpdate', () => {
 
   it('maps null to an explicit unassignment', () => {
     expect(slotUpdate(null)).toBeNull()
+  })
+
+  it('returns null when the key has no chip:label separator', () => {
+    expect(slotUpdate('coretemp')).toBeNull()
+  })
+})
+
+describe('slot field catalogs', () => {
+  it('splits disk temperature slots from the rest so the editor can render them separately', () => {
+    expect(DISK_SLOT_FIELDS.map(({ field }) => field)).toEqual([
+      'disk1Temperature',
+      'disk2Temperature',
+    ])
+    expect(REGULAR_SLOT_FIELDS.some(({ field }) => field.startsWith('disk'))).toBe(false)
+    expect(REGULAR_SLOT_FIELDS).toHaveLength(SLOT_FIELDS.length - DISK_SLOT_FIELDS.length)
+    expect(MAX_NIC_SLOTS).toBe(8)
+  })
+})
+
+describe('slotCandidatesFor', () => {
+  it('returns the capability pool for the requested slot', () => {
+    const cpu = [candidate({ chip: 'coretemp', label: 'Package id 0', path: '/sys/.../temp1' })]
+    const capabilities = capabilitiesWith({ cpuTemperature: cpu })
+    expect(slotCandidatesFor(capabilities, 'cpuTemperature')).toBe(cpu)
+    expect(slotCandidatesFor(capabilities, 'cpuFan')).toEqual([])
+  })
+})
+
+describe('hostingPathOptions', () => {
+  const capabilitiesWithMounts = (
+    candidates: MetricsCapabilities['storageMounts']['candidates'],
+  ): MetricsCapabilities => ({
+    ...EMPTY_CAPABILITIES,
+    storageMounts: {
+      ...EMPTY_CAPABILITIES.storageMounts,
+      candidates,
+    },
+  })
+
+  it('labels each discovered mount with its filesystem type', () => {
+    const options = hostingPathOptions(
+      capabilitiesWithMounts([
+        {
+          path: '/srv',
+          source: '/dev/sdb1',
+          fsType: 'ext4',
+          totalBytes: 1,
+          availableBytes: 1,
+        },
+      ]),
+      null
+    )
+    expect(options).toEqual([
+      { value: '/srv', label: '/srv (ext4)', detail: '/srv' },
+    ])
+  })
+
+  it('keeps a stale override visible when it is no longer discovered', () => {
+    const options = hostingPathOptions(capabilitiesWithMounts([]), '/old')
+    expect(options).toEqual([
+      {
+        value: '/old',
+        label: '/old',
+        detail: 'Current override — no longer discovered',
+      },
+    ])
+  })
+
+  it('does not duplicate a current path that is still in the candidate list', () => {
+    const options = hostingPathOptions(
+      capabilitiesWithMounts([
+        {
+          path: '/srv',
+          source: '/dev/sdb1',
+          fsType: 'xfs',
+          totalBytes: 1,
+          availableBytes: 1,
+        },
+      ]),
+      '/srv'
+    )
+    expect(options).toHaveLength(1)
+    expect(options[0]?.value).toBe('/srv')
+  })
+})
+
+describe('cpuLimitPrefill', () => {
+  const exact: EffectiveCpuThermalLimits = {
+    tdpWatts: 65,
+    tjMaxCelsius: 100,
+    source: 'catalog-exact',
+  }
+  const family: EffectiveCpuThermalLimits = {
+    tdpWatts: 45,
+    tjMaxCelsius: 95,
+    source: 'catalog-family',
+  }
+
+  it('shows the catalog value and its provenance while the draft is empty', () => {
+    expect(cpuLimitPrefill(true, exact, (limits) => limits.tdpWatts)).toEqual({
+      placeholder: '65',
+      hint: 'Matched to your exact CPU model in the catalog.',
+    })
+    expect(cpuLimitPrefill(true, family, (limits) => limits.tjMaxCelsius)).toEqual({
+      placeholder: '95',
+      hint: 'Estimated from CPU family — set an exact value if you know it.',
+    })
+  })
+
+  it('falls back to auto-detection copy when the catalog has no value for that field', () => {
+    expect(
+      cpuLimitPrefill(true, { ...exact, tdpWatts: null }, (limits) => limits.tdpWatts)
+    ).toEqual({
+      placeholder: 'Auto detected',
+      hint: 'Empty uses auto-detection.',
+    })
+  })
+
+  it('uses the generic auto-detection hint for an operator override source', () => {
+    expect(
+      cpuLimitPrefill(
+        true,
+        { tdpWatts: 80, tjMaxCelsius: null, source: 'override' },
+        (limits) => limits.tdpWatts
+      )
+    ).toEqual({
+      placeholder: '80',
+      hint: 'Empty uses auto-detection.',
+    })
+  })
+
+  it('ignores catalog numbers once the operator has typed a draft', () => {
+    expect(cpuLimitPrefill(false, exact, (limits) => limits.tdpWatts)).toEqual({
+      placeholder: 'Auto detected',
+      hint: 'Empty uses auto-detection.',
+    })
+  })
+
+  it('ignores catalog numbers when the source is none or limits are missing', () => {
+    expect(
+      cpuLimitPrefill(
+        true,
+        { tdpWatts: 65, tjMaxCelsius: 100, source: 'none' },
+        (limits) => limits.tdpWatts
+      )
+    ).toEqual({
+      placeholder: 'Auto detected',
+      hint: 'Empty uses auto-detection.',
+    })
+    expect(cpuLimitPrefill(true, null, (limits) => limits.tdpWatts)).toEqual({
+      placeholder: 'Auto detected',
+      hint: 'Empty uses auto-detection.',
+    })
+  })
+})
+
+describe('errorMessage', () => {
+  it('uses the Error message when one is thrown', () => {
+    expect(errorMessage(new Error('socket down'), 'fallback')).toBe('socket down')
+  })
+
+  it('uses the fallback for a non-Error rejection', () => {
+    expect(errorMessage('nope', 'Failed to save hardware profile')).toBe(
+      'Failed to save hardware profile'
+    )
+  })
+})
+
+describe('parseNumericDraft', () => {
+  it('treats blank input as an explicit clear', () => {
+    expect(parseNumericDraft('')).toBeNull()
+    expect(parseNumericDraft('   ')).toBeNull()
+  })
+
+  it('parses a finite number', () => {
+    expect(parseNumericDraft('65')).toBe(65)
+    expect(parseNumericDraft(' 12.5 ')).toBe(12.5)
+  })
+
+  it('rejects non-finite input so the caller can keep the draft invalid', () => {
+    expect(parseNumericDraft('abc')).toBeUndefined()
+    expect(parseNumericDraft('Infinity')).toBeUndefined()
+  })
+})
+
+describe('profile snapshots', () => {
+  it('reads slot, GPU, and NIC selections from a saved profile', () => {
+    const profile: ServerHardwareProfile = {
+      cpuTemperature: { chip: 'coretemp', label: 'Package id 0' },
+      gpuDevice: { chip: 'amdgpu', label: 'edge' },
+      nicSlotDeviceIds: ['mac:eth0'],
+    }
+    expect(gpuDeviceSelectionFromProfile(profile)).toBe('amdgpu:edge')
+    expect(snapshotFromProfile(profile)).toEqual({
+      slots: {
+        ...slotSelectionFromProfile(null),
+        cpuTemperature: 'coretemp:Package id 0',
+      },
+      gpu: 'amdgpu:edge',
+      nicSlots: ['mac:eth0'],
+    })
+  })
+
+  it('starts empty when no profile has been saved yet', () => {
+    expect(gpuDeviceSelectionFromProfile(undefined)).toBeNull()
+    expect(snapshotFromProfile(null)).toEqual({
+      slots: slotSelectionFromProfile(null),
+      gpu: null,
+      nicSlots: [],
+    })
+    expect(emptyTouchedSelection()).toEqual({
+      slots: new Set(),
+      gpu: false,
+      nicSlots: false,
+    })
   })
 })

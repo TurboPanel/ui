@@ -21,4 +21,14 @@ describe('serviceNameFromCommand', () => {
     expect(serviceNameFromCommand('docker run')).toBe('')
     expect(serviceNameFromCommand('   ')).toBe('')
   })
+
+  it('is empty when the remaining token is not a usable image repository', () => {
+    expect(serviceNameFromCommand('docker run :')).toBe('')
+    expect(serviceNameFromCommand('docker run @sha256:dead')).toBe('')
+    expect(serviceNameFromCommand('docker run ///')).toBe('')
+  })
+
+  it('sanitizes characters that are not legal in a compose service name', () => {
+    expect(serviceNameFromCommand('docker run acme/web+api')).toBe('web-api')
+  })
 })

@@ -31,8 +31,11 @@ import {
   useServerLabels,
   useServerMetricsCapabilities,
   useServerMetricsConnection,
+  useServerMetricsCpuLimits,
   useServerMetricsEvents,
   useServerMetricsSeries,
+  useServerMetricsSeriesBatches,
+  useServerNicSlotContext,
   useServerUpdateStatus,
   useServersUpdateStatus,
   useSetServerHostname,
@@ -71,6 +74,7 @@ const {
   createLicense,
   deleteLicense,
   fetchServerMetricsCapabilities,
+  fetchServerMetricsSummary,
   saveServerHardwareProfile,
   startServerMetricsLive,
   stopServerMetricsLive,
@@ -102,6 +106,7 @@ const {
   createLicense: vi.fn(),
   deleteLicense: vi.fn(),
   fetchServerMetricsCapabilities: vi.fn(),
+  fetchServerMetricsSummary: vi.fn(),
   saveServerHardwareProfile: vi.fn(),
   startServerMetricsLive: vi.fn(),
   stopServerMetricsLive: vi.fn(),
@@ -138,6 +143,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     createLicense,
     deleteLicense,
     fetchServerMetricsCapabilities,
+    fetchServerMetricsSummary,
     saveServerHardwareProfile,
     startServerMetricsLive,
     stopServerMetricsLive,
@@ -423,6 +429,296 @@ describe('servers query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchServerMetricsConnection).toHaveBeenCalledWith(serverId, range, orgId)
+  })
+
+  it('useServerMetricsConnection returns null when metrics backend is unavailable', async () => {
+    fetchServerMetricsConnection.mockRejectedValueOnce(new MetricsBackendUnavailableError('duckdb'))
+
+    const { result } = renderHook(
+      () =>
+        useServerMetricsConnection(orgId, serverId, {
+          fromIso: '2026-01-01T00:00:00.000Z',
+          toIso: '2026-01-02T00:00:00.000Z',
+        }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toBeNull()
+  })
+
+  it('useServerMetricsConnection propagates non-backend errors', async () => {
+    fetchServerMetricsConnection.mockRejectedValue(new Error('HTTP 500: boom'))
+
+    const { result } = renderHook(
+      () =>
+        useServerMetricsConnection(orgId, serverId, {
+          fromIso: '2026-01-01T00:00:00.000Z',
+          toIso: '2026-01-02T00:00:00.000Z',
+        }),
+      { wrapper: createWrapper(createTestQueryClient()) }
+    )
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+    expect(result.current.error).toBeInstanceOf(Error)
+  })
+
+  it('useServerMetricsEvents propagates non-backend errors', async () => {
+    fetchServerMetricsEvents.mockRejectedValue(new Error('HTTP 500: boom'))
+
+    const { result } = renderHook(
+      () =>
+        useServerMetricsEvents(orgId, serverId, {
+          fromIso: '2026-01-01T00:00:00.000Z',
+          toIso: '2026-01-02T00:00:00.000Z',
+        }),
+      { wrapper: createWrapper(createTestQueryClient()) }
+    )
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+    expect(result.current.error).toBeInstanceOf(Error)
+  })
+
+  it('useServerMetricsConnection stays idle when disabled', () => {
+    const { result } = renderHook(
+      () =>
+        useServerMetricsConnection(
+          orgId,
+          serverId,
+          {
+            fromIso: '2026-01-01T00:00:00.000Z',
+            toIso: '2026-01-02T00:00:00.000Z',
+          },
+          { enabled: false }
+        ),
+      { wrapper: createWrapper() }
+    )
+
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerMetricsConnection).not.toHaveBeenCalled()
+  })
+
+  it('useServerMetricsEvents keys the cache on rangeKey when provided', async () => {
+    const range = {
+      fromIso: '2026-01-01T00:00:00.000Z',
+      toIso: '2026-01-02T00:00:00.000Z',
+    }
+    fetchServerMetricsEvents.mockResolvedValueOnce({
+      ok: true,
+      events: [],
+      truncated: false,
+    })
+    const client = createAppQueryClient()
+
+    renderHook(() => useServerMetricsEvents(orgId, serverId, range, { rangeKey: '24h' }), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      expect(
+        client.getQueryCache().find({
+          queryKey: queryKeys.org(orgId).servers.metricsEvents(serverId, '24h'),
+        })?.state.status
+      ).toBe('success')
+    })
+    expect(
+      client.getQueryCache().find({
+        queryKey: queryKeys.org(orgId).servers.metricsEvents(serverId, range.fromIso),
+      })
+    ).toBeUndefined()
+  })
+
+  it('useServerMetricsSeriesBatches issues one series request per non-empty metric batch', async () => {
+    const range = {
+      fromIso: '2026-01-01T00:00:00.000Z',
+      toIso: '2026-01-02T00:00:00.000Z',
+    }
+    fetchServerMetricsSeries.mockResolvedValue({
+      host: { points: [] },
+      entities: [],
+    })
+
+    const { result } = renderHook(
+      () =>
+        useServerMetricsSeriesBatches(
+          orgId,
+          serverId,
+          [['host.cpu.busyPercent'], ['network:mac:eth0.receiveBytesPerSecond']],
+          () => range,
+          { rangeKey: 'live' }
+        ),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => {
+      expect(result.current.every((query) => query.isSuccess)).toBe(true)
+    })
+    expect(fetchServerMetricsSeries).toHaveBeenCalledTimes(2)
+    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
+      serverId,
+      { ...range, metrics: ['host.cpu.busyPercent'] },
+      orgId
+    )
+    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
+      serverId,
+      { ...range, metrics: ['network:mac:eth0.receiveBytesPerSecond'] },
+      orgId
+    )
+  })
+
+  it('useServerMetricsSeriesBatches stays idle for empty batches and when disabled', () => {
+    const range = {
+      fromIso: '2026-01-01T00:00:00.000Z',
+      toIso: '2026-01-02T00:00:00.000Z',
+    }
+    const empty = renderHook(
+      () => useServerMetricsSeriesBatches(orgId, serverId, [[]], () => range),
+      { wrapper: createWrapper() }
+    )
+    const disabled = renderHook(
+      () =>
+        useServerMetricsSeriesBatches(orgId, serverId, [['host.cpu.busyPercent']], () => range, {
+          enabled: false,
+        }),
+      { wrapper: createWrapper() }
+    )
+
+    expect(empty.result.current[0]?.fetchStatus).toBe('idle')
+    expect(disabled.result.current[0]?.fetchStatus).toBe('idle')
+    expect(fetchServerMetricsSeries).not.toHaveBeenCalled()
+  })
+
+  it('useServerMetricsCpuLimits reads cpuLimits from a narrow summary window', async () => {
+    const cpuLimits = {
+      tdpWatts: 65,
+      tjMaxCelsius: 100,
+      source: 'catalog-exact',
+    }
+    fetchServerMetricsSummary.mockResolvedValueOnce({
+      ok: true,
+      cpuLimits,
+    })
+
+    const { result } = renderHook(() => useServerMetricsCpuLimits(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual(cpuLimits)
+    })
+    expect(fetchServerMetricsSummary).toHaveBeenCalledWith(
+      serverId,
+      expect.objectContaining({
+        fromIso: expect.any(String),
+        toIso: expect.any(String),
+      }),
+      orgId
+    )
+    const options = fetchServerMetricsSummary.mock.calls[0]?.[1] as {
+      fromIso: string
+      toIso: string
+    }
+    expect(Date.parse(options.toIso) - Date.parse(options.fromIso)).toBe(5 * 60 * 1000)
+  })
+
+  it('useServerMetricsCpuLimits returns null when metrics backend is unavailable', async () => {
+    fetchServerMetricsSummary.mockRejectedValueOnce(new MetricsBackendUnavailableError('duckdb'))
+
+    const { result } = renderHook(() => useServerMetricsCpuLimits(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toBeNull()
+  })
+
+  it('useServerMetricsCpuLimits propagates non-backend errors', async () => {
+    fetchServerMetricsSummary.mockRejectedValue(new Error('HTTP 500: boom'))
+
+    const { result } = renderHook(() => useServerMetricsCpuLimits(orgId, serverId), {
+      wrapper: createWrapper(createTestQueryClient()),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+    expect(result.current.error).toBeInstanceOf(Error)
+  })
+
+  it('useServerMetricsCpuLimits stays idle when disabled or unscoped', () => {
+    const disabled = renderHook(
+      () => useServerMetricsCpuLimits(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() }
+    )
+    const unscoped = renderHook(() => useServerMetricsCpuLimits(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+
+    expect(disabled.result.current.fetchStatus).toBe('idle')
+    expect(unscoped.result.current.fetchStatus).toBe('idle')
+    expect(fetchServerMetricsSummary).not.toHaveBeenCalled()
+  })
+
+  it('useServerNicSlotContext projects networks and the NIC-slot limit from a series seed', async () => {
+    const networks = [
+      { deviceId: 'mac:eth0', name: 'eth0', kind: 'uplink', role: 'nic' },
+    ]
+    fetchServerMetricsSeries.mockResolvedValueOnce({
+      ok: true,
+      inventory: { networks },
+      nicSlotLimit: 2,
+    })
+
+    const { result } = renderHook(() => useServerNicSlotContext(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true)
+    })
+    expect(result.current.networks).toEqual(networks)
+    expect(result.current.nicSlotLimit).toBe(2)
+    expect(result.current.error).toBeNull()
+    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
+      serverId,
+      expect.objectContaining({
+        metrics: ['host.cpu.busyPercent'],
+      }),
+      orgId
+    )
+  })
+
+  it('useServerNicSlotContext defaults to an empty inventory when the series envelope is thin', async () => {
+    fetchServerMetricsSeries.mockResolvedValueOnce({ ok: true })
+
+    const { result } = renderHook(() => useServerNicSlotContext(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true)
+    })
+    expect(result.current.networks).toEqual([])
+    expect(result.current.nicSlotLimit).toBeNull()
+  })
+
+  it('useServerNicSlotContext stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useServerNicSlotContext(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() }
+    )
+
+    expect(result.current.isReady).toBe(false)
+    expect(result.current.isLoading).toBe(false)
+    expect(fetchServerMetricsSeries).not.toHaveBeenCalled()
   })
 
   it('useFleetServerUsage never takes per-server ids — one batched call regardless of fleet size', async () => {
