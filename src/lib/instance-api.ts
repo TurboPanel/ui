@@ -4579,7 +4579,7 @@ export async function stopEnvironment(environmentId: string): Promise<CommandEnq
 export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'
 
 /**
- * Wire-facing identity for a single v4 metric on a single entity instance —
+ * Wire-facing identity for a single v5 metric on a single entity instance —
  * mirrors `turbopanel/src/daemon/metrics/entity-metric-id.ts`. Host-singleton
  * scopes (`host.cpu`/`host.kernel`/`host.memory`/`host.storage`/`host.network`)
  * have exactly one instance per server, so their identity is just
@@ -4591,12 +4591,9 @@ export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'
  *
  * `cpuDetail`/`memoryDetail` are host-singleton too (one `cpu.detail`/
  * `memory.detail` row per server) but capability-gated — a plan without the
- * capability just never returns their fields. `cpuCore` is per-entity
- * (`cpuCore:cpu3.busyPercent`) and live-session-only: the daemon only emits
- * `cpu.core.live` rows while a live metrics lease is active. `cpuHotspot` is
+ * capability just never returns their fields.
  * deliberately NOT a scope here — `cpuDetail`'s 4 embedded hotspot slots are
  * surfaced as part of that singleton's response payload instead, see
- * `HostSeriesChartPoint.cpuHotspots`.
  */
 export type EntityMetricScope =
   | 'host.cpu'
@@ -4613,7 +4610,6 @@ export type EntityMetricScope =
   | 'hardwareSignal'
   | 'ingress'
   | 'databaseProxy'
-  | 'cpuCore'
 
 const HOST_SINGLETON_ENTITY_SCOPES: ReadonlySet<EntityMetricScope> = new Set([
   'host.cpu',
@@ -4634,7 +4630,6 @@ const ENTITY_METRIC_SCOPE_ALIAS: Partial<Record<EntityMetricScope, string>> = {
   hardwareSignal: 'hardware',
   ingress: 'ingress',
   databaseProxy: 'databaseProxy',
-  cpuCore: 'cpuCore',
 }
 
 /**
@@ -4662,7 +4657,7 @@ export function formatEntityMetricId(selector: {
   return `${alias}:${selector.entityId}.${selector.field}`
 }
 
-/** Conceptual per-entity metric grouping — mirrors `HostedFamilyV4`'s per-entity subset. */
+/** Conceptual per-entity metric grouping — mirrors `HostedFamilyV5`'s per-entity subset. */
 export type PerEntityHostedFamily =
   | 'gpu'
   | 'network'
@@ -4671,7 +4666,6 @@ export type PerEntityHostedFamily =
   | 'hardware.physical'
   | 'managed.ingress'
   | 'managed.database_proxy'
-  | 'cpu.core.live'
 
 /**
  * Role of a network device relative to the current `SlotMapping` — `'nic'` is
@@ -4741,13 +4735,17 @@ export type HardwareSignalInventoryEntry = {
   signalId: string
   kind: string
   unit: string
+  /** Which part of the machine this sensor belongs to (`cpu` / `disk` / `board`). */
+  component: string
+  /** hwmon chip, resolved to the backing block device for storage sensors (`nvme0n1`, `sda`). */
+  chip: string
   label: string
   thresholds?: PhysicalSignalThresholds
 }
 
 /**
  * Entity inventory for a server's current topology generation — labels/roles
- * the v4 metrics routes attach to `network`/`filesystem`/`block`/`gpu`/
+ * the v5 metrics routes attach to `network`/`filesystem`/`block`/`gpu`/
  * `hardwareSignal` entity series so a chart never has to show a bare device
  * id with no name or role context. `null` when the server has never reported
  * a usable topology snapshot. `managed.ingress`/`managed.database_proxy` have
@@ -4764,7 +4762,7 @@ export type TopologyInventory = {
 
 /**
  * Server-computed presentation values for one host series point — mirrors
- * `DerivedHostValuesV4` (`turbopanel/src/daemon/metrics/query/derived-metrics-v4.ts`).
+ * `DerivedHostValuesV5` (`turbopanel/src/daemon/metrics/query/derived-metrics-v5.ts`).
  * Every field is `null` when an input it needs is missing or a denominator
  * would be zero — never coerced to `0`.
  */
@@ -4777,19 +4775,6 @@ export type DerivedHostValues = {
   rootFilesystemUsedPercent: number | null
 }
 
-/**
- * One `cpu.detail` embedded hotspot slot's last-observed values within a
- * bucket, plus the `coreId` it was reporting for at that observation —
- * `coreId` can legitimately change bucket-to-bucket (the daemon re-selects
- * the busiest cores every interval). `null` `coreId` means the slot had no
- * hotspot at the last-observed sample in this bucket. Mirrors
- * `CpuHotspotPointV4`.
- */
-export type CpuHotspotPoint = {
-  coreId: string | null
-  values: Partial<Record<string, number | null>>
-}
-
 export type HostSeriesChartPoint = {
   at: string
   /** Keyed by requested canonical name (`host.cpu.busyPercent`, …). */
@@ -4799,12 +4784,6 @@ export type HostSeriesChartPoint = {
   expectedSampleCount?: number
   /** `null`/absent means unknown or a mixed-generation bucket. */
   topologyGeneration?: number | null
-  /**
-   * `cpu.detail`'s 4 embedded hotspot slots, present only when the request's
-   * `metrics` included a `cpuDetail.*` field and a `cpu.detail` row exists in
-   * this bucket. Mirrors `HostSeriesPointV4.cpuHotspots`.
-   */
-  cpuHotspots?: CpuHotspotPoint[]
 }
 
 /** Resolved CPU thermal/power limits for headroom display. Mirrors `EffectiveCpuThermalLimits`. */
@@ -4918,23 +4897,23 @@ export type FleetMetricsLatestResponse = {
 
 /**
  * Host metrics requested for the org servers overview (CPU stack + memory/
- * swap). v3's `load1`/`load5`/`load15` have no v4 analogue — the daemon
+ * swap). v3's `load1`/`load5`/`load15` have no v5 analogue — the daemon
  * contract carries no load-average metric at all — so the fleet overview's
  * load column has nothing to show; this is a known, deliberate capability
- * gap, not an oversight. Mirrors the server's own `FLEET_HOST_METRICS_V4`.
+ * gap, not an oversight. Mirrors the server's own `FLEET_HOST_METRICS_V5`.
  */
 export const FLEET_HOST_METRICS = [
   'host.cpu.busyPercent',
   'host.cpu.userPercent',
   'host.cpu.systemPercent',
   'host.cpu.iowaitPercent',
-  'host.memory.availableBytes',
+  'host.memory.usedBytes',
   'host.memory.swapUsedBytes',
 ] as const
 
 export type MetricEventSeverity = 'info' | 'warning' | 'critical'
 
-/** Hardware-health / lifecycle notice — mirrors `MetricEventV4`. */
+/** Hardware-health / lifecycle notice — mirrors `MetricEventV5`. */
 export type MetricEvent = {
   eventId: string
   at: string
@@ -4965,7 +4944,7 @@ export type ConnectionStatusEvent = {
 }
 
 /**
- * Connection history + uptime totals for a range — unaffected by the v3→v4
+ * Connection history + uptime totals for a range — unaffected by the v3→v5
  * metrics cutover (status events are a separate write path from host
  * metrics samples). `initialConnected === null` means state before `from` is
  * unknown; that span accrues to `unknownSeconds`, never to uptime/downtime.

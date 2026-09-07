@@ -176,7 +176,7 @@ export function formatMilliseconds(value: number | null | undefined): string {
 }
 
 /**
- * CPU busy % — the v4 contract stores `host.cpu.busyPercent` directly
+ * CPU busy % — the v5 contract stores `host.cpu.busyPercent` directly
  * (computed server-side from `1 − idle`), so this is a clamping passthrough,
  * not a derivation. Kept as a named helper so call sites read the same as
  * they did pre-cutover.
@@ -243,4 +243,24 @@ export function formatCoveragePercent(presentSamples: number, expectedSamples: n
 export function presentSamplesFromGaps(expectedSamples: number, gapCount: number): number {
   if (expectedSamples <= 0) return 0
   return Math.max(0, expectedSamples - Math.max(0, gapCount))
+}
+
+/**
+ * Average queue depth (`aqu-sz`) — a dimensionless count of requests in
+ * flight, not a percentage and not a pending-operation count.
+ *
+ * The collector computes it correctly (Δ`time_in_queue` over the interval,
+ * the same figure `iostat -x` reports), but on an idle-to-moderate host it
+ * genuinely sits between 0.001 and 0.2 and only exceeds 1 under real
+ * queuing. Rendered with the shared integer count formatter it read as a
+ * flat zero with visible noise — "always 0 but wavy". Three decimals below 1
+ * is what makes the series legible.
+ */
+export function formatQueueDepth(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—'
+  }
+  if (value >= 10) return value.toFixed(0)
+  if (value >= 1) return value.toFixed(2)
+  return value.toFixed(3)
 }

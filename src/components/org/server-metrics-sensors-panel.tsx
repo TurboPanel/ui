@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { EmptyState, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { attributedSignalTitle, isNvmeCompositeSignal, sensorCommandsFor } from '@/lib/sensor-commands'
 import { formatPhysicalSignalValue, type TemperatureUnit } from '@/lib/format-metrics'
 import {
   formatEntityMetricId,
@@ -100,8 +101,15 @@ function SignalRow({
   return (
     <View style={styles.row}>
       <View style={styles.rowHeader}>
-        <Text style={styles.rowTitle}>{signal.label || signal.signalId}</Text>
-        <Text style={styles.rowMeta}>{signal.kind}</Text>
+        <Text style={styles.rowTitle}>{attributedSignalTitle(signal)}</Text>
+        <Text style={styles.rowMeta}>
+          {isNvmeCompositeSignal(signal)
+            ? 'Whole-drive temperature — the value the drive throttles on'
+            : signal.kind}
+        </Text>
+        <Text style={styles.rowCommand} selectable>
+          {sensorCommandsFor(signal)[0]?.command ?? ''}
+        </Text>
       </View>
       <View style={styles.rowValues}>
         <Text style={styles.rowValue}>
@@ -294,6 +302,13 @@ const styles = StyleSheet.create({
   rowMeta: {
     color: colors.textDim,
     fontSize: 11,
+  },
+  /** Copy-ready terminal command that reproduces this reading on the host. */
+  rowCommand: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    marginTop: 2,
   },
   rowValues: {
     flexDirection: 'row',

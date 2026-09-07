@@ -73,8 +73,8 @@ describe('formatEntityMetricId', () => {
     expect(formatEntityMetricId({ scope: 'host.cpu', field: 'busyPercent' })).toBe(
       'host.cpu.busyPercent'
     )
-    expect(formatEntityMetricId({ scope: 'host.memory', field: 'availableBytes' })).toBe(
-      'host.memory.availableBytes'
+    expect(formatEntityMetricId({ scope: 'host.memory', field: 'usedBytes' })).toBe(
+      'host.memory.usedBytes'
     )
   })
 
@@ -119,12 +119,6 @@ describe('formatEntityMetricId', () => {
     ).toThrow()
   })
 
-  it('formats the cpuCore per-entity scope as cpuCore:<coreId>.<field>', () => {
-    expect(formatEntityMetricId({ scope: 'cpuCore', entityId: 'cpu3', field: 'busyPercent' })).toBe(
-      'cpuCore:cpu3.busyPercent'
-    )
-    expect(() => formatEntityMetricId({ scope: 'cpuCore', field: 'busyPercent' })).toThrow()
-  })
 })
 
 describe('toRelayRecord', () => {

@@ -23,7 +23,17 @@ import {
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { formatCoresTotal, serverCpuThreads, serverInventoryCpuCores } from '@/lib/fleet-capacity'
+import { fillSlowFamilyGrid, holdBucketsFor } from '@/lib/metrics-cadence'
+import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from '@/lib/metrics-groups'
+import { attributedSignalTitle } from '@/lib/sensor-commands'
+import {
+  lastFiniteValue,
+  type SummaryBar,
+  summaryBars,
+  type SummaryTone,
+  summaryTone,
+} from '@/lib/metrics-summary'
+import { formatCoresTotal, serverInventoryCpuCores } from '@/lib/fleet-capacity'
 import {
   cpuBusyPercent,
   formatAxisTime,
@@ -31,6 +41,7 @@ import {
   formatBytesPerSecond,
   formatCelsiusAs,
   formatCount,
+  formatQueueDepth,
   formatCoveragePercent,
   formatMilliseconds,
   formatOpsPerSecond,
@@ -38,7 +49,6 @@ import {
   formatPhysicalSignalValue,
   formatUptimeSeconds,
   formatWatts,
-  hardwareSignalDisplayTitle,
   physicalSignalUnitLabel,
   presentSamplesFromGaps,
   type MetricsRangeId,
@@ -48,7 +58,6 @@ import {
   formatEntityMetricId,
   MetricsBackendUnavailableError,
   type BlockDeviceInventoryEntry,
-  type CpuHotspotPoint,
   type DerivedHostValues,
   type EntityMetricScope,
   type EntitySeriesResult,
@@ -136,8 +145,6 @@ type GridPoint = {
   tMs: number
   values: Partial<Record<string, number | null>>
   derived?: DerivedHostValues
-  /** `cpu.detail`'s embedded hotspot slots for this bucket — see `HostSeriesChartPoint.cpuHotspots`. */
-  cpuHotspots?: CpuHotspotPoint[]
 }
 
 type PointValueReader = (point: GridPoint) => number | null
@@ -240,7 +247,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'cpu-modes',
     title: 'CPU utilization',
     unit: '%',
-    // Stacked bottom-up. There is no v4 "nice"/"irq" field (dropped from the
+    // Stacked bottom-up. There is no v5 "nice"/"irq" field (dropped from the
     // contract) — the stack's total tracks `host.cpu.busyPercent` closely,
     // though the two are sampled independently and may not match exactly.
     stacked: true,
@@ -286,18 +293,17 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     hideWhenEmpty: true,
   },
   {
-    id: 'cpu-max-core',
-    title: 'Busiest core',
-    unit: '%',
+    id: 'cpu-saturated-cores',
+    title: 'Cores saturated',
+    unit: 'count',
     series: [
       {
-        id: 'max-core',
-        label: 'Max core busy',
-        read: hostMetric('host.cpu', 'maxCoreBusyPercent'),
+        id: 'saturated-cores',
+        label: 'Cores at 90%+',
+        read: hostMetric('host.cpu', 'saturatedCoreCount'),
       },
     ],
-    yFormat: (v) => formatPercent(v),
-    yDomain: [0, 100],
+    yFormat: (v) => formatCount(v),
   },
   {
     id: 'cpu-processes',
@@ -320,11 +326,17 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatCount(v),
   },
   {
-    id: 'memory-available',
-    title: 'Memory available',
+    id: 'memory-breakdown',
+    title: 'Memory breakdown',
     unit: 'bytes',
     series: [
-      { id: 'available', label: 'Available', read: hostMetric('host.memory', 'availableBytes') },
+      { id: 'used', label: 'Memory used', read: hostMetric('host.memory', 'usedBytes') },
+      {
+        id: 'cached',
+        label: 'Cached files',
+        color: colors.pending,
+        read: hostMetric('host.memory', 'cachedFilesBytes'),
+      },
     ],
     yFormat: (v) => formatBytes(v),
   },
@@ -388,12 +400,16 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   },
   {
     id: 'memory-major-faults',
-    title: 'Major page faults',
+    // A *major* fault is a memory access the kernel had to satisfy by reading
+    // from disk. "Major page faults" says nothing to an operator; this is the
+    // most direct "am I thrashing" signal there is, so it gets named for what
+    // it measures and sits next to swap I/O under Paging.
+    title: 'Memory reads from disk',
     unit: '/s',
     series: [
       {
         id: 'faults',
-        label: 'Faults',
+        label: 'Reads from disk',
         read: hostMetric('host.memory', 'majorPageFaultsPerSecond'),
       },
     ],
@@ -437,29 +453,13 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Disk latency',
     unit: 'ms',
     series: [
-      { id: 'read', label: 'Read', read: hostMetric('host.storage', 'diskReadLatencyMs') },
       {
-        id: 'write',
-        label: 'Write',
-        color: colors.pending,
-        read: hostMetric('host.storage', 'diskWriteLatencyMs'),
+        id: 'latency',
+        label: 'Service time',
+        read: hostMetric('host.storage', 'diskLatencyMs'),
       },
     ],
     yFormat: (v) => formatMilliseconds(v),
-  },
-  {
-    id: 'disk-max-util',
-    title: 'Busiest block device',
-    unit: '%',
-    series: [
-      {
-        id: 'max-util',
-        label: 'Max utilization',
-        read: hostMetric('host.storage', 'maxBlockDeviceUtilPercent'),
-      },
-    ],
-    yFormat: (v) => formatPercent(v),
-    yDomain: [0, 100],
   },
   {
     id: 'root-filesystem-bytes',
@@ -776,80 +776,6 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
 /** Every host canonical id referenced by `HOST_CHART_DEFINITIONS` above — the single request list for the host series query. */
 const HOST_METRIC_IDS: readonly string[] = [...HOST_METRIC_ID_SET]
 
-const HOST_CHART_GROUPS: readonly {
-  id: string
-  label: string
-  hint: string
-  chartIds: readonly string[]
-}[] = [
-  {
-    id: 'cpu',
-    label: 'CPU',
-    hint: 'CPU modes, pressure, and process counts',
-    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-max-core', 'cpu-processes'],
-  },
-  {
-    id: 'memory',
-    label: 'Memory',
-    hint: 'RAM and swap capacity, pressure, and paging',
-    chartIds: [
-      'memory-available',
-      'memory-percent',
-      'swap-bytes',
-      'swap-percent',
-      'memory-pressure',
-      'memory-swap-io',
-      'memory-major-faults',
-    ],
-  },
-  {
-    id: 'storage',
-    label: 'Storage',
-    hint: 'Root filesystem capacity, throughput, and latency',
-    chartIds: [
-      'storage-io-pressure',
-      'disk-throughput',
-      'disk-latency',
-      'disk-max-util',
-      'root-filesystem-bytes',
-      'root-filesystem-percent',
-      'root-filesystem-inodes',
-    ],
-  },
-  {
-    id: 'network',
-    label: 'Network',
-    hint: 'Host-level network and kernel resource pressure',
-    chartIds: ['network-retransmit', 'network-softnet-drops', 'kernel-resources'],
-  },
-  {
-    id: 'cpu-detail',
-    label: 'CPU detail',
-    hint: 'Busiest-core hotspots, frequency range, scheduling, and IRQ time — needs the CPU detail capability',
-    chartIds: [
-      'cpu-detail-frequency',
-      'cpu-detail-scheduling',
-      'cpu-detail-forks',
-      'cpu-detail-irq',
-    ],
-  },
-  {
-    id: 'memory-detail',
-    label: 'Memory detail',
-    hint: 'Slab, dirty, commit, and reclaim breakdown — needs the memory detail capability',
-    chartIds: [
-      'memory-detail-primary',
-      'memory-detail-slab',
-      'memory-detail-dirty',
-      'memory-detail-other-gauges',
-      'memory-detail-commit',
-      'memory-detail-active-inactive',
-      'memory-detail-reclaim',
-      'memory-detail-compaction',
-    ],
-  },
-]
-
 // ---------------------------------------------------------------------------
 // Per-entity chart builders — GPU / network / filesystem / block device /
 // physical-signal groups render dynamically from this server's topology
@@ -864,7 +790,7 @@ const HOST_CHART_GROUPS: readonly {
 // simply comes back absent from `entities[]`.
 // ---------------------------------------------------------------------------
 
-/** Bounds the combined entity request under the server's 128-selector cap (`MAX_SERIES_METRIC_SELECTORS_V4`) — see the module doc comment on `buildEntityMetricPlan`. */
+/** Bounds the combined entity request under the server's 128-selector cap (`MAX_SERIES_METRIC_SELECTORS_V5`) — see the module doc comment on `buildEntityMetricPlan`. */
 const MAX_ENTITY_SELECTORS = 128
 
 const GPU_FIELDS = [
@@ -948,8 +874,7 @@ const DATABASE_PROXY_FIELDS = [
   'backendsUp',
 ] as const
 
-/** Live-only per-core fields — see `CpuCoreLiveSampleV4`. */
-const CPU_CORE_LIVE_FIELDS = ['busyPercent', 'iowaitPercent', 'stealPercent'] as const
+/** Live-only per-core fields — see `CpuCoreLiveSampleV5`. */
 
 type EntityRequestGroup = Readonly<{
   scope: Extract<
@@ -977,16 +902,8 @@ type EntityRequestGroup = Readonly<{
  * different batches; every batch is fetched (see
  * `useServerMetricsSeriesBatches`) and their results merged, so a large
  * topology never silently loses devices to truncation.
- *
- * `liveCoreIds` (`cpu0`, `cpu1`, …, one per logical CPU thread reported in
- * this server's static hello inventory) is empty outside a live session —
- * the daemon only emits `cpu.core.live` rows while a live metrics lease is
- * active, so requesting them otherwise would just come back empty.
  */
-function buildEntityMetricPlan(
-  inventory: TopologyInventory | null,
-  liveCoreIds: readonly string[] = []
-): string[][] {
+function buildEntityMetricPlan(inventory: TopologyInventory | null): string[][] {
   const groups: EntityRequestGroup[] = inventory
     ? [
         ...inventory.gpus.map((gpu): EntityRequestGroup => ({
@@ -1043,11 +960,6 @@ function buildEntityMetricPlan(
       entityId,
       fields: DATABASE_PROXY_FIELDS,
     })),
-    ...liveCoreIds.map((entityId): EntityRequestGroup => ({
-      scope: 'cpuCore',
-      entityId,
-      fields: CPU_CORE_LIVE_FIELDS,
-    }))
   )
 
   const batches: string[][] = []
@@ -1311,9 +1223,12 @@ function blockDeviceChartDefinitions(
     {
       id: `block:${device.deviceId}:queue-depth`,
       title: `${title} · Queue depth`,
-      unit: 'count',
-      series: [{ id: 'depth', label: 'Queue depth', read: metric('queueDepth') }],
-      yFormat: (v) => formatCount(v),
+      // Requests in flight, averaged over the interval — `iostat -x`'s
+      // `aqu-sz`. Dimensionless, and normally well under 1.
+      unit: 'requests',
+      series: [{ id: 'depth', label: 'Avg requests in flight', read: metric('queueDepth') }],
+      yFormat: (v) => formatQueueDepth(v),
+      referenceLine: { value: 1, label: 'Saturated 1.00' },
     },
   ])
 }
@@ -1323,7 +1238,7 @@ function hardwareSignalChartDefinition(
   temperatureUnit: TemperatureUnit
 ): ChartDefinition {
   const threshold = signal.thresholds?.critical ?? signal.thresholds?.warning
-  const title = hardwareSignalDisplayTitle(signal)
+  const title = attributedSignalTitle(signal)
   return {
     id: `hardware:${signal.signalId}`,
     title,
@@ -1503,24 +1418,6 @@ function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
   ])
 }
 
-/** One chart per live-session core — see `CPU_CORE_LIVE_FIELDS`. */
-function cpuCoreLiveChartDefinitions(entityId: string): ChartDefinition[] {
-  return asEntityCharts([
-    {
-      id: `cpuCore:${entityId}:busy`,
-      title: `${entityId} · Busy / iowait / steal`,
-      unit: '%',
-      series: [
-        { id: 'busy', label: 'Busy', read: metric('busyPercent') },
-        { id: 'iowait', label: 'IOwait', color: colors.pending, read: metric('iowaitPercent') },
-        { id: 'steal', label: 'Steal', color: colors.errorSoft, read: metric('stealPercent') },
-      ],
-      yFormat: (v) => formatPercent(v),
-      yDomain: [0, 100],
-    },
-  ])
-}
-
 type EntityChartGroup = Readonly<{
   id: string
   label: string
@@ -1534,14 +1431,22 @@ function buildEntityChartGroups(
   entities: readonly EntitySeriesResult[],
   bucketGrid: readonly number[],
   temperatureUnit: TemperatureUnit,
-  liveCoreIds: readonly string[] = []
+  resolutionSeconds: number
 ): EntityChartGroup[] {
   function pointsFor(family: PerEntityHostedFamily, entityId: string): GridPoint[] {
     const result = entityResultFor(entities, family)
     const entity = result?.entities.find((entry) => entry.entityId === entityId)
     if (!entity) return bucketGrid.map((tMs) => ({ tMs, values: {} }))
     const byBucket = new Map(entity.points.map((point) => [Date.parse(point.at), point]))
-    return bucketGrid.map((tMs) => ({ tMs, values: byBucket.get(tMs)?.values ?? {} }))
+    // Slow-tier families (filesystem, hardware.physical) have no row in most
+    // buckets by design — hold each reading across the interval it covers
+    // rather than drawing four nulls out of every five.
+    return fillSlowFamilyGrid(
+      bucketGrid,
+      (tMs) => byBucket.get(tMs)?.values,
+      holdBucketsFor(family, resolutionSeconds),
+      {}
+    )
   }
 
   /** Whether `entityId` actually reported anything for `family` this range — its presence isn't inventory-gated (see the module doc comment). */
@@ -1652,32 +1557,11 @@ function buildEntityChartGroups(
     groups.push({
       id: 'database-proxy',
       label: 'Database proxy',
-      hint: 'ProxySQL traffic and backend health for this host’s managed database ingress',
+      hint: 'ProxySQL traffic and backend health for this host\u2019s managed database ingress',
       charts: databaseProxySourcesPresent.flatMap((entityId) =>
         databaseProxyChartDefinitions(entityId).map((definition) => ({
           definition,
           points: pointsFor('managed.database_proxy', entityId),
-        }))
-      ),
-    })
-  }
-
-  // `cpuCore` has no topology-inventory concept (like ingress/databaseProxy)
-  // and is live-session-only — `liveCoreIds` is already empty outside a live
-  // session, and `sourcePresent` further drops any core the daemon didn't
-  // actually report this tick.
-  const liveCoresPresent = liveCoreIds.filter((entityId) =>
-    sourcePresent('cpu.core.live', entityId)
-  )
-  if (liveCoresPresent.length > 0) {
-    groups.push({
-      id: 'cpu-cores-live',
-      label: 'CPU cores (live)',
-      hint: 'Per-core busy/iowait/steal — only sampled while this page is open on a live range',
-      charts: liveCoresPresent.flatMap((entityId) =>
-        cpuCoreLiveChartDefinitions(entityId).map((definition) => ({
-          definition,
-          points: pointsFor('cpu.core.live', entityId),
         }))
       ),
     })
@@ -1794,7 +1678,6 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
         tMs: Date.parse(point.at),
         values: point.values,
         derived: point.derived,
-        cpuHotspots: point.cpuHotspots,
       })),
       gapBands: [],
       expectedSamples: host ? host.sampleCount + host.gapCount : 0,
@@ -1839,7 +1722,6 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
       tMs: bucket,
       values: existing.values,
       derived: existing.derived,
-      cpuHotspots: existing.cpuHotspots,
     })
   }
 
@@ -2302,11 +2184,83 @@ function MetricsChartCard({
   )
 }
 
+/**
+ * Collapsed-section summary: the group's headline figure, an 8-bucket bar
+ * chart of its primary series, and a state chip when a threshold is crossed.
+ * `null` for a group with no summary spec, or whose primary chart isn't
+ * present this range.
+ */
+function summarizeGroup(
+  groupId: string,
+  charts: readonly RenderableChart[]
+): { figure: string; bars: SummaryBar[]; tone: SummaryTone } | null {
+  const spec = GROUP_SUMMARY_SPECS[groupId]
+  if (!spec) return null
+  const chart = charts.find((candidate) => candidate.definition.id === spec.chartId)
+  if (!chart) return null
+  const series = spec.seriesId
+    ? chart.definition.series.find((entry) => entry.id === spec.seriesId)
+    : chart.definition.series[0]
+  if (!series) return null
+
+  // A stacked chart's headline is the stack total, not its first band.
+  const values = chart.points.map((point) =>
+    chart.definition.stacked
+      ? chart.definition.series.reduce<number | null>((total, entry) => {
+          const value = entry.read(point)
+          return value === null ? total : (total ?? 0) + value
+        }, null)
+      : series.read(point)
+  )
+  const latest = lastFiniteValue(values)
+  return {
+    figure: latest === null ? '—' : chart.definition.yFormat(latest),
+    bars: summaryBars(values, 8, spec.max),
+    tone: spec.thresholds ? summaryTone(latest, spec.thresholds) : null,
+  }
+}
+
+/**
+ * The mini bar chart itself — plain flex children with percentage heights.
+ * No charting library and no SVG: it renders from points the page already
+ * has, so a collapsed section costs nothing extra to draw.
+ */
+function SummaryBars({
+  bars,
+  tone,
+}: Readonly<{ bars: SummaryBar[]; tone: SummaryTone }>) {
+  return (
+    <View style={styles.summaryBars} accessibilityElementsHidden importantForAccessibility="no">
+      {bars.map((bar, index) => (
+        <View
+          key={index}
+          style={[
+            styles.summaryBar,
+            // A gap stays visibly empty rather than reading as a zero.
+            bar === null
+              ? styles.summaryBarGap
+              : {
+                  height: `${Math.max(6, bar * 100)}%`,
+                  backgroundColor:
+                    tone === 'critical'
+                      ? colors.error
+                      : tone === 'warning'
+                        ? colors.pending
+                        : colors.accent,
+                },
+          ]}
+        />
+      ))}
+    </View>
+  )
+}
+
 function CollapsibleChartGroup({
   id,
   label,
   hint,
-  defaultExpanded,
+  expandedGroups,
+  onToggle,
   twoColumn,
   charts,
   chartDomainMs,
@@ -2317,7 +2271,8 @@ function CollapsibleChartGroup({
   id: string
   label: string
   hint: string
-  defaultExpanded: boolean
+  expandedGroups: ReadonlySet<string>
+  onToggle: (id: string, expanded: boolean) => void
   twoColumn: boolean
   charts: RenderableChart[]
   chartDomainMs: readonly [number, number]
@@ -2325,16 +2280,20 @@ function CollapsibleChartGroup({
   xTickFormat: (ms: number) => string
   breakLines?: readonly number[]
 }>) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  // Collapse state is owned by the screen, not by this component: a local
+  // `useState` reset on every range change, which is why the sections used to
+  // spring back open mid-session.
+  const expanded = expandedGroups.has(id)
+  const setExpanded = (next: (open: boolean) => boolean) => onToggle(id, next(expanded))
   // hideWhenEmpty cards drop out entirely when nothing reported in range — a
   // missing sensor/entity field is absence, not zero.
   const visibleCharts = charts.filter(
     (chart) => !chart.definition.hideWhenEmpty || chartHasAnyData(chart.points, chart.definition)
   )
 
-  if (visibleCharts.length === 0) return null
+  const summary = summarizeGroup(id, visibleCharts)
 
-  const hotspots = id === 'cpu-detail' ? latestHotspots(charts[0]?.points ?? []) : null
+  if (visibleCharts.length === 0) return null
 
   return (
     <View style={styles.chartGroup}>
@@ -2357,24 +2316,30 @@ function CollapsibleChartGroup({
           <Text style={styles.chartGroupTitle}>{label}</Text>
           <Text style={styles.chartGroupHint}>{hint}</Text>
         </View>
+        {summary ? (
+          <View style={styles.groupSummary}>
+            <Text style={styles.groupSummaryFigure}>{summary.figure}</Text>
+            <SummaryBars bars={summary.bars} tone={summary.tone} />
+            {summary.tone ? (
+              <View
+                style={[
+                  styles.groupSummaryChip,
+                  summary.tone === 'critical' && styles.groupSummaryChipCritical,
+                ]}
+              >
+                <Text style={styles.groupSummaryChipText}>
+                  {summary.tone === 'critical' ? 'Critical' : 'Warning'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         <View style={[styles.chartGroupCount, expanded && styles.chartGroupCountActive]}>
           <Text style={[styles.chartGroupCountText, expanded && styles.chartGroupCountTextActive]}>
             {visibleCharts.length}
           </Text>
         </View>
       </Pressable>
-      {expanded && hotspots && hotspots.length > 0 ? (
-        <View style={styles.hotspotRow}>
-          {hotspots.map((hotspot, index) => (
-            <View key={`${hotspot.coreId ?? 'none'}-${index}`} style={styles.hotspotTile}>
-              <Text style={styles.hotspotCoreId}>{hotspot.coreId ?? '—'}</Text>
-              <Text style={styles.hotspotBusy}>
-                {formatPercent(hotspot.values.busyPercent ?? null)}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
       {expanded ? (
         <View style={[styles.chartGrid, twoColumn ? styles.chartGridTwo : null]}>
           {visibleCharts.map((chart) => (
@@ -2413,15 +2378,6 @@ function latestReadValue(points: GridPoint[], read: PointValueReader): number | 
   for (let index = points.length - 1; index >= 0; index -= 1) {
     const value = read(points[index]!)
     if (value != null) return value
-  }
-  return null
-}
-
-/** Most recent non-empty `cpuHotspots` snapshot in range, or `null` if none reported. */
-function latestHotspots(points: GridPoint[]): CpuHotspotPoint[] | null {
-  for (let index = points.length - 1; index >= 0; index -= 1) {
-    const hotspots = points[index]!.cpuHotspots
-    if (hotspots && hotspots.length > 0) return hotspots
   }
   return null
 }
@@ -2724,6 +2680,8 @@ function LiveModeIndicator({
 }
 
 /** Fallback for a stale cache predating `topologyGenerationBreaks`. */
+const EMPTY_EXPANDED_GROUPS: ReadonlySet<string> = new Set()
+
 const EMPTY_GENERATION_BREAKS: readonly number[] = []
 
 function MetricsCharts({
@@ -2758,6 +2716,19 @@ function MetricsCharts({
   const points = hostGrid.points
   const gapBands = hostGrid.gapBands
   const xTickFormat = (ms: number) => formatAxisTime(ms, rangeId)
+  // Sections start collapsed: each header now carries its own figure and mini
+  // bar chart, so a closed section still answers "is this area OK?". Holding
+  // the set here (rather than a `useState` inside each group) is what makes
+  // the choice survive a range change.
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(EMPTY_EXPANDED_GROUPS)
+  const toggleGroup = useCallback((groupId: string, open: boolean) => {
+    setExpandedGroups((current) => {
+      const next = new Set(current)
+      if (open) next.add(groupId)
+      else next.delete(groupId)
+      return next
+    })
+  }, [])
 
   const topologyGenerationBreaks = data.host?.topologyGenerationBreaks ?? EMPTY_GENERATION_BREAKS
 
@@ -2827,7 +2798,8 @@ function MetricsCharts({
           id={group.id}
           label={group.label}
           hint={group.hint}
-          defaultExpanded={true}
+          expandedGroups={expandedGroups}
+          onToggle={toggleGroup}
           twoColumn={twoColumn}
           charts={group.chartIds
             .map((id) => hostChartsById.get(id))
@@ -2845,7 +2817,8 @@ function MetricsCharts({
             id={group.id}
             label={group.label}
             hint={group.hint}
-            defaultExpanded={true}
+            expandedGroups={expandedGroups}
+            onToggle={toggleGroup}
             twoColumn={twoColumn}
             charts={group.charts}
             chartDomainMs={chartDomainMs}
@@ -2921,17 +2894,6 @@ function resolveSampleStats(
   const coverageLabel =
     expectedSamples > 0 ? formatCoveragePercent(presentSamples, expectedSamples) : null
   return { expectedSamples, presentSamples, coverageLabel }
-}
-
-function liveCpuCoreIds(liveActive: boolean, server: OrgServerRecord | null): string[] {
-  if (!liveActive || !server) {
-    return []
-  }
-  const threadCount = serverCpuThreads(server)
-  if (threadCount == null || threadCount <= 0) {
-    return []
-  }
-  return Array.from({ length: threadCount }, (_, index) => `cpu${index}`)
 }
 
 function resolveChartsView(
@@ -3020,7 +2982,6 @@ export function ServerMetricsSection({
   const queryTiming = liveAwareQueryTiming(liveActive, timing)
 
   const server = serversQuery.data?.servers.find((row) => row.id === serverId) ?? null
-  const liveCoreIds = useMemo(() => liveCpuCoreIds(liveActive, server), [liveActive, server])
 
   const metricsQuery = useServerMetricsSeries(
     orgId,
@@ -3040,8 +3001,8 @@ export function ServerMetricsSection({
   const inventory = data?.inventory ?? null
   const topologyGeneration = data?.topologyGeneration ?? null
   const entityMetricBatches = useMemo(
-    () => buildEntityMetricPlan(inventory, liveCoreIds),
-    [inventory, liveCoreIds]
+    () => buildEntityMetricPlan(inventory),
+    [inventory]
   )
 
   const entityQueries = useServerMetricsSeriesBatches(
@@ -3094,10 +3055,10 @@ export function ServerMetricsSection({
             entityResults,
             hostGrid.bucketGrid,
             temperatureUnit,
-            liveCoreIds
+            data?.resolutionSeconds ?? 60
           )
         : [],
-    [inventory, entityResults, hostGrid, temperatureUnit, liveCoreIds]
+    [inventory, entityResults, hostGrid, temperatureUnit, data?.resolutionSeconds]
   )
 
   const chartDomainMs = useMemo(
@@ -3418,31 +3379,49 @@ const styles = StyleSheet.create({
   chartGroupCountTextActive: {
     color: chrome.accent,
   },
-  hotspotRow: {
+  /** Collapsed-section summary: headline figure, mini bar chart, state chip. */
+  groupSummary: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.sm,
   },
-  hotspotTile: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  hotspotCoreId: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  hotspotBusy: {
+  groupSummaryFigure: {
     color: colors.textTitle,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  summaryBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+    height: 20,
+    width: 56,
+  },
+  summaryBar: {
+    flex: 1,
+    borderRadius: 1,
+    minHeight: 1,
+  },
+  summaryBarGap: {
+    height: '100%',
+    backgroundColor: colors.border,
+    opacity: 0.35,
+  },
+  groupSummaryChip: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 1,
+    borderRadius: 3,
+    backgroundColor: colors.bgSecondary,
+  },
+  groupSummaryChipCritical: {
+    backgroundColor: colors.errorSoft,
+  },
+  groupSummaryChipText: {
+    color: colors.textTitle,
+    fontSize: 10,
     fontWeight: '700',
+    textTransform: 'uppercase',
   },
   chartGrid: {
     gap: spacing.lg,

@@ -131,6 +131,9 @@ vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd 
 **CI:** `.github/workflows/verify.yml` runs lint, `check:vocabulary`, `notices:check`, typecheck, `pnpm test:coverage`,
 then a SonarCloud scan with `sonar.qualitygate.wait=true` (`SONAR_TOKEN` required).
 Automatic Analysis must stay **off** for `turbopanel_ui`.
+`pnpm-workspace.yaml` `allowBuilds` must keep native postinstalls (`esbuild`,
+`workerd`, `sharp`, …) approved; pnpm 12 `strictDepBuilds` otherwise fails
+`pnpm install` with `ERR_PNPM_IGNORED_BUILDS`.
 
 **Pre-commit** (`.githooks/pre-commit`): secret scan only (never skippable).
 Lint/typecheck/tests are **temporarily disabled** in the hook until the

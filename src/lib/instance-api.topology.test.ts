@@ -117,7 +117,7 @@ describe('instance-api topology fetch wrappers', () => {
     await expect(
       createDatacenterSubnet('dc-1', {
         cidr: '203.0.113.0/24',
-        name: 'lab-v4',
+        name: 'lab-v5',
       }),
     ).resolves.toEqual({ ok: true, id: 'net-1' })
     const createCall = fetchMock.mock.calls[0]
@@ -127,7 +127,7 @@ describe('instance-api topology fetch wrappers', () => {
     expect(requestInit(createCall).method).toBe('POST')
     expect(requestBody(createCall)).toEqual({
       cidr: '203.0.113.0/24',
-      name: 'lab-v4',
+      name: 'lab-v5',
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))

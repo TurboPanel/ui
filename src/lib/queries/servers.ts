@@ -1,4 +1,4 @@
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createLicense,
   deleteLicense,
@@ -230,7 +230,7 @@ export function useServerMetricsSeries(
  * Same series endpoint as {@link useServerMetricsSeries}, issued as several
  * parallel requests instead of one — each `metricBatches` entry becomes its
  * own request, letting a caller stay under the server's per-request selector
- * cap (`MAX_SERIES_METRIC_SELECTORS_V4`) without dropping any entity. Uses
+ * cap (`MAX_SERIES_METRIC_SELECTORS_V5`) without dropping any entity. Uses
  * `useQueries` rather than one `useServerMetricsSeries` call per batch since
  * the batch count itself varies (topology size), which rules out calling a
  * hook a variable number of times.
@@ -262,6 +262,13 @@ export function useServerMetricsSeriesBatches(
         (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0 && metrics.length > 0,
       refetchInterval: options?.refetchInterval,
       staleTime: options?.staleTime,
+      // Hold the previous batch while a new one loads. The cache key carries
+      // the topology generation and the batch index, so a generation bump or
+      // a change in batch count would otherwise land on a cold entry and
+      // blank every device chart to "Metric unavailable" mid-refresh — the
+      // host series has no such gap, which is why only the per-device charts
+      // appeared to drop out.
+      placeholderData: keepPreviousData,
     })),
   })
 }

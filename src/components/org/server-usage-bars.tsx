@@ -104,7 +104,7 @@ function UsagePendingPlaceholder({ density }: Readonly<{ density: ServerUsageDen
  * Hosts with no sample yet keep the same three tracks as ghost columns
  * (ellipsis values) so the cell does not become a boxed empty-state card.
  *
- * v3 also carried a Load column (`load1/5/15`) — the v4 daemon contract has
+ * v3 also carried a Load column (`load1/5/15`) — the v5 daemon contract has
  * no load-average metric at all, so that column has nothing to show and was
  * dropped rather than left as a permanent placeholder.
  */
