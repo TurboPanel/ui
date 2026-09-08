@@ -24,7 +24,7 @@
 
 | Tab | Content |
 |-----|---------|
-| Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), SSH port (effective + override), labels editor |
+| Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), license tier placement, SSH port (effective + override), machine class pin, hardware profile, labels editor |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
 | Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |
@@ -42,6 +42,22 @@
 - Docker engine-label charset: keys `[A-Za-z0-9][A-Za-z0-9._-]*`, max 64 labels, key/value length 255.
 - Manage-gated (`organization:manage` display hint). Non-managers see a read-only list.
 - Visible labels, errors adjacent to the editor, `toolbarBtn*` for Add/Save/Remove. Monospace keys/values.
+
+## License tier (Overview tab)
+
+- `ServerTierPlacementPanel` reads `tierPlacement` off the detail record — no extra fetch, no polling; the panel is omitted when the record carries none.
+- Header `Badge` = bound license tier (`Unlicensed` when null); tone from `tierPlacementState` in `src/lib/tier-placement.ts` — `danger` below the required floor, `pending` below the recommendation, `info` two or more ranks above it, `ok` otherwise, `muted` when unranked. Ranks come from the billing catalogue when `billingEnabled`, else the `S<n>` label shape (`SX` on top). Never color-only: the label text is always present.
+- Three label/value rows: license tier, required (cores + RAM floor), recommended (discovered NIC / drive / GPU counts). When `tierPlacement.notice` is set (the control plane's daily entitlement-notice marker — hosted only), a fourth **Daily notice** row states what org owners are being emailed about (`exceeds` / `overprovisioned`) and when the last one went out (`formatRelativeLocalDateTime(lastNotifiedAt)`), and a **Daily notice** `Badge` (`pending` for `exceeds`, `info` for `overprovisioned`) sits beside the tier badge in the header. Presence on the wire *is* the state — the panel never infers it from ranks.
+- **Shortfall:** `InlineNotice` (warning) naming the situation, with a primary **Upgrade to Sn** action that deep-links to `/[orgId]/billing?tier=<recommended>&license=<licenseId>` (hosted only — the button is absent when billing is off). Under it, the specific unmonitored devices from `unwatched` (device ids on detail) in `MonoText`, grouped Drives / NICs / GPUs.
+- **Over-provisioned** (license ≥ recommended + 2): muted `InlineNotice` (info) — informational, no action.
+- The servers table shows the same chip (`Tier` column, unwatched **counts** in a one-line note, plus the **Daily notice** chip and a `notified <age> ago` suffix when the marker is set) — same state rules, label-shape ranks only so the O(1) list adds no billing read.
+
+## Machine class (Overview tab)
+
+- `ServerMachineClassPanel` — collapsible, default collapsed, hint shows the current class (`Auto · inferred…` / `Physical · hardware-sensor slots entitled` / `Virtual · no hardware-sensor slots`).
+- `SegmentedControl` **Auto / Physical / Virtual** bound to `server.machineClass` (`null` = Auto). Manage-gated the same way as labels (`organization:manage` display hint; non-managers see the control disabled with "Manage permission required.").
+- Sits under an `InlineNotice` (mirrors the drivetemp opt-in notice) explaining that the pin sets **entitlement, not collection**: Physical unlocks the tier's hardware-sensor slots, Virtual suppresses them, a VM emits no sensor row at any tier, Auto infers Physical once sensors are discovered and never infers Virtual.
+- Saves through `useSetServerMachineClass` (`PATCH /servers/:id { machineClass }`), which invalidates the server's metrics subtree — the capability plan resolves from the class, so the next series payload can gain or lose whole families.
 
 ## Hardware profile panel (Overview tab)
 

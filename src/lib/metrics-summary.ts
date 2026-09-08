@@ -78,6 +78,48 @@ export function lastFiniteValue(
 /** Severity of a collapsed section's state chip. `null` means nothing is wrong and no chip shows. */
 export type SummaryTone = 'warning' | 'critical' | null
 
+export type ReachabilitySummary = {
+  /** `N of M`, or `—` when neither side has reported. */
+  figure: string
+  /** Per-sample `N / M` in 0..1 — the input for `summaryBars(…, 1)`; `null` where either side is missing or `M` is zero. */
+  fractions: SummaryBar[]
+  tone: SummaryTone
+}
+
+/**
+ * "N of M" readout for an up-vs-total pair (router backends up against
+ * backends total). The direction is the opposite of `summaryTone`: here a
+ * *low* number is the fault. Any backend down is a warning; none up while
+ * some exist is critical. A total of zero means nothing is configured, which
+ * is not an outage — no chip. Both sides missing is absence, not a fault.
+ */
+export function reachabilitySummary(
+  up: readonly (number | null | undefined)[],
+  total: readonly (number | null | undefined)[]
+): ReachabilitySummary {
+  const length = Math.max(up.length, total.length)
+  const fractions: SummaryBar[] = []
+  for (let index = 0; index < length; index += 1) {
+    const n = up[index]
+    const m = total[index]
+    const finite =
+      typeof n === 'number' && Number.isFinite(n) && typeof m === 'number' && Number.isFinite(m)
+    fractions.push(finite && m > 0 ? Math.min(1, Math.max(0, n / m)) : null)
+  }
+  const latestUp = lastFiniteValue(up)
+  const latestTotal = lastFiniteValue(total)
+  if (latestUp === null && latestTotal === null) {
+    return { figure: '—', fractions, tone: null }
+  }
+  const figure = `${latestUp === null ? '—' : Math.round(latestUp)} of ${latestTotal === null ? '—' : Math.round(latestTotal)}`
+  let tone: SummaryTone = null
+  if (latestUp !== null && latestTotal !== null && latestTotal > 0) {
+    if (latestUp <= 0) tone = 'critical'
+    else if (latestUp < latestTotal) tone = 'warning'
+  }
+  return { figure, fractions, tone }
+}
+
 /**
  * Threshold check for a collapsed section's chip.
  *

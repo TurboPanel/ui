@@ -146,6 +146,14 @@ export const queryKeys = {
           ['org', orgId, 'topology', 'networks', filters ?? {}] as const,
       },
 
+      billing: {
+        all: ['org', orgId, 'billing'] as const,
+        /** Public-ish catalogue, but org-scoped like everything else so an org switch never serves a stale answer. */
+        catalog: ['org', orgId, 'billing', 'catalog'] as const,
+        /** Projection summary — webhook-driven; invalidated by mutations, never polled. */
+        subscription: ['org', orgId, 'billing', 'subscription'] as const,
+      },
+
       tls: ['org', orgId, 'tls'] as const,
       /** Org CA sits under the tls prefix so one invalidation clears library + CA. */
       tlsCa: ['org', orgId, 'tls', 'ca'] as const,
@@ -336,6 +344,10 @@ export const queryKeys = {
     metricsLiveSettings: ['admin', 'settings', 'metrics-live'] as const,
     /** Instance-wide Git provider applications. The org-scoped list is `org(id).forges`. */
     forges: ['admin', 'settings', 'forges'] as const,
+    /** The billing tier catalogue, entered by hand and verified against Stripe. */
+    tiers: ['admin', 'tiers'] as const,
+    /** The shipped ladder the tier form prefills from. */
+    tierDefaults: ['admin', 'tiers', 'defaults'] as const,
   },
 } as const
 

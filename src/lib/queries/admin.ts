@@ -2,8 +2,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   applyPublicUrls,
   applyReencryptSecrets,
+  type AdminTierCreateBody,
+  type AdminTierPatchBody,
+  createAdminTier,
   createForge,
+  deactivateAdminTier,
   deleteForge,
+  fetchAdminTierDefaults,
+  fetchAdminTiers,
   fetchEmailSettings,
   fetchForges,
   fetchPublicUrls,
@@ -12,6 +18,7 @@ import {
   type ForgeCreate,
   type ForgeUpdate,
   isForbiddenError,
+  patchAdminTier,
   saveEmailSettings,
   savePublicUrls,
   saveServerMetricsLiveSettings,
@@ -20,6 +27,8 @@ import {
   startGithubAppManifest,
   syncForge,
   updateForge,
+  verifyAdminTier,
+  verifyAllAdminTiers,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import {
@@ -310,5 +319,84 @@ export function useSyncForge(scope: 'admin' | 'org') {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: forgesKey(scope) })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Tier catalogue (superadmin)
+//
+// The rows are hand-entered and verified against Stripe server-side. Every
+// mutation invalidates the list, because a write can change reference counts
+// and successor links on rows other than the one written.
+// ---------------------------------------------------------------------------
+
+export function useAdminTiers(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.tiers,
+    queryFn: fetchAdminTiers,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+/**
+ * The shipped ladder. Effectively static, so it is cached hard — it changes
+ * only when the control plane ships a new one.
+ */
+export function useAdminTierDefaults(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.tierDefaults,
+    queryFn: fetchAdminTierDefaults,
+    enabled: options?.enabled ?? true,
+    staleTime: Infinity,
+  })
+}
+
+export function useCreateAdminTier() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: AdminTierCreateBody) => createAdminTier(body),
+    fallbackError: 'Could not add the tier',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+    },
+  })
+}
+
+export function usePatchAdminTier() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (vars: Readonly<{ id: string; body: AdminTierPatchBody }>) =>
+      patchAdminTier(vars.id, vars.body),
+    fallbackError: 'Could not save the tier',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+    },
+  })
+}
+
+export function useDeactivateAdminTier() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (vars: Readonly<{ id: string; successorId?: string | null }>) =>
+      deactivateAdminTier(vars.id, vars.successorId),
+    fallbackError: 'Could not deactivate the tier',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+    },
+  })
+}
+
+/** Read-only on both sides — no invalidation, nothing changed. */
+export function useVerifyAdminTier() {
+  return useApiMutation({
+    mutationFn: (id: string) => verifyAdminTier(id),
+    fallbackError: 'Could not verify the price',
+  })
+}
+
+export function useVerifyAllAdminTiers() {
+  return useApiMutation({
+    mutationFn: () => verifyAllAdminTiers(),
+    fallbackError: 'Could not verify the catalogue',
   })
 }

@@ -45,6 +45,14 @@ export function sensorCommandsFor(signal: {
   const { component, chip, label } = signal
   const commands: SensorCommand[] = []
 
+  // Entity-joined signals (`gpu`, `drive`) have no hwmon file behind them: a
+  // GPU's readings come from NVML/DCGM/sysfs-DRM, and a drive's whole-drive
+  // temperature is derived from its own probes — which are still listed
+  // individually as `component: 'disk'` signals with real commands. Offering
+  // a `sensors '<chip>-*'` line here would print a chip name that does not
+  // exist on the host.
+  if (component === 'gpu' || component === 'drive') return commands
+
   if (component === 'disk' && NVME_DEVICE_RE.test(chip)) {
     const controller = nvmeControllerFor(chip)
     commands.push(
@@ -138,4 +146,20 @@ export function attributedSignalTitle(signal: {
  */
 export function isNvmeCompositeSignal(signal: { component: string; label: string }): boolean {
   return signal.component === 'disk' && signal.label === 'Composite'
+}
+
+/**
+ * Signal identity for a GPU-owned physical reading, mirroring the daemon's
+ * `topology/hardware-signal-topology.ts` `gpuSignalId`. GPU temperature,
+ * memory temperature, and power are `hardware.physical` signals keyed to the
+ * owning GPU, not `gpu`-family fields, so a surface that wants them for a
+ * specific GPU (rather than rendering the signal catalog generically) has to
+ * build the id. Never parse one of these apart: a `gpuId` is opaque and may
+ * itself contain a `:`.
+ */
+export function gpuSignalId(
+  gpuId: string,
+  kind: 'temperature' | 'memory-temperature' | 'power'
+): string {
+  return `signal:gpu:${gpuId}:${kind}`
 }

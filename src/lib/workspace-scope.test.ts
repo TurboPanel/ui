@@ -59,6 +59,7 @@ describe('ORG_AREAS navigation', () => {
       'servers',
       'network',
       'access',
+      'billing',
     ])
   })
 })

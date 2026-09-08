@@ -382,6 +382,21 @@ export function MetricsNavIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
+/** Card with a magnetic stripe — Billing. */
+export function BillingNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 8.25A2.25 2.25 0 0 1 5.25 6h13.5A2.25 2.25 0 0 1 21 8.25v7.5A2.25 2.25 0 0 1 18.75 18H5.25A2.25 2.25 0 0 1 3 15.75v-7.5Zm0 2.25h18M6.75 14.25h3"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 const AREA_ICONS = {
   overview: OverviewNavIcon,
   projects: ProjectsNavIcon,
@@ -389,6 +404,7 @@ const AREA_ICONS = {
   servers: ServersNavIcon,
   network: NetworkingNavIcon,
   access: AccessNavIcon,
+  billing: BillingNavIcon,
 } as const satisfies Record<OrgAreaId, (props: NavIconProps) => ReactElement>
 
 const ADMIN_AREA_ICONS = {
@@ -398,6 +414,8 @@ const ADMIN_AREA_ICONS = {
   signup: SignupNavIcon,
   secrets: SecretsNavIcon,
   metrics: MetricsNavIcon,
+  // The tier catalogue is the billing catalogue seen from the instance side.
+  tiers: BillingNavIcon,
 } as const satisfies Record<AdminAreaId, (props: NavIconProps) => ReactElement>
 
 export function OrgAreaIcon({

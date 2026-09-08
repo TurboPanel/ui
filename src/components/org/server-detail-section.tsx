@@ -25,6 +25,8 @@ import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerHardwareProfileEditor } from '@/components/org/server-hardware-profile-editor'
 import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
+import { ServerMachineClassPanel } from '@/components/org/server-machine-class-panel'
+import { ServerTierPlacementPanel } from '@/components/org/server-tier-placement-panel'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
@@ -893,6 +895,30 @@ function ServerOverviewTab({
           ) : null}
 
           <View style={groupStyle}>
+            <Text style={panelStyles.detailTitle}>Paths</Text>
+            {server.layoutPaths ? (
+              <>
+                <Text style={panelStyles.detailLine}>
+                  <Text style={panelStyles.detailLabel}>Backups: </Text>
+                  <MonoText>{server.layoutPaths.backup}</MonoText>
+                </Text>
+                <Text style={panelStyles.detailLine}>
+                  <Text style={panelStyles.detailLabel}>Logs: </Text>
+                  <MonoText>{server.layoutPaths.logs}</MonoText>
+                </Text>
+                <Text style={panelStyles.muted}>
+                  Set on the host by TURBOPANEL_BACKUP_DIR; point it at other storage there, not
+                  here.
+                </Text>
+              </>
+            ) : (
+              <Text style={panelStyles.muted}>
+                Not reported yet — the daemon sends its paths with its first topology report.
+              </Text>
+            )}
+          </View>
+
+          <View style={groupStyle}>
             <Text style={panelStyles.detailTitle}>Timezone</Text>
             <Text style={panelStyles.detailLine}>
               <Text style={panelStyles.detailLabel}>Effective: </Text>
@@ -913,7 +939,11 @@ function ServerOverviewTab({
         </View>
       </SectionPanel>
 
+      <ServerTierPlacementPanel orgId={orgId} server={server} />
+
       <ServerSshPortPanel orgId={orgId} server={server} canManage={canManage} />
+
+      <ServerMachineClassPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerMetricsSensorsPanel orgId={orgId} server={server} />
 

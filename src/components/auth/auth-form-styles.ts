@@ -170,15 +170,33 @@ export const authFormStyles = StyleSheet.create({
       ? ({
           backdropFilter: 'blur(10px) saturate(140%)',
           WebkitBackdropFilter: 'blur(10px) saturate(140%)',
+          cursor: 'text',
         } as object)
       : {}),
+  },
+  /**
+   * Paints the floating label above the input (so Chrome autofill's opaque
+   * background cannot hide it) but never receives hits — Animated.Text can
+   * drop `pointerEvents` while tweening `top`/`fontSize`, and that mouseup
+   * would blur the field.
+   */
+  floatingLabelLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
+  floatingLabelLayerWithToggle: {
+    right: 48,
   },
   floatingLabel: {
     position: 'absolute',
     left: spacing.md,
     right: spacing.md,
     fontWeight: '500',
-    zIndex: 1,
+    pointerEvents: 'none',
+    ...(Platform.OS === 'web'
+      ? ({ userSelect: 'none', cursor: 'text' } as object)
+      : {}),
   },
   floatingLabelWithToggle: {
     right: 48,
@@ -205,6 +223,7 @@ export const authFormStyles = StyleSheet.create({
     right: spacing.sm,
     top: 0,
     bottom: 0,
+    zIndex: 2,
     minHeight: 44,
     minWidth: 44,
     paddingHorizontal: spacing.sm,

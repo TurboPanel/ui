@@ -23,11 +23,11 @@ import {
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { fillSlowFamilyGrid, holdBucketsFor } from '@/lib/metrics-cadence'
 import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from '@/lib/metrics-groups'
 import { attributedSignalTitle } from '@/lib/sensor-commands'
 import {
   lastFiniteValue,
+  reachabilitySummary,
   type SummaryBar,
   summaryBars,
   type SummaryTone,
@@ -39,16 +39,15 @@ import {
   formatAxisTime,
   formatBytes,
   formatBytesPerSecond,
-  formatCelsiusAs,
   formatCount,
   formatQueueDepth,
   formatCoveragePercent,
+  formatDurationSeconds,
   formatMilliseconds,
   formatOpsPerSecond,
   formatPercent,
   formatPhysicalSignalValue,
   formatUptimeSeconds,
-  formatWatts,
   physicalSignalUnitLabel,
   presentSamplesFromGaps,
   type MetricsRangeId,
@@ -59,6 +58,7 @@ import {
   MetricsBackendUnavailableError,
   type BlockDeviceInventoryEntry,
   type DerivedHostValues,
+  type IngressDerivedValues,
   type EntityMetricScope,
   type EntitySeriesResult,
   type FilesystemInventoryEntry,
@@ -73,6 +73,7 @@ import {
   type TopologyInventory,
 } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { isEntryTierLicense } from '@/lib/tier-placement'
 import { useCan } from '@/lib/query-client'
 import {
   useOrgServers,
@@ -144,7 +145,8 @@ const SERIES_COLORS = [
 type GridPoint = {
   tMs: number
   values: Partial<Record<string, number | null>>
-  derived?: DerivedHostValues
+  /** Host grid points carry `DerivedHostValues`; `managed.ingress` entity points carry `IngressDerivedValues`. */
+  derived?: DerivedHostValues | IngressDerivedValues
 }
 
 type PointValueReader = (point: GridPoint) => number | null
@@ -161,7 +163,21 @@ function metric(key: string): PointValueReader {
 /** Read one server-computed `derived.*` value; missing/non-finite → null. */
 function derived(key: keyof DerivedHostValues): PointValueReader {
   return (point) => {
-    const value = point.derived?.[key]
+    const value = (point.derived as Partial<DerivedHostValues> | undefined)?.[key]
+    if (value == null || !Number.isFinite(value)) return null
+    return value
+  }
+}
+
+/**
+ * Read one read-time ingress derivation (`p50LatencyMs`, …). These are
+ * computed server-side from the cumulative `le` buckets — never re-derived
+ * here, for the same reason `memoryUsedPercent` is not: a quantile cannot
+ * be re-bucketed client-side once the resolution coarsens.
+ */
+function ingressDerived(key: keyof IngressDerivedValues): PointValueReader {
+  return (point) => {
+    const value = (point.derived as Partial<IngressDerivedValues> | undefined)?.[key]
     if (value == null || !Number.isFinite(value)) return null
     return value
   }
@@ -216,11 +232,13 @@ type RenderableChart = Readonly<{
 /**
  * Host-singleton scope shorthand — see `EntityMetricScope`.
  *
- * `cpuDetail`/`memoryDetail` are capability-gated: requested explicitly, and
- * absent entirely on a plan without the capability. Charts built from those
- * scopes must set `hideWhenEmpty: true` so their `CollapsibleChartGroup`
- * self-hides rather than showing an empty section (see
- * `CollapsibleChartGroup`'s `visibleCharts` filter).
+ * `diagnostics` is the merged always-on depth scope (v6 replaced the two
+ * capability-gated `cpuDetail`/`memoryDetail` scopes with it). It is still
+ * requested explicitly rather than by default — 19 extra columns the overview
+ * never renders — and a collector that produced no diagnostics row still
+ * returns nothing, so charts built from it keep `hideWhenEmpty: true` and
+ * their `CollapsibleChartGroup` self-hides rather than showing an empty
+ * section (see `CollapsibleChartGroup`'s `visibleCharts` filter).
  */
 type HostScope = Extract<
   EntityMetricScope,
@@ -229,8 +247,10 @@ type HostScope = Extract<
   | 'host.memory'
   | 'host.storage'
   | 'host.network'
-  | 'cpuDetail'
-  | 'memoryDetail'
+  | 'diagnostics'
+  | 'router'
+  | 'storage'
+  | 'dockerUsage'
 >
 
 /** Every host canonical id this screen ever requests, collected as chart definitions below reference them — see `HOST_METRIC_IDS`. */
@@ -551,18 +571,18 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'CPU frequency',
     unit: 'MHz',
     series: [
-      { id: 'min', label: 'Min', read: hostMetric('cpuDetail', 'minimumFrequencyMHz') },
+      { id: 'min', label: 'Min', read: hostMetric('diagnostics', 'minimumFrequencyMHz') },
       {
         id: 'avg',
         label: 'Avg',
         color: colors.command,
-        read: hostMetric('cpuDetail', 'averageFrequencyMHz'),
+        read: hostMetric('diagnostics', 'averageFrequencyMHz'),
       },
       {
         id: 'max',
         label: 'Max',
         color: colors.pending,
-        read: hostMetric('cpuDetail', 'maximumFrequencyMHz'),
+        read: hostMetric('diagnostics', 'maximumFrequencyMHz'),
       },
     ],
     yFormat: (v) => `${formatCount(v)} MHz`,
@@ -576,13 +596,13 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       {
         id: 'ctxt',
         label: 'Context switches',
-        read: hostMetric('cpuDetail', 'contextSwitchesPerSecond'),
+        read: hostMetric('diagnostics', 'contextSwitchesPerSecond'),
       },
       {
         id: 'intr',
         label: 'Interrupts',
         color: colors.pending,
-        read: hostMetric('cpuDetail', 'interruptsPerSecond'),
+        read: hostMetric('diagnostics', 'interruptsPerSecond'),
       },
     ],
     yFormat: (v) => `${formatCount(v)}/s`,
@@ -592,7 +612,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'cpu-detail-forks',
     title: 'Process forks',
     unit: '/s',
-    series: [{ id: 'forks', label: 'Forks', read: hostMetric('cpuDetail', 'forksPerSecond') }],
+    series: [{ id: 'forks', label: 'Forks', read: hostMetric('diagnostics', 'forksPerSecond') }],
     yFormat: (v) => `${formatCount(v)}/s`,
     hideWhenEmpty: true,
   },
@@ -600,7 +620,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'cpu-detail-irq',
     title: 'IRQ time',
     unit: '%',
-    series: [{ id: 'irq', label: 'IRQ', read: hostMetric('cpuDetail', 'cpuIrqPercent') }],
+    series: [{ id: 'irq', label: 'IRQ', read: hostMetric('diagnostics', 'cpuIrqPercent') }],
     yFormat: (v) => formatPercent(v),
     yDomain: [0, 100],
     hideWhenEmpty: true,
@@ -610,18 +630,18 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Free & cached memory',
     unit: 'bytes',
     series: [
-      { id: 'free', label: 'Free', read: hostMetric('memoryDetail', 'memoryFreeBytes') },
+      { id: 'free', label: 'Free', read: hostMetric('diagnostics', 'memoryFreeBytes') },
       {
         id: 'cached',
         label: 'Cached',
         color: colors.command,
-        read: hostMetric('memoryDetail', 'cachedBytes'),
+        read: hostMetric('diagnostics', 'cachedBytes'),
       },
       {
         id: 'anon',
         label: 'Anonymous',
         color: colors.pending,
-        read: hostMetric('memoryDetail', 'anonPagesBytes'),
+        read: hostMetric('diagnostics', 'anonPagesBytes'),
       },
     ],
     yFormat: (v) => formatBytes(v),
@@ -635,13 +655,13 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       {
         id: 'reclaimable',
         label: 'Reclaimable',
-        read: hostMetric('memoryDetail', 'slabReclaimableBytes'),
+        read: hostMetric('diagnostics', 'slabReclaimableBytes'),
       },
       {
         id: 'unreclaimable',
         label: 'Unreclaimable',
         color: colors.pending,
-        read: hostMetric('memoryDetail', 'slabUnreclaimableBytes'),
+        read: hostMetric('diagnostics', 'slabUnreclaimableBytes'),
       },
     ],
     yFormat: (v) => formatBytes(v),
@@ -652,12 +672,12 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Dirty & writeback pages',
     unit: 'bytes',
     series: [
-      { id: 'dirty', label: 'Dirty', read: hostMetric('memoryDetail', 'dirtyBytes') },
+      { id: 'dirty', label: 'Dirty', read: hostMetric('diagnostics', 'dirtyBytes') },
       {
         id: 'writeback',
         label: 'Writeback',
         color: colors.pending,
-        read: hostMetric('memoryDetail', 'writebackBytes'),
+        read: hostMetric('diagnostics', 'writebackBytes'),
       },
     ],
     yFormat: (v) => formatBytes(v),
@@ -665,22 +685,10 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   },
   {
     id: 'memory-detail-other-gauges',
-    title: 'Shared, page table & kernel stack memory',
+    title: 'Shared memory',
     unit: 'bytes',
     series: [
-      { id: 'shmem', label: 'Shared', read: hostMetric('memoryDetail', 'shmemBytes') },
-      {
-        id: 'page-tables',
-        label: 'Page tables',
-        color: colors.command,
-        read: hostMetric('memoryDetail', 'pageTablesBytes'),
-      },
-      {
-        id: 'kernel-stack',
-        label: 'Kernel stack',
-        color: colors.pending,
-        read: hostMetric('memoryDetail', 'kernelStackBytes'),
-      },
+      { id: 'shmem', label: 'Shared', read: hostMetric('diagnostics', 'shmemBytes') },
     ],
     yFormat: (v) => formatBytes(v),
     hideWhenEmpty: true,
@@ -693,45 +701,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       {
         id: 'committed',
         label: 'Committed',
-        read: hostMetric('memoryDetail', 'committedAsBytes'),
-      },
-      {
-        id: 'limit',
-        label: 'Limit',
-        color: colors.pending,
-        read: hostMetric('memoryDetail', 'commitLimitBytes'),
-      },
-    ],
-    yFormat: (v) => formatBytes(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'memory-detail-active-inactive',
-    title: 'Active & inactive pages',
-    unit: 'bytes',
-    series: [
-      {
-        id: 'active-anon',
-        label: 'Active anon',
-        read: hostMetric('memoryDetail', 'activeAnonBytes'),
-      },
-      {
-        id: 'inactive-anon',
-        label: 'Inactive anon',
-        color: colors.pending,
-        read: hostMetric('memoryDetail', 'inactiveAnonBytes'),
-      },
-      {
-        id: 'active-file',
-        label: 'Active file',
-        color: colors.command,
-        read: hostMetric('memoryDetail', 'activeFileBytes'),
-      },
-      {
-        id: 'inactive-file',
-        label: 'Inactive file',
-        color: colors.log,
-        read: hostMetric('memoryDetail', 'inactiveFileBytes'),
+        read: hostMetric('diagnostics', 'committedAsBytes'),
       },
     ],
     yFormat: (v) => formatBytes(v),
@@ -745,13 +715,13 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       {
         id: 'scan-direct',
         label: 'Direct scan',
-        read: hostMetric('memoryDetail', 'pageScanDirectPerSecond'),
+        read: hostMetric('diagnostics', 'pageScanDirectPerSecond'),
       },
       {
         id: 'scan-kswapd',
         label: 'kswapd scan',
         color: colors.pending,
-        read: hostMetric('memoryDetail', 'pageScanKswapdPerSecond'),
+        read: hostMetric('diagnostics', 'pageScanKswapdPerSecond'),
       },
     ],
     yFormat: (v) => `${formatCount(v)}/s`,
@@ -765,10 +735,318 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       {
         id: 'stalls',
         label: 'Stalls',
-        read: hostMetric('memoryDetail', 'compactionStallsPerSecond'),
+        read: hostMetric('diagnostics', 'compactionStallsPerSecond'),
       },
     ],
     yFormat: (v) => `${formatCount(v)}/s`,
+    hideWhenEmpty: true,
+  },
+
+  // --- managed.router: the shared hosting Traefik ---------------------------
+  // Host-wide and singleton (v6 split it out of `managed.ingress`), so it has
+  // no entity id and rides the host-series request alongside `host.*` and
+  // `diagnostics` rather than the per-entity path. Every chart is
+  // `hideWhenEmpty`: a host not running the shared ingress reports nothing
+  // here, and an empty card is worse than no card.
+  {
+    id: 'router-backend-requests',
+    title: 'Router · Backend requests',
+    unit: 'count',
+    series: [
+      { id: 'requests', label: 'Requests', read: hostMetric('router', 'backendRequests') },
+      {
+        id: 'errors',
+        label: '5xx',
+        color: colors.pending,
+        read: hostMetric('router', 'backendErrors5xx'),
+      },
+      {
+        id: 'retries',
+        label: 'Retries',
+        color: colors.command,
+        read: hostMetric('router', 'retries'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'router-backend-latency',
+    title: 'Router · Backend latency',
+    unit: 'ms',
+    series: [
+      {
+        id: 'latency',
+        label: 'Avg latency',
+        read: hostMetric('router', 'backendLatencyMsAvg'),
+      },
+    ],
+    yFormat: (v) => formatMilliseconds(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'router-backends',
+    title: 'Router · Backends & services',
+    unit: 'count',
+    series: [
+      { id: 'up', label: 'Backends up', read: hostMetric('router', 'backendsUp') },
+      {
+        id: 'total',
+        label: 'Backends total',
+        color: colors.pending,
+        read: hostMetric('router', 'backendsTotal'),
+      },
+      {
+        id: 'services',
+        label: 'Services',
+        color: colors.command,
+        read: hostMetric('router', 'servicesTotal'),
+      },
+      {
+        id: 'routers',
+        label: 'Routers',
+        color: colors.log,
+        read: hostMetric('router', 'routersTotal'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'router-connections',
+    title: 'Router · Open connections',
+    unit: 'count',
+    series: [
+      {
+        id: 'open',
+        label: 'Open',
+        read: hostMetric('router', 'httpOpenConnections'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'router-config',
+    title: 'Router · Config reloads',
+    unit: 'count',
+    series: [
+      { id: 'reloads', label: 'Reloads', read: hostMetric('router', 'configReloads') },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'router-config-age',
+    title: 'Router · Since last config reload',
+    unit: 'seconds',
+    // A gauge in seconds, kept off the reload *count* chart above (a delta
+    // counter): sharing an axis would misrepresent both. The legend's latest
+    // value is the "how stale is the running config" answer — a large age on
+    // a host whose sites change often means the watcher has stopped
+    // picking up edits.
+    series: [
+      {
+        id: 'age',
+        label: 'Since reload',
+        read: hostMetric('router', 'configLastReloadAgeSeconds'),
+      },
+    ],
+    yFormat: (v) => formatDurationSeconds(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'router-tls-expiry',
+    title: 'Router · Soonest TLS expiry',
+    unit: 'days',
+    // The minimum across every certificate, not a mean — one cert about to
+    // lapse matters regardless of how healthy the others are.
+    series: [
+      {
+        id: 'expiry',
+        label: 'Days to expiry',
+        read: hostMetric('router', 'tlsCertSoonestExpiryDays'),
+      },
+    ],
+    yFormat: (v) => `${formatCount(v)}d`,
+    hideWhenEmpty: true,
+  },
+
+  // --- managed.storage: where the host's bytes went --------------------------
+  // Host-wide singleton like `router`. Used bytes are *directory* usage from
+  // the daemon's slow walker; free bytes are the containing filesystem's, so
+  // each used/free pair answers "can this grow" on one chart. Presence-gated:
+  // absent until the walker's first result lands, hence `hideWhenEmpty`.
+  {
+    id: 'managed-storage-hosting',
+    title: 'Hosting root · Used vs free',
+    unit: 'bytes',
+    series: [
+      { id: 'used', label: 'Used', read: hostMetric('storage', 'hostingUsedBytes') },
+      {
+        id: 'free',
+        label: 'Free on filesystem',
+        color: colors.command,
+        read: hostMetric('storage', 'hostingFreeBytes'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-storage-backup',
+    title: 'Backups · Used vs free',
+    unit: 'bytes',
+    series: [
+      { id: 'used', label: 'Used', read: hostMetric('storage', 'backupUsedBytes') },
+      {
+        id: 'free',
+        label: 'Free on filesystem',
+        color: colors.command,
+        read: hostMetric('storage', 'backupFreeBytes'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-storage-docker',
+    title: 'Docker data root · Used',
+    unit: 'bytes',
+    // The one figure shared with the Docker group: this is the total its
+    // layers / containers / volumes / build-cache breakdown sums to. The
+    // wire carries no `dockerFreeBytes` (`StorageSample` is 19 fields with
+    // no spare slot), so the free side is joined at render time from the
+    // docker-role filesystem's own available-bytes series — see
+    // `dockerStorageChart`, which replaces this renderable when that
+    // filesystem is known. This literal stays the fallback and the id the
+    // group wiring (and `metrics-groups.test.ts`) resolves.
+    series: [{ id: 'used', label: 'Used', read: hostMetric('storage', 'dockerUsedBytes') }],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-storage-logs',
+    title: 'Logs · Used vs free',
+    unit: 'bytes',
+    series: [
+      { id: 'used', label: 'Used', read: hostMetric('storage', 'logsUsedBytes') },
+      {
+        id: 'free',
+        label: 'Free on filesystem',
+        color: colors.command,
+        read: hostMetric('storage', 'logsFreeBytes'),
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-storage-engines',
+    title: 'Managed databases · Running vs healthy',
+    unit: 'count',
+    series: [
+      { id: 'pg-running', label: 'Postgres running', read: hostMetric('storage', 'postgresInstancesRunning') },
+      { id: 'pg-healthy', label: 'Postgres healthy', color: colors.command, read: hostMetric('storage', 'postgresInstancesHealthy'), hideWhenEmpty: true },
+      { id: 'my-running', label: 'MySQL running', color: colors.pending, read: hostMetric('storage', 'mysqlInstancesRunning'), hideWhenEmpty: true },
+      { id: 'my-healthy', label: 'MySQL healthy', color: colors.log, read: hostMetric('storage', 'mysqlInstancesHealthy'), hideWhenEmpty: true },
+      { id: 'ma-running', label: 'MariaDB running', color: colors.errorSoft, read: hostMetric('storage', 'mariadbInstancesRunning'), hideWhenEmpty: true },
+      { id: 'ma-healthy', label: 'MariaDB healthy', color: colors.stdout, read: hostMetric('storage', 'mariadbInstancesHealthy'), hideWhenEmpty: true },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-storage-connections',
+    title: 'Managed databases · Connections used vs max',
+    unit: 'count',
+    series: [
+      { id: 'pg-used', label: 'Postgres used', read: hostMetric('storage', 'postgresConnectionsUsed') },
+      { id: 'pg-max', label: 'Postgres max', color: colors.command, read: hostMetric('storage', 'postgresConnectionsMax'), hideWhenEmpty: true },
+      { id: 'my-used', label: 'MySQL used', color: colors.pending, read: hostMetric('storage', 'mysqlConnectionsUsed'), hideWhenEmpty: true },
+      { id: 'my-max', label: 'MySQL max', color: colors.log, read: hostMetric('storage', 'mysqlConnectionsMax'), hideWhenEmpty: true },
+      { id: 'ma-used', label: 'MariaDB used', color: colors.errorSoft, read: hostMetric('storage', 'mariadbConnectionsUsed'), hideWhenEmpty: true },
+      { id: 'ma-max', label: 'MariaDB max', color: colors.stdout, read: hostMetric('storage', 'mariadbConnectionsMax'), hideWhenEmpty: true },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+
+  // --- managed.docker: Docker's own /system/df breakdown ----------------------
+  // Host-wide singleton. Every `*Reclaimable` series is what a prune would
+  // free — dangling images, unreferenced volumes, unused build cache — never
+  // a projection of deleting live objects. The whole group is tier-gated in
+  // `MetricsCharts` (entry tier does not buy the family); within it each
+  // chart is presence-gated like every other managed family.
+  {
+    id: 'managed-docker-layers',
+    title: 'Docker · Image layers',
+    unit: 'bytes',
+    series: [
+      { id: 'bytes', label: 'Layers', read: hostMetric('dockerUsage', 'layersBytes') },
+      {
+        id: 'reclaimable',
+        label: 'Reclaimable (dangling)',
+        color: colors.pending,
+        read: hostMetric('dockerUsage', 'imagesReclaimableBytes'),
+        hideWhenEmpty: true,
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-docker-containers',
+    title: 'Docker · Container writable layers',
+    unit: 'bytes',
+    series: [{ id: 'bytes', label: 'Containers', read: hostMetric('dockerUsage', 'containersBytes') }],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-docker-volumes',
+    title: 'Docker · Volumes',
+    unit: 'bytes',
+    series: [
+      { id: 'bytes', label: 'Volumes', read: hostMetric('dockerUsage', 'volumesBytes') },
+      {
+        id: 'reclaimable',
+        label: 'Reclaimable (unreferenced)',
+        color: colors.pending,
+        read: hostMetric('dockerUsage', 'volumesReclaimableBytes'),
+        hideWhenEmpty: true,
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-docker-build-cache',
+    title: 'Docker · Build cache',
+    unit: 'bytes',
+    series: [
+      { id: 'bytes', label: 'Build cache', read: hostMetric('dockerUsage', 'buildCacheBytes') },
+      {
+        id: 'reclaimable',
+        label: 'Reclaimable (not in use)',
+        color: colors.pending,
+        read: hostMetric('dockerUsage', 'buildCacheReclaimableBytes'),
+        hideWhenEmpty: true,
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'managed-docker-counts',
+    title: 'Docker · Object counts',
+    unit: 'count',
+    series: [
+      { id: 'images', label: 'Images', read: hostMetric('dockerUsage', 'imagesCount') },
+      { id: 'containers', label: 'Containers', color: colors.command, read: hostMetric('dockerUsage', 'containersCount') },
+      { id: 'volumes', label: 'Volumes', color: colors.pending, read: hostMetric('dockerUsage', 'volumesCount') },
+    ],
+    yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
 ]
@@ -783,11 +1061,15 @@ const HOST_METRIC_IDS: readonly string[] = [...HOST_METRIC_ID_SET]
 // inventory concept (presence is scrape-derived on the daemon, not
 // topology-enumerated), but their `sourceId` space is not open-ended either:
 // `IngressAdapterId`/`DatabaseProxyAdapterId` on the daemon are closed unions
-// of exactly the adapters that exist (`"caddy" | "traefik"` and
-// `"proxysql"`), so — unlike GPU/network/etc. — these entity ids don't need
-// discovery at all; they're requested unconditionally, the same way host
-// canonical names are, and a source that isn't actually running that tick
-// simply comes back absent from `entities[]`.
+// of exactly the adapters that exist (`"caddy"` and `"proxysql"`), so —
+// unlike GPU/network/etc. — these entity ids don't need discovery at all;
+// they're requested unconditionally, the same way host canonical names are,
+// and a source that isn't actually running that tick simply comes back absent
+// from `entities[]`.
+//
+// The shared hosting Traefik is no longer one of these: v6 split it out of
+// `managed.ingress` into the host-wide singleton `managed.router` family,
+// which has no entity id at all and is queried on the host-series path.
 // ---------------------------------------------------------------------------
 
 /** Bounds the combined entity request under the server's 128-selector cap (`MAX_SERIES_METRIC_SELECTORS_V5`) — see the module doc comment on `buildEntityMetricPlan`. */
@@ -797,9 +1079,6 @@ const GPU_FIELDS = [
   'utilizationPercent',
   'memoryUsedBytes',
   'memoryActivityPercent',
-  'temperatureCelsius',
-  'memoryTemperatureCelsius',
-  'powerWatts',
   'pcieReceiveBytesPerSecond',
   'pcieTransmitBytesPerSecond',
   'throttlePercent',
@@ -824,21 +1103,19 @@ const BLOCK_FIELDS = [
   'readLatencyMs',
   'writeLatencyMs',
   'utilizationPercent',
-  'temperatureCelsius',
   'queueDepth',
 ] as const
 
 const HARDWARE_SIGNAL_FIELDS = ['value'] as const
 
 /** Every `IngressAdapterId` the daemon can ever report — see the module doc comment above. */
-const INGRESS_SOURCE_IDS = ['caddy', 'traefik'] as const
+const INGRESS_SOURCE_IDS = ['caddy'] as const
 
 /** Every `DatabaseProxyAdapterId` the daemon can ever report — see the module doc comment above. */
 const DATABASE_PROXY_SOURCE_IDS = ['proxysql'] as const
 
 const INGRESS_SOURCE_TITLES: Record<string, string> = {
   caddy: 'Caddy',
-  traefik: 'Traefik',
 }
 
 const DATABASE_PROXY_SOURCE_TITLES: Record<string, string> = {
@@ -854,11 +1131,13 @@ const INGRESS_FIELDS = [
   'requestErrors',
   'requestBytes',
   'responseBytes',
-  'requestDurationSecondsAvg',
-  'requestsUnder100ms',
-  'requestsUnder500ms',
-  'requestsUnder1s',
-  'requestsUnder5s',
+  'requestDurationSecondsSum',
+  'bucket10ms',
+  'bucket50ms',
+  'bucket100ms',
+  'bucket500ms',
+  'bucket1s',
+  'bucket5s',
   'requestsInFlight',
   'upstreamsHealthy',
   'upstreamsTotal',
@@ -868,10 +1147,21 @@ const INGRESS_FIELDS = [
 const DATABASE_PROXY_FIELDS = [
   'queries',
   'slowQueries',
-  'connectionErrors',
+  'queryLatencyMsAvg',
+  'backendLatencyMsAvg',
+  'activeTransactions',
   'clientConnections',
+  'clientConnectionsCreated',
+  'clientConnectionsAborted',
+  'connectionsRejectedMaxConns',
   'backendConnections',
+  'backendConnectionsCreated',
+  'backendConnectionsAborted',
+  'connectionErrors',
   'backendsUp',
+  'backendsTotal',
+  'bytesFromBackends',
+  'bytesToBackends',
 ] as const
 
 /** Live-only per-core fields — see `CpuCoreLiveSampleV5`. */
@@ -1045,31 +1335,13 @@ function gpuChartDefinitions(
       yFormat: (v) => formatBytes(v),
       hideWhenEmpty: true,
     },
-    {
-      id: `gpu:${gpu.gpuId}:temperature`,
-      title: `${title} · Temperature`,
-      unit: physicalSignalUnitLabel('celsius', temperatureUnit),
-      series: [
-        { id: 'core', label: 'Core', read: metric('temperatureCelsius') },
-        {
-          id: 'memory',
-          label: 'Memory',
-          color: colors.command,
-          read: metric('memoryTemperatureCelsius'),
-          hideWhenEmpty: true,
-        },
-      ],
-      yFormat: (v) => formatCelsiusAs(v, temperatureUnit),
-      hideWhenEmpty: true,
-    },
-    {
-      id: `gpu:${gpu.gpuId}:power`,
-      title: `${title} · Power draw`,
-      unit: 'W',
-      series: [{ id: 'power', label: 'Power', read: metric('powerWatts') }],
-      yFormat: (v) => formatWatts(v),
-      hideWhenEmpty: true,
-    },
+    // No temperature/power cards here: GPU temperature, memory temperature,
+    // and power draw are `hardware.physical` signals keyed to this GPU
+    // (`signal:gpu:<gpuId>:temperature` / `:memory-temperature` / `:power`),
+    // so they render through the generic hardware-signal section below off
+    // `inventory.hardwareSignals` — with the thresholds and unit the signal
+    // topology carries. A card reading them off the `gpu` family would be
+    // permanently empty.
     {
       id: `gpu:${gpu.gpuId}:pcie`,
       title: `${title} · PCIe throughput`,
@@ -1212,14 +1484,9 @@ function blockDeviceChartDefinitions(
       yFormat: (v) => formatPercent(v),
       yDomain: [0, 100],
     },
-    {
-      id: `block:${device.deviceId}:temperature`,
-      title: `${title} · Temperature`,
-      unit: physicalSignalUnitLabel('celsius', temperatureUnit),
-      series: [{ id: 'temp', label: 'Temperature', read: metric('temperatureCelsius') }],
-      yFormat: (v) => formatCelsiusAs(v, temperatureUnit),
-      hideWhenEmpty: true,
-    },
+    // Drive temperature is a `hardware.physical` signal keyed to this device
+    // (`signal:block:<deviceId>:temperature`) — same reasoning as the GPU
+    // thermal cards above.
     {
       id: `block:${device.deviceId}:queue-depth`,
       title: `${title} · Queue depth`,
@@ -1309,27 +1576,37 @@ function ingressChartDefinitions(entityId: string): ChartDefinition[] {
       hideWhenEmpty: true,
     },
     {
-      id: `ingress:${entityId}:duration`,
-      title: `${title} · Avg request duration`,
+      id: `ingress:${entityId}:latency`,
+      title: `${title} · Request latency`,
       unit: 'ms',
-      series: [{ id: 'duration', label: 'Duration', read: metric('requestDurationSecondsAvg') }],
-      yFormat: (v) => formatMilliseconds(v * 1000),
+      // Read-time percentiles the route attaches as `derived.*` — interpolated
+      // from the six cumulative `le` buckets the daemon scrapes. The wire
+      // carries only a duration *sum* and those buckets: an average of
+      // per-interval averages is not the window average, and a stored
+      // quantile cannot be re-bucketed, so nothing here is derived
+      // client-side. p999 is deliberately not offered: six buckets cannot
+      // resolve it.
+      series: [
+        { id: 'p50', label: 'p50', read: ingressDerived('p50LatencyMs') },
+        { id: 'p90', label: 'p90', color: colors.command, read: ingressDerived('p90LatencyMs') },
+        { id: 'p99', label: 'p99', color: colors.pending, read: ingressDerived('p99LatencyMs') },
+      ],
+      yFormat: (v) => formatMilliseconds(v),
       hideWhenEmpty: true,
     },
     {
       id: `ingress:${entityId}:latency-buckets`,
       title: `${title} · Requests under threshold`,
       unit: 'count',
+      // Cumulative-`le` buckets: each counts every request at or under its
+      // bound, so the series nest rather than partition.
       series: [
-        { id: 'u100ms', label: '<100ms', read: metric('requestsUnder100ms') },
-        {
-          id: 'u500ms',
-          label: '<500ms',
-          color: colors.command,
-          read: metric('requestsUnder500ms'),
-        },
-        { id: 'u1s', label: '<1s', color: colors.pending, read: metric('requestsUnder1s') },
-        { id: 'u5s', label: '<5s', color: colors.log, read: metric('requestsUnder5s') },
+        { id: 'u10ms', label: '≤10ms', read: metric('bucket10ms') },
+        { id: 'u50ms', label: '≤50ms', color: colors.command, read: metric('bucket50ms') },
+        { id: 'u100ms', label: '≤100ms', color: colors.pending, read: metric('bucket100ms') },
+        { id: 'u500ms', label: '≤500ms', color: colors.log, read: metric('bucket500ms') },
+        { id: 'u1s', label: '≤1s', read: metric('bucket1s') },
+        { id: 'u5s', label: '≤5s', color: colors.command, read: metric('bucket5s') },
       ],
       yFormat: (v) => formatCount(v),
       hideWhenEmpty: true,
@@ -1366,6 +1643,7 @@ function ingressChartDefinitions(entityId: string): ChartDefinition[] {
     },
   ])
 }
+
 
 function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
   const title = DATABASE_PROXY_SOURCE_TITLES[entityId] ?? entityId
@@ -1409,10 +1687,98 @@ function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
       yFormat: (v) => formatCount(v),
     },
     {
+      id: `databaseProxy:${entityId}:latency`,
+      title: `${title} · Query latency`,
+      unit: 'ms',
+      series: [
+        { id: 'total', label: 'Total', read: metric('queryLatencyMsAvg') },
+        {
+          id: 'backend',
+          label: 'Backend',
+          color: colors.pending,
+          read: metric('backendLatencyMsAvg'),
+        },
+      ],
+      yFormat: (v) => formatMilliseconds(v),
+      hideWhenEmpty: true,
+    },
+    {
+      id: `databaseProxy:${entityId}:connection-churn`,
+      title: `${title} · Connection churn`,
+      unit: 'count',
+      series: [
+        { id: 'client-created', label: 'Client created', read: metric('clientConnectionsCreated') },
+        {
+          id: 'client-aborted',
+          label: 'Client aborted',
+          color: colors.pending,
+          read: metric('clientConnectionsAborted'),
+        },
+        {
+          id: 'backend-created',
+          label: 'Backend created',
+          color: colors.command,
+          read: metric('backendConnectionsCreated'),
+        },
+        {
+          id: 'backend-aborted',
+          label: 'Backend aborted',
+          color: colors.log,
+          read: metric('backendConnectionsAborted'),
+        },
+      ],
+      yFormat: (v) => formatCount(v),
+      hideWhenEmpty: true,
+    },
+    {
+      id: `databaseProxy:${entityId}:rejected`,
+      title: `${title} · Rejected (max connections)`,
+      unit: 'count',
+      series: [
+        { id: 'rejected', label: 'Rejected', read: metric('connectionsRejectedMaxConns') },
+      ],
+      yFormat: (v) => formatCount(v),
+      hideWhenEmpty: true,
+    },
+    {
+      id: `databaseProxy:${entityId}:transactions`,
+      title: `${title} · Active transactions`,
+      unit: 'count',
+      series: [
+        { id: 'active', label: 'Active', read: metric('activeTransactions') },
+      ],
+      yFormat: (v) => formatCount(v),
+      hideWhenEmpty: true,
+    },
+    {
+      id: `databaseProxy:${entityId}:backend-bytes`,
+      title: `${title} · Backend traffic`,
+      unit: 'bytes',
+      series: [
+        { id: 'from', label: 'From backends', read: metric('bytesFromBackends') },
+        {
+          id: 'to',
+          label: 'To backends',
+          color: colors.pending,
+          read: metric('bytesToBackends'),
+        },
+      ],
+      yFormat: (v) => formatBytes(v),
+      hideWhenEmpty: true,
+    },
+    {
       id: `databaseProxy:${entityId}:backends-up`,
       title: `${title} · Backends up`,
       unit: 'count',
-      series: [{ id: 'up', label: 'Backends up', read: metric('backendsUp') }],
+      series: [
+        { id: 'up', label: 'Backends up', read: metric('backendsUp') },
+        {
+          id: 'total',
+          label: 'Backends total',
+          color: colors.pending,
+          read: metric('backendsTotal'),
+        },
+      ],
       yFormat: (v) => formatCount(v),
     },
   ])
@@ -1430,23 +1796,17 @@ function buildEntityChartGroups(
   inventory: TopologyInventory | null,
   entities: readonly EntitySeriesResult[],
   bucketGrid: readonly number[],
-  temperatureUnit: TemperatureUnit,
-  resolutionSeconds: number
+  temperatureUnit: TemperatureUnit
 ): EntityChartGroup[] {
   function pointsFor(family: PerEntityHostedFamily, entityId: string): GridPoint[] {
     const result = entityResultFor(entities, family)
     const entity = result?.entities.find((entry) => entry.entityId === entityId)
     if (!entity) return bucketGrid.map((tMs) => ({ tMs, values: {} }))
     const byBucket = new Map(entity.points.map((point) => [Date.parse(point.at), point]))
-    // Slow-tier families (filesystem, hardware.physical) have no row in most
-    // buckets by design — hold each reading across the interval it covers
-    // rather than drawing four nulls out of every five.
-    return fillSlowFamilyGrid(
-      bucketGrid,
-      (tMs) => byBucket.get(tMs)?.values,
-      holdBucketsFor(family, resolutionSeconds),
-      {}
-    )
+    return bucketGrid.map((tMs) => {
+      const point = byBucket.get(tMs)
+      return { tMs, values: point?.values ?? {}, derived: point?.derived }
+    })
   }
 
   /** Whether `entityId` actually reported anything for `family` this range — its presence isn't inventory-gated (see the module doc comment). */
@@ -1540,7 +1900,7 @@ function buildEntityChartGroups(
     groups.push({
       id: 'ingress',
       label: 'Ingress',
-      hint: 'Per-source Caddy/Traefik request traffic for this host’s managed ingress',
+      hint: 'Per-site Caddy request traffic for this host’s managed ingress — the shared router is its own group above',
       charts: ingressSourcesPresent.flatMap((entityId) =>
         ingressChartDefinitions(entityId).map((definition) => ({
           definition,
@@ -2184,6 +2544,9 @@ function MetricsChartCard({
   )
 }
 
+/** A group's collapsed-header readout — see `summarizeGroup`. */
+type GroupSummaryData = Readonly<{ figure: string; bars: SummaryBar[]; tone: SummaryTone }>
+
 /**
  * Collapsed-section summary: the group's headline figure, an 8-bucket bar
  * chart of its primary series, and a state chip when a threshold is crossed.
@@ -2193,11 +2556,30 @@ function MetricsChartCard({
 function summarizeGroup(
   groupId: string,
   charts: readonly RenderableChart[]
-): { figure: string; bars: SummaryBar[]; tone: SummaryTone } | null {
+): GroupSummaryData | null {
   const spec = GROUP_SUMMARY_SPECS[groupId]
   if (!spec) return null
   const chart = charts.find((candidate) => candidate.definition.id === spec.chartId)
   if (!chart) return null
+  if (spec.reachability) {
+    // `N of M` from an up/total pair — the Router header's backend
+    // reachability. Bars plot the fraction reachable, so a dip is a backend
+    // going away, and the chip fires on a *low* figure.
+    const up = chart.definition.series.find((entry) => entry.id === spec.reachability?.upSeriesId)
+    const total = chart.definition.series.find(
+      (entry) => entry.id === spec.reachability?.totalSeriesId
+    )
+    if (!up || !total) return null
+    const summary = reachabilitySummary(
+      chart.points.map((point) => up.read(point)),
+      chart.points.map((point) => total.read(point))
+    )
+    return {
+      figure: summary.figure,
+      bars: summaryBars(summary.fractions, 8, 1),
+      tone: summary.tone,
+    }
+  }
   const series = spec.seriesId
     ? chart.definition.series.find((entry) => entry.id === spec.seriesId)
     : chart.definition.series[0]
@@ -2225,32 +2607,62 @@ function summarizeGroup(
  * No charting library and no SVG: it renders from points the page already
  * has, so a collapsed section costs nothing extra to draw.
  */
+/**
+ * Bar fill for a group's state. Distinct from `severityToneColor`: an
+ * untoned group is drawing its normal series, so it falls back to `accent`
+ * rather than to the dim text colour an `info` event uses.
+ */
+function summaryBarColor(tone: SummaryTone): string {
+  if (tone === 'critical') return colors.error
+  if (tone === 'warning') return colors.pending
+  return colors.accent
+}
+
 function SummaryBars({
   bars,
   tone,
 }: Readonly<{ bars: SummaryBar[]; tone: SummaryTone }>) {
+  // A bar is a fixed time bucket, so its position is its identity — the row
+  // is a constant length, never reordered, and rebuilt wholesale whenever the
+  // range changes.
+  const buckets = bars.map((value, position) => ({ key: `bucket-${position}`, value }))
+  const fill = summaryBarColor(tone)
   return (
     <View style={styles.summaryBars} accessibilityElementsHidden importantForAccessibility="no">
-      {bars.map((bar, index) => (
+      {buckets.map((bucket) => (
         <View
-          key={index}
+          key={bucket.key}
           style={[
             styles.summaryBar,
             // A gap stays visibly empty rather than reading as a zero.
-            bar === null
+            bucket.value === null
               ? styles.summaryBarGap
               : {
-                  height: `${Math.max(6, bar * 100)}%`,
-                  backgroundColor:
-                    tone === 'critical'
-                      ? colors.error
-                      : tone === 'warning'
-                        ? colors.pending
-                        : colors.accent,
+                  height: `${Math.max(6, bucket.value * 100)}%`,
+                  backgroundColor: fill,
                 },
           ]}
         />
       ))}
+    </View>
+  )
+}
+
+/** The collapsed header's right-hand readout: headline figure, mini bars, and a state chip when toned. */
+function GroupSummary({
+  summary,
+}: Readonly<{ summary: GroupSummaryData | null }>) {
+  if (!summary) return null
+  const critical = summary.tone === 'critical'
+  return (
+    <View style={styles.groupSummary}>
+      <Text style={styles.groupSummaryFigure}>{summary.figure}</Text>
+      <SummaryBars bars={summary.bars} tone={summary.tone} />
+      {summary.tone ? (
+        <View style={[styles.groupSummaryChip, critical && styles.groupSummaryChipCritical]}>
+          <Text style={styles.groupSummaryChipText}>{critical ? 'Critical' : 'Warning'}</Text>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -2316,24 +2728,7 @@ function CollapsibleChartGroup({
           <Text style={styles.chartGroupTitle}>{label}</Text>
           <Text style={styles.chartGroupHint}>{hint}</Text>
         </View>
-        {summary ? (
-          <View style={styles.groupSummary}>
-            <Text style={styles.groupSummaryFigure}>{summary.figure}</Text>
-            <SummaryBars bars={summary.bars} tone={summary.tone} />
-            {summary.tone ? (
-              <View
-                style={[
-                  styles.groupSummaryChip,
-                  summary.tone === 'critical' && styles.groupSummaryChipCritical,
-                ]}
-              >
-                <Text style={styles.groupSummaryChipText}>
-                  {summary.tone === 'critical' ? 'Critical' : 'Warning'}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        <GroupSummary summary={summary} />
         <View style={[styles.chartGroupCount, expanded && styles.chartGroupCountActive]}>
           <Text style={[styles.chartGroupCountText, expanded && styles.chartGroupCountTextActive]}>
             {visibleCharts.length}
@@ -2684,6 +3079,121 @@ const EMPTY_EXPANDED_GROUPS: ReadonlySet<string> = new Set()
 
 const EMPTY_GENERATION_BREAKS: readonly number[] = []
 
+const DOCKER_GROUP_ID = 'managed-docker'
+const MANAGED_STORAGE_GROUP_ID = 'managed-storage'
+const DOCKER_STORAGE_CHART_ID = 'managed-storage-docker'
+
+/**
+ * The four `managed.storage` directory roles, in the order their used/free
+ * charts appear. Each is joined with the inode chart of the filesystem that
+ * carries it, so every role has the same "can this grow" context (bytes
+ * *and* inodes) rather than only hosting and Docker.
+ */
+const MANAGED_STORAGE_ROLES = ['hosting', 'backup', 'docker', 'logs'] as const
+
+/**
+ * Joins the Storage-usage group with the inode series of the filesystems
+ * that carry the hosting / backup / Docker / logs roles — the wire has no
+ * `hosting_filesystem_id`, so the join key is `inventory.filesystems[].roles`
+ * (the same identity the Filesystems group titles by). A role that lives on
+ * the root filesystem reuses the Storage group's root-inode chart. Bytes
+ * used/free already sit on the host row; inodes are the one figure only the
+ * per-filesystem series has. One filesystem carrying several roles joins
+ * once.
+ */
+function storageRoleInodeCharts(
+  inventory: TopologyInventory | null,
+  entityGroups: readonly EntityChartGroup[],
+  hostChartsById: ReadonlyMap<string, RenderableChart>
+): RenderableChart[] {
+  if (!inventory) return []
+  const filesystemsGroup = entityGroups.find((group) => group.id === 'filesystems')
+  const out: RenderableChart[] = []
+  for (const fs of inventory.filesystems) {
+    const relevant = MANAGED_STORAGE_ROLES.some((role) => fs.roles.includes(role))
+    if (!relevant) continue
+    if (fs.isRoot) {
+      const root = hostChartsById.get('root-filesystem-inodes')
+      if (root && !out.includes(root)) out.push(root)
+      continue
+    }
+    const chart = filesystemsGroup?.charts.find(
+      (entry) => entry.definition.id === `filesystem:${fs.filesystemId}:inodes`
+    )
+    if (chart && !out.includes(chart)) out.push(chart)
+  }
+  return out
+}
+
+/** Client-side join key for the Docker free series — not a wire field, never requested. */
+const DOCKER_FREE_JOIN_KEY = 'join.dockerFreeBytes'
+
+/**
+ * The Docker data root's used-vs-free pair. `managed.storage` reports
+ * `dockerUsedBytes` but has no free counterpart on the wire, so the free
+ * side is what the other three `*FreeBytes` fields already mean — the
+ * containing filesystem's available bytes — read off the docker-role
+ * filesystem: the host row's `rootFilesystemAvailableBytes` when Docker
+ * lives on root, else that filesystem's own entity series. Entity points are
+ * aligned onto the host bucket grid by index (`buildEntityChartGroups`), so
+ * the two can share one chart without a time join. Falls back to the plain
+ * used-only definition when no filesystem carries the role.
+ */
+function dockerStorageChart(
+  inventory: TopologyInventory | null,
+  entityGroups: readonly EntityChartGroup[],
+  hostChartsById: ReadonlyMap<string, RenderableChart>
+): RenderableChart | null {
+  const base = hostChartsById.get(DOCKER_STORAGE_CHART_ID)
+  if (!base) return null
+  const dockerFs = inventory?.filesystems.find((fs) => fs.roles.includes('docker')) ?? null
+  if (!dockerFs) return base
+
+  let points = base.points
+  let readFree: PointValueReader
+  if (dockerFs.isRoot) {
+    readFree = metric(
+      formatEntityMetricId({ scope: 'host.storage', field: 'rootFilesystemAvailableBytes' })
+    )
+  } else {
+    const filesystemsGroup = entityGroups.find((group) => group.id === 'filesystems')
+    const available = filesystemsGroup?.charts.find(
+      (entry) => entry.definition.id === `filesystem:${dockerFs.filesystemId}:available`
+    )
+    if (!available) return base
+    const readAvailable = metric('availableBytes')
+    points = base.points.map((point, index) => {
+      const entityPoint = available.points[index]
+      return {
+        ...point,
+        values: {
+          ...point.values,
+          [DOCKER_FREE_JOIN_KEY]: entityPoint ? readAvailable(entityPoint) : null,
+        },
+      }
+    })
+    readFree = metric(DOCKER_FREE_JOIN_KEY)
+  }
+
+  return {
+    definition: {
+      ...base.definition,
+      title: 'Docker data root · Used vs free',
+      series: [
+        ...base.definition.series,
+        {
+          id: 'free',
+          label: 'Free on filesystem',
+          color: colors.command,
+          read: readFree,
+          hideWhenEmpty: true,
+        },
+      ],
+    },
+    points,
+  }
+}
+
 function MetricsCharts({
   data,
   hostGrid,
@@ -2747,6 +3257,18 @@ function MetricsCharts({
     () => new Map(hostCharts.map((chart) => [chart.definition.id, chart])),
     [hostCharts]
   )
+  // Entry-tier licenses do not buy `managed.docker` (the capability plan's
+  // `managedDockerEnabled` is off there). A missing tier — self-hosted, or an
+  // unassigned host — keeps the group: the platform default plan grants it.
+  const dockerUsageWithheld = isEntryTierLicense(server?.tierPlacement?.licenseTier)
+  const storageInodeCharts = useMemo(
+    () => storageRoleInodeCharts(data.inventory, entityGroups, hostChartsById),
+    [data.inventory, entityGroups, hostChartsById]
+  )
+  const dockerStorage = useMemo(
+    () => dockerStorageChart(data.inventory, entityGroups, hostChartsById),
+    [data.inventory, entityGroups, hostChartsById]
+  )
 
   const coveragePercent = expectedSamples > 0 ? (presentSamples / expectedSamples) * 100 : 0
   const gapPercent = Math.max(0, 100 - coveragePercent)
@@ -2792,24 +3314,40 @@ function MetricsCharts({
         </View>
       </View>
 
-      {HOST_CHART_GROUPS.map((group) => (
-        <CollapsibleChartGroup
-          key={group.id}
-          id={group.id}
-          label={group.label}
-          hint={group.hint}
-          expandedGroups={expandedGroups}
-          onToggle={toggleGroup}
-          twoColumn={twoColumn}
-          charts={group.chartIds
-            .map((id) => hostChartsById.get(id))
-            .filter((chart): chart is RenderableChart => chart != null)}
-          chartDomainMs={chartDomainMs}
-          gapBands={gapBands}
-          xTickFormat={xTickFormat}
-          breakLines={breakLines}
-        />
-      ))}
+      {HOST_CHART_GROUPS.map((group) => {
+        if (group.id === DOCKER_GROUP_ID && dockerUsageWithheld) {
+          // Gate on the *tier*, not on whether the family happened to be in
+          // the response: the operator should see why it is absent.
+          return (
+            <InlineNotice
+              key={group.id}
+              title="Docker usage charts need a higher tier"
+              body={`Image, container, volume, and build-cache accounting is not included on ${server?.tierPlacement?.licenseTier ?? 'the entry tier'}. The Docker data root's total still appears under Storage usage.`}
+            />
+          )
+        }
+        return (
+          <CollapsibleChartGroup
+            key={group.id}
+            id={group.id}
+            label={group.label}
+            hint={group.hint}
+            expandedGroups={expandedGroups}
+            onToggle={toggleGroup}
+            twoColumn={twoColumn}
+            charts={[
+              ...group.chartIds
+                .map((id) => (id === DOCKER_STORAGE_CHART_ID ? dockerStorage : hostChartsById.get(id)))
+                .filter((chart): chart is RenderableChart => chart != null),
+              ...(group.id === MANAGED_STORAGE_GROUP_ID ? storageInodeCharts : []),
+            ]}
+            chartDomainMs={chartDomainMs}
+            gapBands={gapBands}
+            xTickFormat={xTickFormat}
+            breakLines={breakLines}
+          />
+        )
+      })}
 
       {entityGroups.map((group) => (
         <Fragment key={group.id}>
@@ -3054,11 +3592,10 @@ export function ServerMetricsSection({
             inventory,
             entityResults,
             hostGrid.bucketGrid,
-            temperatureUnit,
-            data?.resolutionSeconds ?? 60
+            temperatureUnit
           )
         : [],
-    [inventory, entityResults, hostGrid, temperatureUnit, data?.resolutionSeconds]
+    [inventory, entityResults, hostGrid, temperatureUnit]
   )
 
   const chartDomainMs = useMemo(

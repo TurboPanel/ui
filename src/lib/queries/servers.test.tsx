@@ -39,6 +39,7 @@ import {
   useServerUpdateStatus,
   useServersUpdateStatus,
   useSetServerHostname,
+  useSetServerMachineClass,
   useSetServerNtp,
   useSetServerTimezone,
   useStartServerMetricsLive,
@@ -1025,6 +1026,29 @@ describe('servers query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
+  })
+
+  it('useSetServerMachineClass pins the class and invalidates the metrics subtree', async () => {
+    updateServer.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSetServerMachineClass(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run('virtual')
+    expect(updateServer).toHaveBeenCalledWith(serverId, { machineClass: 'virtual' })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.metrics(serverId),
+    })
+
+    updateServer.mockResolvedValueOnce({ ok: true })
+    await result.current.run(null)
+    expect(updateServer).toHaveBeenLastCalledWith(serverId, { machineClass: null })
   })
 
   it('useSaveServerLabels replaces label map', async () => {

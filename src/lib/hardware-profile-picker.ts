@@ -51,8 +51,8 @@ export const REGULAR_SLOT_FIELDS = SLOT_FIELDS.filter(
   ({ field }) => field !== 'disk1Temperature' && field !== 'disk2Temperature'
 )
 
-/** Mirrors the daemon's `MAX_NIC_SLOTS` — the hard ceiling on monitored NIC slots per server. */
-export const MAX_NIC_SLOTS = 8
+/** Mirrors the daemon's `MAX_NIC_SLOTS` — the hard ceiling on monitored NIC slots per server (the S7 / SX entitlement). */
+export const MAX_NIC_SLOTS = 11
 
 /**
  * One row per NIC slot the operator may fill (index = slot − 1); `null` is

@@ -6,12 +6,13 @@ import {
 } from '@/lib/admin-navigation'
 
 describe('ADMIN_AREAS', () => {
-  it('lists the six admin areas with stable path segments', () => {
+  it('lists the seven admin areas with stable path segments', () => {
     expect(ADMIN_AREAS.map((a) => a.id)).toEqual([
       'networking',
       'email',
       'git',
       'signup',
+      'tiers',
       'secrets',
       'metrics',
     ])
@@ -25,6 +26,7 @@ describe('adminAreaHref', () => {
     expect(adminAreaHref('email')).toBe('/admin/email')
     expect(adminAreaHref('git')).toBe('/admin/git')
     expect(adminAreaHref('signup')).toBe('/admin/signup')
+    expect(adminAreaHref('tiers')).toBe('/admin/tiers')
     expect(adminAreaHref('secrets')).toBe('/admin/secrets')
     expect(adminAreaHref('metrics')).toBe('/admin/metrics')
   })

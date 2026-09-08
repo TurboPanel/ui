@@ -2,7 +2,12 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { EmptyState, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { attributedSignalTitle, isNvmeCompositeSignal, sensorCommandsFor } from '@/lib/sensor-commands'
+import {
+  attributedSignalTitle,
+  gpuSignalId,
+  isNvmeCompositeSignal,
+  sensorCommandsFor,
+} from '@/lib/sensor-commands'
 import { formatPhysicalSignalValue, type TemperatureUnit } from '@/lib/format-metrics'
 import {
   formatEntityMetricId,
@@ -19,7 +24,11 @@ import { colors, spacing } from '@/lib/theme'
 /** Short recent window — this is a latest-reading summary, not a chart; the Metrics tab owns history. */
 const SENSORS_PANEL_RANGE_MS = 10 * 60 * 1000
 
-const GPU_SUMMARY_FIELDS = ['utilizationPercent', 'temperatureCelsius', 'powerWatts'] as const
+// GPU temperature and power draw are not `gpu`-family fields — they are
+// `hardware.physical` signals keyed to the owning GPU, already covered by
+// this panel's per-signal request below (`gpuSignalId`). Only workload
+// telemetry is read off the `gpu` family here.
+const GPU_SUMMARY_FIELDS = ['utilizationPercent'] as const
 const HARDWARE_SIGNAL_SUMMARY_FIELDS = ['value'] as const
 
 function computeSensorsPanelRange(): { fromIso: string; toIso: string } {
@@ -182,7 +191,12 @@ export function ServerMetricsSensorsPanel({
   )
 
   const gpus = inventory?.gpus ?? []
-  const hardwareSignals = inventory?.hardwareSignals ?? []
+  // GPU temperature/power are `hardware.physical` signals now, but `GpuRow`
+  // above already shows them on the GPU's own row — listing them again under
+  // "Physical signals" would show every reading twice per GPU.
+  const hardwareSignals = (inventory?.hardwareSignals ?? []).filter(
+    (signal) => signal.component !== 'gpu'
+  )
   const entities = entityQuery.data?.entities
   const noDevices = gpus.length === 0 && hardwareSignals.length === 0
 
@@ -238,11 +252,16 @@ export function ServerMetricsSensorsPanel({
               )}
               temperatureCelsius={latestEntityValue(
                 entities,
-                'gpu',
-                gpu.gpuId,
-                'temperatureCelsius'
+                'hardware.physical',
+                gpuSignalId(gpu.gpuId, 'temperature'),
+                'value'
               )}
-              powerWatts={latestEntityValue(entities, 'gpu', gpu.gpuId, 'powerWatts')}
+              powerWatts={latestEntityValue(
+                entities,
+                'hardware.physical',
+                gpuSignalId(gpu.gpuId, 'power'),
+                'value'
+              )}
               temperatureUnit={temperatureUnit}
             />
           ))}

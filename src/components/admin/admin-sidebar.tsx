@@ -4,6 +4,7 @@ import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { AdminAreaIcon } from '@/components/icons/nav-icons'
 import { ADMIN_AREAS, adminAreaHref } from '@/lib/admin-navigation'
+import { useAuth } from '@/lib/auth-context'
 import { glass } from '@/lib/glass'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
@@ -12,6 +13,12 @@ export function AdminSidebar({
 }: Readonly<{ onNavigate?: () => void }>) {
   const pathname = usePathname()
   const router = useRouter()
+  const { billingEnabled } = useAuth()
+  // The tier catalogue is a hosted (Workers) surface; self-hosted has no
+  // billing and no `/tiers` routes, so the entry is omitted rather than 404ing.
+  const areas = ADMIN_AREAS.filter(
+    (area) => area.id !== 'tiers' || billingEnabled,
+  )
 
   return (
     <GlassSurface style={styles.sidebar} intensity="strong">
@@ -21,7 +28,7 @@ export function AdminSidebar({
       </View>
 
       <View style={styles.nav}>
-        {ADMIN_AREAS.map((area) => {
+        {areas.map((area) => {
           const areaHref = adminAreaHref(area.pathSegment)
           const areaActive =
             pathname === areaHref || pathname.startsWith(`${areaHref}/`)

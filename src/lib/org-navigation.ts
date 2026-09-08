@@ -115,6 +115,16 @@ export const ORG_AREAS = [
     hint: 'Roles, permissions, and grants',
     subRoutes: [],
   },
+  {
+    // Hosted only: the sidebar drops this entry and the route redirects to
+    // Overview when `InstallStatus.billingEnabled` is false (self-hosted).
+    // Deep-link-only on native, like Managed / Network / Access.
+    id: 'billing',
+    label: 'Billing',
+    pathSegment: 'billing',
+    hint: 'Subscription, seats per tier, invoices, and payment method',
+    subRoutes: [],
+  },
 ] as const
 
 export type OrgAreaId = (typeof ORG_AREAS)[number]['id']
@@ -273,6 +283,27 @@ export function organizationsHref(): '/organizations' {
 
 export function orgManageHref(orgId: string): `/${string}/manage` {
   return `/${orgId}/manage`
+}
+
+/**
+ * Query keys the billing screen reads on arrival: `tier` (catalogue tier id
+ * or label) pre-selects the target tier, `license` pre-selects the license
+ * to move — the server detail Upgrade button sets both. Stripe's own
+ * return adds `checkout=success|cancel` (see the control plane's
+ * `checkoutReturnUrls`).
+ */
+export const BILLING_TIER_QUERY_PARAM = 'tier'
+export const BILLING_LICENSE_QUERY_PARAM = 'license'
+
+export function orgBillingHref(
+  orgId: string,
+  preselect?: Readonly<{ tier?: string | null; license?: string | null }>,
+): string {
+  const params = new URLSearchParams()
+  if (preselect?.tier) params.set(BILLING_TIER_QUERY_PARAM, preselect.tier)
+  if (preselect?.license) params.set(BILLING_LICENSE_QUERY_PARAM, preselect.license)
+  const query = params.toString()
+  return query.length > 0 ? `/${orgId}/billing?${query}` : `/${orgId}/billing`
 }
 
 export function serverMetricsHref(

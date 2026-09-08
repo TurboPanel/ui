@@ -143,6 +143,15 @@ export type InstallStatus = {
   /** Workers: defaults to true when env and DB are unset (sign-up is the bootstrap path). */
   isSignupEnabled: boolean
   isSignupEmailVerificationEnabled?: boolean
+  /**
+   * Stripe billing is configured on this control plane. Presence of the
+   * instance's billing config is the flag — self-hosted answers `false` and
+   * every `/billing/*` route 503s `billing_not_configured`, so the console
+   * hides the Billing area wholesale rather than rendering an error page.
+   * Optional on the type (older instances omit it); `fetchInstallStatus`
+   * always fills it in.
+   */
+  billingEnabled?: boolean
 }
 
 export async function fetchSession(): Promise<SessionInfo | null> {
@@ -206,6 +215,7 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
     `${CLIENT_API}/status`
   )
   return {
+    billingEnabled: body.billingEnabled === true,
     ...(body.runtime === 'deno' || body.runtime === 'workers' ? { runtime: body.runtime } : {}),
     ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
     ...(body.isInstallMode === undefined && body.needsInstall === undefined
@@ -370,11 +380,87 @@ export type ServerDatacenterRef = {
   name: string | null
 }
 
+/**
+ * Declared `server.machine_class`. `null` until pinned via `PATCH /servers/:id`
+ * or inferred `physical` at ingest (sensors discovered) — never inferred
+ * `virtual`. The pin sets which metrics slots the license *entitles*
+ * (`physical` unlocks hardware-sensor slots, `virtual` suppresses them); it
+ * does not change what the daemon collects.
+ */
+export type ServerMachineClass = 'physical' | 'virtual'
+
+/**
+ * Devices beyond the effective plan's slot counts — the drives/NICs/GPUs the
+ * daemon enumerates but never samples. The list route sends **counts**; the
+ * detail route sends **device ids** so a panel can name them.
+ */
+export type TierUnwatched<U extends number | string[]> = {
+  nics: U
+  drives: U
+  gpus: U
+}
+
+/**
+ * Why the hosted daily notice fires for a server: `exceeds` when the license
+ * ranks below the recommended placement (devices go unmonitored),
+ * `overprovisioned` when it ranks above it. Mirrors the control plane's
+ * `TierNoticeKind` (`turbopanel/src/lib/tiers/tier-notice-sweep.ts`).
+ */
+export type TierNoticeKind = 'exceeds' | 'overprovisioned'
+
+/**
+ * The hosted daily entitlement notice — the control plane's
+ * `server.metadata.tierNotice` marker, projected onto `tierPlacement` so the
+ * console can show that org owners are being emailed about this host and
+ * when the last one went out. The sweep re-sends every 24 h while the
+ * placement stays out of tier and clears the marker once it is back in
+ * line, so presence *is* the "nagging" state — the console never infers it
+ * from ranks (the sweep's `overprovisioned` fires one rank above the
+ * recommendation; the UI's `above-hardware` chip waits for two).
+ */
+export type TierNoticeState = {
+  kind: TierNoticeKind
+  /** ISO instant of the most recent owner email. */
+  lastNotifiedAt: string
+}
+
+/**
+ * License vs hardware placement for one server (`tierPlacement` on both
+ * server DTOs). Tier values are catalogue **labels** (`S1`…`S7`, `SX`):
+ * `licenseTier` is the bound license's tier or `null` when unassigned /
+ * self-hosted; `requiredTier` is the hard floor from CPU cores + RAM;
+ * `recommendedTier` is the harder of required and discovered NIC / drive /
+ * GPU counts. Rank comparison lives in `src/lib/tier-placement.ts`.
+ * `notice` is the daily-notice marker (hosted only) — `null` when no notice
+ * is active, absent on a control plane that predates the field.
+ */
+export type TierPlacementRecord<U extends number | string[] = number | string[]> = {
+  licenseTier: string | null
+  requiredTier: string
+  recommendedTier: string
+  unwatched: TierUnwatched<U>
+  notice?: TierNoticeState | null
+}
+
+export type ServerLayoutPaths = {
+  backup: string
+  logs: string
+}
+
 export type OrgServerRecord = {
   id: string
   name: string | null
   organizationId: string | null
   licenseId: string | null
+  /** Unwatched device **counts** on the list; the detail record narrows this to ids. */
+  tierPlacement: TierPlacementRecord | null
+  machineClass: ServerMachineClass | null
+  /**
+   * Host layout paths from the daemon's latest topology snapshot — where
+   * managed-engine backups land and its log directory. Read-only: set by the
+   * daemon's environment on the host. Null until a v6 daemon has reported.
+   */
+  layoutPaths: ServerLayoutPaths | null
   options: Record<string, unknown> | null
   createdAt: string
   connected: boolean
@@ -421,6 +507,8 @@ export type OrgServerRecord = {
 }
 
 export type ServerDetailRecord = OrgServerRecord & {
+  /** Detail names the specific unwatched devices (ids), not just counts. */
+  tierPlacement: TierPlacementRecord<string[]> | null
   orgDefaultTimezone: string | null
   enforceServerTimezone: boolean
   datacenterDefaultTimezone: string | null
@@ -449,6 +537,9 @@ export type OrgDefaultTimezoneSettings = {
 function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
   return {
     ...server,
+    tierPlacement: server.tierPlacement ?? null,
+    machineClass: server.machineClass ?? null,
+    layoutPaths: server.layoutPaths ?? null,
     datacenters: server.datacenters ?? [],
     sshPort: server.sshPort ?? 22,
     sshPortSource: server.sshPortSource ?? null,
@@ -497,6 +588,8 @@ export async function updateServer(
   serverId: string,
   body: {
     name?: string | null
+    /** Top-level (not `options`): pins `server.machine_class`; `null` clears the pin so ingest infers again. */
+    machineClass?: ServerMachineClass | null
     options?: {
       sshPort?: number | null
       ntp?: NtpDefaults | null
@@ -1229,6 +1322,210 @@ export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
 export async function deleteLicense(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/licenses/${id}`, {
     method: 'DELETE',
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Billing — `/api/client/v1/billing/*` (hosted only). Owner-only; every route
+// answers 503 `billing_not_configured` on self-hosted, which is why the
+// console gates the whole area on `InstallStatus.billingEnabled` instead of
+// probing. Org scope rides the usual organization header. Amounts are
+// integer minor units (cents) straight from the provider — never computed
+// client-side.
+// ---------------------------------------------------------------------------
+
+export const BILLING_NOT_CONFIGURED_ERROR = 'billing_not_configured'
+export const BILLING_MUTATION_IN_PROGRESS_ERROR = 'billing_mutation_in_progress'
+export const SUBSCRIPTION_PAST_DUE_ERROR = 'subscription_past_due'
+export const SUBSCRIPTION_EXISTS_ERROR = 'subscription_exists'
+export const NO_SUBSCRIPTION_ERROR = 'no_subscription'
+export const LICENSE_HAS_PENDING_CHANGE_ERROR = 'license_has_pending_change'
+
+export type BillingTierEntitlements = {
+  maxCores: number
+  maxMemoryBytes: number
+  nicSlots: number
+  driveSlots: number
+  gpuSlots: number
+  filesystemSlots: number
+}
+
+/** One catalogue row — the `S1`…`S7` ladder plus the negotiated `SX`. */
+export type BillingTier = {
+  id: string
+  /** `S1`…`S7`, `SX`. */
+  label: string
+  generation: number
+  /** Ladder position; entry tier is rank 1. Compare tiers by this, never by label text. */
+  rank: number
+  /** Monthly price per seat in minor units; `null` for negotiated (custom) offerings. */
+  priceCents: number | null
+  isCustom: boolean
+  entitlements: BillingTierEntitlements
+}
+
+/** Per-tier seats vs licenses from the projection. */
+export type BillingTierSeats = {
+  tierId: string
+  label: string
+  /** Committed provider quantity at this tier. */
+  seats: number
+  /** Active licenses at this tier. */
+  licensesUsed: number
+  /** The subset bound to a server. */
+  licensesBound: number
+  /** Seats a new key can be minted against, net of outstanding seat releases. */
+  licensesFree: number
+}
+
+export type BillingPendingChangeKind = 'upgrade' | 'downgrade' | 'release-seat'
+
+export type BillingPendingChange = {
+  id: string
+  kind: BillingPendingChangeKind
+  licenseId: string | null
+  fromTierId: string
+  toTierId: string | null
+  createdAt: string
+  /** Set on upgrades (24 h); `null` on deferred changes, which live until the period boundary. */
+  expiresAt: string | null
+}
+
+export type BillingSubscriptionState = {
+  /** Provider status verbatim (`active`, `past_due`, `canceled`, …). */
+  status: string
+  currentPeriodEnd: string | null
+  pastDueSince: string | null
+  /** Entitlement survives until this moment while past due; the grace clock cancels after it. */
+  graceExpiresAt: string | null
+  /** A deferred change (downgrade / seat release) is parked on a subscription schedule. */
+  scheduleAttached: boolean
+}
+
+export type BillingSubscriptionSummary = {
+  /** `null` until the first checkout created a provider customer. */
+  payer: { taxId: string | null } | null
+  subscription: BillingSubscriptionState | null
+  tiers: BillingTierSeats[]
+  pendingChanges: BillingPendingChange[]
+}
+
+export type BillingPreviewLine = {
+  description: string | null
+  amount: number
+  proration: boolean
+}
+
+/** Stripe's quote for a change. Pass `prorationDate` back verbatim on apply so the invoice matches. */
+export type BillingPreview = {
+  prorationDate: number
+  currency: string | null
+  subtotal: number | null
+  tax: number | null
+  total: number | null
+  amountDue: number | null
+  lines: BillingPreviewLine[]
+}
+
+export type BillingMutationResponse = {
+  ok: true
+  /** The immediate charge failed and Stripe parked the change; entitlement is unchanged until it applies. */
+  pending?: boolean
+  /** Parked on a schedule for the period boundary. */
+  deferred?: boolean
+  intentId?: string
+  scheduleId?: string | null
+}
+
+/**
+ * Provider statuses after which a subscription is gone for good — checkout
+ * is allowed again. Mirrors the control plane's `isEndedStatus`
+ * (`turbopanel/src/lib/db/billing-records.ts`); `past_due` and `unpaid` are
+ * *delinquent but live* there, so they stay out of this set.
+ */
+const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set(['canceled', 'incomplete_expired'])
+
+/** Mirrors the control plane's `DELINQUENT_SUBSCRIPTION_STATUSES` — entitlement-raising changes 409 `subscription_past_due`. */
+export const DELINQUENT_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set(['past_due', 'unpaid'])
+
+/** True when the summary carries a subscription that still governs entitlement. */
+export function hasLiveBillingSubscription(
+  summary: BillingSubscriptionSummary | null | undefined
+): boolean {
+  const status = summary?.subscription?.status
+  return typeof status === 'string' && !ENDED_SUBSCRIPTION_STATUSES.has(status)
+}
+
+export async function fetchBillingCatalog(): Promise<{ tiers: BillingTier[] }> {
+  return await apiFetch(`${CLIENT_API}/billing/catalog`)
+}
+
+export async function fetchBillingSubscription(): Promise<BillingSubscriptionSummary> {
+  return await apiFetch(`${CLIENT_API}/billing/subscription`)
+}
+
+/** First purchase → hosted Checkout URL. 409 `subscription_exists` once a live subscription is projected. */
+export async function createBillingCheckout(body: {
+  tierId: string
+  quantity?: number
+}): Promise<{ url: string; sessionId?: string }> {
+  return await apiFetch(`${CLIENT_API}/billing/checkout`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Customer Portal session (invoices + payment methods). 404 when no provider customer exists yet. */
+export async function createBillingPortalSession(): Promise<{ url: string }> {
+  return await apiFetch(`${CLIENT_API}/billing/portal`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+/** Either a seat-quantity change (`tierId` + `delta`) or a tier move for one license (`licenseId` + `targetTierId`). */
+export type BillingPreviewBody =
+  { tierId: string; delta: number } | { licenseId: string; targetTierId: string }
+
+export async function previewBillingChange(body: BillingPreviewBody): Promise<BillingPreview> {
+  return await apiFetch(`${CLIENT_API}/billing/preview`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** `delta > 0` is invoiced now (pass the preview's `prorationDate`); `delta < 0` defers to the period boundary. */
+export async function changeBillingSeats(body: {
+  tierId: string
+  delta: number
+  prorationDate?: number
+}): Promise<BillingMutationResponse> {
+  return await apiFetch(`${CLIENT_API}/billing/seats`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Move one license to a higher tier, invoiced now. `prorationDate` comes from the preview. */
+export async function upgradeBillingLicense(body: {
+  licenseId: string
+  targetTierId: string
+  prorationDate?: number
+}): Promise<BillingMutationResponse> {
+  return await apiFetch(`${CLIENT_API}/billing/upgrade`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Move one license to a lower tier at the period boundary — no credit, no immediate invoice. */
+export async function downgradeBillingLicense(body: {
+  licenseId: string
+  targetTierId: string
+}): Promise<BillingMutationResponse> {
+  return await apiFetch(`${CLIENT_API}/billing/downgrade`, {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 
@@ -2530,6 +2827,178 @@ export async function applyReencryptSecrets(
     method: 'POST',
     body: JSON.stringify(body ?? {}),
   })
+}
+
+// ---------------------------------------------------------------------------
+// Admin tier catalogue (superadmin)
+//
+// Nothing seeds these rows. The owner creates the Product and Price in the
+// Stripe Dashboard; a superadmin enters the row here and the server verifies
+// it against Stripe before writing. The one field nothing can derive is the
+// price id, which is why the form prefills everything else.
+// ---------------------------------------------------------------------------
+
+export type AdminTierEntitlements = {
+  maxCores: number
+  maxMemoryBytes: number
+  nicSlots: number
+  driveSlots: number
+  gpuSlots: number
+  filesystemSlots: number
+}
+
+export type AdminTierReferences = {
+  licenses: number
+  seats: number
+}
+
+export type AdminTier = {
+  id: string
+  generation: number
+  rank: number
+  label: string
+  priceCents: number | null
+  providerPriceId: string | null
+  isCustom: boolean
+  isActive: boolean
+  successorId: string | null
+  entitlements: AdminTierEntitlements
+  references: AdminTierReferences
+  /** False once any license or seat points at the row. */
+  entitlementsEditable: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type AdminTierPriceSummary = {
+  id: string
+  active: boolean
+  currency: string
+  unitAmount: number | null
+  interval: string | null
+  intervalCount: number | null
+  billingScheme: string | null
+  taxBehavior: string | null
+  livemode: boolean
+  lookupKey: string | null
+  nickname: string | null
+  productId: string | null
+  productName: string | null
+  productActive: boolean | null
+}
+
+export type AdminTierVerification = {
+  ok: boolean
+  failures: string[]
+  price: AdminTierPriceSummary | null
+}
+
+export type AdminTierDefaultEntry = AdminTierEntitlements & {
+  label: string
+  rank: number
+  priceCents: number | null
+  isCustom: boolean
+}
+
+export type AdminTierDefaults = {
+  labelPattern: string
+  currency: string
+  slotCeilings: {
+    nicSlots: number
+    driveSlots: number
+    gpuSlots: number
+    filesystemSlots: number
+  }
+  unbounded: { maxCores: number; maxMemoryBytes: number }
+  placementBands: {
+    maxCores: number[]
+    maxMemoryBytes: number[]
+    nicSlots: number[]
+  }
+  tiers: AdminTierDefaultEntry[]
+}
+
+export type AdminTierCreateBody = AdminTierEntitlements & {
+  generation: number
+  label: string
+  rank: number
+  priceCents: number | null
+  providerPriceId: string | null
+  isCustom: boolean
+  isActive?: boolean
+}
+
+export type AdminTierPatchBody = Partial<
+  AdminTierEntitlements & {
+    rank: number
+    priceCents: number | null
+    providerPriceId: string | null
+    isCustom: boolean
+    isActive: boolean
+    successorId: string | null
+  }
+>
+
+export type AdminTierWriteResponse = {
+  tier: AdminTier
+  verification: AdminTierVerification | null
+  warnings: string[]
+}
+
+export async function fetchAdminTiers(): Promise<{ tiers: AdminTier[] }> {
+  return await apiFetch(`${ADMIN_API}/tiers`)
+}
+
+export async function fetchAdminTierDefaults(): Promise<AdminTierDefaults> {
+  return await apiFetch(`${ADMIN_API}/tiers/defaults`)
+}
+
+export async function createAdminTier(body: AdminTierCreateBody): Promise<AdminTierWriteResponse> {
+  return await apiFetch(`${ADMIN_API}/tiers`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function patchAdminTier(
+  id: string,
+  body: AdminTierPatchBody
+): Promise<AdminTierWriteResponse> {
+  return await apiFetch(`${ADMIN_API}/tiers/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deactivateAdminTier(
+  id: string,
+  successorId?: string | null
+): Promise<{ tier: AdminTier }> {
+  return await apiFetch(`${ADMIN_API}/tiers/${encodeURIComponent(id)}/deactivate`, {
+    method: 'POST',
+    body: JSON.stringify(successorId === undefined ? {} : { successorId }),
+  })
+}
+
+/** Read-only: safe to press as often as you like. */
+export async function verifyAdminTier(
+  id: string
+): Promise<{ verification: AdminTierVerification }> {
+  return await apiFetch(`${ADMIN_API}/tiers/${encodeURIComponent(id)}/verify`, {
+    method: 'POST',
+  })
+}
+
+export type AdminTierVerifyAllResult = AdminTierVerification & {
+  id: string
+  label: string
+  generation: number
+}
+
+export async function verifyAllAdminTiers(): Promise<{
+  results: AdminTierVerifyAllResult[]
+}> {
+  return await apiFetch(`${ADMIN_API}/tiers/verify`, { method: 'POST' })
 }
 
 export type DaemonCellSnapshot = {
@@ -4581,19 +5050,26 @@ export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'
 /**
  * Wire-facing identity for a single v5 metric on a single entity instance —
  * mirrors `turbopanel/src/daemon/metrics/entity-metric-id.ts`. Host-singleton
- * scopes (`host.cpu`/`host.kernel`/`host.memory`/`host.storage`/`host.network`)
- * have exactly one instance per server, so their identity is just
- * `<scope>.<field>` (`host.cpu.busyPercent`) — no entity id. Per-entity scopes
+ * scopes (`host.cpu`/`host.kernel`/`host.memory`/`host.storage`/`host.network`/
+ * `router`) have exactly one instance per server, so their identity is just
+ * `<scope>.<field>` (`host.cpu.busyPercent`, `router.backendsUp`) — no entity
+ * id. `router` (`managed.router`) is host-wide and singleton even though it is
+ * a `managed.*` family: unlike `ingress`/`databaseProxy` there is exactly one
+ * shared HTTP router per host, so it rides the host-series request. `storage`
+ * (`managed.storage` — where the host's bytes went: hosting / backup / Docker /
+ * logs directory usage plus the managed-database census) and `dockerUsage`
+ * (`managed.docker` — Docker's own `/system/df` breakdown) are host-wide for
+ * the same reason and ride the same request. Per-entity scopes
  * (`network`/`filesystem`/`block`/`gpu`/`hardwareSignal`/`ingress`/
  * `databaseProxy`) prefix an alias + entity id: `network:eth0.receiveBytesPerSecond`,
  * `hardware:psu1.value`. `hardwareSignal` uses the short alias `hardware` for
  * wire brevity; every other scope's alias matches its scope name.
  *
- * `cpuDetail`/`memoryDetail` are host-singleton too (one `cpu.detail`/
- * `memory.detail` row per server) but capability-gated — a plan without the
- * capability just never returns their fields.
- * deliberately NOT a scope here — `cpuDetail`'s 4 embedded hotspot slots are
- * surfaced as part of that singleton's response payload instead, see
+ * `diagnostics` is host-singleton too (one `host.diagnostics` row per
+ * server), covering both the CPU frequency/scheduling scalars and the memory
+ * meminfo/vmstat gauges. v6 merged what used to be two capability-gated
+ * `cpuDetail`/`memoryDetail` scopes into this one always-on scope, so its
+ * fields are available on every server rather than only on entitled plans.
  */
 export type EntityMetricScope =
   | 'host.cpu'
@@ -4601,8 +5077,10 @@ export type EntityMetricScope =
   | 'host.memory'
   | 'host.storage'
   | 'host.network'
-  | 'cpuDetail'
-  | 'memoryDetail'
+  | 'diagnostics'
+  | 'router'
+  | 'storage'
+  | 'dockerUsage'
   | 'network'
   | 'filesystem'
   | 'block'
@@ -4617,8 +5095,10 @@ const HOST_SINGLETON_ENTITY_SCOPES: ReadonlySet<EntityMetricScope> = new Set([
   'host.memory',
   'host.storage',
   'host.network',
-  'cpuDetail',
-  'memoryDetail',
+  'diagnostics',
+  'router',
+  'storage',
+  'dockerUsage',
 ])
 
 /** Per-entity scope -> wire alias. Only `hardwareSignal` differs from its scope name. */
@@ -4657,7 +5137,7 @@ export function formatEntityMetricId(selector: {
   return `${alias}:${selector.entityId}.${selector.field}`
 }
 
-/** Conceptual per-entity metric grouping — mirrors `HostedFamilyV5`'s per-entity subset. */
+/** Conceptual per-entity metric grouping — mirrors `HostedFamily`'s per-entity subset. */
 export type PerEntityHostedFamily =
   | 'gpu'
   | 'network'
@@ -4696,7 +5176,15 @@ export type NetworkInventoryEntry = {
   defaultRoute?: boolean
 }
 
-export type FilesystemRole = 'root' | 'hosting' | 'docker' | 'application' | 'custom'
+/**
+ * Mirrors the daemon's `FilesystemRole` (`turbopaneld/src/metrics/topology/types.ts`).
+ * `backup` (the managed-backup root) and `logs` (the daemon log directory)
+ * arrived in v6 with the `managed.storage` family — they are the join keys
+ * the Storage-usage group uses to pair each directory's used/free bytes with
+ * its filesystem's inode series.
+ */
+export type FilesystemRole =
+  'root' | 'hosting' | 'docker' | 'backup' | 'logs' | 'application' | 'custom'
 
 export type FilesystemInventoryEntry = {
   filesystemId: string
@@ -4762,7 +5250,7 @@ export type TopologyInventory = {
 
 /**
  * Server-computed presentation values for one host series point — mirrors
- * `DerivedHostValuesV5` (`turbopanel/src/daemon/metrics/query/derived-metrics-v5.ts`).
+ * `DerivedHostValues` (`turbopanel/src/daemon/metrics/query/derived-metrics.ts`).
  * Every field is `null` when an input it needs is missing or a denominator
  * would be zero — never coerced to `0`.
  */
@@ -4815,10 +5303,29 @@ export type HostSeriesChartResponse = {
   topologyGenerations?: number[]
 }
 
+/**
+ * Read-time derivations the route attaches to every `managed.ingress` point —
+ * mirrors `IngressDerivedValues` (`turbopanel/src/daemon/metrics/query/derived-metrics.ts`).
+ * Percentiles are `histogram_quantile`-style interpolations over the six
+ * cumulative `le` buckets the daemon scrapes; they are computed at read time
+ * because a stored quantile cannot be re-bucketed at a coarser resolution.
+ * p999 is deliberately not offered — six buckets cannot resolve it. `null`
+ * when an input field was not requested or the bucket saw no requests.
+ */
+export type IngressDerivedValues = {
+  errorRatePercent: number | null
+  averageLatencyMs: number | null
+  p50LatencyMs: number | null
+  p90LatencyMs: number | null
+  p99LatencyMs: number | null
+}
+
 export type EntitySeriesPoint = {
   at: string
   /** Keyed by bare field name (`utilizationPercent`, `receiveBytesPerSecond`, …) — never a canonical name, since these scopes always carry an entity id separately. */
   values: Partial<Record<string, number | null>>
+  /** Present on `managed.ingress` points only. */
+  derived?: IngressDerivedValues
   sampleCount?: number
   expectedSampleCount?: number
 }
@@ -4900,7 +5407,7 @@ export type FleetMetricsLatestResponse = {
  * swap). v3's `load1`/`load5`/`load15` have no v5 analogue — the daemon
  * contract carries no load-average metric at all — so the fleet overview's
  * load column has nothing to show; this is a known, deliberate capability
- * gap, not an oversight. Mirrors the server's own `FLEET_HOST_METRICS_V5`.
+ * gap, not an oversight. Mirrors the server's own `FLEET_HOST_METRICS`.
  */
 export const FLEET_HOST_METRICS = [
   'host.cpu.busyPercent',
@@ -4913,7 +5420,7 @@ export const FLEET_HOST_METRICS = [
 
 export type MetricEventSeverity = 'info' | 'warning' | 'critical'
 
-/** Hardware-health / lifecycle notice — mirrors `MetricEventV5`. */
+/** Hardware-health / lifecycle notice — mirrors `MetricEvent`. */
 export type MetricEvent = {
   eventId: string
   at: string

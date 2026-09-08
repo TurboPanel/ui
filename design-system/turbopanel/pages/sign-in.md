@@ -31,14 +31,14 @@
 - Generous vertical rhythm vs dense dashboard pages (density dial conceptually ~4 here)  
 - Tokens only from `src/lib/theme.ts` — no raw hex in auth screens  
 - **Backdrop** (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid on all platforms (RN Web drops CSS `backgroundImage` on `View`); wash uses **opaque** accent→black mixes + extra stops (Safari bands/dithers alpha gradients); 4 Reanimated streaks via shared values; honor reduced motion  
-- **Floating labels** (`AuthFloatingField`): label sits inside the field as the resting “placeholder”, then shrinks to the top on focus or when the field has a value; focused border + raised label use the runtime accent  
+- **Floating labels** (`AuthFloatingField`): label sits inside the field as the resting “placeholder”, then shrinks to the top on focus or when the field has a value; focused border + raised label use the runtime accent. The label paints **above** the input (Chrome autofill would hide a label behind an opaque fill) but must ignore pointer events for the whole raise — first click focuses and stays focused so paste works.  
 - Password visibility toggle is an **eye / eye-slash** icon button (`auth-eye-icons.tsx`) with an accessible name — not “Show” / “Hide” text  
 - Bootstrap/recovery spinners: muted until `runtime` is known, then blue/green (`authSpinnerColor`); Sign In CTA spinner uses `onAccent`
 
 ## Motion
 
 - Subtle field focus / button press only  
-- Floating label raise/settle ~160ms  
+- Floating label raise/settle ~160ms (0ms when `useReducedMotion`)  
 - Backdrop: **2 horizontal + 2 vertical** hairline streaks (accent-tinted, bright tip); each lap picks a random grid line; honor `useReducedMotion` (no streaks)  
 - No hero video, no ambient blob backgrounds, no pulsing glow / neon scan lines
 
@@ -51,4 +51,5 @@
 - ❌ Defaulting the HA bootstrap spinner to green before `/status` returns  
 - ❌ Emoji in validation messages as primary icons  
 - ❌ Placeholder-only fields with no visible label when empty *and* when filled (floating label must remain visible when raised)  
+- ❌ Letting the floating-label animation eat the first click (label must ignore pointer events for the whole raise, including mid-tween frames)  
 - ❌ Text “Show” / “Hide” for password visibility on sign-in  

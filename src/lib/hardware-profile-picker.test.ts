@@ -512,7 +512,7 @@ describe('slot field catalogs', () => {
     ])
     expect(REGULAR_SLOT_FIELDS.some(({ field }) => field.startsWith('disk'))).toBe(false)
     expect(REGULAR_SLOT_FIELDS).toHaveLength(SLOT_FIELDS.length - DISK_SLOT_FIELDS.length)
-    expect(MAX_NIC_SLOTS).toBe(8)
+    expect(MAX_NIC_SLOTS).toBe(11)
   })
 })
 

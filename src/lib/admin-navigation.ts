@@ -28,6 +28,13 @@ export const ADMIN_AREAS = [
     subRoutes: [],
   },
   {
+    id: 'tiers',
+    label: 'Tiers',
+    pathSegment: 'tiers',
+    hint: 'Billing tier catalogue, entered by hand and verified against Stripe',
+    subRoutes: [],
+  },
+  {
     id: 'secrets',
     label: 'Secrets',
     pathSegment: 'secrets',

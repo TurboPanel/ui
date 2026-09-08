@@ -8,6 +8,7 @@ import {
   orgAreaFromPathname,
   defaultOrgDashboardHref,
   orgManageHref,
+  orgBillingHref,
   organizationsHref,
   orgRouteHref,
   orgTabHref,
@@ -292,5 +293,20 @@ describe('orgAreaFromPathname edge cases', () => {
     expect(orgAreaFromPathname('/org')).toBeNull()
     expect(orgAreaFromPathname('/')).toBeNull()
     expect(orgAreaFromPathname('/org/not-an-area')).toBeNull()
+  })
+})
+
+describe('orgBillingHref', () => {
+  it('links to the billing area with no query when nothing is preselected', () => {
+    expect(orgBillingHref('org-1')).toBe('/org-1/billing')
+    expect(orgBillingHref('org-1', {})).toBe('/org-1/billing')
+    expect(orgBillingHref('org-1', { tier: null, license: null })).toBe('/org-1/billing')
+  })
+
+  it('carries the target tier and the license to move as query params', () => {
+    expect(orgBillingHref('org-1', { tier: 'S3' })).toBe('/org-1/billing?tier=S3')
+    expect(orgBillingHref('org-1', { tier: 'S3', license: 'lic-9' })).toBe(
+      '/org-1/billing?tier=S3&license=lic-9',
+    )
   })
 })

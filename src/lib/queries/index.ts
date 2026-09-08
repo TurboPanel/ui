@@ -1,6 +1,7 @@
 export * from '@/lib/queries/access'
 export * from '@/lib/queries/admin'
 export * from '@/lib/queries/auth'
+export * from '@/lib/queries/billing'
 export * from '@/lib/queries/commands'
 export * from '@/lib/queries/containers'
 export * from '@/lib/queries/docker-run'

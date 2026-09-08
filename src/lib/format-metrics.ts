@@ -210,6 +210,21 @@ export function formatUptimeSeconds(value: number | null | undefined): string {
   return `${minutes}m`
 }
 
+/**
+ * A duration that may be short — `42s`, `3m 10s`, `2h 5m`, `1d 3h`. Unlike
+ * `formatUptimeSeconds` it keeps seconds under a minute, so a config reload
+ * from moments ago reads as fresh rather than `0m`.
+ */
+export function formatDurationSeconds(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—'
+  }
+  const totalSeconds = Math.max(0, Math.floor(value))
+  if (totalSeconds < 60) return `${totalSeconds}s`
+  if (totalSeconds < 3600) return `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`
+  return formatUptimeSeconds(totalSeconds)
+}
+
 export type MetricsRangeId = '5m' | '10m' | '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 
 /** Compact x-axis label: time-only for short ranges, date for long ranges. */

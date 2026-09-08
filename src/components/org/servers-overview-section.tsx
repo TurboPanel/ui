@@ -4,6 +4,8 @@ import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
 import {
+  Badge,
+  type BadgeTone,
   Checkbox,
   DataTable,
   DataTableCell,
@@ -53,7 +55,15 @@ import {
   serversPresenceRefetchMs,
   type ServerConnectionStatus,
 } from '@/lib/server-connection-status'
+import { formatElapsedSince } from '@/lib/format-datetime'
 import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
+import {
+  formatUnwatchedCounts,
+  isTierShortfall,
+  summarizeUnwatched,
+  tierPlacementState,
+  type TierPlacementState,
+} from '@/lib/tier-placement'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
@@ -370,13 +380,14 @@ function ServerHostIdentity({ server }: Readonly<{ server: OrgServerRecord }>) {
 const SERVER_COLUMNS = [
   { key: 'name', header: 'Host', flex: 2.6, minWidth: 220, gap: 2 },
   { key: 'status', header: 'Status', flex: 1.1, minWidth: 110, gap: 4 },
+  { key: 'tier', header: 'Tier', flex: 1, minWidth: 96, gap: 2 },
   { key: 'location', header: 'Country', flex: 1.4, minWidth: 130 },
   { key: 'usage', header: 'Usage', flex: 1.6, minWidth: 148 },
   { key: 'mesh', header: 'Mesh', flex: 1.1, minWidth: 110 },
   { key: 'check', header: 'Select', width: 40, align: 'center' },
 ] as const satisfies readonly DataTableColumn[]
 
-const [SV_NAME, SV_STATUS, SV_LOCATION, SV_USAGE, SV_MESH, SV_CHECK] = SERVER_COLUMNS
+const [SV_NAME, SV_STATUS, SV_TIER, SV_LOCATION, SV_USAGE, SV_MESH, SV_CHECK] = SERVER_COLUMNS
 
 function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
@@ -429,6 +440,74 @@ function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
     <DataTableCell column={SV_STATUS}>
       <ServerStatusBadge server={server} />
+    </DataTableCell>
+  )
+}
+
+function tierChipTone(state: TierPlacementState): BadgeTone {
+  switch (state) {
+    case 'below-required':
+      return 'danger'
+    case 'below-recommended':
+      return 'pending'
+    case 'above-hardware':
+      return 'info'
+    case 'ok':
+      return 'ok'
+    default:
+      return 'muted'
+  }
+}
+
+/**
+ * License tier chip plus a one-line shortfall note. Placement rides the
+ * list row itself (`tierPlacement`, unwatched **counts**) — no per-server
+ * fetch. Ranks compare by label shape here; the catalogue-backed resolver
+ * is reserved for the detail panel so this O(1) list adds no billing read.
+ */
+function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const placement = server.tierPlacement
+  // No bound tier is *untiered* (self-hosted, or a hosted key minted before
+  // billing) — not a shortfall, so no "Unlicensed" chip on the fleet list.
+  if (!placement?.licenseTier) {
+    return <Text style={styles.locationMuted}>—</Text>
+  }
+  const state = tierPlacementState(placement)
+  const unwatched = formatUnwatchedCounts(summarizeUnwatched(placement.unwatched))
+  const placementNote = (() => {
+    if (state === 'below-required') return `needs ${placement.requiredTier}`
+    if (state === 'below-recommended') return unwatched ? `${unwatched} unmonitored` : `${placement.recommendedTier} recommended`
+    if (state === 'above-hardware') return `${placement.recommendedTier} would do`
+    return null
+  })()
+  // The daily-notice marker is the control plane's own record that owners
+  // are being emailed about this host; it is shown whenever the wire carries
+  // it, never inferred from the rank comparison above.
+  const notice = placement.notice ?? null
+  const noticeNote = notice ? `notified ${formatElapsedSince(notice.lastNotifiedAt, { fallback: '—' })} ago` : null
+  const note = [placementNote, noticeNote].filter((part): part is string => part != null).join(' · ')
+  return (
+    <View style={styles.tierLine}>
+      <View style={styles.tierChips}>
+        <Badge label={placement.licenseTier ?? 'Unlicensed'} tone={tierChipTone(state)} />
+        {notice ? <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} /> : null}
+      </View>
+      {note ? (
+        <Text
+          style={[styles.tierNote, isTierShortfall(state) && styles.tierNoteWarning]}
+          numberOfLines={1}
+        >
+          {note}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function ServerTierCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  return (
+    <DataTableCell column={SV_TIER}>
+      <ServerTierLine server={server} />
     </DataTableCell>
   )
 }
@@ -521,6 +600,7 @@ function OrgServerTableRow({
     >
       <ServerNameCell server={server} />
       <ServerStatusCell server={server} />
+      <ServerTierCell server={server} />
       <ServerLocationCell server={server} />
       <ServerUsageCell usage={usage} />
       <ServerMeshCell overlayAddress={overlayAddress} />
@@ -568,6 +648,7 @@ function OrgServerCompactRow({
           <ServerHostIdentity server={server} />
           <View style={styles.compactMeta}>
             <ServerStatusBadge server={server} />
+            <ServerTierLine server={server} />
             <ServerCountryLine server={server} />
           </View>
         </View>
@@ -650,7 +731,7 @@ function ServersFleetTable({
   return (
     <DataTable
       columns={SERVER_COLUMNS}
-      minWidth={900}
+      minWidth={1000}
       renderHeaderCell={(column) =>
         column.key === 'check' ? (
           <Checkbox
@@ -728,6 +809,7 @@ function OrgServerTile({
       </View>
       <View style={styles.tileMeta}>
         <ServerStatusBadge server={server} />
+        <ServerTierLine server={server} />
         <ServerCountryLine server={server} />
       </View>
       <View style={styles.tileUsage}>
@@ -1176,6 +1258,23 @@ const styles = StyleSheet.create({
   locationMuted: {
     color: colors.textDim,
     fontSize: 12,
+  },
+  tierLine: {
+    gap: 2,
+    alignItems: 'flex-start',
+  },
+  tierChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tierNote: {
+    color: colors.textDim,
+    fontSize: 11,
+  },
+  tierNoteWarning: {
+    color: colors.pending,
   },
   nameButton: {
     flexDirection: 'row',

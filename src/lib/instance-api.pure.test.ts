@@ -16,6 +16,7 @@ import {
   fetchDatacenter,
   fetchHealth,
   fetchInstallStatus,
+  hasLiveBillingSubscription,
   fetchOrgFabric,
   fetchOrgServers,
   fetchServer,
@@ -101,21 +102,34 @@ describe('formatEntityMetricId', () => {
     expect(() => formatEntityMetricId({ scope: 'gpu', field: 'utilizationPercent' })).toThrow()
   })
 
+  it('formats the v6 managed host-wide scopes as bare canonical names', () => {
+    expect(formatEntityMetricId({ scope: 'router', field: 'backendsUp' })).toBe('router.backendsUp')
+    expect(formatEntityMetricId({ scope: 'storage', field: 'hostingUsedBytes' })).toBe(
+      'storage.hostingUsedBytes'
+    )
+    expect(formatEntityMetricId({ scope: 'dockerUsage', field: 'layersBytes' })).toBe(
+      'dockerUsage.layersBytes'
+    )
+    expect(() =>
+      formatEntityMetricId({ scope: 'storage', entityId: 'nope', field: 'hostingUsedBytes' })
+    ).toThrow(TypeError)
+  })
+
   it('throws when a host-singleton scope is given an entityId', () => {
     expect(() =>
       formatEntityMetricId({ scope: 'host.cpu', entityId: 'nope', field: 'busyPercent' })
     ).toThrow()
   })
 
-  it('formats cpuDetail/memoryDetail as bare canonical names, no entity id', () => {
-    expect(formatEntityMetricId({ scope: 'cpuDetail', field: 'averageFrequencyMHz' })).toBe(
-      'cpuDetail.averageFrequencyMHz'
+  it('formats both diagnostics halves as bare canonical names, no entity id', () => {
+    expect(formatEntityMetricId({ scope: 'diagnostics', field: 'averageFrequencyMHz' })).toBe(
+      'diagnostics.averageFrequencyMHz'
     )
-    expect(formatEntityMetricId({ scope: 'memoryDetail', field: 'memoryFreeBytes' })).toBe(
-      'memoryDetail.memoryFreeBytes'
+    expect(formatEntityMetricId({ scope: 'diagnostics', field: 'memoryFreeBytes' })).toBe(
+      'diagnostics.memoryFreeBytes'
     )
     expect(() =>
-      formatEntityMetricId({ scope: 'cpuDetail', entityId: 'nope', field: 'averageFrequencyMHz' })
+      formatEntityMetricId({ scope: 'diagnostics', entityId: 'nope', field: 'averageFrequencyMHz' })
     ).toThrow()
   })
 
@@ -404,12 +418,25 @@ describe('fetch wrappers (mocked fetch)', () => {
       })
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
+      billingEnabled: false,
       runtime: 'deno',
       needsInstall: true,
       isInstallMode: true,
       isSignupEnabled: true,
       isSignupEmailVerificationEnabled: true,
     })
+  })
+
+  it('fetchInstallStatus passes billingEnabled through only when the instance says true', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, runtime: 'workers', isSignupEnabled: true, billingEnabled: true })
+    )
+    await expect(fetchInstallStatus()).resolves.toMatchObject({ billingEnabled: true })
+    // Anything but a literal `true` (older instance, string, absent) is off.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, runtime: 'workers', isSignupEnabled: true, billingEnabled: 'yes' })
+    )
+    await expect(fetchInstallStatus()).resolves.toMatchObject({ billingEnabled: false })
   })
 
   it('fetchInstallStatus derives isInstallMode from needsInstall when omitted', async () => {
@@ -422,6 +449,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       }),
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
+      billingEnabled: false,
       runtime: 'workers',
       needsInstall: false,
       isInstallMode: false,
@@ -437,6 +465,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       })
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
+      billingEnabled: false,
       isSignupEnabled: false,
     })
   })
@@ -1212,5 +1241,27 @@ describe('fetch wrappers (mocked fetch)', () => {
     await expect(downloadOrganizationCaPem()).rejects.toThrow(
       '/api/client/v1/tls/ca/download failed: HTTP 502'
     )
+  })
+})
+
+describe('hasLiveBillingSubscription', () => {
+  const summary = (status: string | null) => ({
+    payer: null,
+    subscription: status
+      ? { status, currentPeriodEnd: null, pastDueSince: null, graceExpiresAt: null, scheduleAttached: false }
+      : null,
+    tiers: [],
+    pendingChanges: [],
+  })
+
+  it('mirrors the control plane: ended is canceled / incomplete_expired only', () => {
+    expect(hasLiveBillingSubscription(summary('active'))).toBe(true)
+    expect(hasLiveBillingSubscription(summary('past_due'))).toBe(true)
+    expect(hasLiveBillingSubscription(summary('unpaid'))).toBe(true)
+    expect(hasLiveBillingSubscription(summary('canceled'))).toBe(false)
+    expect(hasLiveBillingSubscription(summary('incomplete_expired'))).toBe(false)
+    expect(hasLiveBillingSubscription(summary(null))).toBe(false)
+    expect(hasLiveBillingSubscription(null)).toBe(false)
+    expect(hasLiveBillingSubscription(undefined)).toBe(false)
   })
 })

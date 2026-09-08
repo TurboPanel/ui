@@ -23,6 +23,13 @@ export type GroupSummarySpec = {
   seriesId?: string
   max?: number
   thresholds?: { warning: number; critical: number }
+  /**
+   * An up-vs-total pair read as `N of M` (`reachabilitySummary`) instead of
+   * a single headline series — the bars plot `N / M` and the chip fires on a
+   * *low* figure, the opposite of `thresholds`. `seriesId` / `max` /
+   * `thresholds` are ignored when this is set.
+   */
+  reachability?: { upSeriesId: string; totalSeriesId: string }
 }
 
 /**
@@ -40,6 +47,11 @@ export const GROUP_SUMMARY_SPECS: Readonly<Record<string, GroupSummarySpec>> = {
   storage: { chartId: 'storage-io-pressure', max: 100, thresholds: { warning: 50, critical: 80 } },
   network: { chartId: 'network-retransmit', max: 100 },
   paging: { chartId: 'memory-swap-io' },
+  // The Router header answers "can Traefik reach its backends?" as
+  // `backendsUp of backendsTotal` — the one figure an operator wants
+  // without opening the section. The header renders whether or not the
+  // section is expanded, so this is the always-visible reachability readout.
+  router: { chartId: 'router-backends', reachability: { upSeriesId: 'up', totalSeriesId: 'total' } },
 }
 
 export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
@@ -93,7 +105,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
   {
     id: 'cpu-detail',
     label: 'CPU detail',
-    hint: 'Frequency range, scheduling, and IRQ time — needs the CPU detail capability',
+    hint: 'Frequency range, scheduling, and IRQ time — reported by every Linux host',
     chartIds: [
       'cpu-detail-frequency',
       'cpu-detail-scheduling',
@@ -102,16 +114,63 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     ],
   },
   {
+    // Host-wide singleton (`managed.router`, v6): the shared hosting Traefik
+    // that fronts every site on this host. It used to be one of the
+    // `managed.ingress` sources; the Ingress group below is Caddy-only now.
+    id: 'router',
+    label: 'Router',
+    hint: 'Shared HTTP router — backends reachable, retries, 5xx, latency, config reloads and their age, soonest TLS expiry',
+    chartIds: [
+      'router-backend-requests',
+      'router-backend-latency',
+      'router-backends',
+      'router-connections',
+      'router-config',
+      'router-config-age',
+      'router-tls-expiry',
+    ],
+  },
+  {
+    // `managed.storage` — where the host's bytes actually went. Distinct
+    // from `storage` above (block-layer I/O + root capacity): that answers
+    // "how is the disk behaving", this answers "what is consuming it".
+    id: 'managed-storage',
+    label: 'Storage usage',
+    hint: 'Hosting, backup, Docker, and log directory usage with the free space left to grow into, plus the managed-database census',
+    chartIds: [
+      'managed-storage-hosting',
+      'managed-storage-backup',
+      'managed-storage-docker',
+      'managed-storage-logs',
+      'managed-storage-engines',
+      'managed-storage-connections',
+    ],
+  },
+  {
+    // `managed.docker` — Docker's own `/system/df` breakdown. Hidden
+    // entirely (with a notice in its place) on the entry tier, where the
+    // capability plan does not grant the family; see `server-metrics.md`.
+    id: 'managed-docker',
+    label: 'Docker',
+    hint: 'Image layers, containers, volumes, and build cache — with what a prune would reclaim',
+    chartIds: [
+      'managed-docker-layers',
+      'managed-docker-containers',
+      'managed-docker-volumes',
+      'managed-docker-build-cache',
+      'managed-docker-counts',
+    ],
+  },
+  {
     id: 'memory-detail',
     label: 'Memory detail',
-    hint: 'Slab, dirty, commit, and reclaim breakdown — needs the memory detail capability',
+    hint: 'Slab, dirty, commit, and reclaim breakdown — reported by every Linux host',
     chartIds: [
       'memory-detail-primary',
       'memory-detail-slab',
       'memory-detail-dirty',
       'memory-detail-other-gauges',
       'memory-detail-commit',
-      'memory-detail-active-inactive',
       'memory-detail-reclaim',
       'memory-detail-compaction',
     ],

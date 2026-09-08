@@ -15,6 +15,7 @@ import {
   formatOpsPerSecond,
   formatPercent,
   formatPhysicalSignalValue,
+  formatDurationSeconds,
   formatUptimeSeconds,
   formatWatts,
   physicalSignalUnitLabel,
@@ -281,6 +282,24 @@ describe('formatUptimeSeconds', () => {
     expect(formatUptimeSeconds(60)).toBe('1m')
     expect(formatUptimeSeconds(3660)).toBe('1h 1m')
     expect(formatUptimeSeconds(90_061)).toBe('1d 1h')
+  })
+})
+
+describe('formatDurationSeconds', () => {
+  it('returns em dash for invalid values', () => {
+    expect(formatDurationSeconds(null)).toBe('—')
+    expect(formatDurationSeconds(Number.NaN)).toBe('—')
+  })
+
+  it('keeps seconds under a minute so a fresh reload does not read as 0m', () => {
+    expect(formatDurationSeconds(0)).toBe('0s')
+    expect(formatDurationSeconds(42.9)).toBe('42s')
+    expect(formatDurationSeconds(190)).toBe('3m 10s')
+  })
+
+  it('falls back to the uptime shape from an hour up', () => {
+    expect(formatDurationSeconds(7500)).toBe('2h 5m')
+    expect(formatDurationSeconds(97_200)).toBe('1d 3h')
   })
 })
 

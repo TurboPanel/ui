@@ -49,6 +49,11 @@ type AuthContextValue = {
   isSignupEnabled: boolean
   /** From `GET /status` — set as soon as status returns during bootstrap. */
   controlPlaneRuntime: ControlPlaneRuntime | undefined
+  /**
+   * Stripe billing is configured (hosted). False on self-hosted, where every
+   * `/billing/*` route 503s — the Billing area is hidden wholesale then.
+   */
+  billingEnabled: boolean
   isLoading: boolean
   bootstrapError: string | null
   /** Metro web, or native with no control-plane origin yet. */
@@ -87,6 +92,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const session = sessionQuery.data ?? null
   const needsInstall = statusQuery.data?.needsInstall ?? false
   const isSignupEnabled = statusQuery.data?.isSignupEnabled ?? false
+  const billingEnabled = statusQuery.data?.billingEnabled ?? false
 
   const controlPlaneRuntime = useMemo(() => {
     if (statusQuery.data) {
@@ -213,6 +219,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       needsInstall,
       isSignupEnabled,
       controlPlaneRuntime,
+      billingEnabled,
       isLoading,
       bootstrapError,
       needsControlPlane,
@@ -230,6 +237,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       needsInstall,
       isSignupEnabled,
       controlPlaneRuntime,
+      billingEnabled,
       isLoading,
       bootstrapError,
       needsControlPlane,

@@ -26,8 +26,8 @@ export function finiteMetric(value: number | null | undefined): number | null {
 }
 
 /**
- * Used % from a capacity pair — `(total − free) / total`. Some v5 host
- * fields (e.g. `host.memory.availableBytes`) are still raw measurements
+ * Used % from a capacity pair — `(total − free) / total`. Some host
+ * fields (e.g. filesystem `availableBytes`) are still raw measurements
  * without a stored total; call sites that have a topology-derived total use
  * this, everything else reads the server-computed `derived.*` percent
  * directly instead of re-deriving it client-side.

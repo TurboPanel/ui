@@ -45,6 +45,7 @@ import {
   type MetricsSeriesResponse,
   type OrgTemperatureUnitSettings,
   type ServerHardwareProfileUpdate,
+  type ServerMachineClass,
   type OrgServerRecord,
   type ServerDetailRecord,
 } from '@/lib/instance-api'
@@ -629,6 +630,30 @@ export function useUpdateServer(orgId: string, serverId: string) {
     onSuccess: async () => {
       await invalidateServerQueries(queryClient, orgId, serverId)
     },
+  })
+}
+
+/**
+ * Pin (or clear) the declared machine class. Invalidates the server's
+ * metrics subtree as well as the record: the capability plan resolves from
+ * `machine_class`, so the next series payload can gain or lose whole
+ * families (hardware signals, Docker usage) — the same reason saving a
+ * hardware profile invalidates it.
+ */
+export function useSetServerMachineClass(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (machineClass: ServerMachineClass | null) =>
+      updateServer(serverId, { machineClass }),
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateServerQueries(queryClient, orgId, serverId),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.metrics(serverId),
+        }),
+      ])
+    },
+    fallbackError: 'Failed to save machine class',
   })
 }
 

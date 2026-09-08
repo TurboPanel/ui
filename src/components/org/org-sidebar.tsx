@@ -27,7 +27,7 @@ export function OrgSidebar({
   orgId: string
   onNavigate?: () => void
 }>) {
-  const { session } = useAuth()
+  const { session, billingEnabled } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
   const { scopeId } = useWorkspaceScope()
@@ -37,6 +37,9 @@ export function OrgSidebar({
     pathname === adminHref || pathname.startsWith('/admin/')
   const resolved = orgAreaFromPathname(pathname)
   const activeSubRouteId = resolved?.subRoute?.id ?? null
+  // Billing is a hosted-only surface: self-hosted has no `/billing/*` routes
+  // at all, so the entry is omitted rather than shown as a dead end.
+  const areas = ORG_AREAS.filter((area) => area.id !== 'billing' || billingEnabled)
 
   return (
     <GlassSurface style={styles.sidebar} intensity="strong">
@@ -45,7 +48,7 @@ export function OrgSidebar({
       </View>
 
       <View style={styles.nav}>
-        {ORG_AREAS.map((area) => {
+        {areas.map((area) => {
           const areaHref =
             area.id === 'projects'
               ? projectsHrefForScope(orgId, scopeId)

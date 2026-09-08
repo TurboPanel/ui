@@ -67,6 +67,29 @@ describe('host chart groups', () => {
     }
   })
 
+  it('reads Router reachability as backends up against backends total', () => {
+    // Both series ids must exist on the `router-backends` definition, which
+    // the id scan above cannot see — pin them here so a series rename is caught.
+    expect(GROUP_SUMMARY_SPECS.router).toEqual({
+      chartId: 'router-backends',
+      reachability: { upSeriesId: 'up', totalSeriesId: 'total' },
+    })
+    const source = readFileSync(
+      fileURLToPath(new URL('../components/org/server-metrics-section.tsx', import.meta.url)),
+      'utf8'
+    )
+    const start = source.indexOf("id: 'router-backends'")
+    const block = source.slice(start, source.indexOf('hideWhenEmpty', start))
+    expect(block).toContain("id: 'up'")
+    expect(block).toContain("id: 'total'")
+  })
+
+  it('surfaces the router config reload age alongside the reload count', () => {
+    const router = HOST_CHART_GROUPS.find((group) => group.id === 'router')
+    expect(router?.chartIds).toContain('router-config')
+    expect(router?.chartIds).toContain('router-config-age')
+  })
+
   it('keeps the out-of-RAM signals together in Paging', () => {
     const paging = HOST_CHART_GROUPS.find((group) => group.id === 'paging')
     expect(paging?.chartIds).toEqual(['memory-swap-io', 'memory-major-faults'])

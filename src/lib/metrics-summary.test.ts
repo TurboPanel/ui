@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lastFiniteValue, summaryBars, summaryTone } from './metrics-summary'
+import { lastFiniteValue, reachabilitySummary, summaryBars, summaryTone } from './metrics-summary'
 
 describe('summaryBars', () => {
   it('scales a bounded metric against its ceiling, not its own peak', () => {
@@ -80,5 +80,44 @@ describe('summaryTone', () => {
   it('treats a missing reading as absence, not as a fault', () => {
     expect(summaryTone(null, thresholds)).toBeNull()
     expect(summaryTone(Number.NaN, thresholds)).toBeNull()
+  })
+})
+
+describe('reachabilitySummary', () => {
+  it('reads the latest pair as N of M with no chip when everything is up', () => {
+    const summary = reachabilitySummary([3, 4, 4], [4, 4, 4])
+    expect(summary.figure).toBe('4 of 4')
+    expect(summary.tone).toBeNull()
+    expect(summary.fractions).toEqual([0.75, 1, 1])
+  })
+
+  it('warns when any backend is down and escalates when none are up', () => {
+    expect(reachabilitySummary([3], [4]).tone).toBe('warning')
+    expect(reachabilitySummary([0], [4]).tone).toBe('critical')
+    expect(reachabilitySummary([0], [4]).figure).toBe('0 of 4')
+  })
+
+  it('treats a router with nothing configured as quiet, not as an outage', () => {
+    const summary = reachabilitySummary([0], [0])
+    expect(summary.figure).toBe('0 of 0')
+    expect(summary.tone).toBeNull()
+    expect(summary.fractions).toEqual([null])
+  })
+
+  it('skips trailing gaps to find the most recent pair, leaving the gap bars empty', () => {
+    const summary = reachabilitySummary([2, null], [2, null])
+    expect(summary.figure).toBe('2 of 2')
+    expect(summary.fractions).toEqual([1, null])
+  })
+
+  it('answers absence with a dash and no chip when nothing ever reported', () => {
+    const summary = reachabilitySummary([null], [undefined])
+    expect(summary.figure).toBe('—')
+    expect(summary.tone).toBeNull()
+  })
+
+  it('shows what it has when only one side reported', () => {
+    expect(reachabilitySummary([2], [null]).figure).toBe('2 of —')
+    expect(reachabilitySummary([2], [null]).tone).toBeNull()
   })
 })
