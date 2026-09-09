@@ -3,11 +3,11 @@ import {
   changeBillingSeats,
   createBillingCheckout,
   createBillingPortalSession,
-  downgradeBillingLicense,
+  downgradeBillingTier,
   fetchBillingCatalog,
   fetchBillingSubscription,
   previewBillingChange,
-  upgradeBillingLicense,
+  upgradeBillingTier,
   type BillingPreviewBody,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -89,7 +89,7 @@ async function invalidateBillingAndServers(
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).billing.subscription }),
-    // Tier placement (`licenseTier`) rides the servers list and detail rows.
+    // Tier placement (`licenseTier`, the assigned tier) rides the servers list and detail rows.
     queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.list }),
     queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.licenses }),
   ])
@@ -103,15 +103,16 @@ export function useChangeBillingSeats(orgId: string) {
     onSuccess: async () => {
       await invalidateBillingAndServers(queryClient, orgId)
     },
-    fallbackError: 'Failed to change seats',
+    fallbackError: 'Failed to change the number of licenses',
   })
 }
 
-export function useUpgradeBillingLicense(orgId: string) {
+/** One license moves up a tier, invoiced now. */
+export function useUpgradeBillingTier(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { licenseId: string; targetTierId: string; prorationDate?: number }) =>
-      upgradeBillingLicense(body),
+    mutationFn: (body: { fromTierId: string; toTierId: string; prorationDate?: number }) =>
+      upgradeBillingTier(body),
     onSuccess: async () => {
       await invalidateBillingAndServers(queryClient, orgId)
     },
@@ -119,11 +120,11 @@ export function useUpgradeBillingLicense(orgId: string) {
   })
 }
 
-export function useDowngradeBillingLicense(orgId: string) {
+/** One license moves down a tier at the period end. */
+export function useDowngradeBillingTier(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { licenseId: string; targetTierId: string }) =>
-      downgradeBillingLicense(body),
+    mutationFn: (body: { fromTierId: string; toTierId: string }) => downgradeBillingTier(body),
     onSuccess: async () => {
       await invalidateBillingAndServers(queryClient, orgId)
     },

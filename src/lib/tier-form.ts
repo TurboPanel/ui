@@ -1,30 +1,34 @@
 /**
- * Pure helpers for the admin tier catalogue form.
+ * Pure helpers for Admin → Tiers.
  *
- * The form's job is narrow and worth stating: a superadmin creates a Product
- * and a Price in the Stripe Dashboard by hand, then enters the row here. Every
- * field except the Stripe price id is derivable from the shipped ladder, so
- * the form prefills all of them and asks for the one it cannot know.
- *
- * Everything here is display-side. The server re-validates and verifies
- * against Stripe before writing; nothing in this file is a security boundary.
+ * The screen is one row per ladder label. Entitlements and the list price
+ * come from the in-code ladder and are read-only; the only thing the
+ * operator decides is which provider product a label bills against, picked
+ * from `GET /tiers/products`. The server verifies the pick again before
+ * writing — nothing here is a security boundary.
  */
 
 import type {
+  AdminLadderEntry,
   AdminTier,
-  AdminTierCreateBody,
-  AdminTierDefaultEntry,
-  AdminTierDefaults,
+  AdminTierProduct,
   AdminTierVerification,
+  AdminTierVerifyAllResult,
 } from '@/lib/instance-api'
+import type { SelectOption } from '@/lib/select-options'
 
 const GIB = 1024 ** 3
 const TIB = 1024 ** 4
 
-/** `$10.00`, or an em dash for a negotiated row with no list price. */
-export function formatPrice(cents: number | null): string {
+/** `$10.00`, or an em dash for a negotiated row with no price. */
+export function formatPrice(cents: number | null, currency: string | null = 'usd'): string {
   if (cents === null) return '—'
-  return `$${(cents / 100).toFixed(2)}`
+  const code = (currency ?? 'usd').toUpperCase()
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(cents / 100)
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${code}`
+  }
 }
 
 /**
@@ -58,13 +62,17 @@ export function formatSlots(entitlements: Readonly<{
   ].join(' · ')
 }
 
-/** How many things point at a row — what decides whether it is still editable. */
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`
+}
+
+/** How many things point at a row: organizations buying at it, servers assigned it. */
 export function referenceSummary(tier: AdminTier): string {
-  const { licenses, seats } = tier.references
-  if (licenses === 0 && seats === 0) return 'Unused'
+  const { seats, servers } = tier.references
+  if (seats === 0 && servers === 0) return 'Unused'
   const parts: string[] = []
-  if (licenses > 0) parts.push(`${licenses} licence${licenses === 1 ? '' : 's'}`)
-  if (seats > 0) parts.push(`${seats} seat row${seats === 1 ? '' : 's'}`)
+  if (seats > 0) parts.push(`bought by ${plural(seats, 'organization', 'organizations')}`)
+  if (servers > 0) parts.push(`on ${plural(servers, 'server', 'servers')}`)
   return parts.join(' · ')
 }
 
@@ -74,229 +82,134 @@ export type VerifyBadge = Readonly<{
 }>
 
 /**
- * The badge beside a price id. "Not checked" is deliberately `muted` and not
- * a failure: a row is verified when it is written, and the badge only reports
- * what *this* page has since confirmed.
+ * The badge beside a product. "Not checked" is deliberately `muted` and not
+ * a failure: a row is verified when it is written, and the badge only
+ * reports what *this* page has since confirmed.
  */
 export function verifyBadge(
-  tier: AdminTier,
+  tier: AdminTier | null,
   verification: AdminTierVerification | undefined,
   busy: boolean,
 ): VerifyBadge {
   if (busy) return { label: 'Checking…', tone: 'pending' }
-  if (!tier.providerPriceId) return { label: 'No price', tone: 'muted' }
+  if (!tier) return { label: 'Not set up', tone: 'muted' }
+  if (tier.isCustom) return { label: 'Negotiated', tone: 'muted' }
+  if (!tier.providerProductId) return { label: 'No product', tone: 'muted' }
   if (!verification) return { label: 'Not checked', tone: 'muted' }
   return verification.ok
     ? { label: 'Verified', tone: 'ok' }
-    : { label: `${verification.failures.length} problem${verification.failures.length === 1 ? '' : 's'}`, tone: 'danger' }
+    : { label: plural(verification.failures.length, 'problem', 'problems'), tone: 'danger' }
+}
+
+/** `$10.00 / month`, `$25.00 every 3 months`, or `No price` for an unsellable product. */
+export function formatProductPrice(product: Pick<AdminTierProduct, 'defaultPrice'>): string {
+  const price = product.defaultPrice
+  if (price?.unitAmount == null) return 'No price'
+  const amount = formatPrice(price.unitAmount, price.currency)
+  if (!price.interval) return amount
+  const count = price.intervalCount ?? 1
+  return count > 1 ? `${amount} every ${count} ${price.interval}s` : `${amount} / ${price.interval}`
+}
+
+/** Which tier row a product is already bound to, when it is not this one. */
+export function boundElsewhere(product: Pick<AdminTierProduct, 'tierId'>, rowTierId: string | null): boolean {
+  return product.tierId !== null && product.tierId !== rowTierId
 }
 
 /**
- * What the operator must create in the Stripe Dashboard for this tier,
- * phrased in the Dashboard's own words so the two screens read alike. This
- * is the whole point of the form: it should be obvious that the row here and
- * the Price there are the same object seen twice.
+ * One dropdown row: name and price on the label, the verification verdict
+ * (with every failure reason) on the detail line. A product another tier
+ * already bills against is visible but unselectable — two labels cannot
+ * share a product.
  */
-export type StripeRecipe = Readonly<{
-  productName: string
-  amount: string
-  interval: string
-  billing: string
-  currency: string
-  taxBehaviour: string
+export function productOption(product: AdminTierProduct, rowTierId: string | null): SelectOption {
+  const verdict = product.verification.ok
+    ? '✓ verified'
+    : `✗ ${product.verification.failures.join('; ')}`
+  const taken = boundElsewhere(product, rowTierId)
+  const detailParts = [verdict]
+  if (taken) detailParts.push('bound to another tier')
+  if (!product.livemode) detailParts.push('test mode')
+  return {
+    value: product.id,
+    label: `${product.name} · ${formatProductPrice(product)}`,
+    detail: detailParts.join(' · '),
+    disabled: taken,
+  }
+}
+
+/** Every product as an option, verified ones first, then by name. */
+export function productOptions(
+  products: readonly AdminTierProduct[],
+  rowTierId: string | null,
+): SelectOption[] {
+  return [...products]
+    .sort((a, b) => {
+      if (a.verification.ok !== b.verification.ok) return a.verification.ok ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    .map((product) => productOption(product, rowTierId))
+}
+
+/**
+ * The product to preselect for a label: the one whose metadata names it,
+ * not already taken by another row, verified ones winning. `null` when
+ * nothing on the provider names this label.
+ */
+export function suggestedProductId(
+  products: readonly AdminTierProduct[],
+  label: string,
+  rowTierId: string | null,
+): string | null {
+  const candidates = products.filter(
+    (product) => product.suggestedLabel === label && !boundElsewhere(product, rowTierId),
+  )
+  return candidates.find((product) => product.verification.ok)?.id ?? candidates[0]?.id ?? null
+}
+
+export type LadderRow = Readonly<{
+  entry: AdminLadderEntry
+  /** The row bound to this label, or `null` while it is still to be set up. */
+  tier: AdminTier | null
 }>
 
-export function stripeRecipe(entry: Readonly<{ label: string; priceCents: number | null }>): StripeRecipe | null {
-  if (entry.priceCents === null) return null
-  return {
-    productName: `TurboPanel ${entry.label} server seat`,
-    amount: formatPrice(entry.priceCents),
-    interval: 'Monthly (recurring)',
-    billing: 'Per unit — one seat is one quantity',
-    currency: 'USD',
-    taxBehaviour: 'Inclusive or exclusive — never "unspecified"',
-  }
+/** The ladder in rank order, each rung paired with its row when one exists. */
+export function ladderRows(
+  ladder: readonly AdminLadderEntry[],
+  tiers: readonly AdminTier[],
+): LadderRow[] {
+  const byId = new Map(tiers.map((tier) => [tier.id, tier]))
+  return [...ladder]
+    .sort((a, b) => a.rank - b.rank)
+    .map((entry) => ({ entry, tier: entry.tierId ? (byId.get(entry.tierId) ?? null) : null }))
 }
 
-export type TierFormState = Readonly<{
-  generation: string
-  label: string
-  rank: string
-  priceCents: string
-  providerPriceId: string
-  isCustom: boolean
-  maxCores: string
-  maxMemoryBytes: string
-  nicSlots: string
-  driveSlots: string
-  gpuSlots: string
-  filesystemSlots: string
-}>
-
-/**
- * Prefill every field from one ladder entry, leaving the Stripe price id
- * empty — the one thing the operator has to fetch from the Dashboard.
- */
-export function formStateFromDefault(
-  entry: AdminTierDefaultEntry,
-  generation: number,
-): TierFormState {
-  return {
-    generation: String(generation),
-    label: entry.label,
-    rank: String(entry.rank),
-    priceCents: entry.priceCents === null ? '' : String(entry.priceCents),
-    providerPriceId: '',
-    isCustom: entry.isCustom,
-    maxCores: String(entry.maxCores),
-    maxMemoryBytes: String(entry.maxMemoryBytes),
-    nicSlots: String(entry.nicSlots),
-    driveSlots: String(entry.driveSlots),
-    gpuSlots: String(entry.gpuSlots),
-    filesystemSlots: String(entry.filesystemSlots),
-  }
+/** What the row currently bills against — the product the dropdown should show as selected. */
+export function initialProductId(row: LadderRow, products: readonly AdminTierProduct[]): string | null {
+  if (row.tier?.providerProductId) return row.tier.providerProductId
+  if (row.entry.isCustom) return null
+  return suggestedProductId(products, row.entry.label, row.tier?.id ?? null)
 }
 
-export function emptyFormState(generation: number): TierFormState {
-  return {
-    generation: String(generation),
-    label: '',
-    rank: '',
-    priceCents: '',
-    providerPriceId: '',
-    isCustom: false,
-    maxCores: '',
-    maxMemoryBytes: '',
-    nicSlots: '',
-    driveSlots: '',
-    gpuSlots: '',
-    filesystemSlots: '',
-  }
+/** Whether pressing Save would change anything: a new row, or a different product on an existing one. */
+export function hasPendingBinding(row: LadderRow, productId: string | null): boolean {
+  if (row.entry.isCustom) return row.tier === null
+  if (!productId) return false
+  return row.tier?.providerProductId !== productId
 }
 
-function toInt(value: string): number {
-  const parsed = Number(value.trim())
-  return Number.isFinite(parsed) ? parsed : Number.NaN
-}
-
-/**
- * Form state → request body. Numbers that will not parse become `NaN`, which
- * {@link localFormProblems} reports by field name; the request is not sent
- * while any problem stands.
- */
-export function createBodyFromForm(state: TierFormState): AdminTierCreateBody {
-  const priceId = state.providerPriceId.trim()
-  return {
-    generation: toInt(state.generation),
-    label: state.label.trim(),
-    rank: toInt(state.rank),
-    priceCents: state.isCustom || state.priceCents.trim() === '' ? null : toInt(state.priceCents),
-    providerPriceId: state.isCustom || priceId === '' ? null : priceId,
-    isCustom: state.isCustom,
-    maxCores: toInt(state.maxCores),
-    maxMemoryBytes: toInt(state.maxMemoryBytes),
-    nicSlots: toInt(state.nicSlots),
-    driveSlots: toInt(state.driveSlots),
-    gpuSlots: toInt(state.gpuSlots),
-    filesystemSlots: toInt(state.filesystemSlots),
-  }
-}
-
-function labelProblems(label: string, defaults: AdminTierDefaults | undefined): string[] {
-  if (label.length === 0) return ['Label is required']
-  if (defaults && !new RegExp(defaults.labelPattern).test(label)) {
-    return [`Label must be S1…S99 or SX (got ${label})`]
-  }
-  return []
-}
-
-function numberProblems(body: AdminTierCreateBody): string[] {
-  const numbers: [string, number][] = [
-    ['Generation', body.generation],
-    ['Rank', body.rank],
-    ['Max cores', body.maxCores],
-    ['Max memory', body.maxMemoryBytes],
-    ['NIC slots', body.nicSlots],
-    ['Drive slots', body.driveSlots],
-    ['GPU slots', body.gpuSlots],
-    ['Filesystem slots', body.filesystemSlots],
-  ]
-  return numbers
-    .filter(([, value]) => !Number.isFinite(value))
-    .map(([name]) => `${name} must be a number`)
-}
-
-/** A custom tier carries no Stripe price; a priced tier needs both halves. */
-function pricingProblems(state: TierFormState, body: AdminTierCreateBody): string[] {
-  const out: string[] = []
-  if (body.isCustom) {
-    if (state.priceCents.trim() !== '') out.push('A custom tier has no list price')
-    if (state.providerPriceId.trim() !== '') out.push('A custom tier has no Stripe price id')
-    return out
-  }
-  if (body.priceCents === null || !Number.isFinite(body.priceCents)) {
-    out.push('Price in cents is required for a priced tier')
-  }
-  if (body.providerPriceId === null) out.push('Stripe price id is required for a priced tier')
-  else if (!body.providerPriceId.startsWith('price_')) {
-    out.push('Stripe price id should start with price_')
+/** "Verify all" results keyed by row id, in the shape the per-row badge reads. */
+export function verificationsById(
+  results: readonly AdminTierVerifyAllResult[],
+): Record<string, AdminTierVerification> {
+  const out: Record<string, AdminTierVerification> = {}
+  for (const entry of results) {
+    out[entry.id] = { ok: entry.ok, failures: entry.failures, product: entry.product }
   }
   return out
 }
 
-function slotCeilingProblems(body: AdminTierCreateBody, defaults: AdminTierDefaults | undefined): string[] {
-  if (!defaults) return []
-  const ceilings = defaults.slotCeilings
-  const slots: [string, number, number][] = [
-    ['NIC slots', body.nicSlots, ceilings.nicSlots],
-    ['Drive slots', body.driveSlots, ceilings.driveSlots],
-    ['GPU slots', body.gpuSlots, ceilings.gpuSlots],
-    ['Filesystem slots', body.filesystemSlots, ceilings.filesystemSlots],
-  ]
-  return slots
-    .filter(([, value, ceiling]) => Number.isFinite(value) && value > ceiling)
-    .map(([name, , ceiling]) => `${name} cannot exceed ${ceiling}`)
-}
-
-/**
- * The subset of the server's rules worth checking before a round trip —
- * empty and unparseable fields. The server owns the real ruleset (and the
- * Stripe verification); this only avoids obviously wasted requests.
- */
-export function localFormProblems(
-  state: TierFormState,
-  defaults: AdminTierDefaults | undefined,
-): string[] {
-  const body = createBodyFromForm(state)
-  return [
-    ...labelProblems(body.label, defaults),
-    ...numberProblems(body),
-    ...pricingProblems(state, body),
-    ...slotCeilingProblems(body, defaults),
-  ]
-}
-
-/** Rows in the order the catalogue reads: generation, then rank. */
-export function sortTiers(tiers: readonly AdminTier[]): AdminTier[] {
-  return [...tiers].sort((a, b) =>
-    a.generation === b.generation ? a.rank - b.rank : a.generation - b.generation
-  )
-}
-
-/** The highest generation present, or 1 when the catalogue is empty. */
-export function currentGeneration(tiers: readonly AdminTier[]): number {
-  return tiers.reduce((highest, row) => Math.max(highest, row.generation), 1)
-}
-
-/** Ladder entries not yet present in this generation — what "Add from defaults" offers. */
-export function availableDefaults(
-  defaults: AdminTierDefaults | undefined,
-  tiers: readonly AdminTier[],
-  generation: number,
-): AdminTierDefaultEntry[] {
-  if (!defaults) return []
-  const taken = new Set(
-    tiers.filter((row) => row.generation === generation).map((row) => row.label)
-  )
-  return defaults.tiers.filter((entry) => !taken.has(entry.label))
+/** How many rows reported a problem. */
+export function failingCount(verifications: Readonly<Record<string, AdminTierVerification>>): number {
+  return Object.values(verifications).filter((entry) => !entry.ok).length
 }

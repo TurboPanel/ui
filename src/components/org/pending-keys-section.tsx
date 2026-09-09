@@ -240,7 +240,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
       <View style={styles.root}>
         <Text style={panelStyles.pageTitle}>Pending keys</Text>
         <Text style={panelStyles.pageCopy}>
-          Only organization owners can view unused registration keys.
+          Only organization owners can view servers waiting to connect.
         </Text>
       </View>
     )
@@ -250,9 +250,9 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Pending keys</Text>
       <Text style={panelStyles.pageCopy}>
-        Registration keys that have not enrolled a host yet. Delete a key if you
-        no longer need it — the install command cannot be recovered after you
-        leave Add server.
+        Servers still waiting to connect. Each row is an install command that
+        has not enrolled a host yet; delete one if you no longer need it — the
+        command cannot be recovered after you leave Add server.
       </Text>
 
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
@@ -267,8 +267,8 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
 
         {!loading && rows.length === 0 ? (
           <Text style={panelStyles.muted}>
-            No unused registration keys. Keys appear here after you add a server,
-            until a host connects.
+            No servers waiting to connect. Rows appear here after you add a server,
+            until the host connects.
           </Text>
         ) : null}
 

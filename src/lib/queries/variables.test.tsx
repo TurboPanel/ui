@@ -103,7 +103,7 @@ describe('variables query hooks', () => {
 
     await expect(
       result.current.run({ key: 'PORT', value: '8080' }),
-    ).resolves.toEqual({ ok: false, error: 'duplicate key' })
+    ).resolves.toEqual({ ok: false, error: 'duplicate key', cause: expect.anything() })
   })
 
   it('useUpdateVariable and useDeleteVariable proxy mutations', async () => {
@@ -140,7 +140,7 @@ describe('variables query hooks', () => {
 
     await expect(
       result.current.run({ variableId: 'var-1', body: { value: '1' } }),
-    ).resolves.toEqual({ ok: false, error: 'not found' })
+    ).resolves.toEqual({ ok: false, error: 'not found', cause: expect.anything() })
   })
 
   it('useDeleteVariable returns mutation errors', async () => {
@@ -154,6 +154,7 @@ describe('variables query hooks', () => {
     await expect(result.current.run('var-1')).resolves.toEqual({
       ok: false,
       error: 'locked',
+      cause: expect.anything(),
     })
   })
 })

@@ -344,10 +344,15 @@ export const queryKeys = {
     metricsLiveSettings: ['admin', 'settings', 'metrics-live'] as const,
     /** Instance-wide Git provider applications. The org-scoped list is `org(id).forges`. */
     forges: ['admin', 'settings', 'forges'] as const,
-    /** The billing tier catalogue, entered by hand and verified against Stripe. */
+    /** The billing tier catalogue: ladder labels bound to provider products, verified server-side. */
     tiers: ['admin', 'tiers'] as const,
-    /** The shipped ladder the tier form prefills from. */
-    tierDefaults: ['admin', 'tiers', 'defaults'] as const,
+    /**
+     * The provider's products with their default price and verification — the
+     * tier dropdown. A **sibling** of `tiers`, never a child: invalidation is
+     * prefix-based, so nesting it under `['admin','tiers']` would make every
+     * row re-read drag the provider round trip with it.
+     */
+    tierProducts: ['admin', 'tier-products'] as const,
   },
 } as const
 

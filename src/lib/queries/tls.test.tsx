@@ -177,6 +177,7 @@ describe('tls query hooks', () => {
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: 'not ready',
+      cause: expect.anything(),
     })
   })
 
@@ -190,6 +191,7 @@ describe('tls query hooks', () => {
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: 'still converging',
+      cause: expect.anything(),
     })
   })
 })

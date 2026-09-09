@@ -56,6 +56,6 @@ describe('useImportDockerRun', () => {
 
     await expect(
       result.current.run({ serviceName: 'web', argv: 'not a docker command' }),
-    ).resolves.toEqual({ ok: false, error: 'unparseable_command' })
+    ).resolves.toEqual({ ok: false, error: 'unparseable_command', cause: expect.anything() })
   })
 })

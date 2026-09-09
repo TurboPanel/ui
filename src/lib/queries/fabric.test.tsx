@@ -176,6 +176,7 @@ describe('fabric query hooks', () => {
     await expect(result.current.run({ enabled: true })).resolves.toEqual({
       ok: false,
       error: 'Failed to update TurboFabric',
+      cause: expect.anything(),
     })
   })
 
@@ -226,6 +227,7 @@ describe('fabric query hooks', () => {
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: 'Failed to apply TurboFabric',
+      cause: expect.anything(),
     })
   })
 })

@@ -16,7 +16,10 @@ import {
   UptimeMetricIcon,
 } from '@/components/icons/metric-icons'
 import { ChartCard } from '@/components/org/charts/chart-card'
-import { ChartLegend } from '@/components/org/charts/chart-legend'
+import {
+  ChartLegend,
+  type ChartLegendEntry,
+} from '@/components/org/charts/chart-legend'
 import {
   MetricLineChart,
   type MetricGapBand,
@@ -208,6 +211,18 @@ type ChartDefinition = Readonly<{
   area?: boolean
   /** Render series as a cumulative stacked area chart. */
   stacked?: boolean
+  /**
+   * Series ids that are drawn as lines. Other series stay available for
+   * readouts. Ignored when `range` is set.
+   */
+  plotIds?: readonly string[]
+  /**
+   * Plot `min` / `max` as a filled area behind the `avg` line.
+   * Series ids must be `min`, `avg`, and `max`.
+   */
+  range?: boolean
+  /** Draw straight segments. Cubic smoothing overshoots a noisy clock series. */
+  straight?: boolean
   /**
    * Omit the whole card when no series has a non-null sample in the range —
    * a missing sensor/entity field must never paint a 0-value flatline.
@@ -570,20 +585,16 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'cpu-detail-frequency',
     title: 'CPU frequency',
     unit: 'MHz',
+    range: true,
     series: [
-      { id: 'min', label: 'Min', read: hostMetric('diagnostics', 'minimumFrequencyMHz') },
+      { id: 'min', label: 'Min', color: colors.textChip, read: hostMetric('diagnostics', 'minimumFrequencyMHz') },
       {
         id: 'avg',
-        label: 'Avg',
-        color: colors.command,
+        label: 'Average',
+        color: colors.accent,
         read: hostMetric('diagnostics', 'averageFrequencyMHz'),
       },
-      {
-        id: 'max',
-        label: 'Max',
-        color: colors.pending,
-        read: hostMetric('diagnostics', 'maximumFrequencyMHz'),
-      },
+      { id: 'max', label: 'Max', color: colors.pending, read: hostMetric('diagnostics', 'maximumFrequencyMHz') },
     ],
     yFormat: (v) => `${formatCount(v)} MHz`,
     hideWhenEmpty: true,
@@ -2143,6 +2154,29 @@ function lastFormattedValue(
   return '—'
 }
 
+function lastSeriesValue(
+  series: MetricLineSeries[],
+  key: string,
+  yFormat: (value: number) => string
+): string | undefined {
+  const entry = series.find((candidate) => candidate.key === key)
+  if (!entry) return undefined
+  for (const point of [...entry.points].reverse()) {
+    if (point.value !== null && point.value !== undefined) {
+      return yFormat(point.value)
+    }
+  }
+  return undefined
+}
+
+/** Latest min–max across cores, for the range legend. */
+function frequencyRangeLabel(series: MetricLineSeries[]): string | undefined {
+  const min = lastSeriesValue(series, 'min', formatCount)
+  const max = lastSeriesValue(series, 'max', formatCount)
+  if (min && max && min !== '—' && max !== '—') return `${min}–${max} MHz`
+  return undefined
+}
+
 /**
  * Headline for a stacked chart: the sum of every visible series at the most
  * recent index where at least one has a sample.
@@ -2479,27 +2513,58 @@ function MetricsChartCard({
     [breakLines]
   )
   const series = buildChartSeries(points, definition, breakMs)
-  const unavailable = isChartUnavailable(series)
+  const isRange = definition.range === true
+  const plotIds = definition.plotIds
+  let plottedSeries = series
+  if (!isRange && plotIds) {
+    plottedSeries = series.filter((entry) => plotIds.includes(entry.key))
+  }
+  const unavailable = isChartUnavailable(plottedSeries.length > 0 ? plottedSeries : series)
   const visibleSeries =
-    series.length > 1 ? series.filter((entry) => !hiddenKeys.has(entry.key)) : series
-  const headline = definition.stacked
-    ? lastStackedTotal(visibleSeries, definition.yFormat)
-    : lastFormattedValue(visibleSeries, definition.yFormat)
+    plottedSeries.length > 1 && !isRange
+      ? plottedSeries.filter((entry) => !hiddenKeys.has(entry.key))
+      : plottedSeries
+  const rangeLabel = isRange ? frequencyRangeLabel(series) : undefined
+  let headline = lastFormattedValue(
+    isRange ? series.filter((entry) => entry.key === 'avg') : visibleSeries,
+    definition.yFormat,
+  )
+  if (definition.stacked) {
+    headline = lastStackedTotal(visibleSeries, definition.yFormat)
+  }
 
   const overflowAt =
-    series.length > MAX_VISIBLE_LEGEND_ENTRIES ? MAX_VISIBLE_LEGEND_ENTRIES - 1 : series.length
-  const primarySeries = series.slice(0, overflowAt)
-  const overflowSeries = series.slice(overflowAt)
+    plottedSeries.length > MAX_VISIBLE_LEGEND_ENTRIES
+      ? MAX_VISIBLE_LEGEND_ENTRIES - 1
+      : plottedSeries.length
+  const primarySeries = plottedSeries.slice(0, overflowAt)
+  const overflowSeries = plottedSeries.slice(overflowAt)
 
-  const legendEntries = primarySeries.map((entry) => ({
-    key: entry.key,
-    label: entry.label,
-    color: entry.color,
-    lastValue: lastFormattedValue([entry], definition.yFormat),
-    hidden: hiddenKeys.has(entry.key),
-    onPress: series.length > 1 ? () => toggleSeries([entry.key]) : undefined,
-  }))
-  if (overflowSeries.length > 0) {
+  const legendEntries: ChartLegendEntry[] = isRange
+    ? [
+        {
+          key: 'range',
+          label: 'Range',
+          color: colors.accent,
+          lastValue: rangeLabel ?? '—',
+          swatch: 'band' as const,
+        },
+        {
+          key: 'avg',
+          label: 'Average',
+          color: colors.accent,
+          lastValue: lastSeriesValue(series, 'avg', definition.yFormat) ?? '—',
+        },
+      ]
+    : primarySeries.map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        color: entry.color,
+        lastValue: lastFormattedValue([entry], definition.yFormat),
+        hidden: hiddenKeys.has(entry.key),
+        onPress: plottedSeries.length > 1 ? () => toggleSeries([entry.key]) : undefined,
+      }))
+  if (!isRange && overflowSeries.length > 0) {
     const overflowKeys = overflowSeries.map((entry) => entry.key)
     legendEntries.push({
       key: '__other__',
@@ -2524,7 +2589,7 @@ function MetricsChartCard({
       title={definition.title}
       subtitle={definition.unit}
       headline={unavailable ? undefined : headline}
-      legend={<ChartLegend entries={legendEntries} />}
+      legend={legendEntries.length === 0 ? undefined : <ChartLegend entries={legendEntries} />}
       unavailable={unavailable}
     >
       <MetricLineChart
@@ -2535,6 +2600,8 @@ function MetricsChartCard({
         yDomain={definition.yDomain}
         area={definition.area}
         stacked={definition.stacked}
+        straight={definition.straight}
+        range={definition.range}
         gapBands={gapBands}
         xTickFormat={xTickFormat}
         referenceLine={referenceLine}

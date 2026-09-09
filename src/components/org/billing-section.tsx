@@ -25,34 +25,38 @@ import {
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth-context'
 import {
+  canReleaseAt,
+  describeBillingRefusal,
   describePendingChange,
+  describeUncoveredServer,
   formatMachineExamples,
-  formatMemoryLimit,
   formatMinorUnits,
+  formatTierFits,
   formatTierPrice,
-  formatUnlicensedNeeds,
+  formatTierSlots,
   isDelinquentSubscription,
+  landsAtLabel,
+  licenseSummaryLine,
   machineExamplesForTier,
-  pendingChangeForLicense,
+  serverTitle,
   subscriptionStatusView,
-  summarizeFleetTierNeeds,
   tierChangeDirection,
-  totalSeats,
-  type TierChangeDirection,
+  uncoveredServers,
+  type RefusalContext,
 } from '@/lib/billing-display'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   BILLING_NOT_CONFIGURED_ERROR,
   hasLiveBillingSubscription,
-  type BillingPendingChange,
   type BillingPreview,
   type BillingPreviewLine,
+  type BillingServerCoverage,
   type BillingSubscriptionSummary,
   type BillingTier,
-  type BillingTierSeats,
+  type BillingTierSummary,
   type OrgServerRecord,
 } from '@/lib/instance-api'
-import { BILLING_LICENSE_QUERY_PARAM, BILLING_TIER_QUERY_PARAM } from '@/lib/org-navigation'
+import { BILLING_TIER_QUERY_PARAM } from '@/lib/org-navigation'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import type { ApiMutationResult } from '@/lib/query-client'
 import {
@@ -62,12 +66,11 @@ import {
   useChangeBillingSeats,
   useCreateBillingCheckout,
   useCreateBillingPortalSession,
-  useDowngradeBillingLicense,
+  useDowngradeBillingTier,
   usePreviewBillingChange,
-  useUpgradeBillingLicense,
+  useUpgradeBillingTier,
 } from '@/lib/queries/billing'
 import { useOrgServers } from '@/lib/queries/servers'
-import { tierRankResolver } from '@/lib/tier-placement'
 import { spacing } from '@/lib/theme'
 
 /** One line an operator can paste on the host to size it against the tier ceilings. */
@@ -88,10 +91,6 @@ function openHostedPage(url: string): void {
   })
 }
 
-function serverTitle(server: OrgServerRecord): string {
-  return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
 function errorText(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
 }
@@ -100,18 +99,15 @@ function isNotConfigured(err: unknown): boolean {
   return err instanceof Error && err.message.includes(BILLING_NOT_CONFIGURED_ERROR)
 }
 
-function formatSlots(tier: BillingTier): string {
-  const { nicSlots, driveSlots, gpuSlots, filesystemSlots } = tier.entitlements
-  return `${nicSlots} NIC · ${driveSlots} drive · ${gpuSlots} GPU · ${filesystemSlots} extra FS`
-}
-
-function formatFits(tier: BillingTier): string {
-  return `${tier.entitlements.maxCores} cores · ${formatMemoryLimit(tier.entitlements.maxMemoryBytes)}`
+/** The failure line for a mutation outcome: the refusal's next step when known, else the raw message. */
+function failureOf(outcome: ApiMutationResult<unknown>, context: RefusalContext): string | null {
+  if (outcome.ok) return null
+  return describeBillingRefusal(outcome.cause, context) ?? outcome.error
 }
 
 const TIER_COLUMNS = [
   { key: 'tier', header: 'Tier', flex: 0.7, minWidth: 64 },
-  { key: 'price', header: 'Per seat', flex: 1.3, minWidth: 150 },
+  { key: 'price', header: 'Per license', flex: 1.3, minWidth: 150 },
   { key: 'fits', header: 'Fits up to', flex: 1.3, minWidth: 150 },
   { key: 'slots', header: 'Monitored slots', flex: 2, minWidth: 240 },
 ] as const satisfies readonly DataTableColumn[]
@@ -129,9 +125,28 @@ function purchasableTiers(tiers: readonly BillingTier[]): BillingTier[] {
   return tiers.filter((tier) => !tier.isCustom)
 }
 
+function tierOption(tier: BillingTier, disabled = false): SelectOption {
+  return {
+    value: tier.id,
+    label: tier.label,
+    detail: `${formatTierPrice(tier)} · fits up to ${formatTierFits(tier.entitlements)}`,
+    disabled,
+  }
+}
+
+/** Names the server a refusal points at, from the org servers list. */
+function refusalContextFor(servers: readonly OrgServerRecord[]): RefusalContext {
+  return {
+    serverName: (serverId) => {
+      const server = servers.find((entry) => entry.id === serverId)
+      return server ? serverTitle(server) : null
+    },
+  }
+}
+
 export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
   const { billingEnabled } = useAuth()
-  const params = useLocalSearchParams<{ tier?: string; license?: string; checkout?: string }>()
+  const params = useLocalSearchParams<{ tier?: string; checkout?: string }>()
   const catalogQuery = useBillingCatalog(orgId, { enabled: billingEnabled })
   // Stripe redirects back before its webhook has projected the new
   // subscription, so `checkout=success` with no live subscription is a
@@ -148,7 +163,6 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
   const tiers = useMemo(() => catalogQuery.data?.tiers ?? [], [catalogQuery.data])
   const servers = useMemo(() => serversQuery.data?.servers ?? [], [serversQuery.data])
   const preselectedTier = findTier(tiers, params[BILLING_TIER_QUERY_PARAM])
-  const preselectedLicense = params[BILLING_LICENSE_QUERY_PARAM] ?? null
   const live = hasLiveBillingSubscription(subscriptionQuery.data)
 
   let body: React.ReactNode
@@ -162,8 +176,8 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
       >
         <LoadingState label="Confirming the checkout — this usually takes a few seconds" />
         <Text style={panelStyles.muted}>
-          Seats appear here as soon as the payment is confirmed. Starting another checkout now would
-          create a second subscription.
+          Licenses appear here as soon as the payment is confirmed. Starting another checkout now
+          would create a second subscription.
         </Text>
         <ButtonRow>
           <Button
@@ -189,7 +203,7 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
       <EmptyState
         panel
         title="Billing is not available on this instance"
-        hint="Self-hosted control planes have no subscription. Seats are managed by the host operator."
+        hint="Self-hosted control planes have no subscription. Licenses are managed by the host operator."
       />
     ) : (
       <EmptyState
@@ -212,6 +226,7 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
       <CheckoutPanel
         orgId={orgId}
         tiers={tiers}
+        coverage={subscriptionQuery.data?.servers ?? []}
         servers={servers}
         initialTierId={preselectedTier?.id ?? null}
       />
@@ -224,7 +239,6 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
         tiers={tiers}
         servers={servers}
         preselectedTierId={preselectedTier?.id ?? null}
-        preselectedLicenseId={preselectedLicense}
       />
     )
   }
@@ -233,7 +247,7 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Billing</Text>
       <Text style={panelStyles.pageCopy}>
-        {`Seats license servers on ${HA_PRODUCT_NAME}. One seat enrolls one host at its tier; the tier sets how many cores, RAM, and devices that host's metrics cover.`}
+        {`Licenses cover servers on ${HA_PRODUCT_NAME}. Each server uses one license; the tier it lands on comes from the licenses you bought and the server's hardware.`}
       </Text>
       <CheckoutReturnNotice outcome={params.checkout} live={live} />
       {body}
@@ -252,7 +266,7 @@ function CheckoutReturnNotice({
     return (
       <InlineNotice
         title="Checkout complete"
-        body="Registration keys can now be minted against the purchased tier from Servers → Pending keys."
+        body="You can now add servers from Servers → Add server; each one uses a license."
       />
     )
   }
@@ -269,49 +283,23 @@ function CheckoutReturnNotice({
 }
 
 /**
- * What the rest of the fleet needs, from each server's control-plane
- * placement: seats to buy per tier for the unlicensed hosts, licensed hosts
- * sitting below their hardware, and hosts not yet sized. Renders nothing
- * for an empty fleet.
+ * Servers the control plane could not place on anything bought, each with
+ * the tier its hardware needs. Read from the projection's own placement —
+ * never a client-side re-derivation. Renders nothing when every server is
+ * covered.
  */
-function FleetNeedsNotice({
-  tiers,
+function UncoveredServersNotice({
+  coverage,
   servers,
-}: Readonly<{ tiers: readonly BillingTier[]; servers: readonly OrgServerRecord[] }>) {
-  const needs = useMemo(
-    () => summarizeFleetTierNeeds(servers, tierRankResolver(tiers)),
-    [servers, tiers]
-  )
-  if (needs.total === 0) return null
-  const lines: string[] = []
-  if (needs.unlicensed.length > 0) {
-    const count = needs.unlicensed.reduce((sum, entry) => sum + entry.count, 0)
-    lines.push(
-      `${count} of ${needs.total} servers ${count === 1 ? 'has' : 'have'} no licence — seats to cover them: ${formatUnlicensedNeeds(needs)}.`
-    )
-  }
-  for (const entry of needs.short) {
-    lines.push(
-      `${entry.name} is licensed at ${entry.licenseTier} but its hardware needs ${entry.needsTier}.`
-    )
-  }
-  if (needs.unsized > 0) {
-    lines.push(
-      `${needs.unsized} ${needs.unsized === 1 ? 'server has' : 'servers have'} not reported hardware yet.`
-    )
-  }
-  if (lines.length === 0) {
-    return (
-      <Text style={panelStyles.muted}>
-        Every server in this organization is licensed at or above what its hardware needs.
-      </Text>
-    )
-  }
+}: Readonly<{ coverage: readonly BillingServerCoverage[]; servers: readonly OrgServerRecord[] }>) {
+  const uncovered = useMemo(() => uncoveredServers(coverage, servers), [coverage, servers])
+  if (uncovered.length === 0) return null
+  const count = uncovered.length
   return (
     <InlineNotice
-      tone={needs.short.length > 0 ? 'warning' : 'info'}
-      title="What the rest of the fleet needs"
-      body={lines.join(' ')}
+      tone="warning"
+      title={`${count} ${count === 1 ? 'server is' : 'servers are'} not covered`}
+      body={`${uncovered.map(describeUncoveredServer).join('. ')}. Buy a license at that tier, or move one up.`}
     />
   )
 }
@@ -353,11 +341,11 @@ function TierTable({
               <Text style={panelStyles.detailLine}>{formatTierPrice(tier)}</Text>
             </DataTableCell>
             <DataTableCell column={TC_FITS}>
-              <Text style={panelStyles.detailLine}>{formatFits(tier)}</Text>
+              <Text style={panelStyles.detailLine}>{formatTierFits(tier.entitlements)}</Text>
               {examples ? <Text style={panelStyles.muted}>{examples}</Text> : null}
             </DataTableCell>
             <DataTableCell column={TC_SLOTS}>
-              <Text style={panelStyles.muted}>{formatSlots(tier)}</Text>
+              <Text style={panelStyles.muted}>{formatTierSlots(tier.entitlements)}</Text>
             </DataTableCell>
           </DataTableRow>
         )
@@ -366,7 +354,7 @@ function TierTable({
   )
 }
 
-function parseSeatCount(raw: string): number | null {
+function parseLicenseCount(raw: string): number | null {
   const value = Number(raw.trim())
   return Number.isInteger(value) && value >= 1 ? value : null
 }
@@ -374,30 +362,32 @@ function parseSeatCount(raw: string): number | null {
 function CheckoutPanel({
   orgId,
   tiers,
+  coverage,
   servers,
   initialTierId,
 }: Readonly<{
   orgId: string
   tiers: readonly BillingTier[]
+  coverage: readonly BillingServerCoverage[]
   servers: readonly OrgServerRecord[]
   initialTierId: string | null
 }>) {
   const checkout = useCreateBillingCheckout(orgId)
   const purchasable = useMemo(() => purchasableTiers(tiers), [tiers])
   const [selectedTierId, setSelectedTierId] = useState<string | null>(initialTierId)
-  const [seatsText, setSeatsText] = useState('1')
+  const [countText, setCountText] = useState('1')
   const [error, setError] = useState<string | null>(null)
   const selectedTier = purchasable.find((tier) => tier.id === selectedTierId) ?? null
-  const seats = parseSeatCount(seatsText)
+  const count = parseLicenseCount(countText)
 
   const startCheckout = async () => {
-    if (!selectedTier || seats == null) return
+    if (!selectedTier || count == null) return
     setError(null)
-    const outcome = await checkout.run({ tierId: selectedTier.id, quantity: seats })
+    const outcome = await checkout.run({ tierId: selectedTier.id, quantity: count })
     if (outcome.ok) {
       openHostedPage(outcome.value.url)
-    } else if (outcome.error) {
-      setError(outcome.error)
+    } else {
+      setError(failureOf(outcome, refusalContextFor(servers)))
     }
   }
 
@@ -405,7 +395,7 @@ function CheckoutPanel({
     <>
       <SectionPanel
         title="Choose a tier"
-        hint="One seat licenses one server. Pick the smallest tier whose ceilings cover the host."
+        hint="One license covers one server. Pick the smallest tier whose ceilings cover the host."
         accent
       >
         <InlineNotice
@@ -414,7 +404,7 @@ function CheckoutPanel({
           actions={<CopyButton value={SIZING_COMMAND} label="Copy command" />}
         />
         <MonoText style={styles.sizingCommand}>{SIZING_COMMAND}</MonoText>
-        <FleetNeedsNotice tiers={tiers} servers={servers} />
+        <UncoveredServersNotice coverage={coverage} servers={servers} />
         <TierTable
           tiers={tiers}
           selectedTierId={selectedTierId}
@@ -428,7 +418,7 @@ function CheckoutPanel({
       </SectionPanel>
 
       <SectionPanel
-        title="Start a subscription"
+        title="Buy the first licenses"
         hint="Payment is collected on a hosted checkout page"
       >
         <Text style={panelStyles.detailLine}>
@@ -438,16 +428,16 @@ function CheckoutPanel({
             : 'Select a tier above'}
         </Text>
         <TextField
-          label="Seats"
-          value={seatsText}
-          onChangeText={setSeatsText}
+          label="Licenses"
+          value={countText}
+          onChangeText={setCountText}
           keyboardType="number-pad"
           editable={!checkout.isPending}
-          accessibilityLabel="Number of seats"
-          hint="Whole number, at least 1. You can add or release seats later."
+          accessibilityLabel="Number of licenses"
+          hint="Whole number, at least 1. You can add or release licenses later."
         />
-        {seats == null ? (
-          <Text style={panelStyles.error}>Seats must be a whole number of at least 1.</Text>
+        {count == null ? (
+          <Text style={panelStyles.error}>Licenses must be a whole number of at least 1.</Text>
         ) : null}
         {error ? <Text style={panelStyles.error}>{error}</Text> : null}
         <ButtonRow>
@@ -456,7 +446,7 @@ function CheckoutPanel({
             variant="primary"
             busy={checkout.isPending}
             busyLabel="Opening checkout…"
-            disabled={!selectedTier || seats == null || checkout.isPending}
+            disabled={!selectedTier || count == null || checkout.isPending}
             onPress={() => {
               void startCheckout()
             }}
@@ -468,7 +458,7 @@ function CheckoutPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Live subscription — status, seats per tier, license moves, portal.
+// Live subscription — licenses, per-tier counts, moves, portal.
 // ---------------------------------------------------------------------------
 
 function SubscriptionView({
@@ -477,47 +467,36 @@ function SubscriptionView({
   tiers,
   servers,
   preselectedTierId,
-  preselectedLicenseId,
 }: Readonly<{
   orgId: string
   summary: BillingSubscriptionSummary
   tiers: readonly BillingTier[]
   servers: readonly OrgServerRecord[]
   preselectedTierId: string | null
-  preselectedLicenseId: string | null
 }>) {
   const pastDue = isDelinquentSubscription(summary.subscription)
-  const serverNameForLicense = (licenseId: string): string | null => {
-    const server = servers.find((entry) => entry.licenseId === licenseId)
-    return server ? serverTitle(server) : null
-  }
+  const context = useMemo(() => refusalContextFor(servers), [servers])
 
   return (
     <>
       {pastDue ? <PastDueNotice summary={summary} /> : null}
-      <SubscriptionPanel
-        summary={summary}
-        tiers={tiers}
-        serverNameForLicense={serverNameForLicense}
-      />
-      {summary.tiers.map((tierSeats) => (
-        <TierSeatsPanel
-          key={tierSeats.tierId}
-          orgId={orgId}
-          tierSeats={tierSeats}
-          tier={tiers.find((tier) => tier.id === tierSeats.tierId) ?? null}
-          pastDue={pastDue}
-        />
-      ))}
-      <FleetNeedsNotice tiers={tiers} servers={servers} />
-      <LicenseMovePanel
+      <LicensesPanel summary={summary} tiers={tiers} />
+      <UncoveredServersNotice coverage={summary.servers} servers={servers} />
+      <TierLicensesPanel
         orgId={orgId}
         summary={summary}
         tiers={tiers}
-        servers={servers}
         pastDue={pastDue}
+        context={context}
         preselectedTierId={preselectedTierId}
-        preselectedLicenseId={preselectedLicenseId}
+      />
+      <MoveLicensePanel
+        orgId={orgId}
+        summary={summary}
+        tiers={tiers}
+        pastDue={pastDue}
+        context={context}
+        preselectedTierId={preselectedTierId}
       />
     </>
   )
@@ -553,15 +532,13 @@ function PortalButton({
 
 function PastDueNotice({ summary }: Readonly<{ summary: BillingSubscriptionSummary }>) {
   const grace = summary.subscription?.graceExpiresAt
+  const next =
+    'Update the payment method to resume; upgrades and new licenses are refused until the balance clears.'
   return (
     <InlineNotice
       tone="warning"
       title="Payment is past due — tier changes are paused"
-      body={
-        grace
-          ? `Monitoring continues until ${formatLocalDateTime(grace)}. Update the payment method to resume; upgrades and seat additions are refused until the balance clears.`
-          : 'Update the payment method to resume; upgrades and seat additions are refused until the balance clears.'
-      }
+      body={grace ? `Monitoring continues until ${formatLocalDateTime(grace)}. ${next}` : next}
       actions={
         summary.payer ? <PortalButton label="Update payment method" variant="primary" /> : undefined
       }
@@ -569,21 +546,17 @@ function PastDueNotice({ summary }: Readonly<{ summary: BillingSubscriptionSumma
   )
 }
 
-function SubscriptionPanel({
+/** Org-wide license totals, the pending changes, and the portal link. */
+function LicensesPanel({
   summary,
   tiers,
-  serverNameForLicense,
-}: Readonly<{
-  summary: BillingSubscriptionSummary
-  tiers: readonly BillingTier[]
-  serverNameForLicense: (licenseId: string) => string | null
-}>) {
+}: Readonly<{ summary: BillingSubscriptionSummary; tiers: readonly BillingTier[] }>) {
   const status = subscriptionStatusView(summary.subscription?.status)
-  const totals = totalSeats(summary.tiers)
+  const licenses = summary.licenses
   const periodEnd = summary.subscription?.currentPeriodEnd
   return (
     <SectionPanel
-      title="Subscription"
+      title="Licenses"
       hint={
         periodEnd
           ? `Current period ends ${formatLocalDateTime(periodEnd)}`
@@ -593,31 +566,39 @@ function SubscriptionPanel({
       accent
     >
       <StatTiles
-        accessibilityLabel="Seat totals"
+        accessibilityLabel="License totals"
         items={[
           {
-            key: 'seats',
+            key: 'purchased',
             icon: BillingNavIcon,
-            value: totals.seats,
-            label: 'SEATS',
-            accessibilityLabel: `${totals.seats} seats`,
+            value: licenses.purchased,
+            label: 'PURCHASED',
+            accessibilityLabel: `${licenses.purchased} purchased`,
           },
           {
-            key: 'used',
+            key: 'held',
             icon: AccessNavIcon,
-            value: totals.used,
-            label: 'LICENSED',
-            accessibilityLabel: `${totals.used} licensed`,
+            value: licenses.held,
+            label: 'IN USE',
+            accessibilityLabel: `${licenses.held} in use`,
           },
           {
-            key: 'free',
+            key: 'available',
             icon: ServersNavIcon,
-            value: totals.free,
-            label: 'FREE',
-            accessibilityLabel: `${totals.free} free seats`,
+            value: licenses.available,
+            label: 'AVAILABLE',
+            accessibilityLabel: `${licenses.available} available for new servers`,
+          },
+          {
+            key: 'releasing',
+            icon: BillingNavIcon,
+            value: licenses.releasing,
+            label: 'LEAVING',
+            accessibilityLabel: `${licenses.releasing} leaving at period end`,
           },
         ]}
       />
+      <Text style={panelStyles.detailLine}>{licenseSummaryLine(licenses)}</Text>
       {summary.subscription?.pastDueSince ? (
         <Text style={panelStyles.muted}>
           Past due since {formatLocalDateTime(summary.subscription.pastDueSince)}
@@ -628,7 +609,7 @@ function SubscriptionPanel({
           <Text style={panelStyles.detailLabel}>Pending changes</Text>
           {summary.pendingChanges.map((change) => (
             <Text key={change.id} style={panelStyles.detailLine}>
-              {describePendingChange(change, tiers, serverNameForLicense)}
+              {describePendingChange(change, tiers)}
             </Text>
           ))}
         </View>
@@ -644,100 +625,164 @@ function SubscriptionPanel({
   )
 }
 
-type SeatIntent = { delta: 1 | -1; preview: BillingPreview | null }
+// ---------------------------------------------------------------------------
+// Quantity per tier: +1 (quoted, invoiced now) and −1 (released at period end).
+// ---------------------------------------------------------------------------
 
-function TierSeatsPanel({
-  orgId,
-  tierSeats,
-  tier,
-  pastDue,
-}: Readonly<{
-  orgId: string
-  tierSeats: BillingTierSeats
-  tier: BillingTier | null
-  pastDue: boolean
-}>) {
+type QuantityIntent = Readonly<{ tierId: string; delta: 1 | -1; preview: BillingPreview | null }>
+
+/**
+ * The +1 / −1 state machine shared by every tier row and the buy-at-tier
+ * picker: idle → intent (a quote for +1, nothing to quote for −1) → confirm.
+ * Owns the two provider calls and the last error so the panel only wires
+ * buttons to it.
+ */
+function useLicenseQuantity(orgId: string, context: RefusalContext) {
   const preview = usePreviewBillingChange()
   const change = useChangeBillingSeats(orgId)
-  const [intent, setIntent] = useState<SeatIntent | null>(null)
+  const [intent, setIntent] = useState<QuantityIntent | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const busy = preview.isPending || change.isPending
 
-  const begin = async (delta: 1 | -1) => {
+  const begin = async (tierId: string, delta: 1 | -1) => {
     setError(null)
     if (delta < 0) {
       // A release defers to the period boundary and is never invoiced, so
       // there is no quote to show — just the consequence.
-      setIntent({ delta, preview: null })
+      setIntent({ tierId, delta, preview: null })
       return
     }
-    const outcome = await preview.run({ tierId: tierSeats.tierId, delta })
-    if (outcome.ok) setIntent({ delta, preview: outcome.value })
-    else if (outcome.error) setError(outcome.error)
+    const outcome = await preview.run({ tierId, delta })
+    if (outcome.ok) setIntent({ tierId, delta, preview: outcome.value })
+    else setError(failureOf(outcome, context))
   }
 
   const confirm = async () => {
     if (!intent) return
     setError(null)
     const outcome = await change.run({
-      tierId: tierSeats.tierId,
+      tierId: intent.tierId,
       delta: intent.delta,
       ...(intent.preview ? { prorationDate: intent.preview.prorationDate } : {}),
     })
     if (outcome.ok) setIntent(null)
-    else if (outcome.error) setError(outcome.error)
+    else setError(failureOf(outcome, context))
   }
 
+  const cancel = () => {
+    setIntent(null)
+    setError(null)
+  }
+
+  return {
+    intent,
+    error,
+    begin,
+    confirm,
+    cancel,
+    busy: preview.isPending || change.isPending,
+    submitting: change.isPending,
+  }
+}
+
+const LICENSE_COLUMNS = [
+  { key: 'tier', header: 'Tier', flex: 0.6, minWidth: 56 },
+  { key: 'price', header: 'Per license', flex: 1.2, minWidth: 140 },
+  { key: 'purchased', header: 'Purchased', flex: 0.8, minWidth: 90, align: 'end' },
+  { key: 'inUse', header: 'In use', flex: 0.8, minWidth: 80, align: 'end' },
+  { key: 'releasing', header: 'Leaving', flex: 0.8, minWidth: 80, align: 'end' },
+  { key: 'actions', header: '', flex: 1.4, minWidth: 150 },
+] as const satisfies readonly DataTableColumn[]
+
+const [LC_TIER, LC_PRICE, LC_PURCHASED, LC_IN_USE, LC_RELEASING, LC_ACTIONS] = LICENSE_COLUMNS
+
+function TierLicensesRow({
+  tier,
+  index,
+  last,
+  disabled,
+  addDisabled,
+  onAdd,
+  onRelease,
+}: Readonly<{
+  tier: BillingTierSummary
+  index: number
+  last: boolean
+  disabled: boolean
+  addDisabled: boolean
+  onAdd: () => void
+  onRelease: () => void
+}>) {
   return (
-    <SectionPanel
-      title={`${tierSeats.label} seats`}
-      hint={
-        tier
-          ? `${formatTierPrice(tier)} · fits up to ${formatFits(tier)}`
-          : 'Tier no longer in the catalogue'
-      }
-    >
-      <StatTiles
-        accessibilityLabel={`${tierSeats.label} seat usage`}
-        items={[
-          {
-            key: 'seats',
-            icon: BillingNavIcon,
-            value: tierSeats.seats,
-            label: 'SEATS',
-            accessibilityLabel: `${tierSeats.seats} seats`,
-          },
-          {
-            key: 'used',
-            icon: AccessNavIcon,
-            value: tierSeats.licensesUsed,
-            label: 'LICENSED',
-            accessibilityLabel: `${tierSeats.licensesUsed} licensed`,
-          },
-          {
-            key: 'bound',
-            icon: ServersNavIcon,
-            value: tierSeats.licensesBound,
-            label: 'ON A SERVER',
-            accessibilityLabel: `${tierSeats.licensesBound} bound to a server`,
-          },
-          {
-            key: 'free',
-            icon: BillingNavIcon,
-            value: tierSeats.licensesFree,
-            label: 'FREE',
-            accessibilityLabel: `${tierSeats.licensesFree} free seats`,
-          },
-        ]}
-      />
+    <DataTableRow alt={index % 2 === 1} last={last} accessibilityLabel={`Licenses at ${tier.label}`}>
+      <DataTableCell column={LC_TIER}>
+        <MonoText>{tier.label}</MonoText>
+      </DataTableCell>
+      <DataTableCell column={LC_PRICE}>
+        <Text style={panelStyles.detailLine}>{formatTierPrice(tier)}</Text>
+      </DataTableCell>
+      <DataTableCell column={LC_PURCHASED}>
+        <Text style={panelStyles.detailLine}>{tier.purchased}</Text>
+      </DataTableCell>
+      <DataTableCell column={LC_IN_USE}>
+        <Text style={panelStyles.detailLine}>{tier.inUse}</Text>
+      </DataTableCell>
+      <DataTableCell column={LC_RELEASING}>
+        <Text style={panelStyles.detailLine}>{tier.releasing}</Text>
+      </DataTableCell>
+      <DataTableCell column={LC_ACTIONS}>
+        <ButtonRow>
+          <Button
+            label="+1"
+            size="sm"
+            disabled={disabled || addDisabled}
+            accessibilityLabel={`Buy one more license at ${tier.label}`}
+            onPress={onAdd}
+          />
+          <Button
+            label="−1"
+            size="sm"
+            variant="ghost"
+            disabled={disabled || !canReleaseAt(tier)}
+            accessibilityLabel={`Release one license at ${tier.label}`}
+            onPress={onRelease}
+          />
+        </ButtonRow>
+      </DataTableCell>
+    </DataTableRow>
+  )
+}
+
+/** The quote, the release terms, the error, and Confirm / Cancel for the intent in flight. */
+function QuantityFeedback({
+  intent,
+  error,
+  summary,
+  tiers,
+  busy,
+  submitting,
+  onConfirm,
+  onCancel,
+}: Readonly<{
+  intent: QuantityIntent | null
+  error: string | null
+  summary: BillingSubscriptionSummary
+  tiers: readonly BillingTier[]
+  busy: boolean
+  submitting: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}>) {
+  const label = intent ? (tiers.find((tier) => tier.id === intent.tierId)?.label ?? intent.tierId) : ''
+  return (
+    <>
       {intent?.delta === 1 && intent.preview ? (
-        <PreviewNotice preview={intent.preview} title={`Adding one ${tierSeats.label} seat`} />
+        <PreviewNotice preview={intent.preview} title={`Buying one more license at ${label}`} />
       ) : null}
       {intent?.delta === -1 ? (
         <InlineNotice
           tone="warning"
-          title={`Releasing one ${tierSeats.label} seat`}
-          body="The seat drops at the end of the current period with no credit for the remaining time. It must not be held by an active license."
+          title={`Releasing one license at ${label}`}
+          body={`The license leaves ${landsAtLabel(summary.subscription?.currentPeriodEnd)} with no credit for the remaining time. Every server stays covered until then; the release is refused if a server would be left on nothing.`}
         />
       ) : null}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -747,50 +792,124 @@ function TierSeatsPanel({
             label={intent.delta === 1 ? 'Confirm and pay' : 'Confirm release'}
             variant="primary"
             size="sm"
-            busy={change.isPending}
+            busy={submitting}
             disabled={busy}
-            onPress={() => {
-              void confirm()
+            onPress={onConfirm}
+          />
+          <Button label="Cancel" variant="ghost" size="sm" disabled={busy} onPress={onCancel} />
+        </ButtonRow>
+      ) : null}
+    </>
+  )
+}
+
+/**
+ * Tiers the org has not bought at yet — the picker below the table. The
+ * `?tier=` deep link lands here when it names one of them; otherwise the
+ * row's own +1 covers it.
+ */
+function unownedTierOptions(
+  tiers: readonly BillingTier[],
+  owned: readonly BillingTierSummary[]
+): SelectOption[] {
+  const ownedIds = new Set(owned.map((tier) => tier.tierId))
+  return purchasableTiers(tiers)
+    .filter((tier) => !ownedIds.has(tier.id))
+    .map((tier) => tierOption(tier))
+}
+
+function TierLicensesPanel({
+  orgId,
+  summary,
+  tiers,
+  pastDue,
+  context,
+  preselectedTierId,
+}: Readonly<{
+  orgId: string
+  summary: BillingSubscriptionSummary
+  tiers: readonly BillingTier[]
+  pastDue: boolean
+  context: RefusalContext
+  preselectedTierId: string | null
+}>) {
+  const quantity = useLicenseQuantity(orgId, context)
+  const otherOptions = useMemo(() => unownedTierOptions(tiers, summary.tiers), [tiers, summary.tiers])
+  const [otherTierId, setOtherTierId] = useState<string | null>(preselectedTierId)
+  const otherSelectable = otherOptions.some((option) => option.value === otherTierId)
+  const busy = quantity.busy || quantity.intent != null
+
+  return (
+    <SectionPanel
+      title="Licenses by tier"
+      hint="+1 buys one more at that tier and is invoiced now; −1 releases one at the end of the period"
+    >
+      <DataTable columns={LICENSE_COLUMNS} minWidth={600} bordered>
+        {summary.tiers.length === 0 ? (
+          <DataTableEmpty>No licenses bought yet.</DataTableEmpty>
+        ) : null}
+        {summary.tiers.map((tier, index) => (
+          <TierLicensesRow
+            key={tier.tierId}
+            tier={tier}
+            index={index}
+            last={index === summary.tiers.length - 1}
+            disabled={busy}
+            addDisabled={pastDue}
+            onAdd={() => {
+              void quantity.begin(tier.tierId, 1)
+            }}
+            onRelease={() => {
+              void quantity.begin(tier.tierId, -1)
             }}
           />
-          <Button
-            label="Cancel"
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onPress={() => setIntent(null)}
-          />
-        </ButtonRow>
-      ) : (
-        <ButtonRow>
-          <Button
-            label="Add a seat"
-            size="sm"
-            busy={preview.isPending}
+        ))}
+      </DataTable>
+      {otherOptions.length > 0 ? (
+        <View style={styles.buyOther}>
+          <Text style={panelStyles.detailLabel}>Buy a license at another tier</Text>
+          <Select
+            value={otherSelectable ? otherTierId : null}
+            options={otherOptions}
+            placeholder="Choose a tier"
             disabled={busy || pastDue}
-            onPress={() => {
-              void begin(1)
-            }}
+            accessibilityLabel="Tier to buy a license at"
+            onChange={setOtherTierId}
           />
-          <Button
-            label="Release a seat"
-            size="sm"
-            variant="ghost"
-            disabled={busy || tierSeats.seats === 0}
-            onPress={() => {
-              void begin(-1)
-            }}
-          />
-        </ButtonRow>
-      )}
+          <ButtonRow>
+            <Button
+              label="Buy one"
+              size="sm"
+              disabled={busy || pastDue || !otherSelectable}
+              onPress={() => {
+                if (otherTierId) void quantity.begin(otherTierId, 1)
+              }}
+            />
+          </ButtonRow>
+        </View>
+      ) : null}
+      <QuantityFeedback
+        intent={quantity.intent}
+        error={quantity.error}
+        summary={summary}
+        tiers={tiers}
+        busy={quantity.busy}
+        submitting={quantity.submitting}
+        onConfirm={() => {
+          void quantity.confirm()
+        }}
+        onCancel={quantity.cancel}
+      />
       {pastDue ? (
-        <Text style={panelStyles.muted}>
-          Seat additions resume once the past-due balance clears.
-        </Text>
+        <Text style={panelStyles.muted}>New licenses resume once the past-due balance clears.</Text>
       ) : null}
     </SectionPanel>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Provider quotes.
+// ---------------------------------------------------------------------------
 
 /** A negative provider amount is a credit back to the customer; anything else is charged. */
 function previewLineKind(line: BillingPreviewLine): 'credit' | 'charge' {
@@ -879,73 +998,17 @@ function PreviewNotice({ preview, title }: Readonly<{ preview: BillingPreview; t
   )
 }
 
+// ---------------------------------------------------------------------------
+// Move a license between tiers: a quantity moves, never a named license.
+// ---------------------------------------------------------------------------
+
 type MoveState =
   | { kind: 'idle' }
   | { kind: 'previewing' }
   | { kind: 'upgrade'; preview: BillingPreview }
   | { kind: 'downgrade' }
 
-function licensedServerOptions(servers: readonly OrgServerRecord[]): SelectOption[] {
-  return servers
-    .filter((server) => server.licenseId != null && server.tierPlacement?.licenseTier != null)
-    .map((server) => ({
-      value: server.licenseId as string,
-      label: serverTitle(server),
-      detail: `${server.tierPlacement?.licenseTier ?? '—'} · required ${server.tierPlacement?.requiredTier ?? '—'} · recommended ${server.tierPlacement?.recommendedTier ?? '—'}`,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label))
-}
-
-/**
- * The license the panel is working on. The operator's own pick wins once
- * made; until then the `?license=` deep link governs, but only while it
- * names a licensed server in the current options — the list usually lands
- * after the panel mounts, so this is resolved per render, not seeded.
- */
-function resolveLicenseId(
-  chosen: Readonly<{ value: string | null }> | null,
-  preselected: string | null,
-  options: readonly SelectOption[]
-): string | null {
-  if (chosen) return chosen.value
-  return options.some((option) => option.value === preselected) ? preselected : null
-}
-
-type PlannedMove =
-  | { kind: 'idle' }
-  | { kind: 'downgrade' }
-  | { kind: 'quote'; licenseId: string; targetTierId: string }
-
-/**
- * What picking `next` for the selected license means. A downgrade needs no
- * quote; an upgrade is quoted by the provider first so the operator sees
- * the proration before paying. No license, no current tier, a locked seat,
- * or the same rank all leave the panel idle.
- */
-function plannedMove(
-  input: Readonly<{
-    licenseId: string | null
-    currentTier: BillingTier | null
-    next: BillingTier | null
-    locked: boolean
-  }>
-): PlannedMove {
-  const { licenseId, currentTier, next, locked } = input
-  if (!licenseId || !next || !currentTier || locked) return { kind: 'idle' }
-  const direction = tierChangeDirection(currentTier.rank, next.rank)
-  if (direction === 'downgrade') return { kind: 'downgrade' }
-  if (direction === 'upgrade') return { kind: 'quote', licenseId, targetTierId: next.id }
-  return { kind: 'idle' }
-}
-
-function periodEndLabel(summary: BillingSubscriptionSummary): string {
-  const end = summary.subscription?.currentPeriodEnd
-  return end ? formatLocalDateTime(end) : 'the period ends'
-}
-
-function failureOf(outcome: ApiMutationResult<unknown>): string | null {
-  return outcome.ok ? null : outcome.error
-}
+type MovePair = Readonly<{ from: BillingTier; to: BillingTier }>
 
 function isConfirmable(
   move: MoveState
@@ -954,52 +1017,53 @@ function isConfirmable(
 }
 
 /**
- * The move state machine: idle → (quote) → upgrade | downgrade → idle. Owns
- * the three provider calls and the last error so the panel only wires
- * pickers to it.
+ * The move state machine: idle → (quote) → upgrade | downgrade → idle. An
+ * upgrade is quoted by the provider first so the operator sees the proration
+ * before paying; a downgrade needs no quote. Owns the three provider calls
+ * and the last error so the panel only wires pickers to it.
  */
-function useLicenseMove(orgId: string) {
+function useTierMove(orgId: string, context: RefusalContext) {
   const preview = usePreviewBillingChange()
-  const upgrade = useUpgradeBillingLicense(orgId)
-  const downgrade = useDowngradeBillingLicense(orgId)
+  const upgrade = useUpgradeBillingTier(orgId)
+  const downgrade = useDowngradeBillingTier(orgId)
   const [move, setMove] = useState<MoveState>({ kind: 'idle' })
   const [error, setError] = useState<string | null>(null)
 
-  /** Back to idle; the last error stays visible until the next action. */
-  const dismiss = () => setMove({ kind: 'idle' })
-
   const reset = () => {
-    dismiss()
+    setMove({ kind: 'idle' })
     setError(null)
   }
 
-  /** Settle on what a target pick implies, quoting an upgrade first. */
-  const plan = async (planned: PlannedMove) => {
+  /** Settle on what the pair implies, quoting an upgrade first. */
+  const plan = async (pair: MovePair | null) => {
     setError(null)
-    if (planned.kind !== 'quote') {
-      setMove(planned)
+    const direction = tierChangeDirection(pair?.from.rank, pair?.to.rank)
+    if (!pair || direction === 'same') {
+      setMove({ kind: 'idle' })
+      return
+    }
+    if (direction === 'downgrade') {
+      setMove({ kind: 'downgrade' })
       return
     }
     setMove({ kind: 'previewing' })
-    const outcome = await preview.run({
-      licenseId: planned.licenseId,
-      targetTierId: planned.targetTierId,
-    })
+    const outcome = await preview.run({ fromTierId: pair.from.id, toTierId: pair.to.id })
     // A failed quote drops back to idle so the picker can be retried.
     setMove(outcome.ok ? { kind: 'upgrade', preview: outcome.value } : { kind: 'idle' })
-    setError(failureOf(outcome))
+    setError(failureOf(outcome, context))
   }
 
-  const apply = async (licenseId: string, targetTierId: string) => {
+  const apply = async (pair: MovePair) => {
     if (!isConfirmable(move)) return
     setError(null)
+    const body = { fromTierId: pair.from.id, toTierId: pair.to.id }
     const outcome =
       move.kind === 'upgrade'
-        ? await upgrade.run({ licenseId, targetTierId, prorationDate: move.preview.prorationDate })
-        : await downgrade.run({ licenseId, targetTierId })
+        ? await upgrade.run({ ...body, prorationDate: move.preview.prorationDate })
+        : await downgrade.run(body)
     // A failed apply keeps the quote on screen so the operator can retry.
     if (outcome.ok) setMove({ kind: 'idle' })
-    setError(failureOf(outcome))
+    setError(failureOf(outcome, context))
   }
 
   return {
@@ -1007,79 +1071,57 @@ function useLicenseMove(orgId: string) {
     error,
     plan,
     apply,
-    dismiss,
     reset,
     busy: preview.isPending || upgrade.isPending || downgrade.isPending,
     submitting: upgrade.isPending || downgrade.isPending,
   }
 }
 
-function MoveSummary({
-  server,
-  currentTier,
-  targetTier,
-  direction,
-}: Readonly<{
-  server: OrgServerRecord | null
-  currentTier: BillingTier | null
-  targetTier: BillingTier | null
-  direction: TierChangeDirection
-}>) {
-  if (!currentTier || !server) return null
-  const arrow = targetTier && direction !== 'same' ? ` → ${targetTier.label} (${direction})` : ''
-  return (
-    <Text style={panelStyles.muted}>
-      {serverTitle(server)} is on {currentTier.label}
-      {arrow}
-    </Text>
-  )
+/** Tiers a license can move *from*: bought, and not already leaving in full. */
+function fromTierOptions(
+  owned: readonly BillingTierSummary[],
+  tiers: readonly BillingTier[]
+): SelectOption[] {
+  return owned
+    .filter((tier) => canReleaseAt(tier))
+    .map((tier) => {
+      const catalogue = tiers.find((entry) => entry.id === tier.tierId)
+      const detail = [`${tier.purchased} purchased`, `${tier.inUse} in use`]
+      if (catalogue) detail.push(formatTierPrice(catalogue))
+      return {
+        value: tier.tierId,
+        label: tier.label,
+        detail: detail.join(' · '),
+      }
+    })
 }
 
-/**
- * Everything the panel says about the move in flight: the applying spinner,
- * a pending change already on the license, the quote, the downgrade terms,
- * and the last error.
- */
+/** Everything the panel says about the move in flight: the quote, the downgrade terms, and the last error. */
 function MoveFeedback({
   move,
-  targetTier,
+  pair,
   summary,
-  tiers,
-  server,
-  pendingForLicense,
-  applying,
   error,
 }: Readonly<{
   move: MoveState
-  targetTier: BillingTier | null
+  pair: MovePair | null
   summary: BillingSubscriptionSummary
-  tiers: readonly BillingTier[]
-  server: OrgServerRecord | null
-  pendingForLicense: BillingPendingChange | null
-  applying: boolean
   error: string | null
 }>) {
-  const serverName = server ? serverTitle(server) : null
   return (
     <>
-      {applying ? (
-        <LoadingState label="Applying the tier change — waiting for payment confirmation" />
-      ) : null}
-      {pendingForLicense && !applying ? (
-        <InlineNotice
-          title="A change is already scheduled for this license"
-          body={describePendingChange(pendingForLicense, tiers, () => serverName)}
+      {move.kind === 'previewing' ? <LoadingState label="Fetching the quote…" /> : null}
+      {move.kind === 'upgrade' && pair ? (
+        <PreviewNotice
+          preview={move.preview}
+          title={`Moving one license from ${pair.from.label} to ${pair.to.label}`}
         />
       ) : null}
-      {move.kind === 'previewing' ? <LoadingState label="Fetching the quote…" /> : null}
-      {move.kind === 'upgrade' && targetTier ? (
-        <PreviewNotice preview={move.preview} title={`Upgrade to ${targetTier.label}`} />
-      ) : null}
-      {move.kind === 'downgrade' && targetTier ? (
+      {move.kind === 'downgrade' && pair ? (
         <InlineNotice
           tone="warning"
-          title={`Downgrade to ${targetTier.label} at the end of the period`}
-          body={`The license keeps its current entitlement until ${periodEndLabel(summary)}, then moves. No credit is issued for the remaining time, and devices beyond the lower tier's slots stop being monitored.`}
+          title={`Moving one license from ${pair.from.label} down to ${pair.to.label}`}
+          body={`The move lands ${landsAtLabel(summary.subscription?.currentPeriodEnd)}. No credit is issued for the remaining time. It is refused if a server would be left on nothing.`}
         />
       ) : null}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -1087,54 +1129,27 @@ function MoveFeedback({
   )
 }
 
-/**
- * The panel's buttons. "Review" only shows for a deep link (`?tier=&license=`)
- * that lands with both selects filled but no quote yet — the quote otherwise
- * fires from the picker's own change. Confirm/Cancel show once a quote or
- * downgrade is on screen.
- */
 function MoveActions({
   move,
-  direction,
-  canReview,
   busy,
   submitting,
-  confirmDisabled,
-  onReview,
   onApply,
   onCancel,
 }: Readonly<{
   move: MoveState
-  direction: TierChangeDirection
-  canReview: boolean
   busy: boolean
   submitting: boolean
-  confirmDisabled: boolean
-  onReview: () => void
   onApply: () => void
   onCancel: () => void
 }>) {
-  if (move.kind === 'idle') {
-    if (!canReview) return null
-    return (
-      <ButtonRow>
-        <Button
-          label={direction === 'upgrade' ? 'Review upgrade' : 'Review downgrade'}
-          variant="primary"
-          disabled={busy}
-          onPress={onReview}
-        />
-      </ButtonRow>
-    )
-  }
-  if (move.kind === 'previewing') return null
+  if (!isConfirmable(move)) return null
   return (
     <ButtonRow>
       <Button
         label={move.kind === 'upgrade' ? 'Confirm upgrade and pay' : 'Schedule downgrade'}
         variant="primary"
         busy={submitting}
-        disabled={confirmDisabled}
+        disabled={busy}
         onPress={onApply}
       />
       <Button label="Cancel" variant="ghost" disabled={busy} onPress={onCancel} />
@@ -1142,113 +1157,117 @@ function MoveActions({
   )
 }
 
-function LicenseMovePanel({
+/** The two tiers as a pair once both are picked; `null` until then. */
+function movePair(
+  purchasable: readonly BillingTier[],
+  fromTierId: string | null,
+  toTierId: string | null
+): MovePair | null {
+  const from = purchasable.find((tier) => tier.id === fromTierId)
+  const to = purchasable.find((tier) => tier.id === toTierId)
+  return from && to ? { from, to } : null
+}
+
+function MovePickers({
+  fromTierId,
+  toTierId,
+  fromOptions,
+  toOptions,
+  disabled,
+  onChange,
+}: Readonly<{
+  fromTierId: string | null
+  toTierId: string | null
+  fromOptions: readonly SelectOption[]
+  toOptions: readonly SelectOption[]
+  disabled: boolean
+  onChange: (fromTierId: string | null, toTierId: string | null) => void
+}>) {
+  return (
+    <>
+      {fromOptions.length === 0 ? (
+        <Text style={panelStyles.muted}>No license can move until one is bought.</Text>
+      ) : null}
+      <Select
+        value={fromTierId}
+        options={fromOptions}
+        placeholder="From tier"
+        disabled={disabled || fromOptions.length === 0}
+        accessibilityLabel="Tier the license moves from"
+        onChange={(next) => onChange(next, toTierId)}
+      />
+      <Select
+        value={toTierId}
+        options={toOptions}
+        placeholder="To tier"
+        disabled={disabled || !fromTierId}
+        accessibilityLabel="Tier the license moves to"
+        onChange={(next) => onChange(fromTierId, next)}
+      />
+    </>
+  )
+}
+
+function MoveLicensePanel({
   orgId,
   summary,
   tiers,
-  servers,
   pastDue,
+  context,
   preselectedTierId,
-  preselectedLicenseId,
 }: Readonly<{
   orgId: string
   summary: BillingSubscriptionSummary
   tiers: readonly BillingTier[]
-  servers: readonly OrgServerRecord[]
   pastDue: boolean
+  context: RefusalContext
   preselectedTierId: string | null
-  preselectedLicenseId: string | null
 }>) {
-  const licenseMove = useLicenseMove(orgId)
-  const serverOptions = useMemo(() => licensedServerOptions(servers), [servers])
+  const tierMove = useTierMove(orgId, context)
   const purchasable = useMemo(() => purchasableTiers(tiers), [tiers])
-  // The operator's own pick, once made; `null` means the deep link still
-  // governs (see `resolveLicenseId`).
-  const [chosenLicenseId, setChosenLicenseId] = useState<{ value: string | null } | null>(null)
-  const licenseId = resolveLicenseId(chosenLicenseId, preselectedLicenseId, serverOptions)
-  const [targetTierId, setTargetTierId] = useState<string | null>(preselectedTierId)
+  const fromOptions = useMemo(() => fromTierOptions(summary.tiers, tiers), [summary.tiers, tiers])
+  const [fromTierId, setFromTierId] = useState<string | null>(null)
+  const [toTierId, setToTierId] = useState<string | null>(preselectedTierId)
 
-  const server = servers.find((entry) => entry.licenseId === licenseId) ?? null
-  const currentTier =
-    tiers.find((tier) => tier.label === server?.tierPlacement?.licenseTier) ?? null
-  const targetTier = purchasable.find((tier) => tier.id === targetTierId) ?? null
-  const direction = tierChangeDirection(currentTier?.rank, targetTier?.rank)
-  const pendingForLicense = pendingChangeForLicense(summary.pendingChanges, licenseId)
-  const applying = pendingForLicense?.kind === 'upgrade'
-  const locked = pastDue || pendingForLicense != null
-  const canReview = licenseId != null && targetTier != null && direction !== 'same' && !locked
-  const pickersDisabled = licenseMove.busy || locked
+  const pair = movePair(purchasable, fromTierId, toTierId)
+  const direction = tierChangeDirection(pair?.from.rank, pair?.to.rank)
+  const toOptions: SelectOption[] = purchasable.map((tier) => tierOption(tier, tier.id === fromTierId))
 
-  const tierOptions: SelectOption[] = purchasable.map((tier) => ({
-    value: tier.id,
-    label: tier.label,
-    detail: `${formatTierPrice(tier)} · fits up to ${formatFits(tier)}`,
-    disabled: currentTier?.id === tier.id,
-  }))
-
-  const chooseTarget = (nextTierId: string | null) => {
-    setTargetTierId(nextTierId)
-    const next = purchasable.find((tier) => tier.id === nextTierId) ?? null
-    void licenseMove.plan(plannedMove({ licenseId, currentTier, next, locked }))
+  const choose = (nextFromId: string | null, nextToId: string | null) => {
+    setFromTierId(nextFromId)
+    setToTierId(nextToId)
+    void tierMove.plan(movePair(purchasable, nextFromId, nextToId))
   }
 
   return (
     <SectionPanel
-      title="Move a license to another tier"
-      hint="Upgrades are invoiced now and apply once paid; downgrades apply at the end of the period with no credit"
+      title="Move a license"
+      hint="Up the ladder is invoiced now and applies once paid; down the ladder applies at the end of the period with no credit"
     >
-      {serverOptions.length === 0 ? (
-        <Text style={panelStyles.muted}>No server is bound to a licensed seat yet.</Text>
-      ) : null}
-      <Select
-        value={licenseId}
-        options={serverOptions}
-        placeholder="Select a server"
-        disabled={licenseMove.busy || serverOptions.length === 0}
-        accessibilityLabel="Server whose license moves"
-        onChange={(next) => {
-          setChosenLicenseId({ value: next })
-          licenseMove.reset()
-        }}
+      <MovePickers
+        fromTierId={fromTierId}
+        toTierId={toTierId}
+        fromOptions={fromOptions}
+        toOptions={toOptions}
+        disabled={tierMove.busy || pastDue}
+        onChange={choose}
       />
-      <Select
-        value={targetTierId}
-        options={tierOptions}
-        placeholder="Select a target tier"
-        disabled={pickersDisabled || !licenseId}
-        accessibilityLabel="Target tier"
-        onChange={chooseTarget}
-      />
-      <MoveSummary
-        server={server}
-        currentTier={currentTier}
-        targetTier={targetTier}
-        direction={direction}
-      />
-      <MoveFeedback
-        move={licenseMove.move}
-        targetTier={targetTier}
-        summary={summary}
-        tiers={tiers}
-        server={server}
-        pendingForLicense={pendingForLicense}
-        applying={applying}
-        error={licenseMove.error}
-      />
+      {direction === 'same' ? null : (
+        <Text style={panelStyles.muted}>
+          {pair?.from.label} → {pair?.to.label} ({direction})
+        </Text>
+      )}
+      <MoveFeedback move={tierMove.move} pair={pair} summary={summary} error={tierMove.error} />
       <MoveActions
-        move={licenseMove.move}
-        direction={direction}
-        canReview={canReview}
-        busy={licenseMove.busy}
-        submitting={licenseMove.submitting}
-        confirmDisabled={pickersDisabled}
-        onReview={() => chooseTarget(targetTierId)}
+        move={tierMove.move}
+        busy={tierMove.busy}
+        submitting={tierMove.submitting}
         onApply={() => {
-          if (licenseId && targetTier) void licenseMove.apply(licenseId, targetTier.id)
+          if (pair) void tierMove.apply(pair)
         }}
         onCancel={() => {
-          licenseMove.dismiss()
-          setTargetTierId(null)
+          tierMove.reset()
+          setToTierId(null)
         }}
       />
       {pastDue ? (
@@ -1269,6 +1288,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   pendingList: {
+    gap: spacing.xs,
+  },
+  buyOther: {
     gap: spacing.xs,
   },
   portal: {

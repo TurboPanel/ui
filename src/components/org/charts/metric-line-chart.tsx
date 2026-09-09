@@ -6,6 +6,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native'
 import { LineChart } from 'react-native-gifted-charts'
+import Svg, { Path } from 'react-native-svg'
 import { colors, spacing } from '@/lib/theme'
 
 export type MetricLineSeries = Readonly<{
@@ -33,6 +34,13 @@ type MetricLineChartProps = Readonly<{
    * order. The tooltip and legend keep per-series (non-cumulative) values.
    */
   stacked?: boolean
+  /** Draw straight segments instead of a cubic curve. */
+  straight?: boolean
+  /**
+   * Draw `min`/`max` as a filled envelope behind the `avg` line.
+   * Series keys must be `min`, `avg`, and `max`.
+   */
+  range?: boolean
   gapBands?: readonly MetricGapBand[]
   xTickFormat?: (ms: number) => string
   /** Dashed horizontal reference line (e.g. Tjmax/TDP limit) at a fixed Y value. */
@@ -387,6 +395,233 @@ function buildPointerConfig(
   }
 }
 
+function seriesByKey(series: MetricLineSeries[], key: string): MetricLineSeries | undefined {
+  return series.find((entry) => entry.key === key)
+}
+
+/**
+ * How the props resolve into what actually gets drawn. `range` wins over
+ * `stacked`, and both need more than one series to mean anything.
+ */
+type ChartMode = Readonly<{
+  isRange: boolean
+  isSingle: boolean
+  isStacked: boolean
+  avgSeries: MetricLineSeries | undefined
+  firstSeries: MetricLineSeries | undefined
+  /** The series the line chart itself draws — the `avg` line alone in range mode. */
+  lineSeries: MetricLineSeries[]
+  /** `lineSeries`, made cumulative when stacked. */
+  plotted: MetricLineSeries[]
+  pointCount: number
+}>
+
+function resolveChartMode(
+  series: MetricLineSeries[],
+  range: boolean,
+  stacked: boolean,
+): ChartMode {
+  const isRange = range && series.length > 1
+  const avgSeries = isRange ? seriesByKey(series, 'avg') : undefined
+  const lineSeries = isRange && avgSeries ? [avgSeries] : series
+  const isSingle = lineSeries.length === 1
+  const isStacked = stacked && !isSingle && !isRange
+  const firstSeries = lineSeries[0]
+  return {
+    isRange,
+    isSingle,
+    isStacked,
+    avgSeries,
+    firstSeries,
+    lineSeries,
+    plotted: isStacked ? toStackedSeries(lineSeries) : lineSeries,
+    pointCount: (isRange ? series[0] : firstSeries)?.points.length ?? 0,
+  }
+}
+
+/** Gradient fill, which only a single unstacked series can carry. */
+function buildAreaProps(area: boolean, mode: ChartMode) {
+  if (!area || !mode.isSingle || !mode.firstSeries) return {}
+  const color = mode.firstSeries.color
+  return {
+    areaChart: true,
+    color,
+    startFillColor1: color,
+    endFillColor1: color,
+    startOpacity1: 0.28,
+    endOpacity1: 0.02,
+    gradientDirection: 'vertical',
+  }
+}
+
+/**
+ * In range mode the library line is hidden — `RangeEnvelopeLayer` draws the
+ * `avg` line itself, over the envelope.
+ */
+function buildSingleColorProps(mode: ChartMode) {
+  if (!mode.isSingle || !mode.firstSeries) return {}
+  return {
+    color: mode.isRange ? 'transparent' : mode.firstSeries.color,
+    thickness: mode.isRange ? 0 : 2,
+  }
+}
+
+function valueToPlotY(value: number, yAxis: YAxisConfig, chartHeight: number): number {
+  if (yAxis.maxValue <= 0) return chartHeight
+  const fraction = (value - yAxis.yAxisOffset) / yAxis.maxValue
+  const clamped = Math.max(0, Math.min(1, fraction))
+  return chartHeight * (1 - clamped)
+}
+
+function appendPlotPoint(
+  commands: string[],
+  index: number,
+  value: number,
+  yAxis: YAxisConfig,
+  chartHeight: number,
+  pointSpacing: number,
+) {
+  const command = commands.length === 0 ? 'M' : 'L'
+  commands.push(`${command}${index * pointSpacing},${valueToPlotY(value, yAxis, chartHeight)}`)
+}
+
+/**
+ * One drawn run of samples. `startIndex` is the sample the run opens on, so
+ * it identifies the segment across renders — an array position would not.
+ */
+type PathSegment = Readonly<{ startIndex: number; d: string }>
+
+/**
+ * Closed polygons for a min–max envelope. A missing sample on either edge
+ * breaks the band so a gap is not filled across a hole.
+ */
+function rangeBandPaths(
+  minPoints: MetricLineSeries['points'],
+  maxPoints: MetricLineSeries['points'],
+  yAxis: YAxisConfig,
+  chartHeight: number,
+  pointSpacing: number,
+): PathSegment[] {
+  const paths: PathSegment[] = []
+  let upper: string[] = []
+  let lower: string[] = []
+  let startIndex = 0
+
+  const flush = () => {
+    if (upper.length >= 2) {
+      paths.push({ startIndex, d: `${upper.join(' ')} ${[...lower].reverse().join(' ')} Z` })
+    }
+    upper = []
+    lower = []
+  }
+
+  const count = Math.min(minPoints.length, maxPoints.length)
+  for (let index = 0; index < count; index += 1) {
+    const minValue = minPoints[index]?.value
+    const maxValue = maxPoints[index]?.value
+    if (minValue == null || maxValue == null) {
+      flush()
+      continue
+    }
+    const x = index * pointSpacing
+    const high = Math.max(minValue, maxValue)
+    const low = Math.min(minValue, maxValue)
+    const command = upper.length === 0 ? 'M' : 'L'
+    if (upper.length === 0) startIndex = index
+    upper.push(`${command}${x},${valueToPlotY(high, yAxis, chartHeight)}`)
+    lower.push(`L${x},${valueToPlotY(low, yAxis, chartHeight)}`)
+  }
+  flush()
+  return paths
+}
+
+function rangeLinePaths(
+  points: MetricLineSeries['points'],
+  yAxis: YAxisConfig,
+  chartHeight: number,
+  pointSpacing: number,
+): PathSegment[] {
+  const paths: PathSegment[] = []
+  let commands: string[] = []
+  let startIndex = 0
+
+  const flush = () => {
+    if (commands.length >= 2) paths.push({ startIndex, d: commands.join(' ') })
+    commands = []
+  }
+
+  for (let index = 0; index < points.length; index += 1) {
+    const value = points[index]?.value
+    if (value == null) {
+      flush()
+      continue
+    }
+    if (commands.length === 0) startIndex = index
+    appendPlotPoint(commands, index, value, yAxis, chartHeight, pointSpacing)
+  }
+  flush()
+  return paths
+}
+
+function RangeEnvelopeLayer({
+  minSeries,
+  maxSeries,
+  avgSeries,
+  yAxis,
+  chartWidth,
+  chartHeight,
+  pointSpacing,
+}: Readonly<{
+  minSeries: MetricLineSeries | undefined
+  maxSeries: MetricLineSeries | undefined
+  avgSeries: MetricLineSeries | undefined
+  yAxis: YAxisConfig
+  chartWidth: number
+  chartHeight: number
+  pointSpacing: number
+}>) {
+  if (chartWidth <= 0 || chartHeight <= 0) return null
+  const bandPaths =
+    minSeries && maxSeries
+      ? rangeBandPaths(minSeries.points, maxSeries.points, yAxis, chartHeight, pointSpacing)
+      : []
+  const linePaths = avgSeries
+    ? rangeLinePaths(avgSeries.points, yAxis, chartHeight, pointSpacing)
+    : []
+  if (bandPaths.length === 0 && linePaths.length === 0) return null
+  const lineColor = avgSeries?.color ?? colors.accent
+  return (
+    <View
+      style={[
+        styles.rangeLayer,
+        { left: Y_AXIS_WIDTH, width: chartWidth, height: chartHeight },
+      ]}
+    >
+      <Svg width={chartWidth} height={chartHeight}>
+        {bandPaths.map((segment) => (
+          <Path
+            key={`range-${segment.startIndex}`}
+            d={segment.d}
+            fill={colors.accent}
+            fillOpacity={0.28}
+          />
+        ))}
+        {linePaths.map((segment) => (
+          <Path
+            key={`avg-${segment.startIndex}`}
+            d={segment.d}
+            fill="none"
+            stroke={lineColor}
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ))}
+      </Svg>
+    </View>
+  )
+}
+
 function GapBandsLayer({
   gapBands,
   xDomainMs,
@@ -517,6 +752,8 @@ export function MetricLineChart({
   yDomain,
   area = false,
   stacked = false,
+  straight = false,
+  range = false,
   gapBands,
   xTickFormat,
   referenceLine,
@@ -529,40 +766,28 @@ export function MetricLineChart({
     setMeasuredWidth((prev) => (prev === next ? prev : next))
   }, [])
 
-  const isSingle = series.length === 1
-  const isStacked = stacked && !isSingle
-  const plotted = isStacked ? toStackedSeries(series) : series
-  const firstSeries = series[0]
-  const pointCount = firstSeries ? firstSeries.points.length : 0
+  const mode = resolveChartMode(series, range, stacked)
+  const { isRange, isSingle, isStacked, avgSeries, firstSeries, plotted } = mode
 
   const chartWidth = Math.max(1, measuredWidth - Y_AXIS_WIDTH)
   const chartHeight = Math.max(1, height - 44)
-  const spacing = Math.max(1, chartWidth / Math.max(1, pointCount - 1))
+  const pointSpacing = Math.max(1, chartWidth / Math.max(1, mode.pointCount - 1))
 
-  const yAxis = computeYAxisConfig(plotted, yDomain, yFormat, referenceLine?.valueY)
+  const yAxis = computeYAxisConfig(
+    isRange ? series : plotted,
+    yDomain,
+    yFormat,
+    referenceLine?.valueY,
+  )
   const xAxisTicks = buildXAxisTicks(xDomainMs, chartWidth, xTickFormat)
   const referenceLineTopPx =
     referenceLine !== undefined ? referenceLineTop(referenceLine.valueY, yAxis, chartHeight) : null
 
   const dataProps = buildDataProps(isSingle, isStacked, firstSeries, plotted)
+  const areaProps = buildAreaProps(area, mode)
+  const singleColorProps = buildSingleColorProps(mode)
 
-  const areaProps =
-    area && isSingle && firstSeries
-      ? {
-          areaChart: true,
-          color: firstSeries.color,
-          startFillColor1: firstSeries.color,
-          endFillColor1: firstSeries.color,
-          startOpacity1: 0.28,
-          endOpacity1: 0.02,
-          gradientDirection: 'vertical',
-        }
-      : {}
-
-  const singleColorProps =
-    isSingle && firstSeries ? { color: firstSeries.color, thickness: 2 } : {}
-
-  const pointerLegend = series.map((entry) => ({
+  const pointerLegend = (isRange ? series : mode.lineSeries).map((entry) => ({
     key: entry.key,
     label: entry.label,
     color: entry.color,
@@ -570,7 +795,7 @@ export function MetricLineChart({
   const pointerConfig = buildPointerConfig(
     pointerLegend,
     yFormat,
-    isStacked ? series : undefined,
+    isStacked || isRange ? series : undefined,
   )
 
   return (
@@ -595,14 +820,14 @@ export function MetricLineChart({
             {...singleColorProps}
             width={chartWidth}
             height={chartHeight}
-            spacing={spacing}
+            spacing={pointSpacing}
             initialSpacing={0}
             endSpacing={0}
             adjustToWidth
             disableScroll
             // Cubic overshoot can make cumulative bands cross — stacked
-            // charts draw straight segments.
-            curved={!isStacked}
+            // charts and noisy single series draw straight segments.
+            curved={!isStacked && !straight && !isRange}
             hideDataPoints
             hideRules={false}
             rulesType="solid"
@@ -626,6 +851,17 @@ export function MetricLineChart({
             yAxisTextStyle={styles.yAxisText}
             pointerConfig={pointerConfig}
           />
+          {isRange ? (
+            <RangeEnvelopeLayer
+              minSeries={seriesByKey(series, 'min')}
+              maxSeries={seriesByKey(series, 'max')}
+              avgSeries={avgSeries}
+              yAxis={yAxis}
+              chartWidth={chartWidth}
+              chartHeight={chartHeight}
+              pointSpacing={pointSpacing}
+            />
+          ) : null}
           <ReferenceLineOverlay
             referenceLine={referenceLine}
             topPx={referenceLineTopPx}
@@ -647,6 +883,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xs,
     zIndex: 0,
+    pointerEvents: 'none',
+  },
+  rangeLayer: {
+    position: 'absolute',
+    top: spacing.xs,
+    zIndex: 1,
     pointerEvents: 'none',
   },
   gapBand: {

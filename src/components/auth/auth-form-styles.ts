@@ -181,7 +181,7 @@ export const authFormStyles = StyleSheet.create({
    * would blur the field.
    */
   floatingLabelLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1,
     pointerEvents: 'none',
   },

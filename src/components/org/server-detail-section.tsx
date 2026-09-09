@@ -817,16 +817,22 @@ export function ServerDetailSection({
 }
 
 /**
- * Header connection line — colocated Unix socket, or the host's address.
+ * Header connection line — local Unix socket, or the host's address.
  *
  * The instance resolves `address` for us: the peer address it observed when
  * that is genuinely the host's (including through a Cloudflare Tunnel), and a
  * daemon-reported interface address when the observed one was a reverse proxy
  * or a forwarded port. Interface-sourced addresses are labelled so nobody reads
  * one as proof of how the daemon reached us.
+ *
+ * The socket line follows `addressSource`, not `colocatedWithInstance`: those
+ * are different facts. A co-located daemon dials the Unix socket only on a
+ * self-hosted control plane; against TurboPanel High Availability the same
+ * daemon connects over HTTPS from an address, like any other, and that
+ * address is what belongs here.
  */
 function resolveConnectedViaLabel(server: ServerDetailRecord): string | null {
-  if (server.colocatedWithInstance === true || server.addressSource === 'local') {
+  if (server.addressSource === 'local') {
     return 'via Local Unix Socket'
   }
   const address = server.address?.trim()

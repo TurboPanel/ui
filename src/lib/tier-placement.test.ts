@@ -15,9 +15,9 @@ function tier(label: string, rank: number): BillingTier {
   return {
     id: `tier-${label}`,
     label,
-    generation: 1,
     rank,
     priceCents: rank * 1000,
+    currency: 'usd',
     isCustom: label === 'SX',
     entitlements: {
       maxCores: rank * 4,
@@ -39,18 +39,21 @@ function placement(
 }
 
 describe('tierRankFromLabel', () => {
-  it('parses the numbered ladder and ranks SX above it', () => {
+  it('ranks the shipped ladder S1…S7 with SX on top', () => {
     expect(tierRankFromLabel('S1')).toBe(1)
     expect(tierRankFromLabel('s7')).toBe(7)
     expect(tierRankFromLabel(' S3 ')).toBe(3)
-    expect(tierRankFromLabel('SX')).toBeGreaterThan(tierRankFromLabel('S99')!)
+    expect(tierRankFromLabel('SX')).toBe(8)
+    expect(tierRankFromLabel('SX')).toBeGreaterThan(tierRankFromLabel('S7')!)
   })
 
-  it('answers null for anything it cannot rank', () => {
+  it('answers null for anything off the ladder', () => {
     expect(tierRankFromLabel(null)).toBeNull()
     expect(tierRankFromLabel('')).toBeNull()
     expect(tierRankFromLabel('Pro')).toBeNull()
     expect(tierRankFromLabel('S0')).toBeNull()
+    // The ladder stops at S7; nothing is invented for a label it does not carry.
+    expect(tierRankFromLabel('S99')).toBeNull()
   })
 })
 
@@ -86,8 +89,11 @@ describe('tierPlacementState', () => {
   it('treats one step of headroom as normal and two as over-provisioned', () => {
     expect(tierPlacementState(placement('S4', 'S2', 'S3'))).toBe('ok')
     expect(tierPlacementState(placement('S5', 'S2', 'S3'))).toBe('above-hardware')
-    // The negotiated tier is never "too much" — its shape is bespoke.
+    // The negotiated tier is never "too much" — its shape is bespoke,
+    // whichever resolver ranks it.
     expect(tierPlacementState(placement('SX', 'S1', 'S1'))).toBe('ok')
+    const catalogue = tierRankResolver([tier('S1', 1), tier('SX', 8)])
+    expect(tierPlacementState(placement('SX', 'S1', 'S1'), catalogue)).toBe('ok')
   })
 
   it('does not invent a warning for a label it cannot rank', () => {

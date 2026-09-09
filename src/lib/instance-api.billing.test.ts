@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORG_ID_HEADER, setActiveOrganizationId } from '@/lib/org-context'
 import {
+  BillingRefusalError,
   changeBillingSeats,
   createBillingCheckout,
   createBillingPortalSession,
-  downgradeBillingLicense,
+  downgradeBillingTier,
   fetchBillingCatalog,
   fetchBillingSubscription,
   previewBillingChange,
-  upgradeBillingLicense,
+  upgradeBillingTier,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -23,6 +24,16 @@ function lastRequest(fetchMock: ReturnType<typeof vi.fn>) {
   const headers = (init?.headers ?? {}) as Record<string, string>
   const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined
   return { url, method: init?.method ?? 'GET', headers, body }
+}
+
+async function refusalOf(promise: Promise<unknown>): Promise<BillingRefusalError> {
+  try {
+    await promise
+  } catch (err) {
+    if (err instanceof BillingRefusalError) return err
+    throw err
+  }
+  throw new TypeError('expected the call to be refused')
 }
 
 describe('instance-api billing wrappers', () => {
@@ -49,7 +60,14 @@ describe('instance-api billing wrappers', () => {
   })
 
   it('fetchBillingSubscription returns the projection verbatim', async () => {
-    const summary = { payer: null, subscription: null, tiers: [], pendingChanges: [] }
+    const summary = {
+      payer: null,
+      subscription: null,
+      tiers: [],
+      licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+      servers: [],
+      pendingChanges: [],
+    }
     fetchMock.mockResolvedValueOnce(jsonResponse(summary))
     await expect(fetchBillingSubscription()).resolves.toEqual(summary)
     expect(lastRequest(fetchMock).url).toContain('/api/client/v1/billing/subscription')
@@ -70,6 +88,7 @@ describe('instance-api billing wrappers', () => {
     expect(req.url).toContain('/api/client/v1/billing/checkout')
     expect(req.method).toBe('POST')
     expect(req.body).toEqual({ tierId: 't1', quantity: 2 })
+    expect(req.headers[ORG_ID_HEADER]).toBe('org-1')
   })
 
   it('createBillingPortalSession posts an empty object body', async () => {
@@ -88,8 +107,8 @@ describe('instance-api billing wrappers', () => {
         jsonResponse({ prorationDate: 7, currency: 'usd', subtotal: 1, tax: 0, total: 1, amountDue: 1, lines: [] })
       )
     )
-    await previewBillingChange({ licenseId: 'lic-1', targetTierId: 't2' })
-    expect(lastRequest(fetchMock).body).toEqual({ licenseId: 'lic-1', targetTierId: 't2' })
+    await previewBillingChange({ fromTierId: 't1', toTierId: 't2' })
+    expect(lastRequest(fetchMock).body).toEqual({ fromTierId: 't1', toTierId: 't2' })
     await previewBillingChange({ tierId: 't1', delta: -1 })
     expect(lastRequest(fetchMock).body).toEqual({ tierId: 't1', delta: -1 })
     expect(lastRequest(fetchMock).url).toContain('/api/client/v1/billing/preview')
@@ -103,16 +122,16 @@ describe('instance-api billing wrappers', () => {
       body: { tierId: 't1', delta: 1, prorationDate: 9 },
     },
     {
-      name: 'upgradeBillingLicense',
-      call: () => upgradeBillingLicense({ licenseId: 'lic-1', targetTierId: 't2', prorationDate: 9 }),
+      name: 'upgradeBillingTier',
+      call: () => upgradeBillingTier({ fromTierId: 't1', toTierId: 't2', prorationDate: 9 }),
       path: '/billing/upgrade',
-      body: { licenseId: 'lic-1', targetTierId: 't2', prorationDate: 9 },
+      body: { fromTierId: 't1', toTierId: 't2', prorationDate: 9 },
     },
     {
-      name: 'downgradeBillingLicense',
-      call: () => downgradeBillingLicense({ licenseId: 'lic-1', targetTierId: 't1' }),
+      name: 'downgradeBillingTier',
+      call: () => downgradeBillingTier({ fromTierId: 't2', toTierId: 't1' }),
       path: '/billing/downgrade',
-      body: { licenseId: 'lic-1', targetTierId: 't1' },
+      body: { fromTierId: 't2', toTierId: 't1' },
     },
   ])('$name posts to $path and returns the mutation outcome', async ({ call, path, body }) => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, pending: true, intentId: 'i-1' }))
@@ -126,8 +145,43 @@ describe('instance-api billing wrappers', () => {
 
   it('keeps the conflict code in the thrown message', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'subscription_past_due', graceExpiresAt: null }, 409))
-    await expect(upgradeBillingLicense({ licenseId: 'lic-1', targetTierId: 't2' })).rejects.toThrow(
-      /subscription_past_due/
+    await expect(upgradeBillingTier({ fromTierId: 't1', toTierId: 't2' })).rejects.toThrow(
+      /HTTP 409: subscription_past_due/
     )
+  })
+
+  it('exposes the refusal body so the screen can name the stranded server', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'servers_uncovered', serverId: 'srv-9', requiredTier: 'S5' }, 409)
+    )
+    const err = await refusalOf(changeBillingSeats({ tierId: 't1', delta: -1 }))
+    expect(err.code).toBe('servers_uncovered')
+    expect(err.status).toBe(409)
+    expect(err.text('serverId')).toBe('srv-9')
+    expect(err.text('requiredTier')).toBe('S5')
+    expect(err.count('requiredTier')).toBeNull()
+    expect(err.message).toContain('/billing/seats failed: HTTP 409: servers_uncovered')
+  })
+
+  it('reads numeric refusal fields and tolerates a body without a code', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'licenses_in_use', purchasedAfter: 2, licensesHeld: 3 }, 409)
+    )
+    const err = await refusalOf(downgradeBillingTier({ fromTierId: 't2', toTierId: 't1' }))
+    expect(err.count('purchasedAfter')).toBe(2)
+    expect(err.count('licensesHeld')).toBe(3)
+    expect(err.text('purchasedAfter')).toBeNull()
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'nope' }, 400))
+    const bare = await refusalOf(previewBillingChange({ tierId: 't1', delta: 1 }))
+    expect(bare.code).toBe('')
+    expect(bare.message).toContain('HTTP 400')
+  })
+
+  it('falls back to a plain error for a non-JSON failure', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('bad gateway', { status: 502 }))
+    const failure = changeBillingSeats({ tierId: 't1', delta: 1 })
+    await expect(failure).rejects.toThrow('/api/client/v1/billing/seats failed: HTTP 502')
+    await expect(failure).rejects.not.toBeInstanceOf(BillingRefusalError)
   })
 })

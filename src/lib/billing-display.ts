@@ -1,18 +1,35 @@
 import {
+  BillingRefusalError,
+  BILLING_MUTATION_IN_PROGRESS_ERROR,
   DELINQUENT_SUBSCRIPTION_STATUSES,
+  LICENSES_IN_USE_ERROR,
+  NO_SUBSCRIPTION_ERROR,
+  NOT_A_DOWNGRADE_ERROR,
+  NOT_AN_UPGRADE_ERROR,
+  SERVERS_UNCOVERED_ERROR,
+  SUBSCRIPTION_EXISTS_ERROR,
+  SUBSCRIPTION_PAST_DUE_ERROR,
+  TIER_NOT_PURCHASABLE_ERROR,
+  type BillingLicenseSummary,
   type BillingPendingChange,
+  type BillingServerCoverage,
   type BillingSubscriptionState,
   type BillingTier,
-  type BillingTierSeats,
+  type BillingTierEntitlements,
+  type BillingTierSummary,
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
-import { isTierShortfall, tierPlacementState, type TierRankResolver } from '@/lib/tier-placement'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 /**
  * Presentation helpers for the billing screen. Amounts arrive from the
  * provider as integer minor units and are formatted here — never summed,
  * prorated or otherwise computed on the client.
+ *
+ * Vocabulary: the operator buys **licenses** and runs **servers**. A
+ * license is plumbing — it is never shown as an object here; the page
+ * counts them per tier and names the servers they cover.
  */
 
 /** `1999` + `usd` → `$19.99`; a missing currency renders the raw minor units. */
@@ -32,10 +49,19 @@ export function formatMinorUnits(
   }
 }
 
-/** Catalogue price per seat per month; custom tiers have no list price. */
-export function formatTierPrice(tier: Pick<BillingTier, 'priceCents' | 'isCustom'>): string {
-  if (tier.isCustom || tier.priceCents == null) return 'Contact us'
-  return `${formatMinorUnits(tier.priceCents, 'usd')} / seat / month`
+/** Every priced tier bills in this currency when the row has not cached one yet. */
+const DEFAULT_CURRENCY = 'usd'
+
+/**
+ * Catalogue price per license per month. Custom tiers are negotiated; a
+ * priced row whose product has not been verified yet has no price to show.
+ */
+export function formatTierPrice(
+  tier: Readonly<{ priceCents: number | null; currency?: string | null; isCustom?: boolean }>
+): string {
+  if (tier.isCustom) return 'Negotiated'
+  if (tier.priceCents == null) return 'Price not available'
+  return `${formatMinorUnits(tier.priceCents, tier.currency ?? DEFAULT_CURRENCY)} / license / month`
 }
 
 const GIB = 1024 ** 3
@@ -45,6 +71,19 @@ export function formatMemoryLimit(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '—'
   const gib = bytes / GIB
   return `${Number.isInteger(gib) ? gib : gib.toFixed(1)} GiB`
+}
+
+/** `16 cores · 64 GiB`, or an em dash for a tier the ladder no longer describes. */
+export function formatTierFits(entitlements: BillingTierEntitlements | null | undefined): string {
+  if (!entitlements) return '—'
+  return `${entitlements.maxCores} cores · ${formatMemoryLimit(entitlements.maxMemoryBytes)}`
+}
+
+/** `5 NIC · 6 drive · 2 GPU · 9 extra FS`. */
+export function formatTierSlots(entitlements: BillingTierEntitlements | null | undefined): string {
+  if (!entitlements) return '—'
+  const { nicSlots, driveSlots, gpuSlots, filesystemSlots } = entitlements
+  return `${nicSlots} NIC · ${driveSlots} drive · ${gpuSlots} GPU · ${filesystemSlots} extra FS`
 }
 
 export type SubscriptionStatusView = {
@@ -104,59 +143,154 @@ export function tierChangeDirection(
   return toRank > fromRank ? 'upgrade' : 'downgrade'
 }
 
-/**
- * Sentence for a pending-change row. Tier ids are resolved to labels via
- * the catalogue; an unknown id falls back to the id so nothing is hidden.
- */
-export function describePendingChange(
-  change: BillingPendingChange,
-  tiers: readonly Pick<BillingTier, 'id' | 'label'>[],
-  serverNameForLicense: (licenseId: string) => string | null = () => null
-): string {
-  const label = (tierId: string | null): string =>
-    tierId == null ? '—' : (tiers.find((tier) => tier.id === tierId)?.label ?? tierId)
-  const subject =
-    change.licenseId != null
-      ? (serverNameForLicense(change.licenseId) ?? `license ${change.licenseId.slice(0, 8)}`)
-      : `a ${label(change.fromTierId)} seat`
+type TierLabelSource = readonly Pick<BillingTier, 'id' | 'label'>[]
+
+/** Resolves a tier id to its label; an unknown id falls back to the id so nothing is hidden. */
+export function tierLabelOf(tiers: TierLabelSource, tierId: string | null | undefined): string {
+  if (tierId == null) return '—'
+  return tiers.find((tier) => tier.id === tierId)?.label ?? tierId
+}
+
+/** `on 1 Oct 2026, 00:00` or, when the provider had not reported a period end, `at the end of the current period`. */
+export function landsAtLabel(landsAt: string | null | undefined): string {
+  return landsAt ? `on ${formatLocalDateTime(landsAt)}` : 'at the end of the current period'
+}
+
+/** Sentence for a pending-change row. Tier ids are resolved to labels via the catalogue. */
+export function describePendingChange(change: BillingPendingChange, tiers: TierLabelSource): string {
+  const from = tierLabelOf(tiers, change.fromTierId)
+  const when = landsAtLabel(change.landsAt)
   switch (change.kind) {
-    case 'upgrade':
-      return `Upgrading ${subject} from ${label(change.fromTierId)} to ${label(change.toTierId)} — applies once the payment is confirmed.`
     case 'downgrade':
-      return `Moving ${subject} from ${label(change.fromTierId)} to ${label(change.toTierId)} at the end of the current period.`
+      return `One license moves from ${from} to ${tierLabelOf(tiers, change.toTierId)} ${when}.`
     case 'release-seat':
-      return `Releasing ${subject} at the end of the current period.`
+      return `One ${from} license is released ${when}.`
   }
 }
 
-/** The pending change (if any) that already targets this license — a second change is refused server-side. */
-export function pendingChangeForLicense(
-  changes: readonly BillingPendingChange[] | null | undefined,
-  licenseId: string | null | undefined
-): BillingPendingChange | null {
-  if (!licenseId) return null
-  return changes?.find((change) => change.licenseId === licenseId) ?? null
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`
 }
 
-/** Seats summed across tiers — for the page-level tiles. */
-export function totalSeats(tiers: readonly BillingTierSeats[]): {
-  seats: number
-  used: number
-  free: number
-} {
-  let seats = 0
-  let used = 0
-  let free = 0
-  for (const tier of tiers) {
-    seats += tier.seats
-    used += tier.licensesUsed
-    free += tier.licensesFree
+/**
+ * `3 of 5 licenses in use · 2 more servers can be added · 1 leaving at
+ * period end` — the org-wide line under the Licenses tiles. The releasing
+ * part only appears when something is leaving.
+ */
+export function licenseSummaryLine(licenses: BillingLicenseSummary): string {
+  const parts = [
+    `${licenses.held} of ${plural(licenses.purchased, 'license', 'licenses')} in use`,
+  ]
+  if (licenses.available === 0) {
+    parts.push('no room for another server')
+  } else {
+    parts.push(`${plural(licenses.available, 'more server', 'more servers')} can be added`)
   }
-  return { seats, used, free }
+  if (licenses.releasing > 0) parts.push(`${licenses.releasing} leaving at period end`)
+  return parts.join(' · ')
+}
+
+/** `Licenses at S3: 2 purchased, 1 in use` (plus `, 1 leaving at period end` when set). */
+export function tierLicensesLine(tier: BillingTierSummary): string {
+  const parts = [`${tier.purchased} purchased`, `${tier.inUse} in use`]
+  if (tier.releasing > 0) parts.push(`${tier.releasing} leaving at period end`)
+  return `Licenses at ${tier.label}: ${parts.join(', ')}`
+}
+
+/** True when one license at this tier can be released without stranding a server, as far as the projection shows. */
+export function canReleaseAt(tier: BillingTierSummary): boolean {
+  return tier.purchased - tier.releasing > 0
+}
+
+export function serverTitle(server: Pick<OrgServerRecord, 'id' | 'name' | 'hostname'>): string {
+  return server.name?.trim() || server.hostname?.trim() || server.id
+}
+
+export type UncoveredServer = Readonly<{
+  serverId: string
+  name: string
+  /** What the hardware needs; `null` while the server has not reported it. */
+  requiredTier: string | null
+}>
+
+/**
+ * Servers the control plane could not place on anything bought, named
+ * via the org servers list (falling back to the id) and sorted by name.
+ */
+export function uncoveredServers(
+  coverage: readonly BillingServerCoverage[] | null | undefined,
+  servers: readonly OrgServerRecord[]
+): UncoveredServer[] {
+  const byId = new Map(servers.map((server) => [server.id, server]))
+  return (coverage ?? [])
+    .filter((entry) => entry.assignedTierId === null)
+    .map((entry) => {
+      const server = byId.get(entry.serverId)
+      return {
+        serverId: entry.serverId,
+        name: server ? serverTitle(server) : entry.serverId,
+        requiredTier: entry.requiredTier,
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** `web-1 needs S5` / `web-1 has not reported hardware yet`. */
+export function describeUncoveredServer(entry: UncoveredServer): string {
+  return entry.requiredTier
+    ? `${entry.name} needs ${entry.requiredTier}`
+    : `${entry.name} has not reported hardware yet`
+}
+
+export type RefusalContext = Readonly<{
+  /** Server name for the id a `servers_uncovered` refusal names; `null` falls back to the id. */
+  serverName?: (serverId: string) => string | null
+}>
+
+/**
+ * What to do next, for a refusal the billing routes answer with. `null`
+ * for anything that is not a known refusal, so the caller shows the raw
+ * message instead of guessing.
+ */
+export function describeBillingRefusal(err: unknown, context: RefusalContext = {}): string | null {
+  if (!(err instanceof BillingRefusalError)) return null
+  switch (err.code) {
+    case SERVERS_UNCOVERED_ERROR: {
+      const serverId = err.text('serverId')
+      const name = (serverId && context.serverName?.(serverId)) || serverId || 'A server'
+      const tier = err.text('requiredTier')
+      return tier
+        ? `${name} needs ${tier} and would be left uncovered. Move a license up to ${tier} or buy one there first.`
+        : `${name} would be left uncovered. Buy or move a license that covers it first.`
+    }
+    case LICENSES_IN_USE_ERROR: {
+      const held = err.count('licensesHeld')
+      const after = err.count('purchasedAfter')
+      return held != null && after != null
+        ? `${plural(held, 'license is', 'licenses are')} in use but only ${after} would remain. Remove a server or a waiting key first.`
+        : 'More licenses are in use than would remain. Remove a server or a waiting key first.'
+    }
+    case SUBSCRIPTION_PAST_DUE_ERROR:
+      return 'Payment is past due. Update the payment method, then try again.'
+    case NO_SUBSCRIPTION_ERROR:
+      return 'There is no subscription to change. Buy the first license below.'
+    case SUBSCRIPTION_EXISTS_ERROR:
+      return 'This organization already has a subscription. Refresh the page to see it.'
+    case BILLING_MUTATION_IN_PROGRESS_ERROR:
+      return 'Another billing change is still being applied. Try again in a moment.'
+    case NOT_AN_UPGRADE_ERROR:
+      return 'That move goes down the ladder — it applies at the end of the period, not now.'
+    case NOT_A_DOWNGRADE_ERROR:
+      return 'That move goes up the ladder — it is invoiced now, not at the end of the period.'
+    case TIER_NOT_PURCHASABLE_ERROR:
+      return 'That tier cannot be bought right now. Ask the instance owner to check its product.'
+    default:
+      return null
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Recognisable machine examples and the fleet's tier needs.
+// Recognisable machine examples per tier.
 // ---------------------------------------------------------------------------
 
 /** A familiar machine shape an operator can picture without running `nproc`. */
@@ -169,8 +303,8 @@ export type MachineExample = Readonly<{
 
 /**
  * Fixed shapes, smallest first. Each is *placed* against the live catalogue
- * ceilings rather than pinned to a tier, so an entitlement edit in
- * Admin → Tiers moves the examples with it.
+ * ceilings rather than pinned to a tier, so a ladder change moves the
+ * examples with it.
  */
 export const MACHINE_EXAMPLES: readonly MachineExample[] = [
   { name: 'Raspberry Pi 5', cores: 4, memoryBytes: 8 * GIB, gpus: 0 },
@@ -197,7 +331,8 @@ type TierForPlacement = Pick<BillingTier, 'id' | 'label' | 'rank' | 'isCustom' |
 /**
  * The lowest purchasable tier whose ceilings cover the shape, or `null`
  * when only a custom tier would — the same "smallest tier that fits" rule
- * the sizing hint tells the operator to apply by hand.
+ * the sizing hint tells the operator to apply by hand. A tier without
+ * ladder entitlements cannot place anything and is skipped.
  */
 export function lowestTierFor<T extends TierForPlacement>(
   shape: Pick<MachineExample, 'cores' | 'memoryBytes' | 'gpus'>,
@@ -205,12 +340,15 @@ export function lowestTierFor<T extends TierForPlacement>(
 ): T | null {
   const ladder = tiers.filter((tier) => !tier.isCustom).sort((a, b) => a.rank - b.rank)
   return (
-    ladder.find(
-      (tier) =>
-        tier.entitlements.maxCores >= shape.cores &&
-        tier.entitlements.maxMemoryBytes >= shape.memoryBytes &&
-        tier.entitlements.gpuSlots >= shape.gpus
-    ) ?? null
+    ladder.find((tier) => {
+      const fits = tier.entitlements
+      return (
+        fits != null &&
+        fits.maxCores >= shape.cores &&
+        fits.maxMemoryBytes >= shape.memoryBytes &&
+        fits.gpuSlots >= shape.gpus
+      )
+    }) ?? null
   )
 }
 
@@ -227,60 +365,4 @@ export function machineExamplesForTier(
 export function formatMachineExamples(examples: readonly MachineExample[]): string {
   if (examples.length === 0) return ''
   return `e.g. ${examples.map((example) => example.name).join(', ')}`
-}
-
-export type FleetTierNeeds = Readonly<{
-  total: number
-  /** Servers with no licence, by the tier the control plane recommends, ladder order. */
-  unlicensed: readonly { tier: string; count: number }[]
-  /** Licensed servers whose licence sits below what their hardware needs. */
-  short: readonly { serverId: string; name: string; licenseTier: string; needsTier: string }[]
-  /** Servers the control plane has not sized yet (no placement reported). */
-  unsized: number
-}>
-
-/**
- * What the rest of the fleet needs, read from each server's `tierPlacement`
- * — the control plane's own sizing, never a client-side re-derivation.
- */
-export function summarizeFleetTierNeeds(
-  servers: readonly OrgServerRecord[],
-  rankOf: TierRankResolver
-): FleetTierNeeds {
-  const unlicensedByTier = new Map<string, number>()
-  const short: { serverId: string; name: string; licenseTier: string; needsTier: string }[] = []
-  let unsized = 0
-  for (const server of servers) {
-    const placement = server.tierPlacement
-    if (!placement) {
-      unsized += 1
-      continue
-    }
-    const state = tierPlacementState(placement, rankOf)
-    if (state === 'unlicensed') {
-      unlicensedByTier.set(
-        placement.recommendedTier,
-        (unlicensedByTier.get(placement.recommendedTier) ?? 0) + 1
-      )
-    } else if (isTierShortfall(state) && placement.licenseTier) {
-      short.push({
-        serverId: server.id,
-        name: server.name?.trim() || server.hostname?.trim() || server.id,
-        licenseTier: placement.licenseTier,
-        needsTier: placement.recommendedTier,
-      })
-    }
-  }
-  const unlicensed = [...unlicensedByTier.entries()]
-    .map(([tier, count]) => ({ tier, count }))
-    .sort(
-      (a, b) =>
-        (rankOf(a.tier) ?? Number.MAX_SAFE_INTEGER) - (rankOf(b.tier) ?? Number.MAX_SAFE_INTEGER)
-    )
-  return { total: servers.length, unlicensed, short, unsized }
-}
-
-/** Seats to buy per tier to cover every unlicensed server, as `2 × S3, 1 × S5`. */
-export function formatUnlicensedNeeds(needs: FleetTierNeeds): string {
-  return needs.unlicensed.map((entry) => `${entry.count} × ${entry.tier}`).join(', ')
 }

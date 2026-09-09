@@ -8,7 +8,7 @@ import {
   createForge,
   deactivateAdminTier,
   deleteForge,
-  fetchAdminTierDefaults,
+  fetchAdminTierProducts,
   fetchAdminTiers,
   fetchEmailSettings,
   fetchForges,
@@ -323,11 +323,12 @@ export function useSyncForge(scope: 'admin' | 'org') {
 }
 
 // ---------------------------------------------------------------------------
-// Tier catalogue (superadmin)
+// Tier catalogue (root only, hosted only)
 //
-// The rows are hand-entered and verified against Stripe server-side. Every
-// mutation invalidates the list, because a write can change reference counts
-// and successor links on rows other than the one written.
+// A row binds a ladder label to a provider product; the server verifies the
+// product before writing. Every write invalidates the list and the product
+// list, because a binding moves `products[].tierId` and a verify refreshes
+// the row's cached price.
 // ---------------------------------------------------------------------------
 
 export function useAdminTiers(options?: Readonly<{ enabled?: boolean }>) {
@@ -338,26 +339,31 @@ export function useAdminTiers(options?: Readonly<{ enabled?: boolean }>) {
   })
 }
 
-/**
- * The shipped ladder. Effectively static, so it is cached hard — it changes
- * only when the control plane ships a new one.
- */
-export function useAdminTierDefaults(options?: Readonly<{ enabled?: boolean }>) {
+/** The provider's products — one round trip to Stripe, so not refetched on every focus. */
+export function useAdminTierProducts(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
-    queryKey: queryKeys.admin.tierDefaults,
-    queryFn: fetchAdminTierDefaults,
+    queryKey: queryKeys.admin.tierProducts,
+    queryFn: fetchAdminTierProducts,
     enabled: options?.enabled ?? true,
-    staleTime: Infinity,
+    staleTime: 60_000,
+    retry: false,
   })
+}
+
+async function invalidateTierCatalogue(queryClient: ReturnType<typeof useQueryClient>) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.tierProducts }),
+  ])
 }
 
 export function useCreateAdminTier() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (body: AdminTierCreateBody) => createAdminTier(body),
-    fallbackError: 'Could not add the tier',
+    fallbackError: 'Could not save the tier',
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+      await invalidateTierCatalogue(queryClient)
     },
   })
 }
@@ -369,7 +375,7 @@ export function usePatchAdminTier() {
       patchAdminTier(vars.id, vars.body),
     fallbackError: 'Could not save the tier',
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+      await invalidateTierCatalogue(queryClient)
     },
   })
 }
@@ -377,26 +383,33 @@ export function usePatchAdminTier() {
 export function useDeactivateAdminTier() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (vars: Readonly<{ id: string; successorId?: string | null }>) =>
-      deactivateAdminTier(vars.id, vars.successorId),
-    fallbackError: 'Could not deactivate the tier',
+    mutationFn: (vars: Readonly<{ id: string }>) => deactivateAdminTier(vars.id),
+    fallbackError: 'Could not retire the tier',
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
     },
   })
 }
 
-/** Read-only on both sides — no invalidation, nothing changed. */
+/** Verifying writes the cached price back onto the row, so the list is re-read. */
 export function useVerifyAdminTier() {
+  const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (id: string) => verifyAdminTier(id),
-    fallbackError: 'Could not verify the price',
+    fallbackError: 'Could not verify the product',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+    },
   })
 }
 
 export function useVerifyAllAdminTiers() {
+  const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: () => verifyAllAdminTiers(),
     fallbackError: 'Could not verify the catalogue',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
+    },
   })
 }

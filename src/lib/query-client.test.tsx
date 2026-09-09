@@ -221,20 +221,25 @@ describe('useApiMutation', () => {
   })
 
   it('surfaces a readable actionError for non-forbidden failures', async () => {
+    const failure = new Error('save failed')
     const { result } = renderHook(
       () =>
         useApiMutation({
           mutationFn: async () => {
-            throw new Error('save failed')
+            throw failure
           },
           fallbackError: 'fallback',
         }),
       { wrapper: createWrapper() },
     )
 
+    // `cause` is the thrown value itself, so a caller can read a typed
+    // refusal's fields (a billing `servers_uncovered` body, say) rather
+    // than parse the message.
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: 'save failed',
+      cause: failure,
     })
     await waitFor(() => {
       expect(result.current.actionError).toBe('save failed')
@@ -255,6 +260,7 @@ describe('useApiMutation', () => {
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: 'Request failed',
+      cause: expect.anything(),
     })
   })
 
@@ -273,6 +279,7 @@ describe('useApiMutation', () => {
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: 'fallback',
+      cause: expect.anything(),
     })
   })
 
@@ -292,6 +299,7 @@ describe('useApiMutation', () => {
       { wrapper: createWrapper(client) },
     )
 
+    // No `cause` either: a 403 is auth recovery, not something to explain.
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: null,

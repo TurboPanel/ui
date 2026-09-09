@@ -91,7 +91,12 @@ export function createAppQueryClient(): QueryClient {
 
 export type ApiMutationResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string | null }
+  | {
+      ok: false
+      error: string | null
+      /** The thrown value, for callers that need a typed refusal's fields rather than its message. */
+      cause?: unknown
+    }
 
 /**
  * Thin `useMutation` wrapper that folds the `{ ok, error }` messaging shape
@@ -130,6 +135,7 @@ export function useApiMutation<TData, TVariables = void, TContext = unknown>(
         return {
           ok: false,
           error: err instanceof Error ? err.message : fallbackError,
+          cause: err,
         }
       }
     },

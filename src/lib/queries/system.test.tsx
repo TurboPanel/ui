@@ -316,6 +316,7 @@ describe('system query hooks', () => {
     await expect(result.current.run('hosting-ingress')).resolves.toEqual({
       ok: false,
       error: 'offline',
+      cause: expect.anything(),
     })
   })
 })

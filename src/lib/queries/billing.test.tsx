@@ -12,9 +12,9 @@ import {
   useChangeBillingSeats,
   useCreateBillingCheckout,
   useCreateBillingPortalSession,
-  useDowngradeBillingLicense,
+  useDowngradeBillingTier,
   usePreviewBillingChange,
-  useUpgradeBillingLicense,
+  useUpgradeBillingTier,
 } from '@/lib/queries/billing'
 
 const {
@@ -24,8 +24,8 @@ const {
   createBillingPortalSession,
   previewBillingChange,
   changeBillingSeats,
-  upgradeBillingLicense,
-  downgradeBillingLicense,
+  upgradeBillingTier,
+  downgradeBillingTier,
 } = vi.hoisted(() => ({
   fetchBillingCatalog: vi.fn(),
   fetchBillingSubscription: vi.fn(),
@@ -33,8 +33,8 @@ const {
   createBillingPortalSession: vi.fn(),
   previewBillingChange: vi.fn(),
   changeBillingSeats: vi.fn(),
-  upgradeBillingLicense: vi.fn(),
-  downgradeBillingLicense: vi.fn(),
+  upgradeBillingTier: vi.fn(),
+  downgradeBillingTier: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -47,8 +47,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     createBillingPortalSession,
     previewBillingChange,
     changeBillingSeats,
-    upgradeBillingLicense,
-    downgradeBillingLicense,
+    upgradeBillingTier,
+    downgradeBillingTier,
   }
 })
 
@@ -80,6 +80,8 @@ describe('billing queries', () => {
       payer: null,
       subscription: null,
       tiers: [],
+      licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+      servers: [],
       pendingChanges: [],
     })
     const client = createAppQueryClient()
@@ -101,6 +103,8 @@ describe('billing queries', () => {
       payer: null,
       subscription: null,
       tiers: [],
+      licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+      servers: [],
       pendingChanges: [],
     })
     const client = createAppQueryClient()
@@ -163,9 +167,9 @@ describe('billing queries', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
     const { result } = renderHook(() => usePreviewBillingChange(), { wrapper: createWrapper(client) })
-    await result.current.run({ licenseId: 'lic-1', targetTierId: 'tier-2' })
+    await result.current.run({ fromTierId: 'tier-1', toTierId: 'tier-2' })
     await result.current.run({ tierId: 'tier-1', delta: 1 })
-    expect(previewBillingChange).toHaveBeenNthCalledWith(1, { licenseId: 'lic-1', targetTierId: 'tier-2' })
+    expect(previewBillingChange).toHaveBeenNthCalledWith(1, { fromTierId: 'tier-1', toTierId: 'tier-2' })
     expect(previewBillingChange).toHaveBeenNthCalledWith(2, { tierId: 'tier-1', delta: 1 })
     expect(invalidateSpy).not.toHaveBeenCalled()
   })
@@ -186,16 +190,16 @@ describe('billing queries', () => {
       body: { tierId: 'tier-1', delta: 1, prorationDate: 5 },
     },
     {
-      name: 'useUpgradeBillingLicense',
-      useHook: () => useUpgradeBillingLicense(orgId),
-      mock: upgradeBillingLicense,
-      body: { licenseId: 'lic-1', targetTierId: 'tier-2', prorationDate: 5 },
+      name: 'useUpgradeBillingTier',
+      useHook: () => useUpgradeBillingTier(orgId),
+      mock: upgradeBillingTier,
+      body: { fromTierId: 'tier-1', toTierId: 'tier-2', prorationDate: 5 },
     },
     {
-      name: 'useDowngradeBillingLicense',
-      useHook: () => useDowngradeBillingLicense(orgId),
-      mock: downgradeBillingLicense,
-      body: { licenseId: 'lic-1', targetTierId: 'tier-1' },
+      name: 'useDowngradeBillingTier',
+      useHook: () => useDowngradeBillingTier(orgId),
+      mock: downgradeBillingTier,
+      body: { fromTierId: 'tier-2', toTierId: 'tier-1' },
     },
   ]
 

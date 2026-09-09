@@ -160,6 +160,7 @@ describe('tags query hooks', () => {
     await expect(result.current.run({ name: 'prod' })).resolves.toEqual({
       ok: false,
       error: 'tag_name_in_use',
+      cause: expect.anything(),
     })
   })
 

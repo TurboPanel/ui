@@ -300,13 +300,11 @@ describe('orgBillingHref', () => {
   it('links to the billing area with no query when nothing is preselected', () => {
     expect(orgBillingHref('org-1')).toBe('/org-1/billing')
     expect(orgBillingHref('org-1', {})).toBe('/org-1/billing')
-    expect(orgBillingHref('org-1', { tier: null, license: null })).toBe('/org-1/billing')
+    expect(orgBillingHref('org-1', { tier: null })).toBe('/org-1/billing')
   })
 
-  it('carries the target tier and the license to move as query params', () => {
+  it('carries only the target tier as a query param', () => {
     expect(orgBillingHref('org-1', { tier: 'S3' })).toBe('/org-1/billing?tier=S3')
-    expect(orgBillingHref('org-1', { tier: 'S3', license: 'lic-9' })).toBe(
-      '/org-1/billing?tier=S3&license=lic-9',
-    )
+    expect(orgBillingHref('org-1', { tier: 'tier-uuid' })).toBe('/org-1/billing?tier=tier-uuid')
   })
 })

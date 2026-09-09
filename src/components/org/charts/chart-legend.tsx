@@ -10,6 +10,8 @@ export type ChartLegendEntry = Readonly<{
   hidden?: boolean
   /** Omit for a static, non-interactive chip. */
   onPress?: () => void
+  /** Area swatch for a range fill; default is a line dot. */
+  swatch?: 'dot' | 'band'
 }>
 
 export function ChartLegend({
@@ -38,8 +40,9 @@ export function ChartLegend({
           >
             <View
               style={[
-                styles.dot,
+                entry.swatch === 'band' ? styles.band : styles.dot,
                 { backgroundColor: hidden ? colors.borderMuted : entry.color },
+                entry.swatch === 'band' && !hidden ? { opacity: 0.45 } : null,
               ]}
             />
             <View style={styles.textRow}>
@@ -92,6 +95,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  band: {
+    width: 14,
+    height: 8,
+    borderRadius: 2,
   },
   textRow: {
     flexDirection: 'row',

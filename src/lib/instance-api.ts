@@ -427,8 +427,10 @@ export type TierNoticeState = {
 /**
  * License vs hardware placement for one server (`tierPlacement` on both
  * server DTOs). Tier values are catalogue **labels** (`S1`…`S7`, `SX`):
- * `licenseTier` is the bound license's tier or `null` when unassigned /
- * self-hosted; `requiredTier` is the hard floor from CPU cores + RAM;
+ * `licenseTier` is the tier the control plane **assigned** the server from
+ * what the organization bought and the hardware, or `null` when nothing
+ * bought covers it (or self-hosted); `requiredTier` is the hard floor from
+ * CPU cores + RAM;
  * `recommendedTier` is the harder of required and discovered NIC / drive /
  * GPU counts. Rank comparison lives in `src/lib/tier-placement.ts`.
  * `notice` is the daily-notice marker (hosted only) — `null` when no notice
@@ -1240,19 +1242,63 @@ export class ServerCapacityExceededError extends Error {
   }
 }
 
-function throwIfLicenseCreateFailed(
-  status: number,
-  errorBody: {
-    error?: string
-    maxServers?: number | null
-    usedSeats?: number
+/** Hosted mint refusal: every purchased license is already held by a server or a waiting key. */
+export const NO_LICENSE_AVAILABLE_ERROR = 'no_license_available'
+
+/** The org-wide license totals the mint gate answered with (`409 no_license_available`). */
+export type LicenseAvailability = {
+  purchased: number
+  releasing: number
+  held: number
+  available: number
+}
+
+/** "All N purchased licenses are in use. Buy another on the billing page." — sized to N. */
+export function describeNoLicenseAvailable(purchased: number): string {
+  if (purchased <= 0) return 'No licenses have been bought yet. Buy one on the billing page.'
+  if (purchased === 1) return 'The one purchased license is in use. Buy another on the billing page.'
+  return `All ${purchased} purchased licenses are in use. Buy another on the billing page.`
+}
+
+export class NoLicenseAvailableError extends Error {
+  readonly code = NO_LICENSE_AVAILABLE_ERROR
+  readonly availability: LicenseAvailability
+
+  constructor(availability: LicenseAvailability) {
+    super(describeNoLicenseAvailable(availability.purchased))
+    this.name = 'NoLicenseAvailableError'
+    this.availability = availability
   }
-): never {
+}
+
+function readCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+type LicenseCreateErrorBody = {
+  error?: string
+  maxServers?: number | null
+  usedSeats?: number
+  purchased?: number
+  releasing?: number
+  held?: number
+  available?: number
+}
+
+function throwIfLicenseCreateFailed(status: number, errorBody: LicenseCreateErrorBody): never {
   if (status === 409 && errorBody.error === 'server_capacity_exceeded') {
     throw new ServerCapacityExceededError(
       typeof errorBody.maxServers === 'number' ? errorBody.maxServers : null,
-      typeof errorBody.usedSeats === 'number' ? errorBody.usedSeats : 0
+      readCount(errorBody.usedSeats)
     )
+  }
+  if (status === 409 && errorBody.error === NO_LICENSE_AVAILABLE_ERROR) {
+    throw new NoLicenseAvailableError({
+      purchased: readCount(errorBody.purchased),
+      releasing: readCount(errorBody.releasing),
+      held: readCount(errorBody.held),
+      available: readCount(errorBody.available),
+    })
   }
   const detail = errorBody.error
     ? formatFetchFailureDetail(status, errorBody.error)
@@ -1285,13 +1331,9 @@ export async function createLicense(
   })
 
   if (!response.ok) {
-    let errorBody: {
-      error?: string
-      maxServers?: number | null
-      usedSeats?: number
-    } = {}
+    let errorBody: LicenseCreateErrorBody = {}
     try {
-      errorBody = (await response.json()) as typeof errorBody
+      errorBody = (await response.json()) as LicenseCreateErrorBody
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
@@ -1339,7 +1381,13 @@ export const BILLING_MUTATION_IN_PROGRESS_ERROR = 'billing_mutation_in_progress'
 export const SUBSCRIPTION_PAST_DUE_ERROR = 'subscription_past_due'
 export const SUBSCRIPTION_EXISTS_ERROR = 'subscription_exists'
 export const NO_SUBSCRIPTION_ERROR = 'no_subscription'
-export const LICENSE_HAS_PENDING_CHANGE_ERROR = 'license_has_pending_change'
+/** A reduction would leave a covered server on nothing (`409`; carries `serverId` + `requiredTier`). */
+export const SERVERS_UNCOVERED_ERROR = 'servers_uncovered'
+/** A reduction would leave fewer licenses purchased than held (`409`; carries `purchasedAfter` + `licensesHeld`). */
+export const LICENSES_IN_USE_ERROR = 'licenses_in_use'
+export const NOT_AN_UPGRADE_ERROR = 'not_an_upgrade'
+export const NOT_A_DOWNGRADE_ERROR = 'not_a_downgrade'
+export const TIER_NOT_PURCHASABLE_ERROR = 'tier_not_purchasable'
 
 export type BillingTierEntitlements = {
   maxCores: number
@@ -1355,40 +1403,64 @@ export type BillingTier = {
   id: string
   /** `S1`…`S7`, `SX`. */
   label: string
-  generation: number
   /** Ladder position; entry tier is rank 1. Compare tiers by this, never by label text. */
   rank: number
-  /** Monthly price per seat in minor units; `null` for negotiated (custom) offerings. */
+  /** Monthly price per license in minor units, cached from the provider; `null` for negotiated (custom) offerings. */
   priceCents: number | null
+  currency: string | null
   isCustom: boolean
-  entitlements: BillingTierEntitlements
+  /** What the label entitles, from the in-code ladder; `null` for a label the ladder no longer carries. */
+  entitlements: BillingTierEntitlements | null
 }
 
-/** Per-tier seats vs licenses from the projection. */
-export type BillingTierSeats = {
+/** Per-tier purchased vs in use, from the projection. */
+export type BillingTierSummary = {
   tierId: string
   label: string
-  /** Committed provider quantity at this tier. */
-  seats: number
-  /** Active licenses at this tier. */
-  licensesUsed: number
-  /** The subset bound to a server. */
-  licensesBound: number
-  /** Seats a new key can be minted against, net of outstanding seat releases. */
-  licensesFree: number
+  rank: number
+  /** Committed provider quantity — the licenses bought at this tier. */
+  purchased: number
+  /** Servers currently assigned this tier. */
+  inUse: number
+  /** Of `purchased`, how many leave at the period boundary. */
+  releasing: number
+  priceCents: number | null
+  currency: string | null
 }
 
-export type BillingPendingChangeKind = 'upgrade' | 'downgrade' | 'release-seat'
+/** Org-wide license totals. */
+export type BillingLicenseSummary = {
+  /** Total committed quantity across tiers. */
+  purchased: number
+  /** Of `purchased`, how many leave at the period boundary. */
+  releasing: number
+  /** Active licenses held — bound to a server or still waiting to connect. */
+  held: number
+  bound: number
+  /** `purchased − releasing − held`, floored at zero: how many more servers can be added. */
+  available: number
+}
 
+/** Where each licensed server landed: the tier the control plane assigned it, or `null` when nothing bought covers it. */
+export type BillingServerCoverage = {
+  serverId: string
+  assignedTierId: string | null
+  /** Ladder label the hardware needs at minimum; `null` while the server has not reported hardware. */
+  requiredTier: string | null
+}
+
+export type BillingPendingChangeKind = 'downgrade' | 'release-seat'
+
+/** A quantity change parked until the period boundary. */
 export type BillingPendingChange = {
   id: string
   kind: BillingPendingChangeKind
-  licenseId: string | null
   fromTierId: string
+  /** `null` on a release. */
   toTierId: string | null
   createdAt: string
-  /** Set on upgrades (24 h); `null` on deferred changes, which live until the period boundary. */
-  expiresAt: string | null
+  /** The period end the change lands on; `null` when the provider had not reported one. */
+  landsAt: string | null
 }
 
 export type BillingSubscriptionState = {
@@ -1398,7 +1470,7 @@ export type BillingSubscriptionState = {
   pastDueSince: string | null
   /** Entitlement survives until this moment while past due; the grace clock cancels after it. */
   graceExpiresAt: string | null
-  /** A deferred change (downgrade / seat release) is parked on a subscription schedule. */
+  /** A deferred change (downgrade / release) is parked on a subscription schedule. */
   scheduleAttached: boolean
 }
 
@@ -1406,7 +1478,9 @@ export type BillingSubscriptionSummary = {
   /** `null` until the first checkout created a provider customer. */
   payer: { taxId: string | null } | null
   subscription: BillingSubscriptionState | null
-  tiers: BillingTierSeats[]
+  tiers: BillingTierSummary[]
+  licenses: BillingLicenseSummary
+  servers: BillingServerCoverage[]
   pendingChanges: BillingPendingChange[]
 }
 
@@ -1456,6 +1530,67 @@ export function hasLiveBillingSubscription(
   return typeof status === 'string' && !ENDED_SUBSCRIPTION_STATUSES.has(status)
 }
 
+/**
+ * A billing route said no and said why. The code stays in `message` (the
+ * same `HTTP 409: servers_uncovered` text `apiFetch` would have produced)
+ * so callers matching on it keep working; `body` carries the fields the
+ * screen needs to say what to do next (`serverId`, `requiredTier`, …).
+ */
+export class BillingRefusalError extends Error {
+  readonly code: string
+  readonly status: number
+  readonly body: Readonly<Record<string, unknown>>
+
+  constructor(path: string, status: number, body: Readonly<Record<string, unknown>>) {
+    const code = typeof body.error === 'string' ? body.error : ''
+    super(`${path} failed: ${formatFetchFailureDetail(status, code || undefined)}`)
+    this.name = 'BillingRefusalError'
+    this.code = code
+    this.status = status
+    this.body = body
+  }
+
+  /** A number field from the refusal body, or `null` when it was not sent. */
+  count(key: string): number | null {
+    const value = this.body[key]
+    return typeof value === 'number' && Number.isFinite(value) ? value : null
+  }
+
+  /** A string field from the refusal body, or `null` when it was not sent. */
+  text(key: string): string | null {
+    const value = this.body[key]
+    return typeof value === 'string' && value.length > 0 ? value : null
+  }
+}
+
+/**
+ * `apiFetch` for the billing mutations: identical on success, but a JSON
+ * error body becomes a {@link BillingRefusalError} instead of a bare
+ * string, so the screen can name the server a reduction would strand.
+ */
+async function billingPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  const resolvedOrgId = getActiveOrganizationId()
+  if (resolvedOrgId) headers[ORG_ID_HEADER] = resolvedOrgId
+  const response = await fetch(controlPlaneUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(body),
+  })
+  if (response.ok) return (await response.json()) as T
+  let parsed: unknown = null
+  try {
+    parsed = await response.json()
+  } catch {
+    // Non-JSON error body — fall through to the status-only message.
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    throw new BillingRefusalError(path, response.status, parsed as Record<string, unknown>)
+  }
+  throw new Error(`${path} failed: ${formatFetchFailureDetail(response.status)}`)
+}
+
 export async function fetchBillingCatalog(): Promise<{ tiers: BillingTier[] }> {
   return await apiFetch(`${CLIENT_API}/billing/catalog`)
 }
@@ -1469,10 +1604,7 @@ export async function createBillingCheckout(body: {
   tierId: string
   quantity?: number
 }): Promise<{ url: string; sessionId?: string }> {
-  return await apiFetch(`${CLIENT_API}/billing/checkout`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return await billingPost(`${CLIENT_API}/billing/checkout`, body)
 }
 
 /** Customer Portal session (invoices + payment methods). 404 when no provider customer exists yet. */
@@ -1483,50 +1615,43 @@ export async function createBillingPortalSession(): Promise<{ url: string }> {
   })
 }
 
-/** Either a seat-quantity change (`tierId` + `delta`) or a tier move for one license (`licenseId` + `targetTierId`). */
+/** Either a quantity change at one tier (`tierId` + `delta`) or one license moving between tiers (`fromTierId` + `toTierId`). */
 export type BillingPreviewBody =
-  { tierId: string; delta: number } | { licenseId: string; targetTierId: string }
+  { tierId: string; delta: number } | { fromTierId: string; toTierId: string }
 
 export async function previewBillingChange(body: BillingPreviewBody): Promise<BillingPreview> {
-  return await apiFetch(`${CLIENT_API}/billing/preview`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return await billingPost(`${CLIENT_API}/billing/preview`, body)
 }
 
-/** `delta > 0` is invoiced now (pass the preview's `prorationDate`); `delta < 0` defers to the period boundary. */
+/**
+ * `delta > 0` is invoiced now (pass the preview's `prorationDate`);
+ * `delta < 0` defers to the period boundary. **409** `servers_uncovered`
+ * when a covered server would be left on nothing, `licenses_in_use` when
+ * fewer would be purchased than are held.
+ */
 export async function changeBillingSeats(body: {
   tierId: string
   delta: number
   prorationDate?: number
 }): Promise<BillingMutationResponse> {
-  return await apiFetch(`${CLIENT_API}/billing/seats`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return await billingPost(`${CLIENT_API}/billing/seats`, body)
 }
 
-/** Move one license to a higher tier, invoiced now. `prorationDate` comes from the preview. */
-export async function upgradeBillingLicense(body: {
-  licenseId: string
-  targetTierId: string
+/** Move one license to a higher tier, invoiced now. `prorationDate` comes from the preview. **400** `not_an_upgrade`. */
+export async function upgradeBillingTier(body: {
+  fromTierId: string
+  toTierId: string
   prorationDate?: number
 }): Promise<BillingMutationResponse> {
-  return await apiFetch(`${CLIENT_API}/billing/upgrade`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return await billingPost(`${CLIENT_API}/billing/upgrade`, body)
 }
 
-/** Move one license to a lower tier at the period boundary — no credit, no immediate invoice. */
-export async function downgradeBillingLicense(body: {
-  licenseId: string
-  targetTierId: string
+/** Move one license to a lower tier at the period boundary — no credit, no immediate invoice. **400** `not_a_downgrade`; **409** `servers_uncovered`. */
+export async function downgradeBillingTier(body: {
+  fromTierId: string
+  toTierId: string
 }): Promise<BillingMutationResponse> {
-  return await apiFetch(`${CLIENT_API}/billing/downgrade`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return await billingPost(`${CLIENT_API}/billing/downgrade`, body)
 }
 
 export type PermissionKey =
@@ -2830,12 +2955,14 @@ export async function applyReencryptSecrets(
 }
 
 // ---------------------------------------------------------------------------
-// Admin tier catalogue (superadmin)
+// Admin tier catalogue (root only, hosted only)
 //
-// Nothing seeds these rows. The owner creates the Product and Price in the
-// Stripe Dashboard; a superadmin enters the row here and the server verifies
-// it against Stripe before writing. The one field nothing can derive is the
-// price id, which is why the form prefills everything else.
+// A tier row binds a ladder label (`S1`…`S7`, `SX`) to a product on the
+// payment provider. The provider owns the price, the in-code ladder owns
+// what the label entitles, and the row owns only the binding plus a cached
+// display price. So the form is one dropdown per label: `GET /tiers/products`
+// lists the provider's products with a pass/fail verification, and the
+// server verifies the pick again before writing.
 // ---------------------------------------------------------------------------
 
 export type AdminTierEntitlements = {
@@ -2847,30 +2974,43 @@ export type AdminTierEntitlements = {
   filesystemSlots: number
 }
 
+/** What points at a row: provider quantity rows across organizations, and servers assigned the tier. */
 export type AdminTierReferences = {
-  licenses: number
   seats: number
+  servers: number
 }
 
 export type AdminTier = {
   id: string
-  generation: number
-  rank: number
   label: string
+  rank: number
+  provider: string
+  /** `null` only on the negotiated `SX` row. */
+  providerProductId: string | null
+  /** Cached from the product's default price on every verify; `null` for `SX`. */
   priceCents: number | null
-  providerPriceId: string | null
+  currency: string | null
   isCustom: boolean
   isActive: boolean
-  successorId: string | null
-  entitlements: AdminTierEntitlements
+  /** From the ladder by label; `null` for a label the ladder no longer carries. */
+  entitlements: AdminTierEntitlements | null
   references: AdminTierReferences
-  /** False once any license or seat points at the row. */
-  entitlementsEditable: boolean
   createdAt: string
   updatedAt: string
 }
 
-export type AdminTierPriceSummary = {
+/** One rung of the in-code ladder, with the row bound to it when one exists. */
+export type AdminLadderEntry = {
+  label: string
+  rank: number
+  isCustom: boolean
+  /** The list price the provider product is expected to carry; `null` for `SX`. */
+  listPriceCents: number | null
+  entitlements: AdminTierEntitlements
+  tierId: string | null
+}
+
+export type AdminTierProductPrice = {
   id: string
   active: boolean
   currency: string
@@ -2879,80 +3019,74 @@ export type AdminTierPriceSummary = {
   intervalCount: number | null
   billingScheme: string | null
   taxBehavior: string | null
+}
+
+/** A provider product as the dropdown shows it. */
+export type AdminTierProduct = {
+  id: string
+  name: string
+  active: boolean
   livemode: boolean
-  lookupKey: string | null
-  nickname: string | null
-  productId: string | null
-  productName: string | null
-  productActive: boolean | null
+  /** The ladder label the product names in its metadata, when it names a valid one. */
+  suggestedLabel: string | null
+  /** `null` when the product has no default price — unsellable. */
+  defaultPrice: AdminTierProductPrice | null
+  verification: { ok: boolean; failures: string[] }
+  /** The tier row already bound to this product, when one is. */
+  tierId: string | null
 }
 
 export type AdminTierVerification = {
   ok: boolean
   failures: string[]
-  price: AdminTierPriceSummary | null
+  product: AdminTierProduct | null
 }
 
-export type AdminTierDefaultEntry = AdminTierEntitlements & {
+export type AdminTierCreateBody = {
   label: string
-  rank: number
-  priceCents: number | null
-  isCustom: boolean
+  /** Required for a priced label; must be absent for `SX`. */
+  providerProductId?: string | null
 }
 
-export type AdminTierDefaults = {
-  labelPattern: string
-  currency: string
-  slotCeilings: {
-    nicSlots: number
-    driveSlots: number
-    gpuSlots: number
-    filesystemSlots: number
-  }
-  unbounded: { maxCores: number; maxMemoryBytes: number }
-  placementBands: {
-    maxCores: number[]
-    maxMemoryBytes: number[]
-    nicSlots: number[]
-  }
-  tiers: AdminTierDefaultEntry[]
-}
-
-export type AdminTierCreateBody = AdminTierEntitlements & {
-  generation: number
-  label: string
-  rank: number
-  priceCents: number | null
-  providerPriceId: string | null
-  isCustom: boolean
+export type AdminTierPatchBody = {
+  providerProductId?: string | null
   isActive?: boolean
 }
 
-export type AdminTierPatchBody = Partial<
-  AdminTierEntitlements & {
-    rank: number
-    priceCents: number | null
-    providerPriceId: string | null
-    isCustom: boolean
-    isActive: boolean
-    successorId: string | null
-  }
->
-
 export type AdminTierWriteResponse = {
   tier: AdminTier
+  /** `null` when nothing was verified (a custom row, or a patch that left the product alone). */
   verification: AdminTierVerification | null
-  warnings: string[]
 }
 
-export async function fetchAdminTiers(): Promise<{ tiers: AdminTier[] }> {
+export async function fetchAdminTiers(): Promise<{ tiers: AdminTier[]; ladder: AdminLadderEntry[] }> {
   return await apiFetch(`${ADMIN_API}/tiers`)
 }
 
-export async function fetchAdminTierDefaults(): Promise<AdminTierDefaults> {
-  return await apiFetch(`${ADMIN_API}/tiers/defaults`)
+/**
+ * The payment account's own tax configuration.
+ *
+ * A price may leave its tax behaviour unset and defer to this, which is
+ * what Stripe recommends and what the Dashboard shows as "Use default".
+ * Surfaced so the operator can see why such a price verifies.
+ */
+export type AdminTierTaxDefaults = {
+  /** `inclusive`, `exclusive`, or null when the account names no default. */
+  taxBehavior: string | null
+  /** `active` once the provider can calculate tax; `pending` while incomplete. */
+  status: string | null
 }
 
+/** The provider's products with their default price and verification. **502** `product_lookup_failed`. */
+export async function fetchAdminTierProducts(): Promise<{
+  provider: string
+  taxDefaults: AdminTierTaxDefaults
+  products: AdminTierProduct[]
+}> {
+  return await apiFetch(`${ADMIN_API}/tiers/products`)
+}
+
+/** **400** `tier_invalid` / `product_verification_failed` / `product_lookup_failed`; **409** `tier_exists`. */
 export async function createAdminTier(body: AdminTierCreateBody): Promise<AdminTierWriteResponse> {
   return await apiFetch(`${ADMIN_API}/tiers`, {
     method: 'POST',
@@ -2970,20 +3104,17 @@ export async function patchAdminTier(
   })
 }
 
-export async function deactivateAdminTier(
-  id: string,
-  successorId?: string | null
-): Promise<{ tier: AdminTier }> {
+/** Retire a row. Never deletes — a tier a purchase once counted against stays readable. */
+export async function deactivateAdminTier(id: string): Promise<{ tier: AdminTier }> {
   return await apiFetch(`${ADMIN_API}/tiers/${encodeURIComponent(id)}/deactivate`, {
     method: 'POST',
-    body: JSON.stringify(successorId === undefined ? {} : { successorId }),
   })
 }
 
-/** Read-only: safe to press as often as you like. */
+/** Re-checks the bound product and refreshes the cached price. **400** `tier_has_no_product` on `SX`. */
 export async function verifyAdminTier(
   id: string
-): Promise<{ verification: AdminTierVerification }> {
+): Promise<{ verification: AdminTierVerification; tier: AdminTier }> {
   return await apiFetch(`${ADMIN_API}/tiers/${encodeURIComponent(id)}/verify`, {
     method: 'POST',
   })
@@ -2992,9 +3123,9 @@ export async function verifyAdminTier(
 export type AdminTierVerifyAllResult = AdminTierVerification & {
   id: string
   label: string
-  generation: number
 }
 
+/** Every priced row re-verified and its cached price refreshed. */
 export async function verifyAllAdminTiers(): Promise<{
   results: AdminTierVerifyAllResult[]
 }> {

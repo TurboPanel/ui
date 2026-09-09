@@ -3,32 +3,37 @@ import type { BillingTier, TierPlacementRecord, TierUnwatched } from '@/lib/inst
 /**
  * License-tier placement helpers — pure, shared by the servers table, the
  * server detail Overview, the metrics screen (Docker-usage gating) and the
- * billing screen's tier picker.
+ * billing screen.
  *
  * The control plane sends tier **labels** on `tierPlacement` (`S1`…`S7`,
  * `SX`), never ranks, and it compares by `tier.rank` internally. When the
  * catalogue is loaded (hosted) the label → rank map comes from it; otherwise
- * (self-hosted, or before the catalogue query resolves) the `S<n>` shape is
- * parsed with `SX` — the negotiated top offering — ranked above every
- * numbered tier. A label neither side recognises ranks as unknown (`null`)
- * and every comparison against it answers "cannot tell" rather than
- * inventing a warning.
+ * (self-hosted, or before the catalogue query resolves) the shipped ladder
+ * below answers — the same `S1`…`S7` + `SX` table as
+ * `turbopanel/src/lib/tiers/ladder.ts`, kept in step by hand. A label
+ * neither side recognises ranks as unknown (`null`) and every comparison
+ * against it answers "cannot tell" rather than inventing a warning.
  */
 
-/** The negotiated custom tier; ranked above every numbered tier by convention. */
+/** The negotiated custom tier; the top rung of the ladder. */
 export const CUSTOM_TIER_LABEL = 'SX'
 
 /** The catalogue's entry tier — the one the Docker-usage family is not granted on. */
 export const ENTRY_TIER_RANK = 1
 
-const NUMBERED_TIER_LABEL = /^S(\d{1,2})$/i
+/** `S1`…`S7` then `SX`, in rank order — mirrors the control plane's `LADDER`. */
+export const LADDER_LABELS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', CUSTOM_TIER_LABEL] as const
+
+const LADDER_RANKS: ReadonlyMap<string, number> = new Map(
+  LADDER_LABELS.map((label, index) => [label, index + 1])
+)
 
 export type TierRankResolver = (label: string | null | undefined) => number | null
 
 /**
  * Builds a label → rank resolver from the catalogue, falling back to the
- * `S<n>` label shape when a label is missing from it (an older instance, or
- * a retired generation still bound to a license).
+ * shipped ladder when a label is missing from it (an older instance, or a
+ * retired row still assigned to a server).
  */
 export function tierRankResolver(tiers: readonly BillingTier[] | null | undefined): TierRankResolver {
   const byLabel = new Map<string, number>()
@@ -44,19 +49,19 @@ export function tierRankResolver(tiers: readonly BillingTier[] | null | undefine
   }
 }
 
-/** `S3` → 3, `SX` → above every numbered tier, anything else → `null`. */
+/** `S3` → 3, `SX` → the top rung, anything off the ladder → `null`. */
 export function tierRankFromLabel(label: string | null | undefined): number | null {
   if (!label) return null
-  const upper = label.trim().toUpperCase()
-  if (upper === CUSTOM_TIER_LABEL) return Number.MAX_SAFE_INTEGER
-  const match = NUMBERED_TIER_LABEL.exec(upper)
-  if (!match) return null
-  const rank = Number(match[1])
-  return rank >= 1 ? rank : null
+  return LADDER_RANKS.get(label.trim().toUpperCase()) ?? null
+}
+
+/** True for the negotiated `SX` label, whichever resolver is in play. */
+export function isCustomTierLabel(label: string | null | undefined): boolean {
+  return label?.trim().toUpperCase() === CUSTOM_TIER_LABEL
 }
 
 export type TierPlacementState =
-  /** No bound license tier (self-hosted, or unassigned). */
+  /** No assigned tier — nothing bought covers the server (or self-hosted). */
   | 'unlicensed'
   /** Cores or RAM exceed what the license covers — a hard floor violation. */
   | 'below-required'
@@ -69,9 +74,10 @@ export type TierPlacementState =
   | 'unknown'
 
 /**
- * Where the license sits relative to the hardware. `above-hardware` only
- * fires when the license is at least two ranks over the recommendation —
- * one step of headroom is a normal buying decision, not something to flag.
+ * Where the assigned tier sits relative to the hardware. `above-hardware`
+ * only fires when the tier is at least two ranks over the recommendation —
+ * one step of headroom is a normal buying decision, not something to flag —
+ * and never for `SX`, whose shape is bespoke.
  */
 export function tierPlacementState(
   placement: TierPlacementRecord | null | undefined,
@@ -84,7 +90,7 @@ export function tierPlacementState(
   if (license == null || required == null || recommended == null) return 'unknown'
   if (license < required) return 'below-required'
   if (license < recommended) return 'below-recommended'
-  if (license !== Number.MAX_SAFE_INTEGER && license >= recommended + 2) return 'above-hardware'
+  if (!isCustomTierLabel(placement.licenseTier) && license >= recommended + 2) return 'above-hardware'
   return 'ok'
 }
 
@@ -153,9 +159,9 @@ export function describeUnwatchedDevices(
 }
 
 /**
- * True when the bound license is the entry tier — the one tier on which
+ * True when the assigned tier is the entry tier — the one tier on which
  * the capability plan leaves `managedDockerEnabled` off. `null` /
- * unranked labels answer `false`: self-hosted has no license tier and the
+ * unranked labels answer `false`: self-hosted has no tier and the
  * platform default plan grants the family, so absence of a tier must not
  * hide it.
  */

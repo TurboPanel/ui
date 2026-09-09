@@ -13,16 +13,16 @@ import {
   MonoText,
   SectionPanel,
   Select,
-  TextField,
 } from '@/components/ui'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import type {
   AdminTier,
-  AdminTierDefaultEntry,
+  AdminTierProduct,
+  AdminTierTaxDefaults,
   AdminTierVerification,
 } from '@/lib/instance-api'
 import {
-  useAdminTierDefaults,
+  useAdminTierProducts,
   useAdminTiers,
   useCreateAdminTier,
   useDeactivateAdminTier,
@@ -31,104 +31,68 @@ import {
   useVerifyAllAdminTiers,
 } from '@/lib/queries/admin'
 import {
-  availableDefaults,
-  createBodyFromForm,
-  currentGeneration,
-  emptyFormState,
+  failingCount,
   formatCores,
   formatMemory,
   formatPrice,
   formatSlots,
-  formStateFromDefault,
-  localFormProblems,
+  hasPendingBinding,
+  initialProductId,
+  ladderRows,
+  productOptions,
   referenceSummary,
-  sortTiers,
-  stripeRecipe,
-  type TierFormState,
+  verificationsById,
   verifyBadge,
+  type LadderRow as LadderRowModel,
 } from '@/lib/tier-form'
 import { colors, spacing } from '@/lib/theme'
 
 const COLUMNS = [
-  { key: 'tier', header: 'Tier', flex: 1.1, minWidth: 120 },
-  { key: 'price', header: 'Price', flex: 0.8, minWidth: 90 },
-  { key: 'priceId', header: 'Stripe price', flex: 1.7, minWidth: 190 },
-  { key: 'fits', header: 'Fits', flex: 1.1, minWidth: 130 },
-  { key: 'slots', header: 'Slots', flex: 1.6, minWidth: 190 },
-  { key: 'used', header: 'In use', flex: 1, minWidth: 110 },
-  { key: 'state', header: 'State', flex: 0.8, minWidth: 100 },
+  { key: 'tier', header: 'Tier', flex: 0.7, minWidth: 80 },
+  { key: 'fits', header: 'Fits', flex: 1, minWidth: 120 },
+  { key: 'slots', header: 'Slots', flex: 1.4, minWidth: 170 },
+  { key: 'price', header: 'Price', flex: 1, minWidth: 120 },
+  { key: 'product', header: 'Provider product', flex: 2.6, minWidth: 300 },
+  { key: 'used', header: 'In use', flex: 1.1, minWidth: 140 },
+  { key: 'state', header: 'State', flex: 1, minWidth: 130 },
 ] as const
 
+const [C_TIER, C_FITS, C_SLOTS, C_PRICE, C_PRODUCT, C_USED, C_STATE] = COLUMNS
+
+type Verifications = Readonly<Record<string, AdminTierVerification>>
+
 /**
- * The three steps, in the order they actually happen. Spelled out because the
- * whole flow spans two products and the Stripe half cannot be automated —
- * there is no seed script any more, by design.
+ * The flow, spelled out because it spans two products: the product and its
+ * price live in the provider's dashboard; this screen only says which
+ * product each ladder label bills against.
  */
 function HowItWorks() {
   return (
     <InlineNotice
-      title="Create it in Stripe first, then enter it here"
+      title="Pick the provider product for each tier"
       body={
-        '1 · In the Stripe Dashboard: Products → Add product, then add a recurring, ' +
-        'monthly, per-unit price in USD with a tax behaviour set.\n' +
-        '2 · Copy the price_… id.\n' +
-        '3 · Below: pick the tier from the ladder, paste the id, save. The id is ' +
-        'checked against Stripe before the row is written — a wrong one is silent ' +
-        'otherwise, and would quietly lose entitlement.'
+        'Entitlements and list prices come from the shipped ladder and cannot be edited here. ' +
+        'For each priced tier, choose the product it bills against — the price comes from the ' +
+        "product's default price and is checked before the row is saved. SX is negotiated per " +
+        'customer and has no product.'
       }
     />
   )
 }
 
-/** What to type into the Stripe Dashboard for the selected tier, field by field. */
-function StripeRecipeCard({ entry }: Readonly<{ entry: AdminTierDefaultEntry }>) {
-  const recipe = stripeRecipe(entry)
-  if (!recipe) {
-    return (
-      <View style={styles.recipe}>
-        <Text style={styles.recipeTitle}>Nothing to create in Stripe</Text>
-        <Text style={styles.recipeLine}>
-          {entry.label} is negotiated per customer: the row carries no list price and no
-          price id. Create that customer&apos;s own price when a deal exists, then set it
-          on this row.
-        </Text>
-      </View>
-    )
-  }
-  const rows: [string, string][] = [
-    ['Product name', recipe.productName],
-    ['Price', `${recipe.amount} ${recipe.currency}`],
-    ['Billing period', recipe.interval],
-    ['Pricing model', recipe.billing],
-    ['Tax behaviour', recipe.taxBehaviour],
-  ]
-  return (
-    <View style={styles.recipe}>
-      <Text style={styles.recipeTitle}>Create this in Stripe</Text>
-      {rows.map(([label, value]) => (
-        <View key={label} style={styles.recipeRow}>
-          <Text style={styles.recipeLabel}>{label}</Text>
-          <Text style={styles.recipeValue}>{value}</Text>
-        </View>
-      ))}
-    </View>
-  )
+/** `Verified — TurboPanel S3 · live mode`; just `Verified` when the product was not echoed back. */
+function verifiedLine(product: AdminTierProduct | null): string {
+  if (!product) return 'Verified'
+  const mode = product.livemode ? 'live mode' : 'test mode'
+  return `Verified — ${product.name} · ${mode}`
 }
 
 function VerificationDetail({
   verification,
-}: Readonly<{ verification: AdminTierVerification | null | undefined }>) {
+}: Readonly<{ verification: AdminTierVerification | undefined }>) {
   if (!verification) return null
   if (verification.ok) {
-    const price = verification.price
-    return (
-      <View style={styles.verifyOk}>
-        <Text style={styles.verifyOkText}>
-          Verified{price?.productName ? ` — ${price.productName}` : ''}
-          {price?.livemode ? ' · live mode' : ' · test mode'}
-        </Text>
-      </View>
-    )
+    return <Text style={styles.verifyOkText}>{verifiedLine(verification.product)}</Text>
   }
   return (
     <View style={styles.verifyBad}>
@@ -141,264 +105,444 @@ function VerificationDetail({
   )
 }
 
-function TierRow({
-  tier,
+/** Save = POST for a label with no row yet, PATCH for an existing one. */
+function useBindProduct(row: LadderRowModel, onVerified: (verification: AdminTierVerification | null) => void) {
+  const create = useCreateAdminTier()
+  const patch = usePatchAdminTier()
+  const [saved, setSaved] = useState<string | null>(null)
+
+  const save = async (productId: string | null) => {
+    setSaved(null)
+    const outcome = row.tier
+      ? await patch.run({ id: row.tier.id, body: { providerProductId: productId } })
+      : await create.run({
+          label: row.entry.label,
+          ...(row.entry.isCustom ? {} : { providerProductId: productId }),
+        })
+    if (!outcome.ok) return
+    onVerified(outcome.value.verification)
+    setSaved(row.tier ? 'Saved' : `${row.entry.label} set up`)
+  }
+
+  return {
+    save,
+    saved,
+    busy: create.isPending || patch.isPending,
+    error: create.actionError ?? patch.actionError,
+  }
+}
+
+/** Save outcome under a product cell: the error, or the confirmation. */
+function BindingStatus({ error, saved }: Readonly<{ error: string | null; saved: string | null }>) {
+  return (
+    <>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {saved ? <Text style={styles.savedText}>{saved}</Text> : null}
+    </>
+  )
+}
+
+/** SX takes no product; the only action is creating its row once. */
+function CustomProductCell({
+  row,
+  onVerified,
+}: Readonly<{
+  row: LadderRowModel
+  onVerified: (verification: AdminTierVerification | null) => void
+}>) {
+  const binding = useBindProduct(row, onVerified)
+  return (
+    <View style={styles.productCell}>
+      <Text style={styles.cellText}>Negotiated</Text>
+      <Text style={styles.subLine}>No product — priced per customer</Text>
+      {row.tier ? null : (
+        <ButtonRow>
+          <Button
+            label="Set up"
+            size="sm"
+            busy={binding.busy}
+            onPress={() => {
+              void binding.save(null)
+            }}
+          />
+        </ButtonRow>
+      )}
+      <BindingStatus error={binding.error} saved={binding.saved} />
+    </View>
+  )
+}
+
+/** The one editable thing on a priced row: which product it bills against. */
+function ProductCell({
+  row,
+  products,
+  productsUnavailable,
   verification,
-  busy,
-  stateBusy,
+  verifying,
   onVerify,
+  onVerified,
+}: Readonly<{
+  row: LadderRowModel
+  products: readonly AdminTierProduct[]
+  productsUnavailable: boolean
+  verification: AdminTierVerification | undefined
+  verifying: boolean
+  onVerify: () => void
+  onVerified: (verification: AdminTierVerification | null) => void
+}>) {
+  const binding = useBindProduct(row, onVerified)
+  const [productId, setProductId] = useState<string | null>(() => initialProductId(row, products))
+  const options = useMemo(() => productOptions(products, row.tier?.id ?? null), [products, row.tier?.id])
+  const badge = verifyBadge(row.tier, verification, verifying || binding.busy)
+  const pending = hasPendingBinding(row, productId)
+  const noProducts = options.length === 0
+  const canVerify = row.tier?.providerProductId != null && !pending
+  // `/tiers/products` lists active products only, so a row bound to a
+  // since-archived product would otherwise show an empty dropdown.
+  const boundId = row.tier?.providerProductId ?? null
+  const boundUnlisted = boundId !== null && !options.some((option) => option.value === boundId)
+
+  return (
+    <View style={styles.productCell}>
+      {productsUnavailable ? (
+        <MonoText style={styles.cellText}>{row.tier?.providerProductId ?? '—'}</MonoText>
+      ) : (
+        <Select
+          value={productId}
+          options={options}
+          placeholder={noProducts ? 'No products on the provider' : 'Choose a product'}
+          disabled={binding.busy || noProducts}
+          accessibilityLabel={`Provider product for ${row.entry.label}`}
+          onChange={setProductId}
+        />
+      )}
+      {boundUnlisted && !productsUnavailable ? (
+        <Text style={styles.subLine}>
+          Bound to <MonoText style={styles.subLine}>{boundId}</MonoText>, which the provider no longer lists
+        </Text>
+      ) : null}
+      <View style={styles.badgeRow}>
+        <Badge label={badge.label} tone={badge.tone} />
+        {pending ? (
+          <Button
+            label={row.tier ? 'Save' : 'Verify and save'}
+            size="sm"
+            variant="primary"
+            busy={binding.busy}
+            busyLabel="Checking…"
+            onPress={() => {
+              void binding.save(productId)
+            }}
+          />
+        ) : null}
+        {canVerify ? <Button label="Verify" size="sm" onPress={onVerify} busy={verifying} /> : null}
+      </View>
+      <VerificationDetail verification={verification} />
+      <BindingStatus error={binding.error} saved={binding.saved} />
+    </View>
+  )
+}
+
+/** Ladder list price beside what the provider's product actually carries. */
+function PriceCell({ row }: Readonly<{ row: LadderRowModel }>) {
+  const list = formatPrice(row.entry.listPriceCents)
+  const cached = row.tier?.priceCents ?? null
+  if (row.entry.isCustom) {
+    return <Text style={styles.cellText}>—</Text>
+  }
+  return (
+    <>
+      <Text style={styles.cellText}>{cached === null ? list : formatPrice(cached, row.tier?.currency)}</Text>
+      <Text style={styles.subLine}>
+        {cached === null ? 'list price · not verified yet' : `/ license / month · list ${list}`}
+      </Text>
+    </>
+  )
+}
+
+function StateCell({
+  tier,
+  busy,
   onDeactivate,
   onReactivate,
 }: Readonly<{
-  tier: AdminTier
-  verification: AdminTierVerification | undefined
+  tier: AdminTier | null
   busy: boolean
-  stateBusy: boolean
-  onVerify: () => void
   onDeactivate: () => void
   onReactivate: () => void
 }>) {
-  const badge = verifyBadge(tier, verification, busy)
+  if (!tier) return <Badge label="Not set up" tone="muted" />
+  return (
+    <>
+      <Badge label={tier.isActive ? 'Active' : 'Retired'} tone={tier.isActive ? 'ok' : 'muted'} />
+      <View style={styles.badgeRow}>
+        {tier.isActive ? (
+          <ConfirmButton
+            label="Retire"
+            confirmLabel="Retire it"
+            prompt={`Stop selling ${tier.label}?`}
+            busy={busy}
+            onConfirm={onDeactivate}
+          />
+        ) : (
+          // Retiring is reversible on purpose: the row is never deleted,
+          // so a misclick is one press back rather than a database trip.
+          <Button label="Reactivate" size="sm" busy={busy} onPress={onReactivate} />
+        )}
+      </View>
+    </>
+  )
+}
+
+function LadderRow({
+  row,
+  products,
+  productsUnavailable,
+  verification,
+  verifying,
+  stateBusy,
+  onVerify,
+  onVerified,
+  onDeactivate,
+  onReactivate,
+}: Readonly<{
+  row: LadderRowModel
+  products: readonly AdminTierProduct[]
+  productsUnavailable: boolean
+  verification: AdminTierVerification | undefined
+  verifying: boolean
+  stateBusy: boolean
+  onVerify: (tierId: string) => void
+  onVerified: (tierId: string, verification: AdminTierVerification | null) => void
+  onDeactivate: (tierId: string) => void
+  onReactivate: (tierId: string) => void
+}>) {
+  const { entry, tier } = row
+  /** Runs `action` for the row's tier — a label with no row yet has nothing to act on. */
+  const withTier = (action: (tierId: string) => void) => () => {
+    if (tier) action(tier.id)
+  }
+  const verified = (verification: AdminTierVerification | null) => {
+    if (tier) onVerified(tier.id, verification)
+  }
   return (
     <DataTableRow>
-      <DataTableCell column={COLUMNS[0]}>
-        <Text style={styles.tierLabel}>{tier.label}</Text>
-        <Text style={styles.subLine}>
-          gen {tier.generation} · rank {tier.rank}
-          {tier.isCustom ? ' · custom' : ''}
-        </Text>
+      <DataTableCell column={C_TIER}>
+        <Text style={styles.tierLabel}>{entry.label}</Text>
+        <Text style={styles.subLine}>rank {entry.rank}{entry.isCustom ? ' · custom' : ''}</Text>
       </DataTableCell>
-      <DataTableCell column={COLUMNS[1]}>
-        <Text style={styles.cellText}>{formatPrice(tier.priceCents)}</Text>
-        {tier.priceCents !== null ? <Text style={styles.subLine}>/seat/month</Text> : null}
+      <DataTableCell column={C_FITS}>
+        <Text style={styles.cellText}>{formatCores(entry.entitlements.maxCores)} cores</Text>
+        <Text style={styles.subLine}>{formatMemory(entry.entitlements.maxMemoryBytes)}</Text>
       </DataTableCell>
-      <DataTableCell column={COLUMNS[2]}>
-        {tier.providerPriceId ? (
-          <MonoText style={styles.cellText}>{tier.providerPriceId}</MonoText>
+      <DataTableCell column={C_SLOTS}>
+        <Text style={styles.cellText}>{formatSlots(entry.entitlements)}</Text>
+      </DataTableCell>
+      <DataTableCell column={C_PRICE}>
+        <PriceCell row={row} />
+      </DataTableCell>
+      <DataTableCell column={C_PRODUCT}>
+        {entry.isCustom ? (
+          <CustomProductCell row={row} onVerified={verified} />
         ) : (
-          <Text style={styles.subLine}>—</Text>
+          <ProductCell
+            row={row}
+            products={products}
+            productsUnavailable={productsUnavailable}
+            verification={verification}
+            verifying={verifying}
+            onVerify={withTier(onVerify)}
+            onVerified={verified}
+          />
         )}
-        <View style={styles.badgeRow}>
-          <Badge label={badge.label} tone={badge.tone} />
-          {tier.providerPriceId ? (
-            <Button label="Verify" size="sm" onPress={onVerify} busy={busy} />
-          ) : null}
-        </View>
-        {verification && !verification.ok ? (
-          <VerificationDetail verification={verification} />
-        ) : null}
       </DataTableCell>
-      <DataTableCell column={COLUMNS[3]}>
-        <Text style={styles.cellText}>{formatCores(tier.entitlements.maxCores)} cores</Text>
-        <Text style={styles.subLine}>{formatMemory(tier.entitlements.maxMemoryBytes)}</Text>
+      <DataTableCell column={C_USED}>
+        <Text style={styles.cellText}>{tier ? referenceSummary(tier) : '—'}</Text>
       </DataTableCell>
-      <DataTableCell column={COLUMNS[4]}>
-        <Text style={styles.cellText}>{formatSlots(tier.entitlements)}</Text>
-      </DataTableCell>
-      <DataTableCell column={COLUMNS[5]}>
-        <Text style={styles.cellText}>{referenceSummary(tier)}</Text>
-        {!tier.entitlementsEditable ? (
-          <Text style={styles.subLine}>entitlements locked</Text>
-        ) : null}
-      </DataTableCell>
-      <DataTableCell column={COLUMNS[6]}>
-        <Badge label={tier.isActive ? 'Active' : 'Retired'} tone={tier.isActive ? 'ok' : 'muted'} />
-        <View style={styles.badgeRow}>
-          {tier.isActive ? (
-            <ConfirmButton
-              label="Retire"
-              confirmLabel="Retire it"
-              prompt={`Stop selling ${tier.label}?`}
-              busy={stateBusy}
-              onConfirm={onDeactivate}
-            />
-          ) : (
-            // Retiring is reversible on purpose: the row is never deleted,
-            // so a misclick is one press back rather than a database trip.
-            <Button label="Reactivate" size="sm" busy={stateBusy} onPress={onReactivate} />
-          )}
-        </View>
+      <DataTableCell column={C_STATE}>
+        <StateCell
+          tier={tier}
+          busy={stateBusy}
+          onDeactivate={withTier(onDeactivate)}
+          onReactivate={withTier(onReactivate)}
+        />
       </DataTableCell>
     </DataTableRow>
   )
 }
 
-function AddTierForm({
-  defaults,
-  tiers,
-  generation,
-}: Readonly<{
-  defaults: ReturnType<typeof useAdminTierDefaults>['data']
-  tiers: readonly AdminTier[]
-  generation: number
-}>) {
-  const [state, setState] = useState<TierFormState>(() => emptyFormState(generation))
-  const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
-  const [warnings, setWarnings] = useState<string[]>([])
-  const [saved, setSaved] = useState<string | null>(null)
-  const create = useCreateAdminTier()
+/** Per-row verification results this page has collected, from Verify, Verify all, and saves. */
+function useVerifications() {
+  const verifyOne = useVerifyAdminTier()
+  const verifyAll = useVerifyAllAdminTiers()
+  const [verifications, setVerifications] = useState<Verifications>({})
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
 
-  const options = useMemo(
-    () =>
-      availableDefaults(defaults, tiers, generation).map((entry) => ({
-        value: entry.label,
-        label: entry.label,
-        detail: entry.priceCents === null
-          ? 'Negotiated — no list price'
-          : `${formatPrice(entry.priceCents)}/seat · ${formatCores(entry.maxCores)} cores`,
-      })),
-    [defaults, tiers, generation]
-  )
-
-  const selectedEntry = defaults?.tiers.find((entry) => entry.label === selectedLabel) ?? null
-  const problems = localFormProblems(state, defaults)
-  const update = (patch: Partial<TierFormState>) => setState((prev) => ({ ...prev, ...patch }))
-
-  const pickDefault = (label: string | null) => {
-    setSelectedLabel(label)
-    setSaved(null)
-    setWarnings([])
-    const entry = label === null
-      ? undefined
-      : defaults?.tiers.find((row) => row.label === label)
-    setState(entry ? formStateFromDefault(entry, generation) : emptyFormState(generation))
+  const record = (id: string, verification: AdminTierVerification | null) => {
+    if (!verification) return
+    setVerifications((prev) => ({ ...prev, [id]: verification }))
   }
 
-  const submit = async () => {
-    setSaved(null)
-    const result = await create.run(createBodyFromForm(state))
-    if (!result.ok) return
-    setWarnings(result.value.warnings ?? [])
-    setSaved(`${result.value.tier.label} added`)
-    setSelectedLabel(null)
-    setState(emptyFormState(generation))
+  const runVerifyOne = async (id: string) => {
+    setVerifyingId(id)
+    const result = await verifyOne.run(id)
+    setVerifyingId(null)
+    if (result.ok) {
+      record(id, result.value.verification)
+    } else if (result.error) {
+      // A 400 from verify is itself the verdict: the product no longer passes.
+      record(id, { ok: false, failures: [result.error], product: null })
+    }
   }
 
+  const runVerifyAll = async () => {
+    const result = await verifyAll.run()
+    if (result.ok) setVerifications(verificationsById(result.value.results))
+  }
+
+  return {
+    verifications,
+    verifyingId,
+    record,
+    runVerifyOne,
+    runVerifyAll,
+    verifyingAll: verifyAll.isPending,
+    verifyAllError: verifyAll.actionError,
+  }
+}
+
+function ProductsUnavailableNotice({
+  error,
+  onRetry,
+}: Readonly<{ error: unknown; onRetry: () => void }>) {
+  const detail = error instanceof Error ? error.message : 'Unknown error'
   return (
-    <SectionPanel
-      title="Add a tier"
-      hint="Everything but the Stripe price id is prefilled from the shipped ladder."
-    >
-      <View style={styles.formBody}>
-        <Select
-          value={selectedLabel}
-          options={options}
-          placeholder={
-            options.length === 0
-              ? `Generation ${generation} already has every ladder tier`
-              : 'Add from defaults — pick a tier'
-          }
-          disabled={options.length === 0}
-          accessibilityLabel="Tier to add from the shipped ladder"
-          onChange={pickDefault}
-        />
-
-        {selectedEntry ? <StripeRecipeCard entry={selectedEntry} /> : null}
-
-        {selectedLabel ? (
-          <>
-            {!state.isCustom ? (
-              <TextField
-                label="Stripe price id"
-                hint="Paste the price_… id from the Stripe Dashboard. Checked against Stripe before the row is written."
-                mono
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="price_1AbCdEfGhIjKlMnO"
-                value={state.providerPriceId}
-                onChangeText={(text) => update({ providerPriceId: text })}
-              />
-            ) : null}
-
-            <View style={styles.prefilled}>
-              <Text style={styles.prefilledTitle}>Prefilled from the ladder</Text>
-              <Text style={styles.prefilledLine}>
-                {state.label} · generation {state.generation} · rank {state.rank} ·{' '}
-                {state.isCustom ? 'no list price' : `${formatPrice(Number(state.priceCents))}/seat`}
-              </Text>
-              <Text style={styles.prefilledLine}>
-                {formatCores(Number(state.maxCores))} cores ·{' '}
-                {formatMemory(Number(state.maxMemoryBytes))}
-              </Text>
-              <Text style={styles.prefilledLine}>
-                {formatSlots({
-                  nicSlots: Number(state.nicSlots),
-                  driveSlots: Number(state.driveSlots),
-                  gpuSlots: Number(state.gpuSlots),
-                  filesystemSlots: Number(state.filesystemSlots),
-                })}
-              </Text>
-            </View>
-
-            {problems.length > 0 ? (
-              <View style={styles.problems}>
-                {problems.map((problem) => (
-                  <Text key={problem} style={styles.problemText}>
-                    • {problem}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-
-            <ButtonRow>
-              <Button
-                label="Verify and add"
-                busyLabel="Checking with Stripe…"
-                variant="primary"
-                busy={create.isPending}
-                disabled={problems.length > 0}
-                onPress={submit}
-              />
-              <Button
-                label="Cancel"
-                onPress={() => {
-                  setSelectedLabel(null)
-                  setState(emptyFormState(generation))
-                }}
-              />
-            </ButtonRow>
-          </>
-        ) : null}
-
-        {create.actionError ? (
-          <Text style={styles.errorText}>{create.actionError}</Text>
-        ) : null}
-        {saved ? <Text style={styles.savedText}>{saved}</Text> : null}
-        {warnings.length > 0 ? (
-          <View style={styles.warnings}>
-            <Text style={styles.warningsTitle}>Saved, with warnings</Text>
-            {warnings.map((warning) => (
-              <Text key={warning} style={styles.warningText}>
-                • {warning}
-              </Text>
-            ))}
-          </View>
-        ) : null}
-      </View>
-    </SectionPanel>
+    <InlineNotice
+      tone="warning"
+      title="Could not list the provider's products"
+      body={`The dropdowns are unavailable until the provider answers. Existing bindings still show by id. ${detail}`}
+      actions={<Button label="Retry" size="sm" onPress={onRetry} />}
+    />
   )
 }
 
 /**
- * Admin → Tiers. The catalogue is hand-entered: nothing seeds it, and the
- * server verifies each row's Stripe price before writing it.
+ * What the payment account's tax default is, and what it means for a price
+ * that leaves its own tax behaviour unset.
+ *
+ * Without this the operator has no way to tell, from the panel, why a price
+ * the Stripe Dashboard labels "Use default" passes verification — or why it
+ * does not.
+ */
+function TaxDefaultNotice({ taxDefaults }: Readonly<{ taxDefaults: AdminTierTaxDefaults | null }>) {
+  if (!taxDefaults) return null
+  const behaviour = taxDefaults.taxBehavior
+  if (behaviour === 'inclusive' || behaviour === 'exclusive') {
+    return (
+      <InlineNotice
+        tone="info"
+        title={`Prices are tax ${behaviour} by default`}
+        body={`Set on the payment account, so a price that does not name its own tax behaviour uses this. Those prices verify normally. Change it on the provider, under tax settings.`}
+      />
+    )
+  }
+  return (
+    <InlineNotice
+      tone="warning"
+      title="No default tax behaviour on the account"
+      body="Every price must then name its own, or it will not verify. Setting a default on the provider's tax settings covers all of them at once and is the recommended setup."
+    />
+  )
+}
+
+function FailingNotice({ count }: Readonly<{ count: number }>) {
+  if (count === 0) return null
+  return (
+    <InlineNotice
+      tone="warning"
+      title={`${count} tier${count === 1 ? '' : 's'} did not verify`}
+      body="A row whose product no longer passes loses entitlement silently — the projection skips items whose product maps to no tier. Fix the product on the provider, or point the row at another one."
+    />
+  )
+}
+
+function ErrorLine({ error }: Readonly<{ error: unknown }>) {
+  if (!error) return null
+  const text = error instanceof Error ? error.message : String(error)
+  return <Text style={styles.errorText}>{text}</Text>
+}
+
+function LadderTable({
+  rows,
+  loading,
+  products,
+  productsUnavailable,
+  checks,
+  stateBusy,
+  onDeactivate,
+  onReactivate,
+}: Readonly<{
+  rows: readonly LadderRowModel[]
+  loading: boolean
+  products: readonly AdminTierProduct[]
+  productsUnavailable: boolean
+  checks: ReturnType<typeof useVerifications>
+  stateBusy: boolean
+  onDeactivate: (tierId: string) => void
+  onReactivate: (tierId: string) => void
+}>) {
+  if (rows.length === 0) {
+    return (
+      <DataTable columns={COLUMNS} minWidth={1060} bordered>
+        <DataTableEmpty>{loading ? 'Loading…' : 'The ladder is empty.'}</DataTableEmpty>
+      </DataTable>
+    )
+  }
+  return (
+    <DataTable columns={COLUMNS} minWidth={1060} bordered>
+      {rows.map((row) => (
+        <LadderRow
+          // Remount when the binding or the product list changes so the
+          // dropdown re-seeds from the row instead of a stale pick.
+          key={`${row.entry.label}:${row.tier?.providerProductId ?? ''}:${products.length}`}
+          row={row}
+          products={products}
+          productsUnavailable={productsUnavailable}
+          verification={row.tier ? checks.verifications[row.tier.id] : undefined}
+          verifying={row.tier?.id === checks.verifyingId}
+          stateBusy={stateBusy}
+          onVerify={(tierId) => {
+            void checks.runVerifyOne(tierId)
+          }}
+          onVerified={checks.record}
+          onDeactivate={onDeactivate}
+          onReactivate={onReactivate}
+        />
+      ))}
+    </DataTable>
+  )
+}
+
+/**
+ * Admin → Tiers. One row per ladder label; the operator picks the provider
+ * product each priced label bills against. The server verifies the product
+ * before writing and caches its price on the row.
  */
 export function TiersSection() {
   const { session } = useAuth()
   const isSuperadmin = isSuperadminSession(session)
 
   const tiersQuery = useAdminTiers({ enabled: isSuperadmin })
-  const defaultsQuery = useAdminTierDefaults({ enabled: isSuperadmin })
-  const verifyOne = useVerifyAdminTier()
-  const verifyAll = useVerifyAllAdminTiers()
+  const productsQuery = useAdminTierProducts({ enabled: isSuperadmin })
   const deactivate = useDeactivateAdminTier()
   const patch = usePatchAdminTier()
+  const checks = useVerifications()
 
-  const [verifications, setVerifications] = useState<Record<string, AdminTierVerification>>({})
-  const [verifyingId, setVerifyingId] = useState<string | null>(null)
-
-  const tiers = useMemo(() => sortTiers(tiersQuery.data?.tiers ?? []), [tiersQuery.data])
-  const generation = currentGeneration(tiers)
+  const rows = useMemo(
+    () => ladderRows(tiersQuery.data?.ladder ?? [], tiersQuery.data?.tiers ?? []),
+    [tiersQuery.data]
+  )
+  const products = useMemo(() => productsQuery.data?.products ?? [], [productsQuery.data])
 
   if (!isSuperadmin) {
     return (
@@ -411,89 +555,58 @@ export function TiersSection() {
     )
   }
 
-  const runVerifyOne = async (id: string) => {
-    setVerifyingId(id)
-    const result = await verifyOne.run(id)
-    setVerifyingId(null)
-    if (result.ok) {
-      setVerifications((prev) => ({ ...prev, [id]: result.value.verification }))
-    }
-  }
-
-  const runVerifyAll = async () => {
-    const result = await verifyAll.run()
-    if (!result.ok) return
-    const next: Record<string, AdminTierVerification> = {}
-    for (const entry of result.value.results) {
-      next[entry.id] = { ok: entry.ok, failures: entry.failures, price: entry.price }
-    }
-    setVerifications(next)
-  }
-
-  const failing = Object.values(verifications).filter((entry) => !entry.ok).length
-
   return (
     <View style={styles.container}>
       <SectionPanel
         title="Tier catalogue"
-        hint="Entered by hand and verified against Stripe. Nothing seeds these rows."
+        hint="One row per ladder label. Entitlements are read-only; the price comes from the product."
         headerRight={
           <Button
             label="Verify all"
             size="sm"
-            busy={verifyAll.isPending}
+            busy={checks.verifyingAll}
             busyLabel="Verifying…"
-            onPress={runVerifyAll}
+            onPress={() => {
+              void checks.runVerifyAll()
+            }}
           />
         }
       >
         <View style={styles.panelBody}>
           <HowItWorks />
 
-          {verifyAll.actionError ? (
-            <Text style={styles.errorText}>{verifyAll.actionError}</Text>
-          ) : null}
-          {failing > 0 ? (
-            <InlineNotice
-              tone="warning"
-              title={`${failing} tier${failing === 1 ? '' : 's'} did not verify`}
-              body="A row whose price no longer matches will lose entitlement silently — the projection skips items whose price maps to no tier. Fix the price in Stripe, or point the row at the right id."
+          {productsQuery.isError ? (
+            <ProductsUnavailableNotice
+              error={productsQuery.error}
+              onRetry={() => {
+                void productsQuery.refetch()
+              }}
             />
           ) : null}
+          <TaxDefaultNotice taxDefaults={productsQuery.data?.taxDefaults ?? null} />
+          <ErrorLine error={tiersQuery.error} />
+          <ErrorLine error={checks.verifyAllError} />
+          <FailingNotice count={failingCount(checks.verifications)} />
 
-          <DataTable columns={COLUMNS} minWidth={940} bordered>
-            {tiers.length === 0 ? (
-              <DataTableEmpty>
-                {tiersQuery.isLoading
-                  ? 'Loading…'
-                  : 'No tiers yet. Create the Products and Prices in Stripe, then add them below.'}
-              </DataTableEmpty>
-            ) : (
-              tiers.map((tier) => (
-                <TierRow
-                  key={tier.id}
-                  tier={tier}
-                  verification={verifications[tier.id]}
-                  busy={verifyingId === tier.id}
-                  stateBusy={deactivate.isPending || patch.isPending}
-                  onVerify={() => runVerifyOne(tier.id)}
-                  onDeactivate={() => deactivate.run({ id: tier.id })}
-                  onReactivate={() => patch.run({ id: tier.id, body: { isActive: true } })}
-                />
-              ))
-            )}
-          </DataTable>
+          <LadderTable
+            rows={rows}
+            loading={tiersQuery.isLoading}
+            products={products}
+            productsUnavailable={productsQuery.isError}
+            checks={checks}
+            stateBusy={deactivate.isPending || patch.isPending}
+            onDeactivate={(id) => {
+              void deactivate.run({ id })
+            }}
+            onReactivate={(id) => {
+              void patch.run({ id, body: { isActive: true } })
+            }}
+          />
 
-          {deactivate.actionError ? (
-            <Text style={styles.errorText}>{deactivate.actionError}</Text>
-          ) : null}
-          {patch.actionError ? (
-            <Text style={styles.errorText}>{patch.actionError}</Text>
-          ) : null}
+          <ErrorLine error={deactivate.actionError} />
+          <ErrorLine error={patch.actionError} />
         </View>
       </SectionPanel>
-
-      <AddTierForm defaults={defaultsQuery.data} tiers={tiers} generation={generation} />
     </View>
   )
 }
@@ -501,40 +614,14 @@ export function TiersSection() {
 const styles = StyleSheet.create({
   container: { gap: spacing.lg },
   panelBody: { gap: spacing.md },
-  formBody: { gap: spacing.md },
   tierLabel: { color: colors.text, fontSize: 14, fontWeight: '600' },
   cellText: { color: colors.text, fontSize: 13 },
   subLine: { color: colors.textDim, fontSize: 11 },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
-  recipe: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  recipeTitle: { color: colors.text, fontSize: 13, fontWeight: '600', marginBottom: spacing.xs },
-  recipeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-  recipeLabel: { color: colors.textDim, fontSize: 12 },
-  recipeValue: { color: colors.text, fontSize: 12, textAlign: 'right', flexShrink: 1 },
-  recipeLine: { color: colors.textDim, fontSize: 12, lineHeight: 18 },
-  prefilled: {
-    borderLeftWidth: 2,
-    borderLeftColor: colors.border,
-    paddingLeft: spacing.md,
-    gap: 2,
-  },
-  prefilledTitle: { color: colors.textDim, fontSize: 11, textTransform: 'uppercase' },
-  prefilledLine: { color: colors.text, fontSize: 12 },
-  problems: { gap: 2 },
-  problemText: { color: colors.errorText, fontSize: 12 },
-  errorText: { color: colors.errorText, fontSize: 13 },
-  savedText: { color: colors.green, fontSize: 13 },
-  warnings: { gap: 2 },
-  warningsTitle: { color: colors.text, fontSize: 12, fontWeight: '600' },
-  warningText: { color: colors.pending, fontSize: 12 },
-  verifyOk: { marginTop: spacing.xs },
+  productCell: { gap: spacing.xs },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+  errorText: { color: colors.errorText, fontSize: 12 },
+  savedText: { color: colors.green, fontSize: 12 },
   verifyOkText: { color: colors.green, fontSize: 11 },
-  verifyBad: { marginTop: spacing.xs, gap: 2 },
+  verifyBad: { gap: 2 },
   verifyBadText: { color: colors.errorText, fontSize: 11 },
 })

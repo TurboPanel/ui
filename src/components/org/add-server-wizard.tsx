@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -13,6 +14,7 @@ import {
 import { validateDisplayName } from '@/lib/display-name'
 import {
   isForbiddenError,
+  NoLicenseAvailableError,
   type CreatedLicense,
   type OrgServerRecord,
 } from '@/lib/instance-api'
@@ -25,6 +27,7 @@ import {
 } from '@/lib/install-command'
 import { installTlsHint } from '@/lib/install-tls'
 import { orEmptyArray } from '@/lib/or-empty-array'
+import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -148,6 +151,8 @@ type CreateStepProps = Readonly<{
   managedUrls: string[]
   creating: boolean
   createError: string | null
+  /** Set when the refusal was "no license available": the fix lives on the billing page. */
+  billingHref: string | null
   onDisplayNameChange: (text: string) => void
   onInstallBaseUrlChange: (url: string) => void
   onContinue: () => void
@@ -160,11 +165,13 @@ function CreateStep({
   managedUrls,
   creating,
   createError,
+  billingHref,
   onDisplayNameChange,
   onInstallBaseUrlChange,
   onContinue,
   onCancel,
 }: CreateStepProps) {
+  const router = useRouter()
   return (
     <View style={styles.form}>
       <TextField
@@ -176,6 +183,15 @@ function CreateStep({
       />
       {createError ? (
         <Text style={panelStyles.error}>{createError}</Text>
+      ) : null}
+      {createError && billingHref ? (
+        <ButtonRow>
+          <Button
+            label="Open billing"
+            size="sm"
+            onPress={() => router.push(billingHref)}
+          />
+        </ButtonRow>
       ) : null}
       {__DEV__ ? (
         <>
@@ -373,6 +389,7 @@ export function AddServerWizard({
     __DEV__ ? defaultDevInstallBaseUrl() : '',
   )
   const [createError, setCreateError] = useState<string | null>(null)
+  const [noLicenseAvailable, setNoLicenseAvailable] = useState(false)
   const [revealed, setRevealed] = useState<CreatedLicense | null>(null)
   const [connectedServer, setConnectedServer] = useState<OrgServerRecord | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -400,6 +417,7 @@ export function AddServerWizard({
     setDisplayName('')
     setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl(managedUrls) : '')
     setCreateError(null)
+    setNoLicenseAvailable(false)
     setRevealed(null)
     setConnectedServer(null)
     setElapsedSeconds(0)
@@ -410,6 +428,7 @@ export function AddServerWizard({
 
   const onStartAddServer = async () => {
     setCreateError(null)
+    setNoLicenseAvailable(false)
     if (displayName.trim()) {
       const validationError = validateDisplayName(displayName)
       if (validationError) {
@@ -423,6 +442,9 @@ export function AddServerWizard({
     })
     if (!result.ok) {
       if (result.error) setCreateError(result.error)
+      // Every purchased license is held: the message already says to buy
+      // another, and the button below takes the operator there.
+      setNoLicenseAvailable(result.cause instanceof NoLicenseAvailableError)
       return
     }
     setRevealed(result.value)
@@ -542,6 +564,7 @@ export function AddServerWizard({
           managedUrls={managedUrls}
           creating={creating}
           createError={createError}
+          billingHref={noLicenseAvailable ? orgBillingHref(orgId) : null}
           onDisplayNameChange={clearCreateErrorOnChange(setDisplayName)}
           onInstallBaseUrlChange={clearCreateErrorOnChange(setInstallBaseUrl)}
           onContinue={() => void onStartAddServer()}

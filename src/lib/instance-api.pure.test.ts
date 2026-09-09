@@ -35,6 +35,8 @@ import {
   saveServerMetricsLiveSettings,
   saveServerHardwareProfile,
   ServerCapacityExceededError,
+  NoLicenseAvailableError,
+  describeNoLicenseAvailable,
   ServerDeleteBlockedError,
   signIn,
   startServerMetricsLive,
@@ -686,6 +688,41 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
   })
 
+  it('createLicense throws NoLicenseAvailableError on a hosted 409 with the buy-another copy', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { error: 'no_license_available', purchased: 3, releasing: 1, held: 2, available: 0 },
+        409
+      )
+    )
+    try {
+      await createLicense('Huey')
+      throw new TypeError('expected createLicense to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(NoLicenseAvailableError)
+      if (!(err instanceof NoLicenseAvailableError)) {
+        throw new TypeError('expected NoLicenseAvailableError')
+      }
+      expect(err.availability).toEqual({ purchased: 3, releasing: 1, held: 2, available: 0 })
+      expect(err.message).toBe('All 3 purchased licenses are in use. Buy another on the billing page.')
+    }
+  })
+
+  it('sizes the no-license copy to how many were bought', () => {
+    expect(describeNoLicenseAvailable(0)).toBe(
+      'No licenses have been bought yet. Buy one on the billing page.'
+    )
+    expect(describeNoLicenseAvailable(1)).toBe(
+      'The one purchased license is in use. Buy another on the billing page.'
+    )
+    expect(describeNoLicenseAvailable(4)).toBe(
+      'All 4 purchased licenses are in use. Buy another on the billing page.'
+    )
+    expect(new NoLicenseAvailableError({ purchased: 0, releasing: 0, held: 0, available: 0 }).code).toBe(
+      'no_license_available'
+    )
+  })
+
   it('createLicense treats missing capacity fields as unlimited with zero seats', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'server_capacity_exceeded' }, 409))
     try {
@@ -1251,6 +1288,8 @@ describe('hasLiveBillingSubscription', () => {
       ? { status, currentPeriodEnd: null, pastDueSince: null, graceExpiresAt: null, scheduleAttached: false }
       : null,
     tiers: [],
+    licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+    servers: [],
     pendingChanges: [],
   })
 

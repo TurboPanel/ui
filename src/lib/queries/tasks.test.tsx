@@ -145,7 +145,7 @@ describe('tasks query hooks', () => {
         schedule: '0 2 * * *',
         command: 'backup',
       }),
-    ).resolves.toEqual({ ok: false, error: 'task_name_in_use' })
+    ).resolves.toEqual({ ok: false, error: 'task_name_in_use', cause: expect.anything() })
   })
 
   it('useUpdateTask and useDeleteTask proxy mutations', async () => {

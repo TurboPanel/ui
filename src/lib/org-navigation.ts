@@ -66,7 +66,7 @@ export const ORG_AREAS = [
         id: 'keys',
         label: 'Pending keys',
         pathSegment: 'keys',
-        hint: 'Unused registration keys that have not enrolled a host',
+        hint: 'Servers that are still waiting to connect',
       },
       {
         id: 'settings',
@@ -286,22 +286,19 @@ export function orgManageHref(orgId: string): `/${string}/manage` {
 }
 
 /**
- * Query keys the billing screen reads on arrival: `tier` (catalogue tier id
- * or label) pre-selects the target tier, `license` pre-selects the license
- * to move — the server detail Upgrade button sets both. Stripe's own
- * return adds `checkout=success|cancel` (see the control plane's
- * `checkoutReturnUrls`).
+ * Query key the billing screen reads on arrival: `tier` (catalogue tier id
+ * or label) pre-selects the tier to buy at or move a license to — the
+ * server detail Upgrade button sets it. Stripe's own return adds
+ * `checkout=success|cancel` (see the control plane's `checkoutReturnUrls`).
  */
 export const BILLING_TIER_QUERY_PARAM = 'tier'
-export const BILLING_LICENSE_QUERY_PARAM = 'license'
 
 export function orgBillingHref(
   orgId: string,
-  preselect?: Readonly<{ tier?: string | null; license?: string | null }>,
+  preselect?: Readonly<{ tier?: string | null }>,
 ): string {
   const params = new URLSearchParams()
   if (preselect?.tier) params.set(BILLING_TIER_QUERY_PARAM, preselect.tier)
-  if (preselect?.license) params.set(BILLING_LICENSE_QUERY_PARAM, preselect.license)
   const query = params.toString()
   return query.length > 0 ? `/${orgId}/billing?${query}` : `/${orgId}/billing`
 }
