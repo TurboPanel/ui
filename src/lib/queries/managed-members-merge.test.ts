@@ -171,6 +171,16 @@ describe('alignMemberStatusesWithCluster', () => {
       'failed',
     ])
   })
+
+  it('leaves members unchanged when cluster status is missing', () => {
+    const rows = [member({ id: 'm1', status: 'provisioning' })]
+    expect(alignMemberStatusesWithCluster(rows, null)[0]?.status).toBe(
+      'provisioning',
+    )
+    expect(alignMemberStatusesWithCluster(rows, undefined)[0]?.status).toBe(
+      'provisioning',
+    )
+  })
 })
 
 describe('useShowOnceSecretMutation error fallback', () => {

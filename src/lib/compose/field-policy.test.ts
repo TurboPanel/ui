@@ -8,7 +8,9 @@ import {
   classifyTopLevelKey,
   DEPLOY_FIELD_KEYS,
   NETWORK_FIELD_KEYS,
+  SERVICE_FIELD_KEYS,
   SPANNING_NETWORK_DRIVER,
+  TOP_LEVEL_FIELD_KEYS,
   unsupportedDeployReason,
   unsupportedDeployResourcesReason,
   unsupportedNetworkReason,
@@ -100,6 +102,26 @@ describe('field policy registry', () => {
     expect(classifyServiceKey('image')?.state).toBe('passthrough')
     expect(classifyServiceKey('deploy')?.state).toBe('interpreted')
     expect(classifyServiceKey('imaage')).toBeUndefined()
+  })
+
+  it('answers for every registered top-level and service key', () => {
+    for (const key of TOP_LEVEL_FIELD_KEYS) {
+      expect(classifyTopLevelKey(key)?.state).toBeTypeOf('string')
+    }
+    for (const key of SERVICE_FIELD_KEYS) {
+      expect(classifyServiceKey(key)?.state).toBeTypeOf('string')
+    }
+  })
+
+  it('trims the overlay driver and falls through unknown overlay keys', () => {
+    expect(classifyNetworkKey('attachable', '  overlay  ')?.state).toBe(
+      'unsupported',
+    )
+    expect(classifyNetworkKey('labels', '  overlay  ')?.state).toBe('passthrough')
+    expect(classifyNetworkKey('nope', 'overlay')).toBeUndefined()
+    expect(classifyDeployPlacementKey('constraints')?.state).toBeTypeOf('string')
+    expect(classifyDeployPlacementKey('not-a-key')).toBeUndefined()
+    expect(classifyDeployKey('not-a-key')).toBeUndefined()
   })
 })
 

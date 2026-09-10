@@ -40,6 +40,13 @@ describe('addressInCidr', () => {
     expect(addressInCidr('10.0.1.50', '10.0.0.0/24')).toBe(false)
     expect(addressInCidr('203.0.113.10', '203.0.113.0/24')).toBe(true)
   })
+
+  it('validates IPv6 membership including hostBits=0 and compressed forms', () => {
+    expect(addressInCidr('2001:db8::5', '2001:db8::/32')).toBe(true)
+    expect(addressInCidr('2001:db9::1', '2001:db8::/32')).toBe(false)
+    expect(addressInCidr('2001:db8::1', '2001:db8::1/128')).toBe(true)
+    expect(addressInCidr('2001:db8::2', '2001:db8::1/128')).toBe(false)
+  })
 })
 
 describe('ipVersionOf and addressFamilyLabel', () => {
@@ -76,6 +83,13 @@ describe('cidrsOverlap', () => {
     expect(cidrsOverlap('203.0.113.10/32', '203.0.113.10/32')).toBe(true)
     expect(cidrsOverlap('203.0.113.10/32', '203.0.113.11/32')).toBe(false)
   })
+
+  it('detects IPv6 containment and equal /128 hosts', () => {
+    expect(cidrsOverlap('2001:db8::/32', '2001:db8:1::/48')).toBe(true)
+    expect(cidrsOverlap('2001:db8::/32', '2001:db9::/32')).toBe(false)
+    expect(cidrsOverlap('2001:db8::1/128', '2001:db8::1/128')).toBe(true)
+    expect(cidrsOverlap('2001:db8::1/128', '2001:db8::2/128')).toBe(false)
+  })
 })
 
 describe('parseCidr and formatCidr', () => {
@@ -89,13 +103,16 @@ describe('parseCidr and formatCidr', () => {
 
   it('rejects malformed IPv6 hextets and overlong expansions', () => {
     expect(ipVersionOf('gggg::1')).toBeNull()
+    expect(ipVersionOf('12345::1')).toBeNull()
     expect(ipVersionOf('1:2:3:4:5:6:7:8:9')).toBeNull()
     expect(ipVersionOf('1:2:3:4:5:6:7::8:9')).toBeNull()
+    expect(ipVersionOf('1:::2')).toBeNull()
     expect(parseCidr('2001:db8::/abc')).toBeNull()
     expect(parseCidr('203.0.113.0/33')).toBeNull()
     expect(parseCidr('2001:db8::/129')).toBeNull()
     expect(parseCidr('/24')).toBeNull()
     expect(parseCidr('203.0.113.0/')).toBeNull()
+    expect(parseCidr('203.0.113.0/-1')).toBeNull()
   })
 
   it('formats IPv6 with zero runs at start, middle, and end', () => {
@@ -107,6 +124,20 @@ describe('parseCidr and formatCidr', () => {
       '2001:db8:1:2:3:4::/128',
     )
     expect(formatCidr(parseCidr('0:0:0:0:0:0:0:0/128')!)).toBe('::/128')
+  })
+
+  it('leaves IPv6 uncompressed when there is no run of two or more zeros', () => {
+    expect(formatCidr(parseCidr('2001:db8:1:2:3:4:5:6/128')!)).toBe(
+      '2001:db8:1:2:3:4:5:6/128',
+    )
+  })
+
+  it('parses a /0 prefix and a trailing-compression address', () => {
+    const v4 = parseCidr('0.0.0.0/0')
+    expect(v4?.prefix).toBe(0)
+    expect(formatCidr(v4!)).toBe('0.0.0.0/0')
+    expect(ipVersionOf('2001:db8::')).toBe(6)
+    expect(normalizeCidr('2001:db8::/32')).toBe('2001:db8::/32')
   })
 
   it('checks hostBits=0 membership and rejects cross-family addresses', () => {

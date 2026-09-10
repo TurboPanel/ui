@@ -581,6 +581,191 @@ describe('fillMissingLicenses', () => {
     expect(filled[0]?.license).toBe('MIT')
     expect(filled[1]?.license).toBe('')
   })
+
+  it('looks up UNKNOWN sentinels and keeps a blank result when no default exists', async () => {
+    const filled = await fillMissingLicenses(
+      [pkg({ name: 'mystery', license: 'UNKNOWN' })],
+      async () => '',
+    )
+    expect(filled[0]?.license).toBe('UNKNOWN')
+  })
+})
+
+describe('reviewed package-name defaults and remaining policy classes', () => {
+  it('defaults khroma to MIT', () => {
+    expect(defaultLicenseForPackageName('khroma')).toBe('MIT')
+    expect(defaultLicenseForPackageName('@scope/khroma')).toBe('MIT')
+  })
+
+  it('allows reviewed sharp LGPL production bindings', () => {
+    expect(
+      classifyLicense('LGPL-3.0-or-later', 'production', '@img/sharp-linux-x64'),
+    ).toBeNull()
+    expect(classifyLicense('LGPL-3.0-or-later', 'production', 'sharp')).toBe(
+      'copyleft-production',
+    )
+  })
+
+  it('rejects remaining source-available and missing-license sentinels', () => {
+    expect(classifyLicense('UNLICENSED', 'production')).toBe('missing')
+    expect(classifyLicense('SSPL-1.0', 'production')).toBe('source-available')
+    expect(classifyLicense('FSL-1.1-MIT', 'production')).toBe('source-available')
+    expect(classifyLicense('Fair Source License', 'production')).toBe(
+      'source-available',
+    )
+    expect(classifyLicense('Elastic-2.0', 'production')).toBe('source-available')
+    expect(classifyLicense('commons-clause', 'production')).toBe('noncommercial')
+    expect(classifyLicense('SEE TEXT', 'production')).toBe('custom')
+    expect(classifyLicense('BSD-2-Clause-Patent', 'production')).toBeNull()
+    expect(classifyLicense('BSD-3-Clause-Clear', 'production')).toBeNull()
+  })
+})
+
+describe('notice parser edge cases', () => {
+  it('skips pnpm entries without a name or version', () => {
+    const packages = packagesFromPnpmLicenses(
+      {
+        MIT: [
+          { versions: ['1.0.0'] },
+          { name: 'yaml', versions: ['', '  ', '2.0.0'], license: 'ISC' },
+        ],
+      },
+      new Set(),
+    )
+    expect(packages).toEqual([
+      {
+        name: 'yaml',
+        version: '2.0.0',
+        license: 'ISC',
+        role: 'development',
+      },
+    ])
+  })
+
+  it('reads production npm lock rows and nested scoped install paths', () => {
+    const packages = packagesFromNpmLockfile({
+      packages: {
+        '': { name: 'app' },
+        'node_modules/@scope/pkg': { version: '1.2.3', license: 'MIT' },
+        'node_modules/missing-version': { license: 'MIT' },
+        'not-a-node-modules-path': { version: '1.0.0', license: 'MIT' },
+        'node_modules/named': {
+          name: 'explicit-name',
+          version: '9.0.0',
+          license: 'ISC',
+        },
+      },
+    })
+    expect(
+      packages
+        .map((row) => `${row.name}@${row.version}:${row.role}`)
+        .sort((a, b) => a.localeCompare(b)),
+    ).toEqual(
+      ['@scope/pkg@1.2.3:production', 'explicit-name@9.0.0:production'].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    )
+    expect(packages.every((row) => row.role === 'production')).toBe(true)
+  })
+
+  it('skips Deno lock ids that are not name@version', () => {
+    expect(
+      packagesFromDenoLock({ jsr: { '@': {}, '@std/assert@': {} }, npm: {} }, {}),
+    ).toEqual([])
+  })
+
+  it('skips gradle project lines, duplicates, and unparseable coordinates', () => {
+    const packages = packagesFromGradleDependencyReport(`
++--- project :app
++---androidx.core:core:1.13.0
++--- androidx.core:core:1.13.0
++--- androidx.core:core:1.13.0
++--- org.jetbrains:kotlin:*
++--- incomplete
+`)
+    expect(packages.map((row) => `${row.name}@${row.version}`)).toEqual([
+      'androidx.core:core@1.13.0',
+    ])
+  })
+
+  it('returns undefined for incomplete Maven POMs', () => {
+    expect(packagesFromMavenPom('<project><artifactId>core</artifactId></project>')).toBeUndefined()
+    expect(licenseFromPomXml('<licensesfoo><name>MIT</name></licensesfoo>')).toBe('')
+  })
+
+  it('skips duplicate Podfile.lock rows', () => {
+    const pods = packagesFromPodfileLock(`
+  - Expo (57.0.14)
+  - Expo (57.0.14)
+  - not-a-pod
+`)
+    expect(pods.map((row) => `${row.name}@${row.version}`)).toEqual(['Expo@57.0.14'])
+  })
+})
+
+describe('merge, attach, and render remaining sections', () => {
+  it('prefers a higher-rank role and keeps existing notice metadata', () => {
+    const merged = mergeNoticePackages([
+      [
+        pkg({
+          name: 'yaml',
+          license: 'ISC',
+          role: 'development',
+          noticeText: 'NOTICE',
+          copyright: 'Ada',
+          homepage: 'https://yaml.example',
+        }),
+      ],
+      [pkg({ name: 'yaml', license: 'ISC', role: 'native' })],
+    ])
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.role).toBe('native')
+    expect(merged[0]?.noticeText).toBe('NOTICE')
+    expect(merged[0]?.copyright).toBe('Ada')
+    expect(merged[0]?.homepage).toBe('https://yaml.example')
+  })
+
+  it('attaches licenses by package name and ignores blank NOTICE text', () => {
+    const attached = attachLicensesFromMap(
+      [pkg({ name: 'Expo', version: '57.0.14', license: '', role: 'native' })],
+      { Expo: 'MIT' },
+    )
+    expect(attached[0]?.license).toBe('MIT')
+    expect(attachNoticeText(pkg({ name: 'next', license: 'Apache-2.0' }), '  ')).toEqual(
+      pkg({ name: 'next', license: 'Apache-2.0' }),
+    )
+  })
+
+  it('renders empty sections, extra preamble, and native/orchestration roles', () => {
+    const markdown = renderThirdPartyNotices(
+      [
+        pkg({
+          name: 'ansible-core',
+          license: 'GPL-3.0-or-later',
+          role: 'orchestration',
+          source: 'orchestration',
+        }),
+        pkg({
+          name: 'Expo',
+          version: '57.0.14',
+          license: 'MIT',
+          role: 'native',
+          source: 'podspec',
+        }),
+      ],
+      {
+        ...renderOpts,
+        extraPreamble: 'Bundled fonts keep their own licenses.',
+      },
+    )
+    expect(markdown).toContain('Bundled fonts keep their own licenses.')
+    expect(markdown).toContain('## Production dependencies')
+    expect(markdown).toContain('_None._')
+    expect(markdown).toContain('## Orchestration tooling')
+    expect(markdown).toContain('### ansible-core@1.0.0')
+    expect(markdown).toContain('## Native dependencies')
+    expect(markdown).toContain('- Source: podspec')
+  })
 })
 
 function noticeKey(row: NoticePackage): string {

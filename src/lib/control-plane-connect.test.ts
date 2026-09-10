@@ -9,19 +9,27 @@ import {
 } from '@/lib/control-plane-accounts'
 import { fetchInstallStatus } from '@/lib/instance-api'
 
+const authAccentMocks = vi.hoisted(() => ({
+  applyConsoleChromeRuntime: vi.fn(),
+  resolveControlPlaneRuntime: vi.fn((): 'deno' | 'workers' | undefined => 'deno'),
+}))
+
 vi.mock('@/lib/instance-api', () => ({
   fetchInstallStatus: vi.fn(),
 }))
 
 vi.mock('@/lib/auth-accent', () => ({
-  applyConsoleChromeRuntime: vi.fn(),
-  resolveControlPlaneRuntime: () => 'deno',
+  applyConsoleChromeRuntime: authAccentMocks.applyConsoleChromeRuntime,
+  resolveControlPlaneRuntime: authAccentMocks.resolveControlPlaneRuntime,
 }))
 
 describe('connectToControlPlane', () => {
   beforeEach(() => {
     resetControlPlaneStoreForTests()
     vi.mocked(fetchInstallStatus).mockReset()
+    authAccentMocks.applyConsoleChromeRuntime.mockReset()
+    authAccentMocks.resolveControlPlaneRuntime.mockReset()
+    authAccentMocks.resolveControlPlaneRuntime.mockReturnValue('deno')
   })
 
   it('rejects an invalid URL without probing', async () => {
@@ -48,6 +56,19 @@ describe('connectToControlPlane', () => {
       },
     })
     expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    expect(authAccentMocks.resolveControlPlaneRuntime).toHaveBeenCalled()
+    expect(authAccentMocks.applyConsoleChromeRuntime).toHaveBeenCalledWith('deno')
+  })
+
+  it('skips console chrome when status does not resolve a runtime', async () => {
+    authAccentMocks.resolveControlPlaneRuntime.mockReturnValue(undefined)
+    vi.mocked(fetchInstallStatus).mockResolvedValue({
+      isSignupEnabled: false,
+      needsInstall: false,
+    })
+    const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
+    expect(result.ok).toBe(true)
+    expect(authAccentMocks.applyConsoleChromeRuntime).not.toHaveBeenCalled()
   })
 
   it('returns a field error when status cannot be reached', async () => {
@@ -98,5 +119,28 @@ describe('connectToControlPlane', () => {
       error: 'Could not reach that control plane.',
     })
     expect(getActiveControlPlaneOrigin()).toBeNull()
+  })
+
+  it('keeps an existing origin when reconnect fails with no previous active origin', async () => {
+    resetControlPlaneStoreForTests({
+      accounts: [
+        {
+          origin: LOCAL_HTTPS_ORIGIN,
+          kind: 'self-hosted',
+          email: null,
+          runtime: null,
+          lastOrgId: null,
+        },
+      ],
+      activeOrigin: null,
+    })
+    vi.mocked(fetchInstallStatus).mockRejectedValue('offline')
+    const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new TypeError('expected reconnect failure without a previous origin')
+    }
+    expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
+    expect(getControlPlaneAccounts()).toHaveLength(1)
   })
 })

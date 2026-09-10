@@ -16,6 +16,7 @@ import {
   formatPercent,
   formatPhysicalSignalValue,
   formatDurationSeconds,
+  formatQueueDepth,
   formatUptimeSeconds,
   formatWatts,
   physicalSignalUnitLabel,
@@ -163,8 +164,26 @@ describe('formatWatts', () => {
 
   it('formats sub-50 milliwatt readings in milliwatts', () => {
     expect(formatWatts(0.0004)).toBe('0.4 mW')
+    expect(formatWatts(-0.0004)).toBe('-0.4 mW')
     expect(formatWatts(0.1)).toBe('0.1 W')
     expect(formatWatts(0)).toBe('0.0 W')
+  })
+})
+
+describe('formatQueueDepth', () => {
+  it('returns em dash for null, undefined, and non-finite values', () => {
+    expect(formatQueueDepth(null)).toBe('—')
+    expect(formatQueueDepth(undefined)).toBe('—')
+    expect(formatQueueDepth(Number.NaN)).toBe('—')
+  })
+
+  it('uses three decimals below 1, two below 10, and integers from 10', () => {
+    expect(formatQueueDepth(0)).toBe('0.000')
+    expect(formatQueueDepth(0.042)).toBe('0.042')
+    expect(formatQueueDepth(1.25)).toBe('1.25')
+    expect(formatQueueDepth(9.99)).toBe('9.99')
+    expect(formatQueueDepth(10)).toBe('10')
+    expect(formatQueueDepth(12.6)).toBe('13')
   })
 })
 
@@ -186,7 +205,24 @@ describe('hardwareSignalDisplayTitle', () => {
     ).toBe('CPU package temperature')
   })
 
-  it('passes through already-friendly and unrelated labels', () => {
+  it('renames from the label when the signal id is not a kernel RAPL/coretemp id', () => {
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:other:power',
+        kind: 'power',
+        label: 'package-0',
+      }),
+    ).toBe('CPU package power')
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:other:temp',
+        kind: 'temperature',
+        label: 'Package id 1',
+      }),
+    ).toBe('CPU package temperature')
+  })
+
+  it('passes through already-friendly labels and falls back to the signal id', () => {
     expect(
       hardwareSignalDisplayTitle({
         signalId: 'signal:cpu:hottest-core',
@@ -201,6 +237,13 @@ describe('hardwareSignalDisplayTitle', () => {
         label: 'Composite',
       })
     ).toBe('Composite')
+    expect(
+      hardwareSignalDisplayTitle({
+        signalId: 'signal:fan:1',
+        kind: 'rpm',
+        label: '',
+      }),
+    ).toBe('signal:fan:1')
   })
 })
 
@@ -306,7 +349,7 @@ describe('formatDurationSeconds', () => {
 describe('formatAxisTime', () => {
   const axisMs = Date.parse('2024-03-10T15:45:00.000Z')
 
-  const shortRanges: MetricsRangeId[] = ['1h', '6h', '24h']
+  const shortRanges: MetricsRangeId[] = ['5m', '10m', '1h', '6h', '24h']
   const longRanges: MetricsRangeId[] = ['7d', '30d', '90d']
 
   it('uses time-only labels for short ranges', () => {

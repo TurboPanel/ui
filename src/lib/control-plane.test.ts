@@ -83,9 +83,11 @@ describe('isMetroWebOrigin', () => {
     expect(isMetroWebOrigin('http://localhost:19000')).toBe(true)
     expect(isMetroWebOrigin('http://127.0.0.1:19006')).toBe(true)
     expect(isMetroWebOrigin('https://exp.direct')).toBe(true)
+    expect(isMetroWebOrigin('https://EXP.DIRECT')).toBe(true)
     expect(isMetroWebOrigin('https://abc.exp.direct')).toBe(true)
     expect(isMetroWebOrigin(LOCAL_HTTPS_ORIGIN)).toBe(false)
     expect(isMetroWebOrigin(null)).toBe(false)
+    expect(isMetroWebOrigin('')).toBe(false)
   })
 
   it('returns false for unparseable origins', () => {
@@ -142,12 +144,45 @@ describe('readBrowserLocationOrigin', () => {
     vi.stubGlobal('location', { origin: ` ${LOCAL_HTTPS_ORIGIN} ` })
     expect(readBrowserLocationOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
   })
+
+  it('returns null when location is not present on globalThis', () => {
+    Reflect.deleteProperty(globalThis, 'location')
+    expect(readBrowserLocationOrigin()).toBeNull()
+  })
 })
 
 describe('default control-plane env reader', () => {
   it('treats an unset __DEV__ identifier as not-dev web', async () => {
     vi.resetModules()
     delete (globalThis as { __DEV__?: boolean }).__DEV__
+    vi.stubGlobal('location', { origin: LOCAL_HTTPS_ORIGIN })
+    const { readControlPlaneClientEnv: readFreshEnv } = await import(
+      '@/lib/control-plane'
+    )
+    expect(readFreshEnv()).toEqual({
+      platformOS: 'web',
+      isDev: false,
+      locationOrigin: LOCAL_HTTPS_ORIGIN,
+    })
+  })
+
+  it('treats a truthy __DEV__ identifier as dev web', async () => {
+    vi.resetModules()
+    ;(globalThis as { __DEV__?: boolean }).__DEV__ = true
+    vi.stubGlobal('location', { origin: LOCAL_HTTPS_ORIGIN })
+    const { readControlPlaneClientEnv: readFreshEnv } = await import(
+      '@/lib/control-plane'
+    )
+    expect(readFreshEnv()).toEqual({
+      platformOS: 'web',
+      isDev: true,
+      locationOrigin: LOCAL_HTTPS_ORIGIN,
+    })
+  })
+
+  it('treats an explicit false __DEV__ identifier as not-dev web', async () => {
+    vi.resetModules()
+    ;(globalThis as { __DEV__?: boolean }).__DEV__ = false
     vi.stubGlobal('location', { origin: LOCAL_HTTPS_ORIGIN })
     const { readControlPlaneClientEnv: readFreshEnv } = await import(
       '@/lib/control-plane'
@@ -250,6 +285,13 @@ describe('resolveApiUrl', () => {
   it('throws on native when no origin is set', () => {
     expect(() => resolveApiUrl('/api/health', null, nativeEnv)).toThrow(
       new TypeError('Control plane origin is not set'),
+    )
+  })
+
+  it('prefixes using the registered env reader when native', () => {
+    setControlPlaneEnvReader(() => nativeEnv)
+    expect(resolveApiUrl('/api/health', LOCAL_HTTPS_ORIGIN)).toBe(
+      `${LOCAL_HTTPS_ORIGIN}/api/health`,
     )
   })
 })

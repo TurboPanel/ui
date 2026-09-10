@@ -72,6 +72,18 @@ function queryFocusOption(
   return (query.options as { refetchOnWindowFocus?: boolean }).refetchOnWindowFocus
 }
 
+function hasPlaceholderData(
+  client: ReturnType<typeof createAppQueryClient>,
+  queryKey: readonly unknown[],
+): boolean {
+  const query = client.getQueryCache().find({ queryKey })
+  if (!query) throw new TypeError('expected query in cache')
+  return (
+    (query.options as { placeholderData?: unknown }).placeholderData !==
+    undefined
+  )
+}
+
 function row(
   overrides: Partial<ContainerRecord> = {},
 ): ContainerRecord {
@@ -182,6 +194,58 @@ describe('useContainers', () => {
     const key = queryKeys.org(orgId).containers.list()
     await waitFor(() => {
       expect(resolveRefetchInterval(client, key)).toBe(false)
+    })
+  })
+
+  it('keeps previous data when filters are present', async () => {
+    fetchContainers.mockResolvedValue({ containers: [] })
+    const client = createTestQueryClient()
+    const filters = { projectId: 'proj-1' }
+
+    renderHook(() => useContainers(orgId, filters), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(
+        hasPlaceholderData(
+          client,
+          queryKeys.org(orgId).containers.list(filters),
+        ),
+      ).toBe(true)
+    })
+  })
+
+  it('can disable keepPreviousData on a filtered list', async () => {
+    fetchContainers.mockResolvedValue({ containers: [] })
+    const client = createTestQueryClient()
+    const filters = { projectId: 'proj-1' }
+
+    renderHook(
+      () => useContainers(orgId, filters, { keepPreviousData: false }),
+      { wrapper: createWrapper(client) },
+    )
+    await waitFor(() => {
+      expect(
+        hasPlaceholderData(
+          client,
+          queryKeys.org(orgId).containers.list(filters),
+        ),
+      ).toBe(false)
+    })
+  })
+
+  it('can force keepPreviousData on an unfiltered list', async () => {
+    fetchContainers.mockResolvedValue({ containers: [] })
+    const client = createTestQueryClient()
+
+    renderHook(
+      () => useContainers(orgId, undefined, { keepPreviousData: true }),
+      { wrapper: createWrapper(client) },
+    )
+    await waitFor(() => {
+      expect(
+        hasPlaceholderData(client, queryKeys.org(orgId).containers.list()),
+      ).toBe(true)
     })
   })
 })

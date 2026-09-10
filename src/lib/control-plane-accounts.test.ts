@@ -412,6 +412,29 @@ describe('control-plane account store', () => {
     expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
   })
 
+  it('hydrateControlPlaneStore rejects JSON null and primitive payloads', async () => {
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    setControlPlaneEnvReader(() => ({
+      platformOS: 'ios',
+      isDev: true,
+      locationOrigin: null,
+    }))
+    configureControlPlaneStorageForTests({
+      read: async () => 'null',
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getControlPlaneAccounts()).toEqual([])
+
+    resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
+    configureControlPlaneStorageForTests({
+      read: async () => '42',
+      write: async () => {},
+    })
+    await hydrateControlPlaneStore()
+    expect(getControlPlaneAccounts()).toEqual([])
+  })
+
   it('hydrateControlPlaneStore rejects non-object stored payloads', async () => {
     resetControlPlaneStoreForTests({ accounts: [], activeOrigin: null }, { hydrated: false })
     setControlPlaneEnvReader(() => ({

@@ -194,6 +194,12 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       SMTP_HOST: 'mail.example.com',
     })
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({}))
+    await expect(saveEmailSettings({ SMTP_HOST: null })).resolves.toEqual({
+      ok: true,
+      settings: {},
+    })
+
     const signup = {
       enabled: true,
       dbValue: '1' as const,
@@ -202,7 +208,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(signup))
     await expect(fetchSignupSettings()).resolves.toEqual(signup)
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
       '/api/admin/v1/settings/signup',
     )
 
@@ -210,8 +216,8 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(saveSignupSettings(false)).resolves.toMatchObject({
       enabled: false,
     })
-    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'PUT' })
-    expect(JSON.parse(String(fetchMock.mock.calls[4]?.[1]?.body))).toEqual({
+    expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({
       enabled: false,
     })
   })
@@ -451,6 +457,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(gitlab).toContain('forgeId=a%26b%3Dc%2Fd')
   })
 
+  it('githubAppInstallUrl includes the active organization on the query string', () => {
+    setActiveOrganizationId('org-github')
+    const github = githubAppInstallUrl('app-1')
+    expect(github).toContain('forgeId=app-1')
+    expect(github).toContain('organizationId=org-github')
+  })
+
   it('inspectRepository omits query params when ref and listPath are blank', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -477,6 +490,21 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       commitSha: 'ghi789',
     })
     expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/inspect$/)
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        commitSha: 'abc123',
+        via: 'provider',
+        files: [],
+        entries: [],
+      }),
+    )
+    await expect(
+      inspectRepository('src-1', 'trunk', 'apps/web'),
+    ).resolves.toMatchObject({ commitSha: 'abc123' })
+    const inspectUrl = String(fetchMock.mock.calls[2]?.[0])
+    expect(inspectUrl).toContain('ref=trunk')
+    expect(inspectUrl).toContain('listPath=apps%2Fweb')
   })
 
   it('createGitlabDeployKey POSTs the deploy-key route', async () => {
@@ -759,6 +787,20 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     )
     try {
       await fetchFleetMetricsLatest('org-explicit')
+      throw new TypeError('expected fetchFleetMetricsLatest to throw')
+    } catch (error) {
+      expect(error).toBeInstanceOf(MetricsBackendUnavailableError)
+      if (!(error instanceof MetricsBackendUnavailableError)) {
+        throw new TypeError('expected MetricsBackendUnavailableError')
+      }
+      expect(error.backend).toBe('disabled')
+    }
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'metrics_backend_unavailable' }, 503),
+    )
+    try {
+      await fetchFleetMetricsLatest()
       throw new TypeError('expected fetchFleetMetricsLatest to throw')
     } catch (error) {
       expect(error).toBeInstanceOf(MetricsBackendUnavailableError)

@@ -97,6 +97,23 @@ describe('worstDeploymentStatus', () => {
       ]),
     ).toBe('queued')
   })
+
+  it.each<[CommandStatus, CommandStatus, CommandStatus]>([
+    ['succeeded', 'timed_out', 'timed_out'],
+    ['running', 'cancelled', 'cancelled'],
+    ['cancelled', 'failed', 'failed'],
+    ['queued', 'dispatching', 'queued'],
+    ['dispatching', 'sent', 'dispatching'],
+    ['acked', 'running', 'running'],
+    ['timed_out', 'failed', 'timed_out'],
+  ])('ranks %s vs %s as %s', (first, second, expected) => {
+    expect(
+      worstDeploymentStatus([
+        row({ id: 'a', status: first }),
+        row({ id: 'b', status: second }),
+      ]),
+    ).toBe(expected)
+  })
 })
 
 describe('groupDeploymentsByGeneration', () => {
@@ -178,18 +195,86 @@ describe('groupDeploymentsByGeneration', () => {
     ])
     expect(groups.map((group) => group.generation)).toEqual([8, 7])
   })
+
+  it('returns no groups for an empty list', () => {
+    expect(groupDeploymentsByGeneration([])).toEqual([])
+  })
+
+  it('keeps a standalone row next to a multi-host generation', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'fan-a', generation: 9, serverId: 'srv-a' }),
+      row({ id: 'fan-b', generation: 9, serverId: 'srv-b' }),
+      row({ id: 'solo', generation: null, actorEntityType: 'system' }),
+    ])
+    expect(groups).toHaveLength(2)
+    const fan = groups[0]
+    const solo = groups[1]
+    if (!fan || !solo) throw new TypeError('expected a fan-out and a solo group')
+    expect(fan.id).toBe('fan-a')
+    expect(fan.generation).toBe(9)
+    expect(fan.commands).toHaveLength(2)
+    expect(fan.actorEntityType).toBe('user')
+    expect(solo.id).toBe('solo')
+    expect(solo.generation).toBeNull()
+    expect(solo.actorEntityType).toBe('system')
+  })
+
+  it('uses startedAt over queuedAt even when start is later', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({
+        id: 'a',
+        queuedAt: '2026-08-21T12:00:00.000Z',
+        startedAt: '2026-08-21T12:00:08.000Z',
+      }),
+    ])
+    expect(groups[0]?.startedAt).toBe('2026-08-21T12:00:08.000Z')
+  })
+
+  it('reports a zero duration when every attempt finished instantly', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'a', durationMs: 0 }),
+      row({ id: 'b', serverId: 'srv-b', durationMs: 0 }),
+    ])
+    expect(groups[0]?.durationMs).toBe(0)
+  })
+
+  it('labels a cancelled fan-out from the worst host', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'a', status: 'succeeded' }),
+      row({ id: 'b', serverId: 'srv-b', status: 'cancelled' }),
+    ])
+    expect(groups[0]?.status).toBe('cancelled')
+  })
+
+  it('falls back when the anchor row omits id and actor', () => {
+    const groups = groupDeploymentsByGeneration([
+      {
+        ...row({ id: 'a' }),
+        id: undefined as unknown as string,
+        actorEntityType: undefined as unknown as string,
+      },
+    ])
+    const group = groups[0]
+    if (!group) throw new TypeError('expected a grouped deploy')
+    expect(group.id).toBe('gen:7')
+    expect(group.actorEntityType).toBe('unknown')
+  })
 })
 
 describe('formatDeployDuration', () => {
   it('formats sub-second, second, and minute scales', () => {
     expect(formatDeployDuration(0)).toBe('0ms')
     expect(formatDeployDuration(420)).toBe('420ms')
+    expect(formatDeployDuration(999)).toBe('999ms')
     expect(formatDeployDuration(1000)).toBe('1.0s')
     expect(formatDeployDuration(4200)).toBe('4.2s')
     expect(formatDeployDuration(9999)).toBe('10.0s')
     expect(formatDeployDuration(10_000)).toBe('10s')
     expect(formatDeployDuration(48_000)).toBe('48s')
+    expect(formatDeployDuration(59_400)).toBe('59s')
+    expect(formatDeployDuration(59_500)).toBe('1m 0s')
     expect(formatDeployDuration(60_000)).toBe('1m 0s')
+    expect(formatDeployDuration(61_000)).toBe('1m 1s')
     expect(formatDeployDuration(192_000)).toBe('3m 12s')
   })
 
@@ -202,6 +287,7 @@ describe('formatDeployDuration', () => {
 describe('formatDeployTimestamp', () => {
   it('renders an em dash for a missing or unparseable stamp', () => {
     expect(formatDeployTimestamp(null)).toBe('—')
+    expect(formatDeployTimestamp('')).toBe('—')
     expect(formatDeployTimestamp('not-a-date')).toBe('—')
   })
 
@@ -215,6 +301,7 @@ describe('formatDeployActor', () => {
     expect(formatDeployActor('user')).toBe('User')
     expect(formatDeployActor('system')).toBe('System')
     expect(formatDeployActor('daemon')).toBe('Daemon')
+    expect(formatDeployActor('x')).toBe('X')
     expect(formatDeployActor('')).toBe('Unknown')
   })
 })
@@ -233,10 +320,22 @@ describe('deploymentStatusTone', () => {
       label: 'Timed out',
       tone: 'failed',
     })
-    expect(deploymentStatusTone('cancelled').tone).toBe('failed')
-    expect(deploymentStatusTone('running').tone).toBe('pending')
-    expect(deploymentStatusTone('queued').label).toBe('Queued')
-    expect(deploymentStatusTone('dispatching').label).toBe('Queued')
+    expect(deploymentStatusTone('cancelled')).toEqual({
+      label: 'Cancelled',
+      tone: 'failed',
+    })
+    expect(deploymentStatusTone('running')).toEqual({
+      label: 'Running',
+      tone: 'pending',
+    })
+    expect(deploymentStatusTone('queued')).toEqual({
+      label: 'Queued',
+      tone: 'pending',
+    })
+    expect(deploymentStatusTone('dispatching')).toEqual({
+      label: 'Queued',
+      tone: 'pending',
+    })
     expect(deploymentStatusTone('sent').label).toBe('Queued')
     expect(deploymentStatusTone('acked').label).toBe('Queued')
   })

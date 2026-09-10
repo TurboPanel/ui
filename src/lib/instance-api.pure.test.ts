@@ -457,6 +457,21 @@ describe('fetch wrappers (mocked fetch)', () => {
       isInstallMode: false,
       isSignupEnabled: true,
     })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        runtime: 'workers',
+        isInstallMode: null,
+        isSignupEnabled: false,
+      }),
+    )
+    await expect(fetchInstallStatus()).resolves.toEqual({
+      billingEnabled: false,
+      runtime: 'workers',
+      isInstallMode: false,
+      isSignupEnabled: false,
+    })
   })
 
   it('fetchInstallStatus defaults signup off and omits unknown runtime', async () => {
@@ -789,6 +804,30 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
   })
 
+  it('deleteServer uses the default blocker message when the body omits error', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          code: 'server_has_blockers',
+          blockers: [{ kind: 'network', count: 1 }],
+        },
+        409,
+      ),
+    )
+    try {
+      await deleteServer('srv-1')
+      throw new TypeError('expected deleteServer to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ServerDeleteBlockedError)
+      if (!(err instanceof ServerDeleteBlockedError)) {
+        throw new TypeError('expected ServerDeleteBlockedError')
+      }
+      expect(err.message).toBe(
+        'Cannot delete this server while dependent resources still exist',
+      )
+    }
+  })
+
   it('deleteServer succeeds and forwards an explicit organization header', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
     await expect(deleteServer('srv-1', 'org-del')).resolves.toEqual({
@@ -848,6 +887,37 @@ describe('fetch wrappers (mocked fetch)', () => {
     await expect(deployEnvironment('env-1')).rejects.toBeInstanceOf(
       DeployResourceLimitExceededError
     )
+  })
+
+  it('deployEnvironment treats missing services/violations as empty arrays', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'health_check_missing', required: false }, 409),
+    )
+    try {
+      await deployEnvironment('env-1')
+      throw new TypeError('expected deployEnvironment to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(DeployHealthCheckMissingError)
+      if (!(err instanceof DeployHealthCheckMissingError)) {
+        throw new TypeError('expected DeployHealthCheckMissingError')
+      }
+      expect(err.required).toBe(false)
+      expect(err.services).toEqual([])
+    }
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'resource_limit_exceeded' }, 409),
+    )
+    try {
+      await deployEnvironment('env-1')
+      throw new TypeError('expected deployEnvironment to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(DeployResourceLimitExceededError)
+      if (!(err instanceof DeployResourceLimitExceededError)) {
+        throw new TypeError('expected DeployResourceLimitExceededError')
+      }
+      expect(err.violations).toEqual([])
+    }
   })
 
   it('deployEnvironment surfaces fabric_reconcile_failed from non-409 failures', async () => {
@@ -969,6 +1039,25 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
   })
 
+  it('fetchServerMetricsSeries treats a 503 without backend as disabled', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'metrics_backend_unavailable' }, 503),
+    )
+    try {
+      await fetchServerMetricsSeries('srv-1', {
+        fromIso: '2026-01-01T00:00:00.000Z',
+        toIso: '2026-01-01T01:00:00.000Z',
+      })
+      throw new TypeError('expected metrics series to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(MetricsBackendUnavailableError)
+      if (!(err instanceof MetricsBackendUnavailableError)) {
+        throw new TypeError('expected MetricsBackendUnavailableError')
+      }
+      expect(err.backend).toBe('disabled')
+    }
+  })
+
   it('fetchServerMetricsSeries maps non-JSON 503 and generic failures', async () => {
     fetchMock.mockResolvedValueOnce(textResponse('unavailable', 503))
     await expect(
@@ -1033,6 +1122,11 @@ describe('fetch wrappers (mocked fetch)', () => {
 
     fetchMock.mockResolvedValueOnce(textResponse('down', 503))
     await expect(startServerMetricsLive('srv-1')).rejects.toThrow(/metrics\/live failed: HTTP 503/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, 409))
+    await expect(startServerMetricsLive('srv-1')).rejects.toThrow(
+      /metrics\/live failed: HTTP 409$/,
+    )
   })
 
   it('startServerMetricsLive attaches an explicit organization header', async () => {
@@ -1125,6 +1219,11 @@ describe('fetch wrappers (mocked fetch)', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'other_conflict' }, 409))
     await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
       /metrics\/capabilities failed: HTTP 409: other_conflict/,
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, 409))
+    await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
+      /metrics\/capabilities failed: HTTP 409$/,
     )
 
     fetchMock.mockResolvedValueOnce(textResponse('gone', 503))
@@ -1239,6 +1338,19 @@ describe('fetch wrappers (mocked fetch)', () => {
       )
     )
     await expect(fetchHealth()).rejects.toThrow('/api/health failed: services.web missing image')
+  })
+
+  it('apiFetch compose_invalid falls back to the error code when issues have no messages', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: 'compose_invalid',
+          issues: [{}, { message: '' }],
+        },
+        400,
+      ),
+    )
+    await expect(fetchHealth()).rejects.toThrow('/api/health failed: compose_invalid')
   })
 
   it('apiFetch keeps status detail when error body is not JSON', async () => {

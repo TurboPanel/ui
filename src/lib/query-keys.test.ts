@@ -582,4 +582,98 @@ describe('queryKeys.org(…) remaining factories', () => {
       [...topology.networksAll],
     )
   })
+
+  it('builds remaining server, project, environment, and container factories', () => {
+    const org = queryKeys.org('org-1')
+    expect(org.servers.status('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'status',
+    ])
+    expect(org.servers.updateStatus('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'update',
+    ])
+    expect(org.servers.metricsEvents('srv-1', '1h')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'metrics',
+      'events',
+      '1h',
+    ])
+    expect(org.servers.labels('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'labels',
+    ])
+    expect(org.servers.ips('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'ips',
+      {},
+    ])
+    expect(org.projects.detail('p1')).toEqual(['org', 'org-1', 'project', 'p1'])
+    expect(org.projects.principals('p1')).toEqual([
+      'org',
+      'org-1',
+      'project',
+      'p1',
+      'principals',
+    ])
+    expect(org.projects.principalSshKeys('p1', 'prin-1')).toEqual([
+      'org',
+      'org-1',
+      'project',
+      'p1',
+      'principals',
+      'prin-1',
+      'ssh-keys',
+    ])
+    expect(org.environments.detail('env-1')).toEqual([
+      'org',
+      'org-1',
+      'environment',
+      'env-1',
+    ])
+    expect(org.environments.deployments('env-1')).toEqual([
+      'org',
+      'org-1',
+      'environment',
+      'env-1',
+      'deployments',
+    ])
+    expect(org.repositories.detail('src-1')).toEqual([
+      'org',
+      'org-1',
+      'repositories',
+      'detail',
+      'src-1',
+    ])
+    expect(org.containers.detail('ctr-1')).toEqual([
+      'org',
+      'org-1',
+      'container',
+      'ctr-1',
+    ])
+    expect(org.containers.list()).toEqual(['org', 'org-1', 'containers', {}])
+    expect(org.containers.logs('ctr-1')).toEqual([
+      'org',
+      'org-1',
+      'container',
+      'ctr-1',
+      'logs',
+      200,
+    ])
+  })
 })

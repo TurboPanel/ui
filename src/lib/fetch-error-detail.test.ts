@@ -13,6 +13,11 @@ describe('formatFetchFailureDetail', () => {
   it('keeps HTTP status with backend error body', () => {
     expect(formatFetchFailureDetail(403, 'Forbidden')).toBe('HTTP 403: Forbidden')
   })
+
+  it('omits the body when none is provided', () => {
+    expect(formatFetchFailureDetail(502)).toBe('HTTP 502')
+    expect(formatFetchFailureDetail(404, '')).toBe('HTTP 404')
+  })
 })
 
 describe('isForbiddenError', () => {
@@ -34,6 +39,12 @@ describe('isHttpStatusError', () => {
     expect(isHttpStatusError(error, 503)).toBe(true)
     expect(isHttpStatusError(error, 404)).toBe(false)
   })
+
+  it('rejects non-Error values and longer numeric prefixes', () => {
+    expect(isHttpStatusError('HTTP 403', 403)).toBe(false)
+    expect(isHttpStatusError({ message: 'HTTP 403' }, 403)).toBe(false)
+    expect(isHttpStatusError(new Error('HTTP 4030: overflow'), 403)).toBe(false)
+  })
 })
 
 describe('isServerPlacementRequiredError', () => {
@@ -45,5 +56,8 @@ describe('isServerPlacementRequiredError', () => {
     expect(
       isServerPlacementRequiredError(new Error('path failed: HTTP 409: other')),
     ).toBe(false)
+    expect(isServerPlacementRequiredError('HTTP 409: server_placement_required')).toBe(
+      false,
+    )
   })
 })

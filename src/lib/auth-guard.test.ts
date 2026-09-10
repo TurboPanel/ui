@@ -398,4 +398,48 @@ describe('resolveAuthGuardHref', () => {
       }),
     ).toBe('/sign-in')
   })
+
+  it('keeps unsigned guests on sign-in when install is complete', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'sign-in',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps signed-in users on verify-email', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'verify-email',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('sends same-origin signed-in web away from connect to the dashboard', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'connect',
+        developerDevBypass: false,
+      }),
+    ).toBe('/welcome')
+  })
+
+  it('sends unsigned hosts with no top segment to install when setup is required', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: undefined,
+        developerDevBypass: false,
+      }),
+    ).toBe('/install')
+  })
 })

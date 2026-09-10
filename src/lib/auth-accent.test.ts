@@ -165,6 +165,16 @@ describe('auth-accent', () => {
       )
     })
 
+    it('persists deno runtime and sets green CSS variables on web', async () => {
+      const { applyConsoleChromeRuntime } = await loadAuthAccent()
+      applyConsoleChromeRuntime('deno')
+
+      expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBe('deno')
+      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.green)
+      expect(documentMock._properties.get('--tp-chrome-bg-active')).toBe(colors.bgActive)
+      expect(documentMock._properties.get('--tp-chrome-on-accent')).toBe(colors.buttonText)
+    })
+
     it('no-ops for unknown runtime, native, or missing document', async () => {
       const { applyConsoleChromeRuntime } = await loadAuthAccent()
       applyConsoleChromeRuntime(undefined)

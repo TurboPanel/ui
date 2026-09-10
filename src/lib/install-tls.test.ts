@@ -3,6 +3,7 @@ import {
   formatInstanceDlBase,
   installOriginNeedsInsecureTls,
   installTlsHint,
+  isLoopbackOrPrivateHostname,
 } from './install-tls'
 
 describe('installOriginNeedsInsecureTls', () => {
@@ -85,5 +86,24 @@ describe('installTlsHint', () => {
     expect(installTlsHint('')).toBeNull()
     expect(installTlsHint('  ')).toBeNull()
     expect(installTlsHint('ftp://panel.example.com')).toBeNull()
+  })
+})
+
+describe('isLoopbackOrPrivateHostname', () => {
+  it('treats an empty or bracket-only host as private', () => {
+    expect(isLoopbackOrPrivateHostname('')).toBe(true)
+    expect(isLoopbackOrPrivateHostname('[]')).toBe(true)
+  })
+
+  it('rejects IPv4-looking hosts with non-decimal or out-of-range octets', () => {
+    expect(isLoopbackOrPrivateHostname('192.168.1.a')).toBe(false)
+    expect(isLoopbackOrPrivateHostname('192.168.1.256')).toBe(false)
+    expect(isLoopbackOrPrivateHostname('10.0.0.')).toBe(false)
+  })
+
+  it('treats public IPv4 and IPv6 hosts as reachable', () => {
+    expect(isLoopbackOrPrivateHostname('203.0.113.50')).toBe(false)
+    expect(isLoopbackOrPrivateHostname('172.15.0.1')).toBe(false)
+    expect(isLoopbackOrPrivateHostname('2001:db8::1')).toBe(false)
   })
 })

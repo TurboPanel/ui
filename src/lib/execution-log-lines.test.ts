@@ -39,6 +39,15 @@ describe('stripAnsi', () => {
   it('leaves plain text untouched', () => {
     expect(stripAnsi('docker compose up -d')).toBe('docker compose up -d')
   })
+
+  it.each([
+    ['\u001B[1;31mbold-red\u001B[0m', 'bold-red'],
+    ['\u009B[31mC1\u009B[0m', 'C1'],
+    ['line\r\r', 'line'],
+    ['\u001B[2Kcleared', 'cleared'],
+  ])('strips %s', (input, expected) => {
+    expect(stripAnsi(input)).toBe(expected)
+  })
 })
 
 describe('parseCommandLogChunk', () => {
@@ -154,6 +163,98 @@ describe('parseCommandLogChunk', () => {
       timestamp: null,
     })
   })
+
+  it('returns nothing for a fragment with no newline at all', () => {
+    expect(parseCommandLogChunk('{"sequence":1,"message":"ok"}')).toEqual([])
+    expect(parseCommandLogChunk('plain fragment')).toEqual([])
+  })
+
+  it('returns nothing for a chunk that is only a newline', () => {
+    expect(parseCommandLogChunk('\n')).toEqual([])
+  })
+
+  it('seeds synthetic sequence from 0 when fallbackSeq is omitted', () => {
+    const rows = parseCommandLogChunk('truncated\n')
+    const row = rows[0]
+    if (!row) throw new TypeError('expected a synthetic fallback row')
+    expect(row.seq).toBe(1)
+  })
+
+  it('increments synthetic sequence across consecutive plain-text lines', () => {
+    const rows = parseCommandLogChunk('one\ntwo\n', 10)
+    expect(rows.map((row) => row.seq)).toEqual([11, 12])
+  })
+
+  it('skips a line that is only ANSI after stripping', () => {
+    expect(parseCommandLogChunk('\u001B[32m\u001B[0m\nreal\n')).toEqual([
+      {
+        seq: 1,
+        timestamp: null,
+        stream: 'stdout',
+        phase: null,
+        message: 'real',
+      },
+    ])
+  })
+
+  it.each([
+    ['[]\n', '[]'],
+    ['true\n', 'true'],
+    ['{"message":"ok","sequence":1.5}\n', '{"message":"ok","sequence":1.5}'],
+    ['{"message":"ok","sequence":"1"}\n', '{"message":"ok","sequence":"1"}'],
+    ['{"message":"ok","sequence":null}\n', '{"message":"ok","sequence":null}'],
+    [
+      '{"message":["ok"],"sequence":1}\n',
+      '{"message":["ok"],"sequence":1}',
+    ],
+  ])('falls back to plain text for %s', (chunk, message) => {
+    const rows = parseCommandLogChunk(chunk, 0)
+    const row = rows[0]
+    if (!row) throw new TypeError('expected a plain-text fallback row')
+    expect(row).toEqual({
+      seq: 1,
+      timestamp: null,
+      stream: 'stdout',
+      phase: null,
+      message,
+    })
+  })
+
+  it('treats a missing or unknown stream as stdout', () => {
+    const missing = parseCommandLogChunk(
+      `${JSON.stringify({ sequence: 1, message: 'ok' })}\n`,
+    )
+    const unknown = parseCommandLogChunk(
+      `${JSON.stringify({ sequence: 1, message: 'ok', stream: 'STDOUT' })}\n`,
+    )
+    expect(missing[0]?.stream).toBe('stdout')
+    expect(unknown[0]?.stream).toBe('stdout')
+  })
+
+  it('ignores non-string timestamp and phase', () => {
+    const rows = parseCommandLogChunk(
+      `${JSON.stringify({
+        sequence: 1,
+        message: 'ok',
+        timestamp: 12,
+        phase: 3,
+      })}\n`,
+    )
+    const row = rows[0]
+    if (!row) throw new TypeError('expected a parsed event row')
+    expect(row.timestamp).toBeNull()
+    expect(row.phase).toBeNull()
+  })
+
+  it('accepts sequence 0 and an empty message', () => {
+    const rows = parseCommandLogChunk(
+      `${JSON.stringify({ sequence: 0, message: '' })}\n`,
+    )
+    const row = rows[0]
+    if (!row) throw new TypeError('expected a parsed empty-message row')
+    expect(row.seq).toBe(0)
+    expect(row.message).toBe('')
+  })
 })
 
 describe('mergeTranscriptLines', () => {
@@ -203,6 +304,18 @@ describe('mergeTranscriptLines', () => {
     )
     expect(merged).toEqual([line(1, 'new')])
   })
+
+  it('sorts out-of-order arrivals by sequence', () => {
+    const merged = mergeTranscriptLines([line(3, 'c')], [line(1, 'a'), line(2, 'b')])
+    expect(merged.map((row) => row.message)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('returns only the incoming rows when the current transcript is empty', () => {
+    expect(mergeTranscriptLines([], [line(2, 'b'), line(1, 'a')])).toEqual([
+      line(1, 'a'),
+      line(2, 'b'),
+    ])
+  })
 })
 
 describe('transcriptLineKey', () => {
@@ -225,6 +338,17 @@ describe('plainTextTranscriptLines', () => {
     expect(rows.map((row) => row.message)).toEqual(['one', 'two'])
     expect(rows.every((row) => row.stream === 'stdout')).toBe(true)
     expect(rows.every((row) => row.phase === null)).toBe(true)
+  })
+
+  it('keeps a trailing line that has no newline and strips ANSI', () => {
+    const rows = plainTextTranscriptLines('\u001B[32mone\u001B[0m\ntwo')
+    expect(rows.map((row) => row.message)).toEqual(['one', 'two'])
+    expect(rows.map((row) => row.seq)).toEqual([1, 2])
+  })
+
+  it('returns nothing for empty or whitespace-only input', () => {
+    expect(plainTextTranscriptLines('')).toEqual([])
+    expect(plainTextTranscriptLines('\n  \n')).toEqual([])
   })
 })
 
@@ -260,6 +384,26 @@ describe('dockerTimestampTranscriptLines', () => {
       message: 'offset line',
     })
   })
+
+  it('accepts a negative offset and a trailing line without a newline', () => {
+    const rows = dockerTimestampTranscriptLines(
+      '2026-01-01T00:00:01-05:00 west\nansi \u001B[0mplain',
+    )
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      timestamp: '2026-01-01T00:00:01-05:00',
+      message: 'west',
+    })
+    expect(rows[1]).toMatchObject({
+      timestamp: null,
+      message: 'ansi plain',
+    })
+  })
+
+  it('returns nothing for empty input', () => {
+    expect(dockerTimestampTranscriptLines('')).toEqual([])
+    expect(dockerTimestampTranscriptLines('\n')).toEqual([])
+  })
 })
 
 describe('transcriptPlainText', () => {
@@ -269,6 +413,24 @@ describe('transcriptPlainText', () => {
       { seq: 2, timestamp: null, stream: 'stderr', phase: null, message: 'bad' },
     ])
     expect(text).toBe('ok\nstderr bad')
+  })
+
+  it('does not prefix benign stderr progress in a copied transcript', () => {
+    expect(
+      transcriptPlainText([
+        {
+          seq: 1,
+          timestamp: null,
+          stream: 'stderr',
+          phase: 'compose-up',
+          message: ' 6d2dcf61e6fc Pull complete',
+        },
+      ]),
+    ).toBe(' 6d2dcf61e6fc Pull complete')
+  })
+
+  it('returns an empty string for no rows', () => {
+    expect(transcriptPlainText([])).toBe('')
   })
 })
 
@@ -285,6 +447,32 @@ describe('docker progress lines', () => {
     ' 30d32a3eb4a4 Extracting 1B',
     ' Container adminer Started ',
     ' Network proj_default Created ',
+    ' 6d2dcf61e6fc Verifying Checksum',
+    ' 6d2dcf61e6fc Download complete',
+    ' Container web-1 Restarting',
+    ' Container web-1 Recreating',
+    ' Container web-1 Recreated',
+    ' 6d2dcf61e6fc Uploading 1.2MB',
+    ' Service web Building',
+    ' Network proj_default Creating',
+    ' Container web-1 Removing',
+    ' Container web-1 Stopping',
+    ' Container web-1 Starting',
+    ' Service web Skipped',
+    ' 6d2dcf61e6fc Waiting',
+    ' Container web-1 Healthy',
+    ' Container web-1 Running',
+    ' Image web Pushing',
+    ' Container web-1 Removed',
+    ' Container web-1 Stopped',
+    ' Container web-1 Killing',
+    ' Image web Pulled',
+    ' Container web-1 Killed',
+    ' Image web Pushed',
+    ' Volume data Exists',
+    ' Image web Built',
+    ' 6d2dcf61e6fc Downloading layer',
+    ' Image adminer:latest Pulling fs layer extra',
   ])('recognises %s as progress', (message) => {
     expect(isDockerProgressLine(message)).toBe(true)
   })
@@ -295,6 +483,12 @@ describe('docker progress lines', () => {
     'WARN[0000] a docker-compose.yml file was found',
     ' Container adminer Error ',
     'failed to solve: process did not complete successfully',
+    '',
+    '   ',
+    'Pulling',
+    'Download complete',
+    'Pulling fs layer',
+    'id Warning leftover leftover',
   ])('does not swallow %s', (message) => {
     expect(isDockerProgressLine(message)).toBe(false)
   })
@@ -391,6 +585,7 @@ describe('docker progress lines', () => {
     'remote: Enumerating objects: 12, done.',
     'Switched to a new branch \'coverage\'',
     'Already on trunk',
+    '  Cloning into \'/tmp/source\'...',
   ])('treats git stderr %s as benign', (message) => {
     expect(isBenignStderrLine(message)).toBe(true)
     expect(
@@ -402,6 +597,15 @@ describe('docker progress lines', () => {
         message,
       }),
     ).toBe(false)
+  })
+
+  it.each([
+    'From /local/mirror.git',
+    '* not a branch line',
+    'HEAD detached at abc1234',
+    'Already up to date.',
+  ])('does not treat %s as git progress', (message) => {
+    expect(isBenignStderrLine(message)).toBe(false)
   })
 })
 
@@ -427,6 +631,18 @@ describe('normalizeTranscriptMessage', () => {
   it('keeps a glued 0B suffix that is not a Compose byte counter', () => {
     expect(normalizeTranscriptMessage('id Downloading 2MB0B')).toBe(
       'id Downloading 2MB0B',
+    )
+  })
+
+  it('keeps a real 10B size whose suffix happens to end in 0B', () => {
+    expect(normalizeTranscriptMessage('id Extracting 10B')).toBe(
+      'id Extracting 10B',
+    )
+  })
+
+  it('leaves a progress line that does not end in a byte counter', () => {
+    expect(normalizeTranscriptMessage(' Container web-1 Started')).toBe(
+      ' Container web-1 Started',
     )
   })
 })
@@ -467,6 +683,10 @@ describe('collapseRepeatedProgressLines', () => {
         }),
     )
     expect(collapseRepeatedProgressLines(rows)).toHaveLength(3)
+  })
+
+  it('returns an empty list when there is nothing to collapse', () => {
+    expect(collapseRepeatedProgressLines([])).toEqual([])
   })
 })
 
@@ -511,5 +731,9 @@ describe('groupTranscriptByPhase', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]?.phase).toBeNull()
     expect(groups[0]?.lines).toHaveLength(2)
+  })
+
+  it('returns no groups for an empty transcript', () => {
+    expect(groupTranscriptByPhase([])).toEqual([])
   })
 })
