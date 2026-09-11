@@ -5642,9 +5642,6 @@ async function fetchServerMetricsJson<T>(
     credentials: 'include',
     headers,
   })
-  // #region agent log
-  fetch('http://localhost:7746/ingest/ca9ed83a-836b-44e5-96a8-2a946923e182',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a788f9'},body:JSON.stringify({sessionId:'a788f9',hypothesisId:'A',location:'instance-api.ts:fetchServerMetricsJson',message:'sibling metrics endpoint',data:{pathSuffix,status:response.status,ok:response.ok,contentType:response.headers.get('content-type'),serverId},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   if (response.status === 503) {
     let body: { error?: string; backend?: MetricsBackendKind } = {}
@@ -6050,16 +6047,10 @@ export async function fetchServerMetricsCapabilities(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/capabilities`
-  const resolvedUrl = controlPlaneUrl(path)
-  const response = await fetch(resolvedUrl, {
+  const response = await fetch(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
-  // #region agent log
-  void response.clone().text().then((bodyText) => {
-    fetch('http://localhost:7746/ingest/ca9ed83a-836b-44e5-96a8-2a946923e182',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a788f9'},body:JSON.stringify({sessionId:'a788f9',hypothesisId:'A',location:'instance-api.ts:fetchServerMetricsCapabilities',message:'capabilities response',data:{status:response.status,ok:response.ok,contentType:response.headers.get('content-type'),path,resolvedUrl,serverId,orgHeaderPresent:Boolean(resolvedOrgId),bodyPreview:bodyText.slice(0,400)},timestamp:Date.now()})}).catch(()=>{});
-  }).catch(()=>{});
-  // #endregion
 
   if (response.status === 409) {
     const code = await readConflictError(response)

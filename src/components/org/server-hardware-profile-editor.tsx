@@ -285,12 +285,7 @@ export function ServerHardwareProfileEditor({
       hint="Sensor sources, monitored network interfaces, hosting storage path, and manual limits"
       collapsible
       defaultCollapsed
-      onToggle={(next) => {
-        // #region agent log
-        fetch('http://localhost:7746/ingest/ca9ed83a-836b-44e5-96a8-2a946923e182',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a788f9'},body:JSON.stringify({sessionId:'a788f9',hypothesisId:'E',location:'server-hardware-profile-editor.tsx:onToggle',message:'hardware profile panel toggle',data:{expanded:next,serverId:server.id,orgId},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        setExpanded(next)
-      }}
+      onToggle={setExpanded}
     >
       <Text style={panelStyles.muted}>
         Auto-detection picks the first matching sensor. Override it when the host exposes several,
