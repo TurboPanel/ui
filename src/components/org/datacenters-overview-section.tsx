@@ -1,5 +1,6 @@
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
+  Badge,
   Button,
   DataTable,
   DataTableCell,
@@ -24,6 +25,7 @@ import type { DatacenterRecord } from '@/lib/instance-api'
 import { datacenterHref, datacenterNewHref } from '@/lib/org-navigation'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useDatacenters } from '@/lib/queries/topology'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCan } from '@/lib/query-client'
 import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
@@ -48,6 +50,7 @@ const DATACENTER_COLUMNS = [
   { key: 'country', header: 'Country', flex: 1.2, minWidth: 120 },
   { key: 'servers', header: 'Servers', flex: 0.9, minWidth: 90 },
   { key: 'cidrs', header: 'Subnets', flex: 1.6, minWidth: 140 },
+  { key: 'routing', header: 'Routing', flex: 1.2, minWidth: 150 },
   { key: 'timezone', header: 'Timezone', flex: 1.2, minWidth: 130 },
 ] as const satisfies readonly DataTableColumn[]
 
@@ -56,8 +59,25 @@ const [
   DC_COL_COUNTRY,
   DC_COL_SERVERS,
   DC_COL_CIDRS,
+  DC_COL_ROUTING,
   DC_COL_TIMEZONE,
 ] = DATACENTER_COLUMNS
+
+/** Priority (lower wins) + trust chip — both on the list payload, no extra fetch. */
+function DatacenterRoutingCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
+  return (
+    <DataTableCell column={DC_COL_ROUTING}>
+      <View style={styles.routingRow}>
+        <Text style={styles.monoText}>P{datacenter.priority}</Text>
+        {datacenter.trusted ? (
+          <Badge label="Trusted" tone="ok" />
+        ) : (
+          <Badge label="Untrusted" tone="pending" />
+        )}
+      </View>
+    </DataTableCell>
+  )
+}
 
 function DatacenterCountryCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
   const geo = datacenterGeoFromMetadata(datacenter.metadata)
@@ -124,6 +144,7 @@ function DatacenterTableRow({
           {formatDatacenterSubnetSummary(datacenter.privateCidrs)}
         </Text>
       </DataTableCell>
+      <DatacenterRoutingCell datacenter={datacenter} />
       <DataTableCell column={DC_COL_TIMEZONE}>
         <Text style={styles.monoText} numberOfLines={1}>
           {datacenterTimezoneLabel(datacenter.options)}
@@ -143,7 +164,7 @@ function DatacentersTable({
   serverCountByDatacenter: ReadonlyMap<string, number>
 }>) {
   return (
-    <DataTable columns={DATACENTER_COLUMNS} minWidth={760} bordered>
+    <DataTable columns={DATACENTER_COLUMNS} minWidth={900} bordered>
       {datacenters.map((datacenter, index) => (
         <DatacenterTableRow
           key={datacenter.id}
@@ -250,7 +271,9 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Datacenters</Text>
       <Text style={panelStyles.pageCopy}>
-        Private networks. A datacenter can hold several routable subnets.
+        Logical routing domains, not buildings. A datacenter can hold several
+        routable subnets; a server may belong to more than one. Lower priority
+        wins; untrusted datacenters route through {TURBOFABRIC_PRODUCT_NAME}.
       </Text>
 
       {error && datacenters.length === 0 ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -309,6 +332,13 @@ const styles = StyleSheet.create({
   countryRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+  },
+  routingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
     maxWidth: '100%',
   },

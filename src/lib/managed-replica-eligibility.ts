@@ -14,7 +14,11 @@ import type {
   ManagedMemberTransport,
   ManagedReplicaClass,
 } from '@/lib/managed-services'
-import type { ServerDatacenterRef } from '@/lib/instance-api'
+import {
+  DEFAULT_DATACENTER_PRIORITY,
+  DEFAULT_DATACENTER_TRUSTED,
+  type ServerDatacenterRef,
+} from '@/lib/instance-api'
 
 export type ReplicaIneligibleReason =
   | 'already-member'
@@ -22,6 +26,19 @@ export type ReplicaIneligibleReason =
   | 'no-private-cidr'
   | 'no-private-path'
   | 'offline'
+  | 'untrusted-datacenter'
+
+/**
+ * Per-datacenter routing policy the instance ladder reads. Mirrors
+ * `partitionSharedDatacenters` on the instance: shared datacenters are split
+ * into trusted / untrusted and ordered `(priority asc, id asc)`.
+ */
+export type DatacenterRoutingPolicy = {
+  priority: number
+  trusted: boolean
+}
+
+export type DatacenterPolicyMap = ReadonlyMap<string, DatacenterRoutingPolicy>
 
 export type ReplicaServerEligibility = {
   serverId: string
@@ -44,6 +61,10 @@ export type ReplicaEligibilityInput = {
   datacenters: readonly {
     id: string
     privateCidrs: readonly string[]
+    /** Effective `priority` (lower wins). Absent → default `100`. */
+    priority?: number
+    /** Effective `trusted`. Absent → default `true`. */
+    trusted?: boolean
   }[]
   members: readonly Pick<ManagedMemberRecord, 'serverId' | 'role'>[]
   /**
@@ -71,28 +92,73 @@ function datacenterIds(
   return (server?.datacenters ?? []).map((row) => row.id)
 }
 
-function shareDatacenter(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  if (left.length === 0 || right.length === 0) return false
-  const rightSet = new Set(right)
-  return left.some((id) => rightSet.has(id))
-}
+const EMPTY_POLICIES: DatacenterPolicyMap = new Map()
 
-function sharedDatacenterIds(
-  left: readonly string[],
-  right: readonly string[],
-): string[] {
-  if (left.length === 0 || right.length === 0) return []
-  const rightSet = new Set(right)
-  return left.filter((id) => rightSet.has(id))
+function policyFor(
+  policies: DatacenterPolicyMap,
+  datacenterId: string,
+): DatacenterRoutingPolicy {
+  return (
+    policies.get(datacenterId) ?? {
+      priority: DEFAULT_DATACENTER_PRIORITY,
+      trusted: DEFAULT_DATACENTER_TRUSTED,
+    }
+  )
 }
 
 /**
- * True when `from` can reach `to` over local / same-site / shared fabric path.
- * Does not require datacenter IPs (those fail as datacenter_ip_required on
- * the server) — site readiness is already gated by `no-private-cidr`.
+ * Datacenters both servers belong to, split by trust and ordered
+ * `(priority asc, id asc)` — the instance's `partitionSharedDatacenters`.
+ * Absent policy entries fall back to the documented defaults.
+ */
+export function partitionSharedDatacenters(
+  left: readonly string[],
+  right: readonly string[],
+  policies: DatacenterPolicyMap = EMPTY_POLICIES,
+): { trusted: string[]; untrusted: string[] } {
+  const trusted: string[] = []
+  const untrusted: string[] = []
+  if (left.length === 0 || right.length === 0) return { trusted, untrusted }
+  const rightSet = new Set(right)
+  const shared = [...new Set(left.filter((id) => rightSet.has(id)))]
+  const compare = (a: string, b: string): number => {
+    const diff = policyFor(policies, a).priority - policyFor(policies, b).priority
+    if (diff !== 0) return diff
+    return a.localeCompare(b)
+  }
+  for (const id of shared) {
+    if (policyFor(policies, id).trusted) trusted.push(id)
+    else untrusted.push(id)
+  }
+  trusted.sort(compare)
+  untrusted.sort(compare)
+  return { trusted, untrusted }
+}
+
+/** Trusted shared datacenters in ladder order (see {@link partitionSharedDatacenters}). */
+function sharedDatacenterIds(
+  left: readonly string[],
+  right: readonly string[],
+  policies: DatacenterPolicyMap,
+): string[] {
+  return partitionSharedDatacenters(left, right, policies).trusted
+}
+
+/** True when the pair shares at least one **trusted** datacenter. */
+function shareDatacenter(
+  left: readonly string[],
+  right: readonly string[],
+  policies: DatacenterPolicyMap,
+): boolean {
+  return sharedDatacenterIds(left, right, policies).length > 0
+}
+
+/**
+ * True when `from` can reach `to` over local / trusted same-site / shared
+ * fabric path. Does not require datacenter IPs (those fail as
+ * datacenter_ip_required on the server) — site readiness is already gated by
+ * `no-private-cidr`. An untrusted shared datacenter does not count as a
+ * private path.
  */
 export function hasPrivatePathToPrimary(params: Readonly<{
   candidateServerId: string
@@ -100,6 +166,7 @@ export function hasPrivatePathToPrimary(params: Readonly<{
   primaryServerId: string
   primaryDatacenterIds: readonly string[]
   fabricRelays: readonly { serverId: string }[]
+  policyByDatacenter?: DatacenterPolicyMap
 }>): boolean {
   if (params.candidateServerId === params.primaryServerId) {
     return true
@@ -108,6 +175,7 @@ export function hasPrivatePathToPrimary(params: Readonly<{
     shareDatacenter(
       params.candidateDatacenterIds,
       params.primaryDatacenterIds,
+      params.policyByDatacenter ?? EMPTY_POLICIES,
     )
   ) {
     return true
@@ -135,7 +203,9 @@ function firstDatacenterWithCidr(
 
 /**
  * Display-only prediction of the instance transport that would be selected
- * for a replica on this server (local → datacenter → fabric → public).
+ * for a replica on this server (local → datacenter → fabric → public). The
+ * datacenter rung only counts **trusted** shared datacenters; an untrusted
+ * one is skipped and the prediction falls through to fabric / public.
  */
 export function predictReplicaTransport(params: Readonly<{
   candidateServerId: string
@@ -143,7 +213,9 @@ export function predictReplicaTransport(params: Readonly<{
   primaryServerId: string | null
   primaryDatacenterIds: readonly string[]
   fabricRelays: readonly { serverId: string }[]
+  policyByDatacenter?: DatacenterPolicyMap
 }>): ManagedMemberTransport {
+  const policies = params.policyByDatacenter ?? EMPTY_POLICIES
   if (
     params.primaryServerId &&
     params.candidateServerId === params.primaryServerId
@@ -155,6 +227,7 @@ export function predictReplicaTransport(params: Readonly<{
     shareDatacenter(
       params.candidateDatacenterIds,
       params.primaryDatacenterIds,
+      policies,
     )
   ) {
     return 'datacenter'
@@ -167,6 +240,7 @@ export function predictReplicaTransport(params: Readonly<{
       primaryServerId: params.primaryServerId,
       primaryDatacenterIds: params.primaryDatacenterIds,
       fabricRelays: params.fabricRelays,
+      policyByDatacenter: policies,
     })
   ) {
     return 'fabric'
@@ -179,11 +253,13 @@ function failoverEligibility(params: Readonly<{
   membershipIds: readonly string[]
   primaryDatacenterIds: readonly string[]
   cidrsByDatacenter: ReadonlyMap<string, readonly string[]>
+  policyByDatacenter: DatacenterPolicyMap
   primaryServerId: string | null
 }>): ReplicaServerEligibility {
-  const sharedIds = sharedDatacenterIds(
+  const { trusted: sharedIds, untrusted } = partitionSharedDatacenters(
     params.membershipIds,
     params.primaryDatacenterIds,
+    params.policyByDatacenter,
   )
   if (sharedIds.length === 0) {
     if (params.membershipIds.length === 0 || !params.primaryServerId) {
@@ -191,6 +267,16 @@ function failoverEligibility(params: Readonly<{
         serverId: params.serverId,
         eligible: false,
         reason: 'no-datacenter',
+      }
+    }
+    // Shares a datacenter with the primary, but only untrusted ones: the
+    // instance answers `failover_requires_trusted_datacenter`.
+    if (untrusted.length > 0) {
+      return {
+        serverId: params.serverId,
+        eligible: false,
+        reason: 'untrusted-datacenter',
+        candidateDatacenterId: untrusted[0] ?? null,
       }
     }
     return {
@@ -230,6 +316,7 @@ function readEligibility(params: Readonly<{
   primaryDatacenterIds: readonly string[]
   fabricRelays: readonly { serverId: string }[]
   cidrsByDatacenter: ReadonlyMap<string, readonly string[]>
+  policyByDatacenter: DatacenterPolicyMap
 }>): ReplicaServerEligibility {
   const readyDatacenterId = firstDatacenterWithCidr(
     params.membershipIds,
@@ -245,6 +332,7 @@ function readEligibility(params: Readonly<{
       primaryServerId: params.primaryServerId,
       primaryDatacenterIds: params.primaryDatacenterIds,
       fabricRelays: params.fabricRelays,
+      policyByDatacenter: params.policyByDatacenter,
     }),
   }
 }
@@ -252,12 +340,13 @@ function readEligibility(params: Readonly<{
 /**
  * Per-server eligibility for the add-replica picker.
  *
- * Failover: only servers that share the primary's datacenter with a usable
- * subnet. Read-only: any org server that is not already a member and is
- * online; predicted transport is shown for the picker.
+ * Failover: only servers that share a **trusted** datacenter with the primary
+ * (lowest `priority` first) that has a usable subnet. Read-only: any org
+ * server that is not already a member and is online; predicted transport is
+ * shown for the picker.
  *
  * Precedence when multiple reasons apply: already-member → offline →
- * no-datacenter → no-private-cidr → no-private-path.
+ * no-datacenter → untrusted-datacenter → no-private-cidr → no-private-path.
  */
 export function resolveReplicaEligibility(
   input: ReplicaEligibilityInput,
@@ -265,6 +354,17 @@ export function resolveReplicaEligibility(
   const memberServerIds = new Set(input.members.map((m) => m.serverId))
   const cidrsByDatacenter = new Map(
     input.datacenters.map((dc) => [dc.id, dc.privateCidrs] as const),
+  )
+  const policyByDatacenter: DatacenterPolicyMap = new Map(
+    input.datacenters.map((dc) =>
+      [
+        dc.id,
+        {
+          priority: dc.priority ?? DEFAULT_DATACENTER_PRIORITY,
+          trusted: dc.trusted ?? DEFAULT_DATACENTER_TRUSTED,
+        },
+      ] as const
+    ),
   )
   const serverById = new Map(input.servers.map((s) => [s.id, s] as const))
   const primary = input.primaryServerId
@@ -294,6 +394,7 @@ export function resolveReplicaEligibility(
         primaryDatacenterIds,
         fabricRelays,
         cidrsByDatacenter,
+        policyByDatacenter,
       })
     }
     return failoverEligibility({
@@ -301,6 +402,7 @@ export function resolveReplicaEligibility(
       membershipIds,
       primaryDatacenterIds,
       cidrsByDatacenter,
+      policyByDatacenter,
       primaryServerId: input.primaryServerId,
     })
   })
@@ -323,5 +425,7 @@ export function replicaIneligibleReasonLabel(
       return 'Datacenter has no subnets yet'
     case 'no-private-path':
       return "Must share the primary's datacenter"
+    case 'untrusted-datacenter':
+      return 'Shared datacenter is untrusted — failover replicas need a trusted network'
   }
 }

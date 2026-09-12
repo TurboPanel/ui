@@ -7,11 +7,13 @@ import { FormSelect } from '@/components/org/form-select'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
+  Badge,
   Button,
   ButtonRow,
   ConfirmButton,
   EmptyState,
   FormField,
+  InlineNotice,
   LoadingState,
   SectionPanel,
   SegmentedControl,
@@ -31,14 +33,24 @@ import type {
   RelayRole,
 } from '@/lib/instance-api'
 import {
-  ADDRESS_IN_USE_ERROR,
-  ADDRESS_NOT_IN_ANY_SUBNET_ERROR,
   DATACENTER_HAS_MEMBERS_ERROR,
   DATACENTER_HAS_NETWORKS_ERROR,
+  DEFAULT_DATACENTER_PRIORITY,
   INVALID_CIDR_ERROR,
   SUBNET_HAS_MEMBERS_ERROR,
-  SUBNET_OVERLAPS_ERROR,
 } from '@/lib/instance-api'
+import {
+  networkErrorMessage,
+  SUBNET_OVERLAPS_COPY,
+} from '@/lib/network-error-copy'
+import {
+  buildDatacenterPolicyMap,
+  DATACENTER_PRIORITY_MAX,
+  DATACENTER_PRIORITY_MIN,
+  findDatacenterWinnerHint,
+  formatDatacenterWinnerHint,
+  parseDatacenterPriorityDraft,
+} from '@/lib/datacenter-routing'
 import {
   useAddDatacenterMembers,
   useCreateDatacenterSubnet,
@@ -51,6 +63,7 @@ import {
   useUpdateDatacenterSubnet,
 } from '@/lib/queries/topology'
 import { useOrgFabric } from '@/lib/queries/fabric'
+import { useOrganizationManaged } from '@/lib/queries/managed'
 import { useOrgServers, useTimezones } from '@/lib/queries/servers'
 import {
   networkFabricHref,
@@ -77,6 +90,7 @@ import {
   mergeDatacenterOptions,
   serverIsDatacenterMember,
   sortDatacenterSubnets,
+  STALE_PIN_COPY,
   subnetForAddress,
 } from '@/lib/datacenter-list'
 import {
@@ -186,10 +200,9 @@ function subnetCreateErrorMessage(error: unknown): string {
   if (errorIncludes(error, INVALID_CIDR_ERROR)) {
     return 'Enter a valid IPv4 or IPv6 CIDR.'
   }
-  if (errorIncludes(error, SUBNET_OVERLAPS_ERROR)) {
-    return 'That range overlaps an existing subnet in this organization.'
-  }
-  return mutationErrorMessage(error, 'Failed to add subnet')
+  // Collision 409s (subnet_overlaps, cidr_overlaps_*) read the same on every
+  // network surface; the shared module appends the conflicting range.
+  return networkErrorMessage(error, 'Failed to add subnet')
 }
 
 function subnetDeleteErrorMessage(error: unknown): string {
@@ -419,26 +432,61 @@ function SubnetsPanel({
   )
 }
 
-function AddressPreferencePanel({
+function priorityHint(winnerHint: string | null): string {
+  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. When two servers share more than one trusted datacenter, the lowest priority carries their traffic.`
+  if (!winnerHint) {
+    return `${base} No server pair currently shares this datacenter with another, so priority changes nothing yet.`
+  }
+  return `${base} ${winnerHint}`
+}
+
+/**
+ * Routing policy for this datacenter: address preference, ladder priority,
+ * and trust. All three save through the merged `options` blob — `PATCH`
+ * replaces it, so an unmerged write would clear timezone, SSH port and NTP.
+ * Displayed `priority` / `trusted` come from the effective top-level fields
+ * the API already defaulted, not from `options`.
+ */
+function RoutingPanel({
   preference,
+  priorityText,
+  priorityError,
+  trusted,
+  hasManagedMembers,
+  winnerHint,
   canManage,
   pending,
   loaded,
-  onChange,
+  onChangePreference,
+  onChangePriority,
+  onChangeTrusted,
   onSave,
 }: Readonly<{
   preference: DatacenterAddressPreference
+  priorityText: string
+  priorityError: string | null
+  trusted: boolean
+  /** Toggling trust off recomputes stored transports for these members. */
+  hasManagedMembers: boolean
+  winnerHint: string | null
   canManage: boolean
   pending: boolean
   loaded: boolean
-  onChange: (value: DatacenterAddressPreference) => void
+  onChangePreference: (value: DatacenterAddressPreference) => void
+  onChangePriority: (value: string) => void
+  onChangeTrusted: (value: boolean) => void
   onSave: () => void
 }>) {
   const controlsDisabled = !canManage || pending || !loaded
   const saveDisabled = pending || !loaded
 
   return (
-    <SectionPanel title="Routing" collapsible defaultCollapsed>
+    <SectionPanel
+      title="Routing"
+      hint={trusted ? `Priority ${priorityText || DEFAULT_DATACENTER_PRIORITY} · Trusted` : `Priority ${priorityText || DEFAULT_DATACENTER_PRIORITY} · Untrusted`}
+      collapsible
+      defaultCollapsed
+    >
       <Text style={styles.fieldLabel}>Address preference</Text>
       <SegmentedControl
         options={[
@@ -446,13 +494,49 @@ function AddressPreferencePanel({
           { value: 'ipv4', label: 'Prefer IPv4' },
         ]}
         value={preference}
-        onChange={onChange}
+        onChange={onChangePreference}
         disabled={controlsDisabled}
       />
       <Text style={panelStyles.muted}>
         Only applies when both servers have an address in the same datacenter in
         both families.
       </Text>
+
+      <TextField
+        label="Priority"
+        value={priorityText}
+        onChangeText={onChangePriority}
+        placeholder={String(DEFAULT_DATACENTER_PRIORITY)}
+        hint={priorityHint(winnerHint)}
+        error={priorityError}
+        editable={!controlsDisabled}
+        keyboardType="number-pad"
+        accessibilityLabel="Datacenter routing priority"
+        mono
+      />
+
+      <SettingRow
+        label={trusted ? 'Trusted' : 'Untrusted'}
+        description={`Trusted means this L2 is under your control. Across an untrusted datacenter, server-to-server traffic is forced through ${TURBOFABRIC_PRODUCT_NAME} and encrypted, and a failover replica is refused (failover_requires_trusted_datacenter) — mark a shared retail LAN or a provider segment untrusted.`}
+        align="start"
+      >
+        <Toggle
+          value={trusted}
+          disabled={controlsDisabled}
+          onLabel="Trusted"
+          offLabel="Untrusted"
+          accessibilityLabel="Datacenter trusted"
+          onValueChange={onChangeTrusted}
+        />
+      </SettingRow>
+      {!trusted && hasManagedMembers ? (
+        <InlineNotice
+          tone="warning"
+          title="Saving recomputes managed transports."
+          body={`Servers in this datacenter host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter move to ${TURBOFABRIC_PRODUCT_NAME} or public TLS, and failover replicas that depended on it stop being eligible.`}
+        />
+      ) : null}
+
       {canManage ? (
         <Button
           label="Save"
@@ -460,7 +544,7 @@ function AddressPreferencePanel({
           disabled={saveDisabled}
           busy={pending}
           onPress={onSave}
-          accessibilityLabel="Save address preference"
+          accessibilityLabel="Save routing policy"
         />
       ) : (
         <Text style={panelStyles.muted}>Manage permission required.</Text>
@@ -469,23 +553,9 @@ function AddressPreferencePanel({
   )
 }
 
+/** Pin codes (`address_*`, `subnet_overlaps`, `cidr_overlaps_*`) all live in the shared copy module. */
 function assignMemberErrorMessage(err: unknown): string {
-  if (errorIncludes(err, 'address_cidr_unreported')) {
-    return 'That server has not reported a private IP.'
-  }
-  if (errorIncludes(err, 'address_not_reported')) {
-    return 'Pick a private IP reported on that server.'
-  }
-  if (errorIncludes(err, ADDRESS_IN_USE_ERROR)) {
-    return 'That address is already pinned.'
-  }
-  if (errorIncludes(err, SUBNET_OVERLAPS_ERROR)) {
-    return 'That range overlaps an existing subnet in this organization.'
-  }
-  if (errorIncludes(err, ADDRESS_NOT_IN_ANY_SUBNET_ERROR)) {
-    return 'That address is not in any subnet of this datacenter.'
-  }
-  return mutationErrorMessage(err, 'Failed to assign server')
+  return networkErrorMessage(err, 'Failed to assign server')
 }
 
 function memberPanelHint(pinCount: number, serverCount: number): string {
@@ -557,10 +627,18 @@ function MemberPinCard({
             {pin.address}
           </Text>
           <AddressFamilyBadge family={addressFamilyLabel(pin.address)} />
+          {pin.stale ? <Badge label="Stale" tone="pending" /> : null}
         </View>
       </ExpandToggle>
       {expanded ? (
         <>
+          {pin.stale ? (
+            <InlineNotice
+              tone="warning"
+              title="Stale pin — last known address"
+              body={STALE_PIN_COPY}
+            />
+          ) : null}
           {server ? (
             <Text style={panelStyles.detailLine}>
               <Text style={panelStyles.detailLabel}>Status: </Text>
@@ -1189,6 +1267,9 @@ export function DatacenterDetailSection({
   const [draftEnforce, setDraftEnforce] = useState<boolean | null>(null)
   const [draftPreference, setDraftPreference] =
     useState<DatacenterAddressPreference | null>(null)
+  const [draftPriority, setDraftPriority] = useState<string | null>(null)
+  const [priorityError, setPriorityError] = useState<string | null>(null)
+  const [draftTrusted, setDraftTrusted] = useState<boolean | null>(null)
   const [addCidr, setAddCidr] = useState('')
   const [addLabel, setAddLabel] = useState('')
   const [subnetLabelDrafts, setSubnetLabelDrafts] = useState(
@@ -1202,6 +1283,12 @@ export function DatacenterDetailSection({
   const timezonesQuery = useTimezones()
   const fabricQuery = useOrgFabric(orgId, { enabled: canManage })
   const datacentersQuery = useDatacenters(orgId)
+  // One org-wide managed read, and only once trust is being switched off —
+  // that is the only moment the "transports will be recomputed" notice needs
+  // to know whether any pinned server hosts a managed member.
+  const managedQuery = useOrganizationManaged(orgId, {
+    enabled: canManage && draftTrusted === false,
+  })
 
   const relays = fabricQuery.data?.relays ?? []
   const allDatacenters = orEmptyArray(datacentersQuery.data?.datacenters)
@@ -1216,7 +1303,10 @@ export function DatacenterDetailSection({
 
   const datacenter: DatacenterDetailRecord | undefined =
     datacenterQuery.data?.datacenter
-  const members = datacenterQuery.data?.members ?? []
+  const members = useMemo(
+    () => datacenterQuery.data?.members ?? [],
+    [datacenterQuery.data?.members],
+  )
   const servers = orEmptyArray(serversQuery.data?.servers)
   const subnets = applySubnetLabelDrafts(
     datacenter?.subnets ?? [],
@@ -1285,6 +1375,32 @@ export function DatacenterDetailSection({
     draftEnforce ?? (datacenter?.options?.enforceServerTimezone ?? false)
   const addressPreference: DatacenterAddressPreference =
     draftPreference ?? datacenter?.options?.addressPreference ?? 'ipv6'
+  // Effective values — the API already applied the defaults on the top level.
+  const priorityText =
+    draftPriority ?? (datacenter ? String(datacenter.priority) : '')
+  const trusted = draftTrusted ?? datacenter?.trusted ?? true
+  const policies = useMemo(
+    () =>
+      buildDatacenterPolicyMap(
+        allDatacenters.map((dc) =>
+          dc.id === datacenterId && datacenter
+            ? { id: dc.id, priority: datacenter.priority, trusted: datacenter.trusted }
+            : dc,
+        ),
+      ),
+    [allDatacenters, datacenter, datacenterId],
+  )
+  const winnerHint = useMemo(() => {
+    const hint = findDatacenterWinnerHint(datacenterId, servers, policies)
+    return hint ? formatDatacenterWinnerHint(hint, nameById, policies) : null
+  }, [datacenterId, servers, policies, nameById])
+  const memberServerIds = useMemo(
+    () => new Set(members.map((pin) => pin.serverId)),
+    [members],
+  )
+  const hasManagedMembers = orEmptyArray(managedQuery.data?.managed).some(
+    (cluster) => cluster.members.some((m) => memberServerIds.has(m.serverId)),
+  )
   const identityName = draftName ?? datacenter?.name ?? ''
   const identityDescription = draftDescription ?? datacenter?.description ?? ''
   const pending =
@@ -1396,9 +1512,7 @@ export function DatacenterDetailSection({
             return
           }
           if (subnets.some((subnet) => cidrsOverlap(subnet.cidr, normalized))) {
-            setError(
-              'That range overlaps an existing subnet in this organization.',
-            )
+            setError(SUBNET_OVERLAPS_COPY)
             return
           }
           setError(null)
@@ -1505,19 +1619,41 @@ export function DatacenterDetailSection({
         canManage={canManage}
       />
 
-      <AddressPreferencePanel
+      <RoutingPanel
         preference={addressPreference}
+        priorityText={priorityText}
+        priorityError={priorityError}
+        trusted={trusted}
+        hasManagedMembers={hasManagedMembers}
+        winnerHint={winnerHint}
         canManage={canManage}
         pending={pending}
         loaded={Boolean(datacenter)}
-        onChange={setDraftPreference}
-        onSave={() =>
+        onChangePreference={setDraftPreference}
+        onChangePriority={(value) => {
+          setPriorityError(null)
+          setDraftPriority(value)
+        }}
+        onChangeTrusted={setDraftTrusted}
+        onSave={() => {
+          // The instance drops an out-of-range priority instead of clamping,
+          // so an unvalidated save would look like a no-op. Reject here.
+          const parsed = parseDatacenterPriorityDraft(priorityText)
+          if (!parsed.ok) {
+            setPriorityError(parsed.reason)
+            return
+          }
+          setPriorityError(null)
           saveMergedOptions(
-            { addressPreference },
-            () => setDraftPreference(null),
-            'Failed to save address preference',
+            { addressPreference, priority: parsed.priority, trusted },
+            () => {
+              setDraftPreference(null)
+              setDraftPriority(null)
+              setDraftTrusted(null)
+            },
+            'Failed to save routing policy',
           )
-        }
+        }}
       />
 
       <DatacenterTimezonePanel

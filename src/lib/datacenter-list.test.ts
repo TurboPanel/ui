@@ -31,6 +31,8 @@ import {
   serverIsDatacenterMember,
   sortDatacenterSubnets,
   sortDatacentersByName,
+  STALE_PIN_COPY,
+  stalePinReasonLabel,
   subnetForAddress,
   toggleSelectedId,
 } from './datacenter-list'
@@ -46,6 +48,8 @@ function datacenter(
     privateCidrs: [],
     metadata: null,
     options: null,
+    priority: 100,
+    trusted: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -573,5 +577,22 @@ describe('addressInCidr', () => {
     expect(addressInCidr('10.0.0.50', '10.0.0.0/24')).toBe(true)
     expect(addressInCidr('10.0.1.50', '10.0.0.0/24')).toBe(false)
     expect(addressInCidr('203.0.113.10', '203.0.113.0/24')).toBe(true)
+  })
+})
+
+describe('stalePinReasonLabel', () => {
+  it('reads each repin reason in plain words and never guesses', () => {
+    expect(stalePinReasonLabel('address_gone_no_candidate')).toBe(
+      'no replacement address was reported',
+    )
+    expect(stalePinReasonLabel('address_gone_ambiguous')).toBe(
+      'more than one candidate address, so nothing was guessed',
+    )
+    expect(stalePinReasonLabel(null)).toBe('the daemon no longer reports this address')
+    expect(stalePinReasonLabel('something_new')).toBe(
+      'the daemon no longer reports this address',
+    )
+    expect(STALE_PIN_COPY).toContain('last known address')
+    expect(STALE_PIN_COPY).toContain('unassigning and re-adding')
   })
 })

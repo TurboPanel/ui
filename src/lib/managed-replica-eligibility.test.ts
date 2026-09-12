@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   hasPrivatePathToPrimary,
+  partitionSharedDatacenters,
   predictReplicaTransport,
   replicaIneligibleReasonLabel,
   resolveReplicaEligibility,
@@ -328,6 +329,176 @@ describe('replicaIneligibleReasonLabel', () => {
     expect(replicaIneligibleReasonLabel('no-private-path')).toBe(
       "Must share the primary's datacenter",
     )
+    expect(replicaIneligibleReasonLabel('untrusted-datacenter')).toBe(
+      'Shared datacenter is untrusted — failover replicas need a trusted network',
+    )
+  })
+})
+
+describe('datacenter routing policy', () => {
+  const UNTRUSTED_SERVERS = [
+    {
+      id: 'srv-primary',
+      connected: true,
+      datacenters: [{ id: 'dc-shared', name: 'Shared' }],
+      name: 'Primary host',
+    },
+    {
+      id: 'srv-candidate',
+      connected: true,
+      datacenters: [{ id: 'dc-shared', name: 'Shared' }],
+      name: 'Candidate host',
+    },
+  ]
+  const UNTRUSTED_DATACENTERS = [
+    { id: 'dc-shared', privateCidrs: ['10.0.0.0/24'], priority: 0, trusted: false },
+  ]
+
+  it('flags an untrusted-only shared datacenter for failover', () => {
+    const result = eligibility({
+      servers: UNTRUSTED_SERVERS,
+      datacenters: UNTRUSTED_DATACENTERS,
+      replicaClass: 'failover',
+    })
+    expect(result.servers[1]).toEqual({
+      serverId: 'srv-candidate',
+      eligible: false,
+      reason: 'untrusted-datacenter',
+      candidateDatacenterId: 'dc-shared',
+    })
+  })
+
+  it('predicts fabric (then public) for read replicas over an untrusted datacenter', () => {
+    const withFabric = eligibility({
+      servers: UNTRUSTED_SERVERS,
+      datacenters: UNTRUSTED_DATACENTERS,
+      replicaClass: 'read',
+      fabricRelays: [{ serverId: 'srv-primary' }, { serverId: 'srv-candidate' }],
+    })
+    expect(withFabric.servers[1]).toEqual({
+      serverId: 'srv-candidate',
+      eligible: true,
+      candidateDatacenterId: 'dc-shared',
+      predictedTransport: 'fabric',
+    })
+    const withoutFabric = eligibility({
+      servers: UNTRUSTED_SERVERS,
+      datacenters: UNTRUSTED_DATACENTERS,
+      replicaClass: 'read',
+    })
+    expect(withoutFabric.servers[1]?.predictedTransport).toBe('public')
+  })
+
+  it('prefers a trusted shared datacenter over a lower-priority untrusted one', () => {
+    const result = eligibility({
+      servers: [
+        {
+          id: 'srv-primary',
+          connected: true,
+          datacenters: [
+            { id: 'dc-untrusted', name: 'Untrusted' },
+            { id: 'dc-trusted', name: 'Trusted' },
+          ],
+          name: 'Primary host',
+        },
+        {
+          id: 'srv-candidate',
+          connected: true,
+          datacenters: [
+            { id: 'dc-untrusted', name: 'Untrusted' },
+            { id: 'dc-trusted', name: 'Trusted' },
+          ],
+          name: 'Candidate host',
+        },
+      ],
+      datacenters: [
+        { id: 'dc-untrusted', privateCidrs: ['10.0.0.0/24'], priority: 0, trusted: false },
+        { id: 'dc-trusted', privateCidrs: ['10.1.0.0/24'], priority: 900, trusted: true },
+      ],
+    })
+    expect(result.servers[1]).toEqual({
+      serverId: 'srv-candidate',
+      eligible: true,
+      candidateDatacenterId: 'dc-trusted',
+      predictedTransport: 'datacenter',
+    })
+  })
+
+  it('orders shared datacenters by priority then id without changing the predicted kind', () => {
+    const servers = [
+      {
+        id: 'srv-primary',
+        connected: true,
+        datacenters: [
+          { id: 'dc-a', name: 'A' },
+          { id: 'dc-b', name: 'B' },
+        ],
+        name: 'Primary host',
+      },
+      {
+        id: 'srv-candidate',
+        connected: true,
+        datacenters: [
+          { id: 'dc-a', name: 'A' },
+          { id: 'dc-b', name: 'B' },
+        ],
+        name: 'Candidate host',
+      },
+    ]
+    const byId = eligibility({
+      servers,
+      datacenters: [
+        { id: 'dc-a', privateCidrs: ['10.0.0.0/24'] },
+        { id: 'dc-b', privateCidrs: ['10.1.0.0/24'] },
+      ],
+    })
+    expect(byId.servers[1]?.predictedTransport).toBe('datacenter')
+    expect(byId.servers[1]?.candidateDatacenterId).toBe('dc-a')
+
+    const byPriority = eligibility({
+      servers,
+      datacenters: [
+        { id: 'dc-a', privateCidrs: ['10.0.0.0/24'], priority: 200 },
+        { id: 'dc-b', privateCidrs: ['10.1.0.0/24'], priority: 10 },
+      ],
+    })
+    expect(byPriority.servers[1]?.predictedTransport).toBe('datacenter')
+    expect(byPriority.servers[1]?.candidateDatacenterId).toBe('dc-b')
+
+    expect(
+      partitionSharedDatacenters(
+        ['dc-z', 'dc-a', 'dc-u', 'dc-only-left'],
+        ['dc-a', 'dc-z', 'dc-u'],
+        new Map([
+          ['dc-z', { priority: 5, trusted: true }],
+          ['dc-u', { priority: 1, trusted: false }],
+        ]),
+      ),
+    ).toEqual({ trusted: ['dc-z', 'dc-a'], untrusted: ['dc-u'] })
+  })
+
+  it('does not count an untrusted datacenter as a private path', () => {
+    const policies = new Map([['dc-shared', { priority: 100, trusted: false }]])
+    expect(
+      hasPrivatePathToPrimary({
+        candidateServerId: 'srv-a',
+        candidateDatacenterIds: ['dc-shared'],
+        primaryServerId: 'srv-p',
+        primaryDatacenterIds: ['dc-shared'],
+        fabricRelays: [],
+        policyByDatacenter: policies,
+      }),
+    ).toBe(false)
+    expect(
+      predictReplicaTransport({
+        candidateServerId: 'srv-a',
+        candidateDatacenterIds: ['dc-shared'],
+        primaryServerId: 'srv-p',
+        primaryDatacenterIds: ['dc-shared'],
+        fabricRelays: [{ serverId: 'srv-p' }, { serverId: 'srv-a' }],
+        policyByDatacenter: policies,
+      }),
+    ).toBe('fabric')
   })
 })
 

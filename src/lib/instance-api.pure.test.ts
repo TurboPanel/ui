@@ -633,11 +633,14 @@ describe('fetch wrappers (mocked fetch)', () => {
     const body = await fetchDatacenter('dc-1')
     expect(body.datacenter.privateCidrs).toEqual([])
     expect(body.datacenter.subnets).toEqual([])
+    expect(body.datacenter.priority).toBe(100)
+    expect(body.datacenter.trusted).toBe(true)
     expect(body.members[0]).toEqual({
       serverId: 'srv-1',
       address: '192.0.2.10',
       ipId: 'srv-1:192.0.2.10',
       networkId: null,
+      stale: false,
     })
 
     fetchMock.mockResolvedValueOnce(
@@ -651,12 +654,16 @@ describe('fetch wrappers (mocked fetch)', () => {
           createdAt: '2026-01-01T00:00:00.000Z',
           privateCidrs: ['203.0.113.0/24'],
           subnets: [],
+          priority: 10,
+          trusted: false,
         },
       }),
     )
     const empty = await fetchDatacenter('dc-2')
     expect(empty.members).toEqual([])
     expect(empty.datacenter.privateCidrs).toEqual(['203.0.113.0/24'])
+    expect(empty.datacenter.priority).toBe(10)
+    expect(empty.datacenter.trusted).toBe(false)
   })
 
   it('createLicense returns minted key material on success', async () => {

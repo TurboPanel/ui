@@ -71,6 +71,35 @@ export const ADDRESS_NOT_IN_ANY_SUBNET_ERROR = 'address_not_in_any_subnet'
 export const ADDRESS_IN_USE_ERROR = 'address_in_use'
 export const PRIVATE_FAMILY_MISMATCH_ERROR = 'private_family_mismatch'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
+export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR =
+  'failover_requires_trusted_datacenter'
+/**
+ * CIDR collision codes (**409**) from the instance's single collision
+ * authority (`turbopanel/src/lib/net/cidr-collisions.ts`). Every CIDR write —
+ * `POST`/`PATCH /networks`, `POST /datacenters/:id/subnets`, the Docker
+ * address-pool `PUT`, the fabric container pool — answers with one of these
+ * plus `{ cidr, conflictingCidr, networkId?, datacenterId? }` (see
+ * {@link CidrCollisionError}).
+ */
+export const CIDR_OVERLAPS_FABRIC_ERROR = 'cidr_overlaps_fabric'
+export const CIDR_OVERLAPS_FABRIC_POOL_ERROR = 'cidr_overlaps_fabric_pool'
+export const CIDR_OVERLAPS_RESERVED_ERROR = 'cidr_overlaps_reserved'
+export const CIDR_OVERLAPS_DOCKER_NETWORK_ERROR = 'cidr_overlaps_docker_network'
+export const CIDR_OVERLAPS_GATEWAY_ADVERTISED_ERROR =
+  'cidr_overlaps_gateway_advertised'
+/** **400** — a `datacenter` / `reserved` row exists because of its CIDR; `cidr: null` is refused. */
+export const NETWORK_CIDR_REQUIRED_ERROR = 'network_cidr_required'
+/** **400** field codes for `kind: 'docker'` addressing (`POST`/`PATCH /networks`). */
+export const DOCKER_NETWORK_NAME_REQUIRED_ERROR = 'docker_network_name_required'
+export const DOCKER_NETWORK_SUBNET_REQUIRED_ERROR = 'docker_network_subnet_required'
+export const DOCKER_NETWORK_SUBNET_MISMATCH_ERROR = 'docker_network_subnet_mismatch'
+export const DOCKER_NETWORK_SUBNET_INVALID_ERROR = 'docker_network_subnet_invalid'
+export const DOCKER_NETWORK_IP_RANGE_INVALID_ERROR = 'docker_network_ip_range_invalid'
+export const DOCKER_NETWORK_GATEWAY_INVALID_ERROR = 'docker_network_gateway_invalid'
+export const DOCKER_NETWORK_MTU_INVALID_ERROR = 'docker_network_mtu_invalid'
+/** Bridge MTU bounds the instance accepts for `DockerNetworkOptions.mtu`. */
+export const DOCKER_NETWORK_MTU_MIN = 1280
+export const DOCKER_NETWORK_MTU_MAX = 9000
 export const PEER_TUNNEL_ADDRESS_REQUIRED_ERROR = 'peer_tunnel_address_required'
 export const MANAGED_PRIVATE_PORT_EXHAUSTED_ERROR = 'managed_private_port_exhausted'
 export const MANAGED_LISTENER_BIND_CONFLICT_ERROR = 'managed_listener_bind_conflict'
@@ -759,6 +788,65 @@ export async function saveOrgManagedDefaults(
 }
 
 /**
+ * One dockerd `default-address-pools` entry: `base` is the pool CIDR, `size`
+ * the prefix length of every network Docker carves from it.
+ */
+export type DockerAddressPool = {
+  base: string
+  size: number
+}
+
+/** Upper bound on `addressPools` entries the instance accepts (mirrors `docker-address-pools.ts`). */
+export const DOCKER_ADDRESS_POOLS_MAX = 16
+/**
+ * Largest carve `size` per family — at least two usable host addresses per
+ * network (`/30` IPv4, `/126` IPv6). `size` must also be ≥ the base prefix.
+ */
+export const DOCKER_ADDRESS_POOL_MAX_SIZE_V4 = 30
+export const DOCKER_ADDRESS_POOL_MAX_SIZE_V6 = 126
+
+/**
+ * Organization-wide Docker host addressing every enrolled host merges into
+ * `/etc/docker/daemon.json` — dockerd `default-address-pools` and `bip`.
+ * `addressPools` empty / `defaultBridgeCidr` `null` mean Docker's built-in
+ * defaults apply. Pool bases also join the org CIDR registry (a site subnet,
+ * reserved range or docker registration may not overlap one). Applying a
+ * change restarts dockerd on each host; existing networks and containers
+ * keep their addresses — pools only affect networks created afterwards.
+ */
+export type OrganizationDockerNetworking = {
+  addressPools: DockerAddressPool[]
+  /** dockerd `bip`: the bridge's own address with prefix (`172.17.0.1/16`). */
+  defaultBridgeCidr: string | null
+}
+
+/**
+ * `PUT` replaces the whole object; `null` on a key clears it. Every pool base
+ * runs the CIDR collision authority — **409** with the same
+ * `cidr_overlaps_*` / `subnet_overlaps` codes as `POST /networks`.
+ */
+export type OrganizationDockerNetworkingUpdate = {
+  addressPools?: DockerAddressPool[] | null
+  defaultBridgeCidr?: string | null
+}
+
+export async function fetchOrganizationDockerNetworking(
+  orgId: string
+): Promise<OrganizationDockerNetworking> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/docker-networking`)
+}
+
+export async function updateOrganizationDockerNetworking(
+  orgId: string,
+  update: OrganizationDockerNetworkingUpdate
+): Promise<OrganizationDockerNetworking & { ok: true }> {
+  return await cidrWriteFetch(`${CLIENT_API}/organizations/${orgId}/docker-networking`, {
+    method: 'PUT',
+    body: JSON.stringify(update),
+  })
+}
+
+/**
  * Org randomized-usernames default. When on (platform default), every newly
  * created principal's applied login (Linux account / database role) gets a
  * random `_<11 chars>` suffix. `randomizedUsernames` is the configured
@@ -789,6 +877,8 @@ export type OrgFabricRecord = {
   cidr: string
   status?: string
   allowRelay: boolean
+  /** Effective IPv4 pool relay `/16` prefixes are carved from (default `10.192.0.0/12`). */
+  containerPool?: string
 }
 
 export type RelayRole = 'gateway' | 'member'
@@ -939,14 +1029,26 @@ export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> 
   return toOrgFabricSettings(body)
 }
 
+/**
+ * `containerPool` (IPv4, prefix ≤ `/16`) replaces the pool future relay
+ * prefixes are carved from. **409** `fabric_container_pool_in_use` when an
+ * allocated relay prefix would fall outside it — changing the pool never
+ * renumbers existing relays; the usual `cidr_overlaps_*` codes on a registry
+ * collision.
+ */
 export async function saveOrgFabric(
   orgId: string,
   enabled: boolean,
-  extras?: Readonly<{ allowRelay?: boolean }>
+  extras?: Readonly<{ allowRelay?: boolean; containerPool?: string }>
 ): Promise<OrgFabricSettings> {
-  const payload: { enabled: boolean; allowRelay?: boolean } = { enabled }
+  const payload: { enabled: boolean; allowRelay?: boolean; containerPool?: string } = {
+    enabled,
+  }
   if (extras?.allowRelay !== undefined) {
     payload.allowRelay = extras.allowRelay
+  }
+  if (extras?.containerPool !== undefined) {
+    payload.containerPool = extras.containerPool
   }
   const body = await apiFetch<{
     enabled: boolean
@@ -2104,8 +2206,15 @@ export type ContainerRecord = {
   updatedAt: string
 }
 
-/** Kinds an operator can create through `POST /networks`. */
-export type CreatableNetworkKind = 'datacenter' | 'docker'
+/**
+ * Kinds an operator can create through `POST /networks`. A `reserved` row is
+ * org-scoped (no `datacenterId` / `serverId`), CIDR-required, and — unlike
+ * `managed` — renamable and re-rangeable through `PATCH`. It declares a range
+ * TurboPanel must never assign (a VPN allocation, a remote branch, an upstream
+ * block): the collision authority and the fabric / Docker pool allocators
+ * treat it as off-limits.
+ */
+export type CreatableNetworkKind = 'datacenter' | 'docker' | 'reserved'
 
 /**
  * Kinds a `network` row can carry on read. `managed` is the platform-allocated
@@ -2113,6 +2222,28 @@ export type CreatableNetworkKind = 'datacenter' | 'docker'
  * never operator-created, patched, or deleted.
  */
 export type NetworkKind = CreatableNetworkKind | 'managed'
+
+/**
+ * `options` of a `kind: 'docker'` row. `dockerNetworkName` is the compose
+ * `networks.*.external` name the daemon ensures on the host; the addressing
+ * keys are what `docker network create` is given when the daemon first
+ * creates it (Docker cannot re-range an existing network — a later change
+ * only warns on the host). `subnet` is mirrored into the row's top-level
+ * `cidr` (the registry-visible range): send either and the other is derived;
+ * a disagreeing pair is **400** `docker_network_subnet_mismatch`.
+ */
+export type DockerNetworkOptions = {
+  dockerNetworkName: string
+  /** Network CIDR (`--subnet`). */
+  subnet?: string
+  /** Slice of `subnet` containers are assigned from (`--ip-range`); requires `subnet`. */
+  ipRange?: string
+  /** Bare address inside `subnet` (`--gateway`); requires `subnet`. */
+  gateway?: string
+  /** Bridge MTU, 1280–9000 (`--opt com.docker.network.driver.mtu`). */
+  mtu?: number
+  [key: string]: unknown
+}
 
 export type NetworkRecord = {
   id: string
@@ -2136,7 +2267,22 @@ export type DatacenterOptions = {
   addressPreference?: DatacenterAddressPreference
   sshPort?: number | null
   ntp?: NtpDefaults | null
+  /**
+   * Routing-ladder rank — integer `0`–`1000`, **lower wins**. Absent means the
+   * default `100`; the instance drops out-of-range or non-integer values.
+   */
+  priority?: number
+  /**
+   * Whether the datacenter's L2 is under the operator's control. Absent means
+   * `true`; `false` marks a shared / provider-owned segment.
+   */
+  trusted?: boolean
 }
+
+/** Default `DatacenterOptions.priority` when absent (mirrors the instance). */
+export const DEFAULT_DATACENTER_PRIORITY = 100
+/** Default `DatacenterOptions.trusted` when absent (mirrors the instance). */
+export const DEFAULT_DATACENTER_TRUSTED = true
 
 export type DatacenterNameSuggestion = {
   name: string
@@ -2155,6 +2301,10 @@ export type DatacenterRecord = {
   privateCidrs: string[]
   metadata: Record<string, unknown> | null
   options: DatacenterOptions | null
+  /** Effective `options.priority` with the default (`100`) applied; lower wins. */
+  priority: number
+  /** Effective `options.trusted` with the default (`true`) applied. */
+  trusted: boolean
   createdAt: string
   updatedAt: string
 }
@@ -2173,6 +2323,12 @@ export type DatacenterMemberPin = {
   address: string
   ipId: string
   networkId: string | null
+  /**
+   * True when the daemon stopped reporting this pin's address and the
+   * instance's automatic repin found no unambiguous replacement. The pin still
+   * names the last known address. Defaults to `false` on older payloads.
+   */
+  stale: boolean
 }
 
 export type DatacenterDetailRecord = DatacenterRecord & {
@@ -2199,6 +2355,14 @@ export type IpRecord = {
   options: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+  /**
+   * Membership pins only — derived from `metadata.stale` by the instance: the
+   * daemon no longer reports this address and no unambiguous replacement was
+   * found. Read-only; absent on older payloads.
+   */
+  stale?: boolean
+  staleSince?: string | null
+  staleReason?: 'address_gone_no_candidate' | 'address_gone_ambiguous' | null
 }
 
 export const IP_IN_USE_ERROR = 'ip_in_use'
@@ -2317,8 +2481,22 @@ export async function deleteProject(id: string): Promise<{ ok: true }> {
   })
 }
 
-export async function fetchEnvironment(id: string): Promise<{ environment: EnvironmentRecord }> {
-  return await apiFetch(`${CLIENT_API}/environments/${id}`)
+/**
+ * `needsRedeploy` lists deploy targets whose running hosting `bindAddress`
+ * predates an automatic repin of the membership pin their `hosting.ipId`
+ * names. Derived by the instance from `ip.metadata.repin`; nothing enqueues a
+ * deploy — the console surfaces the same notice as CA rotation. Defaults to
+ * `[]` on older payloads.
+ */
+export async function fetchEnvironment(id: string): Promise<{
+  environment: EnvironmentRecord
+  needsRedeploy: { serverId: string; environmentId: string }[]
+}> {
+  const body = await apiFetch<{
+    environment: EnvironmentRecord
+    needsRedeploy?: { serverId: string; environmentId: string }[]
+  }>(`${CLIENT_API}/environments/${id}`)
+  return { environment: body.environment, needsRedeploy: body.needsRedeploy ?? [] }
 }
 
 export async function createEnvironment(body: {
@@ -2605,7 +2783,20 @@ export async function fetchDatacenterNameSuggestions(options?: {
 export async function fetchDatacenters(): Promise<{
   datacenters: DatacenterRecord[]
 }> {
-  return await apiFetch(`${CLIENT_API}/datacenters`)
+  const body = await apiFetch<{ datacenters?: DatacenterRecord[] }>(
+    `${CLIENT_API}/datacenters`,
+  )
+  return { datacenters: (body.datacenters ?? []).map(normalizeDatacenterRecord) }
+}
+
+/** Older instances omit the effective policy fields; apply the documented defaults. */
+function normalizeDatacenterRecord<T extends DatacenterRecord>(datacenter: T): T {
+  return {
+    ...datacenter,
+    privateCidrs: datacenter.privateCidrs ?? [],
+    priority: datacenter.priority ?? DEFAULT_DATACENTER_PRIORITY,
+    trusted: datacenter.trusted ?? DEFAULT_DATACENTER_TRUSTED,
+  }
 }
 
 function normalizeDatacenterMemberPin(pin: DatacenterMemberPin): DatacenterMemberPin {
@@ -2614,13 +2805,13 @@ function normalizeDatacenterMemberPin(pin: DatacenterMemberPin): DatacenterMembe
     address: pin.address,
     ipId: pin.ipId ?? `${pin.serverId}:${pin.address}`,
     networkId: pin.networkId ?? null,
+    stale: pin.stale === true,
   }
 }
 
 function normalizeDatacenterDetail(datacenter: DatacenterDetailRecord): DatacenterDetailRecord {
   return {
-    ...datacenter,
-    privateCidrs: datacenter.privateCidrs ?? [],
+    ...normalizeDatacenterRecord(datacenter),
     subnets: datacenter.subnets ?? [],
   }
 }
@@ -2684,7 +2875,7 @@ export async function createDatacenterSubnet(
     description?: string
   }
 ): Promise<{ ok: true; id: string }> {
-  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/subnets`, {
+  return await cidrWriteFetch(`${CLIENT_API}/datacenters/${datacenterId}/subnets`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
@@ -2719,6 +2910,7 @@ export async function updateDatacenter(
     name: string | null
     description: string | null
     metadata: Record<string, unknown> | null
+    /** Replace-all; `null` clears the stored blob so the instance defaults apply again. */
     options: DatacenterOptions | null
   }>
 ): Promise<{ ok: true }> {
@@ -2822,6 +3014,82 @@ export async function fetchNetworks(filters?: {
   return await apiFetch(`${CLIENT_API}/networks${suffix}`)
 }
 
+/**
+ * A CIDR write the instance refused because the range collides with one it
+ * already knows (**409**, one of the `cidr_overlaps_*` / `subnet_overlaps`
+ * codes). The code stays in `message` (the same `HTTP 409: <code>` text
+ * `apiFetch` would have produced) so `.includes(code)` callers keep working;
+ * `conflictingCidr` names the existing range so the form can show *what* is
+ * in the way.
+ */
+export class CidrCollisionError extends Error {
+  readonly code: string
+  readonly status: number
+  /** The candidate CIDR that was refused. */
+  readonly cidr: string | null
+  /** The existing range the candidate overlaps. */
+  readonly conflictingCidr: string | null
+  readonly networkId: string | null
+  readonly datacenterId: string | null
+
+  constructor(path: string, status: number, body: Readonly<Record<string, unknown>>) {
+    const code = typeof body.error === 'string' ? body.error : ''
+    super(`${path} failed: ${formatFetchFailureDetail(status, code || undefined)}`)
+    this.name = 'CidrCollisionError'
+    this.code = code
+    this.status = status
+    this.cidr = readNonEmptyString(body.cidr)
+    this.conflictingCidr = readNonEmptyString(body.conflictingCidr)
+    this.networkId = readNonEmptyString(body.networkId)
+    this.datacenterId = readNonEmptyString(body.datacenterId)
+  }
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+/**
+ * `apiFetch` for CIDR writes: identical on success and on every other
+ * failure, but a **409** body carrying `conflictingCidr` becomes a
+ * {@link CidrCollisionError} so the form can name the range in the way.
+ */
+async function cidrWriteFetch<T>(path: string, init: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...(init.headers as Record<string, string> | undefined),
+  }
+  const resolvedOrgId = getActiveOrganizationId()
+  if (resolvedOrgId) headers[ORG_ID_HEADER] = resolvedOrgId
+  const response = await fetch(controlPlaneUrl(path), {
+    ...init,
+    credentials: 'include',
+    headers,
+  })
+  if (response.ok) return (await response.json()) as T
+  let parsed: unknown = null
+  try {
+    parsed = await response.json()
+  } catch {
+    // Non-JSON error body — fall through to the status-only message.
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const body = parsed as Record<string, unknown>
+    if (response.status === 409 && typeof body.conflictingCidr === 'string') {
+      throw new CidrCollisionError(path, response.status, body)
+    }
+    const code = typeof body.error === 'string' ? body.error : undefined
+    throw new Error(`${path} failed: ${formatFetchFailureDetail(response.status, code)}`)
+  }
+  throw new Error(`${path} failed: ${formatFetchFailureDetail(response.status)}`)
+}
+
+/**
+ * `kind: 'reserved'` sends **no** `datacenterId` / `serverId` and requires
+ * `cidr`. `kind: 'docker'` may send `cidr` **or** `options.subnet` (the other
+ * is derived); a disagreeing pair is **400** `docker_network_subnet_mismatch`.
+ * CIDR collisions are **409** {@link CidrCollisionError}.
+ */
 export async function createNetwork(body: {
   organizationId: string
   kind: CreatableNetworkKind
@@ -2832,12 +3100,18 @@ export async function createNetwork(body: {
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
 }): Promise<{ ok: true; id: string }> {
-  return await apiFetch(`${CLIENT_API}/networks`, {
+  return await cidrWriteFetch(`${CLIENT_API}/networks`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
+/**
+ * `cidr: null` on a `datacenter` / `reserved` row is **400**
+ * `network_cidr_required` — those rows exist because of their range. Docker
+ * rows accept `cidr: null` only while no `ipRange` / `gateway` would be left
+ * dangling (**400** `docker_network_subnet_required`).
+ */
 export async function updateNetwork(
   id: string,
   body: Partial<{
@@ -2850,7 +3124,7 @@ export async function updateNetwork(
     options: Record<string, unknown> | null
   }>
 ): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/networks/${id}`, {
+  return await cidrWriteFetch(`${CLIENT_API}/networks/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   })

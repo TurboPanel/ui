@@ -126,6 +126,8 @@ Vagrant guest** from the host `dev` checkout. Canonical detail:
 
 ```bash
 vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/ui && pnpm test'
+# CI-parity (vocabulary + notices + typecheck + LCOV; skips `pnpm lint` because it autofixes):
+vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/ui && pnpm verify:ci'
 ```
 
 **CI:** `.github/workflows/verify.yml` runs lint, `check:vocabulary`, `notices:check`, typecheck, `pnpm test:coverage`,

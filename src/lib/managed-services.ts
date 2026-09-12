@@ -371,6 +371,15 @@ export function shortBackupChecksum(checksum: string): string {
   return checksum.slice(0, 10)
 }
 
+/**
+ * Instance **422** `failover_requires_trusted_datacenter`. One sentence shared
+ * with the network surfaces (`network-error-copy.ts`) so the datacenter
+ * Routing panel and the replica picker never explain the same refusal two ways.
+ */
+export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY =
+  'The only datacenter those servers share is marked untrusted. Failover replicas need a trusted datacenter LAN — mark the datacenter trusted, or add the replica as a read replica over ' +
+  `${TURBOFABRIC_PRODUCT_NAME} instead.`
+
 const MANAGED_ERROR_COPY: Record<string, string> = {
   server_placement_required: 'Select a server before creating this managed service.',
   server_offline: 'The selected server is offline. Choose a connected server.',
@@ -408,6 +417,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   private_family_mismatch:
     'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
+  failover_requires_trusted_datacenter: FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
   peer_tunnel_address_required:
     `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',

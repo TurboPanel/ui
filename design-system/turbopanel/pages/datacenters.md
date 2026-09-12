@@ -8,7 +8,7 @@
 - Detail → `datacenter-detail-section.tsx` at `/servers/datacenters/:id`
 - Legacy `/network/sites/:id` redirects here
 
-**Job:** A datacenter is a **routing domain** — one or more mutually routable private subnets (IPv4 and/or IPv6), plus member pins. Not a second CRUD surface under Network. Subnets are all mutually routable inside the datacenter.
+**Job:** A datacenter is a **logical routing domain, not a building** — one or more mutually routable private subnets (IPv4 and/or IPv6), plus member pins; a server may belong to several datacenters. Each carries a routing `priority` (lower wins, default 100) and a `trusted` flag (default true; false when the L2 is not under the operator's control). Not a second CRUD surface under Network. Subnets are all mutually routable inside the datacenter.
 
 ---
 
@@ -24,7 +24,8 @@
 
 ## Density
 
-- Table-first: Datacenter | Country | Servers | Subnets | Timezone
+- Table-first: Datacenter | Country | Servers | Subnets | Routing | Timezone
+- Routing column: mono `P{priority}` plus a **Trusted** (`ok`) / **Untrusted** (`pending`) `Badge` — both on the list payload (`priority` / `trusted`), never a detail fetch
 - Subnets column: `formatDatacenterSubnetSummary(privateCidrs)` — em dash, a single CIDR, or `10.0.0.0/24 +2` when more than one. List payload has `privateCidrs` only — never fetch detail per row
 - Web row hover (`bgSecondary`) and zebra (`bgInset`)
 - Description as muted subtext under the name when present
@@ -54,8 +55,12 @@
    - **Add subnet** (manage-gated): CIDR + optional label. Client-validate with `isValidCidr`, echo `normalizeCidr`, pre-check overlap with `cidrsOverlap`. **400** `invalid_cidr` → “Enter a valid IPv4 or IPv6 CIDR.” **409** `subnet_overlaps` → “That range overlaps an existing subnet in this organization.”
    - **Rename** (`name`) via `PATCH …/subnets/:networkId` — never send `cidr`
    - **Delete subnet**: two-press confirm; disabled while `memberCount > 0` (“Unassign the pinned servers first.”); **409** `subnet_has_members` uses the same copy
-3. **Routing / address preference** — `segmentGroup` **Prefer IPv6** / **Prefer IPv4** (default IPv6 when `options.addressPreference` is absent). One muted note: “Only applies when both servers have an address in the same datacenter in both families.” Save via `PATCH /datacenters/:id` with `mergeDatacenterOptions` so timezone is not clobbered
-4. **Member servers** — rows from detail `members[]` joined to `useOrgServers` (a server may appear multiple times). Each pin: selectable monospace address, IPv4/IPv6 badge, owning subnet CIDR (`networkId`, fallback `subnetForAddress`). Hint `{pins} pins · {servers} servers`. Picker: `listServersWithCandidateAddresses` / `candidateMemberNetworks` — both families, **gated to addresses inside this datacenter’s subnets**, `FormSelect` only. Do not offer IPs that would create a new subnet; add those CIDRs under Subnets first. Empty picker: `memberAssignEmptyCopy`. Unassign removes **all** pins for that server in this datacenter (announce when the server holds more than one). **409** `address_in_use` → “That address is already pinned.” **400** `address_not_in_any_subnet` → “That address is not in any subnet of this datacenter.”
+3. **Routing** — one `SectionPanel` (collapsible, hint `Priority N · Trusted|Untrusted`) holding three policies that all save through **one** merged `options` write:
+   - **Address preference** — `SegmentedControl` **Prefer IPv6** / **Prefer IPv4** (default IPv6 when `options.addressPreference` is absent). One muted note: “Only applies when both servers have an address in the same datacenter in both families.”
+   - **Priority** — numeric `TextField` (mono, integer `0`–`1000`, **lower wins**, default `100`). Client-validate with `parseDatacenterPriorityDraft` before sending: the instance **drops** an out-of-range value rather than clamping, so an unvalidated save looks like a no-op. The hint names the current winner in plain language — `findDatacenterWinnerHint` over `useDatacenters` + `useOrgServers` (via `partitionSharedDatacenters`): *“Backhaul (priority 10) currently wins over Primary LAN (100) for db-1 ↔ db-2.”* When no server pair shares this datacenter with another trusted one, the hint says priority changes nothing yet.
+   - **Trusted / Untrusted** — `SettingRow` + `Toggle` (`onLabel` Trusted / `offLabel` Untrusted). Description states both consequences literally: traffic across an untrusted datacenter is forced through TurboFabric and encrypted, and a failover replica across it is refused (`failover_requires_trusted_datacenter`). When toggled off while pinned servers host managed members (one `useOrganizationManaged` read, enabled only at that moment), an `InlineNotice` (`warning`) says stored replication transports and ProxySQL backends will be recomputed on save — `PATCH /datacenters/:id` fans out on a policy change.
+   - Displayed `priority` / `trusted` come from the **effective top-level** `datacenter.priority` / `datacenter.trusted` (the API already applied defaults), never from `options`. Save via `PATCH /datacenters/:id` with `mergeDatacenterOptions` so timezone, SSH port, and NTP are not clobbered.
+4. **Member servers** — rows from detail `members[]` joined to `useOrgServers` (a server may appear multiple times). Each pin: selectable monospace address, IPv4/IPv6 badge, owning subnet CIDR (`networkId`, fallback `subnetForAddress`), and a **Stale** `Badge` (`pending` tone, text label — never colour-only) when `pin.stale`; the expanded body carries an `InlineNotice` (`warning`) with `STALE_PIN_COPY`: the daemon stopped reporting this address and the automatic repin found no unambiguous replacement; the pin still names the last known address; re-pin by unassigning and re-adding, or wait for the host to report a usable address. Hint `{pins} pins · {servers} servers`. Picker: `listServersWithCandidateAddresses` / `candidateMemberNetworks` — both families, **gated to addresses inside this datacenter’s subnets**, `FormSelect` only. Do not offer IPs that would create a new subnet; add those CIDRs under Subnets first. Empty picker: `memberAssignEmptyCopy`. Unassign removes **all** pins for that server in this datacenter (announce when the server holds more than one). Errors map through `network-error-copy.ts`: **409** `address_in_use` → “That address is already pinned.” **400** `address_not_in_any_subnet` → “That address is not in any subnet of this datacenter.” Collision **409**s (`subnet_overlaps`, `cidr_overlaps_*`) use the shared sentences with the conflicting range appended.
 5. **TurboFabric** — relays in this datacenter (role, tp0, other datacenters, **Primary** badge, **Via** when a `gateway`-kind path is selected); empty: no relays here (**manage-gated**); rows deep-link to `/network/fabric`. Missing-subnet warning when the datacenter has no subnets
 6. **Timezone** — picker + enforce toggle; save through `mergeDatacenterOptions` so address preference survives
 7. **SSH port** — optional override (empty inherits org, then 22); save through `mergeDatacenterOptions`. Desired config only — does not rewrite sshd
@@ -77,8 +82,12 @@ Keep labels and empty states short. Do not add how-it-works paragraphs on these 
 - ❌ Server/IP selection as chip buttons (use `FormSelect`)
 - ❌ Status conveyed by color alone
 - ❌ Using singular `server.datacenterId` / `assignServerIds` (retired)
-- ❌ Saving timezone, address preference, SSH port, or NTP without merging `options` (`PATCH` replaces the blob)
+- ❌ Saving timezone, address preference, priority, trust, SSH port, or NTP without merging `options` (`PATCH` replaces the blob)
+- ❌ Clamping priority client-side (the instance drops out-of-range values — reject and say why)
+- ❌ React Native `Switch` for trust (use `Toggle` + `SettingRow`)
+- ❌ Reading `priority` / `trusted` from `options` instead of the effective top-level fields
+- ❌ Stale pins signalled by colour alone (always the **Stale** text badge)
 
 ## Tokens
 
-Use `src/lib/theme.ts` + `org-panel-styles.ts` only (`pageTitle`, `pageCopy`, `detailCard`, `detailLine`, `detailLabel`, `statePanel`, `calloutWarning`, `segmentGroup` / `segmentChip`, `toolbarBtn*`, `muted`, `error`, `webPointer`).
+Use `src/lib/theme.ts` + `org-panel-styles.ts` only (`pageTitle`, `pageCopy`, `detailCard`, `detailLine`, `detailLabel`, `statePanel`, `calloutWarning`, `segmentGroup` / `segmentChip`, `toolbarBtn*`, `muted`, `error`, `webPointer`). Primitives from the `@/components/ui` barrel: `Badge`, `InlineNotice`, `SettingRow`, `Toggle`, `TextField`, `SegmentedControl`.

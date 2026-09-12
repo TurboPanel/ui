@@ -128,6 +128,8 @@ export const queryKeys = {
         hostDefaults: ['org', orgId, 'host-defaults'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
+        /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
+        dockerNetworking: ['org', orgId, 'docker-networking'] as const,
         principalDefaults: ['org', orgId, 'principal-defaults'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,

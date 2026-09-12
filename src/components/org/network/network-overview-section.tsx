@@ -6,6 +6,7 @@ import {
   networkAddressesHref,
   networkDockerHref,
   networkFabricHref,
+  networkReservedHref,
   serversDatacentersHref,
 } from '@/lib/org-navigation'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -36,8 +37,13 @@ function hubLinks(orgId: string): NetworkHubLink[] {
     },
     {
       title: 'Docker networks',
-      hint: 'Compose external Docker network registry.',
+      hint: 'Compose external Docker network registry and the host address pools dockerd carves new networks from.',
       href: networkDockerHref(orgId),
+    },
+    {
+      title: 'Reserved ranges',
+      hint: 'Ranges something outside TurboPanel already routes — never assigned to containers, the mesh, or internal services.',
+      href: networkReservedHref(orgId),
     },
   ]
 }
@@ -52,7 +58,7 @@ export function NetworkOverviewSection({
       <Text style={panelStyles.pageTitle}>Network</Text>
       <Text style={panelStyles.pageCopy}>
         Private subnets live on Datacenters. This area is the mesh, address pool,
-        and Docker registry.
+        Docker registry, and reserved ranges.
       </Text>
 
       <SectionPanel title="Areas" hint="One job each">

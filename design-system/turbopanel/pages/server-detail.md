@@ -27,7 +27,7 @@
 | Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), license tier placement, SSH port (effective + override), machine class pin, hardware profile, labels editor |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
-| Network | Datacenter assignment, mesh membership, managed IPs, interface address groups |
+| Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
 
 ## SSH port (Overview)
@@ -69,6 +69,12 @@
 - **CPU TDP/Tjmax prefill:** when no manual override is set, the placeholder shows the resolved catalog value (`EffectiveCpuThermalLimits`, read from the summary endpoint) and the hint notes whether it's an exact catalog match or a family-regex estimate.
 - **Hosting storage path** is a `Select` over `capabilities.storageMounts.candidates`, never free text — the stored override is injected as an extra option when the daemon no longer discovers it, so it never silently disappears from the picker.
 
+## Network tab
+
+- **Read-only contract:** TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
+- **Interfaces** panel first: daemon-reported addresses grouped by `interface` (default-route interface first, fallback to public/private × v4/v6), reported CIDR in mono, family badge, scope, `default route` marker, and **Pinned into: <datacenter>** joined on address from the `scope: 'datacenter'` rows already fetched. **Stale** `Badge` (`pending`) + `staleSince` + plain `staleReason` on stale pins.
+- Then Datacenters (memberships link to datacenter detail; every pin listed), Mesh (manage-gated), Managed addresses. Details and copy rules: `network.md` → Server detail Network tab.
+
 ## Server proxy (Control tab)
 
 - Read-only panel between Commands and Daemon update: status dot + label, container name (mono), compose service name, link into the System workspace project/environment.
@@ -88,3 +94,4 @@
 - ❌ Emoji icons for actions  
 - ❌ Raw hex outside `theme.ts` tokens
 - ❌ Implying SSH port save rewrites sshd
+- ❌ Any Network-tab affordance that reads as configuring an interface, address, or route

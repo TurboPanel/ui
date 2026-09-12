@@ -2,6 +2,7 @@ import type {
   DatacenterOptions,
   DatacenterRecord,
   DatacenterSubnetRecord,
+  IpRecord,
   ServerDatacenterRef,
   ServerGeo,
   ServerReportedIp,
@@ -460,4 +461,26 @@ export function buildCreateDatacenterFromSeed(
     members: [{ serverId: input.serverId, address }],
     sourceServerId: input.serverId,
   })
+}
+
+/**
+ * What a **Stale** membership pin means, in the operator's words. The pin
+ * still names the last known address; nothing was guessed.
+ */
+export const STALE_PIN_COPY =
+  'The daemon stopped reporting this address and the automatic repin found no unambiguous replacement. The pin still names the last known address. Re-pin by unassigning and re-adding the server, or wait for the host to report a usable address.'
+
+export type StalePinReason = NonNullable<IpRecord['staleReason']>
+
+const STALE_PIN_REASON_LABELS: Record<StalePinReason, string> = {
+  address_gone_no_candidate: 'no replacement address was reported',
+  address_gone_ambiguous: 'more than one candidate address, so nothing was guessed',
+}
+
+/** Plain reading of `IpRecord.staleReason`; `null` / unknown reads as the generic sentence. */
+export function stalePinReasonLabel(reason: string | null | undefined): string {
+  if (reason === 'address_gone_no_candidate' || reason === 'address_gone_ambiguous') {
+    return STALE_PIN_REASON_LABELS[reason]
+  }
+  return 'the daemon no longer reports this address'
 }

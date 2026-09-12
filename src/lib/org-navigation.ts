@@ -104,7 +104,13 @@ export const ORG_AREAS = [
         id: 'docker',
         label: 'Docker networks',
         pathSegment: 'docker',
-        hint: 'Compose external Docker network registry',
+        hint: 'Compose external Docker network registry and host address pools',
+      },
+      {
+        id: 'reserved',
+        label: 'Reserved ranges',
+        pathSegment: 'reserved',
+        hint: 'Ranges TurboPanel must never assign because something else routes them',
       },
     ],
   },
@@ -388,6 +394,12 @@ export function networkDockerHref(
   orgId: string,
 ): `/${string}/network/docker` {
   return `/${orgId}/network/docker`
+}
+
+export function networkReservedHref(
+  orgId: string,
+): `/${string}/network/reserved` {
+  return `/${orgId}/network/reserved`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [

@@ -75,9 +75,11 @@ Topology rows ordered primary first then `ordinal`:
 
 - `[ Failover replica ] [ Remote/read replica ]` selector on add (default Failover replica); **Serve read traffic** toggle
 - Transport vocabulary: **Local** / **Datacenter LAN** / **TurboFabric direct** / **Public Internet + TLS**
+- A `datacenter` transport **names the winning datacenter**: `Datacenter LAN · Backhaul (priority 10)` — derived client-side by `describeDatacenterTransport` (`partitionSharedDatacenters(member, primary, policies).trusted[0]`, policies from `useDatacenters` `priority` / `trusted`). Same line in the add-replica picker's predicted transport. Display hint only — no new API field; the stored transport and instance 422s stay authoritative
+- The untrusted refusal keeps its own code: `failover_requires_trusted_datacenter` → `FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY`; the picker shows `replicaIneligibleReasonLabel('untrusted-datacenter')` with a **Set up private network** link to the untrusted datacenter
 - Unbounded replicas (no max-2 cap)
 - Failover: only servers sharing the primary's datacenter with a usable subnet; Remote/read: any org server
-- **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `no-private-cidr` / `no-private-path`) with **Set up private network** links for network reasons — never silent disable
+- **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `untrusted-datacenter` / `no-private-cidr` / `no-private-path`) with **Set up private network** links for network reasons — never silent disable
 - Traffic chips: **Read/write** (primary), **Serves reads** / **Standby only** (replicas); remote/read rows also show **Manual DR candidate**
 - Remove replica = two-press (destroys replica data volume)
 - **Promote** is failover-only recorded switchover; Remote/read rows show **Convert to failover** (two-press, same-DC) and **Promote for disaster recovery** (typed confirm: current primary, target, lag, data-loss copy). On lag-gate `409` codes for failover Promote, show lag/state then separate **Promote anyway** (`force: true` — lag/health only). On `managed_primary_fence_failed`, surface fence failure — do not auto-retry. Cluster panel shows an in-flight / blocked recovery chip; blocked auto-failover copy is `Automatic failover blocked: unable to verify previous primary is fenced`. Unhealthy same-DC failover replicas are skipped; if none are healthy the chip uses `Automatic failover blocked: no same-datacenter failover replica is healthy enough to promote`.

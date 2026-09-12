@@ -17,6 +17,7 @@ import {
   networkAddressesHref,
   networkDockerHref,
   networkFabricHref,
+  networkReservedHref,
   replaceOrganization,
   serverDetailHref,
   serverDetailTabHref,
@@ -251,6 +252,7 @@ describe('serversDatacentersHref', () => {
     expect(datacenterNewHref('org-1')).toBe('/org-1/servers/datacenters/new')
     expect(networkAddressesHref('org-1')).toBe('/org-1/network/addresses')
     expect(networkDockerHref('org-1')).toBe('/org-1/network/docker')
+    expect(networkReservedHref('org-1')).toBe('/org-1/network/reserved')
     expect(serversPendingKeysHref('org-1')).toBe('/org-1/servers/keys')
   })
 })

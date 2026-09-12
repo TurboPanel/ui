@@ -14,6 +14,7 @@ import {
 } from '@/components/ui'
 import type {
   ManagedMemberRecord,
+  ManagedMemberTransport,
   ManagedRecoveryRecord,
   ManagedReplicaClass,
 } from '@/lib/managed-services'
@@ -38,6 +39,10 @@ import {
   type ReplicaServerEligibility,
 } from '@/lib/managed-replica-eligibility'
 import { formatServerDatacenterNames } from '@/lib/datacenter-list'
+import {
+  buildDatacenterPolicyMap,
+  describeDatacenterTransport,
+} from '@/lib/datacenter-routing'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   datacenterHref,
@@ -183,6 +188,8 @@ export function ManagedClusterPanel({
         datacenters: datacenters.map((dc) => ({
           id: dc.id,
           privateCidrs: dc.privateCidrs ?? [],
+          priority: dc.priority,
+          trusted: dc.trusted,
         })),
         members,
         primaryServerId: primary?.serverId ?? null,
@@ -209,6 +216,36 @@ export function ManagedClusterPanel({
   const siteLabel = (serverId: string): string => {
     const server = serverById.get(serverId)
     return formatServerDatacenterNames(server?.datacenters ?? []) || '—'
+  }
+
+  // Which datacenter the ladder picked for a `datacenter` transport — derived
+  // client-side from the same rule the instance uses (trusted shared
+  // datacenters, priority asc then id asc). Display hint only; the stored
+  // transport and the instance's 422s stay authoritative.
+  const policies = useMemo(() => buildDatacenterPolicyMap(datacenters), [datacenters])
+  const datacenterNameById = useMemo(
+    () => new Map(datacenters.map((dc) => [dc.id, dc.name?.trim() || dc.id])),
+    [datacenters],
+  )
+  const datacenterIdsOf = (serverId: string | null): string[] =>
+    serverId
+      ? (serverById.get(serverId)?.datacenters ?? []).map((row) => row.id)
+      : []
+  const transportLabel = (
+    serverId: string,
+    transport: ManagedMemberTransport | null | undefined,
+  ): string => {
+    const base = memberTransportLabel(transport)
+    if (transport !== 'datacenter' || !primary || serverId === primary.serverId) {
+      return base
+    }
+    return describeDatacenterTransport({
+      baseLabel: base,
+      memberDatacenterIds: datacenterIdsOf(serverId),
+      primaryDatacenterIds: datacenterIdsOf(primary.serverId),
+      policies,
+      nameById: datacenterNameById,
+    })
   }
 
   const serverLabel = (member: ManagedMemberRecord): string => {
@@ -367,7 +404,7 @@ export function ManagedClusterPanel({
       return
     }
     if (
-      reason === 'no-private-cidr' &&
+      (reason === 'no-private-cidr' || reason === 'untrusted-datacenter') &&
       eligibilityRow?.candidateDatacenterId
     ) {
       router.push(
@@ -413,6 +450,7 @@ export function ManagedClusterPanel({
             disabled={disabled}
             serverLabel={serverLabel(member)}
             siteLabel={siteLabel(member.serverId)}
+            transportLabel={transportLabel(member.serverId, member.replicationTransport)}
             onToggleReads={() => {
               void handleToggleReads(member, !member.readEligible)
             }}
@@ -494,6 +532,7 @@ export function ManagedClusterPanel({
             servers={servers}
             primaryServerId={primary?.serverId ?? null}
             eligibilityById={eligibilityById}
+            predictedTransportLabel={transportLabel}
             selectedServerId={selectedServerId}
             onSelectServer={setSelectedServerId}
             replicaClass={replicaClass}
@@ -529,6 +568,7 @@ function ClusterMemberRow({
   disabled,
   serverLabel,
   siteLabel,
+  transportLabel,
   onToggleReads,
   onConfirmRemove,
   onConfirmResync,
@@ -541,6 +581,8 @@ function ClusterMemberRow({
   disabled: boolean
   serverLabel: string
   siteLabel: string
+  /** `memberTransportLabel`, naming the winning datacenter for a `datacenter` transport. */
+  transportLabel: string
   onToggleReads: () => void
   onConfirmRemove: () => void
   onConfirmResync: () => void
@@ -570,8 +612,7 @@ function ClusterMemberRow({
             </Text>
             <Text style={styles.metaText}>
               {'  '}
-              {serverLabel} · {siteLabel} ·{' '}
-              {memberTransportLabel(member.replicationTransport)}
+              {serverLabel} · {siteLabel} · {transportLabel}
             </Text>
           </Text>
           <View style={styles.chipRow}>
@@ -789,6 +830,7 @@ function DisasterRecoveryDialog({
 function ServerOptionRow({
   server,
   eligibilityRow,
+  predictedTransportLabel,
   selected,
   disabled,
   onSelect,
@@ -796,6 +838,10 @@ function ServerOptionRow({
 }: Readonly<{
   server: OrgServerRecord
   eligibilityRow: ReplicaServerEligibility | undefined
+  predictedTransportLabel: (
+    serverId: string,
+    transport: ManagedMemberTransport | null | undefined,
+  ) => string
   selected: boolean
   disabled: boolean
   onSelect: () => void
@@ -808,7 +854,8 @@ function ServerOptionRow({
   const showNetworkLink =
     reason === 'no-datacenter' ||
     reason === 'no-private-cidr' ||
-    reason === 'no-private-path'
+    reason === 'no-private-path' ||
+    reason === 'untrusted-datacenter'
 
   return (
     <Pressable
@@ -830,7 +877,7 @@ function ServerOptionRow({
       </Text>
       {eligible && predicted ? (
         <Text style={styles.reasonText}>
-          {memberTransportLabel(predicted)}
+          {predictedTransportLabel(server.id, predicted)}
         </Text>
       ) : null}
       {!eligible && reason ? (
@@ -858,6 +905,7 @@ function AddReplicaForm({
   servers,
   primaryServerId,
   eligibilityById,
+  predictedTransportLabel,
   selectedServerId,
   disabled,
   onSelectServer,
@@ -872,6 +920,10 @@ function AddReplicaForm({
   servers: readonly OrgServerRecord[]
   primaryServerId: string | null
   eligibilityById: ReadonlyMap<string, ReplicaServerEligibility>
+  predictedTransportLabel: (
+    serverId: string,
+    transport: ManagedMemberTransport | null | undefined,
+  ) => string
   selectedServerId: string | null
   disabled: boolean
   onSelectServer: (serverId: string) => void
@@ -904,6 +956,7 @@ function AddReplicaForm({
             key={server.id}
             server={server}
             eligibilityRow={eligibilityById.get(server.id)}
+            predictedTransportLabel={predictedTransportLabel}
             selected={selectedServerId === server.id}
             disabled={disabled}
             onSelect={() => onSelectServer(server.id)}
@@ -937,6 +990,7 @@ function AddReplicaBlock({
   servers,
   primaryServerId,
   eligibilityById,
+  predictedTransportLabel,
   selectedServerId,
   onSelectServer,
   replicaClass,
@@ -953,6 +1007,10 @@ function AddReplicaBlock({
   servers: readonly OrgServerRecord[]
   primaryServerId: string | null
   eligibilityById: ReadonlyMap<string, ReplicaServerEligibility>
+  predictedTransportLabel: (
+    serverId: string,
+    transport: ManagedMemberTransport | null | undefined,
+  ) => string
   selectedServerId: string | null
   onSelectServer: (serverId: string) => void
   replicaClass: ManagedReplicaClass
@@ -970,6 +1028,7 @@ function AddReplicaBlock({
         servers={servers}
         primaryServerId={primaryServerId}
         eligibilityById={eligibilityById}
+        predictedTransportLabel={predictedTransportLabel}
         selectedServerId={selectedServerId}
         disabled={disabled}
         onSelectServer={onSelectServer}

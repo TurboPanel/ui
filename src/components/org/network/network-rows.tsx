@@ -7,6 +7,7 @@ import {
   ConfirmButton,
   MonoText,
 } from '@/components/ui'
+import { dockerNetworkAddressingLines } from '@/lib/docker-addressing'
 import type { NetworkKind, NetworkRecord, IpRecord } from '@/lib/instance-api'
 import { spacing } from '@/lib/theme'
 
@@ -28,10 +29,37 @@ export function readDockerNetworkName(network: NetworkRecord): string | null {
   return null
 }
 
-function kindLabel(kind: NetworkKind): string {
+export function kindLabel(kind: NetworkKind): string {
   if (kind === 'datacenter') return 'Datacenter'
   if (kind === 'managed') return 'Managed'
+  if (kind === 'reserved') return 'Reserved'
   return 'Docker'
+}
+
+/**
+ * Docker cannot re-range a network that already exists on a host — the
+ * addressing below is what `docker network create` is given the first time
+ * the daemon creates it. Shown only when the row carries any of it.
+ */
+function DockerAddressingLines({ network }: Readonly<{ network: NetworkRecord }>) {
+  if (network.kind !== 'docker') return null
+  const lines = dockerNetworkAddressingLines(network.options)
+  if (lines.length === 0) return null
+  return (
+    <View style={styles.addressing}>
+      {lines.map((line) => (
+        <Text key={line.label} style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>{line.label}: </Text>
+          <MonoText selectable>{line.value}</MonoText>
+        </Text>
+      ))}
+      <Text style={panelStyles.muted}>
+        Applied when the daemon first creates this network. Docker cannot
+        re-range an existing network — a later change only applies to a
+        network the daemon has not created yet.
+      </Text>
+    </View>
+  )
 }
 
 /** Platform-allocated rows carry no CIDR by design — stay silent about it. */
@@ -78,6 +106,7 @@ export function NetworkListItem({
         ) : null}
         {renderCidr(network, isPlatformOwned)}
       </View>
+      <DockerAddressingLines network={network} />
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Created: </Text>
         {new Date(network.createdAt).toLocaleString()}
@@ -171,6 +200,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  addressing: {
+    gap: 2,
     marginTop: spacing.xs,
   },
 })

@@ -15,11 +15,16 @@ import {
   fetchIp,
   fetchIps,
   fetchNetworks,
+  fetchOrganizationDockerNetworking,
+  isForbiddenError,
   removeDatacenterMember,
   updateDatacenter,
   updateDatacenterSubnet,
   updateIp,
   updateNetwork,
+  updateOrganizationDockerNetworking,
+  type OrganizationDockerNetworking,
+  type OrganizationDockerNetworkingUpdate,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import { type IpListFilters, type NetworkListFilters } from '@/lib/query-keys'
@@ -132,6 +137,63 @@ export function useNetworks(
     queryFn: () => fetchNetworks(toFetchNetworkFilters(filters)),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     ...(useKeepPrevious ? { placeholderData: keepPreviousData } : {}),
+  })
+}
+
+/** Docker's built-in addressing — what an org with no stored override runs. */
+const DOCKER_NETWORKING_DEFAULTS: OrganizationDockerNetworking = {
+  addressPools: [],
+  defaultBridgeCidr: null,
+}
+
+/**
+ * Org-wide dockerd `default-address-pools` + `bip`. Manage-gated on the
+ * instance: a 403 resolves to Docker's built-in defaults instead of throwing,
+ * so a viewer without manage never trips the session-recovery path just by
+ * opening the Docker networks screen. Every other failure stays an error —
+ * the panel renders it and keeps the form read-only, because the `PUT` is
+ * replace-all and a save over a config that never loaded would wipe it.
+ */
+export function useOrgDockerNetworking(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).settings.dockerNetworking,
+    queryFn: async () => {
+      try {
+        return await fetchOrganizationDockerNetworking(orgId)
+      } catch (err) {
+        if (isForbiddenError(err)) return DOCKER_NETWORKING_DEFAULTS
+        throw err
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+    retry: false,
+  })
+}
+
+/**
+ * `PUT` is replace-all. A pool change alters what every later CIDR write
+ * will accept (pool bases join the org registry), so the networks subtree is
+ * invalidated alongside the setting itself.
+ */
+export function useSaveOrgDockerNetworking(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (update: OrganizationDockerNetworkingUpdate) =>
+      updateOrganizationDockerNetworking(orgId, update),
+    retry: false,
+    onSuccess: async (data) => {
+      queryClient.setQueryData<OrganizationDockerNetworking>(
+        queryKeys.org(orgId).settings.dockerNetworking,
+        { addressPools: data.addressPools, defaultBridgeCidr: data.defaultBridgeCidr },
+      )
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).topology.networksAll,
+      })
+    },
+    fallbackError: 'Failed to save Docker host addressing',
   })
 }
 
