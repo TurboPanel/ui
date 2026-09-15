@@ -466,9 +466,16 @@ function FailingNotice({ count }: Readonly<{ count: number }>) {
   )
 }
 
-function ErrorLine({ error }: Readonly<{ error: unknown }>) {
+function errorLineText(error: unknown): string | null {
   if (!error) return null
-  const text = error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return 'Unknown error'
+}
+
+function ErrorLine({ error }: Readonly<{ error: unknown }>) {
+  const text = errorLineText(error)
+  if (!text) return null
   return <Text style={styles.errorText}>{text}</Text>
 }
 
