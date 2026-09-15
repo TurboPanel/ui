@@ -6,10 +6,13 @@ import { createAppQueryClient } from '@/lib/query-client'
 import {
   useAccessGrants,
   useCreateAccessGrant,
+  useCreateInvitation,
+  useInvitations,
   useOrganizations,
   usePermissions,
   useResolveResourceId,
   useRevokeAccessGrant,
+  useRevokeInvitation,
   useTeams,
 } from '@/lib/queries/access'
 
@@ -21,6 +24,9 @@ const {
   fetchOrganizations,
   fetchVisibleTeams,
   revokeAccessGrant,
+  listInvitations,
+  createInvitation,
+  revokeInvitation,
 } = vi.hoisted(() => ({
   fetchPermissions: vi.fn(),
   fetchAccessGrants: vi.fn(),
@@ -29,6 +35,9 @@ const {
   fetchOrganizations: vi.fn(),
   fetchVisibleTeams: vi.fn(),
   revokeAccessGrant: vi.fn(),
+  listInvitations: vi.fn(),
+  createInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -42,6 +51,9 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchOrganizations,
     fetchVisibleTeams,
     revokeAccessGrant,
+    listInvitations,
+    createInvitation,
+    revokeInvitation,
   }
 })
 
@@ -229,5 +241,51 @@ describe('access query hooks', () => {
       'grant-1',
       expect.anything(),
     )
+  })
+
+  it('useInvitations loads pending invitations', async () => {
+    listInvitations.mockResolvedValueOnce({
+      invitations: [{ id: 'inv-1', email: 'a@example.com' }],
+    })
+
+    const { result } = renderHook(() => useInvitations('org-1'), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data?.invitations).toHaveLength(1)
+  })
+
+  it('useCreateInvitation and useRevokeInvitation invalidate the list', async () => {
+    createInvitation.mockResolvedValueOnce({
+      ok: true,
+      id: 'inv-2',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    })
+    revokeInvitation.mockResolvedValueOnce({ ok: true })
+
+    const create = renderHook(() => useCreateInvitation('org-1'), {
+      wrapper: createWrapper(),
+    })
+    await expect(
+      create.result.current.run({
+        teamId: 'team-1',
+        email: 'new@example.com',
+      }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(createInvitation).toHaveBeenCalledWith({
+      teamId: 'team-1',
+      email: 'new@example.com',
+    })
+
+    const revoke = renderHook(() => useRevokeInvitation('org-1'), {
+      wrapper: createWrapper(),
+    })
+    await expect(revoke.result.current.run('inv-2')).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(revokeInvitation).toHaveBeenCalledWith('inv-2', expect.anything())
   })
 })

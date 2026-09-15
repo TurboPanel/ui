@@ -17,6 +17,8 @@ export type AuthGuardContext = Readonly<{
   blockNativeInstall?: boolean
   /** Metro web and native may remain on /connect (including add-another). */
   allowConnect?: boolean
+  /** Safe same-origin path to honor instead of the dashboard after auth. */
+  returnTo?: string | null
 }>
 
 /** Returns a redirect target, or `null` to stay on the current route. */
@@ -80,6 +82,7 @@ function resolveSessionRouteHref(ctx: AuthGuardContext): Href | null {
   }
 
   if (signedIn && (topSegment === 'sign-in' || topSegment === 'sign-up')) {
+    if (ctx.returnTo) return ctx.returnTo as Href
     return dash
   }
 
@@ -99,6 +102,7 @@ function isPublicAuthRoute(topSegment: string | undefined): boolean {
     topSegment === 'sign-in' ||
     topSegment === 'sign-up' ||
     topSegment === 'verify-email' ||
+    topSegment === 'accept-invitation' ||
     topSegment === 'about' ||
     topSegment === 'recovering'
   )
@@ -108,6 +112,11 @@ function shouldLeaveUnknownSignedInRoute(ctx: AuthGuardContext): boolean {
   const { session, topSegment, developerDevBypass } = ctx
 
   if (topSegment === 'welcome' || topSegment === 'organizations' || isPublicAuthRoute(topSegment)) {
+    return false
+  }
+  // Account settings are signed-in but org-independent — they are neither a
+  // public auth route nor an org id, so `isOrgRoute` would bounce them.
+  if (topSegment === 'account') {
     return false
   }
   if (developerDevBypass) {
@@ -123,6 +132,7 @@ const PUBLIC_ROUTE_SEGMENTS = new Set([
   'sign-in',
   'sign-up',
   'verify-email',
+  'accept-invitation',
   'install',
   'welcome',
   'organizations',
@@ -131,6 +141,8 @@ const PUBLIC_ROUTE_SEGMENTS = new Set([
   'developer',
   'connect',
   'about',
+  // Signed-in but org-independent — never treated as an org id.
+  'account',
 ])
 
 function isOrgRoute(topSegment: string | undefined): boolean {

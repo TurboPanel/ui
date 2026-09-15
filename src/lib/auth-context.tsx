@@ -24,6 +24,8 @@ import {
 import {
   fetchOrganizations,
   type SessionInfo,
+  type SignInResult,
+  type TwoFactorCodeKind,
 } from '@/lib/instance-api'
 import {
   resolvePreferredOrganizationId,
@@ -38,6 +40,8 @@ import {
   useInstallStatusQuery,
   useSessionQuery,
   useSignIn as useSignInMutation,
+  useSignInTwoFactor as useSignInTwoFactorMutation,
+  useSignInWithPasskey as useSignInWithPasskeyMutation,
   useSignOut as useSignOutMutation,
   useSignUp as useSignUpMutation,
 } from '@/lib/queries/auth'
@@ -58,7 +62,19 @@ type AuthContextValue = {
   bootstrapError: string | null
   /** Metro web, or native with no control-plane origin yet. */
   needsControlPlane: boolean
-  signIn: (email: string, password: string) => Promise<SessionInfo>
+  /**
+   * Resolves to a session, or to a pending second factor the caller finishes
+   * with {@link AuthContextValue.completeTwoFactor}.
+   */
+  signIn: (email: string, password: string) => Promise<SignInResult>
+  /** Answers the challenge {@link AuthContextValue.signIn} handed back. */
+  completeTwoFactor: (
+    challenge: string,
+    code: string,
+    kind?: TwoFactorCodeKind,
+  ) => Promise<SessionInfo>
+  /** Web-only WebAuthn sign-in; rejects with the web-only note on native. */
+  signInWithPasskey: () => Promise<SessionInfo>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   clearSession: () => void
@@ -86,6 +102,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     enabled: bootstrapEnabled && (statusQuery.isSuccess || statusQuery.isError),
   })
   const signInMutation = useSignInMutation()
+  const signInTwoFactorMutation = useSignInTwoFactorMutation()
+  const signInWithPasskeyMutation = useSignInWithPasskeyMutation()
   const signUpMutation = useSignUpMutation()
   const signOutMutation = useSignOutMutation()
 
@@ -202,6 +220,21 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     [signInMutation],
   )
 
+  const completeTwoFactor = useCallback(
+    async (challenge: string, code: string, kind?: TwoFactorCodeKind) => {
+      return await signInTwoFactorMutation.mutateAsync({
+        challenge,
+        code,
+        kind,
+      })
+    },
+    [signInTwoFactorMutation],
+  )
+
+  const signInWithPasskey = useCallback(async () => {
+    return await signInWithPasskeyMutation.mutateAsync(undefined)
+  }, [signInWithPasskeyMutation])
+
   const signUp = useCallback(
     async (email: string, password: string) => {
       await signUpMutation.mutateAsync({ email, password })
@@ -224,6 +257,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       bootstrapError,
       needsControlPlane,
       signIn,
+      completeTwoFactor,
+      signInWithPasskey,
       signUp,
       signOut,
       clearSession,
@@ -242,6 +277,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       bootstrapError,
       needsControlPlane,
       signIn,
+      completeTwoFactor,
+      signInWithPasskey,
       signUp,
       signOut,
       clearSession,

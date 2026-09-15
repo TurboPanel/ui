@@ -66,11 +66,14 @@ export const queryKeys = {
     session: ['auth', 'session'] as const,
     organizations: ['auth', 'organizations'] as const,
     permissions: ['auth', 'permissions'] as const,
+    twoFactor: ['auth', 'two-factor'] as const,
+    passkeys: ['auth', 'passkeys'] as const,
     resourceId: (kind: string, itemId: string) => ['auth', 'resource-id', kind, itemId] as const,
     can: (resourceId: string, permissionKey: string) =>
       ['auth', 'can', resourceId, permissionKey] as const,
     accessGrants: (resourceId: string) => ['auth', 'access-grants', resourceId] as const,
     teams: ['auth', 'teams'] as const,
+    invitations: (orgId: string) => ['auth', 'invitations', orgId] as const,
   },
 
   recovery: ['recovery'] as const,
@@ -342,6 +345,7 @@ export const queryKeys = {
     publicUrls: ['admin', 'public-urls'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
     email: ['admin', 'settings', 'email'] as const,
+    authProviders: ['admin', 'settings', 'auth-providers'] as const,
     /** Live-metrics session cap (SERVER_METRICS_LIVE_MAX_MINUTES). */
     metricsLiveSettings: ['admin', 'settings', 'metrics-live'] as const,
     /** Instance-wide Git provider applications. The org-scoped list is `org(id).forges`. */

@@ -283,6 +283,17 @@ describe('resolveAuthGuardHref', () => {
     ).toBeNull()
   })
 
+  it('allows accept-invitation as a public auth route without a session', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'accept-invitation',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
   it('allows verify-email as a public auth route without a session', () => {
     expect(
       resolveAuthGuardHref({
@@ -314,6 +325,18 @@ describe('resolveAuthGuardHref', () => {
         developerDevBypass: false,
       }),
     ).toBe('/welcome')
+  })
+
+  it('honors a safe return target after sign-in instead of the dashboard', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'sign-in',
+        developerDevBypass: false,
+        returnTo: '/accept-invitation?id=11111111-1111-4111-8111-111111111111',
+      }),
+    ).toBe('/accept-invitation?id=11111111-1111-4111-8111-111111111111')
   })
 
   it('leaves welcome when the dashboard is an org overview', () => {
@@ -410,6 +433,17 @@ describe('resolveAuthGuardHref', () => {
     ).toBeNull()
   })
 
+  it('keeps signed-in users on accept-invitation', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'accept-invitation',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
   it('keeps signed-in users on verify-email', () => {
     expect(
       resolveAuthGuardHref({
@@ -438,6 +472,64 @@ describe('resolveAuthGuardHref', () => {
         session: null,
         needsInstall: true,
         topSegment: undefined,
+        developerDevBypass: false,
+      }),
+    ).toBe('/install')
+  })
+
+  it('keeps signed-in users on account settings', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'account',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps members on account settings, not only admins', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: member,
+        needsInstall: false,
+        topSegment: 'account',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps signed-in users on account settings even when an org is the dashboard', () => {
+    dashboardHrefMock.mock.mockReturnValue(
+      '/11111111-1111-1111-1111-111111111111/overview',
+    )
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'account',
+        developerDevBypass: false,
+      }),
+    ).toBeNull()
+  })
+
+  it('sends unsigned visitors on account settings to sign-in', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'account',
+        developerDevBypass: false,
+      }),
+    ).toBe('/sign-in')
+  })
+
+  it('sends unsigned visitors on account settings to install while setup is required', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: true,
+        topSegment: 'account',
         developerDevBypass: false,
       }),
     ).toBe('/install')

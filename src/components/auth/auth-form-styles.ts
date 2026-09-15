@@ -288,11 +288,13 @@ export const authFormStyles = StyleSheet.create({
 })
 
 /** Runtime-tinted CTA styles for auth screens. */
-export function authAccentStyles(theme: AuthAccentTheme): {
+export type AuthAccentStyles = {
   primaryButton: ViewStyle
   primaryButtonText: TextStyle
   footerLinkAccent: TextStyle
-} {
+}
+
+export function authAccentStyles(theme: AuthAccentTheme): AuthAccentStyles {
   return {
     primaryButton: { backgroundColor: theme.accent },
     primaryButtonText: { color: theme.onAccent },

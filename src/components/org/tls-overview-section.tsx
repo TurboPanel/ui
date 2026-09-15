@@ -43,6 +43,17 @@ function formatSans(row: TlsRecord): string {
   return row.metadata.dnsNames.join(', ') || '—'
 }
 
+function tlsStatusLabel(row: TlsRecord): string {
+  if (row.metadata.status === 'managed') {
+    return 'Managed by Caddy on the serving host'
+  }
+  return row.metadata.status
+}
+
+function showTlsExpiry(row: TlsRecord): boolean {
+  return row.metadata.status !== 'managed' && Boolean(row.metadata.notAfter)
+}
+
 const SOURCE_OPTIONS = [
   { value: 'upload', label: 'Uploaded' },
   { value: 'self_signed', label: 'Self-signed' },
@@ -152,10 +163,10 @@ export function TlsOverviewSection({
       <View key={row.id} style={panelStyles.detailCard}>
         <Text style={panelStyles.detailTitle}>{tlsTitle(row)}</Text>
         <Text style={panelStyles.muted}>
-          {tlsSourceLabel(row.source)} · {row.metadata.status}
+          {tlsSourceLabel(row.source)} · {tlsStatusLabel(row)}
         </Text>
         <Text style={styles.sans}>{formatSans(row)}</Text>
-        {row.metadata.notAfter ? (
+        {showTlsExpiry(row) ? (
           <Text style={panelStyles.muted}>
             Expires {new Date(row.metadata.notAfter).toLocaleString()}
           </Text>
@@ -231,7 +242,9 @@ export function TlsOverviewSection({
           )}
           {source === 'lets_encrypt' ? (
             <Text style={panelStyles.muted}>
-              Creates a pending ACME order; certificates become usable after issuance.
+              Caddy issues and renews this certificate on the serving host. The
+              hostname must resolve there with :80 and :443 reachable; wildcards
+              and private bind scopes are not supported.
             </Text>
           ) : null}
           <Button

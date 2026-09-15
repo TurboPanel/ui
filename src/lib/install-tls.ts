@@ -1,6 +1,10 @@
 /**
  * Classify whether an install origin needs bootstrap insecure TLS.
  * Keep in step with instance `src/lib/install-tls.ts`.
+ *
+ * Future: TURBOPANEL_TLS_PUBLIC (`publicOrigin`) is evaluated only on the
+ * control plane; this copy classifies the URL alone. The server-rendered
+ * installCommand is authoritative.
  */
 
 const LOCAL_TLDS = new Set([

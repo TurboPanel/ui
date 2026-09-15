@@ -17,6 +17,7 @@ import {
   fetchCommandLog,
   fetchCommandStatuses,
   fetchContainerLogTail,
+  fetchAuthProviderSettings,
   fetchEmailSettings,
   fetchEnvironmentDeployment,
   fetchEnvironmentDeployments,
@@ -45,6 +46,7 @@ import {
   resetServerUpdateStatus,
   restartSystemComponent,
   rollbackEnvironment,
+  saveAuthProviderSettings,
   saveEmailSettings,
   saveOrgResourceLimits,
   saveServerResourceLimits,
@@ -200,6 +202,49 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       settings: {},
     })
 
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        settings: {
+          TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: {
+            value: 'Iv1.example',
+            source: 'db',
+          },
+        },
+      }),
+    )
+    await expect(fetchAuthProviderSettings()).resolves.toEqual({
+      ok: true,
+      settings: {
+        TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: {
+          value: 'Iv1.example',
+          source: 'db',
+        },
+      },
+    })
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
+      '/api/admin/v1/settings/auth-providers',
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        settings: {
+          TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: {
+            value: 'Iv1.saved',
+            source: 'db',
+          },
+        },
+      }),
+    )
+    await expect(
+      saveAuthProviderSettings({
+        TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: 'Iv1.saved',
+      }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({
+      TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: 'Iv1.saved',
+    })
+
     const signup = {
       enabled: true,
       dbValue: '1' as const,
@@ -208,7 +253,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(signup))
     await expect(fetchSignupSettings()).resolves.toEqual(signup)
-    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
+    expect(String(fetchMock.mock.calls[6]?.[0])).toContain(
       '/api/admin/v1/settings/signup',
     )
 
@@ -216,8 +261,8 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(saveSignupSettings(false)).resolves.toMatchObject({
       enabled: false,
     })
-    expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'PUT' })
-    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({
+    expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(JSON.parse(String(fetchMock.mock.calls[7]?.[1]?.body))).toEqual({
       enabled: false,
     })
   })

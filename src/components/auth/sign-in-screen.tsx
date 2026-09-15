@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { Link, useRouter, type Href } from 'expo-router'
+import { Linking, Pressable, Text, View } from 'react-native'
+import { Link, useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
@@ -9,18 +9,64 @@ import {
   authFormStyles,
   webPointer,
 } from '@/components/auth/auth-form-styles'
+import { TwoFactorStep } from '@/components/auth/two-factor-step'
 import {
   authAccentForRuntime,
   resolveControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
-import { isRemoteCookieClient } from '@/lib/control-plane'
+import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
+import {
+  isTwoFactorChallenge,
+  OAUTH_WEB_ONLY_NOTE,
+  oauthStartUrl,
+  signInOAuthRedirect,
+  type OAuthProvider,
+} from '@/lib/instance-api'
+import { safeAuthReturnPath } from '@/lib/invitation-return'
+import { isPasskeySupported } from '@/lib/passkey-client'
 import { useSignIn } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
+import { TWO_FACTOR_PROMPT_TITLE } from '@/lib/two-factor-prompt'
+
+const OAUTH_SIGN_IN_ERRORS: Record<string, string> = {
+  oauth_state_invalid: 'Sign-in expired. Try again.',
+  oauth_exchange_failed: 'Could not complete sign-in. Try again.',
+  account_disabled: 'This account is disabled.',
+  oauth_signup_disabled: 'New accounts cannot be created this way.',
+  account_conflict: 'That provider account is already linked to another user.',
+  oauth_unauthenticated: 'Sign in first, then link this provider.',
+}
+
+const PROVIDER_LABEL: Record<OAuthProvider, string> = {
+  github: 'GitHub',
+  google: 'Google',
+}
+
+function firstSearchParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(value)) return value[0]
+  return value
+}
+
+function oauthSignInError(code: string): string {
+  return OAUTH_SIGN_IN_ERRORS[code] ?? 'Sign-in failed. Try again.'
+}
 
 export function SignInScreenContent() {
   const router = useRouter()
-  const { resolveDashboardHref, bootstrapError } = useAuth()
+  const pathname = usePathname()
+  const params = useLocalSearchParams<{
+    error?: string | string[]
+    challenge?: string | string[]
+    redirectTo?: string | string[]
+  }>()
+  const currentRedirect = useMemo(
+    () => signInOAuthRedirect(pathname, params),
+    [pathname, params],
+  )
+  const { resolveDashboardHref, bootstrapError, signInWithPasskey } = useAuth()
   const signInMutation = useSignIn()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
@@ -28,7 +74,12 @@ export function SignInScreenContent() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [passkeyBusy, setPasskeyBusy] = useState(false)
   const loading = signInMutation.isPending
+  const passkeyOffered = isPasskeySupported()
+  const authProviders = instanceInfo?.authProviders ?? []
+  const oauthOnWeb = usesSameOriginApi()
 
   const accent = useMemo(
     () =>
@@ -47,16 +98,64 @@ export function SignInScreenContent() {
     setError('')
   }, [])
 
+  const returnTo = useMemo(
+    () => safeAuthReturnPath(firstSearchParam(params.redirectTo)),
+    [params.redirectTo],
+  )
+
+  const goAfterAuth = useCallback(async () => {
+    if (returnTo) {
+      router.replace(returnTo as Href)
+      return
+    }
+    const href = await resolveDashboardHref()
+    router.replace(href as Href)
+  }, [resolveDashboardHref, returnTo, router])
+
   const onSubmit = useCallback(async () => {
     setError('')
     try {
-      await signInMutation.mutateAsync({ email, password })
-      const href = await resolveDashboardHref()
-      router.replace(href as Href)
+      const result = await signInMutation.mutateAsync({ email, password })
+      if (isTwoFactorChallenge(result)) {
+        setChallenge(result.challenge)
+        return
+      }
+      await goAfterAuth()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign In failed')
     }
-  }, [email, password, resolveDashboardHref, router, signInMutation])
+  }, [email, goAfterAuth, password, signInMutation])
+
+  const onPasskeyPress = useCallback(() => {
+    setError('')
+    setPasskeyBusy(true)
+    signInWithPasskey()
+      .then(goAfterAuth)
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Passkey sign in failed')
+      })
+      .finally(() => {
+        setPasskeyBusy(false)
+      })
+  }, [goAfterAuth, signInWithPasskey])
+
+  const onTwoFactorDone = useCallback(() => {
+    goAfterAuth().catch(() => {
+      // Navigation failures fall back to the guard's own redirect.
+    })
+  }, [goAfterAuth])
+
+  const onTwoFactorCancel = useCallback(() => {
+    setChallenge(null)
+    setPassword('')
+  }, [])
+
+  useEffect(() => {
+    const errorCode = firstSearchParam(params.error)
+    if (errorCode) setError(oauthSignInError(errorCode))
+    const incomingChallenge = firstSearchParam(params.challenge)
+    if (incomingChallenge) setChallenge(incomingChallenge)
+  }, [params.challenge, params.error])
 
   useEffect(() => {
     if (instanceInfoLoading) return
@@ -67,6 +166,23 @@ export function SignInScreenContent() {
 
   if (instanceInfoLoading || (isInstallMode && !isRemoteCookieClient())) {
     return null
+  }
+
+  if (challenge) {
+    return (
+      <AuthScreenShell
+        title={TWO_FACTOR_PROMPT_TITLE}
+        accentColor={accent.accent}
+      >
+        <TwoFactorStep
+          challenge={challenge}
+          accent={accent}
+          tint={tint}
+          onAuthenticated={onTwoFactorDone}
+          onCancel={onTwoFactorCancel}
+        />
+      </AuthScreenShell>
+    )
   }
 
   const signupFooter =
@@ -151,7 +267,7 @@ export function SignInScreenContent() {
             // Errors are surfaced via setError inside onSubmit.
           })
         }}
-        disabled={loading}
+        disabled={loading || passkeyBusy}
         busy={loading}
         accessibilityLabel={loading ? 'Signing In' : 'Sign In'}
         label="Sign In"
@@ -159,6 +275,56 @@ export function SignInScreenContent() {
         tint={tint}
         spinnerColor={accent.onAccent}
       />
+
+      {passkeyOffered ? (
+        <Pressable
+          onPress={onPasskeyPress}
+          disabled={loading || passkeyBusy}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in with a passkey"
+          style={webPointer}
+        >
+          <Text style={authFormStyles.footerLink}>
+            <Text
+              style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}
+            >
+              {passkeyBusy ? 'Waiting for passkey…' : 'Sign in with a passkey'}
+            </Text>
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {authProviders.length > 0 && !oauthOnWeb ? (
+        <Text style={authFormStyles.footerLink}>{OAUTH_WEB_ONLY_NOTE}</Text>
+      ) : null}
+
+      {oauthOnWeb
+        ? authProviders.map((provider) => (
+            <Pressable
+              key={provider}
+              onPress={() => {
+                void Linking.openURL(
+                  oauthStartUrl(provider, { redirectTo: currentRedirect }),
+                )
+              }}
+              disabled={loading || passkeyBusy}
+              accessibilityRole="link"
+              accessibilityLabel={`Sign in with ${PROVIDER_LABEL[provider]}`}
+              style={webPointer}
+            >
+              <Text style={authFormStyles.footerLink}>
+                <Text
+                  style={[
+                    authFormStyles.footerLinkAccent,
+                    tint.footerLinkAccent,
+                  ]}
+                >
+                  Sign in with {PROVIDER_LABEL[provider]}
+                </Text>
+              </Text>
+            </Pressable>
+          ))
+        : null}
     </AuthScreenShell>
   )
 }

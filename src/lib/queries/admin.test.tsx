@@ -9,12 +9,14 @@ import { queryKeys } from '../query-keys'
 import {
   useApplyPublicUrls,
   useApplyReencryptSecrets,
+  useAuthProviderSettings,
   useEmailSettings,
   useCreateForge,
   useDeleteForge,
   useForges,
   usePublicUrls,
   usePublicUrlsOptional,
+  useSaveAuthProviderSettings,
   useSaveEmailSettings,
   useSavePublicUrls,
   useSaveServerMetricsLiveSettings,
@@ -32,7 +34,9 @@ const {
   saveSignupSettings,
   savePublicUrls,
   applyPublicUrls,
+  fetchAuthProviderSettings,
   fetchEmailSettings,
+  saveAuthProviderSettings,
   saveEmailSettings,
   applyReencryptSecrets,
   fetchForges,
@@ -49,7 +53,9 @@ const {
   saveSignupSettings: vi.fn(),
   savePublicUrls: vi.fn(),
   applyPublicUrls: vi.fn(),
+  fetchAuthProviderSettings: vi.fn(),
   fetchEmailSettings: vi.fn(),
+  saveAuthProviderSettings: vi.fn(),
   saveEmailSettings: vi.fn(),
   applyReencryptSecrets: vi.fn(),
   fetchForges: vi.fn(),
@@ -71,7 +77,9 @@ vi.mock('../instance-api', async (importOriginal) => {
     saveSignupSettings,
     savePublicUrls,
     applyPublicUrls,
+    fetchAuthProviderSettings,
     fetchEmailSettings,
+    saveAuthProviderSettings,
     saveEmailSettings,
     applyReencryptSecrets,
     fetchForges,
@@ -467,6 +475,48 @@ describe('admin query hooks', () => {
 
     await waitFor(() => {
       expect(client.getQueryData(queryKeys.admin.email)).toEqual(payload)
+    })
+  })
+
+  it('useAuthProviderSettings loads OAuth client credentials', async () => {
+    fetchAuthProviderSettings.mockResolvedValueOnce({ ok: true, settings: {} })
+
+    const { result } = renderHook(() => useAuthProviderSettings(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchAuthProviderSettings).toHaveBeenCalled()
+  })
+
+  it('useAuthProviderSettings stays idle when enabled is false', () => {
+    const { result } = renderHook(
+      () => useAuthProviderSettings({ enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchAuthProviderSettings).not.toHaveBeenCalled()
+  })
+
+  it('useSaveAuthProviderSettings updates the auth-providers cache', async () => {
+    const payload = { ok: true, settings: {} }
+    saveAuthProviderSettings.mockResolvedValueOnce(payload)
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useSaveAuthProviderSettings(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: 'Iv1.example',
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    await waitFor(() => {
+      expect(client.getQueryData(queryKeys.admin.authProviders)).toEqual(payload)
     })
   })
 

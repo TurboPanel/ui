@@ -5,6 +5,9 @@ import {
   DATACENTER_HAS_NETWORKS_ERROR,
   acceptInvitation,
   addDatacenterMembers,
+  createInvitation,
+  listInvitations,
+  revokeInvitation,
   applyPublicUrls,
   applyReencryptSecrets,
   createAccessGrant,
@@ -377,6 +380,46 @@ describe('instance-api topology fetch wrappers', () => {
       '/api/client/v1/invitations/inv-1/accept',
     )
     expect(requestInit(acceptCall).method).toBe('POST')
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        id: 'inv-2',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
+    )
+    await expect(
+      createInvitation({ teamId: 'team-1', email: 'new@example.com' }),
+    ).resolves.toEqual({
+      ok: true,
+      id: 'inv-2',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    })
+    const createInviteCall = fetchMock.mock.calls[3]
+    expect(requestUrl(createInviteCall)).toContain('/api/client/v1/invitations')
+    expect(requestInit(createInviteCall).method).toBe('POST')
+    expect(requestBody(createInviteCall)).toEqual({
+      teamId: 'team-1',
+      email: 'new@example.com',
+    })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ invitations: [{ id: 'inv-2', email: 'new@example.com' }] }),
+    )
+    await expect(listInvitations()).resolves.toEqual({
+      invitations: [{ id: 'inv-2', email: 'new@example.com' }],
+    })
+    expect(requestUrl(fetchMock.mock.calls[4])).toContain(
+      '/api/client/v1/invitations',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await expect(revokeInvitation('inv-2')).resolves.toEqual({ ok: true })
+    const revokeInviteCall = fetchMock.mock.calls[5]
+    expect(requestUrl(revokeInviteCall)).toContain(
+      '/api/client/v1/invitations/inv-2',
+    )
+    expect(requestInit(revokeInviteCall).method).toBe('DELETE')
   })
 
   it('public URL admin helpers fetch, save, and apply with optional urls', async () => {

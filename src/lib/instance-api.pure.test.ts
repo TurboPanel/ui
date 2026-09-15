@@ -421,11 +421,26 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
       billingEnabled: false,
+      authProviders: [],
       runtime: 'deno',
       needsInstall: true,
       isInstallMode: true,
       isSignupEnabled: true,
       isSignupEmailVerificationEnabled: true,
+    })
+  })
+
+  it('fetchInstallStatus keeps only known auth provider ids', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        runtime: 'workers',
+        isSignupEnabled: true,
+        authProviders: ['github', 'unknown', 'google'],
+      }),
+    )
+    await expect(fetchInstallStatus()).resolves.toMatchObject({
+      authProviders: ['github', 'google'],
     })
   })
 
@@ -452,6 +467,7 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
       billingEnabled: false,
+      authProviders: [],
       runtime: 'workers',
       needsInstall: false,
       isInstallMode: false,
@@ -468,6 +484,7 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
       billingEnabled: false,
+      authProviders: [],
       runtime: 'workers',
       isInstallMode: false,
       isSignupEnabled: false,
@@ -483,6 +500,7 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
       billingEnabled: false,
+      authProviders: [],
       isSignupEnabled: false,
     })
   })

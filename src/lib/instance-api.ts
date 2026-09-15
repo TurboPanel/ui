@@ -151,6 +151,8 @@ export type SessionInfo = {
   role: string | null
   /** Deno self-hosted only — absent on Workers. */
   needsInstall?: boolean
+  /** Two-factor authentication is enrolled and verified for this account. */
+  is2faEnabled?: boolean
 }
 
 export type OrganizationRecord = {
@@ -158,6 +160,8 @@ export type OrganizationRecord = {
   name: string | null
   createdAt: string
 }
+
+export type OAuthProvider = 'github' | 'google'
 
 export type InstallStatus = {
   /**
@@ -181,6 +185,12 @@ export type InstallStatus = {
    * always fills it in.
    */
   billingEnabled?: boolean
+  /**
+   * OAuth providers configured on this control plane (`GET /status`).
+   * Optional on the type (older instances omit it); `fetchInstallStatus`
+   * always fills it in.
+   */
+  authProviders?: OAuthProvider[]
 }
 
 export async function fetchSession(): Promise<SessionInfo | null> {
@@ -205,25 +215,49 @@ export async function fetchSession(): Promise<SessionInfo | null> {
   }
 
   const body = (await response.json()) as SessionInfo & { ok: true }
+  return toSessionInfo(body)
+}
+
+/** Shared mapping for every route that answers with a session payload. */
+function toSessionInfo(body: SessionInfo): SessionInfo {
   return {
     userId: body.userId ?? null,
     email: body.email ?? null,
     role: body.role ?? null,
     ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
+    ...(body.is2faEnabled === undefined ? {} : { is2faEnabled: body.is2faEnabled }),
   }
 }
 
-export async function signIn(email: string, password: string): Promise<SessionInfo> {
-  const body = await apiFetch<SessionInfo & { ok: true }>(`${CLIENT_API}/auth/sign-in`, {
+/**
+ * `POST /auth/sign-in` answered with a pending second factor rather than a
+ * session. The challenge is opaque and short-lived — pass it straight back to
+ * {@link signInTwoFactor}.
+ */
+export type TwoFactorChallenge = {
+  requires2fa: true
+  challenge: string
+}
+
+export type SignInResult = SessionInfo | TwoFactorChallenge
+
+export function isTwoFactorChallenge(
+  result: SignInResult,
+): result is TwoFactorChallenge {
+  return 'requires2fa' in result && result.requires2fa === true
+}
+
+export async function signIn(email: string, password: string): Promise<SignInResult> {
+  const body = await apiFetch<
+    SessionInfo & { ok: true; requires2fa?: boolean; challenge?: string }
+  >(`${CLIENT_API}/auth/sign-in`, {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
-  return {
-    userId: body.userId ?? null,
-    email: body.email ?? null,
-    role: body.role ?? null,
-    ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
+  if (body.requires2fa === true && typeof body.challenge === 'string') {
+    return { requires2fa: true, challenge: body.challenge }
   }
+  return toSessionInfo(body)
 }
 
 export async function bootstrapInstall(username: string, password: string): Promise<{ ok: true }> {
@@ -239,12 +273,20 @@ export async function signOut(): Promise<{ ok: true }> {
   })
 }
 
+function toOAuthProviders(value: unknown): OAuthProvider[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is OAuthProvider =>
+    entry === 'github' || entry === 'google'
+  )
+}
+
 export async function fetchInstallStatus(): Promise<InstallStatus> {
   const body = await apiFetch<InstallStatus & { ok: true; needsInstall?: boolean }>(
     `${CLIENT_API}/status`
   )
   return {
     billingEnabled: body.billingEnabled === true,
+    authProviders: toOAuthProviders(body.authProviders),
     ...(body.runtime === 'deno' || body.runtime === 'workers' ? { runtime: body.runtime } : {}),
     ...(body.needsInstall === undefined ? {} : { needsInstall: body.needsInstall }),
     ...(body.isInstallMode === undefined && body.needsInstall === undefined
@@ -259,16 +301,263 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
   }
 }
 
-export async function signUp(email: string, password: string): Promise<{ ok: true }> {
+export async function signUp(
+  email: string,
+  password: string,
+  invitationId?: string,
+): Promise<{ ok: true }> {
+  const body: { email: string; password: string; invitationId?: string } = {
+    email,
+    password,
+  }
+  if (invitationId) {
+    body.invitationId = invitationId
+  }
   return await apiFetch(`${CLIENT_API}/auth/sign-up`, {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   })
 }
 
 export async function verifyEmail(token: string): Promise<{ ok: true }> {
   const params = new URLSearchParams({ token })
   return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`)
+}
+
+/**
+ * A registered WebAuthn credential. `deviceType` / `isBackedUp` come from both
+ * GET /auth/passkeys and GET /auth/2fa. Parsers still default omitted fields
+ * to `null` / `false` rather than making them optional on the type.
+ */
+export type PasskeyRecord = {
+  id: string
+  /** Operator-supplied label; the control plane allows it to be unset. */
+  name: string | null
+  createdAt: string
+  deviceType: string | null
+  isBackedUp: boolean
+}
+
+export type TwoFactorStatus = {
+  enabled: boolean
+  method: 'totp' | null
+  backupCodesRemaining: number
+  passkeys: PasskeyRecord[]
+  /** OAuth identities on this account. Extended on `GET /2fa` rather than adding `GET /auth/oauth`. */
+  linkedProviders: OAuthProvider[]
+}
+
+/** Which kind of secret the operator typed at the second-factor prompt. */
+export type TwoFactorCodeKind = 'totp' | 'backup'
+
+/** Server-built ceremony options plus the signed challenge envelope to echo back. */
+export type PasskeyCeremonyOptions = {
+  challenge: string
+  options: unknown
+}
+
+function toPasskeyRecords(value: unknown): PasskeyRecord[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const row = (entry ?? {}) as Partial<PasskeyRecord>
+    return {
+      id: typeof row.id === 'string' ? row.id : '',
+      name: typeof row.name === 'string' ? row.name : null,
+      createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
+      deviceType: typeof row.deviceType === 'string' ? row.deviceType : null,
+      isBackedUp: row.isBackedUp === true,
+    }
+  })
+}
+
+/** Completes a sign-in that answered {@link TwoFactorChallenge}. */
+export async function signInTwoFactor(
+  challenge: string,
+  code: string,
+  kind: TwoFactorCodeKind = 'totp',
+): Promise<SessionInfo> {
+  const body = await apiFetch<SessionInfo & { ok: true }>(
+    `${CLIENT_API}/auth/sign-in/2fa`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        challenge,
+        ...(kind === 'backup' ? { backupCode: code } : { code }),
+      }),
+    }
+  )
+  return toSessionInfo(body)
+}
+
+export async function fetchTwoFactorStatus(): Promise<TwoFactorStatus> {
+  const body = await apiFetch<{
+    enabled?: boolean
+    method?: 'totp' | null
+    backupCodesRemaining?: number
+    passkeys?: unknown
+    linkedProviders?: unknown
+  }>(`${CLIENT_API}/auth/2fa`)
+  return {
+    enabled: body.enabled === true,
+    method: body.method === 'totp' ? 'totp' : null,
+    backupCodesRemaining: body.backupCodesRemaining ?? 0,
+    passkeys: toPasskeyRecords(body.passkeys),
+    linkedProviders: toOAuthProviders(body.linkedProviders),
+  }
+}
+
+/**
+ * Starts TOTP enrollment. `password` satisfies the step-up check on accounts
+ * whose session is older than the re-auth window; omit it and the route
+ * answers **403** when the session is too old.
+ */
+export async function enrollTotp(
+  password?: string
+): Promise<{ secret: string; otpauthUri: string }> {
+  return await apiFetch(`${CLIENT_API}/auth/2fa/totp/enroll`, {
+    method: 'POST',
+    body: JSON.stringify(password ? { password } : {}),
+  })
+}
+
+/** Confirms enrollment and returns the one-time-visible backup codes. */
+export async function verifyTotp(code: string): Promise<{ backupCodes: string[] }> {
+  return await apiFetch(`${CLIENT_API}/auth/2fa/totp/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+}
+
+export async function regenerateBackupCodes(
+  password?: string
+): Promise<{ backupCodes: string[] }> {
+  return await apiFetch(`${CLIENT_API}/auth/2fa/backup-codes/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify(password ? { password } : {}),
+  })
+}
+
+export async function disableTwoFactor(
+  password?: string,
+  code?: string
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/2fa/disable`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(password ? { password } : {}),
+      ...(code ? { code } : {}),
+    }),
+  })
+}
+
+export async function passkeyRegisterOptions(
+  password?: string
+): Promise<PasskeyCeremonyOptions> {
+  return await apiFetch(`${CLIENT_API}/auth/passkeys/register/options`, {
+    method: 'POST',
+    body: JSON.stringify(password ? { password } : {}),
+  })
+}
+
+export async function passkeyRegisterVerify(
+  challenge: string,
+  name: string,
+  credential: unknown
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/auth/passkeys/register/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ challenge, name, credential }),
+  })
+}
+
+export async function deletePasskey(
+  id: string,
+  password?: string
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/passkeys/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    body: JSON.stringify(password ? { password } : {}),
+  })
+}
+
+/**
+ * Where to send the browser to start (or link) a GitHub/Google sign-in.
+ *
+ * Deliberately a URL rather than a fetch: the endpoint answers `302` to the
+ * provider's authorize page, and the operator has to *land* there. Following
+ * it with `fetch` would consume the redirect and show nothing.
+ */
+export function oauthStartUrl(
+  provider: OAuthProvider,
+  opts?: { redirectTo?: string; link?: boolean }
+): string {
+  const params = new URLSearchParams()
+  if (opts?.redirectTo) params.set('redirectTo', opts.redirectTo)
+  if (opts?.link) params.set('link', '1')
+  const query = params.toString()
+  const suffix = query ? `?${query}` : ''
+  const path = `${CLIENT_API}/auth/oauth/${provider}/start${suffix}`
+  return controlPlaneUrl(path)
+}
+
+/**
+ * Same-origin path to send the browser back to after a provider sign-in.
+ *
+ * Built from the current sign-in route plus leftover query context. Inbound
+ * OAuth / 2FA callback keys (`error`, `challenge`) are omitted so a retry
+ * does not land on a stale failure or consume a used challenge.
+ */
+export function signInOAuthRedirect(
+  pathname: string,
+  params: Record<string, string | string[] | undefined> = {},
+): string {
+  const path = pathname.startsWith('/') ? pathname : `/${pathname}`
+  const search = new URLSearchParams()
+  const keys = Object.keys(params).sort((a, b) => a.localeCompare(b))
+  for (const key of keys) {
+    if (key === 'error' || key === 'challenge') continue
+    const raw = params[key]
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (value) search.set(key, value)
+  }
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
+}
+
+export async function unlinkProvider(
+  provider: OAuthProvider,
+  password?: string
+): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/oauth/${encodeURIComponent(provider)}`, {
+    method: 'DELETE',
+    body: JSON.stringify(password ? { password } : {}),
+  })
+}
+
+/** Native / cross-origin clients cannot complete the provider redirect. */
+export const OAUTH_WEB_ONLY_NOTE =
+  'Sign in with GitHub or Google from a browser. This device cannot complete that flow.'
+
+/** Public ceremony start — no session required, rate-limited server-side. */
+export async function passkeyLoginOptions(): Promise<PasskeyCeremonyOptions> {
+  return await apiFetch(`${CLIENT_API}/auth/passkeys/login/options`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function passkeyLoginVerify(
+  challenge: string,
+  credential: unknown
+): Promise<SessionInfo> {
+  const body = await apiFetch<SessionInfo & { ok: true }>(
+    `${CLIENT_API}/auth/passkeys/login/verify`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ challenge, credential }),
+    }
+  )
+  return toSessionInfo(body)
 }
 
 export type ServerGeo = {
@@ -2102,7 +2391,7 @@ export type HostingRecord = {
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
 
-export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked'
+export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked' | 'managed'
 
 export type TlsMetadata = {
   dnsNames: string[]
@@ -3151,6 +3440,47 @@ export async function revokeAccessGrant(id: string): Promise<{ ok: true }> {
   })
 }
 
+export type InvitationGrantSpec = {
+  entityType: string
+  entityId: string
+  permissionKey: string
+}
+
+export type InvitationRecord = {
+  id: string
+  email: string
+  teamId: string
+  teamName: string | null
+  expiresAt: string
+  createdAt: string
+  invitedBy: string | null
+}
+
+export type CreateInvitationBody = {
+  teamId: string
+  email: string
+  grants?: InvitationGrantSpec[]
+}
+
+export async function createInvitation(
+  body: CreateInvitationBody,
+): Promise<{ ok: true; id: string; expiresAt: string }> {
+  return await apiFetch(`${CLIENT_API}/invitations`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listInvitations(): Promise<{ invitations: InvitationRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/invitations`)
+}
+
+export async function revokeInvitation(id: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/invitations/${id}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function acceptInvitation(
   invitationId: string
 ): Promise<{ ok: true; organizationId: string }> {
@@ -3574,6 +3904,28 @@ export async function saveEmailSettings(
 ): Promise<EmailSettingsResponse> {
   const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
     ADMIN_EMAIL_SETTINGS_URL,
+    {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }
+  )
+  return { ok: true, settings: raw.settings ?? {} }
+}
+
+const ADMIN_AUTH_PROVIDER_SETTINGS_URL = `${ADMIN_API}/settings/auth-providers`
+
+export async function fetchAuthProviderSettings(): Promise<EmailSettingsResponse> {
+  const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
+    ADMIN_AUTH_PROVIDER_SETTINGS_URL
+  )
+  return { ok: true, settings: raw.settings ?? {} }
+}
+
+export async function saveAuthProviderSettings(
+  settings: Record<string, string | null>
+): Promise<EmailSettingsResponse> {
+  const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
+    ADMIN_AUTH_PROVIDER_SETTINGS_URL,
     {
       method: 'PUT',
       body: JSON.stringify(settings),

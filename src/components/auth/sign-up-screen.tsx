@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { Link, useRouter } from 'expo-router'
+import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
 import {
   AuthPasswordMeter,
@@ -24,6 +24,7 @@ import {
   resolveControlPlaneRuntime,
   type AuthAccentTheme,
 } from '@/lib/auth-accent'
+import { signInForInvitationHref } from '@/lib/invitation-return'
 import { useSignUp } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
@@ -206,8 +207,19 @@ function SignupSuccess({
   )
 }
 
+function normalizeInvitationId(param: string | string[] | undefined): string {
+  if (param == null) return ''
+  if (Array.isArray(param)) {
+    const first = param.find((value) => typeof value === 'string' && value.trim().length > 0)
+    return first == null ? '' : first.trim()
+  }
+  return typeof param === 'string' ? param.trim() : ''
+}
+
 export function SignUpScreenContent() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ invitationId?: string | string[] }>()
+  const invitationId = normalizeInvitationId(params.invitationId)
   const signUpMutation = useSignUp()
   const {
     data: instanceInfo,
@@ -246,7 +258,8 @@ export function SignUpScreenContent() {
     compromised: '',
   }[meterStatus]
   const isInstallMode = instanceInfo?.isInstallMode === true
-  const isSignupDisabled = instanceInfo?.isSignupEnabled === false
+  const isSignupDisabled =
+    instanceInfo?.isSignupEnabled === false && invitationId.length === 0
   /** Workers omit install fields — sign-up is the bootstrap path when enabled. */
   const instanceInfoWarning =
     instanceInfoErrored || !instanceInfo
@@ -254,8 +267,10 @@ export function SignUpScreenContent() {
       : ''
 
   const onSignupSuccessContinue = useCallback(() => {
-    router.replace('/sign-in')
-  }, [router])
+    router.replace(
+      (invitationId ? signInForInvitationHref(invitationId) : '/sign-in') as Href,
+    )
+  }, [invitationId, router])
 
   const onEmailChange = useCallback((text: string) => {
     setEmail(text)
@@ -309,7 +324,9 @@ export function SignUpScreenContent() {
     }
     setError('')
     try {
-      await signUpMutation.mutateAsync({ email, password })
+      await signUpMutation.mutateAsync(
+        invitationId ? { email, password, invitationId } : { email, password },
+      )
       setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed')
@@ -322,6 +339,7 @@ export function SignUpScreenContent() {
     pwnedCheckedPassword,
     isPwned,
     signUpMutation,
+    invitationId,
   ])
 
   useEffect(() => {

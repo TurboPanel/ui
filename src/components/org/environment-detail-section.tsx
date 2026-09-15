@@ -1132,7 +1132,7 @@ function HostingPanelRow({
   const hostnames = parseHostnameList(editor.hostnames)
   const covering = tlsOptions.filter(
     (row) =>
-      row.metadata.status === 'ready' &&
+      (row.metadata.status === 'ready' || row.metadata.status === 'managed') &&
       coversAllHostnames(row.metadata.dnsNames, hostnames),
   )
 

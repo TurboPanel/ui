@@ -410,6 +410,7 @@ const AREA_ICONS = {
 const ADMIN_AREA_ICONS = {
   networking: NetworkingNavIcon,
   email: EmailNavIcon,
+  'auth-providers': AccessNavIcon,
   git: GitNavIcon,
   signup: SignupNavIcon,
   secrets: SecretsNavIcon,

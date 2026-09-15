@@ -1,4 +1,4 @@
-import { Redirect, Stack, useSegments } from 'expo-router'
+import { Redirect, Stack, useLocalSearchParams, useSegments } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { useEffect } from 'react'
 import {
@@ -17,6 +17,7 @@ import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { resolveAuthGuardHref } from '@/lib/auth-guard'
 import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
+import { safeAuthReturnPath } from '@/lib/invitation-return'
 import { ORG_CONSOLE_SINGULAR_ID } from '@/lib/org-navigation'
 import { colors } from '@/lib/theme'
 
@@ -57,6 +58,13 @@ export default function RootLayout() {
   )
 }
 
+function firstSearchParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(value)) return value[0]
+  return value
+}
+
 function AuthGuard() {
   const {
     session,
@@ -66,6 +74,7 @@ function AuthGuard() {
     needsControlPlane,
   } = useAuth()
   const segments = useSegments()
+  const params = useLocalSearchParams<{ redirectTo?: string | string[] }>()
   const topSegment = (segments as readonly string[])[0]
 
   if (isLoading) {
@@ -87,6 +96,7 @@ function AuthGuard() {
     needsControlPlane,
     blockNativeInstall: isRemoteCookieClient() && needsInstall,
     allowConnect: !usesSameOriginApi(),
+    returnTo: safeAuthReturnPath(firstSearchParam(params.redirectTo)),
   })
 
   // Keep Stack mounted while redirecting. Swapping Stack out for <Redirect />

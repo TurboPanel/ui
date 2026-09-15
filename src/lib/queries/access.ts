@@ -1,14 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAccessGrant,
+  createInvitation,
   fetchAccessGrants,
   fetchOrganizations,
   fetchPermissions,
   fetchVisibleTeams,
+  listInvitations,
   resolveResourceId,
   revokeAccessGrant,
+  revokeInvitation,
   type AccessScopeKind,
   type CreateAccessBody,
+  type CreateInvitationBody,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
@@ -71,6 +75,41 @@ export function useCreateAccessGrant(resourceId: string) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.accessGrants(resourceId),
+      })
+    },
+  })
+}
+
+export function useInvitations(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.auth.invitations(orgId),
+    queryFn: listInvitations,
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+  })
+}
+
+export function useCreateInvitation(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: CreateInvitationBody) => createInvitation(body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.auth.invitations(orgId),
+      })
+    },
+  })
+}
+
+export function useRevokeInvitation(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: revokeInvitation,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.auth.invitations(orgId),
       })
     },
   })

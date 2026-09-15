@@ -10,6 +10,7 @@ import {
   deleteForge,
   fetchAdminTierProducts,
   fetchAdminTiers,
+  fetchAuthProviderSettings,
   fetchEmailSettings,
   fetchForges,
   fetchPublicUrls,
@@ -19,6 +20,7 @@ import {
   type ForgeUpdate,
   isForbiddenError,
   patchAdminTier,
+  saveAuthProviderSettings,
   saveEmailSettings,
   savePublicUrls,
   saveServerMetricsLiveSettings,
@@ -221,6 +223,24 @@ export function useSaveEmailSettings() {
     mutationFn: saveEmailSettings,
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.admin.email, data)
+    },
+  })
+}
+
+export function useAuthProviderSettings(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.authProviders,
+    queryFn: fetchAuthProviderSettings,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveAuthProviderSettings() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveAuthProviderSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.admin.authProviders, data)
     },
   })
 }

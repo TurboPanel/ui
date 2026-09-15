@@ -18,6 +18,20 @@
 - Footer copyright: `© {year} TurboPanel` (muted) under the panel / alt-path link  
 - Install is a two-step host→superadmin flow — progressive disclosure, not one long form; same shell/column/`GlassSurface`/`AuthFloatingField` as sign-in, but **no** runtime accent tint and **no** backdrop streak motion (`animateBackdrop={false}`, muted chrome)
 
+## Second factor & passkeys
+
+`POST /auth/sign-in` may answer with a pending factor instead of a session. Both extra states live in the **same shell and panel** as the password form — a second factor is a step, not a route, and the challenge is short-lived.
+
+- **Code step** (`two-factor-step.tsx`): title swaps to “Two-factor authentication”, the panel body swaps to one `AuthFloatingField` labelled **“Authentication code”** plus the standard accent CTA (**Verify** / *Verifying…*). A short muted line above the field says where the code comes from. The CTA stays disabled until the code is plausibly complete (6 digits) so an obvious typo never spends an attempt.
+- **Backup-code toggle**: a footer-styled accent `Pressable` (**“Use a backup code”** ⇄ **“Use your authenticator app”**), not a `SegmentedControl` — it is an escape hatch, not a co-equal mode. Toggling clears the field and relabels it **“Backup code”**; the copy, label, keyboard, and autofill hint come from `src/lib/two-factor-prompt.ts`. Below it, a muted **“Back to sign in”** returns to the password form.
+- **Passkey button**: a footer-styled accent `Pressable` (**“Sign in with a passkey”**, *“Waiting for passkey…”* while the ceremony is open) under the Sign In CTA. Rendered **only** when `isPasskeySupported()` — web, same-origin control plane. It is deliberately not a second filled CTA: one accent fill per panel. Ceremony failures surface in the existing `error` line, never a modal.
+
+## Third-party sign-in
+
+Provider buttons sit **below** the passkey link and use the same footer-styled accent text — never a second filled CTA (one accent fill per panel). They appear only for entries in `InstallStatus.authProviders` (`github` / `google`). On web (same-origin) each button is a top-level navigation via `Linking.openURL(oauthStartUrl(provider, { redirectTo: currentRedirect }))` — never `fetch`. `currentRedirect` is the current `/sign-in` route plus leftover query (`signInOAuthRedirect`). On native or a cross-origin control plane the buttons are omitted and a short **“Sign in with GitHub or Google from a browser”** note is shown instead (`OAUTH_WEB_ONLY_NOTE`).
+
+`?error=` from the OAuth callback lands in the existing `error` line (known codes mapped to short copy; unknown codes fall back to a generic message). `?challenge=` sets the existing `challenge` state so the flow drops into `TwoFactorStep` without a route change.
+
 ## Style
 
 - Same OLED dark as the console (no light marketing theme swap)  
@@ -53,3 +67,6 @@
 - ❌ Placeholder-only fields with no visible label when empty *and* when filled (floating label must remain visible when raised)  
 - ❌ Letting the floating-label animation eat the first click (label must ignore pointer events for the whole raise, including mid-tween frames)  
 - ❌ Text “Show” / “Hide” for password visibility on sign-in  
+- ❌ A second filled CTA for passkeys or OAuth providers (one accent fill per panel — both are text links)  
+- ❌ Routing the second factor to its own screen, or rendering it in a modal over the sign-in form  
+- ❌ Showing the passkey button on native or on a cross-origin control plane (gate on `isPasskeySupported()`)  

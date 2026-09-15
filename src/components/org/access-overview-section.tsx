@@ -21,15 +21,19 @@ import type {
   AccessGrantRecord,
   AccessScopeKind,
   CreateAccessBody,
+  InvitationRecord,
   PermissionKey,
   PermissionRecord,
 } from '@/lib/instance-api'
 import {
   useAccessGrants,
   useCreateAccessGrant,
+  useCreateInvitation,
+  useInvitations,
   usePermissions,
   useResolveResourceId,
   useRevokeAccessGrant,
+  useRevokeInvitation,
   useTeams,
 } from '@/lib/queries/access'
 import {
@@ -117,6 +121,132 @@ function TeamScopePicker({
       <Text style={styles.label}>Team</Text>
       {body}
     </>
+  )
+}
+
+function formatInvitationExpiry(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+function InviteTeammatePanel({
+  email,
+  teamId,
+  teamsLoading,
+  teamsError,
+  teamItems,
+  submitting,
+  submitError,
+  onEmailChange,
+  onTeamSelect,
+  onSubmit,
+}: Readonly<{
+  email: string
+  teamId: string
+  teamsLoading: boolean
+  teamsError: unknown
+  teamItems: ScopeItem[]
+  submitting: boolean
+  submitError: string | null
+  onEmailChange: (text: string) => void
+  onTeamSelect: (id: string) => void
+  onSubmit: () => void
+}>) {
+  return (
+    <SectionPanel title="Invite a teammate" hint="Send an email invitation">
+      <View style={styles.form}>
+        <TextField
+          label="Email"
+          value={email}
+          onChangeText={onEmailChange}
+          editable={!submitting}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+        />
+        <TeamScopePicker
+          isLoading={teamsLoading}
+          isError={Boolean(teamsError)}
+          error={teamsError}
+          items={teamItems}
+          selectedItemId={teamId}
+          onSelect={onTeamSelect}
+        />
+        {submitError ? (
+          <Text style={panelStyles.error}>{submitError}</Text>
+        ) : null}
+        <Button
+          label="Send invitation"
+          busyLabel="Sending..."
+          variant="primary"
+          busy={submitting}
+          onPress={onSubmit}
+        />
+      </View>
+    </SectionPanel>
+  )
+}
+
+function PendingInvitationsPanel({
+  isLoading,
+  isError,
+  error,
+  invitations,
+  revokingId,
+  onRevoke,
+}: Readonly<{
+  isLoading: boolean
+  isError: boolean
+  error: unknown
+  invitations: InvitationRecord[]
+  revokingId: string | null
+  onRevoke: (id: string) => void
+}>) {
+  let body: ReactNode
+  if (isLoading) {
+    body = <LoadingState label="Loading invitations..." />
+  } else if (isError) {
+    body = (
+      <Text style={panelStyles.error}>
+        {errorMessage(error, 'Failed to load invitations')}
+      </Text>
+    )
+  } else if (invitations.length === 0) {
+    body = <EmptyState title="No pending invitations." />
+  } else {
+    body = (
+      <View style={styles.list}>
+        {invitations.map((invite) => (
+          <View key={invite.id} style={panelStyles.detailCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardTitleBlock}>
+                <Text style={panelStyles.detailTitle}>{invite.email}</Text>
+                <Text style={panelStyles.detailLine}>
+                  {invite.teamName?.trim() || invite.teamId}
+                </Text>
+                <Text style={panelStyles.detailLine}>
+                  Expires {formatInvitationExpiry(invite.expiresAt)}
+                </Text>
+              </View>
+              <ConfirmButton
+                label={revokingId === invite.id ? 'Revoking...' : 'Revoke'}
+                confirmLabel="Revoke invitation"
+                prompt="Revoke this invitation?"
+                busy={revokingId === invite.id}
+                onConfirm={() => onRevoke(invite.id)}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+    )
+  }
+
+  return (
+    <SectionPanel title="Pending invitations" hint="Unexpired invites">
+      {body}
+    </SectionPanel>
   )
 }
 
@@ -306,7 +436,8 @@ export function AccessOverviewSection({
   const [scopeKind, setScopeKind] = useState<AccessScopeKind>('organization')
   const [selectedItemId, setSelectedItemId] = useState(orgId)
 
-  const teamsQuery = useTeams({ enabled: scopeKind === 'team' })
+  const canInvite = useCan('organization', orgId, 'organization:manage')
+  const teamsQuery = useTeams({ enabled: scopeKind === 'team' || canInvite })
   const teams = orEmptyArray(teamsQuery.data?.teams)
   const scopeItems = useMemo(
     () =>
@@ -348,6 +479,32 @@ export function AccessOverviewSection({
   )
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteTeamId, setInviteTeamId] = useState('')
+  const [inviteError, setInviteError] = useState<string | null>(null)
+
+  const inviteTeamItems = useMemo(
+    () =>
+      teams.map((row) => ({
+        id: row.id,
+        label: row.name?.trim() || row.id,
+      })),
+    [teams],
+  )
+
+  useEffect(() => {
+    if (inviteTeamItems.length === 0) {
+      setInviteTeamId('')
+      return
+    }
+    if (!inviteTeamItems.some((item) => item.id === inviteTeamId)) {
+      setInviteTeamId(inviteTeamItems[0]!.id)
+    }
+  }, [inviteTeamItems, inviteTeamId])
+
+  const invitationsQuery = useInvitations(orgId, { enabled: canInvite })
+  const createInvitationMutation = useCreateInvitation(orgId)
+  const revokeInvitationMutation = useRevokeInvitation(orgId)
 
   useEffect(() => {
     setSelectedPermissionKey(null)
@@ -415,7 +572,43 @@ export function AccessOverviewSection({
     })
   }
 
+  const onSendInvitation = () => {
+    const trimmedEmail = inviteEmail.trim()
+    if (!trimmedEmail) {
+      setInviteError('Email is required')
+      return
+    }
+    if (!inviteTeamId) {
+      setInviteError('Select a team')
+      return
+    }
+    setInviteError(null)
+    createInvitationMutation.mutate(
+      { teamId: inviteTeamId, email: trimmedEmail },
+      {
+        onSuccess: () => {
+          setInviteEmail('')
+        },
+        onError: () => {
+          setInviteError(
+            createInvitationMutation.actionError ?? 'Failed to send invitation',
+          )
+        },
+      },
+    )
+  }
+
+  const onRevokeInvitation = (invitationId: string) => {
+    revokeInvitationMutation.mutate(invitationId)
+  }
+
   const grants = grantsQuery.data?.access ?? []
+  const pendingInvitations = orEmptyArray(invitationsQuery.data?.invitations)
+  const revokingInvitationId =
+    revokeInvitationMutation.isPending &&
+    typeof revokeInvitationMutation.variables === 'string'
+      ? revokeInvitationMutation.variables
+      : null
   const revokingGrantId =
     revokeGrantMutation.isPending &&
     typeof revokeGrantMutation.variables === 'string'
@@ -428,6 +621,37 @@ export function AccessOverviewSection({
       <Text style={panelStyles.pageCopy}>
         Manage permission grants for organizations and teams.
       </Text>
+
+      {canInvite ? (
+        <>
+          <InviteTeammatePanel
+            email={inviteEmail}
+            teamId={inviteTeamId}
+            teamsLoading={teamsQuery.isLoading}
+            teamsError={teamsQuery.isError ? teamsQuery.error : null}
+            teamItems={inviteTeamItems}
+            submitting={createInvitationMutation.isPending}
+            submitError={inviteError ?? createInvitationMutation.actionError}
+            onEmailChange={(text) => {
+              setInviteEmail(text)
+              setInviteError(null)
+            }}
+            onTeamSelect={(id) => {
+              setInviteTeamId(id)
+              setInviteError(null)
+            }}
+            onSubmit={onSendInvitation}
+          />
+          <PendingInvitationsPanel
+            isLoading={invitationsQuery.isLoading}
+            isError={invitationsQuery.isError}
+            error={invitationsQuery.error}
+            invitations={pendingInvitations}
+            revokingId={revokingInvitationId}
+            onRevoke={onRevokeInvitation}
+          />
+        </>
+      ) : null}
 
       <SegmentedControl
         options={SCOPE_OPTIONS}

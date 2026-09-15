@@ -8,14 +8,25 @@ import {
   useBootstrapInstall,
   useCompleteInstall,
   useCreateOrganization,
+  useDeletePasskey,
+  useDisableTwoFactor,
+  useEnrollTotp,
   useInstallStatusQuery,
   useOrganizationsQuery,
+  usePasskeyRegisterOptions,
+  usePasskeyRegisterVerify,
+  useRegenerateBackupCodes,
   useSessionQuery,
   useSignIn,
+  useSignInTwoFactor,
+  useSignInWithPasskey,
   useSignOut,
   useSignUp,
+  useTwoFactorStatusQuery,
+  useUnlinkProvider,
   useUpdateOrganization,
   useVerifyEmail,
+  useVerifyTotp,
 } from '@/lib/queries/auth'
 
 const {
@@ -30,6 +41,18 @@ const {
   completeInstall,
   bootstrapInstall,
   verifyEmail,
+  fetchTwoFactorStatus,
+  signInTwoFactor,
+  enrollTotp,
+  verifyTotp,
+  regenerateBackupCodes,
+  disableTwoFactor,
+  passkeyRegisterOptions,
+  passkeyRegisterVerify,
+  deletePasskey,
+  unlinkProvider,
+  passkeyLoginOptions,
+  passkeyLoginVerify,
 } = vi.hoisted(() => ({
   fetchSession: vi.fn(),
   fetchInstallStatus: vi.fn(),
@@ -42,6 +65,22 @@ const {
   completeInstall: vi.fn(),
   bootstrapInstall: vi.fn(),
   verifyEmail: vi.fn(),
+  fetchTwoFactorStatus: vi.fn(),
+  signInTwoFactor: vi.fn(),
+  enrollTotp: vi.fn(),
+  verifyTotp: vi.fn(),
+  regenerateBackupCodes: vi.fn(),
+  disableTwoFactor: vi.fn(),
+  passkeyRegisterOptions: vi.fn(),
+  passkeyRegisterVerify: vi.fn(),
+  deletePasskey: vi.fn(),
+  unlinkProvider: vi.fn(),
+  passkeyLoginOptions: vi.fn(),
+  passkeyLoginVerify: vi.fn(),
+}))
+
+const { loginWithPasskey } = vi.hoisted(() => ({
+  loginWithPasskey: vi.fn(),
 }))
 
 const {
@@ -77,8 +116,26 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     completeInstall,
     bootstrapInstall,
     verifyEmail,
+    fetchTwoFactorStatus,
+    signInTwoFactor,
+    enrollTotp,
+    verifyTotp,
+    regenerateBackupCodes,
+    disableTwoFactor,
+    passkeyRegisterOptions,
+    passkeyRegisterVerify,
+    deletePasskey,
+    unlinkProvider,
+    passkeyLoginOptions,
+    passkeyLoginVerify,
   }
 })
+
+vi.mock('@/lib/passkey-client', () => ({
+  isPasskeySupported: () => false,
+  loginWithPasskey,
+  registerPasskey: vi.fn(),
+}))
 
 vi.mock('@/lib/control-plane-accounts', () => ({
   getActiveControlPlaneAccount,
@@ -262,6 +319,27 @@ describe('auth query hooks', () => {
       result.current.run({ email: 'new@example.com', password: 'secret' }),
     ).resolves.toMatchObject({ ok: true })
     expect(signUp).toHaveBeenCalledWith('new@example.com', 'secret')
+  })
+
+  it('useSignUp forwards invitationId when present', async () => {
+    signUp.mockResolvedValueOnce({ ok: true })
+
+    const { result } = renderHook(() => useSignUp(), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(
+      result.current.run({
+        email: 'new@example.com',
+        password: 'secret',
+        invitationId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(signUp).toHaveBeenCalledWith(
+      'new@example.com',
+      'secret',
+      '11111111-1111-4111-8111-111111111111',
+    )
   })
 
   it('useBootstrapInstall proxies bootstrap mutation', async () => {
@@ -463,5 +541,305 @@ describe('auth query hooks', () => {
         isSignupEnabled: false,
       })
     })
+  })
+})
+
+const SESSION = {
+  userId: 'u1',
+  email: 'ops@example.com',
+  role: 'admin',
+} as const
+
+describe('two-factor sign-in', () => {
+  it('useSignIn leaves the session cache alone on a pending challenge', async () => {
+    isRemoteCookieClient.mockReturnValue(true)
+    signIn.mockResolvedValueOnce({ requires2fa: true, challenge: 'chal-1' })
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useSignIn(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ email: 'ops@example.com', password: 'secret' }),
+    ).resolves.toMatchObject({ ok: true, value: { requires2fa: true } })
+
+    expect(client.getQueryData(['auth', 'session'])).toBeUndefined()
+    expect(rememberSignedInAccount).not.toHaveBeenCalled()
+  })
+
+  it('useSignInTwoFactor seeds the session on success', async () => {
+    signInTwoFactor.mockResolvedValueOnce({ ...SESSION, is2faEnabled: true })
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useSignInTwoFactor(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ challenge: 'chal-1', code: '123456' }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(signInTwoFactor).toHaveBeenCalledWith('chal-1', '123456', undefined)
+    expect(client.getQueryData(['auth', 'session'])).toMatchObject({
+      email: 'ops@example.com',
+      is2faEnabled: true,
+    })
+  })
+
+  it('useSignInTwoFactor forwards the backup-code kind', async () => {
+    signInTwoFactor.mockResolvedValueOnce(SESSION)
+
+    const { result } = renderHook(() => useSignInTwoFactor(), {
+      wrapper: createWrapper(),
+    })
+
+    await result.current.run({
+      challenge: 'chal-1',
+      code: 'abcd-efgh',
+      kind: 'backup',
+    })
+    expect(signInTwoFactor).toHaveBeenCalledWith('chal-1', 'abcd-efgh', 'backup')
+  })
+
+  it('useSignInTwoFactor remembers a remote account like password sign-in', async () => {
+    isRemoteCookieClient.mockReturnValue(true)
+    signInTwoFactor.mockResolvedValueOnce(SESSION)
+
+    const { result } = renderHook(() => useSignInTwoFactor(), {
+      wrapper: createWrapper(),
+    })
+
+    await result.current.run({ challenge: 'chal-1', code: '123456' })
+    expect(rememberSignedInAccount).toHaveBeenCalledWith({
+      email: 'ops@example.com',
+      runtime: null,
+    })
+  })
+})
+
+describe('useSignInWithPasskey', () => {
+  it('runs the ceremony and seeds the session', async () => {
+    passkeyLoginOptions.mockResolvedValueOnce({
+      challenge: 'chal-1',
+      options: { rpId: 'panel.example.com' },
+    })
+    loginWithPasskey.mockResolvedValueOnce({
+      supported: true,
+      credential: { id: 'cred' },
+    })
+    passkeyLoginVerify.mockResolvedValueOnce(SESSION)
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useSignInWithPasskey(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(loginWithPasskey).toHaveBeenCalledWith({
+      rpId: 'panel.example.com',
+    })
+    expect(passkeyLoginVerify).toHaveBeenCalledWith('chal-1', { id: 'cred' })
+    expect(client.getQueryData(['auth', 'session'])).toMatchObject(SESSION)
+  })
+
+  it('fails with the web-only note when the platform has no WebAuthn', async () => {
+    passkeyLoginOptions.mockResolvedValueOnce({
+      challenge: 'chal-1',
+      options: {},
+    })
+    loginWithPasskey.mockResolvedValueOnce({ supported: false })
+
+    const { result } = renderHook(() => useSignInWithPasskey(), {
+      wrapper: createWrapper(),
+    })
+
+    const outcome = await result.current.run()
+    expect(outcome.ok).toBe(false)
+    if (outcome.ok) throw new TypeError('expected an unsupported failure')
+    expect(outcome.error).toContain('browser')
+    expect(passkeyLoginVerify).not.toHaveBeenCalled()
+  })
+})
+
+describe('two-factor management hooks', () => {
+  it('useTwoFactorStatusQuery loads status and passkeys', async () => {
+    fetchTwoFactorStatus.mockResolvedValueOnce({
+      enabled: true,
+      method: 'totp',
+      backupCodesRemaining: 8,
+      passkeys: [],
+      linkedProviders: [],
+    })
+
+    const { result } = renderHook(() => useTwoFactorStatusQuery(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data?.backupCodesRemaining).toBe(8)
+  })
+
+  it('useTwoFactorStatusQuery stays idle when enabled is false', () => {
+    const { result } = renderHook(
+      () => useTwoFactorStatusQuery({ enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchTwoFactorStatus).not.toHaveBeenCalled()
+  })
+
+  it('useEnrollTotp forwards an optional step-up password', async () => {
+    enrollTotp.mockResolvedValueOnce({ secret: 'JBSWY3DP', otpauthUri: 'x' })
+
+    const { result } = renderHook(() => useEnrollTotp(), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(
+      result.current.run({ password: 'hunter2' }),
+    ).resolves.toMatchObject({ ok: true, value: { secret: 'JBSWY3DP' } })
+    expect(enrollTotp).toHaveBeenCalledWith('hunter2')
+  })
+
+  it('useVerifyTotp marks the cached session as enrolled', async () => {
+    verifyTotp.mockResolvedValueOnce({ backupCodes: ['aaaa-bbbb'] })
+    const client = createAppQueryClient()
+    client.setQueryData(['auth', 'session'], SESSION)
+
+    const { result } = renderHook(() => useVerifyTotp(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run({ code: '123456' })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(client.getQueryData(['auth', 'session'])).toMatchObject({
+      is2faEnabled: true,
+    })
+  })
+
+  it('useVerifyTotp leaves an empty session cache empty', async () => {
+    verifyTotp.mockResolvedValueOnce({ backupCodes: [] })
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useVerifyTotp(), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run({ code: '123456' })
+    expect(client.getQueryData(['auth', 'session'])).toBeUndefined()
+  })
+
+  it('useRegenerateBackupCodes returns the new codes', async () => {
+    regenerateBackupCodes.mockResolvedValueOnce({ backupCodes: ['cccc-dddd'] })
+
+    const { result } = renderHook(() => useRegenerateBackupCodes(), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(result.current.run({})).resolves.toMatchObject({
+      ok: true,
+      value: { backupCodes: ['cccc-dddd'] },
+    })
+    expect(regenerateBackupCodes).toHaveBeenCalledWith(undefined)
+  })
+
+  it('useDisableTwoFactor clears the cached session flag', async () => {
+    disableTwoFactor.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    client.setQueryData(['auth', 'session'], { ...SESSION, is2faEnabled: true })
+
+    const { result } = renderHook(() => useDisableTwoFactor(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ password: 'hunter2', code: '123456' }),
+    ).resolves.toMatchObject({ ok: true })
+    expect(disableTwoFactor).toHaveBeenCalledWith('hunter2', '123456')
+    expect(client.getQueryData(['auth', 'session'])).toMatchObject({
+      is2faEnabled: false,
+    })
+  })
+})
+
+describe('passkey management hooks', () => {
+  it('usePasskeyRegisterOptions forwards an optional password', async () => {
+    passkeyRegisterOptions.mockResolvedValueOnce({
+      challenge: 'chal-1',
+      options: {},
+    })
+
+    const { result } = renderHook(() => usePasskeyRegisterOptions(), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(
+      result.current.run({ password: 'hunter2' }),
+    ).resolves.toMatchObject({ ok: true, value: { challenge: 'chal-1' } })
+    expect(passkeyRegisterOptions).toHaveBeenCalledWith('hunter2')
+  })
+
+  it('usePasskeyRegisterVerify invalidates the passkey reads', async () => {
+    passkeyRegisterVerify.mockResolvedValueOnce({ ok: true, id: 'pk-1' })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => usePasskeyRegisterVerify(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({
+        challenge: 'chal-1',
+        name: 'Laptop',
+        credential: { id: 'cred' },
+      }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(passkeyRegisterVerify).toHaveBeenCalledWith('chal-1', 'Laptop', {
+      id: 'cred',
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['auth', 'two-factor'],
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'passkeys'] })
+  })
+
+  it('useDeletePasskey invalidates the passkey reads', async () => {
+    deletePasskey.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useDeletePasskey(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ id: 'pk-1', password: 'hunter2' }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(deletePasskey).toHaveBeenCalledWith('pk-1', 'hunter2')
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'passkeys'] })
+  })
+
+  it('useUnlinkProvider invalidates the two-factor projection', async () => {
+    unlinkProvider.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useUnlinkProvider(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ provider: 'github', password: 'hunter2' }),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(unlinkProvider).toHaveBeenCalledWith('github', 'hunter2')
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'two-factor'] })
   })
 })
