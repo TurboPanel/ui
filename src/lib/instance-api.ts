@@ -983,6 +983,25 @@ export async function saveOrgTemperatureUnit(
   })
 }
 
+export type OrgTlsSettings = {
+  /** Opt-in gate for Let's Encrypt / ACME issuance. Off by default. */
+  acmeEnabled: boolean
+}
+
+export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/tls-settings`)
+}
+
+export async function saveOrgTlsSettings(
+  orgId: string,
+  patch: OrgTlsSettings
+): Promise<OrgTlsSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/tls-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
 export async function fetchOrgHostDefaults(orgId: string): Promise<OrgHostDefaults> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/host-defaults`)
 }

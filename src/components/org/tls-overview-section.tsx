@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
 import {
@@ -9,16 +10,27 @@ import {
   LoadingState,
   SectionPanel,
   SegmentedControl,
+  SettingRow,
   TextField,
+  Toggle,
 } from '@/components/ui'
-import type { TlsRecord, TlsSource } from '@/lib/instance-api'
+import {
+  fetchOrgTlsSettings,
+  saveOrgTlsSettings,
+  type TlsRecord,
+  type TlsSource,
+} from '@/lib/instance-api'
 import {
   useCreateTlsCertificate,
   useDeleteTlsCertificate,
   useTlsLibrary,
 } from '@/lib/queries/tls'
-import { useCan } from '@/lib/query-client'
+import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
 
 function tlsTitle(row: TlsRecord): string {
   return row.name?.trim() || row.metadata.dnsNames[0] || row.id
@@ -68,6 +80,33 @@ export function TlsOverviewSection({
   const createMutation = useCreateTlsCertificate(orgId)
   const deleteMutation = useDeleteTlsCertificate(orgId)
 
+  const queryClient = useQueryClient()
+  const tlsSettingsKey = queryKeys.org(orgId).settings.tlsSettings
+  const tlsSettingsQuery = useQuery({
+    queryKey: tlsSettingsKey,
+    queryFn: () => fetchOrgTlsSettings(orgId),
+  })
+  const [acmeError, setAcmeError] = useState<string | null>(null)
+  const [draftAcmeEnabled, setDraftAcmeEnabled] = useState<boolean | null>(null)
+  const acmeMutation = useApiMutation({
+    mutationFn: (acmeEnabled: boolean) => saveOrgTlsSettings(orgId, { acmeEnabled }),
+    onSuccess: (data) => {
+      setAcmeError(null)
+      setDraftAcmeEnabled(null)
+      queryClient.setQueryData(tlsSettingsKey, data)
+    },
+    onError: (err) => {
+      setDraftAcmeEnabled(null)
+      setAcmeError(errorMessage(err, "Failed to update the Let's Encrypt setting"))
+    },
+  })
+  const acmeEnabled = draftAcmeEnabled ?? tlsSettingsQuery.data?.acmeEnabled ?? false
+  const sourceOptions = SOURCE_OPTIONS.map((option) =>
+    option.value === 'lets_encrypt' && !acmeEnabled
+      ? { ...option, disabled: true }
+      : option,
+  )
+
   const [error, setError] = useState<string | null>(null)
   const [source, setSource] = useState<TlsSource>('upload')
   const [displayName, setDisplayName] = useState('')
@@ -103,8 +142,24 @@ export function TlsOverviewSection({
     }
   }, [createMutation.isSuccess])
 
+  // If the org's ACME gate turns off (elsewhere, or on load) while
+  // "Let's Encrypt" is selected, fall back rather than submit a source the
+  // segmented control now shows as disabled.
+  useEffect(() => {
+    if (source === 'lets_encrypt' && !acmeEnabled) {
+      setSource('upload')
+    }
+  }, [source, acmeEnabled])
+
+  const onToggleAcme = (next: boolean) => {
+    if (!canManage) return
+    setDraftAcmeEnabled(next)
+    acmeMutation.mutate(next)
+  }
+
   const onCreate = () => {
     if (!canManage) return
+    if (source === 'lets_encrypt' && !acmeEnabled) return
     setError(null)
 
     if (source === 'upload') {
@@ -189,6 +244,28 @@ export function TlsOverviewSection({
     <View style={styles.root}>
       <OrganizationCaPanel orgId={orgId} />
       <SectionPanel
+        title="Let's Encrypt"
+        hint="Off by default — opt in before any Let's Encrypt certificate can be requested"
+      >
+        {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
+        {tlsSettingsQuery.isError && !acmeError ? (
+          <Text style={panelStyles.error}>
+            {errorMessage(tlsSettingsQuery.error, "Failed to load the Let's Encrypt setting")}
+          </Text>
+        ) : null}
+        <SettingRow
+          label="Allow Let's Encrypt certificates"
+          description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and deploys skip any already-pending one. Existing certificates already issued are not revoked by turning this off."
+        >
+          <Toggle
+            value={acmeEnabled}
+            onValueChange={onToggleAcme}
+            disabled={!canManage || acmeMutation.isPending || tlsSettingsQuery.isLoading}
+            accessibilityLabel="Allow Let's Encrypt certificates"
+          />
+        </SettingRow>
+      </SectionPanel>
+      <SectionPanel
         title="TLS certificates"
         hint="Organization certificate library — pin uploaded, self-signed, or Let's Encrypt certs explicitly on hosting (default is basic self-signed). The Organization CA row is platform-managed."
       >
@@ -203,7 +280,7 @@ export function TlsOverviewSection({
           defaultCollapsed
         >
           <SegmentedControl
-            options={SOURCE_OPTIONS}
+            options={sourceOptions}
             value={source as (typeof SOURCE_OPTIONS)[number]['value']}
             onChange={(value) => setSource(value)}
             accessibilityLabel="Certificate source"
@@ -240,6 +317,13 @@ export function TlsOverviewSection({
               onChangeText={setHostnames}
             />
           )}
+          {!acmeEnabled ? (
+            <Text style={panelStyles.muted}>
+              Your organization has not enabled Let&apos;s Encrypt — turn on
+              &ldquo;Allow Let&apos;s Encrypt certificates&rdquo; above to
+              request one.
+            </Text>
+          ) : null}
           {source === 'lets_encrypt' ? (
             <Text style={panelStyles.muted}>
               Caddy issues and renews this certificate on the serving host. The

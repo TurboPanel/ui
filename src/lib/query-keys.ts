@@ -133,6 +133,8 @@ export const queryKeys = {
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,
+        /** Let's Encrypt / ACME opt-in gate (`/organizations/:id/tls-settings`). */
+        tlsSettings: ['org', orgId, 'tls-settings'] as const,
         principalDefaults: ['org', orgId, 'principal-defaults'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,

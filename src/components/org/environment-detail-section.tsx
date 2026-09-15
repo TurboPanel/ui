@@ -565,6 +565,12 @@ function deployErrorMessage(err: unknown): string {
   if (message.includes('fabric_reconcile_pending')) {
     return `${TURBOFABRIC_PRODUCT_NAME} is still converging on the target servers — try the deploy again in a moment.`
   }
+  if (message.includes('acme_requires_org_opt_in')) {
+    return "A hosting is pinned to a Let's Encrypt certificate, but this organization has not enabled Let's Encrypt. Turn on \"Allow Let's Encrypt certificates\" in TLS settings, or pin a different certificate."
+  }
+  if (message.includes('acme_requires_public_bind')) {
+    return "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
+  }
   return message
 }
 
