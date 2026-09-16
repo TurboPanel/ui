@@ -2421,6 +2421,14 @@ export type TlsMetadata = {
   subject: string
   issuer: string
   status: TlsStatus
+  /** Present on `lets_encrypt` rows Caddy issues and renews on the host. */
+  acme?: {
+    orderUrl?: string
+    challengeType?: 'http-01' | 'dns-01'
+    /** Daemon-observed issuance failure, cleared on the next successful probe. */
+    lastError?: string
+    managedBy?: 'caddy'
+  }
 }
 
 export type TlsRecord = {

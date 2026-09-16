@@ -226,6 +226,11 @@ export function TlsOverviewSection({
             Expires {new Date(row.metadata.notAfter).toLocaleString()}
           </Text>
         ) : null}
+        {row.metadata.acme?.lastError ? (
+          <Text style={panelStyles.error}>
+            Issuance failing: {row.metadata.acme.lastError}
+          </Text>
+        ) : null}
         {canManage ? (
           <ConfirmButton
             label={deletingId === row.id ? 'Deleting…' : 'Delete'}
