@@ -57,13 +57,13 @@
     "@tanstack/react-query-devtools": "^5.91.2",
     "@testing-library/react": "^16.3.2",
     "@types/react": "~19.2.2",
-    "@vitest/coverage-v8": "~3.0.9",
+    "@vitest/coverage-v8": "^3.2.6",
     "babel-preset-expo": "~57.0.7",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~57.0.1",
     "happy-dom": "^20.11.2",
     "typescript": "~6.0.3",
-    "vitest": "~3.0.5",
+    "vitest": "^3.2.6",
     "wrangler": "^4.124.0"
   },
   "scripts": {
