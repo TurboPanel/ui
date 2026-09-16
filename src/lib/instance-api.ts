@@ -3911,6 +3911,27 @@ export async function triggerAllServerUpdates(): Promise<ServerBatchUpdateTrigge
   })
 }
 
+/**
+ * `POST /servers/:id/daemon-key/revoke` — the compromised-host cutoff.
+ * `purged: false` means the durable revoke landed but the live daemon cell
+ * could not be reached (`purgeError` says why); the daemon is cut off at its
+ * next frame, reconnect, or session mint regardless. Idempotent.
+ */
+export type ServerDaemonKeyRevokeResult = {
+  ok: true
+  revokedAt: string | null
+  purged: boolean
+  purgeError?: string
+}
+
+export async function revokeServerDaemonKey(
+  serverId: string
+): Promise<ServerDaemonKeyRevokeResult> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/daemon-key/revoke`, {
+    method: 'POST',
+  })
+}
+
 export type EmailSettingSource = 'env' | 'db' | 'default'
 
 export type EmailSettingEntry = { value: string | null; source: EmailSettingSource }

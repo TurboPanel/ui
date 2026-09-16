@@ -24,6 +24,7 @@ import {
   usePingDaemon,
   useRebootServer,
   useResetServerUpdateStatus,
+  useRevokeServerDaemonKey,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
   useSaveServerHardwareProfile,
@@ -66,6 +67,7 @@ const {
   fetchOrgServerCapacity,
   triggerServerUpdate,
   resetServerUpdateStatus,
+  revokeServerDaemonKey,
   rebootServer,
   setServerHostname,
   setServerNtp,
@@ -98,6 +100,7 @@ const {
   fetchOrgServerCapacity: vi.fn(),
   triggerServerUpdate: vi.fn(),
   resetServerUpdateStatus: vi.fn(),
+  revokeServerDaemonKey: vi.fn(),
   rebootServer: vi.fn(),
   setServerHostname: vi.fn(),
   setServerNtp: vi.fn(),
@@ -135,6 +138,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchOrgServerCapacity,
     triggerServerUpdate,
     resetServerUpdateStatus,
+    revokeServerDaemonKey,
     rebootServer,
     setServerHostname,
     setServerNtp,
@@ -954,6 +958,29 @@ describe('servers query hooks', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).commands.all,
+    })
+  })
+
+  it('useRevokeServerDaemonKey revokes and invalidates server queries', async () => {
+    revokeServerDaemonKey.mockResolvedValueOnce({
+      ok: true,
+      revokedAt: '2026-09-16T12:00:00.000Z',
+      purged: true,
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useRevokeServerDaemonKey(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run()
+    expect(revokeServerDaemonKey).toHaveBeenCalledWith(serverId)
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.list,
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
   })
 

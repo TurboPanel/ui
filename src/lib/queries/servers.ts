@@ -24,6 +24,7 @@ import {
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
+  revokeServerDaemonKey,
   saveOrgTemperatureUnit,
   startServerMetricsLive,
   stopServerMetricsLive,
@@ -547,6 +548,16 @@ export function useDeleteServer(orgId: string) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).servers.list,
       })
+    },
+  })
+}
+
+export function useRevokeServerDaemonKey(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => revokeServerDaemonKey(serverId),
+    onSuccess: async () => {
+      await invalidateServerQueries(queryClient, orgId, serverId)
     },
   })
 }

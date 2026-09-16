@@ -57,6 +57,7 @@ import {
   type CommandEnqueueResponse,
   type CommandRecord,
   type OrgServerRecord,
+  type ServerDaemonKeyRevokeResult,
   type ServerDetailRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
@@ -66,6 +67,7 @@ import {
   usePingDaemon,
   useRebootServer,
   useResetServerUpdateStatus,
+  useRevokeServerDaemonKey,
   useServerDetail,
   useServerUpdateStatus,
   useSetServerHostname,
@@ -234,6 +236,7 @@ function DetailTabBody({
   onEnqueueCommand,
   systemRestartInFlight,
   systemRestartPollError,
+  revokeKeyPanel,
   deletePanel,
 }: Readonly<{
   tab: ServerDetailTabId
@@ -260,6 +263,7 @@ function DetailTabBody({
   ) => void
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
+  revokeKeyPanel: ReactNode
   deletePanel: ReactNode
 }>): ReactNode {
   switch (tab) {
@@ -284,6 +288,7 @@ function DetailTabBody({
           onEnqueueRestart={(response, environmentId) => {
             onEnqueueCommand(response, 'systemRestart', { environmentId })
           }}
+          revokeKeyPanel={revokeKeyPanel}
           deletePanel={deletePanel}
         />
       )
@@ -442,6 +447,33 @@ type PollHandlers = Readonly<{
   patchCommand: (patch: Partial<ServerCommandState>) => void
 }>
 
+type RevokeKeyPanelState = Readonly<{
+  error: string | null
+  result: ServerDaemonKeyRevokeResult | null
+}>
+
+function renderServerRevokeKeyPanel(
+  input: Readonly<{
+    canManage: boolean
+    colocated: boolean
+    revoking: boolean
+    state: RevokeKeyPanelState
+    onConfirm: () => void
+  }>
+): ReactNode {
+  if (!input.canManage) return null
+  if (input.colocated) {
+    return (
+      <Text style={panelStyles.muted}>
+        The co-located control plane server&apos;s daemon key cannot be revoked.
+      </Text>
+    )
+  }
+  return (
+    <ServerRevokeKeyPanel revoking={input.revoking} state={input.state} onConfirm={input.onConfirm} />
+  )
+}
+
 function renderServerDeletePanel(
   input: Readonly<{
     canManage: boolean
@@ -491,6 +523,7 @@ export function ServerDetailSection({
   const pingMutation = usePingDaemon(orgId, serverId)
   const hostnameMutation = useSetServerHostname(orgId, serverId)
   const rebootMutation = useRebootServer(orgId, serverId)
+  const revokeKeyMutation = useRevokeServerDaemonKey(orgId, serverId)
   const deleteMutation = useDeleteServer(orgId)
 
   const [commandState, setCommandState] = useState<ServerCommandState>(defaultServerCommandState())
@@ -499,6 +532,10 @@ export function ServerDetailSection({
   const [ntpPollError, setNtpPollError] = useState<string | null>(null)
   const [systemRestartPollError, setSystemRestartPollError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [revokeKeyState, setRevokeKeyState] = useState<RevokeKeyPanelState>({
+    error: null,
+    result: null,
+  })
 
   const server = serverQuery.data
 
@@ -708,6 +745,28 @@ export function ServerDetailSection({
     resetUpdateMutation.mutate()
   }
 
+  const revokeKeyPanel = renderServerRevokeKeyPanel({
+    canManage,
+    colocated: updateVm.colocated,
+    revoking: revokeKeyMutation.isPending,
+    state: revokeKeyState,
+    onConfirm: () => {
+      setRevokeKeyState({ error: null, result: null })
+      revokeKeyMutation.mutate(undefined, {
+        onSuccess: (result) => {
+          setRevokeKeyState({ error: null, result })
+        },
+        onError: (err) => {
+          if (isForbiddenError(err)) return
+          setRevokeKeyState({
+            error: err instanceof Error ? err.message : 'Revoke failed',
+            result: null,
+          })
+        },
+      })
+    },
+  })
+
   const deletePanel = renderServerDeletePanel({
     canManage,
     colocated: updateVm.colocated,
@@ -810,7 +869,8 @@ export function ServerDetailSection({
         }}
         systemRestartInFlight={systemRestartInFlight}
         systemRestartPollError={systemRestartPollError}
-        deletePanel={deletePanel}
+        revokeKeyPanel={revokeKeyPanel}
+          deletePanel={deletePanel}
       />
     </View>
   )
@@ -980,6 +1040,7 @@ function ServerControlTab({
   systemRestartInFlight,
   systemRestartPollError,
   onEnqueueRestart,
+  revokeKeyPanel,
   deletePanel,
 }: Readonly<{
   orgId: string
@@ -996,6 +1057,7 @@ function ServerControlTab({
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
   onEnqueueRestart: (response: CommandEnqueueResponse, environmentId: string | undefined) => void
+  revokeKeyPanel: ReactNode
   deletePanel: ReactNode
 }>) {
   return (
@@ -1071,10 +1133,53 @@ function ServerControlTab({
         {updateState.error ? <Text style={panelStyles.error}>{updateState.error}</Text> : null}
       </SectionPanel>
 
+      <SectionPanel title="Revoke daemon key" hint="Compromised-host cutoff">
+        {revokeKeyPanel}
+      </SectionPanel>
+
       <SectionPanel title="Delete server" hint="Two-step confirm">
         {deletePanel}
       </SectionPanel>
     </View>
+  )
+}
+
+function revokeKeyResultMessage(result: ServerDaemonKeyRevokeResult): string {
+  if (result.purged) {
+    return 'Daemon key revoked and the live session closed. The host cannot enroll again until this server is deleted and a rebuilt host is enrolled fresh.'
+  }
+  const reason = result.purgeError ? ` (${result.purgeError})` : ''
+  return `Daemon key revoked. The live session could not be closed${reason} — the host is cut off at its next reconnect or session refresh. The host cannot enroll again until this server is deleted and a rebuilt host is enrolled fresh.`
+}
+
+function ServerRevokeKeyPanel({
+  revoking,
+  state,
+  onConfirm,
+}: Readonly<{
+  revoking: boolean
+  state: RevokeKeyPanelState
+  onConfirm: () => void
+}>) {
+  return (
+    <>
+      <Text style={panelStyles.muted}>
+        Use this when the host is known to be compromised. The daemon&apos;s identity key is
+        revoked immediately and its connection is closed; the license token still on the host
+        cannot re-enroll it.
+      </Text>
+      {state.error ? <Text style={panelStyles.error}>{state.error}</Text> : null}
+      {state.result ? (
+        <Text style={panelStyles.muted}>{revokeKeyResultMessage(state.result)}</Text>
+      ) : null}
+      <ConfirmButton
+        label={revoking ? 'Revoking…' : 'Revoke daemon key'}
+        confirmLabel="Confirm revoke"
+        prompt="Cut this host off from the control plane now? Recovery is deleting the server and enrolling a rebuilt host."
+        busy={revoking}
+        onConfirm={onConfirm}
+      />
+    </>
   )
 }
 
