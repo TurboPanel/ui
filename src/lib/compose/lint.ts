@@ -46,7 +46,10 @@ export type ComposeLintLevel = 'error' | 'warning'
  * see the fabric row this pure linter cannot; the code exists so a surface can
  * style the note as what it is rather than parse the sentence.
  */
-export type ComposeLintCode = 'field_unsupported' | 'turbofabric_required'
+export type ComposeLintCode =
+  | 'field_unsupported'
+  | 'turbofabric_required'
+  | 'field_requires_org_opt_in'
 
 export type ComposeLintIssue = {
   level: ComposeLintLevel
@@ -602,12 +605,29 @@ function lintServicePropertyKey(
     return { hasImage, hasBuild }
   }
 
-  if (classifyServiceKey(key) === undefined && !isExtensionKey(key)) {
+  const servicePolicy = classifyServiceKey(key)
+  if (servicePolicy === undefined && !isExtensionKey(key)) {
     issues.push({
       level: 'warning',
       message: unknownKeyMessage(key, 'service', SERVICE_FIELD_KEYS),
       path: `${path}.${key}`,
       line: keyLine,
+    })
+  }
+
+  // Always advisory — this org-blind editor cannot know whether the
+  // deploying organization has opted in. Mirrors the instance linter's same
+  // check in `lintServiceField`.
+  if (servicePolicy?.state === 'gated') {
+    issues.push({
+      level: 'warning',
+      code: 'field_requires_org_opt_in',
+      message: `${key} is not supported unless the organization has opted in${
+        servicePolicy.reason ? ` — ${servicePolicy.reason}` : ''
+      }`,
+      path: `${path}.${key}`,
+      line: keyLine,
+      blocking: false,
     })
   }
 

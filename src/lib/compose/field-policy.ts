@@ -39,25 +39,60 @@
  * - `unsupported` — TurboPanel has no behavior for it. Never silently dropped:
  *   it is reported, with {@link ComposeFieldPolicy.reason} saying what is
  *   missing.
+ * - `gated` — TurboPanel supports it, but only for an organization that has
+ *   explicitly opted in (`organization.options.composeGatedFieldsEnabled` on
+ *   the control plane). This registry stays org-blind here too — the editor
+ *   has no DB access at all — so it can only make the structural claim "this
+ *   field needs an opt-in"; the actual per-org enforcement is server-side.
+ *   Requires {@link ComposeFieldPolicy.reason}, same as `unsupported`.
  */
 export type ComposeFieldState =
   | 'passthrough'
   | 'interpreted'
   | 'runtime-generated'
   | 'unsupported'
+  | 'gated'
 
 export type ComposeFieldPolicy = {
   state: ComposeFieldState
   /**
-   * Required when {@link ComposeFieldPolicy.state} is `unsupported`; the
-   * diagnostic quotes it verbatim, so it has to name what is missing rather
-   * than restate that the field is unsupported.
+   * Required when {@link ComposeFieldPolicy.state} is `unsupported` or
+   * `gated`; the diagnostic quotes it verbatim, so it has to name what is
+   * missing (or why the field is gated) rather than restate the state.
    */
   reason?: string
 }
 
 const PASSTHROUGH: ComposeFieldPolicy = { state: 'passthrough' }
 const INTERPRETED: ComposeFieldPolicy = { state: 'interpreted' }
+
+/**
+ * Namespace/capability-escaping Compose keys. Mirrors the instance registry's
+ * `GATED_SERVICE_FIELD_NAMES` byte-for-byte — see that file for why these ten
+ * and not `cap_drop`/`volumes`/`ports`/`user`.
+ */
+const GATED_SERVICE_FIELD_NAMES = [
+  'cap_add',
+  'cgroup_parent',
+  'devices',
+  'ipc',
+  'network_mode',
+  'pid',
+  'privileged',
+  'security_opt',
+  'sysctls',
+  'userns_mode',
+] as const
+
+function gatedField(field: string): ComposeFieldPolicy {
+  return {
+    state: 'gated',
+    reason:
+      `${field} grants root-equivalent access to the shared daemon host — ` +
+      'the organization has to opt in explicitly (Organization settings → ' +
+      'Compose) before a deploy that sets it will run',
+  }
+}
 
 /**
  * Top-level Compose Specification keys TurboPanel accepts. `x-*` extensions are
@@ -95,10 +130,10 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['blkio_config', PASSTHROUGH],
   // `build.args` is scanned for `{$KEY}` variable refs (`apply-variables.ts`).
   ['build', INTERPRETED],
-  ['cap_add', PASSTHROUGH],
+  ['cap_add', gatedField('cap_add')],
   ['cap_drop', PASSTHROUGH],
   ['cgroup', PASSTHROUGH],
-  ['cgroup_parent', PASSTHROUGH],
+  ['cgroup_parent', gatedField('cgroup_parent')],
   ['command', PASSTHROUGH],
   ['configs', PASSTHROUGH],
   // Sole writer is `apply-service-options.ts`; in `uuid` naming mode the
@@ -120,7 +155,7 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['deploy', INTERPRETED],
   ['develop', PASSTHROUGH],
   ['device_cgroup_rules', PASSTHROUGH],
-  ['devices', PASSTHROUGH],
+  ['devices', gatedField('devices')],
   ['dns', PASSTHROUGH],
   ['dns_opt', PASSTHROUGH],
   ['dns_search', PASSTHROUGH],
@@ -140,7 +175,7 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['hostname', PASSTHROUGH],
   ['image', PASSTHROUGH],
   ['init', PASSTHROUGH],
-  ['ipc', PASSTHROUGH],
+  ['ipc', gatedField('ipc')],
   ['isolation', PASSTHROUGH],
   // Compose Specification service keys with no TurboPanel behavior of their
   // own. Listed so `docker run --label-file` / `--use-api-socket` survive the
@@ -154,18 +189,18 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['mem_reservation', PASSTHROUGH],
   ['mem_swappiness', PASSTHROUGH],
   ['memswap_limit', PASSTHROUGH],
-  ['network_mode', PASSTHROUGH],
+  ['network_mode', gatedField('network_mode')],
   // Spanning keys become `external: true` + `tpn_<id>`; a rename adds aliases.
   ['networks', INTERPRETED],
   ['oom_kill_disable', PASSTHROUGH],
   ['oom_score_adj', PASSTHROUGH],
-  ['pid', PASSTHROUGH],
+  ['pid', gatedField('pid')],
   ['pids_limit', PASSTHROUGH],
   ['platform', PASSTHROUGH],
   ['ports', PASSTHROUGH],
   ['post_start', PASSTHROUGH],
   ['pre_stop', PASSTHROUGH],
-  ['privileged', PASSTHROUGH],
+  ['privileged', gatedField('privileged')],
   ['profiles', PASSTHROUGH],
   ['pull_policy', PASSTHROUGH],
   ['read_only', PASSTHROUGH],
@@ -175,19 +210,19 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['scale', INTERPRETED],
   // Secret variables become Compose `secrets:` entries (`apply-variables.ts`).
   ['secrets', INTERPRETED],
-  ['security_opt', PASSTHROUGH],
+  ['security_opt', gatedField('security_opt')],
   ['shm_size', PASSTHROUGH],
   ['stdin_open', PASSTHROUGH],
   ['stop_grace_period', PASSTHROUGH],
   ['stop_signal', PASSTHROUGH],
   ['storage_opt', PASSTHROUGH],
-  ['sysctls', PASSTHROUGH],
+  ['sysctls', gatedField('sysctls')],
   ['tmpfs', PASSTHROUGH],
   ['tty', PASSTHROUGH],
   ['ulimits', PASSTHROUGH],
   ['use_api_socket', PASSTHROUGH],
   ['user', PASSTHROUGH],
-  ['userns_mode', PASSTHROUGH],
+  ['userns_mode', gatedField('userns_mode')],
   ['uts', PASSTHROUGH],
   // Named volumes are registered as `storage` rows and renamed to their UUID.
   ['volumes', INTERPRETED],
@@ -411,6 +446,14 @@ export const DEPLOY_FIELD_KEYS: ReadonlySet<string> = new Set(
 )
 export const NETWORK_FIELD_KEYS: ReadonlySet<string> = new Set(
   NETWORK_FIELD_POLICY.keys(),
+)
+
+/**
+ * Service-level keys classified `gated`. Mirrors the instance registry's
+ * export of the same name.
+ */
+export const GATED_SERVICE_FIELD_KEYS: ReadonlySet<string> = new Set(
+  GATED_SERVICE_FIELD_NAMES,
 )
 
 /** Policy for a top-level Compose key, or `undefined` when it is unknown. */

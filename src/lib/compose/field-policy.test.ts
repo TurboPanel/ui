@@ -7,6 +7,7 @@ import {
   classifyServiceKey,
   classifyTopLevelKey,
   DEPLOY_FIELD_KEYS,
+  GATED_SERVICE_FIELD_KEYS,
   NETWORK_FIELD_KEYS,
   SERVICE_FIELD_KEYS,
   SPANNING_NETWORK_DRIVER,
@@ -111,6 +112,47 @@ describe('field policy registry', () => {
     for (const key of SERVICE_FIELD_KEYS) {
       expect(classifyServiceKey(key)?.state).toBeTypeOf('string')
     }
+  })
+
+  it('mirrors the instance registry\'s ten gated namespace/capability keys', () => {
+    expect([...GATED_SERVICE_FIELD_KEYS].sort()).toEqual([
+      'cap_add',
+      'cgroup_parent',
+      'devices',
+      'ipc',
+      'network_mode',
+      'pid',
+      'privileged',
+      'security_opt',
+      'sysctls',
+      'userns_mode',
+    ])
+    for (const key of GATED_SERVICE_FIELD_KEYS) {
+      const policy = classifyServiceKey(key)
+      expect(policy?.state).toBe('gated')
+      expect(policy?.reason?.length ?? 0).toBeGreaterThan(20)
+    }
+  })
+
+  it('leaves cap_drop, ports and user passthrough (volumes is interpreted)', () => {
+    for (const key of ['cap_drop', 'ports', 'user']) {
+      expect(classifyServiceKey(key)?.state).toBe('passthrough')
+    }
+    expect(classifyServiceKey('volumes')?.state).toBe('interpreted')
+  })
+
+  it('flags a gated key as an always-advisory, never-blocking note', () => {
+    const issues = lintComposeYaml(
+      'services:\n  web:\n    image: nginx:alpine\n    privileged: true\n',
+    )
+    const found = issues.find((issue) => issue.path === 'services.web.privileged')
+    expect(found?.level).toBe('warning')
+    expect(found?.code).toBe('field_requires_org_opt_in')
+    expect(
+      blockingComposeLintIssues(issues).some((issue) =>
+        issue.path === 'services.web.privileged'
+      ),
+    ).toBe(false)
   })
 
   it('trims the overlay driver and falls through unknown overlay keys', () => {
