@@ -1,0 +1,16 @@
+# Accepted-risk exceptions only — never a broad ignore. Each entry must name
+# why the finding is not exploitable in this codebase, verified by reading
+# both the advisory and the actual dependency chain before adding it here.
+# Revisit whenever a fix becomes available upstream.
+
+[[IgnoredVulns]]
+id = "GHSA-82fw-gwwq-j7x9"
+reason = "vitest/@vitest/mocker: only exploitable if the Vitest UI server is exposed to the network via --api.host, which this repo never does. Fix requires a vitest v3->v4 major bump; revisit when that's done for other reasons."
+
+[[IgnoredVulns]]
+id = "GHSA-5p2g-fcmc-qvqq"
+reason = "image-size: DoS via a crafted image buffer with an infinite-loop parser bug. Pulled in transitively by Metro's bundler (expo -> @react-native/metro-config -> metro -> image-size) for build-time processing of image assets already in this repo, never network-reachable input. No fix available upstream as of 2026-09-16."
+
+[[IgnoredVulns]]
+id = "GHSA-w3rx-r6r6-pgpr"
+reason = "image-size: same mechanism and same non-exploitable exposure as GHSA-5p2g-fcmc-qvqq above (ICNS parser instead of JXL/HEIF). No fix available upstream as of 2026-09-16."
