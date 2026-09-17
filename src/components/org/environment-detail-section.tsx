@@ -108,6 +108,7 @@ import {
 } from '@/lib/hosting-compose-owner'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { emptyPlacementHint, placementDropdownOptions } from '@/lib/environment-placement'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -596,21 +597,6 @@ function deployBlockedReason(
     return 'Selected server is offline. Choose a connected server.'
   }
   return null
-}
-
-function placementDropdownOptions(
-  sortedServers: OrgServerRecord[],
-  placementServerId: string | null,
-): OrgServerRecord[] {
-  const connected = sortedServers.filter((server) => server.connected)
-  if (!placementServerId) {
-    return connected
-  }
-  const selected = sortedServers.find((server) => server.id === placementServerId)
-  if (!selected || selected.connected) {
-    return connected
-  }
-  return [selected, ...connected]
 }
 
 const webSelectStyle: CSSProperties = {
@@ -1293,7 +1279,7 @@ function EnvironmentPlacementPanel({
   let picker
   if (options.length === 0) {
     picker = (
-      <Text style={panelStyles.muted}>No connected servers available.</Text>
+      <Text style={panelStyles.muted}>{emptyPlacementHint(sortedServers)}</Text>
     )
   } else if (Platform.OS === 'web') {
     picker = createElement(
