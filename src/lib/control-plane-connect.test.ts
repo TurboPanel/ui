@@ -8,6 +8,11 @@ import {
   resetControlPlaneStoreForTests,
 } from '@/lib/control-plane-accounts'
 import { fetchInstallStatus } from '@/lib/instance-api'
+import {
+  INSTANCE_VERSION_HEADER,
+  recordInstanceVersion,
+  resetInstanceVersionStateForTests,
+} from '@/lib/instance-version'
 
 const authAccentMocks = vi.hoisted(() => ({
   applyConsoleChromeRuntime: vi.fn(),
@@ -27,6 +32,7 @@ describe('connectToControlPlane', () => {
   beforeEach(() => {
     resetControlPlaneStoreForTests()
     vi.mocked(fetchInstallStatus).mockReset()
+    resetInstanceVersionStateForTests()
     authAccentMocks.applyConsoleChromeRuntime.mockReset()
     authAccentMocks.resolveControlPlaneRuntime.mockReset()
     authAccentMocks.resolveControlPlaneRuntime.mockReturnValue('deno')
@@ -69,6 +75,32 @@ describe('connectToControlPlane', () => {
     const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
     expect(result.ok).toBe(true)
     expect(authAccentMocks.applyConsoleChromeRuntime).not.toHaveBeenCalled()
+  })
+
+  it('refuses an instance older than this app supports, and forgets it', async () => {
+    vi.mocked(fetchInstallStatus).mockImplementation(async () => {
+      recordInstanceVersion(new Headers({ [INSTANCE_VERSION_HEADER]: '0.0.9' }))
+      return { isSignupEnabled: false, needsInstall: false }
+    })
+    const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      throw new TypeError('expected an unsupported-instance refusal')
+    }
+    expect(result.error).toBe(
+      'That control plane runs TurboPanel 0.0.9; this app needs 0.1.0 or newer. Update the instance, then connect again.',
+    )
+    expect(getActiveControlPlaneOrigin()).toBeNull()
+    expect(authAccentMocks.applyConsoleChromeRuntime).not.toHaveBeenCalled()
+  })
+
+  it('connects to an instance that sends no version header — the wire is expand-only', async () => {
+    vi.mocked(fetchInstallStatus).mockImplementation(async () => {
+      recordInstanceVersion(new Headers())
+      return { isSignupEnabled: false, needsInstall: false }
+    })
+    const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
+    expect(result.ok).toBe(true)
   })
 
   it('returns a field error when status cannot be reached', async () => {

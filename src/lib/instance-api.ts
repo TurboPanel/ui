@@ -1,5 +1,6 @@
 import type { ComposeDocument } from '@/lib/compose'
 import { resolveApiUrl } from '@/lib/control-plane'
+import { clientVersionHeaders, recordInstanceVersion } from '@/lib/instance-version'
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
 import { formatFetchFailureDetail, isHttpStatusError } from '@/lib/fetch-error-detail'
 import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
@@ -1565,6 +1566,9 @@ async function apiFetch<T>(
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
     'content-type': 'application/json',
+    // The app ↔ instance version wire: our version out, theirs back on the
+    // response header (see instance-version.ts).
+    ...clientVersionHeaders(),
     ...(init?.headers as Record<string, string> | undefined),
   }
   if (resolvedOrgId) {
@@ -1576,6 +1580,7 @@ async function apiFetch<T>(
     credentials: 'include',
     headers,
   })
+  recordInstanceVersion(response.headers)
 
   if (!response.ok) {
     let detail = formatFetchFailureDetail(response.status)
@@ -1622,6 +1627,8 @@ async function apiFetch<T>(
 export type HealthResponse = {
   ok: boolean
   license?: string
+  /** The instance's semver (instances from 0.1.0 on). */
+  version?: string
   revision?: { commit: string; sourceUrl: string }
 }
 
@@ -3829,6 +3836,19 @@ export type ServerUpdateCommit = {
   commit: string
   buildId: string
   builtAt?: string
+  /** The daemon's semver, when it reports one (builds from 0.1.0 on). */
+  version?: string
+}
+
+/**
+ * The daemon's reported version held against the control plane's supported
+ * floor. An unsupported daemon stays connected but receives no commands until
+ * it is updated; unknown is a build that reports no version.
+ */
+export type DaemonSupport = {
+  status: 'supported' | 'unsupported' | 'unknown'
+  version: string | null
+  minVersion: string
 }
 
 export type ServerUpdateStatus = {
@@ -3847,6 +3867,7 @@ export type ServerUpdateStatus = {
   lastUpdateError?: string
   queuedAt?: string
   canResetUpdateStatus?: boolean
+  daemonSupport?: DaemonSupport
 }
 
 export type ServerUpdateTriggerResult = {

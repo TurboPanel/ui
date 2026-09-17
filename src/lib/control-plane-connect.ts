@@ -13,6 +13,11 @@ import {
   fetchInstallStatus,
   type InstallStatus,
 } from '@/lib/instance-api'
+import {
+  getInstanceVersion,
+  instanceUnsupportedMessage,
+  resolveInstanceSupport,
+} from '@/lib/instance-version'
 
 export type ControlPlaneConnectResult =
   | { ok: true; origin: string; status: InstallStatus }
@@ -32,6 +37,12 @@ export async function connectToControlPlane(
   activateControlPlaneOrigin(parsed.origin)
   try {
     const status = await fetchInstallStatus()
+    // The response just recorded the instance's version header; an instance
+    // older than this app supports is refused before it is remembered.
+    const support = resolveInstanceSupport(getInstanceVersion())
+    if (support.status === 'unsupported') {
+      throw new Error(instanceUnsupportedMessage(support))
+    }
     const runtime = resolveControlPlaneRuntime(status)
     if (runtime !== undefined) {
       applyConsoleChromeRuntime(runtime)

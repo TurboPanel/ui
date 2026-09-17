@@ -43,6 +43,12 @@ import {
   SectionPanel,
   SegmentedControl,
 } from '@/components/ui'
+import {
+  channelLabel,
+  daemonUnsupportedLabel,
+  runningBuildLabel,
+  shortCommit,
+} from '@/lib/daemon-update-labels'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import {
@@ -115,10 +121,6 @@ function parseTabParam(raw: string | string[] | undefined): ServerDetailTabId {
 
 function serverTitle(server: Pick<OrgServerRecord, 'name' | 'hostname' | 'id'>): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
-function shortCommit(commit?: string | null): string {
-  return commit ? commit.slice(0, 12) : 'Unknown'
 }
 
 function isColocatedServer(
@@ -1088,19 +1090,26 @@ function ServerControlTab({
       <SectionPanel title="Daemon update">
         {viewModel.colocated ? (
           <Text style={panelStyles.muted}>
-            Co-located hosts are updated via local git, not remote trunk pulls.
+            Co-located hosts are updated via local git, not remote updates.
           </Text>
         ) : null}
         <Text style={panelStyles.detailLine}>
           <Text style={panelStyles.detailLabel}>Running: </Text>
-          {shortCommit(viewModel.updateData?.current?.commit)}
+          {runningBuildLabel(viewModel.updateData?.current)}
         </Text>
         <Text style={panelStyles.detailLine}>
-          <Text style={panelStyles.detailLabel}>Trunk: </Text>
+          <Text style={panelStyles.detailLabel}>
+            {channelLabel(viewModel.updateData?.channel)}:{' '}
+          </Text>
           {viewModel.updateData?.targetStatus === 'unknown'
             ? 'Unknown'
             : shortCommit(viewModel.updateData?.target?.commit)}
         </Text>
+        {viewModel.updateData?.daemonSupport?.status === 'unsupported' ? (
+          <Text style={panelStyles.error}>
+            {daemonUnsupportedLabel(viewModel.updateData.daemonSupport)}
+          </Text>
+        ) : null}
         <Badge
           tone={updateBadgeTone(viewModel.badgeVariant)}
           label={updateBadgeLabel(viewModel.badgeVariant, viewModel.runningVersionUnknown)}

@@ -1,3 +1,4 @@
+import Constants from 'expo-constants'
 import { Redirect, Stack, useLocalSearchParams, useSegments } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { useEffect } from 'react'
@@ -17,11 +18,16 @@ import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { resolveAuthGuardHref } from '@/lib/auth-guard'
 import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
+import { setClientVersion } from '@/lib/instance-version'
 import { safeAuthReturnPath } from '@/lib/invitation-return'
 import { ORG_CONSOLE_SINGULAR_ID } from '@/lib/org-navigation'
 import { colors } from '@/lib/theme'
 
 const STACK_SCREEN_OPTIONS = { headerShown: false } as const
+
+// The app's version (app.json / app.config.ts) rides every API request as
+// x-turbopanel-client-version — set once, before the first fetch.
+setClientVersion(Constants.expoConfig?.version)
 
 function onAppStateChange(status: AppStateStatus) {
   if (Platform.OS !== 'web') {
