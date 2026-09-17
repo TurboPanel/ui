@@ -1103,7 +1103,7 @@ function ServerControlTab({
           </Text>
           {viewModel.updateData?.targetStatus === 'unknown'
             ? 'Unknown'
-            : shortCommit(viewModel.updateData?.target?.commit)}
+            : runningBuildLabel(viewModel.updateData?.target)}
         </Text>
         {viewModel.updateData?.daemonSupport?.status === 'unsupported' ? (
           <Text style={panelStyles.error}>
