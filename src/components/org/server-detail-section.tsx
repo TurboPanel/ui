@@ -47,7 +47,6 @@ import {
   channelLabel,
   daemonUnsupportedLabel,
   runningBuildLabel,
-  shortCommit,
 } from '@/lib/daemon-update-labels'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
