@@ -260,7 +260,7 @@ export function TlsOverviewSection({
         ) : null}
         <SettingRow
           label="Allow Let's Encrypt certificates"
-          description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and deploys skip any already-pending one. Existing certificates already issued are not revoked by turning this off."
+          description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off."
         >
           <Toggle
             value={acmeEnabled}
