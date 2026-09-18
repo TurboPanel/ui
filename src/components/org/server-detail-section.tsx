@@ -1152,11 +1152,27 @@ function ServerControlTab({
   )
 }
 
+/**
+ * The API returns a fixed code, not the registry's own message — that text
+ * named Redis / Durable Object internals. Render the two we know and fall
+ * back to nothing rather than showing an operator a bare identifier.
+ */
+function purgeFailureReason(purgeError: string | undefined): string {
+  switch (purgeError) {
+    case 'registry_unavailable':
+      return ' (the daemon registry is unreachable from this instance)'
+    case 'purge_failed':
+      return ' (the registry refused the purge)'
+    default:
+      return ''
+  }
+}
+
 function revokeKeyResultMessage(result: ServerDaemonKeyRevokeResult): string {
   if (result.purged) {
     return 'Daemon key revoked and the live session closed. The host cannot enroll again until this server is deleted and a rebuilt host is enrolled fresh.'
   }
-  const reason = result.purgeError ? ` (${result.purgeError})` : ''
+  const reason = purgeFailureReason(result.purgeError)
   return `Daemon key revoked. The live session could not be closed${reason} — the host is cut off at its next reconnect or session refresh. The host cannot enroll again until this server is deleted and a rebuilt host is enrolled fresh.`
 }
 

@@ -3932,17 +3932,22 @@ export async function triggerAllServerUpdates(): Promise<ServerBatchUpdateTrigge
   })
 }
 
+/** Why the live cell could not be purged. A fixed code, never driver text. */
+export type ServerDaemonKeyPurgeFailure = 'purge_failed' | 'registry_unavailable'
+
 /**
  * `POST /servers/:id/daemon-key/revoke` — the compromised-host cutoff.
  * `purged: false` means the durable revoke landed but the live daemon cell
- * could not be reached (`purgeError` says why); the daemon is cut off at its
- * next frame, reconnect, or session mint regardless. Idempotent.
+ * could not be reached (`purgeError` is one of two fixed codes — the
+ * registry's own message is logged server-side, never returned, because it
+ * names Redis / Durable Object internals); the daemon is cut off at its next
+ * frame, reconnect, or session mint regardless. Idempotent.
  */
 export type ServerDaemonKeyRevokeResult = {
   ok: true
   revokedAt: string | null
   purged: boolean
-  purgeError?: string
+  purgeError?: ServerDaemonKeyPurgeFailure | string
 }
 
 export async function revokeServerDaemonKey(
