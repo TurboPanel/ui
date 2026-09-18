@@ -28,7 +28,7 @@ export type RulesDraft = {
 export function addressHint(kind: NotificationChannelKind): string {
   switch (kind) {
     case 'email':
-      return 'One address. Each event arrives as its own message.'
+      return 'Your own address for a personal channel, or a member\'s account email for an organization one. Each event arrives as its own message.'
     case 'webhook':
       return 'An https URL that accepts a JSON POST. Add a signing secret to get an X-TurboPanel-Signature header.'
     case 'slack':
@@ -55,6 +55,7 @@ export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
 const CHANNEL_ERROR_COPY: Record<string, string> = {
   address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted instance).',
   address_invalid: 'That address does not look right for this kind of channel.',
+  address_not_a_member: 'An email channel can only name an address TurboPanel already knows: your own for a personal channel, a member\'s account email for an organization one.',
   address_required: 'Enter an address.',
   label_required: 'Give the channel a name.',
   label_invalid: 'The name is too long or contains characters that cannot be shown.',
