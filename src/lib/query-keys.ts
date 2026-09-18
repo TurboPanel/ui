@@ -135,6 +135,10 @@ export const queryKeys = {
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,
         /** Let's Encrypt / ACME opt-in gate (`/organizations/:id/tls-settings`). */
         tlsSettings: ['org', orgId, 'tls-settings'] as const,
+        /** Owner opt-in for gated compose fields (`/organizations/:id/compose-privileged-fields`). */
+        composeGatedFields: ['org', orgId, 'compose-privileged-fields'] as const,
+        /** Org default resource ceiling for compose services (`/organizations/:id/compose-resource-defaults`). */
+        composeResourceDefaults: ['org', orgId, 'compose-resource-defaults'] as const,
         principalDefaults: ['org', orgId, 'principal-defaults'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,

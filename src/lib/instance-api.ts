@@ -1003,6 +1003,48 @@ export async function saveOrgTlsSettings(
   })
 }
 
+export type OrgComposeGatedFields = {
+  /** Owner opt-in for the ten root-equivalent compose fields. Off by default. */
+  composeGatedFieldsEnabled: boolean
+}
+
+export async function fetchOrgComposeGatedFields(
+  orgId: string
+): Promise<OrgComposeGatedFields> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-privileged-fields`)
+}
+
+export async function saveOrgComposeGatedFields(
+  orgId: string,
+  patch: OrgComposeGatedFields
+): Promise<OrgComposeGatedFields> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-privileged-fields`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
+export type OrgComposeResourceDefaults = {
+  /** `null` = no default ceiling; otherwise cores and/or bytes. */
+  composeDefaultResourceLimits: { cpus?: number; memoryBytes?: number } | null
+}
+
+export async function fetchOrgComposeResourceDefaults(
+  orgId: string
+): Promise<OrgComposeResourceDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-resource-defaults`)
+}
+
+export async function saveOrgComposeResourceDefaults(
+  orgId: string,
+  patch: OrgComposeResourceDefaults
+): Promise<OrgComposeResourceDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-resource-defaults`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
 export async function fetchOrgHostDefaults(orgId: string): Promise<OrgHostDefaults> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/host-defaults`)
 }

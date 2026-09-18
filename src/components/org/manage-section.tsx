@@ -1,11 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { ComposeSettingsSection } from '@/components/org/compose-settings-section'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { spacing } from '@/lib/theme'
 
-/** Org Manage — organization record (view / rename). */
+/** Org Manage — organization record (view / rename) and the owner-only compose opt-ins. */
 export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   const orgsQuery = useOrganizationsQuery()
 
@@ -17,6 +18,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Manage Organization</Text>
       <OrganizationFormSection orgId={orgId} />
+      <ComposeSettingsSection orgId={orgId} />
     </View>
   )
 }
