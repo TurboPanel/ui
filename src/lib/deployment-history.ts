@@ -184,3 +184,22 @@ export function deploymentStatusTone(
 export function deploymentServerLabel(row: DeploymentHistoryRecord): string {
   return row.serverName?.trim() || row.serverId
 }
+
+/**
+ * A deploy that stalled says whether running it again is free.
+ *
+ * The sweep that times out a stranded command records which of the two
+ * happened: `stalled_undelivered` means the daemon never acknowledged it, so
+ * nothing ran on the host; `stalled` means it did, and the work may still be
+ * going there. That is the difference between "press deploy again" and "go
+ * look at the host first", so the console says which.
+ */
+export function stalledDeploymentHint(errorCode: string | null): string | null {
+  if (errorCode === 'stalled_undelivered') {
+    return 'The server never picked this up, so nothing ran on it. Deploying again is safe.'
+  }
+  if (errorCode === 'stalled') {
+    return 'The server took this deploy but never reported back. It may still be running there — check the host before deploying again.'
+  }
+  return null
+}

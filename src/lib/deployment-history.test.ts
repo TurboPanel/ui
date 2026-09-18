@@ -8,6 +8,7 @@ import {
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
   worstDeploymentStatus,
+  stalledDeploymentHint,
 } from './deployment-history'
 
 function row(
@@ -351,5 +352,17 @@ describe('deploymentServerLabel', () => {
     expect(deploymentServerLabel(row({ id: 'a', serverName: '  web-01  ' }))).toBe(
       'web-01',
     )
+  })
+})
+
+describe('stalledDeploymentHint', () => {
+  it('tells the operator whether deploying again is free', () => {
+    // The sweep records which of the two stalls happened; the console turns
+    // that into the operator's next move.
+    expect(stalledDeploymentHint('stalled_undelivered')).toContain('safe')
+    expect(stalledDeploymentHint('stalled')).toContain('check the host')
+    // Any other failure speaks for itself through errorMessage.
+    expect(stalledDeploymentHint('deploy_failed')).toBeNull()
+    expect(stalledDeploymentHint(null)).toBeNull()
   })
 })

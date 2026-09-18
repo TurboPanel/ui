@@ -22,6 +22,7 @@ import {
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
   type DeploymentGroup,
+  stalledDeploymentHint,
 } from '@/lib/deployment-history'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
 import { isTerminalCommandStatus } from '@/lib/queries/commands'
@@ -94,6 +95,7 @@ function DeploymentDetail({
     group.commands.find((row) => row.serverId === serverId) ??
     group.commands[0]
   const failure = active?.errorMessage ?? null
+  const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
 
   return (
     <View style={styles.detail}>
@@ -113,6 +115,7 @@ function DeploymentDetail({
           {failure}
         </Text>
       ) : null}
+      {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
       {active ? <DeploymentTranscript orgId={orgId} row={active} /> : null}
     </View>
   )
