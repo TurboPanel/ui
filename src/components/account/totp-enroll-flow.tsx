@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { BackupCodesSheet } from '@/components/account/backup-codes-sheet'
 import { StepUpPasswordField } from '@/components/account/step-up-password-field'
 import {
   Button,
@@ -30,9 +29,18 @@ type EnrollSecret = { secret: string; otpauthUri: string }
  *
  * Three steps in place, never a route change: confirm identity → transfer the
  * secret to an authenticator → prove it works. Backup codes are returned only
- * by the verify call and only once, which is why they land in a modal.
+ * by the verify call and only once, which is why they land in a modal — and
+ * why that modal is the parent's, not this component's: a successful verify
+ * invalidates the two-factor status, the Security screen swaps this wizard for
+ * the manage panel, and a sheet owned here would unmount with it before the
+ * operator ever saw the codes (found 2026-09-18 in a real browser round trip).
  */
-export function TotpEnrollFlow() {
+export function TotpEnrollFlow({
+  onEnabled,
+}: Readonly<{
+  /** Called once with the backup codes the verify call returned. */
+  onEnabled: (backupCodes: readonly string[]) => void
+}>) {
   const enroll = useEnrollTotp()
   const verify = useVerifyTotp()
   const [password, setPassword] = useState('')
@@ -40,7 +48,6 @@ export function TotpEnrollFlow() {
   const [secret, setSecret] = useState<EnrollSecret | null>(null)
   const [code, setCode] = useState('')
   const [message, setMessage] = useState<string | null>(null)
-  const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
 
   const onEnroll = useCallback(() => {
     setMessage(null)
@@ -66,7 +73,7 @@ export function TotpEnrollFlow() {
       .then((result) => {
         setMessage(securityActionMessage(result))
         if (result.ok) {
-          setBackupCodes(result.value.backupCodes)
+          onEnabled(result.value.backupCodes)
           setSecret(null)
           setCode('')
         }
@@ -74,11 +81,7 @@ export function TotpEnrollFlow() {
       .catch(() => {
         // `run` folds rejections into its result shape.
       })
-  }, [code, verify])
-
-  const onAcknowledge = useCallback(() => {
-    setBackupCodes(null)
-  }, [])
+  }, [code, onEnabled, verify])
 
   return (
     <View style={styles.stack}>
@@ -115,12 +118,6 @@ export function TotpEnrollFlow() {
       )}
 
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
-
-      <BackupCodesSheet
-        visible={backupCodes !== null}
-        codes={backupCodes ?? []}
-        onAcknowledge={onAcknowledge}
-      />
     </View>
   )
 }

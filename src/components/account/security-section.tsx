@@ -1,5 +1,7 @@
+import { type ReactNode, useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { BackupCodesSheet } from '@/components/account/backup-codes-sheet'
 import { LinkedAccountsPanel } from '@/components/account/linked-accounts-panel'
 import { PasskeysPanel } from '@/components/account/passkeys-panel'
 import { TotpEnrollFlow } from '@/components/account/totp-enroll-flow'
@@ -118,12 +120,30 @@ function TwoFactorBody({
   unavailable: boolean
   status: ReturnType<typeof useTwoFactorStatusQuery>['data']
 }>) {
-  if (loading) return <LoadingState label="Loading security settings…" />
-  if (unavailable || !status) {
-    return <Text style={panelStyles.muted}>{SECURITY_STATUS_UNAVAILABLE}</Text>
-  }
-  if (status.enabled) return <TwoFactorManage status={status} />
-  return <TotpEnrollFlow />
+  // The backup codes live here, above the enrol/manage swap: verifying the
+  // first code flips `status.enabled`, which replaces the wizard with the
+  // manage panel, and a sheet owned by the wizard would vanish with it.
+  const [backupCodes, setBackupCodes] = useState<readonly string[] | null>(null)
+  const onEnabled = useCallback((codes: readonly string[]) => setBackupCodes(codes), [])
+  const onAcknowledge = useCallback(() => setBackupCodes(null), [])
+
+  let body: ReactNode
+  if (loading) body = <LoadingState label="Loading security settings…" />
+  else if (unavailable || !status) {
+    body = <Text style={panelStyles.muted}>{SECURITY_STATUS_UNAVAILABLE}</Text>
+  } else if (status.enabled) body = <TwoFactorManage status={status} />
+  else body = <TotpEnrollFlow onEnabled={onEnabled} />
+
+  return (
+    <>
+      {body}
+      <BackupCodesSheet
+        visible={backupCodes !== null}
+        codes={backupCodes ?? []}
+        onAcknowledge={onAcknowledge}
+      />
+    </>
+  )
 }
 
 export function SecuritySection() {

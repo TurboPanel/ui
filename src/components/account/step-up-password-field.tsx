@@ -1,12 +1,14 @@
 import { TextField } from '@/components/ui'
 
 /**
- * Optional password confirmation for a step-up protected action.
+ * Password confirmation for a step-up protected action.
  *
- * Every security mutation accepts a password and only *needs* one when the
- * session is older than the re-auth window, so the field is always offered and
- * never required up front — the operator types it when the control plane says
- * to, not before.
+ * The control plane's rule (`reauth.ts`): an account that has a password must
+ * resubmit it for every security mutation — a fresh session never substitutes.
+ * Only an account with no password (passkey / provider sign-in only) is let
+ * through on a session younger than the re-auth window. The field is always
+ * offered; the hint says which case the reader is in as plainly as it can
+ * without knowing the account shape, and turns firm once a 403 asked.
  */
 export function StepUpPasswordField({
   value,
@@ -25,8 +27,8 @@ export function StepUpPasswordField({
       label="Current password"
       hint={
         required
-          ? 'Your session is older than the confirmation window — enter your password to continue.'
-          : 'Only needed if your session is older than the confirmation window.'
+          ? 'Enter your password to continue.'
+          : 'Confirm with your password. Only an account that signs in without one (passkey or provider only) may skip this for 15 minutes after signing in.'
       }
       value={value}
       onChangeText={onChangeText}
