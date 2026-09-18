@@ -60,6 +60,13 @@ function storageParentKey(filter: StorageParentFilter): readonly [string, string
 }
 
 export const queryKeys = {
+  notifications: {
+    all: ['notifications'] as const,
+    inbox: ['notifications', 'inbox'] as const,
+    unread: ['notifications', 'unread'] as const,
+    events: ['notifications', 'events'] as const,
+    channels: (scope: 'user' | 'organization') => ['notifications', 'channels', scope] as const,
+  },
   auth: {
     all: ['auth'] as const,
     status: ['auth', 'status'] as const,

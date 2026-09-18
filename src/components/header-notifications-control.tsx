@@ -85,7 +85,7 @@ export function HeaderNotificationsSegment() {
           style={[headerMenuGroupStyles.menu, isCompact && styles.rightPanel]}
           intensity="strong"
         >
-          <NotificationsPanelBody />
+          <NotificationsPanelBody onNavigate={close} />
         </GlassSurface>
       </HeaderMenuOverlay>
     </>

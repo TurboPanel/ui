@@ -104,6 +104,8 @@ function UserAccountMenuBody({
   onSwitch,
   onAddControlPlane,
   onSecurity,
+  onNotifications,
+  onClose,
   onAbout,
   onSignOut,
 }: Readonly<{
@@ -116,6 +118,9 @@ function UserAccountMenuBody({
   onSwitch: (account: ControlPlaneAccount) => void
   onAddControlPlane: () => void
   onSecurity: () => void
+  onNotifications: () => void
+  /** Closes the menu before a navigation the panel itself performs. */
+  onClose: () => void
   onAbout: () => void
   onSignOut: () => void
 }>) {
@@ -126,7 +131,7 @@ function UserAccountMenuBody({
     >
       {isNative ? (
         <>
-          <NotificationsPanelBody />
+          <NotificationsPanelBody onNavigate={onClose} />
           <View style={headerMenuGroupStyles.menuDivider} />
         </>
       ) : null}
@@ -214,6 +219,19 @@ function UserAccountMenuBody({
           pressed && headerMenuGroupStyles.itemPressed,
           webPointer,
         ]}
+        onPress={onNotifications}
+        accessibilityRole="menuitem"
+        accessibilityLabel="Notifications"
+      >
+        <Text style={headerMenuGroupStyles.menuActionLabel}>Notifications</Text>
+      </Pressable>
+
+      <Pressable
+        style={({ pressed }) => [
+          headerMenuGroupStyles.menuAction,
+          pressed && headerMenuGroupStyles.itemPressed,
+          webPointer,
+        ]}
         onPress={onAbout}
         accessibilityRole="menuitem"
         accessibilityLabel="About"
@@ -293,6 +311,11 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
     router.push('/account/security')
   }
 
+  const handleNotifications = () => {
+    close()
+    router.push('/account/notifications')
+  }
+
   const handleAbout = () => {
     close()
     router.push('/about')
@@ -334,6 +357,8 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
           onSwitch={handleSwitch}
           onAddControlPlane={handleAddControlPlane}
           onSecurity={handleSecurity}
+          onNotifications={handleNotifications}
+          onClose={close}
           onAbout={handleAbout}
           onSignOut={handleSignOut}
         />

@@ -1,9 +1,15 @@
+import { useAuth } from '@/lib/auth-context'
+import { useUnreadNotificationsQuery } from '@/lib/queries/notifications'
+
 /**
- * Notification UI stubs until the instance has a notifications table / API.
+ * Unread count for the native avatar badge and the web bell badge.
  *
- * Unread count drives the native avatar badge and the web bell badge.
- * Always 0 until a real feed is wired.
+ * Polls `GET /notifications/unread-count` once a minute while signed in; 0
+ * while signed out, loading, or when the control plane cannot answer — a
+ * badge must never be the thing that breaks the header.
  */
 export function useUnreadNotificationCount(): number {
-  return 0
+  const { session } = useAuth()
+  const query = useUnreadNotificationsQuery({ enabled: Boolean(session) })
+  return query.data ?? 0
 }

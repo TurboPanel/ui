@@ -7550,3 +7550,144 @@ export async function importDockerRunCommand(body: {
 
   return (await response.json()) as DockerRunImportResponse
 }
+
+// ---------------------------------------------------------------------------
+// Notifications — the inbox and the channels (`/api/client/v1/notifications`,
+// `/notification-channels`, `/notification-events`). One data model for
+// self-hosted, High Availability and the store apps.
+// ---------------------------------------------------------------------------
+
+export type NotificationSeverity = 'info' | 'warning' | 'critical'
+
+export type NotificationRecord = {
+  id: string
+  createdAt: string
+  organizationId: string | null
+  event: string
+  severity: NotificationSeverity
+  title: string
+  body: string | null
+  targetType: string | null
+  targetId: string | null
+  readAt: string | null
+}
+
+export type NotificationEventInfo = {
+  event: string
+  severity: NotificationSeverity
+  scope: 'organization' | 'instance'
+  example: string
+}
+
+export const NOTIFICATION_CHANNEL_KINDS = [
+  'email',
+  'webhook',
+  'slack',
+  'discord',
+  'telegram',
+] as const
+export type NotificationChannelKind = (typeof NOTIFICATION_CHANNEL_KINDS)[number]
+
+export type NotificationRule = { event: string; minSeverity: NotificationSeverity }
+
+export type NotificationChannel = {
+  id: string
+  scope: 'user' | 'organization' | 'instance'
+  organizationId: string | null
+  kind: NotificationChannelKind | 'push'
+  label: string
+  /** Described, never the credential: an origin for a URL kind, a tail for the rest. */
+  address: string
+  signed: boolean
+  verifiedAt: string | null
+  disabledAt: string | null
+  createdAt: string
+  rules: NotificationRule[]
+  recentDeliveries: {
+    id: string
+    event: string
+    status: 'pending' | 'sent' | 'failed' | 'abandoned'
+    attempts: number
+    at: string
+  }[]
+}
+
+export async function fetchNotifications(opts: { limit?: number; before?: string } = {}): Promise<{
+  notifications: NotificationRecord[]
+  unread: number
+}> {
+  const params = new URLSearchParams()
+  if (opts.limit) params.set('limit', String(opts.limit))
+  if (opts.before) params.set('before', opts.before)
+  const query = params.toString()
+  const body = await apiFetch<{ notifications?: NotificationRecord[]; unread?: number }>(
+    `${CLIENT_API}/notifications${query ? `?${query}` : ''}`,
+  )
+  return { notifications: body.notifications ?? [], unread: body.unread ?? 0 }
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const body = await apiFetch<{ unread?: number }>(`${CLIENT_API}/notifications/unread-count`)
+  return body.unread ?? 0
+}
+
+/** Mark the given rows read, or every unread row when `ids` is empty. */
+export async function markNotificationsRead(ids: readonly string[] = []): Promise<{ updated: number; unread: number }> {
+  const body = await apiFetch<{ updated?: number; unread?: number }>(`${CLIENT_API}/notifications/read`, {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+  return { updated: body.updated ?? 0, unread: body.unread ?? 0 }
+}
+
+export async function dismissNotification(id: string): Promise<void> {
+  await apiFetch(`${CLIENT_API}/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export async function fetchNotificationEvents(): Promise<NotificationEventInfo[]> {
+  const body = await apiFetch<{ events?: NotificationEventInfo[] }>(`${CLIENT_API}/notification-events`)
+  return body.events ?? []
+}
+
+export async function fetchNotificationChannels(
+  scope: 'user' | 'organization',
+): Promise<NotificationChannel[]> {
+  const body = await apiFetch<{ channels?: NotificationChannel[] }>(
+    `${CLIENT_API}/notification-channels?scope=${scope}`,
+  )
+  return body.channels ?? []
+}
+
+export type CreateNotificationChannelBody = {
+  scope: 'user' | 'organization'
+  kind: NotificationChannelKind
+  label: string
+  address: string
+  signingSecret?: string
+  rules: NotificationRule[]
+}
+
+export async function createNotificationChannel(
+  body: CreateNotificationChannelBody,
+): Promise<NotificationChannel> {
+  const res = await apiFetch<{ channel: NotificationChannel }>(`${CLIENT_API}/notification-channels`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return res.channel
+}
+
+export async function updateNotificationChannel(
+  id: string,
+  patch: { label?: string; disabled?: boolean; rules?: NotificationRule[] },
+): Promise<NotificationChannel | null> {
+  const res = await apiFetch<{ channel: NotificationChannel | null }>(
+    `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return res.channel
+}
+
+export async function deleteNotificationChannel(id: string): Promise<void> {
+  await apiFetch(`${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
