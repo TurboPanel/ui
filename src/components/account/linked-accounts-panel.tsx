@@ -124,6 +124,20 @@ export function LinkedAccountsPanel({
           body="That provider account is already linked to a different user."
         />
       ) : null}
+      {returnError === 'oauth_reauth_required' ? (
+        <InlineNotice
+          tone="warning"
+          title="Sign in again to link an account"
+          body="Linking a provider adds a permanent way into your account, so it needs a recent sign-in. Sign out and back in, then try again."
+        />
+      ) : null}
+      {returnError === 'oauth_unauthenticated' ? (
+        <InlineNotice
+          tone="warning"
+          title="Could not link that account"
+          body="Your session ended before the provider came back. Sign in and try again."
+        />
+      ) : null}
       {!canLink && authProviders.length > 0 ? (
         <InlineNotice title="Link from a browser" body={OAUTH_WEB_ONLY_NOTE} />
       ) : null}
