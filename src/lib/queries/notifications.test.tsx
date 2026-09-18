@@ -102,7 +102,7 @@ describe('notification hooks', () => {
     const client = createAppQueryClient()
     const wrapper = createWrapper(client)
     renderHook(() => useNotificationChannelsQuery('user'), { wrapper })
-    await waitFor(() => expect(fetchNotificationChannels).toHaveBeenCalledWith('user'))
+    await waitFor(() => expect(fetchNotificationChannels).toHaveBeenCalledWith('user', undefined))
     const { result } = renderHook(() => useCreateNotificationChannel('user'), { wrapper })
     await result.current.run({
       kind: 'slack',
@@ -110,13 +110,16 @@ describe('notification hooks', () => {
       address: 'https://hooks.slack.com/x',
       rules: [{ event: '*', minSeverity: 'warning' }],
     })
-    expect(createNotificationChannel).toHaveBeenCalledWith({
-      scope: 'user',
-      kind: 'slack',
-      label: 'Ops',
-      address: 'https://hooks.slack.com/x',
-      rules: [{ event: '*', minSeverity: 'warning' }],
-    })
+    expect(createNotificationChannel).toHaveBeenCalledWith(
+      {
+        scope: 'user',
+        kind: 'slack',
+        label: 'Ops',
+        address: 'https://hooks.slack.com/x',
+        rules: [{ event: '*', minSeverity: 'warning' }],
+      },
+      undefined,
+    )
     await waitFor(() => expect(fetchNotificationChannels).toHaveBeenCalledTimes(2))
   })
 })

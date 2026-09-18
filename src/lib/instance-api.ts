@@ -7651,9 +7651,12 @@ export async function fetchNotificationEvents(): Promise<NotificationEventInfo[]
 
 export async function fetchNotificationChannels(
   scope: 'user' | 'organization',
+  organizationId?: string | null,
 ): Promise<NotificationChannel[]> {
   const body = await apiFetch<{ channels?: NotificationChannel[] }>(
     `${CLIENT_API}/notification-channels?scope=${scope}`,
+    undefined,
+    organizationId,
   )
   return body.channels ?? []
 }
@@ -7669,25 +7672,33 @@ export type CreateNotificationChannelBody = {
 
 export async function createNotificationChannel(
   body: CreateNotificationChannelBody,
+  organizationId?: string | null,
 ): Promise<NotificationChannel> {
-  const res = await apiFetch<{ channel: NotificationChannel }>(`${CLIENT_API}/notification-channels`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  const res = await apiFetch<{ channel: NotificationChannel }>(
+    `${CLIENT_API}/notification-channels`,
+    { method: 'POST', body: JSON.stringify(body) },
+    organizationId,
+  )
   return res.channel
 }
 
 export async function updateNotificationChannel(
   id: string,
   patch: { label?: string; disabled?: boolean; rules?: NotificationRule[] },
+  organizationId?: string | null,
 ): Promise<NotificationChannel | null> {
   const res = await apiFetch<{ channel: NotificationChannel | null }>(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'PATCH', body: JSON.stringify(patch) },
+    organizationId,
   )
   return res.channel
 }
 
-export async function deleteNotificationChannel(id: string): Promise<void> {
-  await apiFetch(`${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export async function deleteNotificationChannel(id: string, organizationId?: string | null): Promise<void> {
+  await apiFetch(
+    `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    organizationId,
+  )
 }

@@ -72,13 +72,18 @@ export function useNotificationEventsQuery(options?: Readonly<{ enabled?: boolea
   })
 }
 
+/**
+ * `organizationId` names the organization an `organization`-scoped call is
+ * about. The account screens sit outside the org shell, so the active
+ * organization is not set there; they pass the person's preferred one.
+ */
 export function useNotificationChannelsQuery(
   scope: 'user' | 'organization',
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean; organizationId?: string | null }>,
 ) {
   return useQuery({
-    queryKey: queryKeys.notifications.channels(scope),
-    queryFn: () => fetchNotificationChannels(scope),
+    queryKey: [...queryKeys.notifications.channels(scope), options?.organizationId ?? null] as const,
+    queryFn: () => fetchNotificationChannels(scope, options?.organizationId),
     enabled: options?.enabled ?? true,
     retry: false,
   })
@@ -88,32 +93,32 @@ async function invalidateChannels(queryClient: QueryClient, scope: 'user' | 'org
   await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.channels(scope) })
 }
 
-export function useCreateNotificationChannel(scope: 'user' | 'organization') {
+export function useCreateNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (body: Omit<CreateNotificationChannelBody, 'scope'>) =>
-      createNotificationChannel({ ...body, scope }),
+      createNotificationChannel({ ...body, scope }, organizationId),
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
     },
   })
 }
 
-export function useUpdateNotificationChannel(scope: 'user' | 'organization') {
+export function useUpdateNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: ({ id, ...patch }: { id: string; label?: string; disabled?: boolean; rules?: NotificationRule[] }) =>
-      updateNotificationChannel(id, patch),
+      updateNotificationChannel(id, patch, organizationId),
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
     },
   })
 }
 
-export function useDeleteNotificationChannel(scope: 'user' | 'organization') {
+export function useDeleteNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (id: string) => deleteNotificationChannel(id),
+    mutationFn: (id: string) => deleteNotificationChannel(id, organizationId),
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
     },

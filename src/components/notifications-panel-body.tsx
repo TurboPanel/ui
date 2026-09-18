@@ -78,54 +78,56 @@ export function NotificationsPanelBody({
       ) : (
         rows.map((row) => {
           const href = notificationHref(row)
+          // Two siblings, not a button inside a button: the row opens the
+          // target, the × beside it dismisses.
           return (
-            <Pressable
+            <View
               key={row.id}
-              style={({ pressed }) => [
-                styles.row,
-                row.readAt === null && styles.rowUnread,
-                pressed && headerMenuGroupStyles.itemPressed,
-                webPointer,
-              ]}
-              onPress={() => {
-                if (row.readAt === null) void markRead.run([row.id])
-                if (href) go(href)
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={row.title}
+              style={[styles.row, row.readAt === null && styles.rowUnread]}
             >
-              <View style={styles.rowDot}>
-                <StatusDot tone={SEVERITY_TONE[row.severity]} />
-              </View>
-              <View style={styles.rowText}>
-                <Text
-                  style={[styles.rowTitle, row.readAt === null && styles.rowTitleUnread]}
-                  numberOfLines={2}
-                >
-                  {row.title}
-                </Text>
-                {row.body ? (
-                  <Text style={styles.rowBody} numberOfLines={2}>
-                    {row.body}
-                  </Text>
-                ) : null}
-                <Text style={styles.rowMeta}>
-                  {formatRelativeLocalDateTime(row.createdAt)}
-                </Text>
-              </View>
               <Pressable
-                onPress={(event) => {
-                  event.stopPropagation()
-                  void dismiss.run(row.id)
+                style={({ pressed }) => [
+                  styles.rowMain,
+                  pressed && headerMenuGroupStyles.itemPressed,
+                  webPointer,
+                ]}
+                onPress={() => {
+                  if (row.readAt === null) void markRead.run([row.id])
+                  if (href) go(href)
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={row.title}
+              >
+                <View style={styles.rowDot}>
+                  <StatusDot tone={SEVERITY_TONE[row.severity]} />
+                </View>
+                <View style={styles.rowText}>
+                  <Text
+                    style={[styles.rowTitle, row.readAt === null && styles.rowTitleUnread]}
+                    numberOfLines={2}
+                  >
+                    {row.title}
+                  </Text>
+                  {row.body ? (
+                    <Text style={styles.rowBody} numberOfLines={2}>
+                      {row.body}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.rowMeta}>
+                    {formatRelativeLocalDateTime(row.createdAt)}
+                  </Text>
+                </View>
+              </Pressable>
+              <Pressable
+                onPress={() => void dismiss.run(row.id)}
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss notification"
                 hitSlop={8}
-                style={webPointer}
+                style={[styles.dismissWrap, webPointer]}
               >
                 <Text style={styles.dismiss}>×</Text>
               </Pressable>
-            </Pressable>
+            </View>
           )
         })
       )}
@@ -181,10 +183,20 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    borderRadius: 8,
+  },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 8,
     borderRadius: 8,
+  },
+  dismissWrap: {
+    paddingTop: 6,
+    paddingRight: spacing.sm,
   },
   rowUnread: {
     backgroundColor: colors.bgSecondary,

@@ -40,6 +40,8 @@ import {
   useNotificationEventsQuery,
   useUpdateNotificationChannel,
 } from '@/lib/queries/notifications'
+import { getActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
+import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 const KIND_OPTIONS: readonly SegmentedOption<NotificationChannelKind>[] =
@@ -106,13 +108,15 @@ function ChannelRow({
   channel,
   events,
   scope,
+  organizationId,
 }: Readonly<{
   channel: NotificationChannel
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  organizationId: string | null
 }>) {
-  const update = useUpdateNotificationChannel(scope)
-  const remove = useDeleteNotificationChannel(scope)
+  const update = useUpdateNotificationChannel(scope, organizationId)
+  const remove = useDeleteNotificationChannel(scope, organizationId)
   const [draft, setDraft] = useState(() => draftFromRules(channel.rules))
   const [dirty, setDirty] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -183,8 +187,13 @@ function ChannelRow({
 function AddChannelForm({
   events,
   scope,
-}: Readonly<{ events: readonly NotificationEventInfo[]; scope: 'user' | 'organization' }>) {
-  const create = useCreateNotificationChannel(scope)
+  organizationId,
+}: Readonly<{
+  events: readonly NotificationEventInfo[]
+  scope: 'user' | 'organization'
+  organizationId: string | null
+}>) {
+  const create = useCreateNotificationChannel(scope, organizationId)
   const [kind, setKind] = useState<NotificationChannelKind>('email')
   const [label, setLabel] = useState('')
   const [address, setAddress] = useState('')
@@ -267,8 +276,13 @@ function AddChannelForm({
 function ChannelsPanel({
   scope,
   events,
-}: Readonly<{ scope: 'user' | 'organization'; events: readonly NotificationEventInfo[] }>) {
-  const query = useNotificationChannelsQuery(scope)
+  organizationId,
+}: Readonly<{
+  scope: 'user' | 'organization'
+  events: readonly NotificationEventInfo[]
+  organizationId: string | null
+}>) {
+  const query = useNotificationChannelsQuery(scope, { organizationId })
   const channels = query.data ?? []
   return (
     <View style={styles.stack}>
@@ -279,9 +293,11 @@ function ChannelsPanel({
       ) : channels.length === 0 ? (
         <EmptyState title="No channels yet." />
       ) : (
-        channels.map((channel) => <ChannelRow key={channel.id} channel={channel} events={events} scope={scope} />)
+        channels.map((channel) => (
+          <ChannelRow key={channel.id} channel={channel} events={events} scope={scope} organizationId={organizationId} />
+        ))
       )}
-      <AddChannelForm events={events} scope={scope} />
+      <AddChannelForm events={events} scope={scope} organizationId={organizationId} />
     </View>
   )
 }
@@ -296,6 +312,14 @@ export function NotificationChannelsSectionContent() {
   const router = useRouter()
   const eventsQuery = useNotificationEventsQuery()
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data])
+  // This screen sits outside the org shell, so the active organization may be
+  // unset; the person's preferred one (stored, or their only one) stands in.
+  const organizationsQuery = useOrganizationsQuery()
+  const organizationId = useMemo(() => {
+    const organizations = organizationsQuery.data?.organizations ?? []
+    return getActiveOrganizationId() ?? resolvePreferredOrganizationId(organizations)
+  }, [organizationsQuery.data])
+  const organizationName = organizationsQuery.data?.organizations.find((o) => o.id === organizationId)?.name ?? null
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
@@ -325,14 +349,18 @@ export function NotificationChannelsSectionContent() {
       </View>
 
       <SectionPanel title="Your channels" hint="Yours alone; they follow your account across organizations.">
-        <ChannelsPanel scope="user" events={events} />
+        <ChannelsPanel scope="user" events={events} organizationId={null} />
       </SectionPanel>
 
       <SectionPanel
         title="Organization channels"
-        hint="Shared by the organization in the header; managers may edit them."
+        hint={organizationName ? `Shared by ${organizationName}; managers may edit them.` : 'Shared by an organization; managers may edit them.'}
       >
-        <ChannelsPanel scope="organization" events={events} />
+        {organizationId ? (
+          <ChannelsPanel scope="organization" events={events} organizationId={organizationId} />
+        ) : (
+          <Text style={panelStyles.muted}>Open an organization first, then come back here.</Text>
+        )}
       </SectionPanel>
     </ScrollView>
   )
