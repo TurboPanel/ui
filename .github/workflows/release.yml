@@ -14,7 +14,13 @@
 #
 # The export is a plain `pnpm export`, so the about screen reports the
 # non-release source URL (isReleaseBuild() is EAS-only) — the exact commit
-# still comes from GITHUB_SHA via app.config.ts.
+# still comes from EXPO_PUBLIC_GIT_COMMIT via app.config.ts.
+#
+# The canary channel reuses this same export: canary.yml calls this workflow
+# (workflow_call, channel=canary) after every green Verify on trunk. The
+# version is then package.json's number plus `-canary.<buildId>`, and the
+# package goes to the rolling `canary` pre-release through TurboPanel/dev's
+# gh-canary.yml instead of a versioned release.
 
 name: Release
 
@@ -36,6 +42,16 @@ on:
         required: true
         type: string
         default: rc
+  workflow_call:
+    inputs:
+      channel:
+        description: Only `canary` is meaningful here — the rolling trunk build
+        required: true
+        type: string
+      ref:
+        description: The trunk commit to build (the head of the green Verify run)
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -47,12 +63,29 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       channel: ${{ steps.resolve.outputs.channel }}
+      commit: ${{ steps.resolve.outputs.commit }}
     steps:
-      - name: Resolve version and channel
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Resolve version, channel and commit
         id: resolve
         run: |
           set -eu
-          if [ -n "${{ inputs.version }}" ]; then
+          _commit="$(git rev-parse HEAD)"
+          echo "commit=${_commit}" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.channel }}" = "canary" ] && [ -n "${{ inputs.ref }}" ]; then
+            # The rolling trunk build: package.json's number plus a
+            # pre-release suffix carrying the build id, so every asset name
+            # is unique per build and semver orders it below the release it
+            # leads to.
+            _pkg_version="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
+            _build_id="$(date -u '+%Y%m%d-%H%M%S')-$(git rev-parse --short=7 HEAD)"
+            echo "version=${_pkg_version}-canary.${_build_id}" >> "$GITHUB_OUTPUT"
+            echo "channel=canary" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.version }}" ]; then
             echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
             echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
           else
@@ -61,14 +94,12 @@ jobs:
             echo "channel=release" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
       - name: Require the tag to match package.json's version
         # A tag cut before the bump is a release that lies about itself
         # (app.json and sonar.projectVersion are pinned to package.json by
-        # scripts/version-literals.test.ts). Dry runs skip this.
-        if: inputs.version == ''
+        # scripts/version-literals.test.ts). Dry runs and canary builds skip
+        # this.
+        if: inputs.version == '' && steps.resolve.outputs.channel != 'canary'
         run: |
           set -eu
           _tag_version="${{ steps.resolve.outputs.version }}"
@@ -85,9 +116,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          _ok="$(gh run list --repo "${{ github.repository }}" --workflow Verify --commit "${{ github.sha }}" --status success --json databaseId --jq 'length')"
+          _ok="$(gh run list --repo "${{ github.repository }}" --workflow Verify --commit "${{ steps.resolve.outputs.commit }}" --status success --json databaseId --jq 'length')"
           if [ "${_ok:-0}" -lt 1 ]; then
-            echo "::error::no successful Verify run found for ${{ github.sha }} — tag a commit whose Verify is green"
+            echo "::error::no successful Verify run found for ${{ steps.resolve.outputs.commit }} — tag a commit whose Verify is green"
             exit 1
           fi
 
@@ -97,6 +128,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -114,16 +147,22 @@ jobs:
       - name: Export the web app
         env:
           CI: "1"
-          # app.config.ts resolves the exact commit from GITHUB_SHA.
+          # app.config.ts resolves the exact commit from this (ahead of
+          # GITHUB_SHA, which for a canary build is the trunk head at trigger
+          # time, not necessarily the commit being built).
+          EXPO_PUBLIC_GIT_COMMIT: ${{ needs.prepare.outputs.commit }}
         run: pnpm export
 
       - name: Package release assets and write the manifest
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
           CHANNEL: ${{ needs.prepare.outputs.channel }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
           # Tag-pinned, not releases/latest — a promotion landing between a
-          # consumer's manifest fetch and its asset fetch must not 404 it.
-          ARTIFACT_BASE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ needs.prepare.outputs.version }}
+          # consumer's manifest fetch and its asset fetch must not 404 it. A
+          # canary build points at the rolling release instead: its asset
+          # carries the build id in its name, so it is never overwritten.
+          ARTIFACT_BASE_URL: ${{ needs.prepare.outputs.channel == 'canary' && format('https://github.com/{0}/releases/download/canary', github.repository) || format('https://github.com/{0}/releases/download/v{1}', github.repository, needs.prepare.outputs.version) }}
         run: |
           set -eu
           test -f dist/index.html
@@ -132,19 +171,24 @@ jobs:
           # dist/ contents at the tarball root: what ui-build untars in place.
           tar -C dist -czf "release-assets/${_name}" .
           python3 - "$_name" <<'PY'
-          import hashlib, json, os, sys, time
+          import hashlib, json, os, re, sys, time
           name = sys.argv[1]
           path = os.path.join("release-assets", name)
           with open(path, "rb") as f:
               data = f.read()
-          commit = os.environ["GITHUB_SHA"]
+          commit = os.environ["COMMIT"]
+          version = os.environ["VERSION"]
           built_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+          # A canary version already carries its build id; reuse it so the
+          # manifest, the asset name and the release notes all agree.
+          m = re.search(r"-canary\.(\d{8}-\d{6}-[0-9a-f]{7})$", version)
+          build_id = m.group(1) if m else f"{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{commit[:7]}"
           manifest = {
               "schema": 1,
               "channel": os.environ["CHANNEL"],
-              "version": os.environ["VERSION"],
+              "version": version,
               "commit": commit,
-              "buildId": f"{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{commit[:7]}",
+              "buildId": build_id,
               "builtAt": built_at,
               "artifacts": {
                   "ui": {
@@ -170,6 +214,7 @@ jobs:
 
   release:
     needs: [prepare, build]
+    if: needs.prepare.outputs.channel != 'canary'
     uses: TurboPanel/dev/.github/workflows/gh-release.yml@trunk
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -177,3 +222,13 @@ jobs:
       assets-artifact-name: turbopanel-ui-release-assets
       manifest-filename: manifest.json
       release-notes: "See https://github.com/${{ github.repository }}/commits/v${{ needs.prepare.outputs.version }} for changes."
+
+  canary:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.channel == 'canary'
+    uses: TurboPanel/dev/.github/workflows/gh-canary.yml@trunk
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      commit: ${{ needs.prepare.outputs.commit }}
+      assets-artifact-name: turbopanel-ui-release-assets
+      manifest-filename: manifest.json

@@ -1,0 +1,34 @@
+# Canary: after every green Verify on trunk, export the web app from that
+# exact commit and publish it to the rolling `canary` pre-release (Road to
+# 0.1.x, `trunk-canary`). The export itself is release.yml's — called here
+# with channel=canary — so a canary package is the same shape as a release
+# package, only versioned <X.Y.Z>-canary.<buildId> and replaced on the next
+# merge instead of pinned to a tag.
+#
+# workflow_run (not push) so the export never starts before lint, typecheck
+# and tests have passed on the commit; cancel-in-progress so a burst of
+# merges only ever publishes the newest one.
+
+name: Canary
+
+on:
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
+    branches: [trunk]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: canary
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'trunk'
+    uses: ./.github/workflows/release.yml
+    with:
+      channel: canary
+      ref: ${{ github.event.workflow_run.head_sha }}
