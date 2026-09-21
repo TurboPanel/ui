@@ -1,6 +1,6 @@
 /**
  * Client mirror of the control-plane managed-SQL listener ports
- * (`turbopanel/src/lib/managed/ingress-ports.ts`).
+ * (`turbopanel/src/features/managed/ingress-ports.ts`).
  *
  * These are the ports apps and operators dial on the shared ProxySQL. They are
  * **organization-wide, per protocol family** — one ProxySQL fronts every managed

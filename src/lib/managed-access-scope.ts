@@ -1,6 +1,6 @@
 /**
  * Client mirror of the control-plane managed SQL access scopes
- * (`turbopanel/src/lib/managed/access-scope.ts`).
+ * (`turbopanel/src/features/managed/access-scope.ts`).
  */
 
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'

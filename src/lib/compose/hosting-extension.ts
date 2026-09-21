@@ -1,6 +1,6 @@
 /**
  * Per-service **authored** ingress (`services.<name>.x-turbopanel.hosting`).
- * Mirrors the instance's `turbopanel/src/lib/compose/hosting-extension.ts` —
+ * Mirrors the instance's `turbopanel/src/features/compose/hosting-extension.ts` —
  * same shape, same rules, same messages, so the editor says what the save would
  * say instead of blessing a document the control plane then rejects.
  *

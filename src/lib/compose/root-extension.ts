@@ -1,6 +1,6 @@
 /**
  * Top-level **authored** `x-turbopanel` extension. Mirrors the instance's
- * `turbopanel/src/lib/compose/root-extension.ts`.
+ * `turbopanel/src/features/compose/root-extension.ts`.
  *
  * Two different objects share the `x-turbopanel` key and this module owns
  * exactly one of them:

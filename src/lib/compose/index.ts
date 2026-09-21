@@ -2,7 +2,7 @@
  * Compose helpers for the product console.
  *
  * Merge semantics below MUST stay in parity with
- * `turbopanel/src/lib/compose/merge.ts` (Compose Spec append / dedup / `!reset`
+ * `turbopanel/src/features/compose/merge.ts` (Compose Spec append / dedup / `!reset`
  * / `!override`). That file is the source of truth for what Docker Compose
  * does when multiple `-f` files are merged — never reintroduce naive
  * deep-merge here.
@@ -298,7 +298,7 @@ function buildPresentation(
   }
 }
 
-// --- Compose Spec merge (parity with instance/src/lib/compose/merge.ts) ---
+// --- Compose Spec merge (parity with turbopanel/src/features/compose/merge.ts) ---
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -942,13 +942,13 @@ export function mergeComposeOverlay(
   }
 }
 
-/** Mirror of instance `src/lib/compose/placement.ts`. */
+/** Mirror of instance `turbopanel/src/features/compose/placement.ts`. */
 export const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
 
 /**
  * The **runtime** top-level `x-turbopanel` block — preview/compile-time audit
  * metadata, never authored and never stored. Mirrors the instance's
- * `TurbopanelRuntimeRootExtension` in `src/lib/compose/placement.ts`.
+ * `TurbopanelRuntimeRootExtension` in `turbopanel/src/features/compose/placement.ts`.
  *
  * Structurally separate from the authored `TurbopanelRootExtension` in
  * `./root-extension` on purpose: the two are not variants of one all-optional

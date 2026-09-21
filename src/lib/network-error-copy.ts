@@ -3,7 +3,7 @@
  * pins, reserved ranges, Docker registrations, Docker host address pools).
  *
  * The instance answers every CIDR write through a single collision authority
- * (`turbopanel/src/lib/net/cidr-collisions.ts`), so the same **409** can
+ * (`turbopanel/src/features/net/cidr-collisions.ts`), so the same **409** can
  * surface on four different forms. Keeping the copy here means it never reads
  * two ways. Pure and unit-tested — rendering (monospace for the conflicting
  * range) stays with the surface.

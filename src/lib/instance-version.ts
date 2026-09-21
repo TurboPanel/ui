@@ -113,7 +113,7 @@ let clientVersion: string | null = null
 /** Set once at app start from the Expo config's `version`. */
 export function setClientVersion(version: string | null | undefined): void {
   const trimmed = version?.trim()
-  clientVersion = trimmed ? trimmed : null
+  clientVersion = trimmed || null
 }
 
 export function getClientVersion(): string | null {
@@ -134,7 +134,7 @@ let lastInstanceVersion: string | null = null
  */
 export function recordInstanceVersion(headers: Pick<Headers, 'get'>): string | null {
   const raw = headers.get(INSTANCE_VERSION_HEADER)?.trim()
-  lastInstanceVersion = raw ? raw : null
+  lastInstanceVersion = raw || null
   return lastInstanceVersion
 }
 

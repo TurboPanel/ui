@@ -76,7 +76,7 @@ export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR =
   'failover_requires_trusted_datacenter'
 /**
  * CIDR collision codes (**409**) from the instance's single collision
- * authority (`turbopanel/src/lib/net/cidr-collisions.ts`). Every CIDR write —
+ * authority (`turbopanel/src/features/net/cidr-collisions.ts`). Every CIDR write —
  * `POST`/`PATCH /networks`, `POST /datacenters/:id/subnets`, the Docker
  * address-pool `PUT`, the fabric container pool — answers with one of these
  * plus `{ cidr, conflictingCidr, networkId?, datacenterId? }` (see
@@ -723,7 +723,7 @@ export type TierUnwatched<U extends number | string[]> = {
  * Why the hosted daily notice fires for a server: `exceeds` when the license
  * ranks below the recommended placement (devices go unmonitored),
  * `overprovisioned` when it ranks above it. Mirrors the control plane's
- * `TierNoticeKind` (`turbopanel/src/lib/tiers/tier-notice-sweep.ts`).
+ * `TierNoticeKind` (`turbopanel/src/features/tiers/tier-notice-sweep.ts`).
  */
 export type TierNoticeKind = 'exceeds' | 'overprovisioned'
 
@@ -1973,7 +1973,7 @@ export type BillingMutationResponse = {
 /**
  * Provider statuses after which a subscription is gone for good — checkout
  * is allowed again. Mirrors the control plane's `isEndedStatus`
- * (`turbopanel/src/lib/db/billing-records.ts`); `past_due` and `unpaid` are
+ * (`turbopanel/src/features/billing/billing-records.ts`); `past_due` and `unpaid` are
  * *delinquent but live* there, so they stay out of this set.
  */
 const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set(['canceled', 'incomplete_expired'])
@@ -3989,7 +3989,7 @@ export type ServerDaemonKeyRevokeResult = {
   ok: true
   revokedAt: string | null
   purged: boolean
-  purgeError?: ServerDaemonKeyPurgeFailure | string
+  purgeError?: ServerDaemonKeyPurgeFailure
 }
 
 export async function revokeServerDaemonKey(
@@ -4072,7 +4072,7 @@ export async function saveSignupSettings(enabled: boolean): Promise<SignupSettin
 
 /**
  * Webhook ingress paths, mirrored by hand from the control plane's
- * `GITHUB_WEBHOOK_PATH` / `GITLAB_WEBHOOK_PATH` in `turbopanel/src/surfaces.ts`.
+ * `GITHUB_WEBHOOK_PATH` / `GITLAB_WEBHOOK_PATH` in `turbopanel/src/app/surfaces.ts`.
  * That module is a different repo and runtime, so it cannot be imported here —
  * keep these two literals in step with it.
  */
@@ -7620,8 +7620,11 @@ export async function fetchNotifications(opts: { limit?: number; before?: string
   if (opts.limit) params.set('limit', String(opts.limit))
   if (opts.before) params.set('before', opts.before)
   const query = params.toString()
+  const path = query
+    ? `${CLIENT_API}/notifications?${query}`
+    : `${CLIENT_API}/notifications`
   const body = await apiFetch<{ notifications?: NotificationRecord[]; unread?: number }>(
-    `${CLIENT_API}/notifications${query ? `?${query}` : ''}`,
+    path,
   )
   return { notifications: body.notifications ?? [], unread: body.unread ?? 0 }
 }
