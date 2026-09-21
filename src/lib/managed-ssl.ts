@@ -1,6 +1,6 @@
 /**
  * Client mirror of the control-plane managed-SQL TLS policy
- * (`turbopanel/src/lib/managed/ssl.ts`).
+ * (`turbopanel/src/features/managed/ssl.ts`).
  *
  * The mode is a **client-facing** policy at the ProxySQL boundary, never a
  * switch for engine TLS — the ProxySQL → engine leg is always encrypted. It

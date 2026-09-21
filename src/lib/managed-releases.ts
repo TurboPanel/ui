@@ -4,7 +4,7 @@
  * A managed service's user-facing version is an **engine series** (`18`, `9.7`,
  * `12.3`), not an OCI tag — the create wizard picks a series plus a base-OS
  * **variant** and the control plane resolves the image. This file must stay in
- * sync with `turbopanel/src/lib/managed/releases.ts` (control plane, source of
+ * sync with `turbopanel/src/features/managed/releases.ts` (control plane, source of
  * truth) and `turbopaneld/src/instance/commands/contracts.ts` (daemon payload
  * allowlist); `managed-releases.test.ts` pins the literal set.
  */

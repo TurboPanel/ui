@@ -10,7 +10,7 @@ import type { BillingTier, TierPlacementRecord, TierUnwatched } from '@/lib/inst
  * catalogue is loaded (hosted) the label → rank map comes from it; otherwise
  * (self-hosted, or before the catalogue query resolves) the shipped ladder
  * below answers — the same `S1`…`S7` + `SX` table as
- * `turbopanel/src/lib/tiers/ladder.ts`, kept in step by hand. A label
+ * `turbopanel/src/features/tiers/ladder.ts`, kept in step by hand. A label
  * neither side recognises ranks as unknown (`null`) and every comparison
  * against it answers "cannot tell" rather than inventing a warning.
  */

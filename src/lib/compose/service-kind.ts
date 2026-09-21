@@ -68,7 +68,7 @@ const NODE_VERSION_RE = /^\d{1,3}(\.\d{1,3}){0,2}$/
 /**
  * Per-service Git source binding (`x-turbopanel.source`).
  *
- * Mirrors the instance type in `turbopanel/src/lib/compose/service-kind.ts`.
+ * Mirrors the instance type in `turbopanel/src/features/compose/service-kind.ts`.
  * `sourceId` shape is all this module can check — whether the id resolves is
  * decided by the instance route layer (and, once the UI has a repositories
  * list, by passing `knownSourceIds` into `lintComposeYaml`). The compose

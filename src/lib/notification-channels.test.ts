@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addressFieldLabel,
   addressHint,
   channelErrorCopy,
   draftFromRules,
@@ -31,5 +32,13 @@ describe('notification channel rules matrix', () => {
     }
     expect(channelErrorCopy(new Error('Request failed: HTTP 422: address_rejected'))).toMatch(/refused/)
     expect(channelErrorCopy(new Error('boom'))).toBe('boom')
+  })
+
+  it('labels the address field by kind', () => {
+    expect(addressFieldLabel('email')).toBe('Email address')
+    expect(addressFieldLabel('telegram')).toBe('Bot token / chat id')
+    expect(addressFieldLabel('webhook')).toBe('URL')
+    expect(addressFieldLabel('slack')).toBe('URL')
+    expect(addressFieldLabel('discord')).toBe('URL')
   })
 })

@@ -1,7 +1,7 @@
 /**
  * JSON-safe Compose Spec `!reset` / `!override` sentinels.
  *
- * Mirrors `turbopanel/src/lib/compose/tags.ts` — keep in parity so tagged JSON
+ * Mirrors `turbopanel/src/features/compose/tags.ts` — keep in parity so tagged JSON
  * stored by the instance round-trips through the UI unchanged.
  *
  * yaml's schema resolves tags **per node kind** (scalar / map / seq). Without

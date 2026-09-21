@@ -72,6 +72,101 @@ const SOURCE_OPTIONS = [
   { value: 'lets_encrypt', label: "Let's Encrypt" },
 ] as const
 
+function TlsCertificateList({
+  loading,
+  rows,
+  canManage,
+  deletingId,
+  deletePending,
+  onDelete,
+}: Readonly<{
+  loading: boolean
+  rows: readonly TlsRecord[]
+  canManage: boolean
+  deletingId: string | null
+  deletePending: boolean
+  onDelete: (id: string) => void
+}>) {
+  if (loading) {
+    return <LoadingState label="Loading certificates…" />
+  }
+  if (rows.length === 0) {
+    return <EmptyState title="No certificates yet." />
+  }
+  return rows.map((row) => (
+    <View key={row.id} style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>{tlsTitle(row)}</Text>
+      <Text style={panelStyles.muted}>
+        {tlsSourceLabel(row.source)} · {tlsStatusLabel(row)}
+      </Text>
+      <Text style={styles.sans}>{formatSans(row)}</Text>
+      {showTlsExpiry(row) ? (
+        <Text style={panelStyles.muted}>
+          Expires {new Date(row.metadata.notAfter).toLocaleString()}
+        </Text>
+      ) : null}
+      {row.metadata.acme?.lastError ? (
+        <Text style={panelStyles.error}>
+          Issuance failing: {row.metadata.acme.lastError}
+        </Text>
+      ) : null}
+      {canManage ? (
+        <ConfirmButton
+          label={deletingId === row.id ? 'Deleting…' : 'Delete'}
+          confirmLabel="Delete certificate"
+          prompt="Remove this certificate?"
+          busy={deletingId === row.id}
+          disabled={deletePending && deletingId !== row.id}
+          onConfirm={() => onDelete(row.id)}
+        />
+      ) : null}
+    </View>
+  ))
+}
+
+function TlsLetsEncryptPanel({
+  canManage,
+  acmeEnabled,
+  acmeError,
+  settingsError,
+  settingsLoading,
+  pending,
+  onToggle,
+}: Readonly<{
+  canManage: boolean
+  acmeEnabled: boolean
+  acmeError: string | null
+  settingsError: unknown
+  settingsLoading: boolean
+  pending: boolean
+  onToggle: (next: boolean) => void
+}>) {
+  return (
+    <SectionPanel
+      title="Let's Encrypt"
+      hint="Off by default — opt in before any Let's Encrypt certificate can be requested"
+    >
+      {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
+      {settingsError && !acmeError ? (
+        <Text style={panelStyles.error}>
+          {errorMessage(settingsError, "Failed to load the Let's Encrypt setting")}
+        </Text>
+      ) : null}
+      <SettingRow
+        label="Allow Let's Encrypt certificates"
+        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off."
+      >
+        <Toggle
+          value={acmeEnabled}
+          onValueChange={onToggle}
+          disabled={!canManage || pending || settingsLoading}
+          accessibilityLabel="Allow Let's Encrypt certificates"
+        />
+      </SettingRow>
+    </SectionPanel>
+  )
+}
+
 export function TlsOverviewSection({
   orgId,
 }: Readonly<{ orgId: string }>) {
@@ -207,74 +302,30 @@ export function TlsOverviewSection({
     })
   }
 
-  const renderCertificateList = () => {
-    if (loading) {
-      return <LoadingState label="Loading certificates…" />
-    }
-    if (rows.length === 0) {
-      return <EmptyState title="No certificates yet." />
-    }
-    return rows.map((row) => (
-      <View key={row.id} style={panelStyles.detailCard}>
-        <Text style={panelStyles.detailTitle}>{tlsTitle(row)}</Text>
-        <Text style={panelStyles.muted}>
-          {tlsSourceLabel(row.source)} · {tlsStatusLabel(row)}
-        </Text>
-        <Text style={styles.sans}>{formatSans(row)}</Text>
-        {showTlsExpiry(row) ? (
-          <Text style={panelStyles.muted}>
-            Expires {new Date(row.metadata.notAfter).toLocaleString()}
-          </Text>
-        ) : null}
-        {row.metadata.acme?.lastError ? (
-          <Text style={panelStyles.error}>
-            Issuance failing: {row.metadata.acme.lastError}
-          </Text>
-        ) : null}
-        {canManage ? (
-          <ConfirmButton
-            label={deletingId === row.id ? 'Deleting…' : 'Delete'}
-            confirmLabel="Delete certificate"
-            prompt="Remove this certificate?"
-            busy={deletingId === row.id}
-            disabled={deleteMutation.isPending && deletingId !== row.id}
-            onConfirm={() => onDelete(row.id)}
-          />
-        ) : null}
-      </View>
-    ))
-  }
-
   return (
     <View style={styles.root}>
       <OrganizationCaPanel orgId={orgId} />
-      <SectionPanel
-        title="Let's Encrypt"
-        hint="Off by default — opt in before any Let's Encrypt certificate can be requested"
-      >
-        {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
-        {tlsSettingsQuery.isError && !acmeError ? (
-          <Text style={panelStyles.error}>
-            {errorMessage(tlsSettingsQuery.error, "Failed to load the Let's Encrypt setting")}
-          </Text>
-        ) : null}
-        <SettingRow
-          label="Allow Let's Encrypt certificates"
-          description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off."
-        >
-          <Toggle
-            value={acmeEnabled}
-            onValueChange={onToggleAcme}
-            disabled={!canManage || acmeMutation.isPending || tlsSettingsQuery.isLoading}
-            accessibilityLabel="Allow Let's Encrypt certificates"
-          />
-        </SettingRow>
-      </SectionPanel>
+      <TlsLetsEncryptPanel
+        canManage={canManage}
+        acmeEnabled={acmeEnabled}
+        acmeError={acmeError}
+        settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}
+        settingsLoading={tlsSettingsQuery.isLoading}
+        pending={acmeMutation.isPending}
+        onToggle={onToggleAcme}
+      />
       <SectionPanel
         title="TLS certificates"
         hint="Organization certificate library — pin uploaded, self-signed, or Let's Encrypt certs explicitly on hosting (default is basic self-signed). The Organization CA row is platform-managed."
       >
-        {renderCertificateList()}
+        <TlsCertificateList
+          loading={loading}
+          rows={rows}
+          canManage={canManage}
+          deletingId={deletingId}
+          deletePending={deleteMutation.isPending}
+          onDelete={onDelete}
+        />
       </SectionPanel>
 
       {canManage ? (

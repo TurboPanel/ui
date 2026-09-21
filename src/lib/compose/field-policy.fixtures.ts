@@ -2,7 +2,7 @@
  * Shared field-policy lint fixtures.
  *
  * **This file is byte-identical in both repositories** —
- * `turbopanel/src/lib/compose/field-policy.fixtures.ts` and
+ * `turbopanel/src/features/compose/field-policy.fixtures.ts` and
  * `ui/src/lib/compose/field-policy.fixtures.ts`, which is why `diff` over the
  * two is the drift check.
  * They ship separately and cannot import across the boundary,

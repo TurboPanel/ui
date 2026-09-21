@@ -26,6 +26,86 @@ export function notificationHref(row: NotificationRecord): string | null {
   return null
 }
 
+function NotificationInboxRows({
+  isLoading,
+  rows,
+  onOpen,
+  onDismiss,
+}: Readonly<{
+  isLoading: boolean
+  rows: readonly NotificationRecord[]
+  onOpen: (row: NotificationRecord) => void
+  onDismiss: (id: string) => void
+}>) {
+  if (isLoading) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyCopy}>Loading…</Text>
+      </View>
+    )
+  }
+  if (rows.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyTitle}>No notifications yet</Text>
+        <Text style={styles.emptyCopy}>
+          Alerts and updates for this account will show up here.
+        </Text>
+      </View>
+    )
+  }
+  return rows.map((row) => {
+    // Two siblings, not a button inside a button: the row opens the
+    // target, the × beside it dismisses.
+    return (
+      <View
+        key={row.id}
+        style={[styles.row, row.readAt === null && styles.rowUnread]}
+      >
+        <Pressable
+          style={({ pressed }) => [
+            styles.rowMain,
+            pressed && headerMenuGroupStyles.itemPressed,
+            webPointer,
+          ]}
+          onPress={() => onOpen(row)}
+          accessibilityRole="button"
+          accessibilityLabel={row.title}
+        >
+          <View style={styles.rowDot}>
+            <StatusDot tone={SEVERITY_TONE[row.severity]} />
+          </View>
+          <View style={styles.rowText}>
+            <Text
+              style={[styles.rowTitle, row.readAt === null && styles.rowTitleUnread]}
+              numberOfLines={2}
+            >
+              {row.title}
+            </Text>
+            {row.body ? (
+              <Text style={styles.rowBody} numberOfLines={2}>
+                {row.body}
+              </Text>
+            ) : null}
+            <Text style={styles.rowMeta}>
+              {formatRelativeLocalDateTime(row.createdAt)}
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => onDismiss(row.id)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss notification"
+          hitSlop={8}
+          style={[styles.dismissWrap, webPointer]}
+        >
+          <Text style={styles.dismiss}>×</Text>
+        </Pressable>
+      </View>
+    )
+  })
+}
+
 /**
  * The bell's list: the newest inbox rows for the signed-in person, unread
  * first by weight of the dot, with **Mark all read** and a link to the
@@ -64,73 +144,18 @@ export function NotificationsPanelBody({
         ) : null}
       </View>
 
-      {query.isLoading ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyCopy}>Loading…</Text>
-        </View>
-      ) : rows.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No notifications yet</Text>
-          <Text style={styles.emptyCopy}>
-            Alerts and updates for this account will show up here.
-          </Text>
-        </View>
-      ) : (
-        rows.map((row) => {
+      <NotificationInboxRows
+        isLoading={query.isLoading}
+        rows={rows}
+        onOpen={(row) => {
+          if (row.readAt === null) void markRead.run([row.id])
           const href = notificationHref(row)
-          // Two siblings, not a button inside a button: the row opens the
-          // target, the × beside it dismisses.
-          return (
-            <View
-              key={row.id}
-              style={[styles.row, row.readAt === null && styles.rowUnread]}
-            >
-              <Pressable
-                style={({ pressed }) => [
-                  styles.rowMain,
-                  pressed && headerMenuGroupStyles.itemPressed,
-                  webPointer,
-                ]}
-                onPress={() => {
-                  if (row.readAt === null) void markRead.run([row.id])
-                  if (href) go(href)
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={row.title}
-              >
-                <View style={styles.rowDot}>
-                  <StatusDot tone={SEVERITY_TONE[row.severity]} />
-                </View>
-                <View style={styles.rowText}>
-                  <Text
-                    style={[styles.rowTitle, row.readAt === null && styles.rowTitleUnread]}
-                    numberOfLines={2}
-                  >
-                    {row.title}
-                  </Text>
-                  {row.body ? (
-                    <Text style={styles.rowBody} numberOfLines={2}>
-                      {row.body}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.rowMeta}>
-                    {formatRelativeLocalDateTime(row.createdAt)}
-                  </Text>
-                </View>
-              </Pressable>
-              <Pressable
-                onPress={() => void dismiss.run(row.id)}
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss notification"
-                hitSlop={8}
-                style={[styles.dismissWrap, webPointer]}
-              >
-                <Text style={styles.dismiss}>×</Text>
-              </Pressable>
-            </View>
-          )
-        })
-      )}
+          if (href) go(href)
+        }}
+        onDismiss={(id) => {
+          void dismiss.run(id)
+        }}
+      />
 
       <View style={headerMenuGroupStyles.menuDivider} />
       <Pressable

@@ -27,6 +27,7 @@ import {
 } from '@/lib/instance-api'
 import {
   addressHint,
+  addressFieldLabel,
   channelErrorCopy,
   draftFromRules,
   KIND_LABEL,
@@ -237,7 +238,7 @@ function AddChannelForm({
         editable={!create.isPending}
       />
       <TextField
-        label={kind === 'email' ? 'Email address' : kind === 'telegram' ? 'Bot token / chat id' : 'URL'}
+        label={addressFieldLabel(kind)}
         hint={addressHint(kind)}
         value={address}
         onChangeText={setAddress}
@@ -273,6 +274,31 @@ function AddChannelForm({
   )
 }
 
+function ChannelsList({
+  isLoading,
+  isError,
+  channels,
+  events,
+  scope,
+  organizationId,
+}: Readonly<{
+  isLoading: boolean
+  isError: boolean
+  channels: readonly NotificationChannel[]
+  events: readonly NotificationEventInfo[]
+  scope: 'user' | 'organization'
+  organizationId: string | null
+}>) {
+  if (isLoading) return <LoadingState label="Loading channels…" />
+  if (isError) {
+    return <InlineNotice tone="warning" title="Could not load channels" body="Reload the page to try again." />
+  }
+  if (channels.length === 0) return <EmptyState title="No channels yet." />
+  return channels.map((channel) => (
+    <ChannelRow key={channel.id} channel={channel} events={events} scope={scope} organizationId={organizationId} />
+  ))
+}
+
 function ChannelsPanel({
   scope,
   events,
@@ -286,17 +312,14 @@ function ChannelsPanel({
   const channels = query.data ?? []
   return (
     <View style={styles.stack}>
-      {query.isLoading ? (
-        <LoadingState label="Loading channels…" />
-      ) : query.isError ? (
-        <InlineNotice tone="warning" title="Could not load channels" body="Reload the page to try again." />
-      ) : channels.length === 0 ? (
-        <EmptyState title="No channels yet." />
-      ) : (
-        channels.map((channel) => (
-          <ChannelRow key={channel.id} channel={channel} events={events} scope={scope} organizationId={organizationId} />
-        ))
-      )}
+      <ChannelsList
+        isLoading={query.isLoading}
+        isError={query.isError}
+        channels={channels}
+        events={events}
+        scope={scope}
+        organizationId={organizationId}
+      />
       <AddChannelForm events={events} scope={scope} organizationId={organizationId} />
     </View>
   )

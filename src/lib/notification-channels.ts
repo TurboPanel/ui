@@ -40,6 +40,13 @@ export function addressHint(kind: NotificationChannelKind): string {
   }
 }
 
+/** Short field label for the address input, per kind. */
+export function addressFieldLabel(kind: NotificationChannelKind): string {
+  if (kind === 'email') return 'Email address'
+  if (kind === 'telegram') return 'Bot token / chat id'
+  return 'URL'
+}
+
 /** The rules the matrix saves: `*` at a floor, or one row per chosen event. */
 export function rulesFromDraft(draft: Readonly<RulesDraft>): NotificationRule[] {
   if (draft.everything) return [{ event: '*', minSeverity: draft.floor }]

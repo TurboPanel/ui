@@ -13,7 +13,7 @@
  * so a key can never again be quietly dropped: an `unsupported` field is a
  * named diagnostic, permissive while editing and blocking at deploy.
  *
- * **Mirror of `turbopanel/src/lib/compose/field-policy.ts`**, trimmed. The
+ * **Mirror of `turbopanel/src/features/compose/field-policy.ts`**, trimmed. The
  * editor never compiles runtime YAML, so the control plane's `runtime`
  * ("does this key survive into the compiled document") axis and the
  * `DEPLOY_KEYS_STRIPPED_FROM_RUNTIME` set it feeds are omitted here. Every

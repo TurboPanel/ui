@@ -568,30 +568,15 @@ function lintBuildArgs(
   }
 }
 
-function lintServicePropertyKey(
+function lintServiceKeySideEffects(
   path: string,
   key: string,
   valueNode: Node | null | undefined,
   keyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
-): { hasImage: boolean; hasBuild: boolean } {
-  let hasImage = false
-  let hasBuild = false
-
-  if (isComposeTagNode(valueNode)) {
-    // Tags replace content at merge time — count image/build as present.
-    if (key === 'image') hasImage = true
-    if (key === 'build') hasBuild = true
-    return { hasImage, hasBuild }
-  }
-
-  if (key === 'image' && !isEmptyImageValue(valueNode)) {
-    hasImage = true
-  }
-  if (key === 'build') hasBuild = true
-
+  options: ComposeLintOptions | undefined,
+): boolean {
   if (
     options?.managedExtensionHidden &&
     key === TURBOPANEL_SERVICE_EXTENSION_KEY
@@ -602,7 +587,7 @@ function lintServicePropertyKey(
       path: `${path}.${key}`,
       line: keyLine,
     })
-    return { hasImage, hasBuild }
+    return true
   }
 
   const servicePolicy = classifyServiceKey(key)
@@ -636,6 +621,43 @@ function lintServicePropertyKey(
   } else if (key === 'build') {
     lintBuildArgs(`${path}.${key}`, valueNode, lineCounter, issues)
   }
+  return false
+}
+
+function lintServicePropertyKey(
+  path: string,
+  key: string,
+  valueNode: Node | null | undefined,
+  keyLine: number | undefined,
+  lineCounter: LineCounter,
+  issues: ComposeLintIssue[],
+  options?: ComposeLintOptions,
+): { hasImage: boolean; hasBuild: boolean } {
+  let hasImage = false
+  let hasBuild = false
+
+  if (isComposeTagNode(valueNode)) {
+    // Tags replace content at merge time — count image/build as present.
+    if (key === 'image') hasImage = true
+    if (key === 'build') hasBuild = true
+    return { hasImage, hasBuild }
+  }
+
+  if (key === 'image' && !isEmptyImageValue(valueNode)) {
+    hasImage = true
+  }
+  if (key === 'build') hasBuild = true
+
+  const stop = lintServiceKeySideEffects(
+    path,
+    key,
+    valueNode,
+    keyLine,
+    lineCounter,
+    issues,
+    options,
+  )
+  if (stop) return { hasImage, hasBuild }
 
   return { hasImage, hasBuild }
 }
@@ -860,7 +882,7 @@ function lintHostingRef(params: {
 /**
  * `deploy.mode` values naming a controller TurboPanel does not have.
  *
- * Mirrors the instance rule (`src/lib/compose/lint.ts`), minus its posture
+ * Mirrors the instance rule (`turbopanel/src/features/compose/lint.ts`), minus its posture
  * switch. Swarm's two **job** modes are finite work — tasks run to completion
  * and the service is done — while TurboPanel schedules long-running replicas it
  * restarts when they exit, and its scheduler folds every non-`global` value
@@ -945,7 +967,7 @@ function lintDeployResources(
  * are untouched — Docker reads the whole Compose vocabulary itself.
  *
  * The grammar is the instance's `NATIVE_APP_RESTART_CONDITIONS` /
- * `isNativeAppRestartDuration` (`src/lib/compose/native-app.ts`), restated here
+ * `isNativeAppRestartDuration` (`turbopanel/src/features/compose/native-app.ts`), restated here
  * because the two surfaces ship separately and cannot import across the
  * boundary.
  */

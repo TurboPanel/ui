@@ -44,7 +44,7 @@ export function bindingPrefixedKeys(prefix: string): BindingPrefixedKeys {
 
 /**
  * Engine default (unprefixed) keys — source of truth is
- * `spec.binding.unprefixed` in `turbopanel/src/lib/managed/postgres.ts`,
+ * `spec.binding.unprefixed` in `turbopanel/src/features/managed/postgres.ts`,
  * `mysql.ts`, and `mariadb.ts`.
  */
 export const BINDING_ENGINE_DEFAULT_KEYS: Record<
