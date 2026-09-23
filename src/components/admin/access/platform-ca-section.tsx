@@ -170,7 +170,7 @@ function DetailLine({
 function readablePlatformCa(
   data: PlatformCaInfo | undefined,
 ): Extract<PlatformCaInfo, { ok: true }> | null {
-  if (!data || data.ok !== true) return null
+  if (data?.ok !== true) return null
   return data
 }
 
