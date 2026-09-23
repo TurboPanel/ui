@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   installedIdentity,
   unitUpdateFeedback,
@@ -153,5 +153,58 @@ describe('unitUpdateFeedback', () => {
     expect(unitUpdateFeedback('instance', 'applied')).toBe('Control plane updated.')
     expect(unitUpdateFeedback('daemon', 'reconnected')).toContain('Daemon')
     expect(unitUpdateFeedback('instance', 'unreachable')).toContain('Lost contact')
+    expect(unitUpdateFeedback('daemon', 'unreachable')).toBe(
+      'Lost contact while the daemon updated.',
+    )
+  })
+})
+
+describe('waitForUnitUpdate edges', () => {
+  it('is unreachable when the deadline has already passed', async () => {
+    const result = await waitForUnitUpdate({
+      read: () => Promise.reject(new Error('not called')),
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:',
+      timeoutMs: 0,
+      now: () => 1_000,
+    })
+    expect(result).toEqual({ kind: 'unreachable' })
+  })
+
+  it('treats a blank target as applied once the installed identity changes', async () => {
+    const result = await waitForUnitUpdate({
+      read: () => Promise.resolve({ version: '0.1.1', commit: 'abc' }),
+      target: { version: 'unknown', commit: '  ', buildId: '' },
+      before: '0.1.0:abc',
+      timeoutMs: 1_000,
+      intervalMs: 1,
+      sleep: () => Promise.resolve(),
+      now: () => 0,
+    })
+    expect(result).toEqual({ kind: 'applied' })
+  })
+
+  it('sleeps on the default timer until the version lands', async () => {
+    vi.useFakeTimers()
+    try {
+      let calls = 0
+      const pending = waitForUnitUpdate({
+        read: () => {
+          calls += 1
+          return Promise.resolve({
+            version: calls < 2 ? '0.1.0' : '0.1.1',
+            commit: 'abc',
+          })
+        },
+        target: { version: '0.1.1', commit: null },
+        before: '0.1.0:abc',
+        timeoutMs: 50,
+        intervalMs: 10,
+      })
+      await vi.advanceTimersByTimeAsync(20)
+      await expect(pending).resolves.toEqual({ kind: 'applied' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
