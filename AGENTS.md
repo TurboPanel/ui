@@ -217,7 +217,7 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | Shared UI primitives | `src/components/ui/` — barrel `src/components/ui/index.ts` (see [Component layer](#component-layer)) |
 | Shared panel patterns | `src/components/ui/panel-styles.ts` (`panelStyles`) |
 
-**Page overrides that exist today** (do not invent others): `sign-in.md`, `about.md`, `overview.md`, `manage.md`, `organizations.md`, `servers.md`, `datacenters.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`, `tls.md`, `deploy-logs.md`, `container-logs.md`, `git-sources.md`, `billing.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
+**Page overrides that exist today** (do not invent others): `sign-in.md`, `about.md`, `overview.md`, `manage.md`, `organizations.md`, `servers.md`, `datacenters.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`, `tls.md`, `deploy-logs.md`, `container-logs.md`, `git-sources.md`, `billing.md`, `access.md`, `updates.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
 
 ### Component layer
 

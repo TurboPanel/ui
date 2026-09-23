@@ -2,6 +2,23 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   applyPublicUrls,
   applyReencryptSecrets,
+  attachInstanceCertificate,
+  fetchInstanceAcmeSettings,
+  fetchInstanceCertificates,
+  fetchInstanceDaemon,
+  fetchInstanceHostnames,
+  fetchInstanceUpdates,
+  requestColocatedDaemonUpdate,
+  requestInstanceUpdate,
+  fetchPlatformCa,
+  fetchTrustedProxies,
+  type InstanceHostnameInput,
+  type InstanceHostnameRecord,
+  reconcilePlatformCaTrust,
+  saveInstanceAcmeSettings,
+  saveInstanceHostnames,
+  setInstanceTunnelToken,
+  uploadInstanceCertificate,
   type AdminTierCreateBody,
   type AdminTierPatchBody,
   createAdminTier,
@@ -37,8 +54,12 @@ import {
   isControlPlaneRestartError,
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
-import { samePublicUrlSet } from '@/lib/public-url-entry'
 import { getActiveOrganizationId } from '@/lib/org-context'
+import {
+  waitForUnitUpdate,
+  type UnitUpdateWait,
+  type UpdateTargetIdentity,
+} from '@/lib/instance-updates'
 
 export function usePublicUrls(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -90,20 +111,24 @@ export function useSavePublicUrls() {
  */
 const APPLY_REQUEST_DEADLINE_MS = 120_000
 
-async function requestPublicUrlsApply(urls?: string[]): Promise<void> {
+async function requestPublicUrlsApply(): Promise<void> {
   const controller = new AbortController()
   const deadline = setTimeout(() => {
     controller.abort()
   }, APPLY_REQUEST_DEADLINE_MS)
   try {
-    await applyPublicUrls(urls, controller.signal)
+    await applyPublicUrls(undefined, controller.signal)
   } finally {
     clearTimeout(deadline)
   }
 }
 
 export type ApplyPublicUrlsVariables = Readonly<{
-  urls?: string[]
+  /**
+   * The hostname set just saved. Compared against the recovery probe.
+   * Omit it and a restart that comes back counts as reconnected.
+   */
+  hostnames?: readonly InstanceHostnameInput[]
   /** Fires once the request has died and the reconnect wait starts. */
   onReconnecting?: () => void
 }>
@@ -112,11 +137,39 @@ export type ApplyPublicUrlsOutcome =
   /** The request survived the reload and the control plane confirmed it. */
   | { kind: 'applied' }
   /** The request died, the control plane came back, and the change is there. */
-  | { kind: 'reconnected'; urls: string[] }
-  /** It came back, but holding different addresses — the write never landed. */
-  | { kind: 'not-saved'; urls: string[] }
+  | { kind: 'reconnected'; hostnames: InstanceHostnameInput[] }
+  /** It came back, but holding a different set — the write never landed. */
+  | { kind: 'not-saved'; hostnames: InstanceHostnameInput[] }
   /** It never came back inside the wait window. */
   | { kind: 'unreachable' }
+
+function hostnameIdentity(entry: {
+  host: string
+  source: string
+  uploadedCertId?: string | null
+}): string {
+  return `${entry.host}\0${entry.source}\0${entry.uploadedCertId ?? ''}`
+}
+
+function sameHostnameSet(
+  saved: readonly InstanceHostnameRecord[],
+  expected: readonly InstanceHostnameInput[],
+): boolean {
+  const left = saved.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
+  const right = expected.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
+  if (left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+function hostnameInputs(
+  records: readonly InstanceHostnameRecord[],
+): InstanceHostnameInput[] {
+  return records.map((record) => ({
+    host: record.host,
+    source: record.source,
+    uploadedCertId: record.uploadedCertId,
+  }))
+}
 
 /**
  * Apply public URLs, absorbing the control-plane restart the apply itself
@@ -125,42 +178,236 @@ export type ApplyPublicUrlsOutcome =
  * Regenerating the certificate reloads Caddy, which drops the connection this
  * request is riding on — an `HTTP 502` from Caddy or the tunnel in front of it,
  * for work that in fact succeeded. So a restart-shaped failure is answered by
- * waiting for the control plane and then *re-reading* the stored URLs, which is
- * both the liveness check and the proof of what landed: the apply route
- * persists before it dispatches to the daemon, so URLs that match the request
- * mean the write went through. Anything the control plane actually answered —
- * a 422 from a non-applying runtime, a 503 with no co-located daemon — still
- * throws.
+ * waiting for the control plane and then *re-reading* the stored hostnames,
+ * which is both the liveness check and the proof of what landed. Apply is
+ * called with no body so stored per-hostname sources survive — sending `urls`
+ * would reset every source to the Platform CA. Anything the control plane
+ * actually answered — a 422 from a non-applying runtime, a 503 with no
+ * co-located daemon — still throws.
  */
 export function useApplyPublicUrls() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: async ({
-      urls,
+      hostnames,
       onReconnecting,
     }: ApplyPublicUrlsVariables = {}): Promise<ApplyPublicUrlsOutcome> => {
       try {
-        await requestPublicUrlsApply(urls)
+        await requestPublicUrlsApply()
         return { kind: 'applied' }
       } catch (err) {
         if (!isControlPlaneRestartError(err)) throw err
         onReconnecting?.()
         const recovery = await waitForControlPlaneRecovery({
-          probe: fetchPublicUrls,
+          probe: fetchInstanceHostnames,
         })
         if (recovery.kind === 'unreachable') return { kind: 'unreachable' }
-        const saved = recovery.value.urls
-        if (urls && !samePublicUrlSet(saved, urls)) {
-          return { kind: 'not-saved', urls: saved }
+        const saved = hostnameInputs(recovery.value.hostnames)
+        if (hostnames && !sameHostnameSet(recovery.value.hostnames, hostnames)) {
+          return { kind: 'not-saved', hostnames: saved }
         }
-        return { kind: 'reconnected', urls: saved }
+        return { kind: 'reconnected', hostnames: saved }
       }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.admin.publicUrls,
       })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.instanceHostnames,
+      })
     },
+  })
+}
+
+function invalidateHostnameProjection(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceHostnames }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.publicUrls }),
+  ])
+}
+
+export function useInstanceHostnames(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceHostnames,
+    queryFn: fetchInstanceHostnames,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveInstanceHostnames() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveInstanceHostnames,
+    onSuccess: async () => {
+      await invalidateHostnameProjection(queryClient)
+    },
+  })
+}
+
+export function useInstanceCertificates(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceCertificates,
+    queryFn: fetchInstanceCertificates,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useUploadInstanceCertificate() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: uploadInstanceCertificate,
+    onSuccess: async () => {
+      await invalidateHostnameProjection(queryClient)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.instanceCertificates,
+      })
+    },
+  })
+}
+
+export function useAttachInstanceCertificate() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (input: { id: string; hosts: string[] }) =>
+      attachInstanceCertificate(input.id, input.hosts),
+    onSuccess: async () => {
+      await invalidateHostnameProjection(queryClient)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.instanceCertificates,
+      })
+    },
+  })
+}
+
+export function useInstanceAcmeSettings(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceAcme,
+    queryFn: fetchInstanceAcmeSettings,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveInstanceAcmeSettings() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveInstanceAcmeSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.admin.instanceAcme, data)
+    },
+  })
+}
+
+export function useInstanceUpdates(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceUpdates,
+    queryFn: fetchInstanceUpdates,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+async function dispatchThenWait(
+  request: () => Promise<unknown>,
+  read: () => Promise<{ version: string | null; commit: string | null }>,
+  target: UpdateTargetIdentity,
+  before: string,
+): Promise<UnitUpdateWait> {
+  try {
+    await request()
+  } catch (err) {
+    if (!isControlPlaneRestartError(err)) throw err
+  }
+  return await waitForUnitUpdate({ read, target, before })
+}
+
+/**
+ * Queue a control-plane update, then poll until the new version answers.
+ * The POST returns as soon as the daemon is asked; the install restarts the
+ * control plane this request is talking through.
+ */
+export function useUpgradeInstance() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (
+      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
+    ) =>
+      dispatchThenWait(
+        requestInstanceUpdate,
+        async () => (await fetchInstanceUpdates()).units.instance.installed,
+        vars.target,
+        vars.before,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.instanceUpdates,
+      })
+    },
+  })
+}
+
+/** Queue a co-located daemon update and poll the updates read. The control plane stays up. */
+export function useUpgradeColocatedDaemon() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (
+      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
+    ) =>
+      dispatchThenWait(
+        requestColocatedDaemonUpdate,
+        async () => {
+          const installed = (await fetchInstanceUpdates()).units.daemon.installed
+          return installed ?? { version: null, commit: null }
+        },
+        vars.target,
+        vars.before,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.instanceUpdates,
+      })
+    },
+  })
+}
+
+/** Capability gate. `staleTime` and no interval — this must not be polled. */
+export function useInstanceDaemon(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceDaemon,
+    queryFn: fetchInstanceDaemon,
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function usePlatformCa(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.platformCa,
+    queryFn: fetchPlatformCa,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useReconcilePlatformCaTrust() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: reconcilePlatformCaTrust,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.platformCa })
+    },
+  })
+}
+
+export function useTrustedProxies(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.trustedProxies,
+    queryFn: fetchTrustedProxies,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSetInstanceTunnelToken() {
+  return useApiMutation({
+    mutationFn: setInstanceTunnelToken,
   })
 }
 

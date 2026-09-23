@@ -141,7 +141,6 @@ export function ControlPlaneUrlsSection() {
     setApplyError(null)
     setApplyStatus('applying')
     const result = await applyMutation.run({
-      urls: draft,
       onReconnecting: () => setApplyStatus('reconnecting'),
     })
     if (!result.ok) {
@@ -150,7 +149,7 @@ export function ControlPlaneUrlsSection() {
     }
     const outcome = result.value
     if (outcome.kind === 'reconnected' || outcome.kind === 'not-saved') {
-      setDraft(outcome.urls)
+      setDraft(outcome.hostnames.map((entry) => entry.host))
     }
     setApplyStatus(OUTCOME_STATUS[outcome.kind])
   }

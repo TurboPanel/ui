@@ -30,6 +30,7 @@ import {
 
 const {
   fetchPublicUrls,
+  fetchInstanceHostnames,
   fetchSignupSettings,
   saveSignupSettings,
   savePublicUrls,
@@ -49,6 +50,7 @@ const {
   saveServerMetricsLiveSettings,
 } = vi.hoisted(() => ({
   fetchPublicUrls: vi.fn(),
+  fetchInstanceHostnames: vi.fn(),
   fetchSignupSettings: vi.fn(),
   saveSignupSettings: vi.fn(),
   savePublicUrls: vi.fn(),
@@ -73,6 +75,7 @@ vi.mock('../instance-api', async (importOriginal) => {
   return {
     ...actual,
     fetchPublicUrls,
+    fetchInstanceHostnames,
     fetchSignupSettings,
     saveSignupSettings,
     savePublicUrls,
@@ -96,6 +99,27 @@ vi.mock('../instance-api', async (importOriginal) => {
 function createWrapper(client = createAppQueryClient()) {
   return function Wrapper({ children }: Readonly<{ children: ReactNode }>) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
+
+function hostnameInput(host: string) {
+  return {
+    host,
+    source: 'platform-ca' as const,
+    uploadedCertId: null,
+  }
+}
+
+function savedHostname(host: string) {
+  return {
+    id: 'origin-1',
+    host,
+    source: 'platform-ca' as const,
+    uploadedCertId: null,
+    status: 'ready' as const,
+    notAfter: null,
+    acmeLastAttemptAt: null,
+    acmeLastError: null,
   }
 }
 
@@ -277,12 +301,23 @@ describe('admin query hooks', () => {
     })
 
     await expect(
-      result.current.run({ urls: ['https://panel.example.com'] }),
+      result.current.run({
+        hostnames: [
+          {
+            host: 'https://panel.example.com',
+            source: 'platform-ca',
+            uploadedCertId: null,
+          },
+        ],
+      }),
     ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.admin.publicUrls,
+      })
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.admin.instanceHostnames,
       })
     })
   })
@@ -293,9 +328,12 @@ describe('admin query hooks', () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
     )
-    fetchPublicUrls
+    fetchInstanceHostnames
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValueOnce({ ok: true, urls: ['https://panel.example.com'] })
+      .mockResolvedValueOnce({
+        ok: true,
+        hostnames: [savedHostname('https://panel.example.com')],
+      })
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
       wrapper: createWrapper(),
@@ -305,13 +343,16 @@ describe('admin query hooks', () => {
     vi.useFakeTimers()
     try {
       const pending = result.current.run({
-        urls: ['https://panel.example.com'],
+        hostnames: [hostnameInput('https://panel.example.com')],
         onReconnecting,
       })
       await vi.advanceTimersByTimeAsync(10_000)
       await expect(pending).resolves.toMatchObject({
         ok: true,
-        value: { kind: 'reconnected', urls: ['https://panel.example.com'] },
+        value: {
+          kind: 'reconnected',
+          hostnames: [hostnameInput('https://panel.example.com')],
+        },
       })
     } finally {
       vi.useRealTimers()
@@ -335,9 +376,9 @@ describe('admin query hooks', () => {
           signal?.addEventListener('abort', onAbort, { once: true })
         }),
     )
-    fetchPublicUrls.mockResolvedValueOnce({
+    fetchInstanceHostnames.mockResolvedValueOnce({
       ok: true,
-      urls: ['https://panel.example.com'],
+      hostnames: [savedHostname('https://panel.example.com')],
     })
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
@@ -347,13 +388,16 @@ describe('admin query hooks', () => {
     vi.useFakeTimers()
     try {
       const pending = result.current.run({
-        urls: ['https://panel.example.com'],
+        hostnames: [hostnameInput('https://panel.example.com')],
       })
       await vi.advanceTimersByTimeAsync(120_000)
       await vi.advanceTimersByTimeAsync(2_000)
       await expect(pending).resolves.toMatchObject({
         ok: true,
-        value: { kind: 'reconnected', urls: ['https://panel.example.com'] },
+        value: {
+          kind: 'reconnected',
+          hostnames: [hostnameInput('https://panel.example.com')],
+        },
       })
     } finally {
       vi.useRealTimers()
@@ -364,7 +408,7 @@ describe('admin query hooks', () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
     )
-    fetchPublicUrls.mockRejectedValue(new TypeError('Failed to fetch'))
+    fetchInstanceHostnames.mockRejectedValue(new TypeError('Failed to fetch'))
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
       wrapper: createWrapper(),
@@ -373,7 +417,7 @@ describe('admin query hooks', () => {
     vi.useFakeTimers()
     try {
       const pending = result.current.run({
-        urls: ['https://panel.example.com'],
+        hostnames: [hostnameInput('https://panel.example.com')],
       })
       await vi.advanceTimersByTimeAsync(92_000)
       await expect(pending).resolves.toMatchObject({
@@ -387,7 +431,7 @@ describe('admin query hooks', () => {
 
   it('useApplyPublicUrls reports a restart that did not save the change', async () => {
     applyPublicUrls.mockRejectedValueOnce(new TypeError('Failed to fetch'))
-    fetchPublicUrls.mockResolvedValueOnce({ ok: true, urls: [] })
+    fetchInstanceHostnames.mockResolvedValueOnce({ ok: true, hostnames: [] })
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
       wrapper: createWrapper(),
@@ -395,11 +439,13 @@ describe('admin query hooks', () => {
 
     vi.useFakeTimers()
     try {
-      const pending = result.current.run({ urls: ['https://panel.example.com'] })
+      const pending = result.current.run({
+        hostnames: [hostnameInput('https://panel.example.com')],
+      })
       await vi.advanceTimersByTimeAsync(10_000)
       await expect(pending).resolves.toMatchObject({
         ok: true,
-        value: { kind: 'not-saved', urls: [] },
+        value: { kind: 'not-saved', hostnames: [] },
       })
     } finally {
       vi.useRealTimers()
@@ -418,12 +464,14 @@ describe('admin query hooks', () => {
     })
 
     await expect(
-      result.current.run({ urls: ['https://panel.example.com'] }),
+      result.current.run({
+        hostnames: [hostnameInput('https://panel.example.com')],
+      }),
     ).resolves.toMatchObject({
       ok: false,
       error: expect.stringContaining('no co-located daemon connected'),
     })
-    expect(fetchPublicUrls).not.toHaveBeenCalled()
+    expect(fetchInstanceHostnames).not.toHaveBeenCalled()
   })
 
   it('useEmailSettings loads email provider settings', async () => {

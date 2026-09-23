@@ -8,18 +8,20 @@ import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import { useApplyPublicUrls, useForges } from '@/lib/queries/admin'
 
-const { applyPublicUrls, fetchPublicUrls, fetchForges } = vi.hoisted(() => ({
-  applyPublicUrls: vi.fn(),
-  fetchPublicUrls: vi.fn(),
-  fetchForges: vi.fn(),
-}))
+const { applyPublicUrls, fetchInstanceHostnames, fetchForges } = vi.hoisted(
+  () => ({
+    applyPublicUrls: vi.fn(),
+    fetchInstanceHostnames: vi.fn(),
+    fetchForges: vi.fn(),
+  }),
+)
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/instance-api')>()
   return {
     ...actual,
     applyPublicUrls,
-    fetchPublicUrls,
+    fetchInstanceHostnames,
     fetchForges,
   }
 })
@@ -53,13 +55,24 @@ describe('admin apply and forge key branches', () => {
     )
   })
 
-  it('useApplyPublicUrls treats a restart without requested urls as reconnected', async () => {
+  it('useApplyPublicUrls treats a restart without requested hostnames as reconnected', async () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
     )
-    fetchPublicUrls.mockResolvedValueOnce({
+    fetchInstanceHostnames.mockResolvedValueOnce({
       ok: true,
-      urls: ['https://panel.example.com'],
+      hostnames: [
+        {
+          id: 'origin-1',
+          host: 'https://panel.example.com',
+          source: 'platform-ca',
+          uploadedCertId: null,
+          status: 'ready',
+          notAfter: null,
+          acmeLastAttemptAt: null,
+          acmeLastError: null,
+        },
+      ],
     })
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
@@ -74,7 +87,13 @@ describe('admin apply and forge key branches', () => {
         ok: true,
         value: {
           kind: 'reconnected',
-          urls: ['https://panel.example.com'],
+          hostnames: [
+            {
+              host: 'https://panel.example.com',
+              source: 'platform-ca',
+              uploadedCertId: null,
+            },
+          ],
         },
       })
     } finally {

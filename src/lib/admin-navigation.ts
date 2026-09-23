@@ -1,9 +1,37 @@
 export const ADMIN_AREAS = [
   {
-    id: 'networking',
-    label: 'Networking',
-    pathSegment: 'networking',
-    hint: 'Control-plane public URLs and TLS',
+    id: 'access',
+    label: 'Access',
+    pathSegment: 'access',
+    hint: 'Hostnames, certificates, and how people and machines reach this control plane',
+    subRoutes: [
+      {
+        id: 'certificates',
+        label: 'Certificates',
+        pathSegment: 'certificates',
+      },
+      {
+        id: 'trusted-proxies',
+        label: 'Trusted proxies',
+        pathSegment: 'trusted-proxies',
+      },
+      {
+        id: 'tunnel',
+        label: 'Tunnel',
+        pathSegment: 'tunnel',
+      },
+      {
+        id: 'platform-ca',
+        label: 'Platform CA',
+        pathSegment: 'platform-ca',
+      },
+    ],
+  },
+  {
+    id: 'updates',
+    label: 'Updates',
+    pathSegment: 'updates',
+    hint: 'Control plane and co-located daemon versions',
     subRoutes: [],
   },
   {
@@ -59,10 +87,18 @@ export const ADMIN_AREAS = [
 
 export type AdminAreaId = (typeof ADMIN_AREAS)[number]['id']
 
-export function adminAreaHref(
-  areaPathSegment: string,
-): `/admin/${string}` {
+export type AdminSubRouteId =
+  (typeof ADMIN_AREAS)[number]['subRoutes'][number]['id']
+
+export function adminAreaHref(areaPathSegment: string): `/admin/${string}` {
   return `/admin/${areaPathSegment}`
+}
+
+export function adminRouteHref(
+  areaPathSegment: string,
+  subRoutePathSegment: string,
+): `/admin/${string}/${string}` {
+  return `/admin/${areaPathSegment}/${subRoutePathSegment}`
 }
 
 export function adminAreaFromPathname(pathname: string) {
@@ -77,5 +113,11 @@ export function adminAreaFromPathname(pathname: string) {
     return null
   }
 
-  return { area }
+  const subRouteSegment = parts[2]
+  const subRoute = subRouteSegment
+    ? (area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ??
+      null)
+    : null
+
+  return { area, subRoute }
 }

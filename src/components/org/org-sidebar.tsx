@@ -32,7 +32,7 @@ export function OrgSidebar({
   const router = useRouter()
   const { scopeId } = useWorkspaceScope()
   const showAdminLink = isAdminSession(session)
-  const adminHref = adminAreaHref('networking')
+  const adminHref = adminAreaHref('access')
   const adminActive =
     pathname === adminHref || pathname.startsWith('/admin/')
   const resolved = orgAreaFromPathname(pathname)

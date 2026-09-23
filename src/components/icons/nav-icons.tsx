@@ -407,8 +407,24 @@ const AREA_ICONS = {
   billing: BillingNavIcon,
 } as const satisfies Record<OrgAreaId, (props: NavIconProps) => ReactElement>
 
+/** Circular arrows — Updates. */
+export function UpdatesNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4.5 12a7.5 7.5 0 0 1 12.8-5.3L19.5 9M19.5 4.5V9h-4.5M19.5 12a7.5 7.5 0 0 1-12.8 5.3L4.5 15M4.5 19.5V15h4.5"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 const ADMIN_AREA_ICONS = {
-  networking: NetworkingNavIcon,
+  access: NetworkingNavIcon,
+  updates: UpdatesNavIcon,
   email: EmailNavIcon,
   'auth-providers': AccessNavIcon,
   git: GitNavIcon,

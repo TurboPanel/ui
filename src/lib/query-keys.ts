@@ -356,6 +356,13 @@ export const queryKeys = {
   admin: {
     all: ['admin'] as const,
     publicUrls: ['admin', 'public-urls'] as const,
+    instanceHostnames: ['admin', 'instance-hostnames'] as const,
+    instanceCertificates: ['admin', 'instance-certificates'] as const,
+    instanceAcme: ['admin', 'instance-acme'] as const,
+    instanceDaemon: ['admin', 'instance-daemon'] as const,
+    instanceUpdates: ['admin', 'instance-updates'] as const,
+    platformCa: ['admin', 'platform-ca'] as const,
+    trustedProxies: ['admin', 'trusted-proxies'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
     email: ['admin', 'settings', 'email'] as const,
     authProviders: ['admin', 'settings', 'auth-providers'] as const,

@@ -12,7 +12,7 @@ export default function AdminTiersScreen() {
   const { billingEnabled } = useAuth()
 
   if (!billingEnabled) {
-    return <Redirect href={adminAreaHref('networking') as Href} />
+    return <Redirect href={adminAreaHref('access') as Href} />
   }
 
   return <TiersSection />
