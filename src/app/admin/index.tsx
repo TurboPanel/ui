@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router'
 
 export default function AdminIndex() {
-  return <Redirect href="/admin/networking" />
+  return <Redirect href="/admin/access" />
 }

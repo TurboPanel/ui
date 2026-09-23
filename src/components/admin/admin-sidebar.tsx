@@ -3,7 +3,7 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { AdminAreaIcon } from '@/components/icons/nav-icons'
-import { ADMIN_AREAS, adminAreaHref } from '@/lib/admin-navigation'
+import { ADMIN_AREAS, adminAreaFromPathname, adminAreaHref, adminRouteHref } from '@/lib/admin-navigation'
 import { useAuth } from '@/lib/auth-context'
 import { glass } from '@/lib/glass'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
@@ -14,6 +14,8 @@ export function AdminSidebar({
   const pathname = usePathname()
   const router = useRouter()
   const { billingEnabled } = useAuth()
+  const resolved = adminAreaFromPathname(pathname)
+  const activeSubRouteId = resolved?.subRoute?.id ?? null
   // The tier catalogue is a hosted (Workers) surface; self-hosted has no
   // billing and no `/tiers` routes, so the entry is omitted rather than 404ing.
   const areas = ADMIN_AREAS.filter(
@@ -63,6 +65,49 @@ export function AdminSidebar({
                   {area.label}
                 </Text>
               </Pressable>
+
+              {areaActive && area.subRoutes.length > 0 ? (
+                <View style={styles.subNav}>
+                  <View style={styles.subNavRail} />
+                  <View style={styles.subNavItems}>
+                    {area.subRoutes.map((subRoute) => {
+                      const subHref = adminRouteHref(
+                        area.pathSegment,
+                        subRoute.pathSegment,
+                      )
+                      const subActive =
+                        activeSubRouteId === subRoute.id ||
+                        pathname === subHref ||
+                        pathname.startsWith(`${subHref}/`)
+
+                      return (
+                        <Pressable
+                          key={subRoute.id}
+                          style={({ pressed }) => [
+                            styles.subItem,
+                            subActive && styles.subItemActive,
+                            pressed && styles.itemPressed,
+                            webPointer,
+                          ]}
+                          onPress={() => {
+                            router.push(subHref as Href)
+                            onNavigate?.()
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.subLabel,
+                              subActive && styles.subLabelActive,
+                            ]}
+                          >
+                            {subRoute.label}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                </View>
+              ) : null}
             </View>
           )
         })}
@@ -130,6 +175,40 @@ const styles = StyleSheet.create({
   },
   areaLabelActive: {
     color: colors.text,
+  },
+  subNav: {
+    flexDirection: 'row',
+    paddingLeft: spacing.md,
+    marginTop: 2,
+  },
+  subNavRail: {
+    width: 1,
+    backgroundColor: colors.borderArea,
+    marginRight: spacing.sm,
+    marginVertical: 4,
+  },
+  subNavItems: {
+    flex: 1,
+    gap: 2,
+  },
+  subItem: {
+    paddingVertical: 7,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  subItemActive: {
+    borderColor: colors.borderMuted,
+    backgroundColor: chrome.bgActive,
+  },
+  subLabel: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  subLabelActive: {
+    color: chrome.accent,
   },
   itemPressed: {
     opacity: 0.85,

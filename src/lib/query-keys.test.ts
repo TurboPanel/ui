@@ -429,6 +429,19 @@ describe('queryKeys.org(…) remaining factories', () => {
   it('exposes stable auth and admin roots', () => {
     expect(queryKeys.auth.all).toEqual(['auth'])
     expect(queryKeys.admin.all).toEqual(['admin'])
+    expect(queryKeys.admin.instanceHostnames).toEqual([
+      'admin',
+      'instance-hostnames',
+    ])
+    expect(queryKeys.admin.instanceCertificates).toEqual([
+      'admin',
+      'instance-certificates',
+    ])
+    expect(queryKeys.admin.instanceAcme).toEqual(['admin', 'instance-acme'])
+    expect(queryKeys.admin.instanceDaemon).toEqual(['admin', 'instance-daemon'])
+    expect(queryKeys.admin.instanceUpdates).toEqual(['admin', 'instance-updates'])
+    expect(queryKeys.admin.platformCa).toEqual(['admin', 'platform-ca'])
+    expect(queryKeys.admin.trustedProxies).toEqual(['admin', 'trusted-proxies'])
     expect(queryKeys.org('org-1').all).toEqual(['org', 'org-1'])
   })
 

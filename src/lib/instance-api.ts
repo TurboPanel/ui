@@ -3605,6 +3605,257 @@ export async function applyPublicUrls(
   })
 }
 
+export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'lets-encrypt'
+
+export type InstanceHostnameStatus = 'ready' | 'pending' | 'failed' | 'expired'
+
+export type InstanceHostnameRecord = {
+  id: string
+  host: string
+  source: InstanceHostnameSource
+  uploadedCertId: string | null
+  status: InstanceHostnameStatus
+  notAfter: string | null
+  acmeLastAttemptAt: string | null
+  acmeLastError: string | null
+}
+
+export type InstanceHostnameInput = {
+  host: string
+  source: InstanceHostnameSource
+  uploadedCertId: string | null
+}
+
+export type UploadedCertificateRecord = {
+  id: string
+  label: string
+  dnsNames: string[]
+  notAfter: string
+  createdAt: string
+  hostnames: string[]
+}
+
+export type InstanceAcmeSettingEntry = {
+  value: string | null
+  source: EmailSettingSource
+}
+
+export type InstanceAcmeSettings = Record<string, InstanceAcmeSettingEntry>
+
+export type InstanceDaemonCapabilities = {
+  applicable: boolean
+  connected?: boolean
+  serverId?: string | null
+  version?: string | null
+  capabilities?: Record<string, boolean>
+}
+
+export type PlatformCaInfo =
+  | {
+    ok: true
+    fingerprintSha256: string
+    subject: string
+    notBefore: string
+    notAfter: string
+    pem: string
+  }
+  | { ok: false; error?: string }
+
+export type TrustedProxySettings = {
+  cidrs: string[]
+  isDefault: boolean
+}
+
+/**
+ * `PUT /instance/hostnames` is replace-all. A 422 carries `{ error, invalid }`
+ * naming the entries the control plane refused.
+ */
+export class InstanceHostnameValidationError extends Error {
+  readonly invalid: string[]
+
+  constructor(message: string, invalid: string[]) {
+    super(message)
+    this.name = 'InstanceHostnameValidationError'
+    this.invalid = invalid
+  }
+}
+
+export async function fetchInstanceHostnames(): Promise<{
+  ok: boolean
+  hostnames: InstanceHostnameRecord[]
+}> {
+  return await apiFetch(`${ADMIN_API}/instance/hostnames`)
+}
+
+export async function saveInstanceHostnames(
+  hostnames: InstanceHostnameInput[],
+): Promise<{ ok: boolean; hostnames: InstanceHostnameRecord[] }> {
+  return await adminJson(`${ADMIN_API}/instance/hostnames`, {
+    method: 'PUT',
+    body: JSON.stringify({ hostnames }),
+  })
+}
+
+export async function fetchInstanceCertificates(): Promise<{
+  ok: boolean
+  certificates: UploadedCertificateRecord[]
+}> {
+  return await apiFetch(`${ADMIN_API}/instance/certificates`)
+}
+
+export async function uploadInstanceCertificate(body: {
+  label: string
+  certPem: string
+  keyPem: string
+}): Promise<{
+  ok: boolean
+  id: string
+  label: string
+  dnsNames: string[]
+  hasWildcard: boolean
+  notAfter: string
+  fingerprintSha256: string
+}> {
+  return await apiFetch(`${ADMIN_API}/instance/certificates`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function attachInstanceCertificate(
+  id: string,
+  hosts: string[],
+): Promise<{ ok: boolean; hostnames: string[] }> {
+  return await apiFetch(
+    `${ADMIN_API}/instance/certificates/${encodeURIComponent(id)}/hostnames`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ hosts }),
+    },
+  )
+}
+
+export async function fetchInstanceAcmeSettings(): Promise<{
+  settings: InstanceAcmeSettings
+}> {
+  return await apiFetch(`${ADMIN_API}/instance/acme`)
+}
+
+export async function saveInstanceAcmeSettings(
+  updates: Record<string, string | boolean | null>,
+): Promise<{ settings: InstanceAcmeSettings }> {
+  return await apiFetch(`${ADMIN_API}/instance/acme`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  })
+}
+
+export async function fetchInstanceDaemon(): Promise<InstanceDaemonCapabilities> {
+  return await apiFetch(`${ADMIN_API}/instance/daemon`)
+}
+
+export type InstanceUpdateTarget = {
+  commit: string
+  buildId: string
+  builtAt: string
+  channel: string
+  manifestUrl: string
+  version?: string
+}
+
+export type InstanceUpdates = {
+  ok: boolean
+  channel: string
+  units: {
+    instance: {
+      installed: { version: string; commit: string }
+      target: InstanceUpdateTarget | null
+      /** UI package installed by the same control-plane upgrade. */
+      uiTarget: InstanceUpdateTarget | null
+    }
+    daemon: {
+      installed: { version: string | null; commit: string | null } | null
+      target: InstanceUpdateTarget | null
+      serverId: string | null
+      connected: boolean
+    }
+  }
+}
+
+export async function fetchInstanceUpdates(): Promise<InstanceUpdates> {
+  return await apiFetch(`${ADMIN_API}/instance/updates`)
+}
+
+export async function requestInstanceUpdate(): Promise<{ ok: true; dispatched: true }> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/instance`, { method: 'POST' })
+}
+
+export async function requestColocatedDaemonUpdate(): Promise<{
+  ok: true
+  dispatched: true
+}> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/daemon`, { method: 'POST' })
+}
+
+export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
+  return await apiFetch(`${ADMIN_API}/instance/platform-ca`)
+}
+
+export async function reconcilePlatformCaTrust(): Promise<{
+  ok: boolean
+  enqueued?: number
+  error?: string
+}> {
+  return await apiFetch(`${ADMIN_API}/instance/platform-ca/trust-reconcile`, {
+    method: 'POST',
+  })
+}
+
+export async function fetchTrustedProxies(): Promise<TrustedProxySettings> {
+  return await apiFetch(`${ADMIN_API}/instance/trusted-proxies`)
+}
+
+/** Write-only. An empty token tears the tunnel down. The API returns no stored value. */
+export async function setInstanceTunnelToken(
+  token: string,
+): Promise<{ ok: boolean }> {
+  return await apiFetch(`${ADMIN_API}/instance/tunnel-token`, {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+}
+
+async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...clientVersionHeaders(),
+    ...(init.headers as Record<string, string> | undefined),
+  }
+  const orgId = getActiveOrganizationId()
+  if (orgId) headers[ORG_ID_HEADER] = orgId
+  const response = await fetch(controlPlaneUrl(path), {
+    ...init,
+    credentials: 'include',
+    headers,
+  })
+  recordInstanceVersion(response.headers)
+  const body = (await response.json().catch(() => null)) as {
+    error?: string
+    invalid?: unknown
+  } | null
+  if (!response.ok) {
+    const detail = formatFetchFailureDetail(response.status, body?.error)
+    const invalid = Array.isArray(body?.invalid)
+      ? body.invalid.filter((item): item is string => typeof item === 'string')
+      : null
+    if (invalid) {
+      throw new InstanceHostnameValidationError(`${path} failed: ${detail}`, invalid)
+    }
+    throw new Error(`${path} failed: ${detail}`)
+  }
+  return body as T
+}
+
 export type ReencryptSecretsCursor = {
   stage: 'variables' | 'tls' | 'principals' | 'email'
   afterId?: string

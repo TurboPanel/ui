@@ -165,7 +165,7 @@ export function OrganizationSwitcherScreen() {
               pressed && styles.pressed,
               webPointer,
             ]}
-            onPress={() => router.push(adminAreaHref('networking') as Href)}
+            onPress={() => router.push(adminAreaHref('access') as Href)}
             accessibilityRole="link"
             accessibilityLabel="Instance administration"
           >
