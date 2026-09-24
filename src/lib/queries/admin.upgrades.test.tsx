@@ -52,7 +52,16 @@ describe('managed upgrade admin queries', () => {
     })
     api.fetchUpgradeSettings.mockResolvedValue({
       ok: true,
-      settings: { batchMode: 'percent', batchValue: 100 },
+      settings: {
+        autoUpdate: false,
+        batch: { mode: 'percent', value: 100 },
+        maintenanceWindow: {
+          enabled: false,
+          startMinute: 0,
+          durationMinutes: 60,
+          weekdays: [0, 1, 2, 3, 4, 5, 6],
+        },
+      },
     })
     api.fetchUpgradeHistory.mockResolvedValue({ ok: true, runs: [], total: 0 })
     api.fetchUpgradeServersPage.mockResolvedValue({ ok: true, servers: [], total: 0 })
@@ -106,9 +115,19 @@ describe('managed upgrade admin queries', () => {
       ok: true,
       run: { id: 'run-9', status: 'succeeded' },
     })
+    const savedSettings = {
+      autoUpdate: true,
+      batch: { mode: 'count' as const, value: 3 },
+      maintenanceWindow: {
+        enabled: false,
+        startMinute: 120,
+        durationMinutes: 30,
+        weekdays: [1, 2, 3],
+      },
+    }
     api.saveUpgradeSettings.mockResolvedValue({
       ok: true,
-      settings: { batchMode: 'count', batchValue: 3 },
+      settings: savedSettings,
     })
     api.checkUpgradeManifests.mockResolvedValue({ ok: true })
     api.retryUpgradeStep.mockResolvedValue({ ok: true })
@@ -126,15 +145,10 @@ describe('managed upgrade admin queries', () => {
       ok: true,
       value: { kind: 'applied' },
     })
-    await expect(
-      save.result.current.run({ batchMode: 'count', batchValue: 3 }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(save.result.current.run(savedSettings)).resolves.toMatchObject({ ok: true })
     await expect(check.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
     await expect(retry.result.current.run('step-1')).resolves.toMatchObject({ ok: true })
     await expect(cancel.result.current.run('run-9')).resolves.toMatchObject({ ok: true })
-    expect(api.saveUpgradeSettings).toHaveBeenCalledWith({
-      batchMode: 'count',
-      batchValue: 3,
-    })
+    expect(api.saveUpgradeSettings).toHaveBeenCalledWith(savedSettings)
   })
 })

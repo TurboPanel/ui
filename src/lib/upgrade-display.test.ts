@@ -137,6 +137,6 @@ describe('upgrade display helpers', () => {
     expect(mapStepStatusToPipeline(null)).toBe('preparing')
     expect(mapStepStatusToPipeline('failed')).toBe('verifying')
     expect(mapStepStatusToPipeline('installing')).toBe('installing')
-    expect(mapStepStatusToPipeline('weird')).toBe('preparing')
+    expect(mapStepStatusToPipeline('pending')).toBe('preparing')
   })
 })
