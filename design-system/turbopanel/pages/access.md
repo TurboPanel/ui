@@ -26,7 +26,7 @@
 ## Hostnames
 
 - Title **Hostnames**. One line: these addresses are the Platform CA leaf SANs, the Git webhook origin, and the install-command origin.
-- Compose each entry (scheme, host, optional port) via `src/lib/public-url-entry.ts`. Scheme-less stored entries stay byte-for-byte (`panel.lan` expands to port 8443 in an install command).
+- Compose each new entry (scheme, host, optional port) via `src/lib/public-url-entry.ts`. Scheme-less stored entries stay byte-for-byte. The hostname table shows `https://<host>:8443` for every row, and the copy button copies that URL.
 - `PUT /instance/hostnames` is **replace-all**. A 422 names `invalid` hosts beside the row.
 - Each row picks `platform-ca` / `uploaded` / `lets-encrypt`. Disable a source the daemon cannot render or that Let's Encrypt / the uploaded pair refuses, and show the sentence from `certificateSourceEligibility`.
 - **Save & Apply** posts `POST /instance/public-urls/apply` **with no body**. The PUT already persisted the rows. Do not send `{ urls }`.
@@ -40,7 +40,7 @@
 - Upload form: label, certificate PEM, private key PEM. The key is sent once and never shown again.
 - Attach/detach is the full `hosts` set for that pair. A hostname the pair does not cover stays disabled. Clearing a hostname and saving leaves it on the Platform CA leaf. Disable attach while `instance-cert-sources-per-hostname` is absent, and keep the capability notice visible.
 - Let's Encrypt form: contact email, directory URL, terms checkbox, staging toggle. An env-sourced key is read-only (Environment badge).
-- Reachability sits under the form. A private, loopback, or wildcard name is refused before issuance. A Let's Encrypt name then shows the HTTP-01 preflight: the daemon publishes a nonce and requires `http://<hostname>/.well-known/acme-challenge/<nonce>` to reach `127.0.0.1:8880`. That result is `acmeLastError` when the apply failed the check, and a passed line once an attempt is recorded. A later issuance error is a separate line. Show the last attempt day and the leaf expiry when one is stored.
+- Reachability sits under the form. Each row shows `https://<host>:8443`. A private, loopback, or wildcard name is refused before issuance. Port 80 is opened only while a certificate is being issued or renewed. A Let's Encrypt name then shows the HTTP-01 preflight: the daemon publishes a nonce and requires `http://<hostname>/.well-known/acme-challenge/<nonce>` to reach the instance ACME issuer. That result is `acmeLastError` when the apply failed the check (`did not reach the instance ACME issuer`), and a passed line once an attempt is recorded. A later issuance error is a separate line. Show the last attempt day and the leaf expiry when one is stored.
 
 ## Trusted proxies
 

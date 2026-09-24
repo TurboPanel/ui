@@ -3,7 +3,6 @@ import {
   buildInstallCommandWithBaseUrl,
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
-  defaultDevInstallHttpBaseUrl,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from './install-command'
@@ -19,14 +18,11 @@ afterEach(() => {
 })
 
 describe('parseInstallBaseUrl', () => {
-  it('accepts https origins and allows http when requested', () => {
+  it('accepts https origins and rejects plaintext http', () => {
     expect(parseInstallBaseUrl('https://panel.example.com')).toBe(
       'https://panel.example.com',
     )
-    expect(parseInstallBaseUrl('http://dev.example.com:8880')).toBeNull()
-    expect(
-      parseInstallBaseUrl('http://dev.example.com:8880', { allowHttp: true }),
-    ).toBe('http://dev.example.com:8880')
+    expect(parseInstallBaseUrl('http://dev.example.com')).toBeNull()
   })
 
   it('rejects paths, query strings, credentials, and shell metacharacters', () => {
@@ -76,7 +72,7 @@ describe('defaultDevInstallBaseUrl', () => {
     })
     expect(
       defaultDevInstallBaseUrl([
-        'http://studio.lan:8880',
+        'https://other.lan:8443',
         'https://studio.lan:8443',
       ]),
     ).toBe('https://studio.lan:8443')
@@ -85,11 +81,11 @@ describe('defaultDevInstallBaseUrl', () => {
   it('falls back to the first https managed URL, then host-derived https', () => {
     expect(
       defaultDevInstallBaseUrl([
-        'http://huey.lan:8880',
         'https://huey.lan:8443',
+        'https://other.lan:8443',
       ]),
     ).toBe('https://huey.lan:8443')
-    expect(defaultDevInstallBaseUrl(['http://huey.lan:8880'])).toBe(
+    expect(defaultDevInstallBaseUrl(['http://huey.lan'])).toBe(
       'https://huey.lan:8443',
     )
   })
@@ -107,17 +103,16 @@ describe('defaultDevInstallBaseUrl', () => {
     expect(defaultDevInstallBaseUrl()).toBe('https://localhost:8443')
   })
 
-  it('prefers a managed URL that matches the browser http origin', () => {
+  it('ignores a plaintext browser origin and uses the https managed URL', () => {
     vi.stubGlobal('location', {
-      origin: 'http://studio.lan:8880',
+      origin: 'http://studio.lan',
       hostname: 'studio.lan',
     })
     expect(
       defaultDevInstallBaseUrl([
         'https://studio.lan:8443',
-        'http://studio.lan:8880',
       ]),
-    ).toBe('http://studio.lan:8880')
+    ).toBe('https://studio.lan:8443')
   })
 
   it('skips blank and invalid managed URLs when picking https', () => {
@@ -172,11 +167,11 @@ describe('defaultDevInstallBaseUrl', () => {
 
 describe('defaultDevCaddyHttpsBaseUrl', () => {
   it('derives https://host:8443 from managed URLs or the browser host', () => {
-    expect(defaultDevCaddyHttpsBaseUrl(['http://huey.lan:8880'])).toBe(
+    expect(defaultDevCaddyHttpsBaseUrl(['http://huey.lan'])).toBe(
       'https://huey.lan:8443',
     )
     vi.stubGlobal('location', {
-      origin: 'http://dev.example.com:8880',
+      origin: 'http://dev.example.com',
       hostname: 'dev.example.com',
     })
     expect(defaultDevCaddyHttpsBaseUrl()).toBe('https://dev.example.com:8443')
@@ -203,51 +198,6 @@ describe('defaultDevCaddyHttpsBaseUrl', () => {
       hostname: 'null',
     })
     expect(defaultDevCaddyHttpsBaseUrl()).toBe('https://localhost:8443')
-  })
-})
-
-describe('defaultDevInstallHttpBaseUrl', () => {
-  it('prefers an http managed URL, else derives :8880 from the host', () => {
-    expect(
-      defaultDevInstallHttpBaseUrl([
-        'https://huey.lan:8443',
-        'http://huey.lan:8880',
-      ]),
-    ).toBe('http://huey.lan:8880')
-    expect(defaultDevInstallHttpBaseUrl(['https://huey.lan:8443'])).toBe(
-      'http://huey.lan:8880',
-    )
-  })
-
-  it('uses the browser hostname when no managed URLs are provided', () => {
-    vi.stubGlobal('location', {
-      origin: 'https://dev.example.com:8443',
-      hostname: 'dev.example.com',
-    })
-    expect(defaultDevInstallHttpBaseUrl()).toBe('http://dev.example.com:8880')
-  })
-
-  it('falls back to localhost HTTP', () => {
-    expect(defaultDevInstallHttpBaseUrl()).toBe('http://localhost:8880')
-  })
-
-  it('skips blank and invalid managed URLs when picking http', () => {
-    expect(
-      defaultDevInstallHttpBaseUrl([
-        '',
-        '  ',
-        'not a url',
-        'http://huey.lan:8880',
-      ]),
-    ).toBe('http://huey.lan:8880')
-  })
-
-  it('falls back to localhost HTTP when the browser hostname is unusable', () => {
-    vi.stubGlobal('location', {
-      origin: 'https://null',
-      hostname: 'null',
-    })
-    expect(defaultDevInstallHttpBaseUrl()).toBe('http://localhost:8880')
   })
 })
 
@@ -374,16 +324,16 @@ describe('buildInstallCommandWithBaseUrl', () => {
     expect(command).not.toContain('curl -fsSL turbopanel.sh |')
   })
 
-  it('omits insecure TLS for plaintext HTTP and still sets DL_BASE + HOST', () => {
+  it('sets insecure TLS for a LAN https origin and still sets DL_BASE + HOST', () => {
     const command = buildInstallCommandWithBaseUrl({
       ...license,
-      baseUrl: 'http://dev.example.com:8880/',
+      baseUrl: 'https://dev.example.com:8443/',
     })
-    expect(command).toContain('curl -fsSL http://dev.example.com:8880/run.sh')
-    expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
-    expect(command).toContain('TURBOPANEL_HOST=http://dev.example.com:8880')
+    expect(command).toContain('curl -fsSLk https://dev.example.com:8443/run.sh')
+    expect(command).toContain('TURBOPANEL_INSECURE_TLS=1')
+    expect(command).toContain('TURBOPANEL_HOST=https://dev.example.com:8443')
     expect(command).toContain(
-      'TURBOPANEL_DL_BASE=http://dev.example.com:8880/downloads/daemon',
+      'TURBOPANEL_DL_BASE=https://dev.example.com:8443/downloads/daemon',
     )
   })
 })
@@ -425,54 +375,38 @@ describe('resolveDisplayedInstallCommand', () => {
     ).toBe(revealed.installCommand)
   })
 
-  it('emits unquoted validated HTTPS origins in the rebuilt pipeline', () => {
-    const command = resolveDisplayedInstallCommand(
-      revealed,
-      'https://panel.example.com:8443',
-    )
-    const licenseArg = btoa('license-id:token')
-      .replaceAll('+', '-')
-      .replaceAll('/', '_')
-      .replaceAll('=', '')
-
-    expect(command).toContain(
-      'curl -fsSLk https://panel.example.com:8443/run.sh',
-    )
-    expect(command).toContain(
-      'TURBOPANEL_HOST=https://panel.example.com:8443',
-    )
-    expect(command).toContain(`TURBOPANEL_LICENSE=${licenseArg}`)
-    expect(command).toContain('TURBOPANEL_INSECURE_TLS=1')
-    expect(command).toContain(
-      'TURBOPANEL_DL_BASE=https://panel.example.com:8443/downloads/daemon',
-    )
-    expect(command).not.toContain("'")
+  it('keeps the issued command when the edited origin is a different https URL', () => {
+    expect(
+      resolveDisplayedInstallCommand(
+        revealed,
+        'https://panel.example.com:8443',
+      ),
+    ).toBe(revealed.installCommand)
+    expect(
+      resolveDisplayedInstallCommand(revealed, 'https://turbopanel.dev'),
+    ).toBe(revealed.installCommand)
+    expect(revealed.installCommand).not.toContain('panel.example.com')
+    expect(revealed.installCommand).not.toContain('dev.lan')
   })
 
-  it('omits insecure TLS for publicly trusted HTTPS on 443', () => {
+  it('does not retarget an issued LAN command to an unchecked alias', () => {
+    const issued = {
+      ...revealed,
+      installCommand:
+        'curl -fsSLk https://192.168.1.10:8443/run.sh | TURBOPANEL_HOST=https://192.168.1.10:8443 TURBOPANEL_LICENSE=abc sh',
+    }
     const command = resolveDisplayedInstallCommand(
-      revealed,
-      'https://turbopanel.dev',
+      issued,
+      'https://dev.lan:8443',
     )
-    expect(command).toContain('curl -fsSL https://turbopanel.dev/run.sh')
-    expect(command).not.toContain('curl -fsSLk')
-    expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
-    expect(command).toContain(
-      'TURBOPANEL_DL_BASE=https://turbopanel.dev/downloads/daemon',
-    )
+    expect(command).toBe(issued.installCommand)
+    expect(command).toContain('192.168.1.10')
+    expect(command).not.toContain('dev.lan')
   })
 
-  it('emits unquoted validated HTTP origins without insecure TLS flags', () => {
-    const command = resolveDisplayedInstallCommand(
-      revealed,
-      'http://dev.example.com:8880',
-    )
-    expect(command).toContain('curl -fsSL http://dev.example.com:8880/run.sh')
-    expect(command).not.toContain('curl -fsSLk')
-    expect(command).not.toContain('TURBOPANEL_INSECURE_TLS')
-    expect(command).toContain(
-      'TURBOPANEL_DL_BASE=http://dev.example.com:8880/downloads/daemon',
-    )
-    expect(command).not.toContain("'")
+  it('falls back to the server command for a plaintext install URL', () => {
+    expect(
+      resolveDisplayedInstallCommand(revealed, 'http://dev.example.com'),
+    ).toBe(revealed.installCommand)
   })
 })

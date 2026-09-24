@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   HA_CONTROL_PLANE_ORIGIN,
-  LOCAL_HTTP_ORIGIN,
   LOCAL_HTTPS_ORIGIN,
   canBootstrapAgainstControlPlane,
   controlPlaneKindForOrigin,
@@ -50,12 +49,6 @@ describe('resolveControlPlaneClientKind', () => {
 
   it('treats Caddy-proxied dev web as same-origin', () => {
     expect(resolveControlPlaneClientKind(caddyEnv)).toBe('same-origin')
-    expect(
-      resolveControlPlaneClientKind({
-        ...caddyEnv,
-        locationOrigin: LOCAL_HTTP_ORIGIN,
-      }),
-    ).toBe('same-origin')
   })
 
   it('treats Metro web as standalone Expo web', () => {

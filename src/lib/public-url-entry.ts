@@ -79,6 +79,9 @@ const CREDENTIALS_ERROR = 'Remove the username and password from the address.'
 const PORT_ERROR = 'Port must be a number between 1 and 65535.'
 const DUPLICATE_ERROR = 'That address is already listed.'
 
+/** HTTPS comparison uses the control-plane listener, not the scheme default. */
+const CONTROL_PLANE_HTTPS_PORT = '8443'
+
 function stripIpv6Brackets(host: string): string {
   return host.replace(/^\[/, '').replace(/\]$/, '')
 }
@@ -195,10 +198,22 @@ export function buildPublicUrlEntry(draft: PublicUrlDraft): PublicUrlEntryResult
   return { ok: true, value: formatPublicUrlEntry(parts), parts }
 }
 
-/** The comparable form of a stored entry — its parsed address, or itself. */
+function comparableHttpsHost(host: string): string {
+  return host.includes(':') ? `[${host}]` : host
+}
+
+/**
+ * The comparable form of a stored entry. HTTPS entries compare as the
+ * control plane's `https://host:8443` origin, so a portless draft and a
+ * saved `:8443` row are the same address. HTTP keeps its own port.
+ */
 function comparableEntry(entry: string): string {
   const parts = parsePublicUrlEntry(entry)
-  return parts ? formatPublicUrlEntry(parts) : entry.trim()
+  if (!parts) return entry.trim()
+  if (parts.scheme === 'https') {
+    return `https://${comparableHttpsHost(parts.host)}:${CONTROL_PLANE_HTTPS_PORT}`
+  }
+  return formatPublicUrlEntry(parts)
 }
 
 /**
@@ -212,7 +227,7 @@ export function addPublicUrlEntry(
   const built = buildPublicUrlEntry(draft)
   if (!built.ok) return built
 
-  if (new Set(current.map(comparableEntry)).has(built.value)) {
+  if (new Set(current.map(comparableEntry)).has(comparableEntry(built.value))) {
     return { ok: false, error: DUPLICATE_ERROR }
   }
 

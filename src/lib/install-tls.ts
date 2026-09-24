@@ -86,9 +86,6 @@ export function formatInstanceDlBase(origin: string): string {
 export function installTlsHint(origin: string): string | null {
   const trimmed = origin.trim()
   if (!trimmed) return null
-  if (trimmed.startsWith('http://')) {
-    return 'Plaintext HTTP — development only. The daemon will not verify TLS.'
-  }
   if (!trimmed.startsWith('https://')) return null
   if (installOriginNeedsInsecureTls(trimmed)) {
     return 'This URL uses the platform CA (self-signed). The install command skips TLS verification for bootstrap, then trusts the downloaded CA.'

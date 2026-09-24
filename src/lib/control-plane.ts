@@ -6,9 +6,6 @@ export const HA_CONTROL_PLANE_ORIGIN = 'https://turbopanel.app'
 /** Co-located Caddy HTTPS (platform CA). */
 export const LOCAL_HTTPS_ORIGIN = 'https://localhost:8443'
 
-/** Co-located Caddy plaintext HTTP (LAN / device-friendly in development). */
-export const LOCAL_HTTP_ORIGIN = 'http://localhost:8880'
-
 const METRO_WEB_PORTS = new Set(['8081', '8082', '19000', '19006'])
 
 export type ControlPlaneClientKind = 'same-origin' | 'metro-web' | 'native'

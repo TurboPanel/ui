@@ -5,7 +5,7 @@
 **Routes:** `/sign-in`, `/sign-up`, `/install`, `/connect`  
 **Job:** Get a verified operator into the org console with zero chrome noise.
 
-`/connect` uses the same auth shell. **Standalone Expo web** (Metro `:8081`): copy only — open via Caddy (`https://localhost:8443` / `http://localhost:8880`); no URL field and no status probe. **Native:** HA / localhost HTTPS / HTTP chips plus a custom URL; errors sit next to the field. No account switcher on web.
+`/connect` uses the same auth shell. **Standalone Expo web** (Metro `:8081`): copy only — open via Caddy (`https://localhost:8443`) and trust the Platform CA; no URL field and no status probe. **Native:** HA / localhost HTTPS chips plus a custom URL; errors sit next to the field. On a phone, localhost is the device — use `https://<LAN host>:8443` and trust the Platform CA. No account switcher on web.
 
 ---
 
