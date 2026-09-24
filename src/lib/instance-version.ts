@@ -15,6 +15,7 @@
  */
 
 export const INSTANCE_VERSION_HEADER = 'x-turbopanel-version'
+export const INSTANCE_REVISION_HEADER = 'x-turbopanel-revision'
 export const CLIENT_VERSION_HEADER = 'x-turbopanel-client-version'
 
 /**
@@ -126,6 +127,7 @@ export function clientVersionHeaders(): Record<string, string> {
 }
 
 let lastInstanceVersion: string | null = null
+let lastInstanceRevision: string | null = null
 
 /**
  * Remember the version the instance stamped on a response. Cleared (to
@@ -135,6 +137,8 @@ let lastInstanceVersion: string | null = null
 export function recordInstanceVersion(headers: Pick<Headers, 'get'>): string | null {
   const raw = headers.get(INSTANCE_VERSION_HEADER)?.trim()
   lastInstanceVersion = raw || null
+  const revision = headers.get(INSTANCE_REVISION_HEADER)?.trim()
+  lastInstanceRevision = revision || null
   return lastInstanceVersion
 }
 
@@ -142,8 +146,13 @@ export function getInstanceVersion(): string | null {
   return lastInstanceVersion
 }
 
+export function getInstanceRevision(): string | null {
+  return lastInstanceRevision
+}
+
 /** Test-only reset of the module state. */
 export function resetInstanceVersionStateForTests(): void {
   clientVersion = null
   lastInstanceVersion = null
+  lastInstanceRevision = null
 }

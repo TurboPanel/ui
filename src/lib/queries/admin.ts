@@ -7,9 +7,21 @@ import {
   fetchInstanceCertificates,
   fetchInstanceDaemon,
   fetchInstanceHostnames,
+  cancelUpgradeRun,
+  checkUpgradeManifests,
   fetchInstanceUpdates,
+  fetchUpgradeActiveRun,
+  fetchUpgradeRun,
+  fetchUpgradeHistory,
+  fetchUpgradeServersPage,
+  fetchUpgradeSettings,
   requestColocatedDaemonUpdate,
   requestInstanceUpdate,
+  retryUpgradeStep,
+  runUpgradePreflight,
+  saveUpgradeSettings,
+  startPlatformUpgradeRun,
+  type UpgradeSettings,
   fetchPlatformCa,
   fetchTrustedProxies,
   type InstanceHostnameInput,
@@ -55,7 +67,15 @@ import {
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
 import { getActiveOrganizationId } from '@/lib/org-context'
+import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
 import {
+  isUpgradeRunActive,
+  UPGRADE_RUN_POLL_MS,
+  waitForUpgradeRunSettlement,
+} from '@/lib/upgrade-run-poll'
+import { clearControlPlaneUpgradeWatch, markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
+import {
+  installedIdentity,
   waitForUnitUpdate,
   type UnitUpdateWait,
   type UpdateTargetIdentity,
@@ -298,11 +318,57 @@ export function useSaveInstanceAcmeSettings() {
   })
 }
 
+export function useUpgradeActiveRun(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeActiveRun,
+    queryFn: async () => {
+      try {
+        return await fetchUpgradeActiveRun()
+      } catch (err) {
+        if (isManagedUpgradeApiMissing(err)) return { ok: true, run: null }
+        throw err
+      }
+    },
+    enabled: options?.enabled ?? true,
+    refetchInterval: (query) => {
+      const run = query.state.data?.run
+      return run && isUpgradeRunActive(run.status) ? UPGRADE_RUN_POLL_MS : false
+    },
+  })
+}
+
+function instanceUpdatesPollInterval(
+  data: Awaited<ReturnType<typeof fetchInstanceUpdates>> | undefined,
+  activeRunStatus: string | undefined,
+): number | false {
+  if (activeRunStatus && isUpgradeRunActive(activeRunStatus as 'running')) {
+    return UPGRADE_RUN_POLL_MS
+  }
+  if (!data) return false
+  const daemonTarget = data.units.daemon.target
+  const instanceTarget = data.units.instance.target
+  const daemonInstalled = data.units.daemon.installed
+  const instanceInstalled = data.units.instance.installed
+  const daemonBehind =
+    daemonTarget &&
+    daemonInstalled &&
+    installedIdentity(daemonInstalled) !==
+      `${daemonTarget.version ?? ''}:${daemonTarget.commit ?? ''}`
+  const instanceBehind =
+    instanceTarget &&
+    installedIdentity(instanceInstalled) !==
+      `${instanceTarget.version ?? ''}:${instanceTarget.commit ?? ''}`
+  return daemonBehind || instanceBehind ? UPGRADE_RUN_POLL_MS : false
+}
+
 export function useInstanceUpdates(options?: Readonly<{ enabled?: boolean }>) {
+  const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
   return useQuery({
     queryKey: queryKeys.admin.instanceUpdates,
     queryFn: fetchInstanceUpdates,
     enabled: options?.enabled ?? true,
+    refetchInterval: (query) =>
+      instanceUpdatesPollInterval(query.state.data, activeRun.data?.run?.status),
   })
 }
 
@@ -345,7 +411,156 @@ export function useUpgradeInstance() {
   })
 }
 
-/** Queue a co-located daemon update and poll the updates read. The control plane stays up. */
+export type UpgradeStartResult =
+  | { kind: 'applied' }
+  | { kind: 'partially_failed' }
+  | { kind: 'failed' }
+  | { kind: 'cancelled' }
+  | { kind: 'missing' }
+  | { kind: 'unreachable' }
+
+/** Poll the run id returned by start. A missing row is not success. */
+async function pollExactUpgradeRun(runId: string): Promise<UpgradeStartResult> {
+  markControlPlaneUpgradeWatch()
+  const outcome = await waitForUpgradeRunSettlement({
+    readRun: async () => {
+      const body = await fetchUpgradeRun(runId)
+      return body.run
+    },
+  })
+  clearControlPlaneUpgradeWatch()
+  if (outcome.kind === 'missing') return { kind: 'missing' }
+  if (outcome.kind === 'completed') {
+    if (outcome.status === 'succeeded') return { kind: 'applied' }
+    if (outcome.status === 'partially_failed') return { kind: 'partially_failed' }
+    if (outcome.status === 'failed') return { kind: 'failed' }
+    if (outcome.status === 'cancelled') return { kind: 'cancelled' }
+  }
+  return { kind: 'unreachable' }
+}
+
+export function useRunUpgradePreflight() {
+  return useApiMutation({
+    mutationFn: () => runUpgradePreflight(),
+  })
+}
+
+export function useStartPlatformUpgrade() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: async (runId?: string) => {
+      const started = await startPlatformUpgradeRun(runId)
+      return await pollExactUpgradeRun(started.runId)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'instance-updates'] })
+    },
+  })
+}
+
+export function useUpgradeSettings(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeSettings,
+    queryFn: async () => {
+      try {
+        return await fetchUpgradeSettings()
+      } catch (err) {
+        if (isManagedUpgradeApiMissing(err)) return null
+        throw err
+      }
+    },
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useSaveUpgradeSettings() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (settings: UpgradeSettings) => saveUpgradeSettings(settings),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeSettings })
+    },
+  })
+}
+
+export function useUpgradeHistory(
+  page: Readonly<{ offset: number; limit: number }>,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeHistory(page.offset, page.limit),
+    queryFn: async () => {
+      try {
+        return await fetchUpgradeHistory(page)
+      } catch (err) {
+        if (isManagedUpgradeApiMissing(err)) {
+          return { ok: true, runs: [], total: 0 }
+        }
+        throw err
+      }
+    },
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useUpgradeServersPage(
+  page: Readonly<{ offset: number; limit: number; status: string }>,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeServers(page.offset, page.limit, page.status),
+    queryFn: async () => {
+      try {
+        return await fetchUpgradeServersPage(page)
+      } catch (err) {
+        if (isManagedUpgradeApiMissing(err)) {
+          return { ok: true, servers: [], total: 0 }
+        }
+        throw err
+      }
+    },
+    enabled: options?.enabled ?? true,
+    refetchInterval:
+      activeRun.data?.run && isUpgradeRunActive(activeRun.data.run.status)
+        ? UPGRADE_RUN_POLL_MS
+        : false,
+  })
+}
+
+export function useRetryUpgradeStep() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (stepId: string) => retryUpgradeStep(stepId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'instance-updates'] })
+    },
+  })
+}
+
+export function useCancelUpgradeRun() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (runId: string) => cancelUpgradeRun(runId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
+    },
+  })
+}
+
+export function useCheckUpgradeManifests() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => checkUpgradeManifests(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
+    },
+  })
+}
+
 export function useUpgradeColocatedDaemon() {
   const queryClient = useQueryClient()
   return useApiMutation({

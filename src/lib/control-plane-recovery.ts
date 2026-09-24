@@ -32,6 +32,9 @@ const RESTART_STATUSES = new Set([
 const STATUS_ONLY = /HTTP (\d{3})$/
 const ANY_STATUS = /HTTP \d{3}/
 
+/** Caddy maintenance page while the control plane package restarts. */
+const CONTROL_PLANE_UPDATING = /HTTP 503: control_plane_updating\b/
+
 function isAbortError(err: unknown): boolean {
   return (
     typeof err === 'object' &&
@@ -51,12 +54,18 @@ export function isControlPlaneRestartError(err: unknown): boolean {
   if (isAbortError(err)) return true
   if (!(err instanceof Error)) return false
 
+  if (CONTROL_PLANE_UPDATING.test(err.message)) return true
+
   const statusOnly = STATUS_ONLY.exec(err.message)
   if (statusOnly) return RESTART_STATUSES.has(Number(statusOnly[1]))
 
   // A status with a body behind it means the control plane answered — a real
   // failure, and never something to wait out.
   return !ANY_STATUS.test(err.message)
+}
+
+export function isControlPlaneUpdatingError(err: unknown): boolean {
+  return err instanceof Error && CONTROL_PLANE_UPDATING.test(err.message)
 }
 
 /** How long to wait for the control plane before giving up on it. */

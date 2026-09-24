@@ -24,6 +24,12 @@ describe('isControlPlaneRestartError', () => {
     expect(isControlPlaneRestartError({ name: 'AbortError' })).toBe(true)
   })
 
+  it('treats the control_plane_updating JSON 503 as a restart', () => {
+    expect(
+      isControlPlaneRestartError(apiError('HTTP 503: control_plane_updating')),
+    ).toBe(true)
+  })
+
   it('does not swallow a failure the control plane actually answered', () => {
     expect(
       isControlPlaneRestartError(apiError('HTTP 503: no co-located daemon connected')),

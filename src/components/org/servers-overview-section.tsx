@@ -101,9 +101,7 @@ function isColocatedServer(
   updateData?: ServerUpdateStatus | null
 ): boolean {
   return (
-    server.colocatedWithInstance === true ||
-    updateData?.colocatedWithInstance === true ||
-    updateData?.updateBlocked === true
+    server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
   )
 }
 
@@ -116,6 +114,7 @@ function isServerUpdatable(
   return (
     server.connected &&
     !isColocatedServer(server, data) &&
+    data?.updateBlockedReason !== 'updates_managed' &&
     data?.targetStatus === 'ok' &&
     data.updateAvailable === true &&
     !triggeringServerIds.has(server.id) &&

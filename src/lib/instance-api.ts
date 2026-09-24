@@ -3766,6 +3766,16 @@ export type InstanceUpdateTarget = {
 export type InstanceUpdates = {
   ok: boolean
   channel: string
+  runtime?: 'deno' | 'workers'
+  /** When true (Workers), fleet updates are platform-managed — no local Upgrade control. */
+  updatesManaged?: boolean
+  /** Present once the managed upgrade coordinator is mounted. */
+  managedUpgrade?: boolean
+  fleetSummary?: {
+    connected: number
+    upToDate: number
+    total: number
+  }
   units: {
     instance: {
       installed: { version: string; commit: string }
@@ -3782,8 +3792,194 @@ export type InstanceUpdates = {
   }
 }
 
+export type UpgradeSettings = {
+  autoUpdate: boolean
+  batch: { mode: 'percent' | 'count'; value: number }
+  maintenanceWindow: {
+    enabled: boolean
+    startMinute: number
+    durationMinutes: number
+    weekdays: number[]
+  }
+}
+
+export type UpgradePreflightCheck = {
+  id: string
+  label: string
+  passed: boolean
+  detail?: string
+}
+
+export type UpgradePreflightResult = {
+  ok: boolean
+  canStart: boolean
+  checks: UpgradePreflightCheck[]
+  recoveryCommand?: string
+  runId?: string
+  backupPath?: string
+  blockers?: string[]
+}
+
+export type UpgradeRunStatus =
+  | 'pending'
+  | 'running'
+  | 'succeeded'
+  | 'partially_failed'
+  | 'failed'
+  | 'cancelled'
+
+export type UpgradePhase = 'colocated_daemon' | 'control_plane' | 'fleet'
+
+export type UpgradeStepStatus =
+  | 'pending'
+  | 'waiting'
+  | 'dispatched'
+  | 'preparing'
+  | 'downloading'
+  | 'installing'
+  | 'restarting'
+  | 'verifying'
+  | 'done'
+  | 'failed'
+  | 'rolled_back'
+  | 'needs_attention'
+  | 'skipped'
+
+export type UpgradeStepRow = {
+  id: string
+  serverId: string
+  serverName?: string | null
+  hostname?: string | null
+  connected?: boolean
+  unit: 'daemon' | 'instance'
+  phase: UpgradePhase
+  batchIndex: number
+  status: UpgradeStepStatus
+  fromVersion?: string | null
+  toVersion?: string | null
+  fromCommit?: string | null
+  toCommit?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
+}
+
+export type UpgradeRunRecord = {
+  id: string
+  status: UpgradeRunStatus
+  phase: UpgradePhase | null
+  channel: string
+  source: 'manual' | 'auto' | 'server'
+  startedAt?: string | null
+  finishedAt?: string | null
+  startedByEmail?: string | null
+  error?: string | null
+  counts?: {
+    done: number
+    failed: number
+    total: number
+    needsAttention?: number
+  }
+}
+
+export type UpgradeActiveRunResponse = {
+  ok: boolean
+  run: (UpgradeRunRecord & { steps: UpgradeStepRow[] }) | null
+}
+
+export type UpgradeHistoryEntry = UpgradeRunRecord & {
+  resultLabel?: string
+}
+
+export type UpgradeHistoryResponse = {
+  ok: boolean
+  runs: UpgradeHistoryEntry[]
+  total: number
+}
+
+export type UpgradeServersPage = {
+  ok: boolean
+  servers: (UpgradeStepRow & {
+    updateAvailable?: boolean
+    installedVersion?: string | null
+    installedCommit?: string | null
+  })[]
+  total: number
+}
+
 export async function fetchInstanceUpdates(): Promise<InstanceUpdates> {
   return await apiFetch(`${ADMIN_API}/instance/updates`)
+}
+
+export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/run`)
+}
+
+export async function fetchUpgradeRun(runId: string): Promise<UpgradeActiveRunResponse> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}`)
+}
+
+export async function fetchUpgradeHistory(
+  params?: Readonly<{ offset?: number; limit?: number }>,
+): Promise<UpgradeHistoryResponse> {
+  const query = new URLSearchParams()
+  if (params?.offset != null) query.set('offset', String(params.offset))
+  if (params?.limit != null) query.set('limit', String(params.limit))
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return await apiFetch(`${ADMIN_API}/instance/updates/history${suffix}`)
+}
+
+export async function fetchUpgradeServersPage(
+  params?: Readonly<{ offset?: number; limit?: number; status?: string }>,
+): Promise<UpgradeServersPage> {
+  const query = new URLSearchParams()
+  if (params?.offset != null) query.set('offset', String(params.offset))
+  if (params?.limit != null) query.set('limit', String(params.limit))
+  if (params?.status) query.set('status', params.status)
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return await apiFetch(`${ADMIN_API}/instance/updates/servers${suffix}`)
+}
+
+export async function fetchUpgradeSettings(): Promise<{ ok: boolean; settings: UpgradeSettings }> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/settings`)
+}
+
+export async function saveUpgradeSettings(
+  settings: UpgradeSettings,
+): Promise<{ ok: boolean; settings: UpgradeSettings }> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/settings`, {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  })
+}
+
+export async function runUpgradePreflight(): Promise<UpgradePreflightResult> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/preflight`, { method: 'POST' })
+}
+
+export async function startPlatformUpgradeRun(
+  runId?: string,
+): Promise<{ ok: boolean; runId: string }> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/runs`, {
+    method: 'POST',
+    body: JSON.stringify(runId ? { runId } : {}),
+  })
+}
+
+export async function checkUpgradeManifests(): Promise<{ ok: boolean }> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/check`, { method: 'POST' })
+}
+
+export async function retryUpgradeStep(stepId: string): Promise<{ ok: boolean }> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/steps/${encodeURIComponent(stepId)}/retry`, {
+    method: 'POST',
+  })
+}
+
+export async function cancelUpgradeRun(runId: string): Promise<{ ok: boolean }> {
+  return await apiFetch(
+    `${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/cancel`,
+    { method: 'POST' },
+  )
 }
 
 export async function requestInstanceUpdate(): Promise<{ ok: true; dispatched: true }> {

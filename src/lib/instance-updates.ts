@@ -4,7 +4,10 @@ import {
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
 
-/** Covers a control-plane install, then the restart that follows it. */
+/**
+ * Legacy per-unit wait ceiling. Platform upgrades prefer
+ * `waitForUpgradeRunSettlement` in `upgrade-run-poll.ts`.
+ */
 export const INSTANCE_UPDATE_WAIT_MS = 10 * 60 * 1000
 
 export type InstalledIdentity = {

@@ -1,4 +1,5 @@
 import type { DaemonSupport, ServerUpdateCommit } from '@/lib/instance-api'
+import { UPDATE_BLOCKED_REASONS } from '@/lib/upgrade-vocabulary'
 
 /** The first twelve characters of a commit, or `Unknown`. */
 export function shortCommit(commit?: string | null): string {
@@ -28,4 +29,22 @@ export function channelLabel(channel?: string | null): string {
 /** Why an unsupported daemon receives no commands, and the fix. */
 export function daemonUnsupportedLabel(support: DaemonSupport): string {
   return `Daemon ${support.version ?? 'unknown'} is below the supported minimum ${support.minVersion}: it stays connected but receives no commands until it is updated.`
+}
+
+export function serverUpdateBlockedLabel(reason: string | null | undefined): string | null {
+  const code = reason?.trim()
+  if (!code) return null
+  if (code === UPDATE_BLOCKED_REASONS.controlPlaneUpgradeRequired) {
+    return 'Waiting for the control plane upgrade'
+  }
+  if (code === UPDATE_BLOCKED_REASONS.updatesManaged) {
+    return 'Updates managed by TurboPanel High Availability'
+  }
+  return null
+}
+
+export function isServerUpdateActionHidden(
+  reason: string | null | undefined,
+): boolean {
+  return reason?.trim() === UPDATE_BLOCKED_REASONS.updatesManaged
 }

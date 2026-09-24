@@ -46,7 +46,9 @@ import {
 import {
   channelLabel,
   daemonUnsupportedLabel,
+  isServerUpdateActionHidden,
   runningBuildLabel,
+  serverUpdateBlockedLabel,
 } from '@/lib/daemon-update-labels'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
@@ -127,9 +129,7 @@ function isColocatedServer(
   updateData?: ServerUpdateStatus | null
 ): boolean {
   return (
-    server.colocatedWithInstance === true ||
-    updateData?.colocatedWithInstance === true ||
-    updateData?.updateBlocked === true
+    server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
   )
 }
 
@@ -138,11 +138,13 @@ function resolveUpdateBadgeVariant(input: {
   targetStatus: ServerUpdateStatus['targetStatus'] | undefined
   updateAvailable: boolean | undefined
   colocated: boolean
+  updateBlockedReason?: string | null
   showUpdateErrorBadge: boolean
   runningVersionUnknown: boolean
 }): UpdateBadgeVariant {
   if (input.status === 'updating') return 'updating'
   if (input.showUpdateErrorBadge) return 'error'
+  if (serverUpdateBlockedLabel(input.updateBlockedReason)) return 'colocated'
   if (input.colocated) return 'colocated'
   if (input.targetStatus === 'unknown' || input.runningVersionUnknown) {
     return 'unknown'
@@ -151,14 +153,18 @@ function resolveUpdateBadgeVariant(input: {
   return 'current'
 }
 
-function updateBadgeLabel(variant: UpdateBadgeVariant, runningVersionUnknown: boolean): string {
+function updateBadgeLabel(
+  variant: UpdateBadgeVariant,
+  runningVersionUnknown: boolean,
+  blockedLabel: string | null,
+): string {
   switch (variant) {
     case 'updating':
       return 'Update in progress'
     case 'error':
       return 'Update error'
     case 'colocated':
-      return 'Co-located daemon'
+      return blockedLabel ?? 'Co-located daemon'
     case 'unknown':
       return runningVersionUnknown ? 'Version unknown' : 'Target unavailable'
     case 'available':
@@ -324,11 +330,13 @@ function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: Up
   const targetKnown = updateData?.targetStatus === 'ok'
   const runningVersionUnknown =
     targetKnown && server.connected && !colocated && !updateData?.current?.commit
+  const blockedLabel = serverUpdateBlockedLabel(updateData?.updateBlockedReason)
   const badgeVariant = resolveUpdateBadgeVariant({
     status: updateData?.status,
     targetStatus: updateData?.targetStatus,
     updateAvailable: updateData?.updateAvailable,
     colocated,
+    updateBlockedReason: updateData?.updateBlockedReason,
     showUpdateErrorBadge,
     runningVersionUnknown,
   })
@@ -336,6 +344,8 @@ function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: Up
   return {
     updateData,
     colocated,
+    blockedLabel,
+    hideServerUpdateAction: isServerUpdateActionHidden(updateData?.updateBlockedReason),
     isUpdateStatusLoading,
     isUpdateInProgress,
     canResetUpdateStatus,
@@ -1111,9 +1121,16 @@ function ServerControlTab({
         ) : null}
         <Badge
           tone={updateBadgeTone(viewModel.badgeVariant)}
-          label={updateBadgeLabel(viewModel.badgeVariant, viewModel.runningVersionUnknown)}
+          label={updateBadgeLabel(
+            viewModel.badgeVariant,
+            viewModel.runningVersionUnknown,
+            viewModel.blockedLabel,
+          )}
         />
-        {canManage ? (
+        {viewModel.blockedLabel ? (
+          <Text style={panelStyles.muted}>{viewModel.blockedLabel}</Text>
+        ) : null}
+        {canManage && !viewModel.hideServerUpdateAction ? (
           <ButtonRow>
             <Button
               label="Update"

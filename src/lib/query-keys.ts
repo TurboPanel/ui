@@ -361,6 +361,12 @@ export const queryKeys = {
     instanceAcme: ['admin', 'instance-acme'] as const,
     instanceDaemon: ['admin', 'instance-daemon'] as const,
     instanceUpdates: ['admin', 'instance-updates'] as const,
+    upgradeActiveRun: ['admin', 'instance-updates', 'run'] as const,
+    upgradeHistory: (offset: number, limit: number) =>
+      ['admin', 'instance-updates', 'history', offset, limit] as const,
+    upgradeServers: (offset: number, limit: number, status: string) =>
+      ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
+    upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,
     platformCa: ['admin', 'platform-ca'] as const,
     trustedProxies: ['admin', 'trusted-proxies'] as const,
     signup: ['admin', 'settings', 'signup'] as const,

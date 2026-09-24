@@ -385,7 +385,7 @@ anything under `src/app/[orgId]/`.
 
 ## Admin area (`/admin/*`)
 
-Moved to `src/app/admin/AGENTS.md`.
+Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the managed upgrade console (self-hosted vs TurboPanel High Availability layouts, preflight `ModalSheet`, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Page override: `design-system/turbopanel/pages/updates.md`.
 
 ## Command Pipeline UI
 

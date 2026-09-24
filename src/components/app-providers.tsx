@@ -10,6 +10,7 @@ import { isRemoteCookieClient } from '@/lib/control-plane'
 import { hydrateControlPlaneStore } from '@/lib/control-plane-accounts'
 import { createAppQueryClient } from '@/lib/query-client'
 import tamaguiConfig from '@/lib/tamagui.config'
+import { ControlPlaneUpdatingOverlay } from '@/components/admin/control-plane-updating-overlay'
 import { colors } from '@/lib/theme'
 
 /** Module-level instance — preserves Fast Refresh lifetime. */
@@ -45,7 +46,10 @@ export function AppProviders({ children }: AppProvidersProps) {
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
       <QueryClientProvider client={queryClient}>
         <ControlPlaneGate>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <ControlPlaneUpdatingOverlay />
+          </AuthProvider>
         </ControlPlaneGate>
         {Platform.OS === 'web' && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
