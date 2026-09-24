@@ -21,7 +21,6 @@ import {
 import {
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
-  defaultDevInstallHttpBaseUrl,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
@@ -62,13 +61,15 @@ type DevInstallUrlFieldsProps = Readonly<{
   managedUrls: string[]
   onChange: (url: string) => void
   editable?: boolean
+  /** Install step: the origin was already checked and the command is fixed. */
+  locked?: boolean
 }>
 
 function managedInstallOrigins(managedUrls: string[]): string[] {
   const seen = new Set<string>()
   const origins: string[] = []
   for (const raw of managedUrls) {
-    const origin = parseInstallBaseUrl(raw, { allowHttp: true })
+    const origin = parseInstallBaseUrl(raw)
     if (!origin || seen.has(origin)) continue
     seen.add(origin)
     origins.push(origin)
@@ -81,10 +82,12 @@ function DevInstallUrlFields({
   managedUrls,
   onChange,
   editable = true,
+  locked = false,
 }: DevInstallUrlFieldsProps) {
   const origins = managedInstallOrigins(managedUrls)
-  const selected = parseInstallBaseUrl(installBaseUrl, { allowHttp: true })
+  const selected = parseInstallBaseUrl(installBaseUrl)
   const tlsHint = installTlsHint(selected ?? installBaseUrl)
+  const canEdit = editable && !locked
 
   return (
     <>
@@ -95,7 +98,7 @@ function DevInstallUrlFields({
         placeholder="https://192.168.1.10:8443"
         autoCapitalize="none"
         autoCorrect={false}
-        editable={editable}
+        editable={canEdit}
       />
       {origins.length > 0 ? (
         <View style={styles.devUrlQuickPicks}>
@@ -105,8 +108,8 @@ function DevInstallUrlFields({
               <Pressable
                 key={origin}
                 accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                disabled={!editable}
+                accessibilityState={{ selected: active, disabled: !canEdit }}
+                disabled={!canEdit}
                 style={[
                   styles.secondaryButton,
                   active && styles.devUrlChipActive,
@@ -126,18 +129,21 @@ function DevInstallUrlFields({
           })}
         </View>
       ) : null}
-      <ButtonRow>
-        <Button
-          label="Use HTTPS (:8443)"
-          size="sm"
-          onPress={() => onChange(defaultDevCaddyHttpsBaseUrl(managedUrls))}
-        />
-        <Button
-          label="Use HTTP (:8880)"
-          size="sm"
-          onPress={() => onChange(defaultDevInstallHttpBaseUrl(managedUrls))}
-        />
-      </ButtonRow>
+      {canEdit ? (
+        <ButtonRow>
+          <Button
+            label="Use HTTPS (:8443)"
+            size="sm"
+            onPress={() => onChange(defaultDevCaddyHttpsBaseUrl(managedUrls))}
+          />
+        </ButtonRow>
+      ) : null}
+      {locked ? (
+        <Text style={panelStyles.muted}>
+          This address was checked against the Platform CA certificate. The
+          install command is the one the control plane issued.
+        </Text>
+      ) : null}
       {tlsHint ? (
         <Text style={panelStyles.muted}>{tlsHint}</Text>
       ) : null}
@@ -251,6 +257,8 @@ function InstallStep({
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           onChange={onInstallBaseUrlChange}
+          editable={false}
+          locked
         />
       ) : null}
       <View style={panelStyles.commandCodeBlock}>

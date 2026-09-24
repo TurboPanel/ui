@@ -48,9 +48,9 @@ describe('parseExpoStartOrigin', () => {
       ok: true,
       origin: EXPO_START_DEFAULT_ORIGIN,
     })
-    expect(parseExpoStartOrigin('http://203.0.113.20:8880/')).toEqual({
+    expect(parseExpoStartOrigin('http://203.0.113.20:8080/')).toEqual({
       ok: true,
-      origin: 'http://203.0.113.20:8880',
+      origin: 'http://203.0.113.20:8080',
     })
     expect(parseExpoStartOrigin('not-a-url')).toEqual({
       ok: false,

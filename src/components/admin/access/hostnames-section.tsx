@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import {
   AddPublicUrlRow,
-  PublicUrlParts,
   PublicUrlsApplyFeedback,
 } from '@/components/admin/public-url-fields'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -28,6 +27,7 @@ import {
   hostnameStatusPresentation,
   INSTANCE_HOSTNAME_SOURCE_LABELS,
   lockoutWarning,
+  panelHostnameHttpsUrl,
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
 import {
@@ -78,7 +78,7 @@ const COLUMNS: readonly DataTableColumn[] = [
 ]
 
 const APPLY_NOTE =
-  ':8443 with the Platform CA leaf is always bound and is the recovery address. A hostname on Let\'s Encrypt or an uploaded pair is additionally served with that certificate.'
+  'Every hostname is served at https://<host>:8443. The certificate follows the name. The Platform CA leaf stays bound on :8443 as the recovery address.'
 
 function toInput(record: InstanceHostnameRecord): InstanceHostnameInput {
   return {
@@ -454,10 +454,13 @@ function HostnameRow({
   onRemove: () => void
 }>) {
   const status = record ? hostnameStatusPresentation(record) : null
+  const address = panelHostnameHttpsUrl(row.host)
   return (
     <DataTableRow alt={alt} last={last}>
       <DataTableCell column={COLUMNS[0]}>
-        <PublicUrlParts url={row.host} />
+        <Text selectable style={styles.address}>
+          {address}
+        </Text>
         {invalid ? (
           <Text style={styles.rowError}>This hostname was refused.</Text>
         ) : null}
@@ -486,7 +489,7 @@ function HostnameRow({
       </DataTableCell>
       <DataTableCell column={COLUMNS[4]}>
         <View style={styles.actions}>
-          <CopyButton value={row.host} />
+          <CopyButton value={address} />
           <Button label="Remove" size="sm" disabled={busy} onPress={onRemove} />
         </View>
       </DataTableCell>
@@ -522,7 +525,7 @@ function CertificatePicker({
       <Select
         value={row.source}
         disabled={busy}
-        accessibilityLabel={`Certificate source for ${row.host}`}
+        accessibilityLabel={`Certificate source for ${panelHostnameHttpsUrl(row.host)}`}
         placeholder="Certificate source"
         options={[
           { value: 'platform-ca', label: INSTANCE_HOSTNAME_SOURCE_LABELS['platform-ca'] },
@@ -615,5 +618,10 @@ const styles = StyleSheet.create({
   rowError: {
     color: colors.errorText,
     fontSize: 12,
+  },
+  address: {
+    color: colors.stdout,
+    fontFamily: 'monospace',
+    fontSize: 13,
   },
 })

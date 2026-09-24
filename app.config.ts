@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { withAndroidUserCaTrust } from './src/lib/android-user-ca-trust-node.mjs'
 import { withDevelopmentClientNativeNetwork } from './src/lib/metro-cleartext-node.mjs'
 import { isFullGitCommit, sourceReleaseUrl, UI_LICENSE, UI_SOURCE_REPO } from './src/lib/source-release-node.mjs'
 
@@ -51,14 +52,16 @@ export default function appConfig() {
   } else if (gitCommit) {
     releaseUrl = sourceReleaseUrl(gitCommit)
   }
-  return withDevelopmentClientNativeNetwork({
-    ...appJson.expo,
-    extra: {
-      ...appJson.expo.extra,
-      license: UI_LICENSE,
-      gitCommit,
-      sourceReleaseUrl: releaseUrl,
-      release,
-    },
-  })
+  return withAndroidUserCaTrust(
+    withDevelopmentClientNativeNetwork({
+      ...appJson.expo,
+      extra: {
+        ...appJson.expo.extra,
+        license: UI_LICENSE,
+        gitCommit,
+        sourceReleaseUrl: releaseUrl,
+        release,
+      },
+    }),
+  )
 }

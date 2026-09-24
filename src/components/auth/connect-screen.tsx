@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
@@ -14,18 +14,17 @@ import { authAccentForRuntime } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import {
   HA_CONTROL_PLANE_ORIGIN,
-  LOCAL_HTTP_ORIGIN,
   LOCAL_HTTPS_ORIGIN,
   isStandaloneExpoWeb,
 } from '@/lib/control-plane'
 import { connectToControlPlane } from '@/lib/control-plane-connect'
+import { platformCaInstallSteps } from '@/lib/platform-ca-install'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, spacing } from '@/lib/theme'
 
 const QUICK_PICKS = [
   { label: HA_PRODUCT_NAME, origin: HA_CONTROL_PLANE_ORIGIN },
   { label: 'Use HTTPS', origin: LOCAL_HTTPS_ORIGIN },
-  { label: 'Use HTTP', origin: LOCAL_HTTP_ORIGIN },
 ] as const
 
 export function ConnectScreenContent() {
@@ -46,8 +45,8 @@ function MetroWebConnectScreen() {
       animateBackdrop={false}
     >
       <Text style={authFormStyles.pageCopy}>
-        Use {LOCAL_HTTPS_ORIGIN} or {LOCAL_HTTP_ORIGIN} in your browser. Visiting
-        Metro on port 8081 cannot sign in.
+        Use {LOCAL_HTTPS_ORIGIN} in your browser and trust the Platform CA.
+        Visiting Metro on port 8081 cannot sign in.
       </Text>
       <AboutLink onPress={() => router.push('/about')} />
     </AuthScreenShell>
@@ -98,9 +97,11 @@ function NativeConnectScreen() {
   return (
     <AuthScreenShell
       title="Control plane"
-      description="Choose TurboPanel High Availability or a self-hosted origin. On a phone, localhost is this device — use the host LAN IP and prefer HTTP :8880 unless the certificate is publicly trusted."
+      description="Choose TurboPanel High Availability or a self-hosted origin. On a phone, localhost is this device — use https://<LAN host>:8443 and trust the Platform CA."
       accentColor={accent.accent}
     >
+      <PlatformCaInstallHelp />
+
       <View style={styles.chipRow}>
         {QUICK_PICKS.map((pick) => (
           <Pressable
@@ -174,6 +175,19 @@ function NativeConnectScreen() {
   )
 }
 
+function PlatformCaInstallHelp() {
+  const steps = platformCaInstallSteps(Platform.OS)
+  return (
+    <View style={styles.help}>
+      {steps.map((step) => (
+        <Text key={step} style={authFormStyles.pageCopy}>
+          {step}
+        </Text>
+      ))}
+    </View>
+  )
+}
+
 function AboutLink({ onPress }: Readonly<{ onPress: () => void }>) {
   return (
     <Pressable
@@ -196,6 +210,9 @@ export function ConnectScreen() {
 }
 
 const styles = StyleSheet.create({
+  help: {
+    gap: spacing.sm,
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

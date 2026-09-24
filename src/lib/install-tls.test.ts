@@ -52,7 +52,7 @@ describe('installOriginNeedsInsecureTls', () => {
   })
 
   it('never flags plaintext HTTP or non-https schemes', () => {
-    expect(installOriginNeedsInsecureTls('http://studio.lan:8880')).toBe(false)
+    expect(installOriginNeedsInsecureTls('http://studio.lan')).toBe(false)
     expect(installOriginNeedsInsecureTls('ftp://panel.example.com')).toBe(false)
     expect(installOriginNeedsInsecureTls('not a url')).toBe(false)
   })
@@ -79,7 +79,7 @@ describe('installTlsHint', () => {
       'publicly trusted TLS',
     )
     expect(installTlsHint('https://studio.lan:8443')).toContain('platform CA')
-    expect(installTlsHint('http://studio.lan:8880')).toContain('Plaintext HTTP')
+    expect(installTlsHint('http://studio.lan')).toBeNull()
   })
 
   it('returns null for empty or non-http(s) origins', () => {

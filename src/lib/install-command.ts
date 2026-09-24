@@ -4,18 +4,14 @@ import {
 } from '@/lib/install-tls'
 
 const DEV_HTTPS_PORT = 8443
-const DEV_HTTP_PORT = 8880
 
-function findManagedUrlByScheme(
-  managedUrls: string[],
-  scheme: 'http' | 'https',
-): string | null {
+function findManagedHttpsUrl(managedUrls: string[]): string | null {
   for (const raw of managedUrls) {
     const trimmed = raw.trim()
     if (!trimmed) continue
     try {
       const parsed = new URL(trimmed)
-      if (parsed.protocol === `${scheme}:`) return trimmed
+      if (parsed.protocol === 'https:') return trimmed
     } catch {
       // skip invalid entries
     }
@@ -41,10 +37,6 @@ function httpsDevOriginFromHost(host: string): string {
   return `https://${host}:${DEV_HTTPS_PORT}`
 }
 
-function httpDevOriginFromHost(host: string): string {
-  return `http://${host}:${DEV_HTTP_PORT}`
-}
-
 function browserOrigin(): string | null {
   if (typeof globalThis === 'undefined' || !('location' in globalThis)) {
     return null
@@ -55,8 +47,8 @@ function browserOrigin(): string | null {
 }
 
 function originMatchesManagedUrl(origin: string, managed: string): boolean {
-  const parsedManaged = parseInstallBaseUrl(managed, { allowHttp: true })
-  const parsedOrigin = parseInstallBaseUrl(origin, { allowHttp: true })
+  const parsedManaged = parseInstallBaseUrl(managed)
+  const parsedOrigin = parseInstallBaseUrl(origin)
   if (!parsedManaged || !parsedOrigin) return false
   return parsedManaged === parsedOrigin
 }
@@ -66,7 +58,7 @@ function findManagedUrlMatchingBrowser(managedUrls: string[]): string | null {
   if (!origin) return null
   for (const raw of managedUrls) {
     if (originMatchesManagedUrl(origin, raw)) {
-      return parseInstallBaseUrl(raw, { allowHttp: true }) ?? origin
+      return parseInstallBaseUrl(raw) ?? origin
     }
   }
   return null
@@ -76,14 +68,14 @@ export function defaultDevInstallBaseUrl(managedUrls?: string[]): string {
   if (managedUrls && managedUrls.length > 0) {
     const fromBrowser = findManagedUrlMatchingBrowser(managedUrls)
     if (fromBrowser) return fromBrowser
-    const httpsUrl = findManagedUrlByScheme(managedUrls, 'https')
+    const httpsUrl = findManagedHttpsUrl(managedUrls)
     if (httpsUrl) return httpsUrl
     const host = parseManagedUrlHost(managedUrls)
     if (host) return httpsDevOriginFromHost(host)
   }
   const origin = browserOrigin()
   if (origin) {
-    const parsed = parseInstallBaseUrl(origin, { allowHttp: true })
+    const parsed = parseInstallBaseUrl(origin)
     if (parsed) return parsed
   }
   return `https://localhost:${DEV_HTTPS_PORT}`
@@ -102,23 +94,6 @@ export function defaultDevCaddyHttpsBaseUrl(managedUrls?: string[]): string {
     }
   }
   return `https://localhost:${DEV_HTTPS_PORT}`
-}
-
-export function defaultDevInstallHttpBaseUrl(managedUrls?: string[]): string {
-  if (managedUrls && managedUrls.length > 0) {
-    const httpUrl = findManagedUrlByScheme(managedUrls, 'http')
-    if (httpUrl) return httpUrl
-    const host = parseManagedUrlHost(managedUrls)
-    if (host) return httpDevOriginFromHost(host)
-  }
-  if (typeof globalThis !== 'undefined' && 'location' in globalThis) {
-    const location = globalThis.location as Location
-    const hostname = location.hostname?.trim()
-    if (hostname && hostname !== 'null') {
-      return httpDevOriginFromHost(hostname)
-    }
-  }
-  return `http://localhost:${DEV_HTTP_PORT}`
 }
 
 function trimTrailingSlash(url: string): string {
@@ -168,21 +143,14 @@ function encodeLicenseArg(licenseId: string, licenseToken: string): string {
 /**
  * Validate an edited install base URL with the same origin rules as the
  * instance `parseInstallBaseUrl` / `publicUrlEntryToInstallOrigin` helpers:
- * http(s) scheme, no credentials, no path/query/hash.
- *
- * Dev UI rebuilds allow plaintext `http:` (mirrors the instance
- * `{ allowHttp: true }` developer-surface allowance).
+ * https scheme, no credentials, no path/query/hash.
  */
-export function parseInstallBaseUrl(
-  value: string | undefined,
-  opts: { allowHttp?: boolean } = {},
-): string | null {
+export function parseInstallBaseUrl(value: string | undefined): string | null {
   const trimmed = value?.trim()
   if (!trimmed) return null
   try {
     const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-    if (url.protocol === 'http:' && !opts.allowHttp) return null
+    if (url.protocol !== 'https:') return null
     const host = url.hostname.replace(/^\[/, '').replace(/\]$/, '')
     if (!host || host === 'null') return null
     if (url.username || url.password) return null
@@ -230,14 +198,6 @@ export function buildInstallCommandWithBaseUrl(opts: {
   const licenseArg = encodeLicenseArg(opts.licenseId, opts.licenseToken)
   const curlUrl = formatInstallScriptCurlUrl(base)
   const dlBase = formatInstanceDlBase(base)
-  if (base.startsWith('http://')) {
-    return buildInstallPipeline({
-      curlUrl,
-      licenseArg,
-      host: base,
-      dlBase,
-    })
-  }
   const insecureTls = opts.insecureTls ?? installOriginNeedsInsecureTls(base)
   return buildInstallPipeline({
     curlUrl,
@@ -249,20 +209,15 @@ export function buildInstallCommandWithBaseUrl(opts: {
   })
 }
 
+/**
+ * The command `POST /licenses` already checked. An origin edited after
+ * minting is not copied into it; the create step sends that origin, and
+ * the control plane checks the Platform CA leaf before it returns this
+ * string.
+ */
 export function resolveDisplayedInstallCommand(
   revealed: { licenseId: string; licenseToken: string; installCommand: string },
-  installBaseUrl: string,
+  _installBaseUrl: string,
 ): string {
-  const trimmed = installBaseUrl.trim()
-  if (!trimmed) return revealed.installCommand
-
-  // Reject untrusted / injectable edits — fall back to the server-built command.
-  const validated = parseInstallBaseUrl(trimmed, { allowHttp: true })
-  if (!validated) return revealed.installCommand
-
-  return buildInstallCommandWithBaseUrl({
-    licenseId: revealed.licenseId,
-    licenseToken: revealed.licenseToken,
-    baseUrl: validated,
-  })
+  return revealed.installCommand
 }

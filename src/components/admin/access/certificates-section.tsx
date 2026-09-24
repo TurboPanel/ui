@@ -22,6 +22,7 @@ import {
   certificateSourceEligibility,
   hostnameStatusPresentation,
   http01PreflightPresentation,
+  panelHostnameHttpsUrl,
 } from '@/lib/instance-certificates'
 import {
   type InstanceAcmeSettings,
@@ -551,10 +552,13 @@ function ReachabilityList({
     <View style={styles.reach}>
       <Text style={styles.attachTitle}>Reachability and last error</Text>
       <Text style={panelStyles.muted}>
-        Let&apos;s Encrypt issuance waits for an HTTP-01 preflight. The daemon
-        publishes a nonce and checks that http://&lt;hostname&gt;/.well-known/acme-challenge/&lt;nonce&gt; reaches
-        127.0.0.1:8880. A private or wildcard name is refused before that
-        check. Issuance errors are listed separately from that preflight.
+        Each hostname is served at https://&lt;host&gt;:8443. Port 80 is opened
+        only while a certificate is being issued or renewed. During that window
+        the daemon answers a nonce and requires
+        http://&lt;hostname&gt;/.well-known/acme-challenge/&lt;nonce&gt; to
+        reach the instance ACME issuer. A private or wildcard name is refused
+        before that check. Issuance errors are listed separately from that
+        preflight.
       </Text>
       {hostnames.length === 0 ? (
         <Text style={panelStyles.muted}>No hostnames configured.</Text>
@@ -587,7 +591,7 @@ function ReachabilityRow({
   const preflightStyle = preflight?.kind === 'failed' ? styles.rowError : styles.rowHint
   return (
     <View style={styles.reachRow}>
-      <Text style={styles.mono}>{record.host}</Text>
+      <Text style={styles.mono}>{panelHostnameHttpsUrl(record.host)}</Text>
       <Badge label={status.label} tone={status.badge} />
       {refused ? <Text style={styles.rowHint}>{refused}</Text> : null}
       {preflight ? <Text style={preflightStyle}>{preflight.text}</Text> : null}

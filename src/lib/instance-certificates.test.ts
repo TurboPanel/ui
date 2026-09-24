@@ -3,7 +3,9 @@ import {
   certificateSourceEligibility,
   hostnameStatusPresentation,
   http01PreflightPresentation,
+  INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE,
   INSTANCE_HOSTNAME_SOURCE_LABELS,
+  panelHostnameHttpsUrl,
   lockoutWarning,
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
@@ -134,16 +136,36 @@ describe('requiresPlatformCaConfirm', () => {
   })
 })
 
+describe('panelHostnameHttpsUrl', () => {
+  it('serves every hostname at https on port 8443', () => {
+    expect(panelHostnameHttpsUrl('panel.example.com')).toBe(
+      'https://panel.example.com:8443',
+    )
+    expect(panelHostnameHttpsUrl('https://panel.example.com')).toBe(
+      'https://panel.example.com:8443',
+    )
+    expect(panelHostnameHttpsUrl('https://panel.example.com:443')).toBe(
+      'https://panel.example.com:8443',
+    )
+    expect(panelHostnameHttpsUrl('https://panel.example.com:9443')).toBe(
+      'https://panel.example.com:8443',
+    )
+    expect(panelHostnameHttpsUrl('2001:db8::1')).toBe(
+      'https://[2001:db8::1]:8443',
+    )
+  })
+})
+
 describe('http01PreflightPresentation', () => {
   it('reports a failed nonce check separately from later issuance', () => {
     const failed = http01PreflightPresentation({
       source: 'lets-encrypt',
       acmeLastError:
-        'Let\'s Encrypt HTTP-01 preflight failed for panel.example.com: http://panel.example.com/.well-known/acme-challenge/abc did not reach 127.0.0.1:8880 (HTTP 404)',
+        'Let\'s Encrypt HTTP-01 preflight failed for panel.example.com: http://panel.example.com/.well-known/acme-challenge/abc did not reach the instance ACME issuer (HTTP 404)',
       acmeLastAttemptAt: '2026-09-22T00:00:00.000Z',
     })
     expect(failed?.kind).toBe('failed')
-    expect(failed?.text.includes('127.0.0.1:8880')).toBe(true)
+    expect(failed?.text.includes(INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE)).toBe(true)
 
     const issued = http01PreflightPresentation({
       source: 'lets-encrypt',

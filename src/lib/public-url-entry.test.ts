@@ -196,6 +196,16 @@ describe('addPublicUrlEntry', () => {
     expect(result.ok ? '' : result.error).toContain('already listed')
   })
 
+  it('treats a portless https draft as the saved :8443 address', () => {
+    const result = addPublicUrlEntry(['https://panel.example.com:8443'], {
+      scheme: 'https',
+      host: 'panel.example.com',
+      port: '',
+    })
+    expect(result).toMatchObject({ ok: false })
+    expect(result.ok ? '' : result.error).toContain('already listed')
+  })
+
   it('treats a scheme-less stored entry as the https address it expands to', () => {
     expect(
       addPublicUrlEntry(['panel.lan'], { scheme: 'https', host: 'panel.lan', port: '' }),
@@ -225,6 +235,12 @@ describe('samePublicUrlSet', () => {
   })
 
   it('compares unreadable entries verbatim', () => {
+    expect(
+      samePublicUrlSet(
+        ['https://panel.example.com'],
+        ['https://panel.example.com:8443'],
+      ),
+    ).toBe(true)
     expect(samePublicUrlSet(['not a url'], ['not a url'])).toBe(true)
     expect(samePublicUrlSet(['not a url'], ['other junk'])).toBe(false)
   })

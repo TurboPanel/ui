@@ -41,7 +41,15 @@ export function hostnameStatusPresentation(record: Readonly<{
   }
 }
 
-const HTTP01_PREFLIGHT_REACHED = 'did not reach 127.0.0.1:8880'
+/**
+ * Detail phrase from the daemon (`INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE`).
+ * A preflight miss includes this sentence; a later issuance error does not.
+ */
+export const INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE =
+  'did not reach the instance ACME issuer'
+
+/** Every panel hostname is served on this port, whatever its certificate source. */
+export const PANEL_HTTPS_PORT = '8443'
 
 export type Http01PreflightKind = 'failed' | 'passed' | 'unrecorded'
 
@@ -57,7 +65,7 @@ export function http01PreflightPresentation(record: Readonly<{
 }>): { kind: Http01PreflightKind; text: string } | null {
   if (record.source !== 'lets-encrypt') return null
   const error = record.acmeLastError?.trim() ?? ''
-  if (error.includes(HTTP01_PREFLIGHT_REACHED)) {
+  if (error.includes(INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE)) {
     return { kind: 'failed', text: error }
   }
   if (record.acmeLastAttemptAt) {
@@ -70,6 +78,17 @@ export function http01PreflightPresentation(record: Readonly<{
     kind: 'unrecorded',
     text: 'HTTP-01 preflight has not been recorded for this hostname.',
   }
+}
+
+/**
+ * The address operators open for a hostname row. An omitted port and an
+ * explicit `:443` both become `:8443`.
+ */
+export function panelHostnameHttpsUrl(entry: string): string {
+  const parsed = parsePublicUrlEntry(entry)
+  const host = parsed?.host ?? entry.trim()
+  const literal = host.includes(':') ? `[${host}]` : host
+  return `https://${literal}:${PANEL_HTTPS_PORT}`
 }
 
 function expiryLine(notAfter: string | null): string {
