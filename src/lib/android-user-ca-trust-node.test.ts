@@ -112,30 +112,35 @@ describe('applyAndroidNetworkSecurityConfig', () => {
 
 describe('withAndroidUserCaTrust', () => {
   it('registers user-CA trust on shipped builds and keeps Metro cleartext in development', () => {
+    const expoBase = {
+      name: 'TurboPanel',
+      plugins: ['expo-router'],
+      android: { package: 'app.turbopanel' },
+    }
     const shipped = withAndroidUserCaTrust(
-      withDevelopmentClientNativeNetwork(
-        { name: 'TurboPanel', plugins: ['expo-router'], android: { package: 'app.turbopanel' } },
-        { EAS_BUILD: 'true', EAS_BUILD_PROFILE: 'production' },
-      ),
-    )
+      withDevelopmentClientNativeNetwork(expoBase, {
+        EAS_BUILD: 'true',
+        EAS_BUILD_PROFILE: 'production',
+      }),
+    ) as typeof expoBase & {
+      plugins: unknown[]
+      android?: { package: string; usesCleartextTraffic?: boolean }
+    }
     expect(shipped.plugins).toContain(androidUserCaTrustPlugin)
     expect(shipped.plugins).toContain('expo-router')
-    expect(
-      (shipped.android as { usesCleartextTraffic?: boolean }).usesCleartextTraffic,
-    ).toBeUndefined()
+    expect(shipped.android?.usesCleartextTraffic).toBeUndefined()
     trustAnchors(networkSecurityConfigXml(false))
 
     const development = withAndroidUserCaTrust(
-      withDevelopmentClientNativeNetwork(
-        { name: 'TurboPanel', plugins: ['expo-router'], android: { package: 'app.turbopanel' } },
-        { EAS_BUILD_PROFILE: 'development' },
-      ),
-    )
+      withDevelopmentClientNativeNetwork(expoBase, {
+        EAS_BUILD_PROFILE: 'development',
+      }),
+    ) as typeof expoBase & {
+      plugins: unknown[]
+      android: { package: string; usesCleartextTraffic: boolean }
+    }
     expect(development.plugins).toContain(androidUserCaTrustPlugin)
-    expect(
-      (development.android as { usesCleartextTraffic?: boolean })
-        .usesCleartextTraffic,
-    ).toBe(true)
+    expect(development.android.usesCleartextTraffic).toBe(true)
     trustAnchors(networkSecurityConfigXml(true))
   })
 })
