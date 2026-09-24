@@ -24,8 +24,10 @@ import {
 } from '@/components/ui'
 import {
   certificateSourceEligibility,
+  draftUsesLetsEncryptSource,
   hostnameStatusPresentation,
   INSTANCE_HOSTNAME_SOURCE_LABELS,
+  letsEncryptApplyBlockedMessage,
   lockoutWarning,
   panelHostnameHttpsUrl,
   requiresPlatformCaConfirm,
@@ -47,6 +49,7 @@ import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
 import {
   type ApplyPublicUrlsOutcome,
   useApplyPublicUrls,
+  useInstanceAcmeSettings,
   useInstanceCertificates,
   useInstanceDaemon,
   useInstanceHostnames,
@@ -105,6 +108,7 @@ function invalidFrom(cause: unknown): string[] {
 
 export function HostnamesSection() {
   const hostnamesQuery = useInstanceHostnames()
+  const acmeQuery = useInstanceAcmeSettings()
   const certificatesQuery = useInstanceCertificates()
   const daemonQuery = useInstanceDaemon()
   const saveMutation = useSaveInstanceHostnames()
@@ -194,6 +198,14 @@ export function HostnamesSection() {
     const next = saved.value.hostnames.map(toInput)
     setStored(saved.value.hostnames)
     setDraft(next)
+    const termsBlock = draftUsesLetsEncryptSource(next)
+      ? letsEncryptApplyBlockedMessage(acmeQuery.data?.settings)
+      : null
+    if (termsBlock) {
+      setApplyStatus('failed')
+      setApplyError(termsBlock)
+      return
+    }
     const applied = await applyMutation.run({
       hostnames: next,
       onReconnecting: () => setApplyStatus('reconnecting'),

@@ -7,6 +7,8 @@ import {
   INSTANCE_HOSTNAME_SOURCE_LABELS,
   panelHostnameHttpsUrl,
   lockoutWarning,
+  letsEncryptApplyBlockedMessage,
+  instanceLetsEncryptTermsAccepted,
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
 
@@ -189,5 +191,40 @@ describe('http01PreflightPresentation', () => {
       acmeLastError: null,
       acmeLastAttemptAt: null,
     })).toBeNull()
+  })
+})
+
+describe('letsEncryptApplyBlockedMessage', () => {
+  it('returns null when terms are accepted', () => {
+    expect(
+      instanceLetsEncryptTermsAccepted({
+        TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: {
+          value: 'true',
+          source: 'db',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      letsEncryptApplyBlockedMessage({
+        TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: {
+          value: 'true',
+          source: 'db',
+        },
+      }),
+    ).toBeNull()
+  })
+
+  it('points to Certificates when terms are unset in the database', () => {
+    const message = letsEncryptApplyBlockedMessage({
+      TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'false', source: 'default' },
+    })
+    expect(message).toContain('Certificates')
+  })
+
+  it('points to env when terms are env-sourced and false', () => {
+    const message = letsEncryptApplyBlockedMessage({
+      TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'false', source: 'env' },
+    })
+    expect(message).toContain('TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true')
   })
 })

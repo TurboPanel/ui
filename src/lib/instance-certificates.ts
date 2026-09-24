@@ -30,6 +30,35 @@ const STATUS_PRESENTATION: Record<
 const OLD_DAEMON_REASON =
   "this host's daemon is too old to render per-hostname certificate sources"
 
+export const INSTANCE_ACME_TOS_SETTING_KEY =
+  'TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED' as const
+
+/** Stable apply refusal. Keep in step with the control plane and daemon. */
+export const INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE =
+  "Let's Encrypt terms have not been accepted"
+
+export function instanceLetsEncryptTermsAccepted(
+  settings: Readonly<
+    Record<string, { value: string | null; source: string }> | undefined
+  >,
+): boolean {
+  return settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.value === 'true'
+}
+
+/** Block Save & Apply before the API when Let's Encrypt is selected without terms. */
+export function letsEncryptApplyBlockedMessage(
+  settings: Readonly<
+    Record<string, { value: string | null; source: string }> | undefined
+  >,
+): string | null {
+  if (instanceLetsEncryptTermsAccepted(settings)) return null
+  const source = settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.source
+  if (source === 'env') {
+    return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Set TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true in the instance environment (Admin cannot override an env-sourced value), then restart the control plane.`
+  }
+  return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Open Access → Certificates, check Terms accepted, click Save Let's Encrypt, then Save & Apply here.`
+}
+
 export function hostnameStatusPresentation(record: Readonly<{
   status: keyof typeof STATUS_PRESENTATION
   notAfter: string | null
@@ -143,6 +172,12 @@ export type HostnameSourceDraft = Readonly<{
   host: string
   source: InstanceHostnameSource
 }>
+
+export function draftUsesLetsEncryptSource(
+  draft: readonly HostnameSourceDraft[],
+): boolean {
+  return draft.some((row) => row.source === 'lets-encrypt')
+}
 
 /**
  * Sentence shown before an apply that changes a source or removes a hostname.
