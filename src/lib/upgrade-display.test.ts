@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   formatUpgradeBuildDisplayName,
   mapStepStatusToPipeline,
+  platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
   summarizeFleetSteps,
+  upgradeBuildDetailLines,
+  upgradeChannelTitle,
+  upgradePhaseLabel,
 } from '@/lib/upgrade-display'
 
 describe('formatUpgradeBuildDisplayName', () => {
@@ -78,5 +82,61 @@ describe('resolvePlatformUpgradeHeadline', () => {
         needsAttentionCount: 0,
       }),
     ).toBe('updating')
+  })
+
+  it('falls back to update available and up to date', () => {
+    expect(
+      resolvePlatformUpgradeHeadline({
+        activeRunStatus: null,
+        updateAvailable: true,
+        needsAttentionCount: 0,
+      }),
+    ).toBe('update_available')
+    expect(
+      resolvePlatformUpgradeHeadline({
+        activeRunStatus: 'succeeded',
+        updateAvailable: false,
+        needsAttentionCount: 0,
+      }),
+    ).toBe('up_to_date')
+    expect(platformUpgradeHeadlineCopy('needs_attention')).toBe('Needs attention')
+  })
+})
+
+describe('upgrade display helpers', () => {
+  it('titles channels and builds detail lines', () => {
+    expect(upgradeChannelTitle('')).toBe('Build')
+    expect(upgradeChannelTitle('canary')).toBe('Canary')
+    expect(formatUpgradeBuildDisplayName(null)).toBe('No package on this channel')
+    expect(
+      formatUpgradeBuildDisplayName({
+        channel: 'rc',
+        builtAt: 'not-a-date',
+        version: '1.0.0',
+        commit: 'unknown',
+        buildId: 'build-abcdef123456',
+      }),
+    ).toBe('Rc · v1.0.0')
+    expect(
+      upgradeBuildDetailLines({
+        version: ' 1.2 ',
+        commit: 'unknown',
+        buildId: 'bid-1',
+        manifestUrl: ' https://example/manifest.json ',
+      }),
+    ).toEqual({
+      version: '1.2',
+      commit: 'bid-1',
+      manifestUrl: 'https://example/manifest.json',
+    })
+  })
+
+  it('labels phases and maps pipeline edge cases', () => {
+    expect(upgradePhaseLabel('fleet')).toBe('Fleet')
+    expect(upgradePhaseLabel(null)).toBe('Upgrade')
+    expect(mapStepStatusToPipeline(null)).toBe('preparing')
+    expect(mapStepStatusToPipeline('failed')).toBe('verifying')
+    expect(mapStepStatusToPipeline('installing')).toBe('installing')
+    expect(mapStepStatusToPipeline('weird')).toBe('preparing')
   })
 })

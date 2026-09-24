@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE, validateUpgradeBatchInput } from '@/lib/upgrade-batch'
+import {
+  fleetServersQuery,
+  formatUpgradeBatchLabel,
+  UPGRADE_FLEET_PAGE_SIZE,
+  validateUpgradeBatchInput,
+} from '@/lib/upgrade-batch'
 
 describe('validateUpgradeBatchInput', () => {
   it('accepts default percent', () => {
@@ -30,5 +35,20 @@ describe('validateUpgradeBatchInput', () => {
       mode: 'count',
       value: 5,
     })
+  })
+
+  it('rejects empty, fractional, and out-of-range values', () => {
+    expect(validateUpgradeBatchInput({ mode: 'percent', value: '  ' }).ok).toBe(false)
+    expect(validateUpgradeBatchInput({ mode: 'percent', value: '12.5' }).ok).toBe(false)
+    expect(validateUpgradeBatchInput({ mode: 'percent', value: '101' }).ok).toBe(false)
+    expect(validateUpgradeBatchInput({ mode: 'count', value: '0' }).ok).toBe(false)
+    expect(validateUpgradeBatchInput({ mode: 'count', value: '10001' }).ok).toBe(false)
+  })
+
+  it('clamps negative fleet offsets and formats labels', () => {
+    expect(fleetServersQuery(-3, 'pending').offset).toBe(0)
+    expect(formatUpgradeBatchLabel('percent', 25)).toBe('25% of fleet per batch')
+    expect(formatUpgradeBatchLabel('count', 1)).toBe('1 server per batch')
+    expect(formatUpgradeBatchLabel('count', 4)).toBe('4 servers per batch')
   })
 })
