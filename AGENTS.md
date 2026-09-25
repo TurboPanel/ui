@@ -324,13 +324,9 @@ These are non-negotiable for the console (detail lives in Master):
 - Decorative card stacks, emoji-as-icons, status conveyed by color alone
 - Copy website search project name (`TurboPanel Website`) or `--stack nextjs` into this repo
 
-### UI overhaul roadmap (web)
+### Console surfaces and shared patterns (web)
 
-| Phase | Scope | Status |
-|-------|--------|--------|
-| **1** | Design system pages, compose create wizard + base panel, shell polish, TurboPanel High Availability terminology, variables presets | **Shipped** |
-| **2** | Compose flow rail + wizard step indicator, project variables panel, managed provision API wired, environment-scoped managed connection UI, Expo SDK 56.0.16 | **Shipped** |
-| **3** | TurboFabric mesh console, read replicas, move services between servers, managed DB user provisioning, daemon `managed.provision` command | **Partial** — TurboFabric is the only mesh page (enable + relay table + Apply; the old Links page is gone); **managed DB user provisioning shipped for Postgres** (create wizard + managed project panels); remaining items planned |
+Plans and roadmaps live outside the repo. The console overhaul roadmap is the [TurboPanel UI Roadmap](https://claude.ai/artifact/7w9zHNNQeNXaFUJa9YDxH4) artifact.
 
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, optional health-check policy (`disabled` default — compose/`image` HEALTHCHECK is enough when present; `warn`/`required` are opt-in gates), storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
 
@@ -339,7 +335,7 @@ These are non-negotiable for the console (detail lives in Master):
 - `InlineNotice` (`inline-notice.tsx`) — left-accent state strip (title, optional body, optional actions that sit inline on wide layouts and wrap beneath the copy on narrow ones), `tone` `info` (default, `colors.command`) or `warning` (`colors.pending`). Use it wherever a message explains the content it sits above — **never** a modal or a scrim for that, which hides the very thing the message is about.
 - `StatTiles` (`stat-tiles.tsx`) — icon-led count tiles **inside** a surface (fill-only, no border, auto-fit grid, zero values dimmed rather than hidden). Distinct from `StatusStatBoxes` (`org/status-stat-boxes.tsx`), which is the wider bordered label-first tile for page-level fleet numbers. Compose resource glyphs live in `src/components/icons/resource-icons.tsx`; compose nav glyphs in `org/compose-view-icons.tsx`.
 
-**Shell polish (Phase 1):** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org/admin sidebar brand via `TurboPanelLogo` (T mark only; full wordmark is website-only) + sub-nav rail; header eyebrow + borderless hover-tile account controls (`HeaderMenuTrigger`: org, user, notifications — leading icons sit in a 16px `triggerGlyph` slot matching the label line-height; native org switcher shows the display name truncated to `HEADER_ORG_NAME_MAX_CHARS` (20) plus chevron; native profile is a circular avatar with the user icon and optional unread badge, no chevron). Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
+**Shell polish:** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org/admin sidebar brand via `TurboPanelLogo` (T mark only; full wordmark is website-only) + sub-nav rail; header eyebrow + borderless hover-tile account controls (`HeaderMenuTrigger`: org, user, notifications — leading icons sit in a 16px `triggerGlyph` slot matching the label line-height; native org switcher shows the display name truncated to `HEADER_ORG_NAME_MAX_CHARS` (20) plus chevron; native profile is a circular avatar with the user icon and optional unread badge, no chevron). Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
 
 ## End-user auth & first-run install (self-hosted)
 
