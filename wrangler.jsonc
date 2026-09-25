@@ -16,6 +16,13 @@
     "not_found_handling": "single-page-application"
   },
   "env": {
+    "testing": {
+      "name": "testing-ui",
+      "route": {
+        "pattern": "testing.turbopanel.dev",
+        "custom_domain": true
+      }
+    },
     "live": {
       "name": "ui",
       "route": {
