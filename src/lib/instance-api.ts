@@ -3683,6 +3683,8 @@ export class InstanceHostnameValidationError extends Error {
 export async function fetchInstanceHostnames(): Promise<{
   ok: boolean
   hostnames: InstanceHostnameRecord[]
+  /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
+  tosAccepted?: boolean
 }> {
   return await apiFetch(`${ADMIN_API}/instance/hostnames`)
 }
@@ -3737,13 +3739,15 @@ export async function attachInstanceCertificate(
 
 export async function fetchInstanceAcmeSettings(): Promise<{
   settings: InstanceAcmeSettings
+  /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
+  tosAccepted?: boolean
 }> {
   return await apiFetch(`${ADMIN_API}/instance/acme`)
 }
 
 export async function saveInstanceAcmeSettings(
   updates: Record<string, string | boolean | null>,
-): Promise<{ settings: InstanceAcmeSettings }> {
+): Promise<{ settings: InstanceAcmeSettings; tosAccepted?: boolean }> {
   return await apiFetch(`${ADMIN_API}/instance/acme`, {
     method: 'PUT',
     body: JSON.stringify(updates),
@@ -3782,12 +3786,16 @@ export type InstanceUpdates = {
       target: InstanceUpdateTarget | null
       /** UI package installed by the same control-plane upgrade. */
       uiTarget: InstanceUpdateTarget | null
+      /** The server's answer. Absent on a control plane older than the field. */
+      updateAvailable?: boolean
     }
     daemon: {
       installed: { version: string | null; commit: string | null } | null
       target: InstanceUpdateTarget | null
       serverId: string | null
       connected: boolean
+      /** The server's answer. Absent on a control plane older than the field. */
+      updateAvailable?: boolean
     }
   }
 }
@@ -4340,6 +4348,13 @@ export type DaemonSupport = {
   minVersion: string
 }
 
+/** `updateBlockedCode` values this ui names; any other code shows the server's sentence. */
+export type ServerUpdateBlockedCode =
+  | 'updates_managed'
+  | 'control_plane_upgrade_required'
+  | 'upgrade_gate_unavailable'
+  | 'colocated_with_instance'
+
 export type ServerUpdateStatus = {
   ok: boolean
   serverId: string
@@ -4349,6 +4364,8 @@ export type ServerUpdateStatus = {
   updateAvailable: boolean
   colocatedWithInstance?: boolean
   updateBlocked?: boolean
+  /** Why updates are refused, as a code. Absent on a control plane older than the field. */
+  updateBlockedCode?: ServerUpdateBlockedCode | (string & {})
   updateBlockedReason?: string
   status: 'idle' | 'updating' | 'error'
   targetStatus: 'ok' | 'unknown'

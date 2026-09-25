@@ -123,18 +123,18 @@ export function ComposeSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
       {gatedError ? <Text style={panelStyles.error}>{gatedError}</Text> : null}
       {gatedQuery.isError && !gatedError ? (
         <Text style={panelStyles.error}>
-          {errorMessage(gatedQuery.error, 'Failed to load the privileged-fields setting')}
+          {errorMessage(gatedQuery.error, 'Failed to load the host-level Compose setting')}
         </Text>
       ) : null}
       <SettingRow
-        label="Allow privileged compose fields"
-        description="Off by default. When off, a deploy that sets privileged, cap_add, devices, network_mode, pid, ipc, userns_mode, security_opt, cgroup_parent or sysctls is refused — those fields grant root-equivalent access to the shared server, and every other project on that server with it. Turning this on is recorded in the organization's audit trail."
+        label="Allow host-level Compose features"
+        description="Off by default. Host-level features give a container root-equivalent access to the server it runs on, and to every other project there: the privileged keys (privileged, cap_add, devices, network_mode, pid, ipc, userns_mode, uts, cgroup, cgroup_parent, device_cgroup_rules, runtime, security_opt, sysctls, use_api_socket, volumes_from), the Docker socket, and any bind, env_file, config, secret or build context outside the service's own directory. When this is off, a deploy that uses one is refused. When it is on, only an organization manager or owner can deploy them, and an automated deploy runs only content a manager or owner has deployed once from the console. Turning this on is recorded in the organization's audit trail."
       >
         <Toggle
           value={gatedEnabled}
           onValueChange={onToggleGated}
           disabled={!canOwn || gatedMutation.isPending || gatedQuery.isLoading}
-          accessibilityLabel="Allow privileged compose fields"
+          accessibilityLabel="Allow host-level Compose features"
         />
       </SettingRow>
 

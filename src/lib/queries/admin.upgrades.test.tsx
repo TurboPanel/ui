@@ -141,10 +141,12 @@ describe('managed upgrade admin queries', () => {
     const cancel = renderHook(() => useCancelUpgradeRun(), { wrapper })
 
     await expect(preflight.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
+    // Start returns as soon as the run exists; it never waits out the upgrade.
     await expect(start.result.current.run(undefined)).resolves.toMatchObject({
       ok: true,
-      value: { kind: 'applied' },
+      value: { kind: 'started', runId: 'run-9' },
     })
+    expect(api.fetchUpgradeRun).not.toHaveBeenCalled()
     await expect(save.result.current.run(savedSettings)).resolves.toMatchObject({ ok: true })
     await expect(check.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
     await expect(retry.result.current.run('step-1')).resolves.toMatchObject({ ok: true })

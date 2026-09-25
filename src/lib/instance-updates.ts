@@ -31,6 +31,34 @@ export function installedIdentity(installed: InstalledIdentity): string {
   return `${installed.version ?? ''}:${installed.commit ?? ''}`
 }
 
+/** One unit of `GET /instance/updates`, as far as update availability needs it. */
+export type UpdateUnitView = Readonly<{
+  installed: InstalledIdentity | null
+  target: Readonly<{ commit?: string | null }> | null
+  /** The server's answer. Absent only on a control plane older than the field. */
+  updateAvailable?: boolean
+}>
+
+/**
+ * Whether a unit has an update. The server's `updateAvailable` is the answer;
+ * an older control plane is read by the server's own rule — the target names
+ * a commit the unit is not running — never by comparing version strings.
+ */
+export function unitUpdateAvailable(unit: UpdateUnitView): boolean {
+  if (typeof unit.updateAvailable === 'boolean') return unit.updateAvailable
+  const want = presentIdentity(unit.target?.commit)
+  if (!want || !unit.installed) return false
+  return presentIdentity(unit.installed.commit) !== want
+}
+
+/** Either platform unit (control plane or co-located daemon) has an update. */
+export function platformUpdateAvailable(units: Readonly<{
+  instance: UpdateUnitView
+  daemon: UpdateUnitView
+}>): boolean {
+  return unitUpdateAvailable(units.instance) || unitUpdateAvailable(units.daemon)
+}
+
 function presentIdentity(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? ''
   if (trimmed === '' || trimmed === 'unknown') return null

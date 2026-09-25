@@ -24,10 +24,10 @@ import {
 } from '@/components/ui'
 import {
   certificateSourceEligibility,
-  draftUsesLetsEncryptSource,
+  daemonCapabilitiesStatus,
+  type DaemonCapabilitiesStatus,
   hostnameStatusPresentation,
   INSTANCE_HOSTNAME_SOURCE_LABELS,
-  letsEncryptApplyBlockedMessage,
   lockoutWarning,
   panelHostnameHttpsUrl,
   requiresPlatformCaConfirm,
@@ -49,7 +49,7 @@ import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
 import {
   type ApplyPublicUrlsOutcome,
   useApplyPublicUrls,
-  useInstanceAcmeSettings,
+  useLetsEncryptTermsGuard,
   useInstanceCertificates,
   useInstanceDaemon,
   useInstanceHostnames,
@@ -108,7 +108,7 @@ function invalidFrom(cause: unknown): string[] {
 
 export function HostnamesSection() {
   const hostnamesQuery = useInstanceHostnames()
-  const acmeQuery = useInstanceAcmeSettings()
+  const termsBlock = useLetsEncryptTermsGuard()
   const certificatesQuery = useInstanceCertificates()
   const daemonQuery = useInstanceDaemon()
   const saveMutation = useSaveInstanceHostnames()
@@ -133,6 +133,7 @@ export function HostnamesSection() {
 
   const certificates = certificatesQuery.data?.certificates ?? []
   const capabilities = daemonQuery.data?.capabilities ?? null
+  const capabilitiesStatus = daemonCapabilitiesStatus(daemonQuery)
   const warning = lockoutWarning(stored, draft)
 
   let queryError: string | null = null
@@ -171,6 +172,11 @@ export function HostnamesSection() {
   const onSave = async () => {
     setError(null)
     setInvalidHosts([])
+    const blocked = termsBlock(draft)
+    if (blocked) {
+      setError(blocked)
+      return
+    }
     const result = await saveMutation.run(draft)
     if (!result.ok) {
       setInvalidHosts(invalidFrom(result.cause))
@@ -187,6 +193,12 @@ export function HostnamesSection() {
     setError(null)
     setInvalidHosts([])
     setApplyError(null)
+    const blocked = termsBlock(draft)
+    if (blocked) {
+      setApplyStatus('failed')
+      setApplyError(blocked)
+      return
+    }
     setApplyStatus('applying')
     const saved = await saveMutation.run(draft)
     if (!saved.ok) {
@@ -198,14 +210,6 @@ export function HostnamesSection() {
     const next = saved.value.hostnames.map(toInput)
     setStored(saved.value.hostnames)
     setDraft(next)
-    const termsBlock = draftUsesLetsEncryptSource(next)
-      ? letsEncryptApplyBlockedMessage(acmeQuery.data?.settings)
-      : null
-    if (termsBlock) {
-      setApplyStatus('failed')
-      setApplyError(termsBlock)
-      return
-    }
     const applied = await applyMutation.run({
       hostnames: next,
       onReconnecting: () => setApplyStatus('reconnecting'),
@@ -266,6 +270,7 @@ export function HostnamesSection() {
             stored={stored}
             certificates={certificates}
             capabilities={capabilities}
+            capabilitiesStatus={capabilitiesStatus}
             invalidHosts={invalidHosts}
             warning={warning}
             entry={entry}
@@ -307,6 +312,7 @@ function HostnamesEditor({
   stored,
   certificates,
   capabilities,
+  capabilitiesStatus,
   invalidHosts,
   warning,
   entry,
@@ -326,6 +332,7 @@ function HostnamesEditor({
   stored: InstanceHostnameRecord[]
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
+  capabilitiesStatus: DaemonCapabilitiesStatus
   invalidHosts: string[]
   warning: string | null
   entry: PublicUrlDraft
@@ -353,6 +360,7 @@ function HostnamesEditor({
         byHost={byHost}
         certificates={certificates}
         capabilities={capabilities}
+        capabilitiesStatus={capabilitiesStatus}
         invalidHosts={invalidHosts}
         busy={busy}
         onDraftChange={onDraftChange}
@@ -397,6 +405,7 @@ function HostnameTable({
   byHost,
   certificates,
   capabilities,
+  capabilitiesStatus,
   invalidHosts,
   busy,
   onDraftChange,
@@ -405,6 +414,7 @@ function HostnameTable({
   byHost: Map<string, InstanceHostnameRecord>
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
+  capabilitiesStatus: DaemonCapabilitiesStatus
   invalidHosts: string[]
   busy: boolean
   onDraftChange: (next: InstanceHostnameInput[]) => void
@@ -426,6 +436,7 @@ function HostnameTable({
           record={byHost.get(row.host) ?? null}
           certificates={certificates}
           capabilities={capabilities}
+          capabilitiesStatus={capabilitiesStatus}
           invalid={invalidHosts.includes(row.host)}
           busy={busy}
           alt={index % 2 === 1}
@@ -447,6 +458,7 @@ function HostnameRow({
   record,
   certificates,
   capabilities,
+  capabilitiesStatus,
   invalid,
   busy,
   alt,
@@ -458,6 +470,7 @@ function HostnameRow({
   record: InstanceHostnameRecord | null
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
+  capabilitiesStatus: DaemonCapabilitiesStatus
   invalid: boolean
   busy: boolean
   alt: boolean
@@ -482,6 +495,7 @@ function HostnameRow({
           row={row}
           certificates={certificates}
           capabilities={capabilities}
+          capabilitiesStatus={capabilitiesStatus}
           busy={busy}
           onChange={onChange}
         />
@@ -513,18 +527,21 @@ function CertificatePicker({
   row,
   certificates,
   capabilities,
+  capabilitiesStatus,
   busy,
   onChange,
 }: Readonly<{
   row: InstanceHostnameInput
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
+  capabilitiesStatus: DaemonCapabilitiesStatus
   busy: boolean
   onChange: (next: InstanceHostnameInput) => void
 }>) {
   const refused = certificateSourceEligibility(row.host, {
     certificates,
     capabilities,
+    capabilitiesStatus,
   })
   const covering = certificates.filter((certificate) =>
     coversHostname(certificate.dnsNames, hostnameOf(row.host)),

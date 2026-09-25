@@ -8,6 +8,9 @@ import {
   upgradeBuildDetailLines,
   upgradeChannelTitle,
   upgradePhaseLabel,
+  upgradeRunErrorLabel,
+  upgradeStepErrorLabel,
+  upgradeStepOutcome,
 } from '@/lib/upgrade-display'
 
 describe('formatUpgradeBuildDisplayName', () => {
@@ -138,5 +141,52 @@ describe('upgrade display helpers', () => {
     expect(mapStepStatusToPipeline('failed')).toBe('verifying')
     expect(mapStepStatusToPipeline('installing')).toBe('installing')
     expect(mapStepStatusToPipeline('pending')).toBe('preparing')
+  })
+})
+
+describe('upgradeStepOutcome', () => {
+  it('shows a failed or rolled-back step as that, never as "Verifying"', () => {
+    expect(upgradeStepOutcome({ status: 'failed' }).label).toBe('Failed')
+    expect(upgradeStepOutcome({ status: 'failed' }).tone).toBe('danger')
+    expect(upgradeStepOutcome({ status: 'rolled_back', errorCode: 'rolled_back' })).toEqual({
+      tone: 'danger',
+      label: 'Rolled back',
+      detail: 'Rolled back to the previous build',
+    })
+    expect(
+      upgradeStepOutcome({ status: 'needs_attention', errorCode: 'server_offline' }),
+    ).toEqual({
+      tone: 'pending',
+      label: 'Needs attention',
+      detail: 'Server offline for over an hour',
+    })
+  })
+
+  it('explains a skipped server that is already newer than the target', () => {
+    expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'downgrade_refused' }).detail).toBe(
+      'Already newer than the target',
+    )
+  })
+
+  it('keeps showing the stage for a step still in progress', () => {
+    expect(upgradeStepOutcome({ status: 'downloading' })).toEqual({
+      tone: 'active',
+      label: 'Downloading',
+      detail: null,
+    })
+    expect(upgradeStepOutcome({ status: 'done' }).label).toBe('Done')
+  })
+
+  it("shows a daemon's own reason code verbatim", () => {
+    expect(upgradeStepErrorLabel('health_check_failed')).toBe('health_check_failed')
+    expect(upgradeStepErrorLabel(null)).toBeNull()
+  })
+
+  it('names the run errors the control plane ends a run with', () => {
+    expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe(
+      'The co-located daemon step failed',
+    )
+    expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control-plane step failed')
+    expect(upgradeRunErrorLabel('')).toBeNull()
   })
 })

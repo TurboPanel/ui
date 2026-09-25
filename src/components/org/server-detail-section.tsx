@@ -138,13 +138,13 @@ function resolveUpdateBadgeVariant(input: {
   targetStatus: ServerUpdateStatus['targetStatus'] | undefined
   updateAvailable: boolean | undefined
   colocated: boolean
-  updateBlockedReason?: string | null
+  block: ServerUpdateStatus | null | undefined
   showUpdateErrorBadge: boolean
   runningVersionUnknown: boolean
 }): UpdateBadgeVariant {
   if (input.status === 'updating') return 'updating'
   if (input.showUpdateErrorBadge) return 'error'
-  if (serverUpdateBlockedLabel(input.updateBlockedReason)) return 'colocated'
+  if (serverUpdateBlockedLabel(input.block)) return 'colocated'
   if (input.colocated) return 'colocated'
   if (input.targetStatus === 'unknown' || input.runningVersionUnknown) {
     return 'unknown'
@@ -330,13 +330,13 @@ function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: Up
   const targetKnown = updateData?.targetStatus === 'ok'
   const runningVersionUnknown =
     targetKnown && server.connected && !colocated && !updateData?.current?.commit
-  const blockedLabel = serverUpdateBlockedLabel(updateData?.updateBlockedReason)
+  const blockedLabel = serverUpdateBlockedLabel(updateData)
   const badgeVariant = resolveUpdateBadgeVariant({
     status: updateData?.status,
     targetStatus: updateData?.targetStatus,
     updateAvailable: updateData?.updateAvailable,
     colocated,
-    updateBlockedReason: updateData?.updateBlockedReason,
+    block: updateData,
     showUpdateErrorBadge,
     runningVersionUnknown,
   })
@@ -345,7 +345,7 @@ function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: Up
     updateData,
     colocated,
     blockedLabel,
-    hideServerUpdateAction: isServerUpdateActionHidden(updateData?.updateBlockedReason),
+    hideServerUpdateAction: isServerUpdateActionHidden(updateData),
     isUpdateStatusLoading,
     isUpdateInProgress,
     canResetUpdateStatus,
