@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   certificateSourceEligibility,
+  daemonCapabilitiesStatus,
   hostnameStatusPresentation,
   http01PreflightPresentation,
   INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE,
   INSTANCE_HOSTNAME_SOURCE_LABELS,
   panelHostnameHttpsUrl,
   lockoutWarning,
-  letsEncryptApplyBlockedMessage,
-  instanceLetsEncryptTermsAccepted,
+  LETS_ENCRYPT_TERMS_LOADING_MESSAGE,
+  LETS_ENCRYPT_TERMS_UNAVAILABLE_MESSAGE,
+  letsEncryptSaveBlockedMessage,
+  letsEncryptTermsAccepted,
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
 
@@ -58,6 +61,52 @@ describe('certificateSourceEligibility', () => {
     })
     expect(refused.uploaded).toContain('too old')
     expect(refused['lets-encrypt']).toContain('too old')
+  })
+
+  it('names why the daemon state blocks a source instead of calling it too old', () => {
+    for (const [status, phrase] of [
+      ['not-applicable', 'self-hosted'],
+      ['disconnected', "isn't connected"],
+    ] as const) {
+      const refused = certificateSourceEligibility('panel.example.com', {
+        certificates: [],
+        capabilities: undefined,
+        capabilitiesStatus: status,
+      })
+      expect(refused['lets-encrypt']).toContain(phrase)
+      expect(refused['lets-encrypt']).not.toContain('too old')
+    }
+  })
+
+  it('reads the daemon query into one status', () => {
+    expect(daemonCapabilitiesStatus({ isError: false })).toBe('loading')
+    expect(daemonCapabilitiesStatus({ isError: true })).toBe('error')
+    expect(daemonCapabilitiesStatus({ data: { applicable: false }, isError: false })).toBe(
+      'not-applicable',
+    )
+    expect(
+      daemonCapabilitiesStatus({ data: { applicable: true, connected: false }, isError: false }),
+    ).toBe('disconnected')
+    expect(
+      daemonCapabilitiesStatus({ data: { applicable: true, connected: true }, isError: false }),
+    ).toBe('ready')
+  })
+
+  it('says the daemon is still being read, or unreadable, rather than "too old"', () => {
+    const loading = certificateSourceEligibility('panel.example.com', {
+      certificates: [],
+      capabilities: null,
+      capabilitiesStatus: 'loading',
+    })
+    expect(loading['lets-encrypt']).toContain('Checking')
+    expect(loading['lets-encrypt']).not.toContain('too old')
+    const failed = certificateSourceEligibility('panel.example.com', {
+      certificates: [],
+      capabilities: null,
+      capabilitiesStatus: 'error',
+    })
+    expect(failed.uploaded).toContain("Couldn't read")
+    expect(failed.uploaded).not.toContain('too old')
   })
 
   it('refuses Let\'s Encrypt for private and wildcard names', () => {
@@ -194,37 +243,81 @@ describe('http01PreflightPresentation', () => {
   })
 })
 
-describe('letsEncryptApplyBlockedMessage', () => {
-  it('returns null when terms are accepted', () => {
-    expect(
-      instanceLetsEncryptTermsAccepted({
-        TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: {
-          value: 'true',
-          source: 'db',
-        },
-      }),
-    ).toBe(true)
-    expect(
-      letsEncryptApplyBlockedMessage({
-        TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: {
-          value: 'true',
-          source: 'db',
-        },
-      }),
-    ).toBeNull()
+describe('letsEncryptTermsAccepted', () => {
+  it("prefers the server's tosAccepted over the raw setting", () => {
+    expect(letsEncryptTermsAccepted({
+      tosAccepted: true,
+      settings: { TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'false', source: 'db' } },
+    })).toBe(true)
+    expect(letsEncryptTermsAccepted({
+      tosAccepted: false,
+      settings: { TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'true', source: 'db' } },
+    })).toBe(false)
   })
 
-  it('points to Certificates when terms are unset in the database', () => {
-    const message = letsEncryptApplyBlockedMessage({
-      TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'false', source: 'default' },
-    })
-    expect(message).toContain('Certificates')
+  it("reads an older control plane with the server's own flag rule, not 'true' only", () => {
+    for (const value of ['1', 'true', 'TRUE', 'yes', ' Yes ']) {
+      expect(letsEncryptTermsAccepted({
+        settings: { TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value, source: 'env' } },
+      })).toBe(true)
+    }
+    for (const value of ['0', 'false', 'no', '', null]) {
+      expect(letsEncryptTermsAccepted({
+        settings: { TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value, source: 'db' } },
+      })).toBe(false)
+    }
+    expect(letsEncryptTermsAccepted(undefined)).toBe(false)
+  })
+})
+
+describe('letsEncryptSaveBlockedMessage', () => {
+  const notAccepted = (source: string) => ({
+    data: {
+      tosAccepted: false,
+      settings: { TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'false', source } },
+    },
+    isError: false,
   })
 
-  it('points to env when terms are env-sourced and false', () => {
-    const message = letsEncryptApplyBlockedMessage({
-      TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED: { value: 'false', source: 'env' },
-    })
-    expect(message).toContain('TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true')
+  it('never blocks a save with no Let\'s Encrypt row, whatever the settings say', () => {
+    expect(letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: false,
+      acme: { data: undefined, isError: true },
+    })).toBeNull()
+  })
+
+  it('blocks with a loading sentence, not "not accepted", while the settings load', () => {
+    expect(letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: true,
+      acme: { data: undefined, isError: false },
+    })).toBe(LETS_ENCRYPT_TERMS_LOADING_MESSAGE)
+  })
+
+  it('blocks with an unavailable sentence when the settings failed to load', () => {
+    expect(letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: true,
+      acme: { data: undefined, isError: true },
+    })).toBe(LETS_ENCRYPT_TERMS_UNAVAILABLE_MESSAGE)
+  })
+
+  it('allows the save once the server says the terms are accepted', () => {
+    expect(letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: true,
+      acme: { data: { tosAccepted: true }, isError: false },
+    })).toBeNull()
+  })
+
+  it('points to Certificates when the terms are not accepted in the database', () => {
+    expect(letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: true,
+      acme: notAccepted('default'),
+    })).toContain('Certificates')
+  })
+
+  it('points to the environment when the terms are env-sourced and not accepted', () => {
+    expect(letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: true,
+      acme: notAccepted('env'),
+    })).toContain('TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true')
   })
 })

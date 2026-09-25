@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   installedIdentity,
+  platformUpdateAvailable,
+  unitUpdateAvailable,
   unitUpdateFeedback,
   waitForUnitUpdate,
 } from '@/lib/instance-updates'
@@ -206,5 +208,35 @@ describe('waitForUnitUpdate edges', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('unitUpdateAvailable', () => {
+  const installed = { version: '0.1.1', commit: 'aaa' }
+
+  it("renders the server's answer, whatever the identities look like", () => {
+    expect(
+      unitUpdateAvailable({ installed, target: { commit: 'bbb' }, updateAvailable: false }),
+    ).toBe(false)
+    expect(
+      unitUpdateAvailable({ installed, target: { commit: 'aaa' }, updateAvailable: true }),
+    ).toBe(true)
+  })
+
+  it('reads an older control plane by commit only, as the server does', () => {
+    // The 2 s loop: the old check compared version:commit, so a target that
+    // named the same commit under a different version label read as "behind".
+    expect(unitUpdateAvailable({ installed, target: { commit: 'aaa' } })).toBe(false)
+    expect(unitUpdateAvailable({ installed, target: { commit: 'bbb' } })).toBe(true)
+    expect(unitUpdateAvailable({ installed, target: null })).toBe(false)
+    expect(unitUpdateAvailable({ installed: null, target: { commit: 'bbb' } })).toBe(false)
+  })
+
+  it('is true for the platform when either unit has an update', () => {
+    const none = { installed, target: null }
+    expect(platformUpdateAvailable({ instance: none, daemon: none })).toBe(false)
+    expect(
+      platformUpdateAvailable({ instance: none, daemon: { ...none, updateAvailable: true } }),
+    ).toBe(true)
   })
 })

@@ -107,7 +107,7 @@ import {
   readHostingComposeRoute,
 } from '@/lib/hosting-compose-owner'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
-import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { deployErrorMessage } from '@/lib/deploy-error-message'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -530,10 +530,6 @@ function containerHostLabel(
   return container.serverId
 }
 
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
-}
-
 function upsertServiceById(
   current: ServiceRecord[],
   nextService: ServiceRecord,
@@ -554,25 +550,6 @@ function deployStatusMessage(command: CommandStatusRecord): string {
   return command.errorMessage ?? `Deployment ${command.status}.`
 }
 
-function deployErrorMessage(err: unknown): string {
-  const message = errorMessage(err, 'Failed to deploy environment')
-  if (message.includes('server_placement_mismatch')) {
-    return "Deploy target does not match the project's pinned server placement."
-  }
-  if (message.includes('fabric_reconcile_failed')) {
-    return `${TURBOFABRIC_PRODUCT_NAME} could not be configured on one of the servers…`
-  }
-  if (message.includes('fabric_reconcile_pending')) {
-    return `${TURBOFABRIC_PRODUCT_NAME} is still converging on the target servers — try the deploy again in a moment.`
-  }
-  if (message.includes('acme_requires_org_opt_in')) {
-    return "A hosting is pinned to a Let's Encrypt certificate, but this organization has not enabled Let's Encrypt. Turn on \"Allow Let's Encrypt certificates\" in TLS settings, or pin a different certificate."
-  }
-  if (message.includes('acme_requires_public_bind')) {
-    return "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
-  }
-  return message
-}
 
 function tlsLabel(row: TlsRecord): string {
   return row.name?.trim() || row.metadata.dnsNames[0] || row.id.slice(0, 8)

@@ -14,12 +14,13 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
-import { installedIdentity } from '@/lib/instance-updates'
+import { platformUpdateAvailable } from '@/lib/instance-updates'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
   summarizeFleetSteps,
+  upgradeRunErrorLabel,
 } from '@/lib/upgrade-display'
 import {
   useRetryUpgradeStep,
@@ -40,30 +41,6 @@ function installedLabel(version: string | null | undefined, commit: string | nul
   return 'Unknown'
 }
 
-function updateAvailable(data: InstanceUpdates): boolean {
-  const instanceTarget = data.units.instance.target
-  const daemonTarget = data.units.daemon.target
-  const instanceBehind =
-    instanceTarget &&
-    installedIdentity(data.units.instance.installed) !==
-      `${instanceTarget.version ?? ''}:${instanceTarget.commit ?? ''}`
-  const daemonInstalled = data.units.daemon.installed
-  const daemonBehind =
-    daemonTarget &&
-    daemonInstalled &&
-    installedIdentity(daemonInstalled) !==
-      `${daemonTarget.version ?? ''}:${daemonTarget.commit ?? ''}`
-  return Boolean(instanceBehind || daemonBehind)
-}
-
-function upgradeStartNotice(kind: string): string {
-  if (kind === 'applied') return 'Upgrade finished.'
-  if (kind === 'partially_failed') return 'Upgrade finished with some servers still behind.'
-  if (kind === 'failed') return 'Upgrade failed.'
-  if (kind === 'cancelled') return 'Upgrade cancelled.'
-  if (kind === 'missing') return 'The upgrade run could not be read after it started.'
-  return 'Upgrade started. Track progress below.'
-}
 
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [offset, setOffset] = useState(0)
@@ -91,7 +68,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
 
   const headline = resolvePlatformUpgradeHeadline({
     activeRunStatus: run?.status ?? null,
-    updateAvailable: updateAvailable(data),
+    updateAvailable: platformUpdateAvailable(data.units),
     needsAttentionCount: needsAttention,
   })
 
@@ -123,7 +100,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     try {
       const outcome = await startUpgrade.mutateAsync(preflight?.runId)
       setPreflightOpen(false)
-      setNotice(upgradeStartNotice(outcome.kind))
+      setNotice(`Upgrade started (run ${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Upgrade failed to start')
     }
@@ -172,18 +149,23 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         />
       </SectionPanel>
 
-      {run || updateAvailable(data) ? (
+      {run || platformUpdateAvailable(data.units) ? (
         <SectionPanel title="Progress">
           <UpgradeStepTracker
             phase="colocated_daemon"
             status={daemonStep?.status ?? null}
+            errorCode={daemonStep?.errorCode ?? null}
             title="Co-located daemon"
           />
           <UpgradeStepTracker
             phase="control_plane"
             status={controlPlaneStep?.status ?? null}
+            errorCode={controlPlaneStep?.errorCode ?? null}
             title="Control plane"
           />
+          {upgradeRunErrorLabel(run?.error) ? (
+            <Text style={panelStyles.error}>{upgradeRunErrorLabel(run?.error)}</Text>
+          ) : null}
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
               ? `${fleetSummary.upToDate} of ${fleetSummary.total} fleet servers up to date`

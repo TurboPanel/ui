@@ -28,15 +28,7 @@ import { isPasskeySupported } from '@/lib/passkey-client'
 import { useSignIn } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { TWO_FACTOR_PROMPT_TITLE } from '@/lib/two-factor-prompt'
-
-const OAUTH_SIGN_IN_ERRORS: Record<string, string> = {
-  oauth_state_invalid: 'Sign-in expired. Try again.',
-  oauth_exchange_failed: 'Could not complete sign-in. Try again.',
-  account_disabled: 'This account is disabled.',
-  oauth_signup_disabled: 'New accounts cannot be created this way.',
-  account_conflict: 'That provider account is already linked to another user.',
-  oauth_unauthenticated: 'Sign in first, then link this provider.',
-}
+import { oauthSignInError } from '@/lib/oauth-sign-in-errors'
 
 const PROVIDER_LABEL: Record<OAuthProvider, string> = {
   github: 'GitHub',
@@ -48,10 +40,6 @@ function firstSearchParam(
 ): string | undefined {
   if (Array.isArray(value)) return value[0]
   return value
-}
-
-function oauthSignInError(code: string): string {
-  return OAUTH_SIGN_IN_ERRORS[code] ?? 'Sign-in failed. Try again.'
 }
 
 export function SignInScreenContent() {

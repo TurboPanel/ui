@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   channelLabel,
   daemonUnsupportedLabel,
+  isServerUpdateActionHidden,
   runningBuildLabel,
+  serverUpdateBlockedLabel,
   shortCommit,
 } from './daemon-update-labels'
 
@@ -42,5 +44,61 @@ describe('daemon update labels', () => {
     expect(
       daemonUnsupportedLabel({ status: 'unknown', version: null, minVersion: '0.1.0' }),
     ).toContain('Daemon unknown is below')
+  })
+})
+
+describe('server update block', () => {
+  it('renders the label for each code the server sends', () => {
+    // The bug: the server sent a sentence and the ui compared it to codes, so
+    // no label ever rendered and the Update button stayed until a 409.
+    expect(
+      serverUpdateBlockedLabel({
+        updateBlocked: true,
+        updateBlockedCode: 'updates_managed',
+        updateBlockedReason: 'Daemon updates on TurboPanel High Availability run from Admin → Updates.',
+      }),
+    ).toBe('Updates managed by TurboPanel High Availability')
+    expect(
+      serverUpdateBlockedLabel({
+        updateBlocked: true,
+        updateBlockedCode: 'control_plane_upgrade_required',
+      }),
+    ).toBe('Waiting for the control plane upgrade')
+    expect(
+      serverUpdateBlockedLabel({ updateBlocked: true, updateBlockedCode: 'upgrade_gate_unavailable' }),
+    ).toContain('Updates unavailable')
+    expect(
+      serverUpdateBlockedLabel({ updateBlocked: true, updateBlockedCode: 'colocated_with_instance' }),
+    ).toContain('control plane')
+  })
+
+  it("shows the server's sentence for a code it does not name, or an older control plane", () => {
+    expect(
+      serverUpdateBlockedLabel({
+        updateBlocked: true,
+        updateBlockedCode: 'something_new',
+        updateBlockedReason: 'A reason from the server.',
+      }),
+    ).toBe('A reason from the server.')
+    expect(
+      serverUpdateBlockedLabel({
+        updateBlocked: true,
+        updateBlockedReason: 'Update this control plane from Admin → Updates before updating other servers.',
+      }),
+    ).toBe('Update this control plane from Admin → Updates before updating other servers.')
+  })
+
+  it('shows nothing and keeps the action when updates are not blocked', () => {
+    expect(serverUpdateBlockedLabel({ updateBlocked: false })).toBeNull()
+    expect(serverUpdateBlockedLabel(null)).toBeNull()
+    expect(isServerUpdateActionHidden({ updateBlocked: false })).toBe(false)
+    expect(isServerUpdateActionHidden(undefined)).toBe(false)
+  })
+
+  it('hides the Update action whenever the server refuses updates', () => {
+    for (const code of ['updates_managed', 'control_plane_upgrade_required', 'upgrade_gate_unavailable']) {
+      expect(isServerUpdateActionHidden({ updateBlocked: true, updateBlockedCode: code })).toBe(true)
+    }
+    expect(isServerUpdateActionHidden({ updateBlocked: true, updateBlockedReason: 'older server' })).toBe(true)
   })
 })

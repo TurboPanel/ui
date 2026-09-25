@@ -77,6 +77,74 @@ export function mapStepStatusToPipeline(
   return 'preparing'
 }
 
+/**
+ * Step `errorCode`s the control plane sets itself (its `UPGRADE_STEP_ERROR_CODES`).
+ * A daemon may report its own reason code; that one is shown as sent.
+ */
+const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
+  rolled_back: 'Rolled back to the previous build',
+  server_offline: 'Server offline for over an hour',
+  step_timeout: 'Stopped reporting progress',
+  managed_upgrade_required: 'This server needs a managed upgrade',
+  downgrade_refused: 'Already newer than the target',
+}
+
+/** Run `error` codes (the control plane's `UPGRADE_RUN_ERROR_CODES`). */
+const RUN_ERROR_LABELS: Readonly<Record<string, string>> = {
+  colocated_daemon_failed: 'The co-located daemon step failed',
+  control_plane_failed: 'The control-plane step failed',
+}
+
+export function upgradeStepErrorLabel(code: string | null | undefined): string | null {
+  const trimmed = code?.trim()
+  if (!trimmed) return null
+  return STEP_ERROR_LABELS[trimmed] ?? trimmed
+}
+
+export function upgradeRunErrorLabel(code: string | null | undefined): string | null {
+  const trimmed = code?.trim()
+  if (!trimmed) return null
+  return RUN_ERROR_LABELS[trimmed] ?? trimmed
+}
+
+export type UpgradeStepOutcome = Readonly<{
+  tone: 'ok' | 'muted' | 'danger' | 'pending' | 'active'
+  label: string
+  /** Why it ended badly (or was skipped), when the step says. */
+  detail: string | null
+}>
+
+/**
+ * What a step's row says. A failed, rolled-back, or stuck step reads as that —
+ * never as the pipeline stage it stopped on.
+ */
+export function upgradeStepOutcome(step: Readonly<{
+  status: UpgradeStepStatus | null | undefined
+  errorCode?: string | null
+}>): UpgradeStepOutcome {
+  const detail = upgradeStepErrorLabel(step.errorCode)
+  switch (step.status) {
+    case 'done':
+      return { tone: 'ok', label: 'Done', detail: null }
+    case 'skipped':
+      return { tone: 'muted', label: 'Skipped', detail }
+    case 'failed':
+      return { tone: 'danger', label: 'Failed', detail }
+    case 'rolled_back':
+      return { tone: 'danger', label: 'Rolled back', detail }
+    case 'needs_attention':
+      return { tone: 'pending', label: 'Needs attention', detail }
+    default: {
+      const stage = mapStepStatusToPipeline(step.status)
+      return {
+        tone: 'active',
+        label: stage.charAt(0).toUpperCase() + stage.slice(1),
+        detail: null,
+      }
+    }
+  }
+}
+
 export function upgradePhaseLabel(phase: UpgradePhase | null | undefined): string {
   switch (phase) {
     case 'colocated_daemon':

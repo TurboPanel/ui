@@ -11,7 +11,6 @@ import {
   checkUpgradeManifests,
   fetchInstanceUpdates,
   fetchUpgradeActiveRun,
-  fetchUpgradeRun,
   fetchUpgradeHistory,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
@@ -63,6 +62,11 @@ import {
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import {
+  draftUsesLetsEncryptSource,
+  type HostnameSourceDraft,
+  letsEncryptSaveBlockedMessage,
+} from '@/lib/instance-certificates'
+import {
   isControlPlaneRestartError,
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
@@ -71,11 +75,9 @@ import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
 import {
   isUpgradeRunActive,
   UPGRADE_RUN_POLL_MS,
-  waitForUpgradeRunSettlement,
 } from '@/lib/upgrade-run-poll'
-import { clearControlPlaneUpgradeWatch, markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
+import { markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
 import {
-  installedIdentity,
   waitForUnitUpdate,
   type UnitUpdateWait,
   type UpdateTargetIdentity,
@@ -308,6 +310,23 @@ export function useInstanceAcmeSettings(options?: Readonly<{ enabled?: boolean }
   })
 }
 
+/**
+ * The save-time Let's Encrypt terms check. Returns a refusal sentence for a
+ * hostname set that stores a Let's Encrypt row while the server says the
+ * terms are not accepted, is still being asked, or could not be asked;
+ * `null` when the save may go ahead.
+ */
+export function useLetsEncryptTermsGuard(): (
+  rows: readonly HostnameSourceDraft[],
+) => string | null {
+  const acme = useInstanceAcmeSettings()
+  return (rows) =>
+    letsEncryptSaveBlockedMessage({
+      usesLetsEncrypt: draftUsesLetsEncryptSource(rows),
+      acme: { data: acme.data, isError: acme.isError },
+    })
+}
+
 export function useSaveInstanceAcmeSettings() {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -337,28 +356,19 @@ export function useUpgradeActiveRun(options?: Readonly<{ enabled?: boolean }>) {
   })
 }
 
-function instanceUpdatesPollInterval(
-  data: Awaited<ReturnType<typeof fetchInstanceUpdates>> | undefined,
+/**
+ * Poll only while a run is active. An available update is not a reason to
+ * poll — nothing changes until a run starts — and comparing installed and
+ * target identities here used to spin a 2 s loop whenever the ui's reading of
+ * "behind" disagreed with the server's.
+ */
+export function instanceUpdatesPollInterval(
   activeRunStatus: string | undefined,
 ): number | false {
   if (activeRunStatus && isUpgradeRunActive(activeRunStatus as 'running')) {
     return UPGRADE_RUN_POLL_MS
   }
-  if (!data) return false
-  const daemonTarget = data.units.daemon.target
-  const instanceTarget = data.units.instance.target
-  const daemonInstalled = data.units.daemon.installed
-  const instanceInstalled = data.units.instance.installed
-  const daemonBehind =
-    daemonTarget &&
-    daemonInstalled &&
-    installedIdentity(daemonInstalled) !==
-      `${daemonTarget.version ?? ''}:${daemonTarget.commit ?? ''}`
-  const instanceBehind =
-    instanceTarget &&
-    installedIdentity(instanceInstalled) !==
-      `${instanceTarget.version ?? ''}:${instanceTarget.commit ?? ''}`
-  return daemonBehind || instanceBehind ? UPGRADE_RUN_POLL_MS : false
+  return false
 }
 
 export function useInstanceUpdates(options?: Readonly<{ enabled?: boolean }>) {
@@ -367,8 +377,7 @@ export function useInstanceUpdates(options?: Readonly<{ enabled?: boolean }>) {
     queryKey: queryKeys.admin.instanceUpdates,
     queryFn: fetchInstanceUpdates,
     enabled: options?.enabled ?? true,
-    refetchInterval: (query) =>
-      instanceUpdatesPollInterval(query.state.data, activeRun.data?.run?.status),
+    refetchInterval: () => instanceUpdatesPollInterval(activeRun.data?.run?.status),
   })
 }
 
@@ -411,33 +420,7 @@ export function useUpgradeInstance() {
   })
 }
 
-export type UpgradeStartResult =
-  | { kind: 'applied' }
-  | { kind: 'partially_failed' }
-  | { kind: 'failed' }
-  | { kind: 'cancelled' }
-  | { kind: 'missing' }
-  | { kind: 'unreachable' }
-
-/** Poll the run id returned by start. A missing row is not success. */
-async function pollExactUpgradeRun(runId: string): Promise<UpgradeStartResult> {
-  markControlPlaneUpgradeWatch()
-  const outcome = await waitForUpgradeRunSettlement({
-    readRun: async () => {
-      const body = await fetchUpgradeRun(runId)
-      return body.run
-    },
-  })
-  clearControlPlaneUpgradeWatch()
-  if (outcome.kind === 'missing') return { kind: 'missing' }
-  if (outcome.kind === 'completed') {
-    if (outcome.status === 'succeeded') return { kind: 'applied' }
-    if (outcome.status === 'partially_failed') return { kind: 'partially_failed' }
-    if (outcome.status === 'failed') return { kind: 'failed' }
-    if (outcome.status === 'cancelled') return { kind: 'cancelled' }
-  }
-  return { kind: 'unreachable' }
-}
+export type UpgradeStartResult = { kind: 'started'; runId: string }
 
 export function useRunUpgradePreflight() {
   return useApiMutation({
@@ -448,9 +431,13 @@ export function useRunUpgradePreflight() {
 export function useStartPlatformUpgrade() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: async (runId?: string) => {
+    // Returns as soon as the run exists. Progress comes from the active-run
+    // query, which polls while the run is active — never from holding this
+    // mutation open for the length of an upgrade.
+    mutationFn: async (runId?: string): Promise<UpgradeStartResult> => {
       const started = await startPlatformUpgradeRun(runId)
-      return await pollExactUpgradeRun(started.runId)
+      markControlPlaneUpgradeWatch()
+      return { kind: 'started', runId: started.runId }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })

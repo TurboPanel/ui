@@ -1,5 +1,9 @@
-import type { DaemonSupport, ServerUpdateCommit } from '@/lib/instance-api'
-import { UPDATE_BLOCKED_REASONS } from '@/lib/upgrade-vocabulary'
+import type {
+  DaemonSupport,
+  ServerUpdateBlockedCode,
+  ServerUpdateCommit,
+  ServerUpdateStatus,
+} from '@/lib/instance-api'
 
 /** The first twelve characters of a commit, or `Unknown`. */
 export function shortCommit(commit?: string | null): string {
@@ -31,20 +35,38 @@ export function daemonUnsupportedLabel(support: DaemonSupport): string {
   return `Daemon ${support.version ?? 'unknown'} is below the supported minimum ${support.minVersion}: it stays connected but receives no commands until it is updated.`
 }
 
-export function serverUpdateBlockedLabel(reason: string | null | undefined): string | null {
-  const code = reason?.trim()
-  if (!code) return null
-  if (code === UPDATE_BLOCKED_REASONS.controlPlaneUpgradeRequired) {
-    return 'Waiting for the control plane upgrade'
-  }
-  if (code === UPDATE_BLOCKED_REASONS.updatesManaged) {
-    return 'Updates managed by TurboPanel High Availability'
-  }
-  return null
+/** What the server said about blocked updates for one server. */
+export type ServerUpdateBlock = Pick<
+  ServerUpdateStatus,
+  'updateBlocked' | 'updateBlockedCode' | 'updateBlockedReason'
+>
+
+const BLOCKED_LABELS: Record<ServerUpdateBlockedCode, string> = {
+  control_plane_upgrade_required: 'Waiting for the control plane upgrade',
+  updates_managed: 'Updates managed by TurboPanel High Availability',
+  upgrade_gate_unavailable: "Updates unavailable: the control plane couldn't confirm it is ready",
+  colocated_with_instance: 'Updated together with the control plane',
 }
 
+/**
+ * The line to show when the server refuses updates for a server, or `null`.
+ * Reads the server's `updateBlockedCode`; any code this ui does not name, and
+ * a control plane that sends no code, show the server's own sentence.
+ */
+export function serverUpdateBlockedLabel(
+  block: ServerUpdateBlock | null | undefined,
+): string | null {
+  const code = block?.updateBlockedCode?.trim()
+  if (code && code in BLOCKED_LABELS) {
+    return BLOCKED_LABELS[code as ServerUpdateBlockedCode]
+  }
+  if (!block?.updateBlocked && !code) return null
+  return block?.updateBlockedReason?.trim() || 'Updates are blocked for this server'
+}
+
+/** The server refuses updates for this server, so offer no Update action. */
 export function isServerUpdateActionHidden(
-  reason: string | null | undefined,
+  block: ServerUpdateBlock | null | undefined,
 ): boolean {
-  return reason?.trim() === UPDATE_BLOCKED_REASONS.updatesManaged
+  return block?.updateBlocked === true || Boolean(block?.updateBlockedCode)
 }

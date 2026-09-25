@@ -114,24 +114,39 @@ describe('field policy registry', () => {
     }
   })
 
-  it('mirrors the instance registry\'s ten gated namespace/capability keys', () => {
+  it('mirrors the instance registry\'s sixteen gated host-level keys', () => {
     expect([...GATED_SERVICE_FIELD_KEYS].sort()).toEqual([
       'cap_add',
+      'cgroup',
       'cgroup_parent',
+      'device_cgroup_rules',
       'devices',
       'ipc',
       'network_mode',
       'pid',
       'privileged',
+      'runtime',
       'security_opt',
       'sysctls',
+      'use_api_socket',
       'userns_mode',
+      'uts',
+      'volumes_from',
     ])
     for (const key of GATED_SERVICE_FIELD_KEYS) {
       const policy = classifyServiceKey(key)
       expect(policy?.state).toBe('gated')
-      expect(policy?.reason?.length ?? 0).toBeGreaterThan(20)
+      expect(policy?.reason).toContain('only an organization manager or owner')
     }
+  })
+
+  it('flags the Docker API socket key as host-level, not passthrough', () => {
+    const issues = lintComposeYaml(
+      'services:\n  web:\n    image: nginx:alpine\n    use_api_socket: true\n',
+    )
+    const found = issues.find((issue) => issue.path === 'services.web.use_api_socket')
+    expect(found?.code).toBe('field_requires_org_opt_in')
+    expect(found?.message).toContain('host-level Compose features')
   })
 
   it('leaves cap_drop, ports and user passthrough (volumes is interpreted)', () => {

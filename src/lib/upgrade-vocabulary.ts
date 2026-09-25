@@ -37,8 +37,3 @@ export type UpgradeStepStatus =
   | 'rolled_back'
   | 'needs_attention'
   | 'skipped'
-
-export const UPDATE_BLOCKED_REASONS = {
-  controlPlaneUpgradeRequired: 'control_plane_upgrade_required',
-  updatesManaged: 'updates_managed',
-} as const

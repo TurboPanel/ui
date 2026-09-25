@@ -14,7 +14,8 @@ import {
 } from '@/lib/upgrade-reload'
 import {
   clearControlPlaneUpgradeWatch,
-  isControlPlaneUpgradeWatchActive,
+  controlPlaneOverlayState,
+  controlPlaneUpgradeWatchRemainingMs,
 } from '@/lib/upgrade-watch'
 import { colors, spacing } from '@/lib/theme'
 
@@ -26,12 +27,21 @@ export function ControlPlaneUpdatingOverlay() {
   })
   const activeRun = useUpgradeActiveRun({ enabled: adminQuery })
   const [dismissReload, setDismissReload] = useState(false)
+  const [dismissedUpdating, setDismissedUpdating] = useState(false)
+  // Re-render when the watch lapses so a stale flag can never hold the scrim.
+  const [, setTick] = useState(0)
 
   const runActive = isUpgradeRunActive(activeRun.data?.run?.status)
-  const watchActive = isControlPlaneUpgradeWatchActive()
+  const watchRemainingMs = controlPlaneUpgradeWatchRemainingMs()
   const controlPlaneStepActive =
     activeRun.data?.run?.phase === 'control_plane' && runActive
-  const visible = (adminQuery && controlPlaneStepActive) || watchActive
+  const overlay = controlPlaneOverlayState({
+    canReadRun: adminQuery,
+    runAnswered: activeRun.isSuccess && !activeRun.isFetching,
+    controlPlaneStepActive,
+    watchActive: watchRemainingMs > 0,
+  })
+  const visible = overlay.visible && !dismissedUpdating
 
   const observedRevision = getInstanceRevision()
   const needsReload = shouldPromptControlPlaneReload({
@@ -42,8 +52,14 @@ export function ControlPlaneUpdatingOverlay() {
   })
 
   useEffect(() => {
-    if (!visible && !runActive) clearControlPlaneUpgradeWatch()
-  }, [visible, runActive])
+    if (overlay.clearWatch) clearControlPlaneUpgradeWatch()
+  }, [overlay.clearWatch])
+
+  useEffect(() => {
+    if (watchRemainingMs <= 0) return
+    const timer = setTimeout(() => setTick((n) => n + 1), watchRemainingMs + 50)
+    return () => clearTimeout(timer)
+  }, [watchRemainingMs])
 
   if (!visible && !(needsReload && !dismissReload)) return null
 
@@ -81,6 +97,16 @@ export function ControlPlaneUpdatingOverlay() {
         <Text style={styles.copy}>
           The control plane is restarting. This page will reconnect automatically.
         </Text>
+        <View style={styles.actions}>
+          <Button
+            label="Continue without waiting"
+            variant="secondary"
+            onPress={() => {
+              clearControlPlaneUpgradeWatch()
+              setDismissedUpdating(true)
+            }}
+          />
+        </View>
       </View>
     </View>
   )

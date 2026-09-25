@@ -68,29 +68,43 @@ const INTERPRETED: ComposeFieldPolicy = { state: 'interpreted' }
 
 /**
  * Namespace/capability-escaping Compose keys. Mirrors the instance registry's
- * `GATED_SERVICE_FIELD_NAMES` byte-for-byte — see that file for why these ten
- * and not `cap_drop`/`volumes`/`ports`/`user`.
+ * `GATED_SERVICE_FIELD_NAMES` — see that file for why these and not
+ * `cap_drop`/`volumes`/`ports`/`user`. `field-policy.test.ts` pins the list.
  */
 const GATED_SERVICE_FIELD_NAMES = [
   'cap_add',
+  'cgroup',
   'cgroup_parent',
+  'device_cgroup_rules',
   'devices',
   'ipc',
   'network_mode',
   'pid',
   'privileged',
+  'runtime',
   'security_opt',
   'sysctls',
+  'use_api_socket',
   'userns_mode',
+  'uts',
+  'volumes_from',
 ] as const
+
+/**
+ * The sentence every host-level refusal ends with. Mirrors the control plane's
+ * `HOST_LEVEL_OPT_IN_SENTENCE` word for word.
+ */
+export const HOST_LEVEL_OPT_IN_SENTENCE =
+  'an organization owner has to turn on host-level Compose features under ' +
+  'Manage Organization → Compose, and only an organization manager or owner ' +
+  'can deploy them'
 
 function gatedField(field: string): ComposeFieldPolicy {
   return {
     state: 'gated',
     reason:
       `${field} grants root-equivalent access to the shared daemon host — ` +
-      'an organization owner has to opt in under Manage Organization → ' +
-      'Compose before a deploy that sets it will run',
+      HOST_LEVEL_OPT_IN_SENTENCE,
   }
 }
 
@@ -132,7 +146,7 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['build', INTERPRETED],
   ['cap_add', gatedField('cap_add')],
   ['cap_drop', PASSTHROUGH],
-  ['cgroup', PASSTHROUGH],
+  ['cgroup', gatedField('cgroup')],
   ['cgroup_parent', gatedField('cgroup_parent')],
   ['command', PASSTHROUGH],
   ['configs', PASSTHROUGH],
@@ -154,7 +168,7 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   // See {@link DEPLOY_FIELD_POLICY} for the per-key answer.
   ['deploy', INTERPRETED],
   ['develop', PASSTHROUGH],
-  ['device_cgroup_rules', PASSTHROUGH],
+  ['device_cgroup_rules', gatedField('device_cgroup_rules')],
   ['devices', gatedField('devices')],
   ['dns', PASSTHROUGH],
   ['dns_opt', PASSTHROUGH],
@@ -205,7 +219,7 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['pull_policy', PASSTHROUGH],
   ['read_only', PASSTHROUGH],
   ['restart', PASSTHROUGH],
-  ['runtime', PASSTHROUGH],
+  ['runtime', gatedField('runtime')],
   // Written by `apply-service-options.ts` when a service has >1 local replica.
   ['scale', INTERPRETED],
   // Secret variables become Compose `secrets:` entries (`apply-variables.ts`).
@@ -220,13 +234,13 @@ const SERVICE_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
   ['tmpfs', PASSTHROUGH],
   ['tty', PASSTHROUGH],
   ['ulimits', PASSTHROUGH],
-  ['use_api_socket', PASSTHROUGH],
+  ['use_api_socket', gatedField('use_api_socket')],
   ['user', PASSTHROUGH],
   ['userns_mode', gatedField('userns_mode')],
-  ['uts', PASSTHROUGH],
+  ['uts', gatedField('uts')],
   // Named volumes are registered as `storage` rows and renamed to their UUID.
   ['volumes', INTERPRETED],
-  ['volumes_from', PASSTHROUGH],
+  ['volumes_from', gatedField('volumes_from')],
   ['working_dir', PASSTHROUGH],
 ])
 

@@ -34,6 +34,7 @@ import {
   type RelayRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
+import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { unboundPendingKeys, unusedRegistrationKeysLabel } from '@/lib/pending-keys'
 import { useOrgFabric } from '@/lib/queries/fabric'
@@ -114,7 +115,7 @@ function isServerUpdatable(
   return (
     server.connected &&
     !isColocatedServer(server, data) &&
-    data?.updateBlockedReason !== 'updates_managed' &&
+    !isServerUpdateActionHidden(data) &&
     data?.targetStatus === 'ok' &&
     data.updateAvailable === true &&
     !triggeringServerIds.has(server.id) &&

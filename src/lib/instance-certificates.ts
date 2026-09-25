@@ -33,30 +33,64 @@ const OLD_DAEMON_REASON =
 export const INSTANCE_ACME_TOS_SETTING_KEY =
   'TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED' as const
 
-/** Stable apply refusal. Keep in step with the control plane and daemon. */
+/** The sentence the control plane sends beside {@link INSTANCE_ACME_TOS_NOT_ACCEPTED_CODE}. */
 export const INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE =
   "Let's Encrypt terms have not been accepted"
 
-export function instanceLetsEncryptTermsAccepted(
-  settings: Readonly<
-    Record<string, { value: string | null; source: string }> | undefined
-  >,
+/** Machine code the control plane returns when a save or apply needs the terms. */
+export const INSTANCE_ACME_TOS_NOT_ACCEPTED_CODE = 'acme_terms_not_accepted'
+
+type AcmeSettingEntry = Readonly<{ value: string | null; source: string }>
+
+/** What the ACME settings read returned: the server's answer, and the raw rows. */
+export type InstanceAcmeTermsData = Readonly<{
+  settings?: Readonly<Record<string, AcmeSettingEntry>>
+  /** The server's decision. Absent only on a control plane older than this field. */
+  tosAccepted?: boolean
+}>
+
+/**
+ * Whether the terms are accepted. The server's `tosAccepted` is the answer;
+ * a control plane that predates the field is read with the server's own flag
+ * rule (`1`, `true`, `yes`, any case), never a narrower one.
+ */
+export function letsEncryptTermsAccepted(
+  data: InstanceAcmeTermsData | undefined,
 ): boolean {
-  return settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.value === 'true'
+  if (typeof data?.tosAccepted === 'boolean') return data.tosAccepted
+  const raw = data?.settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.value
+  const normalized = raw?.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
 }
 
-/** Block Save & Apply before the API when Let's Encrypt is selected without terms. */
-export function letsEncryptApplyBlockedMessage(
-  settings: Readonly<
-    Record<string, { value: string | null; source: string }> | undefined
-  >,
-): string | null {
-  if (instanceLetsEncryptTermsAccepted(settings)) return null
-  const source = settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.source
+export const LETS_ENCRYPT_TERMS_LOADING_MESSAGE =
+  "Checking whether the Let's Encrypt terms are accepted. Try again in a moment."
+
+export const LETS_ENCRYPT_TERMS_UNAVAILABLE_MESSAGE =
+  "Couldn't read the Let's Encrypt settings, so hostnames using Let's Encrypt can't be saved yet. Reload the page and try again."
+
+/**
+ * Refuse a save (plain Save and Save & Apply alike) that stores a Let's
+ * Encrypt hostname before the terms are accepted. The control plane refuses
+ * it too; checking first keeps the draft intact and says what to do. While the
+ * settings are loading or failed to load, say that — never "not accepted".
+ */
+export function letsEncryptSaveBlockedMessage(input: Readonly<{
+  usesLetsEncrypt: boolean
+  acme: Readonly<{ data?: InstanceAcmeTermsData; isError: boolean }>
+}>): string | null {
+  if (!input.usesLetsEncrypt) return null
+  if (input.acme.data === undefined) {
+    return input.acme.isError
+      ? LETS_ENCRYPT_TERMS_UNAVAILABLE_MESSAGE
+      : LETS_ENCRYPT_TERMS_LOADING_MESSAGE
+  }
+  if (letsEncryptTermsAccepted(input.acme.data)) return null
+  const source = input.acme.data.settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.source
   if (source === 'env') {
     return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Set TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true in the instance environment (Admin cannot override an env-sourced value), then restart the control plane.`
   }
-  return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Open Access → Certificates, check Terms accepted, click Save Let's Encrypt, then Save & Apply here.`
+  return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Open Access → Certificates, check Terms accepted, click Save Let's Encrypt, then save your hostnames here.`
 }
 
 export function hostnameStatusPresentation(record: Readonly<{
@@ -134,7 +168,50 @@ export type CertificateCoverage = Readonly<{
 export type CertificateSourceContext = Readonly<{
   certificates: readonly CertificateCoverage[]
   capabilities: Readonly<Record<string, boolean>> | null | undefined
+  /**
+   * How the daemon read went. Only a daemon that answered without the
+   * capability is "too old"; a read still in flight or one that failed says so.
+   */
+  capabilitiesStatus?: DaemonCapabilitiesStatus
 }>
+
+/**
+ * Where the daemon read stands. Only `ready` with the capability missing means
+ * the daemon is too old; every other state has its own reason.
+ */
+export type DaemonCapabilitiesStatus =
+  | 'loading'
+  | 'error'
+  | 'not-applicable'
+  | 'disconnected'
+  | 'ready'
+
+const DAEMON_STATUS_REASONS: Readonly<Record<Exclude<DaemonCapabilitiesStatus, 'ready'>, string>> = {
+  loading: "Checking this host's daemon.",
+  error: "Couldn't read this host's daemon, so this source can't be chosen right now.",
+  'not-applicable':
+    'Only a self-hosted control plane issues certificates for its own hostnames.',
+  disconnected: "This host's daemon isn't connected, so this source can't be chosen right now.",
+}
+
+function daemonCapabilityRefusal(options: CertificateSourceContext): string | null {
+  const status = options.capabilitiesStatus ?? 'ready'
+  if (status !== 'ready') return DAEMON_STATUS_REASONS[status]
+  return options.capabilities?.['instance-cert-sources-per-hostname'] === true
+    ? null
+    : OLD_DAEMON_REASON
+}
+
+/** The daemon read's state, from the query and what it returned. */
+export function daemonCapabilitiesStatus(query: Readonly<{
+  data?: Readonly<{ applicable: boolean; connected?: boolean }>
+  isError: boolean
+}>): DaemonCapabilitiesStatus {
+  if (!query.data) return query.isError ? 'error' : 'loading'
+  if (query.data.applicable === false) return 'not-applicable'
+  if (query.data.connected === false) return 'disconnected'
+  return 'ready'
+}
 
 /**
  * Client-side mirror of `validateHostnameSource`. Each refusal is a sentence
@@ -144,10 +221,11 @@ export function certificateSourceEligibility(
   host: string,
   options: CertificateSourceContext,
 ): Partial<Record<'uploaded' | 'lets-encrypt', string>> {
-  if (options.capabilities?.['instance-cert-sources-per-hostname'] !== true) {
+  const daemonRefusal = daemonCapabilityRefusal(options)
+  if (daemonRefusal) {
     return {
-      uploaded: OLD_DAEMON_REASON,
-      'lets-encrypt': OLD_DAEMON_REASON,
+      uploaded: daemonRefusal,
+      'lets-encrypt': daemonRefusal,
     }
   }
   const refused: Partial<Record<'uploaded' | 'lets-encrypt', string>> = {}

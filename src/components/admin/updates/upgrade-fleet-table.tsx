@@ -10,7 +10,7 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeStepRow } from '@/lib/instance-api'
-import { mapStepStatusToPipeline } from '@/lib/upgrade-display'
+import { upgradeStepOutcome } from '@/lib/upgrade-display'
 import { colors } from '@/lib/theme'
 
 const COLUMNS: readonly DataTableColumn[] = [
@@ -23,8 +23,7 @@ const COLUMNS: readonly DataTableColumn[] = [
 ]
 
 function stepLabel(step: UpgradeStepRow): string {
-  const pipeline = mapStepStatusToPipeline(step.status)
-  return pipeline.charAt(0).toUpperCase() + pipeline.slice(1)
+  return upgradeStepOutcome(step).label
 }
 
 export function UpgradeFleetTable({
@@ -70,7 +69,7 @@ export function UpgradeFleetTable({
             </DataTableCell>
             <DataTableCell column={COLUMNS[4]}>
               <Text style={panelStyles.muted} numberOfLines={2}>
-                {row.errorMessage ?? '—'}
+                {row.errorMessage ?? upgradeStepOutcome(row).detail ?? '—'}
               </Text>
             </DataTableCell>
             <DataTableCell column={COLUMNS[5]}>
