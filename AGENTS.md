@@ -137,7 +137,7 @@ Automatic Analysis must stay **off** for `turbopanel_ui`.
 `workerd`, `sharp`, …) approved; pnpm 12 `strictDepBuilds` otherwise fails
 `pnpm install` with `ERR_PNPM_IGNORED_BUILDS`.
 
-**Pre-commit** (`.githooks/pre-commit`): secret scan only (never skippable).
+**Pre-commit** (`.githooks/pre-commit`): secret scan only (never skippable). `scripts/scan-secrets.sh` is byte-identical in turbopanel, turbopaneld, ui, website and dev — change all five together. It refuses a committed secret-bearing file (`license.token`, `server-key.json`, `.pgpass`, `.rabbitmq_pass`, …), flags credential URLs (`amqp(s)`/`postgres(ql)` with `user:pass@`) and `TURBOPANEL_SECRET(S)` bindings, and flags any line that names a secret-bearing file unless that exact `path:line:content` is in `.secretscan-allowlist`. dev's `src/lib/scan-secrets.test.ts` tests the rules and, with the siblings checked out in dev CI, fails if any copy drifts.
 Lint/typecheck/tests are **temporarily disabled** in the hook until the
 toolchain can run inside the Vagrant guest. Requires `core.hooksPath=.githooks`
 (otherwise Git never runs the hook).
