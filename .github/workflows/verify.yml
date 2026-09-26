@@ -59,6 +59,10 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Secret scan (every tracked file)
+        # The pre-commit hook scans staged files only; CI scans the whole tree.
+        run: sh scripts/scan-secrets.sh --all
+
       - name: Check vocabulary
         run: pnpm check:vocabulary
 
