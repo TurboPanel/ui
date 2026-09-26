@@ -87,7 +87,9 @@
     "test:coverage:low-mem": "vitest run --coverage --maxWorkers=1 --no-file-parallelism",
     "os-logos": "node scripts/render-os-logos.mjs",
     "export": "expo export --platform web",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/deploy-refuse.mjs",
+    "deploy:testing": "wrangler deploy --env testing",
+    "deploy:live": "wrangler deploy --env live",
     "cf-typegen": "wrangler types"
   },
   "private": true,
