@@ -111,6 +111,7 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 | Command | Purpose |
 | --- | --- |
 | `pnpm typecheck` | `tsc --noEmit` — same gate as CI `verify.yml` and deploy |
+| (CI only) `ci-ok` | Aggregator job in `verify.yml`: needs `verify` + `metrics-legacy`, `if: always()`, fails on any failure/cancel/skip — the one check the trunk ruleset will require |
 | `pnpm lint` | Expo ESLint |
 | `pnpm check:vocabulary` | Reject daemon-as-agent and Apple-associated chrome phrasing (`src/lib/vocabulary.ts` + `scripts/check-vocabulary.mjs`) |
 | `pnpm notices:generate` | Write `THIRD_PARTY_NOTICES.md` from the resolved pnpm graph plus committed bundled resources (fonts). After Expo prebuild / EAS, the same script collects CocoaPods, Gradle, and AAR/POM metadata (`--native`) |
