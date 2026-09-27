@@ -1756,17 +1756,55 @@ export class ServerCapacityExceededError extends Error {
 /** Hosted mint refusal: every purchased license is already held by a server or a waiting key. */
 export const NO_LICENSE_AVAILABLE_ERROR = 'no_license_available'
 
-/** The org-wide license totals the mint gate answered with (`409 no_license_available`). */
-export type LicenseAvailability = {
+/** One tier's counts in a `409 no_license_available` refusal. */
+export type LicenseTierAvailability = {
+  tierId: string
+  label: string
   purchased: number
-  releasing: number
-  held: number
+  inUse: number
+  /** Licenses ending at the period boundary — restorable, never usable for a new server. */
+  ending: number
+  endsAt: string | null
   available: number
 }
 
-/** "All N purchased licenses are in use. Buy another on the billing page." — sized to N. */
-export function describeNoLicenseAvailable(purchased: number): string {
+/** The org-wide license totals the mint gate answered with (`409 no_license_available`). */
+export type LicenseAvailability = {
+  purchased: number
+  /** Held by a server or a waiting key. */
+  inUse: number
+  /** Ending at the period boundary; they cannot take a new server until restored. */
+  ending: number
+  endsAt: string | null
+  available: number
+  tiers: LicenseTierAvailability[]
+  /** The control plane's own sentence, shown verbatim when present. */
+  message: string | null
+}
+
+/** `Oct 26` — the short date the license screens use for "ends". */
+export function formatShortDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
+}
+
+/**
+ * The fallback sentence when the refusal carried no `message` (an older
+ * control plane). Never calls an ending license "in use": ending licenses
+ * are named with their date and the fix is to restore one.
+ */
+export function describeNoLicenseAvailable(
+  availability: Pick<LicenseAvailability, 'purchased' | 'inUse' | 'ending' | 'endsAt'>
+): string {
+  const { purchased, inUse, ending, endsAt } = availability
   if (purchased <= 0) return 'No licenses have been bought yet. Buy one on the billing page.'
+  if (ending > 0) {
+    const when = formatShortDate(endsAt)
+    const ends = `${ending} ${ending === 1 ? 'ends' : 'end'}${when ? ` ${when}` : ' at the end of the period'}`
+    return `${inUse} in use, ${ends} — restore one to add this server.`
+  }
   if (purchased === 1) return 'The one purchased license is in use. Buy another on the billing page.'
   return `All ${purchased} purchased licenses are in use. Buy another on the billing page.`
 }
@@ -1776,7 +1814,7 @@ export class NoLicenseAvailableError extends Error {
   readonly availability: LicenseAvailability
 
   constructor(availability: LicenseAvailability) {
-    super(describeNoLicenseAvailable(availability.purchased))
+    super(availability.message ?? describeNoLicenseAvailable(availability))
     this.name = 'NoLicenseAvailableError'
     this.availability = availability
   }
@@ -1786,14 +1824,58 @@ function readCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
+function readText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
 type LicenseCreateErrorBody = {
   error?: string
   maxServers?: number | null
   usedSeats?: number
+  message?: string
   purchased?: number
+  inUse?: number
+  ending?: number
+  endsAt?: string | null
+  available?: number
+  tiers?: unknown
+  /** Deprecated aliases from before `inUse` / `ending`. */
   releasing?: number
   held?: number
-  available?: number
+}
+
+function readLicenseTiers(raw: unknown): LicenseTierAvailability[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry): LicenseTierAvailability[] => {
+    if (!entry || typeof entry !== 'object') return []
+    const row = entry as Record<string, unknown>
+    const tierId = readText(row.tierId)
+    if (!tierId) return []
+    return [
+      {
+        tierId,
+        label: readText(row.label) ?? tierId,
+        purchased: readCount(row.purchased),
+        inUse: readCount(row.inUse),
+        ending: readCount(row.ending),
+        endsAt: readText(row.endsAt),
+        available: readCount(row.available),
+      },
+    ]
+  })
+}
+
+/** Normalises a `409 no_license_available` body, reading the deprecated aliases when the new fields are absent. */
+export function licenseAvailabilityFromBody(body: LicenseCreateErrorBody): LicenseAvailability {
+  return {
+    purchased: readCount(body.purchased),
+    inUse: readCount(body.inUse ?? body.held),
+    ending: readCount(body.ending),
+    endsAt: readText(body.endsAt),
+    available: readCount(body.available),
+    tiers: readLicenseTiers(body.tiers),
+    message: readText(body.message),
+  }
 }
 
 function throwIfLicenseCreateFailed(status: number, errorBody: LicenseCreateErrorBody): never {
@@ -1804,12 +1886,7 @@ function throwIfLicenseCreateFailed(status: number, errorBody: LicenseCreateErro
     )
   }
   if (status === 409 && errorBody.error === NO_LICENSE_AVAILABLE_ERROR) {
-    throw new NoLicenseAvailableError({
-      purchased: readCount(errorBody.purchased),
-      releasing: readCount(errorBody.releasing),
-      held: readCount(errorBody.held),
-      available: readCount(errorBody.available),
-    })
+    throw new NoLicenseAvailableError(licenseAvailabilityFromBody(errorBody))
   }
   const detail = errorBody.error
     ? formatFetchFailureDetail(status, errorBody.error)
@@ -1899,6 +1976,10 @@ export const LICENSES_IN_USE_ERROR = 'licenses_in_use'
 export const NOT_AN_UPGRADE_ERROR = 'not_an_upgrade'
 export const NOT_A_DOWNGRADE_ERROR = 'not_a_downgrade'
 export const TIER_NOT_PURCHASABLE_ERROR = 'tier_not_purchasable'
+/** Buying more at a tier while licenses at that tier are ending (`409`; carries `tierId`, `ending`, `endsAt`). Restore those first. */
+export const LICENSES_ENDING_ERROR = 'licenses_ending'
+/** `POST /billing/restore` at a tier with nothing ending (`409`). */
+export const NO_LICENSES_ENDING_ERROR = 'no_licenses_ending'
 
 export type BillingTierEntitlements = {
   maxCores: number
@@ -1933,8 +2014,14 @@ export type BillingTierSummary = {
   purchased: number
   /** Servers currently assigned this tier. */
   inUse: number
-  /** Of `purchased`, how many leave at the period boundary. */
-  releasing: number
+  /** Of `purchased`, the licenses that end at the period boundary — restorable with `POST /billing/restore`. */
+  ending: number
+  /** When they end; `null` when `ending` is 0. */
+  endsAt: string | null
+  /** `purchased − ending − inUse`, floored at 0 (advisory; the mint gate is the org-wide total). */
+  available: number
+  /** @deprecated Use `ending` — this also counts pending downgrades. */
+  releasing?: number
   priceCents: number | null
   currency: string | null
 }
@@ -1943,13 +2030,18 @@ export type BillingTierSummary = {
 export type BillingLicenseSummary = {
   /** Total committed quantity across tiers. */
   purchased: number
-  /** Of `purchased`, how many leave at the period boundary. */
-  releasing: number
-  /** Active licenses held — bound to a server or still waiting to connect. */
-  held: number
+  /** Licenses ending at the period boundary, all tiers; restorable. */
+  ending: number
+  endsAt: string | null
+  /** Licenses held — bound to a server or still waiting to connect. */
+  inUse: number
   bound: number
-  /** `purchased − releasing − held`, floored at zero: how many more servers can be added. */
+  /** How many more servers can be added right now. */
   available: number
+  /** @deprecated Use `ending`. */
+  releasing?: number
+  /** @deprecated Use `inUse`. */
+  held?: number
 }
 
 /** Where each licensed server landed: the tier the control plane assigned it, or `null` when nothing bought covers it. */
@@ -2102,7 +2194,17 @@ async function billingPost<T>(path: string, body: Record<string, unknown>): Prom
   throw new Error(`${path} failed: ${formatFetchFailureDetail(response.status)}`)
 }
 
-export async function fetchBillingCatalog(): Promise<{ tiers: BillingTier[] }> {
+export type BillingCatalog = {
+  tiers: BillingTier[]
+  /**
+   * One POSIX line to paste on a server: prints its physical cores, RAM and
+   * the tier it lands on (e.g. `8 cores, 31.3 GiB RAM -> S2`). Absent on an
+   * older control plane.
+   */
+  sizeCommand?: string
+}
+
+export async function fetchBillingCatalog(): Promise<BillingCatalog> {
   return await apiFetch(`${CLIENT_API}/billing/catalog`)
 }
 
@@ -2136,9 +2238,10 @@ export async function previewBillingChange(body: BillingPreviewBody): Promise<Bi
 
 /**
  * `delta > 0` is invoiced now (pass the preview's `prorationDate`);
- * `delta < 0` defers to the period boundary. **409** `servers_uncovered`
- * when a covered server would be left on nothing, `licenses_in_use` when
- * fewer would be purchased than are held.
+ * `delta < 0` defers to the period boundary. **409** `licenses_ending` when
+ * `delta > 0` at a tier with licenses ending (restore those first),
+ * `servers_uncovered` when a covered server would be left on nothing,
+ * `licenses_in_use` when fewer would be purchased than are held.
  */
 export async function changeBillingSeats(body: {
   tierId: string
@@ -2146,6 +2249,26 @@ export async function changeBillingSeats(body: {
   prorationDate?: number
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/seats`, body)
+}
+
+export type BillingRestoreResponse = {
+  ok: true
+  /** Licenses taken back; never charged. */
+  restored: number
+  /** Still ending at this tier afterwards. */
+  ending: number
+  scheduleId: string | null
+}
+
+/**
+ * Take back up to `count` of a tier's ending licenses — free, allowed while
+ * past due. **409** `no_licenses_ending` when nothing at that tier is ending.
+ */
+export async function restoreBillingLicenses(body: {
+  tierId: string
+  count: number
+}): Promise<BillingRestoreResponse> {
+  return await billingPost(`${CLIENT_API}/billing/restore`, body)
 }
 
 /** Move one license to a higher tier, invoiced now. `prorationDate` comes from the preview. **400** `not_an_upgrade`. */
