@@ -78,8 +78,7 @@ export function resolveOsLogoKey(
   }>,
 ): ServerOsLogoKey | null {
   if (input.osLogo) return input.osLogo
-  const id = input.os?.id?.toLowerCase()
-  if (input.os?.variant === 'raspberry-pi-os') return 'raspberry-pi-os'
-  if (id === 'debian') return 'debian'
+  if (input.os && isRaspberryPiOs(input.os)) return 'raspberry-pi-os'
+  if (input.os?.id?.toLowerCase() === 'debian') return 'debian'
   return null
 }

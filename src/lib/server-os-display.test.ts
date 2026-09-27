@@ -90,6 +90,11 @@ describe('resolveOsLogoKey', () => {
     expect(resolveOsLogoKey({ os: { id: 'Debian' } })).toBe('debian')
   })
 
+  it('recognises Raspberry Pi OS by its own os-release ids too', () => {
+    expect(resolveOsLogoKey({ os: { id: 'raspbian' } })).toBe('raspberry-pi-os')
+    expect(resolveOsLogoKey({ os: { id: 'raspios' } })).toBe('raspberry-pi-os')
+  })
+
   it('returns null when no logo key can be derived', () => {
     expect(resolveOsLogoKey({})).toBeNull()
     expect(resolveOsLogoKey({ osLogo: null, os: null })).toBeNull()

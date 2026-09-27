@@ -21,5 +21,6 @@ running `pnpm os-logos`.
 ## raspberry-pi-os
 
 Not shipped. The control plane may still send `osLogo: "raspberry-pi-os"`; the
-UI renders the product name as plain text. Raspberry Pi trademarks are not
+UI draws its own lettered "RPi / OS" badge instead (`src/lib/os-badges.ts`) —
+plain text in a box, no Raspberry Pi artwork. Raspberry Pi trademarks are not
 licensed for this use.
