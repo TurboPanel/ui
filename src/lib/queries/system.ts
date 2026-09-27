@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { restartSystemComponent } from '@/lib/instance-api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchHealth, restartSystemComponent } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import { useContainers } from '@/lib/queries/containers'
 import { useEnvironments } from '@/lib/queries/environments'
@@ -142,5 +142,22 @@ export function useRestartSystemComponent(orgId: string, serverId: string) {
         queryKey: queryKeys.org(orgId).commands.all,
       })
     },
+  })
+}
+
+/**
+ * `/api/health` — the control plane's version and build revision. Fetched once
+ * per session (a deploy reloads the bundle through upgrade-reload anyway), no
+ * polling, no retries: a failure just leaves the version line empty.
+ */
+export function useControlPlaneHealth(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.health,
+    queryFn: fetchHealth,
+    enabled: options?.enabled ?? true,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
   })
 }
