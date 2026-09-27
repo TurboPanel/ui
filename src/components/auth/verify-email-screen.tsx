@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { Link, useLocalSearchParams, useRouter } from 'expo-router'
+import { type Href, Link, useLocalSearchParams, useRouter } from 'expo-router'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
@@ -19,6 +19,7 @@ import {
   authSpinnerColor,
   resolveControlPlaneRuntime,
 } from '@/lib/auth-accent'
+import { signInForInvitationHref } from '@/lib/invitation-return'
 import { useVerifyEmail } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
@@ -54,8 +55,17 @@ const styles = StyleSheet.create({
 
 export function VerifyEmailScreenContent() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ token?: string | string[] }>()
+  const params = useLocalSearchParams<{
+    token?: string | string[]
+    invitationId?: string | string[]
+  }>()
   const token = normalizeParam(params.token)
+  // A sign-up that came from an invitation: after verifying, signing in
+  // continues to accepting it (joining the inviter's organization).
+  const invitationId = normalizeParam(params.invitationId)
+  const signInHref = (
+    invitationId ? signInForInvitationHref(invitationId) : '/sign-in'
+  ) as Href
   const verifyEmailMutation = useVerifyEmail()
   const { data: instanceInfo } = useAuthStatus()
 
@@ -93,7 +103,7 @@ export function VerifyEmailScreenContent() {
 
   const goToSignIn = (
     <AuthPrimaryButton
-      onPress={() => router.replace('/sign-in')}
+      onPress={() => router.replace(signInHref)}
       accessibilityLabel="Go to sign in"
       label="Go to sign in"
       tint={tint}
@@ -117,7 +127,9 @@ export function VerifyEmailScreenContent() {
       <AuthScreenShell title="Verify Email" accentColor={accent.accent}>
         <Text style={styles.statusTitle}>Email verified!</Text>
         <Text style={styles.statusCopy}>
-          Your email address has been verified. You can now sign in.
+          {invitationId
+            ? 'Your email address has been verified. Sign in to join the organization you were invited to.'
+            : 'Your email address has been verified. You can now sign in.'}
         </Text>
         {goToSignIn}
       </AuthScreenShell>
@@ -125,7 +137,7 @@ export function VerifyEmailScreenContent() {
   }
 
   const backToSignInFooter = (
-    <Link href="/sign-in" asChild>
+    <Link href={signInHref} asChild>
       <Pressable
         accessibilityRole="link"
         accessibilityLabel="Back to sign in"
