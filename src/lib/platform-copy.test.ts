@@ -5,7 +5,9 @@ import {
   HA_PRODUCT_NAME,
   HA_PRODUCT_TAGLINE,
   HA_SIGNUP_SETTINGS_NOTE,
+  HA_WORDMARK_LINES,
   TURBOFABRIC_PRODUCT_NAME,
+  showsHighAvailabilityWordmark,
 } from './platform-copy'
 
 describe('platform-copy', () => {
@@ -19,5 +21,13 @@ describe('platform-copy', () => {
 
   it('exports the TurboFabric product name', () => {
     expect(TURBOFABRIC_PRODUCT_NAME).toBe('TurboFabric')
+  })
+
+  it('shows the HIGH / AVAILABILITY wordmark only on the hosted Workers control plane', () => {
+    expect(HA_WORDMARK_LINES).toEqual(['HIGH', 'AVAILABILITY'])
+    expect(showsHighAvailabilityWordmark('workers')).toBe(true)
+    expect(showsHighAvailabilityWordmark('deno')).toBe(false)
+    expect(showsHighAvailabilityWordmark(null)).toBe(false)
+    expect(showsHighAvailabilityWordmark(undefined)).toBe(false)
   })
 })
