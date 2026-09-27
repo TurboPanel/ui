@@ -19,6 +19,7 @@ import {
 } from '@/components/ui'
 import { ServerUsageBars } from '@/components/org/server-usage-bars'
 import { indexFleetUsageByServerId } from '@/lib/fleet-capacity'
+import { serverConnectingAddress } from '@/lib/server-connecting-address'
 import {
   getStoredServersLayout,
   resolveServersFleetSurface,
@@ -360,6 +361,7 @@ function ServerHostIdentity({ server }: Readonly<{ server: OrgServerRecord }>) {
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
   const showHostname = hostname != null && hostname.length > 0 && hostname !== title
+  const connecting = serverConnectingAddress(server)
 
   return (
     <View style={styles.nameButton}>
@@ -371,6 +373,18 @@ function ServerHostIdentity({ server }: Readonly<{ server: OrgServerRecord }>) {
         {showHostname ? (
           <Text style={styles.hostnameSubtext} numberOfLines={1}>
             {hostname}
+          </Text>
+        ) : null}
+        {connecting ? (
+          <Text
+            style={styles.connectingAddress}
+            numberOfLines={1}
+            selectable={connecting.kind === 'ip'}
+            accessibilityLabel={
+              connecting.kind === 'ip' ? `Connected from ${connecting.full}` : connecting.full
+            }
+          >
+            {connecting.text}
           </Text>
         ) : null}
       </View>
@@ -1283,6 +1297,13 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 11,
     fontFamily: 'monospace',
+    flexShrink: 1,
+  },
+  /** Same muted tone and size as the Location column's network line. */
+  connectingAddress: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 14,
     flexShrink: 1,
   },
   statusBadge: {
