@@ -1,7 +1,13 @@
+import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Badge, InlineNotice, MonoText } from '@/components/ui'
+import { Badge, Button, InlineNotice, MonoText } from '@/components/ui'
 import { formatMinorUnits } from '@/lib/billing-display'
+import {
+  PREVIEW_DETAILS_EXPLANATION,
+  previewSummaryBody,
+  type PreviewSummary,
+} from '@/lib/billing-preview-summary'
 import type { BillingPreview, BillingPreviewLine } from '@/lib/instance-api'
 import { spacing } from '@/lib/theme'
 
@@ -45,7 +51,7 @@ function PreviewLineRow({
         {description}
       </Text>
       <Badge
-        label={kind === 'credit' ? 'Credit' : 'Debit'}
+        label={kind === 'credit' ? 'Credit' : 'Charge'}
         tone={kind === 'credit' ? 'ok' : 'info'}
       />
       {line.proration ? <Badge label="Prorated" tone="muted" /> : null}
@@ -55,37 +61,55 @@ function PreviewLineRow({
 }
 
 /**
- * Stripe's numbers, verbatim — never a client-side sum. The totals ride the
- * notice; every invoice line the provider returned is listed under it with
- * its own signed amount, so the operator can check the exact credit for the
- * unused remainder of the old tier against the debit for the new one before
- * paying, rather than trusting a collapsed total.
+ * A provider quote in plain language: the net first (what is bought, for
+ * which days, what is due now, what the monthly bill becomes), with Stripe's
+ * own credit and charge lines — its numbers, verbatim, never a client-side
+ * sum — behind a "Show calculation details" disclosure. Reusable wherever a
+ * purchase is confirmed (billing page, Add Server). Build `summary` with
+ * `summarizePurchasePreview` / `summarizeMovePreview`.
  */
-export function BillingPreviewNotice({ preview, title }: Readonly<{ preview: BillingPreview; title: string }>) {
+export function BillingPreviewNotice({
+  preview,
+  summary,
+}: Readonly<{ preview: BillingPreview; summary: PreviewSummary }>) {
+  const [showDetails, setShowDetails] = useState(false)
   const currency = preview.currency
-  const parts = [
-    `Due now ${formatMinorUnits(preview.amountDue, currency)}`,
-    `subtotal ${formatMinorUnits(preview.subtotal, currency)}`,
-    `tax ${formatMinorUnits(preview.tax, currency)}`,
-    `total ${formatMinorUnits(preview.total, currency)}`,
-  ]
-  const prorated = preview.lines.some((line) => line.proration)
-  const body = prorated
-    ? `${parts.join(' · ')}. Prorated for the rest of the current period — the lines below are the provider's own credit and debit entries.`
-    : `${parts.join(' · ')}.`
   return (
     <>
-      <InlineNotice title={title} body={body} />
-      {preview.lines.length > 0 ? (
-        <View
-          style={styles.previewLines}
-          accessibilityRole="list"
-          accessibilityLabel="Invoice lines from the payment provider"
-        >
-          <Text style={panelStyles.detailLabel}>Invoice lines</Text>
-          {keyedPreviewLines(preview.lines).map(({ key, line }) => (
-            <PreviewLineRow key={key} line={line} currency={currency} />
-          ))}
+      <InlineNotice title={summary.headline} body={previewSummaryBody(summary)} />
+      {summary.hasDetails ? (
+        <View style={styles.details}>
+          <Button
+            label={showDetails ? 'Hide calculation details' : 'Show calculation details'}
+            variant="ghost"
+            size="sm"
+            accessibilityLabel={
+              showDetails
+                ? 'Hide the payment provider calculation'
+                : 'Show the payment provider calculation'
+            }
+            onPress={() => setShowDetails((open) => !open)}
+          />
+          {showDetails ? (
+            <View
+              style={styles.previewLines}
+              accessibilityRole="list"
+              accessibilityLabel="Invoice lines from the payment provider"
+            >
+              <Text style={panelStyles.muted}>{PREVIEW_DETAILS_EXPLANATION}</Text>
+              {keyedPreviewLines(preview.lines).map(({ key, line }) => (
+                <PreviewLineRow key={key} line={line} currency={currency} />
+              ))}
+              <View style={styles.previewLine}>
+                <Text style={[panelStyles.detailLabel, styles.previewLineDescription]}>
+                  Due now
+                </Text>
+                <MonoText style={styles.previewLineAmount}>
+                  {formatMinorUnits(preview.amountDue ?? preview.total, currency)}
+                </MonoText>
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </>
@@ -93,7 +117,12 @@ export function BillingPreviewNotice({ preview, title }: Readonly<{ preview: Bil
 }
 
 const styles = StyleSheet.create({
+  details: {
+    gap: spacing.xs,
+    alignItems: 'flex-start',
+  },
   previewLines: {
+    alignSelf: 'stretch',
     gap: spacing.xs,
   },
   previewLine: {
