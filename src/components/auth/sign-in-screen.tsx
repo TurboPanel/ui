@@ -23,7 +23,11 @@ import {
   signInOAuthRedirect,
   type OAuthProvider,
 } from '@/lib/instance-api'
-import { safeAuthReturnPath } from '@/lib/invitation-return'
+import {
+  invitationSignInContext,
+  invitationSignInDescription,
+  safeAuthReturnPath,
+} from '@/lib/invitation-return'
 import { isPasskeySupported } from '@/lib/passkey-client'
 import { useSignIn } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
@@ -49,6 +53,8 @@ export function SignInScreenContent() {
     error?: string | string[]
     challenge?: string | string[]
     redirectTo?: string | string[]
+    email?: string | string[]
+    org?: string | string[]
   }>()
   const currentRedirect = useMemo(
     () => signInOAuthRedirect(pathname, params),
@@ -58,7 +64,18 @@ export function SignInScreenContent() {
   const signInMutation = useSignIn()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
   const isInstallMode = instanceInfo?.isInstallMode === true
-  const [email, setEmail] = useState('')
+  // Arriving from an invitation: prefill the invited email and say which
+  // organization signing in will join (only when returning to the invitation).
+  const invitationContext = useMemo(
+    () =>
+      invitationSignInContext({
+        redirectTo: firstSearchParam(params.redirectTo),
+        email: firstSearchParam(params.email),
+        org: firstSearchParam(params.org),
+      }),
+    [params.redirectTo, params.email, params.org],
+  )
+  const [email, setEmail] = useState(() => invitationContext?.email ?? '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -194,6 +211,7 @@ export function SignInScreenContent() {
   return (
     <AuthScreenShell
       title="Sign In"
+      description={invitationSignInDescription(invitationContext)}
       footer={signupFooter}
       accentColor={accent.accent}
     >

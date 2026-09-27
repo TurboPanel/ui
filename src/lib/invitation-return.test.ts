@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   acceptInvitationPath,
+  invitationSignInContext,
+  invitationSignInDescription,
   safeAuthReturnPath,
   signInForInvitationHref,
   signInWithReturnHref,
@@ -35,5 +37,38 @@ describe('invitation return hrefs', () => {
     expect(signInForInvitationHref(invitationId)).toBe(
       `/sign-in?redirectTo=${encodeURIComponent(acceptPath)}`,
     )
+  })
+})
+
+describe('invitation sign-in hand-off', () => {
+  const invitationId = '11111111-1111-4111-8111-111111111111'
+
+  it('carries the invited email and organization to sign-in', () => {
+    const href = signInForInvitationHref(invitationId, {
+      email: 'ada@example.com',
+      organizationName: 'Acme & Co',
+    })
+    const url = new URL(href, 'https://console.example')
+    expect(url.pathname).toBe('/sign-in')
+    expect(url.searchParams.get('redirectTo')).toBe(acceptInvitationPath(invitationId))
+    expect(url.searchParams.get('email')).toBe('ada@example.com')
+    expect(url.searchParams.get('org')).toBe('Acme & Co')
+  })
+
+  it('shows invitation copy only when sign-in returns to an invitation', () => {
+    const redirectTo = acceptInvitationPath(invitationId)
+    const context = invitationSignInContext({ redirectTo, email: ' ada@example.com ', org: 'Acme' })
+    expect(context).toEqual({ email: 'ada@example.com', organizationName: 'Acme' })
+    expect(invitationSignInDescription(context)).toBe('Sign in to accept your invitation to Acme.')
+    expect(invitationSignInContext({ redirectTo: '/servers', org: 'Acme' })).toBeNull()
+    expect(invitationSignInContext({ org: 'Acme' })).toBeNull()
+    expect(invitationSignInDescription(null)).toBeUndefined()
+  })
+
+  it('drops a malformed email and an overlong organization name', () => {
+    const redirectTo = acceptInvitationPath(invitationId)
+    const context = invitationSignInContext({ redirectTo, email: 'not-an-email', org: 'x'.repeat(201) })
+    expect(context).toEqual({})
+    expect(invitationSignInDescription(context)).toBe('Sign in to accept your invitation.')
   })
 })

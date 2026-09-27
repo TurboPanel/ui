@@ -339,6 +339,37 @@ export async function resetPassword(body: {
   })
 }
 
+/** What the invitation landing page needs to choose a path (never accepts). */
+export type InvitationPreview = {
+  ok: true
+  status: 'pending' | 'expired' | 'accepted' | 'revoked'
+  organizationName: string
+  teamName: string
+  inviterName: string | null
+  /** Pending invitations only. */
+  email?: string
+  /** Pending invitations only: whether an account already uses `email`. */
+  accountExists?: boolean
+}
+
+export async function getInvitationPreview(invitationId: string): Promise<InvitationPreview> {
+  return await apiFetch(`${CLIENT_API}/auth/invitations/${encodeURIComponent(invitationId)}`)
+}
+
+/**
+ * New address: create the account with the invitation's email, accept it and
+ * sign in — one step. Answers the session payload plus the organization.
+ */
+export async function signUpForInvitation(
+  invitationId: string,
+  password: string
+): Promise<SessionInfo & { organizationId: string }> {
+  return await apiFetch(
+    `${CLIENT_API}/auth/invitations/${encodeURIComponent(invitationId)}/sign-up`,
+    { method: 'POST', body: JSON.stringify({ password }) }
+  )
+}
+
 export async function verifyEmail(token: string): Promise<{ ok: true }> {
   const params = new URLSearchParams({ token })
   return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`)
