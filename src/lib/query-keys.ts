@@ -85,6 +85,9 @@ export const queryKeys = {
 
   recovery: ['recovery'] as const,
 
+  /** `/api/health` — the control plane's version and revision. */
+  health: ['health'] as const,
+
   timezones: ['timezones'] as const,
 
   org: (orgId: string) =>

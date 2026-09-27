@@ -1,12 +1,14 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import { StyleSheet, Text, View } from 'react-native'
+import { Linking, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '@/lib/auth-context'
+import { controlPlaneVersionLine } from '@/lib/control-plane-version'
 import {
   HA_PRODUCT_NAME,
   HA_WORDMARK_SHORT,
   HA_WORDMARK_TEXT,
   showsHighAvailabilityWordmark,
 } from '@/lib/platform-copy'
+import { useControlPlaneHealth } from '@/lib/queries/system'
 import { colors } from '@/lib/theme'
 
 /** HA blue fading to its light tint: the pill's 1px border. */
@@ -22,19 +24,26 @@ const BORDER_GRADIENT = [colors.blue, colors.command] as const
  *
  * The border is an outer gradient with 1px padding around an inner
  * blue-tinted fill, so it reads the same on every surface it sits on.
+ *
+ * Under the full pill, right-aligned to its edge: the control plane's version
+ * (and short commit, linked to the source) from `/api/health`. Its line is
+ * reserved from the first render so the pill never moves when it arrives;
+ * the compact pill has no version line.
  */
 export function HighAvailabilityWordmark({
   compact = false,
 }: Readonly<{ compact?: boolean }>) {
   const { controlPlaneRuntime } = useAuth()
-  if (!showsHighAvailabilityWordmark(controlPlaneRuntime)) return null
+  const shown = showsHighAvailabilityWordmark(controlPlaneRuntime)
+  const health = useControlPlaneHealth({ enabled: shown && !compact })
+  if (!shown) return null
 
-  return (
+  const pill = (
     <LinearGradient
       colors={BORDER_GRADIENT}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.border}
+      style={[styles.border, !compact && styles.borderInStack]}
       accessible
       accessibilityRole="text"
       accessibilityLabel={HA_PRODUCT_NAME}
@@ -50,6 +59,30 @@ export function HighAvailabilityWordmark({
       </View>
     </LinearGradient>
   )
+  if (compact) return pill
+
+  const versionLine = controlPlaneVersionLine(health.data)
+  const commitUrl = versionLine?.commitUrl ?? null
+  return (
+    <View style={styles.stack}>
+      {pill}
+      <Text
+        style={styles.version}
+        numberOfLines={1}
+        {...(commitUrl
+          ? {
+              accessibilityRole: 'link' as const,
+              accessibilityLabel: `Control plane ${versionLine?.label ?? ''}, view source commit`,
+              onPress: () => {
+                void Linking.openURL(commitUrl).catch(() => undefined)
+              },
+            }
+          : {})}
+      >
+        {versionLine?.label ?? ''}
+      </Text>
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -59,6 +92,24 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     alignSelf: 'center',
+  },
+  borderInStack: {
+    alignSelf: 'flex-end',
+  },
+  stack: {
+    flexShrink: 1,
+    minWidth: 0,
+    alignSelf: 'center',
+    alignItems: 'flex-end',
+  },
+  version: {
+    marginTop: 2,
+    height: 11,
+    color: colors.textMuted,
+    fontSize: 9,
+    lineHeight: 11,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.3,
   },
   fill: {
     borderRadius: 999,
