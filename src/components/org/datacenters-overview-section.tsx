@@ -1,3 +1,4 @@
+import { GeoLocationLines } from '@/components/org/geo-location-lines'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
@@ -27,7 +28,6 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { useDatacenters } from '@/lib/queries/topology'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCan } from '@/lib/query-client'
-import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
 import { colors, spacing } from '@/lib/theme'
 import { useRouter } from 'expo-router'
 import { useMemo } from 'react'
@@ -47,7 +47,7 @@ function datacentersErrorMessage(error: unknown): string | null {
 
 const DATACENTER_COLUMNS = [
   { key: 'name', header: 'Datacenter', flex: 2.2, minWidth: 180 },
-  { key: 'country', header: 'Country', flex: 1.2, minWidth: 120 },
+  { key: 'location', header: 'Location', flex: 1.8, minWidth: 170 },
   { key: 'servers', header: 'Servers', flex: 0.9, minWidth: 90 },
   { key: 'cidrs', header: 'Subnets', flex: 1.6, minWidth: 140 },
   { key: 'routing', header: 'Routing', flex: 1.2, minWidth: 150 },
@@ -56,7 +56,7 @@ const DATACENTER_COLUMNS = [
 
 const [
   DC_COL_NAME,
-  DC_COL_COUNTRY,
+  DC_COL_LOCATION,
   DC_COL_SERVERS,
   DC_COL_CIDRS,
   DC_COL_ROUTING,
@@ -79,27 +79,10 @@ function DatacenterRoutingCell({ datacenter }: Readonly<{ datacenter: Datacenter
   )
 }
 
-function DatacenterCountryCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
-  const geo = datacenterGeoFromMetadata(datacenter.metadata)
-  const flag = countryCodeToFlagEmoji(geo?.country)
-  const country = formatServerGeoCountryName(geo)
-
-  if (!country && !flag) {
-    return (
-      <DataTableCell column={DC_COL_COUNTRY}>
-        <Text style={styles.mutedValue}>—</Text>
-      </DataTableCell>
-    )
-  }
-
+function DatacenterLocationCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
   return (
-    <DataTableCell column={DC_COL_COUNTRY}>
-      <View style={styles.countryRow}>
-        {flag ? <Text style={styles.countryFlag}>{flag}</Text> : null}
-        <Text style={styles.countryText} numberOfLines={1}>
-          {country || '—'}
-        </Text>
-      </View>
+    <DataTableCell column={DC_COL_LOCATION}>
+      <GeoLocationLines geo={datacenterGeoFromMetadata(datacenter.metadata)} />
     </DataTableCell>
   )
 }
@@ -135,7 +118,7 @@ function DatacenterTableRow({
           </Text>
         ) : null}
       </DataTableCell>
-      <DatacenterCountryCell datacenter={datacenter} />
+      <DatacenterLocationCell datacenter={datacenter} />
       <DataTableCell column={DC_COL_SERVERS}>
         <Text style={styles.countText}>{formatDatacenterServerCount(serverCount)}</Text>
       </DataTableCell>
@@ -329,28 +312,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flexShrink: 1,
   },
-  countryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    maxWidth: '100%',
-  },
   routingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
     maxWidth: '100%',
-  },
-  countryFlag: {
-    fontSize: 14,
-    lineHeight: 16,
-  },
-  countryText: {
-    color: colors.textBody,
-    fontSize: 12,
-    fontWeight: '500',
-    flexShrink: 1,
   },
   mutedValue: {
     color: colors.textDim,

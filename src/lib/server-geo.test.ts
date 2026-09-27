@@ -153,3 +153,47 @@ describe('formatServerGeoAsn', () => {
     expect(formatServerGeoAsn({})).toBe('')
   })
 })
+
+describe('formatServerGeoPlace', () => {
+  it('joins city, short state and country name', async () => {
+    const { formatServerGeoPlace } = await loadGeo()
+    expect(
+      formatServerGeoPlace({ city: 'Wichita', region: 'Kansas', regionCode: 'KS', country: 'US' }),
+    ).toBe('Wichita, KS, United States')
+  })
+
+  it('falls back to the region name when the code is long or missing', async () => {
+    const { formatServerGeoPlace } = await loadGeo()
+    expect(formatServerGeoPlace({ city: 'Bergen', region: 'Vestland', country: 'NO' })).toBe(
+      'Bergen, Vestland, Norway',
+    )
+    expect(
+      formatServerGeoPlace({ region: 'Île-de-France', regionCode: 'IDF-75', country: 'FR' }),
+    ).toBe('Île-de-France, France')
+  })
+
+  it('skips missing parts without stray commas', async () => {
+    const { formatServerGeoPlace } = await loadGeo()
+    expect(formatServerGeoPlace({ country: 'DE' })).toBe('Germany')
+    expect(formatServerGeoPlace({ city: 'Austin' })).toBe('Austin')
+    expect(formatServerGeoPlace({})).toBe('')
+    expect(formatServerGeoPlace(null)).toBe('')
+  })
+})
+
+describe('formatServerGeoAsnLine', () => {
+  it('shows the ASN number and its organization', async () => {
+    const { formatServerGeoAsnLine } = await loadGeo()
+    expect(formatServerGeoAsnLine({ asn: 13335, asOrganization: 'Cloudflare, Inc.' })).toBe(
+      'AS13335 · Cloudflare, Inc.',
+    )
+  })
+
+  it('shows whichever half is known', async () => {
+    const { formatServerGeoAsnLine } = await loadGeo()
+    expect(formatServerGeoAsnLine({ asn: 7922 })).toBe('AS7922')
+    expect(formatServerGeoAsnLine({ asOrganization: 'Comcast' })).toBe('Comcast')
+    expect(formatServerGeoAsnLine({ asn: Number.NaN })).toBe('')
+    expect(formatServerGeoAsnLine(undefined)).toBe('')
+  })
+})
