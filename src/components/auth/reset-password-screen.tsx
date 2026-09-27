@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text } from 'react-native'
 import { Link, useLocalSearchParams, useRouter } from 'expo-router'
-import { AuthFloatingField } from '@/components/auth/auth-floating-field'
-import { AuthPasswordMeter } from '@/components/auth/auth-password-meter'
+import { AuthNewPasswordField } from '@/components/auth/auth-new-password-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
@@ -15,7 +14,6 @@ import {
   checkPwnedPassword,
   COMPROMISED_PASSWORD_MESSAGE,
   passwordHint,
-  passwordProgress,
   resolveMeterStatus,
   validatePassword,
 } from '@/lib/password-policy'
@@ -59,7 +57,6 @@ export function ResetPasswordScreenContent() {
   const reset = useResetPassword()
 
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [pwnedWarning, setPwnedWarning] = useState('')
   const [checking, setChecking] = useState(false)
@@ -158,39 +155,21 @@ export function ResetPasswordScreenContent() {
       footer={requestNewLink}
       accentColor={accent.accent}
     >
-      <View style={authFormStyles.field}>
-        <AuthFloatingField
-          label="New password"
-          value={password}
-          onChangeText={(text) => {
-            setPassword(text)
-            setError('')
-            setPwnedWarning('')
-          }}
-          accentColor={accent.accent}
-          autoComplete="new-password"
-          secureTextEntry={!showPassword}
-          showPasswordToggle
-          passwordVisible={showPassword}
-          onTogglePasswordVisible={() => setShowPassword((v) => !v)}
-          editable={!loading}
-          returnKeyType="go"
-          onSubmitEditing={() => {
-            onSubmit().catch(() => {
-              // Errors are surfaced via setError inside onSubmit.
-            })
-          }}
-        />
-      </View>
-
-      {password ? (
-        <AuthPasswordMeter
-          status={meterStatus}
-          progress={passwordProgress(validation)}
-          hint={meterHint}
-          accentColor={accent.accent}
-        />
-      ) : null}
+      <AuthNewPasswordField
+        label="New password"
+        value={password}
+        onChangeText={(text) => {
+          setPassword(text)
+          setError('')
+          setPwnedWarning('')
+        }}
+        onSubmit={onSubmit}
+        editable={!loading}
+        accentColor={accent.accent}
+        validation={validation}
+        meterStatus={meterStatus}
+        meterHint={meterHint}
+      />
 
       {pwnedWarning ? (
         <Text style={styles.warning} accessibilityRole="alert">

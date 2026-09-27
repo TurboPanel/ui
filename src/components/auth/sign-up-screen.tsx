@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
-import { AuthPasswordMeter } from '@/components/auth/auth-password-meter'
+import { AuthNewPasswordField } from '@/components/auth/auth-new-password-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
@@ -26,7 +26,6 @@ import {
   checkPwnedPassword,
   COMPROMISED_PASSWORD_MESSAGE,
   passwordHint,
-  passwordProgress,
   resolveMeterStatus,
   validatePassword,
 } from '@/lib/password-policy'
@@ -115,7 +114,6 @@ export function SignUpScreenContent() {
   } = useAuthStatus()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const loading = signUpMutation.isPending
@@ -298,40 +296,23 @@ export function SignUpScreenContent() {
         />
       </View>
 
-      <View style={[authFormStyles.field, authFormStyles.fieldSpaced]}>
-        <AuthFloatingField
-          label="Password"
-          value={password}
-          onChangeText={onPasswordChange}
-          onBlur={() => {
-            onPasswordBlur().catch(() => {
-              // pwned check failures fall back to server-side enforcement.
-            })
-          }}
-          accentColor={accent.accent}
-          autoComplete="new-password"
-          secureTextEntry={!showPassword}
-          showPasswordToggle
-          passwordVisible={showPassword}
-          onTogglePasswordVisible={() => setShowPassword((v) => !v)}
-          editable={!loading}
-          returnKeyType="go"
-          onSubmitEditing={() => {
-            onSubmit().catch(() => {
-              // Errors are surfaced via setError inside onSubmit.
-            })
-          }}
-        />
-      </View>
-
-      {password ? (
-        <AuthPasswordMeter
-          status={meterStatus}
-          progress={passwordProgress(validation)}
-          hint={meterHint}
-          accentColor={accent.accent}
-        />
-      ) : null}
+      <AuthNewPasswordField
+        label="Password"
+        value={password}
+        onChangeText={onPasswordChange}
+        onBlur={() => {
+          onPasswordBlur().catch(() => {
+            // pwned check failures fall back to server-side enforcement.
+          })
+        }}
+        onSubmit={onSubmit}
+        editable={!loading}
+        accentColor={accent.accent}
+        validation={validation}
+        meterStatus={meterStatus}
+        meterHint={meterHint}
+        spaced
+      />
 
       {error ? (
         <Text style={authFormStyles.error} accessibilityRole="alert">
