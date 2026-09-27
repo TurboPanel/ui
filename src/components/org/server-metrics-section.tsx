@@ -56,6 +56,7 @@ import {
   type MetricsRangeId,
   type TemperatureUnit,
 } from '@/lib/format-metrics'
+import { layoutHostGrid } from '@/lib/metrics-host-grid'
 import {
   formatEntityMetricId,
   MetricsBackendUnavailableError,
@@ -2002,15 +2003,6 @@ function isServerStale(server: OrgServerRecord | null): boolean {
   return !server.connected
 }
 
-function bucketFloor(ms: number, resolutionSeconds: number): number {
-  const bucketMs = resolutionSeconds * 1000
-  return Math.floor(ms / bucketMs) * bucketMs
-}
-
-function defaultExpectedSamplesPerBucket(resolutionSeconds: number): number {
-  return Math.max(1, Math.round(resolutionSeconds / 60))
-}
-
 type NormalizedHostGrid = {
   points: GridPoint[]
   gapBands: MetricGapBand[]
@@ -2027,9 +2019,12 @@ type NormalizedHostGrid = {
  * their own — one daemon POST per sampling tick writes every family
  * together, so a host-level gap means every family's series has one too.
  *
- * Amber bands mark buckets with no samples (a hole in the line). A live
- * bucket that landed some points but fewer than `expectedSampleCount` still
- * plots — coverage accounting keeps the shortfall, the overlay does not.
+ * Amber bands mark real gaps only — empty buckets where a sample was due
+ * (the control plane's `gapBuckets`; see `layoutHostGrid`). Empty buckets
+ * that are not missing data (a grid finer than the collection cadence, or
+ * rows the store sampled down) are left out so the line draws through them.
+ * A live bucket that landed some points but fewer than `expectedSampleCount`
+ * still plots — coverage accounting keeps the shortfall, the overlay does not.
  */
 function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
   const fromMs = Date.parse(data.from)
@@ -2059,42 +2054,35 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
   }
 
   const bucketMs = resolutionSeconds * 1000
-  const startMs = bucketFloor(fromMs, resolutionSeconds)
-  const endMs = bucketFloor(toMs, resolutionSeconds)
-  const defaultExpected = defaultExpectedSamplesPerBucket(resolutionSeconds)
-
-  const pointByBucket = new Map(
-    host.points.map((point) => [bucketFloor(Date.parse(point.at), resolutionSeconds), point])
-  )
+  const layout = layoutHostGrid({
+    fromMs,
+    toMs,
+    resolutionSeconds,
+    points: host.points,
+    sampleCount: host.sampleCount,
+    gapCount: host.gapCount,
+    gapBuckets: host.gapBuckets,
+  })
 
   const points: GridPoint[] = []
   const gapBands: MetricGapBand[] = []
   const bucketGrid: number[] = []
-  let expectedSamples = 0
-
-  for (let bucket = startMs; bucket < endMs; bucket += bucketMs) {
-    bucketGrid.push(bucket)
-    const existing = pointByBucket.get(bucket)
-    const band = { fromMs: bucket, toMs: bucket + bucketMs }
-
-    if (!existing) {
-      expectedSamples += defaultExpected
-      gapBands.push(band)
-      points.push({ tMs: bucket, values: {} })
+  for (const slot of layout.slots) {
+    bucketGrid.push(slot.bucketMs)
+    if (slot.kind === 'gap') {
+      gapBands.push({ fromMs: slot.bucketMs, toMs: slot.bucketMs + bucketMs })
+      points.push({ tMs: slot.bucketMs, values: {} })
       continue
     }
-
-    const expected = existing.expectedSampleCount ?? defaultExpected
-    expectedSamples += expected
-    if (existing.sampleCount <= 0) {
-      gapBands.push(band)
-    }
     points.push({
-      tMs: bucket,
-      values: existing.values,
-      derived: existing.derived,
+      tMs: slot.bucketMs,
+      values: slot.point.values,
+      derived: slot.point.derived,
     })
   }
+  const expectedSamples = layout.expectedSamples
+  const startMs = layout.startMs
+  const endMs = layout.endMs
 
   return { points, gapBands, expectedSamples, fromMs: startMs, toMs: endMs, bucketGrid }
 }
