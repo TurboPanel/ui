@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
+import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import {
@@ -44,7 +45,10 @@ export function OrgSidebar({
   return (
     <GlassSurface style={styles.sidebar} intensity="strong">
       <View style={styles.brand}>
-        <TurboPanelLogo size={36} />
+        <View style={styles.brandRow}>
+          <TurboPanelLogo size={36} />
+          <HighAvailabilityWordmark />
+        </View>
       </View>
 
       <View style={styles.nav}>
@@ -180,6 +184,12 @@ const styles = StyleSheet.create({
   brand: {
     marginBottom: spacing.xl,
     alignItems: 'center',
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    maxWidth: '100%',
   },
   nav: {
     flex: 1,

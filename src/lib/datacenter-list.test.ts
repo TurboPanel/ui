@@ -168,6 +168,26 @@ describe('datacenterGeoFromMetadata', () => {
       city: 'Amsterdam',
       region: 'North Holland',
     })
+    expect(
+      datacenterGeoFromMetadata({
+        geo: {
+          country: 'US',
+          city: 'Wichita',
+          regionCode: 'KS',
+          asn: 7922,
+          asOrganization: ' Comcast ',
+        },
+      }),
+    ).toEqual({
+      country: 'US',
+      city: 'Wichita',
+      regionCode: 'KS',
+      asn: 7922,
+      asOrganization: 'Comcast',
+    })
+    expect(datacenterGeoFromMetadata({ geo: { country: 'US', asn: 'x' } })).toEqual({
+      country: 'US',
+    })
     expect(datacenterGeoFromMetadata({ geo: { country: '  ' } })).toBeNull()
     expect(datacenterGeoFromMetadata({ geo: 'not-an-object' })).toBeNull()
     expect(datacenterGeoFromMetadata(null)).toBeNull()
