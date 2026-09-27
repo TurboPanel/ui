@@ -87,9 +87,15 @@ export function datacenterGeoFromMetadata(
   const country = typeof source.country === 'string' ? source.country.trim() : ''
   const city = typeof source.city === 'string' ? source.city.trim() : ''
   const region = typeof source.region === 'string' ? source.region.trim() : ''
+  const regionCode = typeof source.regionCode === 'string' ? source.regionCode.trim() : ''
+  const asOrganization =
+    typeof source.asOrganization === 'string' ? source.asOrganization.trim() : ''
   if (country) geo.country = country
   if (city) geo.city = city
   if (region) geo.region = region
+  if (regionCode) geo.regionCode = regionCode
+  if (typeof source.asn === 'number' && Number.isFinite(source.asn)) geo.asn = source.asn
+  if (asOrganization) geo.asOrganization = asOrganization
   if (!geo.country && !geo.city && !geo.region) return null
   return geo
 }

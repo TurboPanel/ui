@@ -68,3 +68,28 @@ export function formatServerGeoAsn(geo?: ServerGeo | null): string {
   }
   return org ?? ''
 }
+
+/** A short state/region: the code when it is a short one (`KS`), else the name. */
+function regionShort(geo: ServerGeo): string {
+  const code = geo.regionCode?.trim()
+  if (code && /^[A-Za-z0-9]{1,3}$/.test(code)) return code.toUpperCase()
+  return geo.region?.trim() || code || ''
+}
+
+/**
+ * "City, State, Country" for the server list's Location column (e.g.
+ * `"Wichita, KS, United States"`), skipping absent parts.
+ */
+export function formatServerGeoPlace(geo?: ServerGeo | null): string {
+  if (!geo) return ''
+  const parts = [geo.city?.trim() ?? '', regionShort(geo), formatServerGeoCountryName(geo)]
+  return parts.filter(Boolean).join(', ')
+}
+
+/** ASN line under the place (e.g. `"AS13335 · Cloudflare, Inc."`). */
+export function formatServerGeoAsnLine(geo?: ServerGeo | null): string {
+  if (!geo) return ''
+  const org = geo.asOrganization?.trim() ?? ''
+  const asn = geo.asn != null && Number.isFinite(geo.asn) ? `AS${geo.asn}` : ''
+  return [asn, org].filter(Boolean).join(' · ')
+}
