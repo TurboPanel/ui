@@ -594,9 +594,13 @@ export function AddServerWizard({
                 chosenTierId={chosenTierId}
                 onChooseTier={setChosenTierId}
                 refusal={licenseRefusal}
-                onRestored={() => {
+                onLicenseReady={() => {
+                  // A license was restored or bought. When the last Continue
+                  // was refused for want of one, carry on without a second click.
+                  const retry = licenseRefusal != null
                   setLicenseRefusal(null)
                   setCreateError(null)
+                  if (retry) void onStartAddServer()
                 }}
               />
             ) : null

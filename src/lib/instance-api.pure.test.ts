@@ -770,6 +770,8 @@ describe('fetch wrappers (mocked fetch)', () => {
         ending: 3,
         endsAt: '2026-10-26T00:00:00.000Z',
         available: 0,
+        provisioning: 0,
+        unusedKeys: 0,
         message: '3 in use, 3 end Oct 26 — restore one to add this server.',
         tiers: [
           {
@@ -795,9 +797,23 @@ describe('fetch wrappers (mocked fetch)', () => {
       ending: 0,
       endsAt: null,
       available: 0,
+      provisioning: 0,
+      unusedKeys: 0,
       tiers: [],
       message: null,
     })
+  })
+
+  it('reads the provisioning and unused-key counts when the control plane sends them', () => {
+    const availability = licenseAvailabilityFromBody({
+      purchased: 7,
+      inUse: 6,
+      provisioning: 1,
+      unusedKeys: 1,
+      available: 0,
+    })
+    expect(availability.provisioning).toBe(1)
+    expect(availability.unusedKeys).toBe(1)
   })
 
   it('falls back to a truthful sentence sized to what was bought', () => {

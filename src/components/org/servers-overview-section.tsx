@@ -39,7 +39,12 @@ import {
 } from '@/lib/instance-api'
 import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
-import { unboundPendingKeys, unusedRegistrationKeysLabel } from '@/lib/pending-keys'
+import {
+  provisioningKeys,
+  provisioningServersLabel,
+  unboundPendingKeys,
+  unusedRegistrationKeysLabel,
+} from '@/lib/pending-keys'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import {
   SERVERS_REFRESH_MS,
@@ -259,19 +264,28 @@ function AddServerToolbarButton({
   )
 }
 
-function UnusedKeysHint({ orgId, count }: Readonly<{ orgId: string; count: number }>) {
+function UnusedKeysHint({
+  orgId,
+  count,
+  provisioning,
+}: Readonly<{ orgId: string; count: number; provisioning: string | null }>) {
   const router = useRouter()
-  if (count <= 0) return null
+  if (count <= 0) {
+    return provisioning ? <Text style={panelStyles.muted}>{provisioning}</Text> : null
+  }
   const label = unusedRegistrationKeysLabel(count)
   return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={`${label}. Open pending keys.`}
-      style={({ pressed }) => [styles.unusedKeysLink, pressed && styles.buttonPressed, webPointer]}
-      onPress={() => router.push(serversPendingKeysHref(orgId))}
-    >
-      <Text style={styles.unusedKeysLinkText}>{label} — view and delete</Text>
-    </Pressable>
+    <>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`${label}. Open pending keys.`}
+        style={({ pressed }) => [styles.unusedKeysLink, pressed && styles.buttonPressed, webPointer]}
+        onPress={() => router.push(serversPendingKeysHref(orgId))}
+      >
+        <Text style={styles.unusedKeysLinkText}>{label} — view and delete</Text>
+      </Pressable>
+      {provisioning ? <Text style={panelStyles.muted}>{provisioning}</Text> : null}
+    </>
   )
 }
 
@@ -1006,6 +1020,9 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
 
   const servers = orEmptyArray(serversQuery.data?.servers)
   const pendingKeyCount = unboundPendingKeys(licensesQuery.data?.licenses ?? []).length
+  const provisioningLabel = provisioningServersLabel(
+    provisioningKeys(licensesQuery.data?.licenses ?? [])
+  )
   const loading = serversQuery.isLoading
   const error = serversQuery.isError
     ? serversRefreshErrorMessage(serversQuery.error, isForbiddenError(serversQuery.error))
@@ -1136,7 +1153,9 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         </Text>
       ) : null}
 
-      {canOwn ? <UnusedKeysHint orgId={orgId} count={pendingKeyCount} /> : null}
+      {canOwn ? (
+        <UnusedKeysHint orgId={orgId} count={pendingKeyCount} provisioning={provisioningLabel} />
+      ) : null}
 
       {canOwn && showAddServerWizard ? (
         <AddServerWizard
