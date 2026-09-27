@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { HeaderAccountControls } from '@/components/header-account-controls'
 import { useAuth } from '@/lib/auth-context'
@@ -29,6 +30,7 @@ export function OrgHeader({
       <View style={styles.row}>
         <View style={styles.headerMain}>
           <TurboPanelLogo size={28} />
+          <HighAvailabilityWordmark compact />
           {onMenuPress ? (
             <Pressable
               style={({ pressed }) => [

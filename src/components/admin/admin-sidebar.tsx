@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
+import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { AdminAreaIcon } from '@/components/icons/nav-icons'
@@ -25,7 +26,10 @@ export function AdminSidebar({
   return (
     <GlassSurface style={styles.sidebar} intensity="strong">
       <View style={styles.brand}>
-        <TurboPanelLogo size={36} />
+        <View style={styles.brandRow}>
+          <TurboPanelLogo size={36} />
+          <HighAvailabilityWordmark />
+        </View>
         <Text style={styles.brandHint}>Instance administration</Text>
       </View>
 
@@ -131,6 +135,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     alignItems: 'center',
     gap: spacing.xs,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    maxWidth: '100%',
   },
   brandHint: {
     color: colors.textDim,
