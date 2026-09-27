@@ -346,26 +346,34 @@ export type InvitationPreview = {
   organizationName: string
   teamName: string
   inviterName: string | null
-  /** Pending invitations only. */
+  /** Link-secret preview only: the id for the signed-in Accept button (not a secret). */
+  invitationId?: string
+  /** Link-secret preview of a pending invitation only. */
   email?: string
-  /** Pending invitations only: whether an account already uses `email`. */
+  /** Link-secret preview of a pending invitation only: whether an account already uses `email`. */
   accountExists?: boolean
 }
 
-export async function getInvitationPreview(invitationId: string): Promise<InvitationPreview> {
+/** Preview from the emailed link's secret (`/accept-invitation?token=`). */
+export async function getInvitationPreviewByToken(token: string): Promise<InvitationPreview> {
+  return await apiFetch(`${CLIENT_API}/auth/invitations/by-token/${encodeURIComponent(token)}`)
+}
+
+/** Old `?id=` links: organization, inviter and status only — never the email. */
+export async function getInvitationPreviewById(invitationId: string): Promise<InvitationPreview> {
   return await apiFetch(`${CLIENT_API}/auth/invitations/${encodeURIComponent(invitationId)}`)
 }
 
 /**
  * New address: create the account with the invitation's email, accept it and
- * sign in — one step. Answers the session payload plus the organization.
+ * sign in — one step. Only the emailed link secret can do this.
  */
 export async function signUpForInvitation(
-  invitationId: string,
+  token: string,
   password: string
 ): Promise<SessionInfo & { organizationId: string }> {
   return await apiFetch(
-    `${CLIENT_API}/auth/invitations/${encodeURIComponent(invitationId)}/sign-up`,
+    `${CLIENT_API}/auth/invitations/by-token/${encodeURIComponent(token)}/sign-up`,
     { method: 'POST', body: JSON.stringify({ password }) }
   )
 }

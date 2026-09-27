@@ -1,34 +1,51 @@
 /**
  * Invitation landing page (owner decision 2026-09-27): the emailed link opens
- * `/accept-invitation?id=…`, which never accepts on load. What it shows comes
- * from the unauthenticated invitation preview and who (if anyone) is signed in.
+ * `/accept-invitation?token=<secret>`, which never accepts on load.
+ *
+ * Only the link **secret** may show the invited email, route a new address to
+ * "create a password", or stand in for proof of the address — the invitation
+ * id cannot (managers can list it). Links sent before the secret existed carry
+ * `?id=`: those get the organization and inviter only, and the person signs
+ * in or signs up as usual, then presses Accept (the server checks the email).
  */
 import type { InvitationPreview } from './instance-api'
 
+export type InvitationLink = { kind: 'token'; token: string } | { kind: 'id'; id: string }
+
+/** `?token=` wins over `?id=`; neither → null. */
+export function invitationLinkFromParams(params: {
+  token?: string
+  id?: string
+}): InvitationLink | null {
+  const token = params.token?.trim()
+  if (token) return { kind: 'token', token }
+  const id = params.id?.trim()
+  if (id) return { kind: 'id', id }
+  return null
+}
+
 export type InvitationLandingView =
-  | { kind: 'missing-id' }
+  | { kind: 'missing-link' }
   | { kind: 'loading' }
-  /** The id matches no invitation. */
+  /** The link matches no invitation (or was re-sent). */
   | { kind: 'not-found' }
   /** Expired, revoked or already used. */
   | { kind: 'unavailable'; status: 'expired' | 'accepted' | 'revoked'; organizationName: string }
-  /** Signed in as the invited address: show the Accept invitation button. */
-  | { kind: 'accept'; organizationName: string; inviterName: string | null }
-  /** Signed in as someone else: say so and offer switching accounts. */
+  /** Signed in (as the invited address, on the token path): the Accept button. */
+  | { kind: 'accept'; organizationName: string; inviterName: string | null; invitationId: string }
+  /** Token path, signed in as someone else: say so and offer switching accounts. */
   | { kind: 'wrong-account'; organizationName: string; signedInAs: string; invitedEmail: string }
-  /** Not signed in, the address has an account: go to sign-in, come back to Accept. */
+  /** Token path, not signed in, the address has an account: go to sign-in, come back to Accept. */
   | { kind: 'sign-in'; organizationName: string; email: string }
-  /** Not signed in, no account yet: create a password — that is the accept. */
+  /** Token path, not signed in, no account yet: create a password — that is the accept. */
   | { kind: 'create-password'; organizationName: string; email: string }
-  /**
-   * The preview could not be read (an older control plane without it, or a
-   * network error): fall back to explicit links and, when signed in, the
-   * Accept button — never an automatic accept.
-   */
-  | { kind: 'fallback'; signedIn: boolean }
+  /** Old `?id=` link, not signed in: sign in or sign up with the invited email, then Accept. */
+  | { kind: 'sign-in-to-accept'; organizationName: string; invitationId: string }
+  /** The preview could not be read: offer a retry (never an automatic accept). */
+  | { kind: 'error' }
 
 export type InvitationLandingInput = {
-  invitationId: string
+  link: InvitationLink | null
   sessionLoading: boolean
   /** The signed-in account's email, or null when signed out. */
   sessionEmail: string | null
@@ -46,13 +63,32 @@ export function isInvitationNotFound(err: unknown): boolean {
   return err instanceof Error && /HTTP 404\b/.test(err.message) && err.message.includes('not_found')
 }
 
+function idLinkView(
+  link: { kind: 'id'; id: string },
+  input: InvitationLandingInput,
+  preview: InvitationPreview | undefined,
+): InvitationLandingView {
+  const organizationName = preview?.organizationName ?? 'this organization'
+  if (input.sessionEmail !== null) {
+    return {
+      kind: 'accept',
+      organizationName,
+      inviterName: preview?.inviterName ?? null,
+      invitationId: link.id,
+    }
+  }
+  return { kind: 'sign-in-to-accept', organizationName, invitationId: link.id }
+}
+
 export function invitationLandingView(input: InvitationLandingInput): InvitationLandingView {
-  if (!input.invitationId) return { kind: 'missing-id' }
+  const link = input.link
+  if (!link) return { kind: 'missing-link' }
   if (input.sessionLoading || input.previewLoading) return { kind: 'loading' }
+
   if (input.previewError !== undefined && input.previewError !== null) {
-    return isInvitationNotFound(input.previewError)
-      ? { kind: 'not-found' }
-      : { kind: 'fallback', signedIn: input.sessionEmail !== null }
+    if (isInvitationNotFound(input.previewError)) return { kind: 'not-found' }
+    // An old id link can still be accepted after sign-in; the server checks the email.
+    return link.kind === 'id' ? idLinkView(link, input, undefined) : { kind: 'error' }
   }
   const preview = input.preview
   if (!preview) return { kind: 'loading' }
@@ -61,15 +97,16 @@ export function invitationLandingView(input: InvitationLandingInput): Invitation
   if (preview.status !== 'pending') {
     return { kind: 'unavailable', status: preview.status, organizationName }
   }
-  const invitedEmail = preview.email ?? ''
+  if (link.kind === 'id') return idLinkView(link, input, preview)
 
+  const invitedEmail = preview.email ?? ''
+  const invitationId = preview.invitationId ?? ''
   if (input.sessionEmail !== null) {
     if (invitedEmail && !sameEmail(input.sessionEmail, invitedEmail)) {
       return { kind: 'wrong-account', organizationName, signedInAs: input.sessionEmail, invitedEmail }
     }
-    return { kind: 'accept', organizationName, inviterName: preview.inviterName }
+    return { kind: 'accept', organizationName, inviterName: preview.inviterName, invitationId }
   }
-
   return preview.accountExists
     ? { kind: 'sign-in', organizationName, email: invitedEmail }
     : { kind: 'create-password', organizationName, email: invitedEmail }
@@ -95,7 +132,9 @@ export function invitationActionErrorCopy(err: unknown): string {
   const message = err.message
   if (/HTTP 403\b/.test(message)) return 'This invitation was sent to a different email address.'
   if (/HTTP 404\b/.test(message)) return 'This invitation could not be found.'
-  if (/HTTP 410\b/.test(message)) return 'This invitation has expired or has already been used.'
+  if (/HTTP 410\b/.test(message)) {
+    return 'This invitation link has expired, was re-sent, or has already been used.'
+  }
   if (/HTTP 429\b/.test(message)) return 'Too many attempts. Wait a minute and try again.'
   return message || 'Could not accept this invitation.'
 }

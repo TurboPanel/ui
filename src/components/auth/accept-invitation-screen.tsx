@@ -12,15 +12,21 @@ import {
   resolveControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
-import { acceptInvitation, getInvitationPreview, signUpForInvitation } from '@/lib/instance-api'
+import {
+  acceptInvitation,
+  getInvitationPreviewById,
+  getInvitationPreviewByToken,
+  signUpForInvitation,
+} from '@/lib/instance-api'
 import {
   invitationActionErrorCopy,
   invitationLandingView,
+  invitationLinkFromParams,
   isAccountExistsError,
   unavailableInvitationCopy,
   type InvitationLandingView,
 } from '@/lib/invitation-landing'
-import { signInForInvitationHref } from '@/lib/invitation-return'
+import { invitationLandingPath, signInReturningTo } from '@/lib/invitation-return'
 import {
   checkPwnedPassword,
   COMPROMISED_PASSWORD_MESSAGE,
@@ -74,14 +80,21 @@ const styles = StyleSheet.create({
 const TITLE = 'Accept invitation'
 
 /**
- * The page the invitation email links to. It never accepts on load: an
- * existing account signs in and presses Accept; a new address creates its
- * password here, which accepts and signs in (owner decision 2026-09-27).
+ * The page the invitation email links to (`?token=<secret>`; `?id=` for links
+ * sent before link secrets). It never accepts on load: an existing account
+ * signs in and presses Accept; a new address creates its password here, which
+ * accepts and signs in (owner decision 2026-09-27). Only the secret can show
+ * the invited email or create the account.
  */
 export function AcceptInvitationScreenContent() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ id?: string | string[] }>()
-  const invitationId = normalizeParam(params.id)
+  const params = useLocalSearchParams<{ id?: string | string[]; token?: string | string[] }>()
+  const link = invitationLinkFromParams({
+    token: normalizeParam(params.token),
+    id: normalizeParam(params.id),
+  })
+  const linkKey = link ? `${link.kind}:${link.kind === 'token' ? link.token : link.id}` : ''
+  const landingPath = link ? invitationLandingPath(link) : '/sign-in'
   const { session, isLoading: sessionLoading, signOut, refreshSession } = useAuth()
   const { data: instanceInfo } = useAuthStatus()
   const runtime = useMemo(() => resolveControlPlaneRuntime(instanceInfo), [instanceInfo])
@@ -89,19 +102,22 @@ export function AcceptInvitationScreenContent() {
   const tint = useMemo(() => authAccentStyles(accent), [accent])
 
   const preview = useQuery({
-    queryKey: ['invitation-preview', invitationId],
-    queryFn: () => getInvitationPreview(invitationId),
-    enabled: invitationId.length > 0,
+    queryKey: ['invitation-preview', linkKey],
+    queryFn: () =>
+      link?.kind === 'token'
+        ? getInvitationPreviewByToken(link.token)
+        : getInvitationPreviewById(link?.id ?? ''),
+    enabled: link !== null,
     retry: false,
     staleTime: 30_000,
   })
 
   const view = invitationLandingView({
-    invitationId,
+    link,
     sessionLoading,
     sessionEmail: session?.email ?? null,
     preview: preview.data,
-    previewLoading: invitationId.length > 0 && preview.isLoading,
+    previewLoading: link !== null && preview.isLoading,
     previewError: preview.error ?? undefined,
   })
 
@@ -109,12 +125,12 @@ export function AcceptInvitationScreenContent() {
   useEffect(() => {
     if (view.kind !== 'sign-in') return
     router.replace(
-      signInForInvitationHref(invitationId, {
+      signInReturningTo(landingPath, {
         email: view.email,
         organizationName: view.organizationName,
       }) as Href,
     )
-  }, [view, invitationId, router])
+  }, [view, landingPath, router])
 
   const openOrganization = useCallback(
     async (organizationId: string) => {
@@ -158,10 +174,10 @@ export function AcceptInvitationScreenContent() {
     case 'loading':
     case 'sign-in':
       return spinner(view.kind === 'sign-in' ? 'Taking you to sign in…' : 'Loading your invitation…')
-    case 'missing-id':
+    case 'missing-link':
       return shell(
         <Text style={authFormStyles.error} accessibilityRole="alert">
-          This invitation link is missing its id. Open the link from the email again.
+          This invitation link is incomplete. Open the link from the email again.
         </Text>,
         undefined,
         backToSignIn,
@@ -169,7 +185,8 @@ export function AcceptInvitationScreenContent() {
     case 'not-found':
       return shell(
         <Text style={authFormStyles.error} accessibilityRole="alert">
-          This invitation could not be found. Ask whoever invited you to send a new one.
+          This invitation link is not valid anymore — it may have been re-sent. Use the newest
+          email, or ask whoever invited you to send a new one.
         </Text>,
         undefined,
         backToSignIn,
@@ -189,7 +206,7 @@ export function AcceptInvitationScreenContent() {
           onSwitch={async () => {
             await signOut().catch(() => undefined)
             router.replace(
-              signInForInvitationHref(invitationId, {
+              signInReturningTo(landingPath, {
                 email: view.invitedEmail,
                 organizationName: view.organizationName,
               }) as Href,
@@ -202,7 +219,7 @@ export function AcceptInvitationScreenContent() {
     case 'accept':
       return (
         <AcceptButton
-          invitationId={invitationId}
+          invitationId={view.invitationId}
           view={view}
           onAccepted={openOrganization}
           shell={shell}
@@ -212,13 +229,13 @@ export function AcceptInvitationScreenContent() {
     case 'create-password':
       return (
         <CreatePassword
-          invitationId={invitationId}
+          token={link?.kind === 'token' ? link.token : ''}
           view={view}
           accentColor={accent.accent}
           onJoined={openOrganization}
           onAccountExists={() =>
             router.replace(
-              signInForInvitationHref(invitationId, {
+              signInReturningTo(landingPath, {
                 email: view.email,
                 organizationName: view.organizationName,
               }) as Href,
@@ -228,31 +245,52 @@ export function AcceptInvitationScreenContent() {
           tint={tint}
         />
       )
-    case 'fallback':
-      return view.signedIn ? (
-        <AcceptButton
-          invitationId={invitationId}
-          view={{ kind: 'accept', organizationName: 'this organization', inviterName: null }}
-          onAccepted={openOrganization}
-          shell={shell}
-          tint={tint}
-        />
-      ) : (
-        shell(
-          <>
-            <Text style={styles.statusCopy}>
-              Sign in with the invited email to accept this invitation.
+    case 'sign-in-to-accept':
+      return shell(
+        <>
+          <Text style={styles.statusCopy}>
+            {`Sign in with the invited email to accept your invitation to ${view.organizationName}. New here? Create an account with that email first.`}
+          </Text>
+          <AuthPrimaryButton
+            onPress={() =>
+              router.push(
+                signInReturningTo(landingPath, { organizationName: view.organizationName }) as Href,
+              )
+            }
+            accessibilityLabel="Sign in"
+            label="Sign in"
+            tint={tint}
+          />
+        </>,
+        undefined,
+        <Link href={`/sign-up?invitationId=${encodeURIComponent(view.invitationId)}` as Href} asChild>
+          <Pressable accessibilityRole="link" accessibilityLabel="Create an account" style={webPointer}>
+            <Text style={authFormStyles.footerLink}>
+              New here?{' '}
+              <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
+                Create an account
+              </Text>
             </Text>
-            <AuthPrimaryButton
-              onPress={() => router.push(signInForInvitationHref(invitationId) as Href)}
-              accessibilityLabel="Sign in"
-              label="Sign in"
-              tint={tint}
-            />
-          </>,
-          undefined,
-          backToSignIn,
-        )
+          </Pressable>
+        </Link>,
+      )
+    case 'error':
+      return shell(
+        <>
+          <Text style={authFormStyles.error} accessibilityRole="alert">
+            {"Couldn't load this invitation. Check your connection and try again."}
+          </Text>
+          <AuthPrimaryButton
+            onPress={() => {
+              preview.refetch().catch(() => undefined)
+            }}
+            accessibilityLabel="Try again"
+            label="Try again"
+            tint={tint}
+          />
+        </>,
+        undefined,
+        backToSignIn,
       )
   }
 }
@@ -345,7 +383,7 @@ function WrongAccount({
 }
 
 function CreatePassword({
-  invitationId,
+  token,
   view,
   accentColor,
   onJoined,
@@ -353,7 +391,7 @@ function CreatePassword({
   shell,
   tint,
 }: Readonly<{
-  invitationId: string
+  token: string
   view: Extract<InvitationLandingView, { kind: 'create-password' }>
   accentColor: string
   onJoined: (organizationId: string) => Promise<void>
@@ -385,7 +423,7 @@ function CreatePassword({
     }
     setSubmitting(true)
     try {
-      const joined = await signUpForInvitation(invitationId, password)
+      const joined = await signUpForInvitation(token, password)
       await onJoined(joined.organizationId)
     } catch (err) {
       setSubmitting(false)
@@ -395,7 +433,7 @@ function CreatePassword({
       }
       setError(invitationActionErrorCopy(err))
     }
-  }, [validation.isValid, loading, password, invitationId, onJoined, onAccountExists])
+  }, [validation.isValid, loading, password, token, onJoined, onAccountExists])
 
   const meterStatus = resolveMeterStatus({
     hasPwnedResult: pwnedWarning !== '',

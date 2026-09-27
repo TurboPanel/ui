@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   acceptInvitationPath,
+  acceptInvitationTokenPath,
+  invitationLandingPath,
   invitationSignInContext,
   invitationSignInDescription,
   safeAuthReturnPath,
   signInForInvitationHref,
+  signInReturningTo,
   signInWithReturnHref,
 } from './invitation-return'
 
@@ -70,5 +73,18 @@ describe('invitation sign-in hand-off', () => {
     const context = invitationSignInContext({ redirectTo, email: 'not-an-email', org: 'x'.repeat(201) })
     expect(context).toEqual({})
     expect(invitationSignInDescription(context)).toBe('Sign in to accept your invitation.')
+  })
+})
+
+describe('secret links', () => {
+  it('returns to the emailed-secret landing page after sign-in', () => {
+    const token = 'b'.repeat(64)
+    const landing = acceptInvitationTokenPath(token)
+    expect(landing).toBe(`/accept-invitation?token=${token}`)
+    expect(invitationLandingPath({ kind: 'token', token })).toBe(landing)
+    expect(invitationLandingPath({ kind: 'id', id: 'inv' })).toBe(acceptInvitationPath('inv'))
+    const url = new URL(signInReturningTo(landing, { organizationName: 'Acme' }), 'https://c.example')
+    expect(url.searchParams.get('redirectTo')).toBe(landing)
+    expect(invitationSignInContext({ redirectTo: landing, org: 'Acme' })).toEqual({ organizationName: 'Acme' })
   })
 })

@@ -1,9 +1,9 @@
 /**
  * Preserve invitation context across the guest sign-in / sign-up handoff.
  *
- * Accept lives on `/accept-invitation?id=…`. Guests leave that screen to
- * authenticate, then must land back there so the signed-in effect can call
- * `acceptInvitation(id)`.
+ * The landing page is `/accept-invitation?token=…` (or `?id=…` for links sent
+ * before link secrets). Guests leave it to sign in, then land back there to
+ * press Accept.
  */
 
 /** Same-origin path a signed-in user may be returned to after auth. */
@@ -19,6 +19,18 @@ export function safeAuthReturnPath(value: string | undefined): string | null {
 
 export function acceptInvitationPath(invitationId: string): string {
   return `/accept-invitation?id=${encodeURIComponent(invitationId)}`
+}
+
+/** The landing page for an emailed link secret (`?token=`). */
+export function acceptInvitationTokenPath(token: string): string {
+  return `/accept-invitation?token=${encodeURIComponent(token)}`
+}
+
+/** The landing page for whichever link brought the person here. */
+export function invitationLandingPath(
+  link: { kind: 'token'; token: string } | { kind: 'id'; id: string },
+): string {
+  return link.kind === 'token' ? acceptInvitationTokenPath(link.token) : acceptInvitationPath(link.id)
 }
 
 export function signInWithReturnHref(returnPath: string): string {
@@ -39,7 +51,15 @@ export function signInForInvitationHref(
   invitationId: string,
   context: InvitationSignInContext = {},
 ): string {
-  const params = new URLSearchParams({ redirectTo: acceptInvitationPath(invitationId) })
+  return signInReturningTo(acceptInvitationPath(invitationId), context)
+}
+
+/** Sign-in that returns to `landingPath` (an `/accept-invitation?…` page). */
+export function signInReturningTo(
+  landingPath: string,
+  context: InvitationSignInContext = {},
+): string {
+  const params = new URLSearchParams({ redirectTo: landingPath })
   if (context.email) params.set('email', context.email)
   if (context.organizationName) params.set('org', context.organizationName)
   return `/sign-in?${params.toString()}`
