@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import { useContainers } from '@/lib/queries/containers'
@@ -8,6 +8,7 @@ import { useEnvironments } from '@/lib/queries/environments'
 import { useProjects } from '@/lib/queries/projects'
 import { useServices } from '@/lib/queries/services'
 import {
+  useControlPlaneHealth,
   useRestartSystemComponent,
   useServerSystemIngress,
 } from '@/lib/queries/system'
@@ -17,8 +18,9 @@ import {
   TURBOPANEL_WORKSPACE_KIND,
 } from '@/lib/system-inventory'
 
-const { restartSystemComponent } = vi.hoisted(() => ({
+const { restartSystemComponent, fetchHealth } = vi.hoisted(() => ({
   restartSystemComponent: vi.fn(),
+  fetchHealth: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -26,6 +28,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
   return {
     ...actual,
     restartSystemComponent,
+    fetchHealth,
   }
 })
 
@@ -318,5 +321,51 @@ describe('system query hooks', () => {
       error: 'offline',
       cause: expect.anything(),
     })
+  })
+})
+
+describe('useControlPlaneHealth', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('reads /api/health once and caches it under the health key', async () => {
+    const health = {
+      ok: true,
+      version: '0.1.1',
+      revision: { commit: '18ad2b07c0ffee1234567890abcdef1234567890', sourceUrl: 'https://github.com/TurboPanel/turbopanel' },
+    }
+    fetchHealth.mockResolvedValueOnce(health)
+    const client = createAppQueryClient()
+    const { result, rerender } = renderHook(() => useControlPlaneHealth(), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toEqual(health)
+    expect(client.getQueryData(queryKeys.health)).toEqual(health)
+    rerender()
+    expect(fetchHealth).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fetch while disabled (self-hosted or the narrow pill)', () => {
+    const { result } = renderHook(() => useControlPlaneHealth({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchHealth).not.toHaveBeenCalled()
+  })
+
+  it('does not retry a failed health read — the version line just stays empty', async () => {
+    fetchHealth.mockRejectedValueOnce(new Error('offline'))
+    const { result } = renderHook(() => useControlPlaneHealth(), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+    expect(fetchHealth).toHaveBeenCalledTimes(1)
+    expect(result.current.data).toBeUndefined()
   })
 })
