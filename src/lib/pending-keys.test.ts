@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { LicenseRecord } from '@/lib/instance-api'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   pendingKeyDisplayName,
+  provisioningKeys,
+  provisioningServersLabel,
   unboundPendingKeys,
   unusedRegistrationKeysLabel,
 } from '@/lib/pending-keys'
@@ -37,6 +40,47 @@ describe('unboundPendingKeys', () => {
       'newer',
       'older',
     ])
+  })
+})
+
+describe('provisioning keys', () => {
+  const provisioning = license({
+    id: 'prov',
+    createdAt: '2026-03-01T00:00:00.000Z',
+    provisioning: { since: '2026-09-26T23:50:00.000Z', hostname: 'adrastea' },
+  })
+  const unused = license({ id: 'unused' })
+  const bound = license({
+    id: 'bound',
+    boundServer: { id: 's1', name: 'node', connected: true },
+    provisioning: { since: '2026-09-26T23:50:00.000Z', hostname: 'node' },
+  })
+
+  it('never counts a key whose server is provisioning as unused', () => {
+    expect(unboundPendingKeys([provisioning, unused, bound]).map((row) => row.id)).toEqual([
+      'unused',
+    ])
+  })
+
+  it('lists only unbound keys that are provisioning', () => {
+    expect(provisioningKeys([provisioning, unused, bound]).map((row) => row.id)).toEqual(['prov'])
+  })
+
+  it('names one provisioning server with its host and start time', () => {
+    const since = formatLocalDateTime('2026-09-26T23:50:00.000Z', { includeSeconds: false })
+    expect(provisioningServersLabel([provisioning])).toBe(
+      `1 server provisioning (adrastea) since ${since}`
+    )
+  })
+
+  it('counts several, and says nothing when none is provisioning', () => {
+    expect(provisioningServersLabel([provisioning, provisioning])).toBe('2 servers provisioning')
+    expect(provisioningServersLabel([])).toBeNull()
+    expect(
+      provisioningServersLabel([
+        license({ id: 'bare', provisioning: { since: '', hostname: '  ' } }),
+      ])
+    ).toBe('1 server provisioning')
   })
 })
 

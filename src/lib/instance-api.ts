@@ -1783,6 +1783,10 @@ export type LicenseAvailability = {
   ending: number
   endsAt: string | null
   available: number
+  /** Of `inUse`, keys whose daemon has started enrolling but is not bound yet (0 on an older control plane). */
+  provisioning: number
+  /** Keys minted and never used — each holds a license until used or deleted (0 on an older control plane). */
+  unusedKeys: number
   tiers: LicenseTierAvailability[]
   /** The control plane's own sentence, shown verbatim when present. */
   message: string | null
@@ -1845,6 +1849,8 @@ type LicenseCreateErrorBody = {
   endsAt?: string | null
   available?: number
   tiers?: unknown
+  provisioning?: number
+  unusedKeys?: number
   /** Deprecated aliases from before `inUse` / `ending`. */
   releasing?: number
   held?: number
@@ -1879,6 +1885,8 @@ export function licenseAvailabilityFromBody(body: LicenseCreateErrorBody): Licen
     ending: readCount(body.ending),
     endsAt: readText(body.endsAt),
     available: readCount(body.available),
+    provisioning: readCount(body.provisioning),
+    unusedKeys: readCount(body.unusedKeys),
     tiers: readLicenseTiers(body.tiers),
     message: readText(body.message),
   }
@@ -1943,12 +1951,20 @@ export type LicenseBoundServer = {
   connected: boolean
 }
 
+/** A key whose daemon has passed enrolment checks but is not bound to a server yet. */
+export type LicenseProvisioning = {
+  since: string
+  hostname: string | null
+}
+
 export type LicenseRecord = {
   id: string
   name: string | null
   createdAt: string
   revocable: boolean
   boundServer: LicenseBoundServer | null
+  /** Set while its server is being provisioned; absent on an older control plane. */
+  provisioning?: LicenseProvisioning | null
 }
 
 export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
@@ -2039,9 +2055,13 @@ export type BillingLicenseSummary = {
   /** Licenses ending at the period boundary, all tiers; restorable. */
   ending: number
   endsAt: string | null
-  /** Licenses held — bound to a server or still waiting to connect. */
+  /** Licenses in use — bound to a server or provisioning one. */
   inUse: number
   bound: number
+  /** Of `inUse`, keys whose server is still provisioning (absent on an older control plane). */
+  provisioning?: number
+  /** Keys minted and never used — each holds a license (absent on an older control plane). */
+  unusedKeys?: number
   /** How many more servers can be added right now. */
   available: number
   /** @deprecated Use `ending`. */
@@ -2203,9 +2223,10 @@ async function billingPost<T>(path: string, body: Record<string, unknown>): Prom
 export type BillingCatalog = {
   tiers: BillingTier[]
   /**
-   * One POSIX line to paste on a server: prints its physical cores, RAM and
-   * the tier it lands on (e.g. `8 cores, 31.3 GiB RAM -> S2`). Absent on an
-   * older control plane.
+   * One POSIX line to paste on a server: prints its physical cores and RAM
+   * (e.g. `8 cores, 31.3 GiB RAM`; an older control plane also appended
+   * `-> S2`). The console maps it to a tier with the catalogue bands. Absent
+   * on an older control plane.
    */
   sizeCommand?: string
 }

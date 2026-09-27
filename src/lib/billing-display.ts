@@ -192,14 +192,23 @@ function licensesInUse(licenses: BillingLicenseSummary): number {
 }
 
 /**
- * `3 of 6 licenses in use · 3 end Oct 26 · no room for another server` —
- * the org-wide line under the Licenses tiles. An ending license is never
- * counted as in use; it is named with its date instead.
+ * `3 of 6 licenses in use (1 provisioning) · 1 held by an unused key · 3 end
+ * Oct 26 · no room for another server` — the org-wide line under the
+ * Licenses tiles. An ending license is never counted as in use; it is named
+ * with its date instead. A key whose server is still provisioning is in use;
+ * a key never used holds a license and is named as such.
  */
 export function licenseSummaryLine(licenses: BillingLicenseSummary): string {
+  const provisioning = licenses.provisioning ?? 0
   const parts = [
-    `${licensesInUse(licenses)} of ${plural(licenses.purchased, 'license', 'licenses')} in use`,
+    `${licensesInUse(licenses)} of ${plural(licenses.purchased, 'license', 'licenses')} in use${
+      provisioning > 0 ? ` (${provisioning} provisioning)` : ''
+    }`,
   ]
+  const unusedKeys = licenses.unusedKeys ?? 0
+  if (unusedKeys > 0) {
+    parts.push(`${unusedKeys} held by ${unusedKeys === 1 ? 'an unused key' : 'unused keys'}`)
+  }
   const ending = endingLabel(licenses.ending ?? 0, licenses.endsAt)
   if (ending) parts.push(ending)
   if (licenses.available === 0) {
@@ -251,17 +260,39 @@ export type AddServerTierState =
   | Readonly<{ kind: 'restore'; ending: number; endsAt: string | null; message: string }>
   | Readonly<{ kind: 'buy'; message: string }>
 
+/** Org-wide totals that cap what a tier can offer (`GET /billing/subscription` → `licenses`). */
+export type OrgLicenseCap = Pick<BillingLicenseSummary, 'available' | 'unusedKeys'>
+
+/**
+ * How many licenses at a tier can actually take a new server: the tier's own
+ * count, capped by the org-wide `available`. Unused registration keys (and
+ * servers still provisioning) hold licenses without a tier yet, so a tier
+ * can look free while the org has nothing left — this is the one number the
+ * Add Server screen shows, so it never contradicts the mint refusal.
+ */
+export function effectiveTierAvailable(
+  tier: Pick<BillingTierSummary, 'available'> | null | undefined,
+  org?: OrgLicenseCap | null
+): number {
+  const own = Math.max(0, tier?.available ?? 0)
+  if (!org || !Number.isFinite(org.available)) return own
+  return Math.min(own, Math.max(0, org.available))
+}
+
 /**
  * The chosen tier's situation, restore before buy: a free license there is
  * used as-is; otherwise an ending one must be restored before anything new
  * is bought at that tier (the control plane refuses the purchase anyway).
- * Ending licenses at *other* tiers never matter here.
+ * Ending licenses at *other* tiers never matter here. When licenses are held
+ * by unused registration keys, the buy message says so — deleting a key
+ * frees its license without buying one.
  */
 export function addServerTierState(
   label: string,
-  tier: Pick<BillingTierSummary, 'available' | 'ending' | 'endsAt'> | null | undefined
+  tier: Pick<BillingTierSummary, 'available' | 'ending' | 'endsAt'> | null | undefined,
+  org?: OrgLicenseCap | null
 ): AddServerTierState {
-  const available = tier?.available ?? 0
+  const available = effectiveTierAvailable(tier, org)
   if (available > 0) {
     return {
       kind: 'available',
@@ -276,6 +307,13 @@ export function addServerTierState(
       ending,
       endsAt: tier?.endsAt ?? null,
       message: `No ${label} license is free. ${endingLabel(ending, tier?.endsAt)} — restore one to use it for this server.`,
+    }
+  }
+  const unusedKeys = Math.max(0, org?.unusedKeys ?? 0)
+  if (unusedKeys > 0) {
+    return {
+      kind: 'buy',
+      message: `No ${label} license is free. ${plural(unusedKeys, 'license is', 'licenses are')} held by unused registration keys — delete one to free it, or buy another.`,
     }
   }
   return { kind: 'buy', message: `No ${label} license is free. Buy one to add this server.` }

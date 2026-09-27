@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { Linking, Platform, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
+import { openHostedPage } from '@/lib/open-hosted-page'
 import { AccessNavIcon, BillingNavIcon, ServersNavIcon } from '@/components/icons/nav-icons'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -88,21 +89,6 @@ import { spacing } from '@/lib/theme'
  * yet: cores, then RAM in GiB, compared by hand against the tier table.
  */
 const FALLBACK_SIZING_COMMAND = 'nproc && free -g'
-
-/**
- * Stripe hands control back to `/<orgId>/billing?checkout=…` and the Portal
- * returns to the same page, so the hosted pages replace this tab on web
- * rather than opening a second one that leaves a stale console behind.
- */
-function openHostedPage(url: string): void {
-  if (Platform.OS === 'web' && typeof globalThis.location?.assign === 'function') {
-    globalThis.location.assign(url)
-    return
-  }
-  Linking.openURL(url).catch(() => {
-    // The button's error row covers a refused open; nothing else to do here.
-  })
-}
 
 function errorText(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -419,7 +405,7 @@ function CheckoutPanel({
           body={
             sizeCommand === FALLBACK_SIZING_COMMAND
               ? 'Run this on the server: the first number is its cores, the second line its RAM in GiB. Choose the lowest tier whose Fits up to column covers both.'
-              : 'Run this on the server — it prints its cores and RAM and the tier it needs.'
+              : 'Run this on the server — it prints its cores and RAM. Choose the lowest tier whose Fits up to column covers both.'
           }
           actions={<CopyButton value={sizeCommand} label="Copy command" />}
         />

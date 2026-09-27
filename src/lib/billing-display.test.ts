@@ -8,6 +8,7 @@ import {
 } from '@/lib/instance-api'
 import {
   addServerTierState,
+  effectiveTierAvailable,
   canReleaseAt,
   describeBillingRefusal,
   describePendingChange,
@@ -208,6 +209,32 @@ describe('license summary lines', () => {
     ).toBe(`3 of 6 licenses in use · 3 end ${oct26} · restore one to add another server`)
   })
 
+  it('names servers still provisioning and licenses held by unused keys', () => {
+    expect(
+      licenseSummaryLine({
+        purchased: 7,
+        ending: 0,
+        endsAt: null,
+        inUse: 6,
+        bound: 5,
+        provisioning: 1,
+        unusedKeys: 1,
+        available: 0,
+      })
+    ).toBe('6 of 7 licenses in use (1 provisioning) · 1 held by an unused key · no room for another server')
+    expect(
+      licenseSummaryLine({
+        purchased: 8,
+        ending: 0,
+        endsAt: null,
+        inUse: 4,
+        bound: 4,
+        unusedKeys: 2,
+        available: 2,
+      })
+    ).toBe('4 of 8 licenses in use · 2 held by unused keys · 2 more servers can be added')
+  })
+
   it('reads the deprecated held count from an older control plane', () => {
     expect(
       licenseSummaryLine({
@@ -286,6 +313,50 @@ describe('addServerTierState — restore before buy, per tier', () => {
       message: 'No S2 license is free. Buy one to add this server.',
     })
     expect(addServerTierState('S3', null).kind).toBe('buy')
+  })
+  it('caps a tier by the org-wide total so it never says "free" when the mint would refuse', () => {
+    // The owner's case: the tier row says 1 free, but a provisioning key holds it org-wide.
+    const state = addServerTierState('S1', tierRow({ available: 1, ending: 0 }), {
+      available: 0,
+      unusedKeys: 0,
+    })
+    expect(state).toEqual({
+      kind: 'buy',
+      message: 'No S1 license is free. Buy one to add this server.',
+    })
+  })
+  it('says when unused registration keys are holding the licenses', () => {
+    expect(
+      addServerTierState('S1', tierRow({ available: 1, ending: 0 }), { available: 0, unusedKeys: 1 })
+    ).toEqual({
+      kind: 'buy',
+      message:
+        'No S1 license is free. 1 license is held by unused registration keys — delete one to free it, or buy another.',
+    })
+    expect(
+      addServerTierState('S1', tierRow({ available: 0, ending: 0 }), { available: 0, unusedKeys: 2 })
+        .message
+    ).toContain('2 licenses are held by unused registration keys')
+  })
+  it('still restores first when the tier has licenses ending, whatever the org total', () => {
+    expect(
+      addServerTierState('S1', tierRow({ available: 1, ending: 2, endsAt: OCT_26 }), {
+        available: 0,
+        unusedKeys: 1,
+      }).kind
+    ).toBe('restore')
+  })
+})
+
+describe('effectiveTierAvailable', () => {
+  it('is the smaller of the tier and the org-wide count, never negative', () => {
+    expect(effectiveTierAvailable(tierRow({ available: 3 }), { available: 1, unusedKeys: 0 })).toBe(1)
+    expect(effectiveTierAvailable(tierRow({ available: 1 }), { available: 5, unusedKeys: 0 })).toBe(1)
+    expect(effectiveTierAvailable(tierRow({ available: -2 }), null)).toBe(0)
+    expect(effectiveTierAvailable(null, { available: 4, unusedKeys: 0 })).toBe(0)
+    expect(
+      effectiveTierAvailable(tierRow({ available: 2 }), { available: Number.NaN, unusedKeys: 0 })
+    ).toBe(2)
   })
 })
 

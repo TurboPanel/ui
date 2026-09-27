@@ -18,6 +18,8 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { LicenseRecord } from '@/lib/instance-api'
 import {
   pendingKeyDisplayName,
+  provisioningKeys,
+  provisioningServersLabel,
   unboundPendingKeys,
   unusedRegistrationKeysLabel,
 } from '@/lib/pending-keys'
@@ -202,6 +204,10 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const rows = unboundPendingKeys(licensesQuery.data?.licenses ?? [])
+  // Keys whose server is enrolling are in use, not unused: named, never deletable here.
+  const provisioning = provisioningServersLabel(
+    provisioningKeys(licensesQuery.data?.licenses ?? [])
+  )
   const loading = licensesQuery.isLoading && rows.length === 0
   let queryError: string | null = null
   if (licensesQuery.isError) {
@@ -256,6 +262,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
       </Text>
 
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
+      {provisioning ? <Text style={panelStyles.muted}>{provisioning}</Text> : null}
 
       <SectionPanel title="Unused keys" hint={pendingKeysHint(loading, rows.length)}>
         {loading ? (

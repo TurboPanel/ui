@@ -98,12 +98,15 @@ export function LicenseDialog({
   periodEnd,
   context,
   onClose,
+  onSucceeded,
 }: Readonly<{
   orgId: string
   request: LicenseDialogRequest | null
   periodEnd: string | null
   context: RefusalContext
   onClose: () => void
+  /** Called once the add / remove / restore went through, before the dialog closes. */
+  onSucceeded?: (mode: LicenseDialogMode) => void
 }>) {
   // Remounting per request resets the count, quote and errors.
   if (!request) return null
@@ -115,6 +118,7 @@ export function LicenseDialog({
       periodEnd={periodEnd}
       context={context}
       onClose={onClose}
+      onSucceeded={onSucceeded}
     />
   )
 }
@@ -125,12 +129,14 @@ function LicenseDialogBody({
   periodEnd,
   context,
   onClose,
+  onSucceeded,
 }: Readonly<{
   orgId: string
   request: LicenseDialogRequest
   periodEnd: string | null
   context: RefusalContext
   onClose: () => void
+  onSucceeded?: (mode: LicenseDialogMode) => void
 }>) {
   const { tier } = request
   // Restore before buy: an Add at a tier with licenses ending opens as a Restore.
@@ -194,6 +200,7 @@ function LicenseDialogBody({
       })
     }
     if (outcome.ok) {
+      onSucceeded?.(mode)
       onClose()
       return
     }
