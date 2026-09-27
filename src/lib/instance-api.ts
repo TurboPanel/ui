@@ -339,6 +339,45 @@ export async function resetPassword(body: {
   })
 }
 
+/** What the invitation landing page needs to choose a path (never accepts). */
+export type InvitationPreview = {
+  ok: true
+  status: 'pending' | 'expired' | 'accepted' | 'revoked'
+  organizationName: string
+  teamName: string
+  inviterName: string | null
+  /** Link-secret preview only: the id for the signed-in Accept button (not a secret). */
+  invitationId?: string
+  /** Link-secret preview of a pending invitation only. */
+  email?: string
+  /** Link-secret preview of a pending invitation only: whether an account already uses `email`. */
+  accountExists?: boolean
+}
+
+/** Preview from the emailed link's secret (`/accept-invitation?token=`). */
+export async function getInvitationPreviewByToken(token: string): Promise<InvitationPreview> {
+  return await apiFetch(`${CLIENT_API}/auth/invitations/by-token/${encodeURIComponent(token)}`)
+}
+
+/** Old `?id=` links: organization, inviter and status only — never the email. */
+export async function getInvitationPreviewById(invitationId: string): Promise<InvitationPreview> {
+  return await apiFetch(`${CLIENT_API}/auth/invitations/${encodeURIComponent(invitationId)}`)
+}
+
+/**
+ * New address: create the account with the invitation's email, accept it and
+ * sign in — one step. Only the emailed link secret can do this.
+ */
+export async function signUpForInvitation(
+  token: string,
+  password: string
+): Promise<SessionInfo & { organizationId: string }> {
+  return await apiFetch(
+    `${CLIENT_API}/auth/invitations/by-token/${encodeURIComponent(token)}/sign-up`,
+    { method: 'POST', body: JSON.stringify({ password }) }
+  )
+}
+
 export async function verifyEmail(token: string): Promise<{ ok: true }> {
   const params = new URLSearchParams({ token })
   return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`)
