@@ -7,6 +7,7 @@ import {
   fetchBillingCatalog,
   fetchBillingSubscription,
   previewBillingChange,
+  restoreBillingLicenses,
   upgradeBillingTier,
   type BillingPreviewBody,
 } from '@/lib/instance-api'
@@ -129,5 +130,17 @@ export function useDowngradeBillingTier(orgId: string) {
       await invalidateBillingAndServers(queryClient, orgId)
     },
     fallbackError: 'Failed to schedule the downgrade',
+  })
+}
+
+/** Take back ending licenses at one tier — free; the Add Server screen uses it too. */
+export function useRestoreBillingLicenses(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: { tierId: string; count: number }) => restoreBillingLicenses(body),
+    onSuccess: async () => {
+      await invalidateBillingAndServers(queryClient, orgId)
+    },
+    fallbackError: 'Failed to restore the licenses',
   })
 }

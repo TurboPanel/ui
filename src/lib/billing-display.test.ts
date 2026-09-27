@@ -7,10 +7,12 @@ import {
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
+  addServerTierState,
   canReleaseAt,
   describeBillingRefusal,
   describePendingChange,
   describeUncoveredServer,
+  endingLabel,
   formatMachineExamples,
   formatMemoryLimit,
   formatMinorUnits,
@@ -23,6 +25,9 @@ import {
   lowestTierFor,
   MACHINE_EXAMPLES,
   machineExamplesForTier,
+  parseLicenseCount,
+  refusalTierId,
+  removableAt,
   serverTitle,
   subscriptionStatusView,
   tierChangeDirection,
@@ -143,7 +148,7 @@ describe('describePendingChange', () => {
       change({ kind: 'release-seat', fromTierId: 't1', toTierId: null, landsAt: '2026-10-01T00:00:00Z' }),
       tiers
     )
-    expect(dated).toMatch(/^One S1 license is released on .+\.$/)
+    expect(dated).toMatch(/^One S1 license ends on .+\.$/)
     expect(dated).not.toContain('end of the current period')
   })
 
@@ -159,36 +164,145 @@ describe('describePendingChange', () => {
   })
 })
 
+const OCT_26 = '2026-10-26T00:00:00.000Z'
+const oct26 = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+  new Date(OCT_26)
+)
+
+function tierRow(overrides: Partial<BillingTierSummary> = {}): BillingTierSummary {
+  return {
+    tierId: 't1',
+    label: 'S1',
+    rank: 1,
+    purchased: 6,
+    inUse: 3,
+    ending: 0,
+    endsAt: null,
+    available: 3,
+    priceCents: 500,
+    currency: 'usd',
+    ...overrides,
+  }
+}
+
 describe('license summary lines', () => {
   it('summarises the organization in one line', () => {
     expect(
-      licenseSummaryLine({ purchased: 5, releasing: 1, held: 3, bound: 2, available: 1 })
-    ).toBe('3 of 5 licenses in use · 1 more server can be added · 1 leaving at period end')
-    expect(
-      licenseSummaryLine({ purchased: 1, releasing: 0, held: 1, bound: 1, available: 0 })
-    ).toBe('1 of 1 license in use · no room for another server')
-    expect(
-      licenseSummaryLine({ purchased: 4, releasing: 0, held: 1, bound: 1, available: 3 })
+      licenseSummaryLine({
+        purchased: 4,
+        ending: 0,
+        endsAt: null,
+        inUse: 1,
+        bound: 1,
+        available: 3,
+      })
     ).toBe('1 of 4 licenses in use · 3 more servers can be added')
+    expect(
+      licenseSummaryLine({ purchased: 1, ending: 0, endsAt: null, inUse: 1, bound: 1, available: 0 })
+    ).toBe('1 of 1 license in use · no room for another server')
   })
 
-  it('summarises one tier, mentioning releases only when there are any', () => {
-    const tier = (releasing: number): BillingTierSummary => ({
-      tierId: 't3',
-      label: 'S3',
-      rank: 3,
-      purchased: 2,
-      inUse: 1,
-      releasing,
-      priceCents: 1000,
-      currency: 'usd',
-    })
-    expect(tierLicensesLine(tier(0))).toBe('Licenses at S3: 2 purchased, 1 in use')
-    expect(tierLicensesLine(tier(1))).toBe(
-      'Licenses at S3: 2 purchased, 1 in use, 1 leaving at period end'
+  it('never counts an ending license as in use — it names the date and says restore', () => {
+    expect(
+      licenseSummaryLine({ purchased: 6, ending: 3, endsAt: OCT_26, inUse: 3, bound: 3, available: 0 })
+    ).toBe(`3 of 6 licenses in use · 3 end ${oct26} · restore one to add another server`)
+  })
+
+  it('reads the deprecated held count from an older control plane', () => {
+    expect(
+      licenseSummaryLine({
+        purchased: 2,
+        ending: 0,
+        endsAt: null,
+        held: 2,
+        bound: 2,
+        available: 0,
+      } as unknown as Parameters<typeof licenseSummaryLine>[0])
+    ).toBe('2 of 2 licenses in use · no room for another server')
+  })
+
+  it('summarises one tier, naming ending licenses with their date', () => {
+    expect(tierLicensesLine(tierRow())).toBe('Licenses at S1: 6 purchased, 3 in use')
+    expect(tierLicensesLine(tierRow({ ending: 1, endsAt: OCT_26 }))).toBe(
+      `Licenses at S1: 6 purchased, 3 in use, 1 ends ${oct26}`
     )
-    expect(canReleaseAt(tier(1))).toBe(true)
-    expect(canReleaseAt(tier(2))).toBe(false)
+  })
+})
+
+describe('endingLabel', () => {
+  it('is empty when nothing is ending', () => {
+    expect(endingLabel(0, OCT_26)).toBe('')
+  })
+  it('pluralises and dates', () => {
+    expect(endingLabel(1, OCT_26)).toBe(`1 ends ${oct26}`)
+    expect(endingLabel(3, OCT_26)).toBe(`3 end ${oct26}`)
+    expect(endingLabel(2, null)).toBe('2 end at the end of the period')
+  })
+})
+
+describe('removableAt / canReleaseAt', () => {
+  it('offers only licenses that are neither ending nor covering a server', () => {
+    expect(removableAt(tierRow({ purchased: 6, ending: 3, inUse: 3 }))).toBe(0)
+    expect(removableAt(tierRow({ purchased: 6, ending: 1, inUse: 3 }))).toBe(2)
+    expect(removableAt(tierRow({ purchased: 2, ending: 0, inUse: 5 }))).toBe(0)
+  })
+  it('counts a pending downgrade the older control plane reports as releasing', () => {
+    expect(removableAt(tierRow({ purchased: 6, ending: 1, releasing: 2, inUse: 3 }))).toBe(1)
+    expect(canReleaseAt(tierRow({ purchased: 2, ending: 1, releasing: 2 }))).toBe(false)
+    expect(canReleaseAt(tierRow({ purchased: 2, ending: 1 }))).toBe(true)
+  })
+})
+
+describe('parseLicenseCount', () => {
+  it('accepts whole numbers of at least 1', () => {
+    expect(parseLicenseCount('1')).toBe(1)
+    expect(parseLicenseCount(' 12 ')).toBe(12)
+  })
+  it('refuses zero, negatives, decimals and junk', () => {
+    for (const raw of ['0', '-1', '1.5', '1e3', '', 'abc', '0x10']) {
+      expect(parseLicenseCount(raw)).toBeNull()
+    }
+  })
+})
+
+describe('addServerTierState — restore before buy, per tier', () => {
+  it('uses a free license when the tier has one', () => {
+    const state = addServerTierState('S1', tierRow({ available: 2, ending: 3, endsAt: OCT_26 }))
+    expect(state.kind).toBe('available')
+    expect(state.message).toBe('2 S1 licenses are free for this server.')
+  })
+  it('asks to restore an ending license before buying when none is free', () => {
+    const state = addServerTierState('S1', tierRow({ available: 0, ending: 3, endsAt: OCT_26 }))
+    expect(state).toEqual({
+      kind: 'restore',
+      ending: 3,
+      endsAt: OCT_26,
+      message: `No S1 license is free. 3 end ${oct26} — restore one to use it for this server.`,
+    })
+  })
+  it('offers to buy only when nothing at that tier is ending', () => {
+    expect(addServerTierState('S2', tierRow({ label: 'S2', available: 0, ending: 0 }))).toEqual({
+      kind: 'buy',
+      message: 'No S2 license is free. Buy one to add this server.',
+    })
+    expect(addServerTierState('S3', null).kind).toBe('buy')
+  })
+})
+
+describe('refusalTierId', () => {
+  const refusal = {
+    tiers: [
+      { tierId: 't1', label: 'S1', purchased: 3, inUse: 3, ending: 0, endsAt: null, available: 0 },
+      { tierId: 't2', label: 'S2', purchased: 2, inUse: 0, ending: 2, endsAt: OCT_26, available: 0 },
+    ],
+  }
+  it('prefers the tier the operator chose', () => {
+    expect(refusalTierId('t1', refusal)).toBe('t1')
+  })
+  it('falls back to the first tier with licenses ending', () => {
+    expect(refusalTierId(null, refusal)).toBe('t2')
+    expect(refusalTierId(null, { tiers: [] })).toBeNull()
+    expect(refusalTierId(null, null)).toBeNull()
   })
 })
 
@@ -243,6 +357,20 @@ describe('describeBillingRefusal', () => {
     expect(describeBillingRefusal(refusal({ error: 'servers_uncovered' }))).toBe(
       'A server would be left uncovered. Buy or move a license that covers it first.'
     )
+  })
+
+  it('asks to restore ending licenses before buying at that tier', () => {
+    const labels = { tierLabel: (id: string) => (id === 't1' ? 'S1' : null) }
+    expect(
+      describeBillingRefusal(
+        refusal({ error: 'licenses_ending', tierId: 't1', ending: 3, endsAt: OCT_26 }),
+        labels
+      )
+    ).toBe(`You have 3 S1 licenses ending ${oct26} — restore those first.`)
+    expect(
+      describeBillingRefusal(refusal({ error: 'licenses_ending', tierId: 'tx', ending: 1, endsAt: null }))
+    ).toBe('You have 1 license ending at the end of the period — restore those first.')
+    expect(describeBillingRefusal(refusal({ error: 'no_licenses_ending' }))).toContain('Refresh')
   })
 
   it('explains the other refusals with a next step', () => {

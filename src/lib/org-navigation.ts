@@ -122,9 +122,10 @@ export const ORG_AREAS = [
     subRoutes: [],
   },
   {
-    // Hosted only: the sidebar drops this entry and the route redirects to
-    // Overview when `InstallStatus.billingEnabled` is false (self-hosted).
-    // Deep-link-only on native, like Managed / Network / Access.
+    // Hosted only, and never in the sidebar: reached from the organization
+    // menu (switcher, Billing) and from screens that need a purchase. The
+    // route redirects to Overview when `InstallStatus.billingEnabled` is
+    // false (self-hosted). Kept here so breadcrumbs and deep links resolve.
     id: 'billing',
     label: 'Billing',
     pathSegment: 'billing',

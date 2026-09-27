@@ -19,13 +19,15 @@ import {
 } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
-import { GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
+import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { truncateDisplayName } from '@/lib/display-name'
 import { organizationLabel, shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { setActiveOrganizationId } from '@/lib/org-context'
+import { useAuth } from '@/lib/auth-context'
 import {
   defaultOrgDashboardHref,
+  orgBillingHref,
   orgManageHref,
   organizationsHref,
   replaceOrganization,
@@ -65,6 +67,9 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   const isCompact = Platform.OS !== 'web' || width < layout.desktopBreakpoint
   const orgsQuery = useOrganizationsQuery()
   const createOrganization = useCreateOrganization()
+  // Billing lives here, behind the organization menu, rather than in the
+  // sidebar: hosted only, and reached on purpose rather than glanced at.
+  const { billingEnabled } = useAuth()
   const organizations = orgsQuery.data?.organizations ?? []
   const currentOrg = organizations.find((org) => org.id === orgId)
 
@@ -125,6 +130,15 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
     router.push(settingsHref as Href)
   }
 
+  const openBilling = () => {
+    closeMenu()
+    const billingHref = orgBillingHref(orgId)
+    if (pathname === billingHref) {
+      return
+    }
+    router.push(billingHref as Href)
+  }
+
   const openAllOrganizations = () => {
     closeMenu()
     const href = organizationsHref()
@@ -180,6 +194,14 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
             onPress={openSettings}
             icon={<GearIcon size={14} color={colors.textChip} />}
           />
+          {billingEnabled ? (
+            <FooterAction
+              label="Billing"
+              accessibilityLabel="Organization billing and licenses"
+              onPress={openBilling}
+              icon={<BillingNavIcon size={14} color={colors.textChip} />}
+            />
+          ) : null}
           <FooterAction
             label="New"
             accessibilityLabel="Create organization"
