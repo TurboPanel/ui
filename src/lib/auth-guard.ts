@@ -102,6 +102,8 @@ function isPublicAuthRoute(topSegment: string | undefined): boolean {
     topSegment === 'sign-in' ||
     topSegment === 'sign-up' ||
     topSegment === 'verify-email' ||
+    topSegment === 'forgot-password' ||
+    topSegment === 'reset-password' ||
     topSegment === 'accept-invitation' ||
     topSegment === 'about' ||
     topSegment === 'recovering'
@@ -132,6 +134,8 @@ const PUBLIC_ROUTE_SEGMENTS = new Set([
   'sign-in',
   'sign-up',
   'verify-email',
+  'forgot-password',
+  'reset-password',
   'accept-invitation',
   'install',
   'welcome',

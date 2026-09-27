@@ -8,10 +8,7 @@ import {
 } from 'react-native'
 import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
-import {
-  AuthPasswordMeter,
-  type PasswordMeterStatus,
-} from '@/components/auth/auth-password-meter'
+import { AuthNewPasswordField } from '@/components/auth/auth-new-password-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
 import {
@@ -25,127 +22,16 @@ import {
   type AuthAccentTheme,
 } from '@/lib/auth-accent'
 import { signInForInvitationHref } from '@/lib/invitation-return'
+import {
+  checkPwnedPassword,
+  COMPROMISED_PASSWORD_MESSAGE,
+  passwordHint,
+  resolveMeterStatus,
+  validatePassword,
+} from '@/lib/password-policy'
 import { useSignUp } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
-
-type PasswordValidation = {
-  isValid: boolean
-  hasMinLength: boolean
-  hasNumber: boolean
-  hasSpecialChar: boolean
-  noLeadingTrailingWhitespace: boolean
-}
-
-const COMPROMISED_PASSWORD_MESSAGE =
-  "That password isn't safe to use. Please choose a different one."
-
-const PWNED_PASSWORDS_RANGE_URL = 'https://api.pwnedpasswords.com/range/'
-const PWNED_PASSWORDS_TIMEOUT_MS = 5000
-
-// Client mirror of the canonical server password policy in the instance repo
-// (`src/client/authn/install-state.ts` → `validateSuperadminPassword` /
-// `PASSWORD_SPECIAL_CHARS_PATTERN` / `PASSWORD_MIN_LENGTH`). The server enforces
-// the same structural rules on every password-setting path (install, sign-up,
-// password reset), so the API rejects weak passwords even if this UI check is
-// bypassed. Keep the two in lockstep — do not weaken one without the other.
-const PASSWORD_MIN_LENGTH = 8
-const PASSWORD_SPECIAL_CHARS_PATTERN = /[$!@%&*#^()_+=-]/
-
-function validatePassword(password: string): PasswordValidation {
-  const hasMinLength = password.length >= PASSWORD_MIN_LENGTH
-  const hasNumber = /\d/.test(password)
-  const hasSpecialChar = PASSWORD_SPECIAL_CHARS_PATTERN.test(password)
-  const noLeadingTrailingWhitespace = password === password.trim()
-  return {
-    hasMinLength,
-    hasNumber,
-    hasSpecialChar,
-    noLeadingTrailingWhitespace,
-    isValid: hasMinLength && hasNumber && hasSpecialChar && noLeadingTrailingWhitespace,
-  }
-}
-
-/**
- * One nudge at a time, never a checklist — sign-up is the first impression, so
- * the form asks for the single next thing instead of grading four rules at once.
- */
-function passwordHint(validation: PasswordValidation): string {
-  if (!validation.hasMinLength) return 'A little longer'
-  if (!validation.hasNumber) return 'Add a number'
-  if (!validation.hasSpecialChar) return 'Add a symbol'
-  if (!validation.noLeadingTrailingWhitespace) {
-    return 'Remove the leading or trailing space'
-  }
-  return ''
-}
-
-/** Map structural policy + HIBP state onto the password meter badge. */
-function resolveMeterStatus(input: {
-  hasPwnedResult: boolean
-  isPwned: boolean | null
-  checking: boolean
-  isValid: boolean
-}): PasswordMeterStatus {
-  if (input.hasPwnedResult && input.isPwned === true) return 'compromised'
-  if (input.checking) return 'checking'
-  if (input.isValid) return 'valid'
-  return 'incomplete'
-}
-
-/** Track fill; never reads full while the password is still rejected. */
-function passwordProgress(validation: PasswordValidation): number {
-  if (validation.isValid) return 1
-  const met = [
-    validation.hasMinLength,
-    validation.hasNumber,
-    validation.hasSpecialChar,
-  ].filter(Boolean).length
-  return Math.min(met / 3, 2 / 3)
-}
-
-async function sha1Hex(password: string): Promise<string> {
-  const enc = new TextEncoder()
-  // HIBP range API requires SHA-1; only the 5-char prefix is sent (k-anonymity).
-  const digest = await crypto.subtle.digest('SHA-1', enc.encode(password)) // NOSONAR typescript:S4790 — HIBP k-anonymity API mandates SHA-1
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-}
-
-async function checkPwnedPassword(password: string): Promise<boolean> {
-  try {
-    const fullHash = await sha1Hex(password)
-    const prefix = fullHash.slice(0, 5)
-    const suffix = fullHash.slice(5)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), PWNED_PASSWORDS_TIMEOUT_MS)
-    try {
-      const res = await fetch(`${PWNED_PASSWORDS_RANGE_URL}${prefix}`, {
-        headers: { 'Add-Padding': 'true' },
-        signal: controller.signal,
-      })
-      if (!res.ok) return false
-      const text = await res.text()
-      for (const line of text.split(/\r?\n/)) {
-        const colon = line.indexOf(':')
-        if (colon === -1) continue
-        const lineSuffix = line.slice(0, colon).trim()
-        const countStr = line.slice(colon + 1).trim()
-        if (lineSuffix === suffix) {
-          const count = Number.parseInt(countStr, 10)
-          return Number.isFinite(count) && count > 0
-        }
-      }
-      return false
-    } finally {
-      clearTimeout(timeoutId)
-    }
-  } catch {
-    return false
-  }
-}
 
 const styles = StyleSheet.create({
   warning: {
@@ -228,7 +114,6 @@ export function SignUpScreenContent() {
   } = useAuthStatus()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const loading = signUpMutation.isPending
@@ -411,40 +296,23 @@ export function SignUpScreenContent() {
         />
       </View>
 
-      <View style={[authFormStyles.field, authFormStyles.fieldSpaced]}>
-        <AuthFloatingField
-          label="Password"
-          value={password}
-          onChangeText={onPasswordChange}
-          onBlur={() => {
-            onPasswordBlur().catch(() => {
-              // pwned check failures fall back to server-side enforcement.
-            })
-          }}
-          accentColor={accent.accent}
-          autoComplete="new-password"
-          secureTextEntry={!showPassword}
-          showPasswordToggle
-          passwordVisible={showPassword}
-          onTogglePasswordVisible={() => setShowPassword((v) => !v)}
-          editable={!loading}
-          returnKeyType="go"
-          onSubmitEditing={() => {
-            onSubmit().catch(() => {
-              // Errors are surfaced via setError inside onSubmit.
-            })
-          }}
-        />
-      </View>
-
-      {password ? (
-        <AuthPasswordMeter
-          status={meterStatus}
-          progress={passwordProgress(validation)}
-          hint={meterHint}
-          accentColor={accent.accent}
-        />
-      ) : null}
+      <AuthNewPasswordField
+        label="Password"
+        value={password}
+        onChangeText={onPasswordChange}
+        onBlur={() => {
+          onPasswordBlur().catch(() => {
+            // pwned check failures fall back to server-side enforcement.
+          })
+        }}
+        onSubmit={onSubmit}
+        editable={!loading}
+        accentColor={accent.accent}
+        validation={validation}
+        meterStatus={meterStatus}
+        meterHint={meterHint}
+        spaced
+      />
 
       {error ? (
         <Text style={authFormStyles.error} accessibilityRole="alert">

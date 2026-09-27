@@ -320,6 +320,25 @@ export async function signUp(
   })
 }
 
+/** better-auth `requestPasswordReset`: always answers ok; the email only goes to a real account. */
+export async function requestPasswordReset(email: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/request-password-reset`, {
+    method: 'POST',
+    body: JSON.stringify({ email, redirectTo: '/reset-password' }),
+  })
+}
+
+/** better-auth `resetPassword`: sets the password and signs the account out everywhere. */
+export async function resetPassword(body: {
+  newPassword: string
+  token: string
+}): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function verifyEmail(token: string): Promise<{ ok: true }> {
   const params = new URLSearchParams({ token })
   return await apiFetch(`${CLIENT_API}/auth/verify-email?${params.toString()}`)

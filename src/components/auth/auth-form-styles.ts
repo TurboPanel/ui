@@ -103,6 +103,11 @@ export const authFormStyles = StyleSheet.create({
   brandMark: {
     flexShrink: 0,
   },
+  /** "Forgot password?" under the sign-in password field, right-aligned. */
+  forgotPasswordLink: {
+    alignSelf: 'flex-end',
+    marginTop: spacing.xs,
+  },
   pageTitle: {
     color: colors.text,
     fontSize: 22,
