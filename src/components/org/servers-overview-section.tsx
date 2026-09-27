@@ -2,6 +2,7 @@ import { OverviewNavIcon } from '@/components/icons/nav-icons'
 import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { GeoLocationLines } from '@/components/org/geo-location-lines'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
 import {
   Badge,
@@ -57,7 +58,6 @@ import {
   type ServerConnectionStatus,
 } from '@/lib/server-connection-status'
 import { formatElapsedSince } from '@/lib/format-datetime'
-import { countryCodeToFlagEmoji, formatServerGeoCountryName } from '@/lib/server-geo'
 import {
   formatUnwatchedCounts,
   isTierShortfall,
@@ -381,7 +381,7 @@ const SERVER_COLUMNS = [
   { key: 'name', header: 'Host', flex: 2.6, minWidth: 220, gap: 2 },
   { key: 'status', header: 'Status', flex: 1.1, minWidth: 110, gap: 4 },
   { key: 'tier', header: 'Tier', flex: 1, minWidth: 96, gap: 2 },
-  { key: 'location', header: 'Country', flex: 1.4, minWidth: 130 },
+  { key: 'location', header: 'Location', flex: 2, minWidth: 190 },
   { key: 'usage', header: 'Usage', flex: 1.6, minWidth: 148 },
   { key: 'mesh', header: 'Mesh', flex: 1.1, minWidth: 110 },
   { key: 'check', header: 'Select', width: 40, align: 'center' },
@@ -512,28 +512,22 @@ function ServerTierCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   )
 }
 
-function ServerCountryLine({ server }: Readonly<{ server: OrgServerRecord }>) {
-  const flag = countryCodeToFlagEmoji(server.geo?.country)
-  const country = formatServerGeoCountryName(server.geo)
-
-  if (!country && !flag) {
-    return <Text style={styles.locationMuted}>—</Text>
-  }
-
-  return (
-    <View style={styles.locationRow}>
-      {flag ? <Text style={styles.locationFlag}>{flag}</Text> : null}
-      <Text style={styles.locationText} numberOfLines={1}>
-        {country || '—'}
-      </Text>
-    </View>
-  )
+/** Where the daemon's connection to the control plane comes from. */
+function ServerLocationLines({
+  server,
+  inline = false,
+}: Readonly<{
+  server: OrgServerRecord
+  /** Tiles and stacked rows: the place line only (the label still carries the network). */
+  inline?: boolean
+}>) {
+  return <GeoLocationLines geo={server.geo} inline={inline} />
 }
 
 function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
     <DataTableCell column={SV_LOCATION}>
-      <ServerCountryLine server={server} />
+      <ServerLocationLines server={server} />
     </DataTableCell>
   )
 }
@@ -649,7 +643,7 @@ function OrgServerCompactRow({
           <View style={styles.compactMeta}>
             <ServerStatusBadge server={server} />
             <ServerTierLine server={server} />
-            <ServerCountryLine server={server} />
+            <ServerLocationLines server={server} inline />
           </View>
         </View>
         <View style={styles.compactCheck}>
@@ -810,7 +804,7 @@ function OrgServerTile({
       <View style={styles.tileMeta}>
         <ServerStatusBadge server={server} />
         <ServerTierLine server={server} />
-        <ServerCountryLine server={server} />
+        <ServerLocationLines server={server} inline />
       </View>
       <View style={styles.tileUsage}>
         <ServerUsageBars density="tile" {...usageBarMetrics(usage)} />
@@ -1239,26 +1233,11 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     lineHeight: 16,
   },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    maxWidth: '100%',
-  },
-  locationFlag: {
-    fontSize: 14,
-    lineHeight: 16,
-  },
-  locationText: {
-    color: colors.textBody,
-    fontSize: 12,
-    fontWeight: '500',
-    flexShrink: 1,
-  },
   locationMuted: {
     color: colors.textDim,
     fontSize: 12,
   },
+
   tierLine: {
     gap: 2,
     alignItems: 'flex-start',
