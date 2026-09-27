@@ -73,6 +73,7 @@ import {
   useUpgradeBillingTier,
 } from '@/lib/queries/billing'
 import { BillingPreviewNotice } from '@/components/org/billing-preview-notice'
+import { summarizeMovePreview } from '@/lib/billing-preview-summary'
 import {
   LicenseDialog,
   type LicenseDialogMode,
@@ -677,6 +678,9 @@ function dialogTier(tier: BillingTierSummary): LicenseDialogTier {
     ending: tier.ending,
     endsAt: tier.endsAt,
     removable: removableAt(tier),
+    purchased: tier.purchased,
+    priceCents: tier.priceCents,
+    currency: tier.currency,
   }
 }
 
@@ -839,6 +843,9 @@ function TierLicensesPanel({
                     ending: 0,
                     endsAt: null,
                     removable: 0,
+                    purchased: 0,
+                    priceCents: otherTier.priceCents,
+                    currency: otherTier.currency,
                   },
                 })
               }}
@@ -979,7 +986,12 @@ function MoveFeedback({
       {move.kind === 'upgrade' && pair ? (
         <BillingPreviewNotice
           preview={move.preview}
-          title={`Moving one license from ${pair.from.label} to ${pair.to.label}`}
+          summary={summarizeMovePreview({
+            preview: move.preview,
+            fromLabel: pair.from.label,
+            toLabel: pair.to.label,
+            periodEnd: summary.subscription?.currentPeriodEnd ?? null,
+          })}
         />
       ) : null}
       {move.kind === 'downgrade' && pair ? (
