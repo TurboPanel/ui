@@ -36,15 +36,20 @@ const BORDER_GRADIENT = [colors.blue, colors.command] as const
  * Self-hosted has no pill: the full form is just the version line beside the
  * T, carrying the exact installed build label (`v0.1.1-canary.…`,
  * `v0.1.1-rc.1`) when the control plane reports one.
+ *
+ * `showVersion={false}` (the sign-in and sign-up screens) is the full pill
+ * alone: no version line, no `/api/health` read, nothing on self-hosted.
  */
 export function HighAvailabilityWordmark({
   compact = false,
-}: Readonly<{ compact?: boolean }>) {
+  showVersion = true,
+}: Readonly<{ compact?: boolean; showVersion?: boolean }>) {
   const { controlPlaneRuntime } = useAuth()
   const shown = showsHighAvailabilityWordmark(controlPlaneRuntime)
   const selfHosted = controlPlaneRuntime === 'deno'
-  const health = useControlPlaneHealth({ enabled: (shown || selfHosted) && !compact })
-  if (selfHosted && !compact) {
+  const withVersion = showVersion && !compact
+  const health = useControlPlaneHealth({ enabled: (shown || selfHosted) && withVersion })
+  if (selfHosted && withVersion) {
     return (
       <View style={[styles.stack, styles.stackSelfHosted]}>
         <VersionLine health={health.data} runtime="deno" />
@@ -58,7 +63,7 @@ export function HighAvailabilityWordmark({
       colors={BORDER_GRADIENT}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.border, !compact && styles.borderInStack]}
+      style={[styles.border, withVersion && styles.borderInStack]}
       accessible
       accessibilityRole="text"
       accessibilityLabel={HA_PRODUCT_NAME}
@@ -74,7 +79,7 @@ export function HighAvailabilityWordmark({
       </View>
     </LinearGradient>
   )
-  if (compact) return pill
+  if (!withVersion) return pill
 
   return (
     <View style={styles.stack}>
