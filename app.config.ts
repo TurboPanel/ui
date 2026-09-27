@@ -27,6 +27,8 @@ function resolveGitCommit(): string {
   const fromEnv = (
     process.env.EAS_BUILD_GIT_COMMIT_HASH ||
     process.env.EXPO_PUBLIC_GIT_COMMIT ||
+    // Cloudflare Workers Builds (testing / live console deploys).
+    process.env.WORKERS_CI_COMMIT_SHA ||
     process.env.GITHUB_SHA ||
     ''
   ).trim()

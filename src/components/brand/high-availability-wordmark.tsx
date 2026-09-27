@@ -1,6 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import { Linking, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { BuildInfoSheet } from '@/components/brand/build-info-sheet'
 import { useAuth } from '@/lib/auth-context'
+import { showsBuildInfo } from '@/lib/build-info'
 import { controlPlaneVersionLine } from '@/lib/control-plane-version'
 import type { HealthResponse } from '@/lib/instance-api'
 import {
@@ -10,7 +13,7 @@ import {
   showsHighAvailabilityWordmark,
 } from '@/lib/platform-copy'
 import { useControlPlaneHealth } from '@/lib/queries/system'
-import { colors } from '@/lib/theme'
+import { colors, webPointer } from '@/lib/theme'
 
 /** HA blue fading to its light tint: the pill's 1px border. */
 const BORDER_GRADIENT = [colors.blue, colors.command] as const
@@ -98,11 +101,16 @@ function VersionLine({
   health,
   runtime,
 }: Readonly<{ health: HealthResponse | undefined; runtime: 'deno' | 'workers' }>) {
+  const [infoOpen, setInfoOpen] = useState(false)
   const versionLine = controlPlaneVersionLine(health, runtime)
-  const commitUrl = versionLine?.commitUrl ?? null
   const environment = versionLine?.environment ?? null
-  return (
-    <View style={styles.versionRow}>
+  // Testing and staging: the whole line opens "What's running" (console and
+  // control plane versions + commits). Elsewhere the commit links to GitHub.
+  const opensBuildInfo = runtime === 'workers' && showsBuildInfo(health)
+  const commitUrl = opensBuildInfo ? null : (versionLine?.commitUrl ?? null)
+
+  const content = (
+    <>
       <Text
         style={styles.version}
         numberOfLines={1}
@@ -127,7 +135,24 @@ function VersionLine({
           {environment.text}
         </Text>
       ) : null}
-    </View>
+    </>
+  )
+
+  if (!opensBuildInfo) {
+    return <View style={styles.versionRow}>{content}</View>
+  }
+  return (
+    <>
+      <Pressable
+        style={[styles.versionRow, webPointer]}
+        onPress={() => setInfoOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`${versionLine?.label ?? 'Version'}, show what's running`}
+      >
+        {content}
+      </Pressable>
+      <BuildInfoSheet visible={infoOpen} health={health} onClose={() => setInfoOpen(false)} />
+    </>
   )
 }
 
