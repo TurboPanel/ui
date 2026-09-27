@@ -6878,6 +6878,8 @@ export type HostSeriesChartPoint = {
   derived: DerivedHostValues
   sampleCount: number
   expectedSampleCount?: number
+  /** Seconds between stored samples in this bucket (collection interval × store sampling weight). */
+  sampleSpacingSeconds?: number
   /** `null`/absent means unknown or a mixed-generation bucket. */
   topologyGeneration?: number | null
 }
@@ -6900,6 +6902,12 @@ export type HostSeriesChartResponse = {
   metrics: readonly string[]
   sampleCount: number
   gapCount: number
+  /**
+   * Starts (ISO) of the empty buckets where a sample was due and never
+   * arrived. Absent from control planes that predate it — then every empty
+   * bucket reads as a gap.
+   */
+  gapBuckets?: string[]
   points: HostSeriesChartPoint[]
   /**
    * Point indices where `topologyGeneration` differs from the previous known
