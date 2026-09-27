@@ -29,6 +29,7 @@ import { ServerMachineClassPanel } from '@/components/org/server-machine-class-p
 import { ServerTierPlacementPanel } from '@/components/org/server-tier-placement-panel'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
+import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -79,18 +80,15 @@ import {
   useServerUpdateStatus,
   useSetServerHostname,
   useTriggerServerUpdate,
+  useUpdateServer,
 } from '@/lib/queries/servers'
 import { useCan, queryKeys } from '@/lib/query-client'
 import {
   resolveServerConnectionStatus,
   serverConnectionStatusLabel,
 } from '@/lib/server-connection-status'
-import {
-  countryCodeToFlagEmoji,
-  formatServerGeoAsn,
-  formatServerGeoCountryCode,
-  formatServerGeoLocation,
-} from '@/lib/server-geo'
+import { countryCodeToFlagEmoji } from '@/lib/server-geo'
+import { locationDisplayGeo } from '@/lib/location'
 import { colors, layout, spacing, webPointer } from '@/lib/theme'
 
 type DetailActiveCommand = ActiveCommand
@@ -681,7 +679,7 @@ export function ServerDetailSection({
   }
 
   const updateVm = deriveServerUpdateViewModel(server, updateState)
-  const flag = countryCodeToFlagEmoji(server.geo?.country)
+  const flag = countryCodeToFlagEmoji(locationDisplayGeo(server.location, server.geo)?.country)
   const title = serverTitle(server)
   const hostname = server.hostname?.trim()
   const connectedVia = resolveConnectedViaLabel(server)
@@ -924,10 +922,7 @@ function ServerOverviewTab({
 }>) {
   const { width } = useWindowDimensions()
   const twoColumn = width >= layout.desktopBreakpoint
-  const geoLine = formatServerGeoLocation(server.geo)
-  const country = formatServerGeoCountryCode(server.geo)
-  const asn = formatServerGeoAsn(server.geo)
-  const hasGeo = Boolean(geoLine || country || asn)
+  const updateServerMutation = useUpdateServer(orgId, server.id)
   const timezoneSource = configuredSourceLabel(server.timezoneSource)
   const groupStyle = [styles.detailGroup, twoColumn && styles.detailGroupHalf]
 
@@ -961,15 +956,6 @@ function ServerOverviewTab({
               <Text style={panelStyles.muted}>Codename: {server.os.codename}</Text>
             ) : null}
           </View>
-
-          {hasGeo ? (
-            <View style={groupStyle}>
-              <Text style={panelStyles.detailTitle}>Geo</Text>
-              {geoLine ? <Text style={panelStyles.detailLine}>{geoLine}</Text> : null}
-              {country ? <Text style={panelStyles.detailLine}>{country}</Text> : null}
-              {asn ? <Text style={panelStyles.muted}>{asn}</Text> : null}
-            </View>
-          ) : null}
 
           <View style={groupStyle}>
             <Text style={panelStyles.detailTitle}>Paths</Text>
@@ -1015,6 +1001,14 @@ function ServerOverviewTab({
           </View>
         </View>
       </SectionPanel>
+
+      <LocationEditorPanel
+        subject="server"
+        location={server.location}
+        detectedGeo={server.geo}
+        canManage={canManage}
+        onSave={(location) => updateServerMutation.mutateAsync({ location })}
+      />
 
       <ServerTierPlacementPanel orgId={orgId} server={server} />
 

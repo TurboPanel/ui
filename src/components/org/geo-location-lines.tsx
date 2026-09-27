@@ -12,13 +12,17 @@ import { colors } from '@/lib/theme'
  * "City, State, Country", and the network ("AS13335 · Cloudflare, Inc.") as a
  * muted second line. Both lines truncate; the accessible label carries the
  * full text. `inline` (tiles, stacked rows) shows the place line only.
+ * `custom` marks a location an operator has edited.
  */
 export function GeoLocationLines({
   geo,
   inline = false,
+  custom = false,
 }: Readonly<{
   geo: ServerGeo | null | undefined
   inline?: boolean
+  /** At least one field is an operator override, not Cloudflare's detected value. */
+  custom?: boolean
 }>) {
   const flag = countryCodeToFlagEmoji(geo?.country)
   const place = formatServerGeoPlace(geo)
@@ -28,7 +32,7 @@ export function GeoLocationLines({
     return <Text style={styles.muted}>—</Text>
   }
 
-  const fullText = [place, network].filter(Boolean).join(' — ')
+  const fullText = [place, network, custom ? 'edited' : ''].filter(Boolean).join(' — ')
   return (
     <View style={styles.block} accessible accessibilityLabel={fullText}>
       <View style={styles.row}>
@@ -36,6 +40,7 @@ export function GeoLocationLines({
         <Text style={styles.place} numberOfLines={1}>
           {place || '—'}
         </Text>
+        {custom ? <Text style={styles.edited}>edited</Text> : null}
       </View>
       {network && !inline ? (
         <Text style={styles.network} numberOfLines={1}>
@@ -71,6 +76,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     lineHeight: 14,
+  },
+  edited: {
+    color: colors.textDim,
+    fontSize: 10,
+    fontStyle: 'italic',
+    flexShrink: 0,
   },
   muted: {
     color: colors.textDim,

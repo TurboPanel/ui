@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { AddressFamilyBadge } from '@/components/org/address-family-badge'
 import { FormSelect } from '@/components/org/form-select'
+import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ServerTimezonePicker } from '@/components/org/server-timezone-picker'
 import {
@@ -84,6 +85,7 @@ import {
 } from '@/lib/cidr'
 import {
   candidateMemberNetworks,
+  datacenterGeoFromMetadata,
   formatDatacenterServerCount,
   listServersWithCandidateAddresses,
   memberAssignEmptyCopy,
@@ -1495,6 +1497,16 @@ export function DatacenterDetailSection({
           )
         }}
       />
+
+      {datacenter ? (
+        <LocationEditorPanel
+          subject="datacenter"
+          location={datacenter.location}
+          detectedGeo={datacenterGeoFromMetadata(datacenter.metadata)}
+          canManage={canManage}
+          onSave={(location) => updateMutation.mutateAsync({ location })}
+        />
+      ) : null}
 
       <SubnetsPanel
         subnets={subnets}

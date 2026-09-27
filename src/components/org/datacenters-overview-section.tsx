@@ -1,4 +1,5 @@
 import { GeoLocationLines } from '@/components/org/geo-location-lines'
+import { isCustomLocation, locationDisplayGeo } from '@/lib/location'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
@@ -82,7 +83,10 @@ function DatacenterRoutingCell({ datacenter }: Readonly<{ datacenter: Datacenter
 function DatacenterLocationCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
   return (
     <DataTableCell column={DC_COL_LOCATION}>
-      <GeoLocationLines geo={datacenterGeoFromMetadata(datacenter.metadata)} />
+      <GeoLocationLines
+        geo={locationDisplayGeo(datacenter.location, datacenterGeoFromMetadata(datacenter.metadata))}
+        custom={isCustomLocation(datacenter.location)}
+      />
     </DataTableCell>
   )
 }

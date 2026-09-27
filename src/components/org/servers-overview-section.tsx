@@ -3,6 +3,7 @@ import { AddServerWizard } from '@/components/org/add-server-wizard'
 import { ConnectionStatusDot } from '@/components/org/connection-status-dot'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { GeoLocationLines } from '@/components/org/geo-location-lines'
+import { isCustomLocation, locationDisplayGeo } from '@/lib/location'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
 import {
   Badge,
@@ -521,7 +522,13 @@ function ServerLocationLines({
   /** Tiles and stacked rows: the place line only (the label still carries the network). */
   inline?: boolean
 }>) {
-  return <GeoLocationLines geo={server.geo} inline={inline} />
+  return (
+    <GeoLocationLines
+      geo={locationDisplayGeo(server.location, server.geo)}
+      custom={isCustomLocation(server.location)}
+      inline={inline}
+    />
+  )
 }
 
 function ServerLocationCell({ server }: Readonly<{ server: OrgServerRecord }>) {

@@ -578,6 +578,54 @@ export type ServerGeo = {
   capturedAt?: string
 }
 
+/** The location fields an operator may override (control plane `options.location`). */
+export type LocationField =
+  | 'city'
+  | 'region'
+  | 'regionCode'
+  | 'country'
+  | 'asn'
+  | 'asOrganization'
+
+/** One set of location values; each is null when unknown. */
+export type ResolvedLocationFields = {
+  city: string | null
+  /** State / province name. */
+  region: string | null
+  /** State / province code (e.g. `"KS"`). */
+  regionCode: string | null
+  /** ISO 3166-1 alpha-2, upper-case. */
+  country: string | null
+  asn: number | null
+  /** AS organization name (e.g. `"Cloudflare, Inc."`). */
+  asOrganization: string | null
+}
+
+/**
+ * The `location` a server or datacenter carries: each field is the operator's
+ * override, else Cloudflare's detected value, else null. `detected` keeps
+ * Cloudflare's values for "use detected" / reset.
+ */
+export type ResolvedLocation = ResolvedLocationFields & {
+  source: 'detected' | 'custom'
+  overridden: LocationField[]
+  detected: ResolvedLocationFields
+}
+
+/**
+ * A PATCH `location` body: a present field sets that override; `null` (or
+ * `""`) clears it back to the detected value. `location: null` resets all.
+ */
+export type LocationPatch = {
+  city?: string | null
+  region?: string | null
+  regionCode?: string | null
+  country?: string | null
+  /** A positive integer, or `"AS13335"`. */
+  asn?: number | string | null
+  asOrganization?: string | null
+}
+
 export type ServerOsFamily = 'linux' | 'windows' | 'freebsd' | 'darwin'
 
 export type ServerOsVariant = 'raspberry-pi-os'
@@ -799,6 +847,8 @@ export type OrgServerRecord = {
   /** Last online/offline transition (`server.status_changed_at`). */
   statusChangedAt: string | null
   geo: ServerGeo | null
+  /** Effective (override ?? detected) location; absent on older control planes. */
+  location?: ResolvedLocation | null
   /** Host OS from server.os_* columns (daemon hello); null until reported. */
   os: ServerOsMetadata | null
   /** Formatted label e.g. "Debian 13.5 (Trixie)". */
@@ -916,6 +966,8 @@ export async function updateServer(
       ntp?: NtpDefaults | null
       hosting?: { enabled: boolean }
     }
+    /** Location override; `null` resets every field to the detected value. */
+    location?: LocationPatch | null
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}`, {
@@ -2670,6 +2722,8 @@ export type DatacenterRecord = {
   priority: number
   /** Effective `options.trusted` with the default (`true`) applied. */
   trusted: boolean
+  /** Effective (override ?? detected) location; absent on older control planes. */
+  location?: ResolvedLocation | null
   createdAt: string
   updatedAt: string
 }
@@ -3277,6 +3331,8 @@ export async function updateDatacenter(
     metadata: Record<string, unknown> | null
     /** Replace-all; `null` clears the stored blob so the instance defaults apply again. */
     options: DatacenterOptions | null
+    /** Location override; `null` resets every field to the detected value. */
+    location: LocationPatch | null
   }>
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/datacenters/${id}`, {
