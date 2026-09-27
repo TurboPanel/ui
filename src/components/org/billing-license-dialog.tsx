@@ -22,6 +22,7 @@ import {
 } from '@/lib/queries/billing'
 import { spacing } from '@/lib/theme'
 import { BillingPreviewNotice } from '@/components/org/billing-preview-notice'
+import { summarizePurchasePreview } from '@/lib/billing-preview-summary'
 
 export type LicenseDialogMode = 'add' | 'remove' | 'restore'
 
@@ -33,6 +34,11 @@ export type LicenseDialogTier = Readonly<{
   endsAt: string | null
   /** Upper bound Remove offers; 0 hides nothing but refuses the count. */
   removable: number
+  /** Licenses already bought at this tier — for "From Oct 1: … for N × S1". */
+  purchased?: number | null
+  /** Catalogue price per license per month, minor units. */
+  priceCents?: number | null
+  currency?: string | null
 }>
 
 export type LicenseDialogRequest = Readonly<{ mode: LicenseDialogMode; tier: LicenseDialogTier }>
@@ -219,11 +225,19 @@ function LicenseDialogBody({
         body="No refund for the rest of the period. Until then they still count as yours and can be restored; they cannot take a new server. Refused if a server would be left without a license."
       />
     )
-  } else if (quote) {
+  } else if (quote && count != null) {
     consequence = (
       <BillingPreviewNotice
         preview={quote}
-        title={`Adding ${count != null ? plural(count, 'license', 'licenses') : 'licenses'} at ${tier.label}`}
+        summary={summarizePurchasePreview({
+          preview: quote,
+          count,
+          label: tier.label,
+          periodEnd,
+          unitCents: tier.priceCents,
+          currency: tier.currency,
+          purchasedBefore: tier.purchased,
+        })}
       />
     )
   }
@@ -247,7 +261,7 @@ function LicenseDialogBody({
   let hint: string
   if (mode === 'restore') hint = `Up to ${tier.ending} (${endingLabel(tier.ending, tier.endsAt)}).`
   else if (mode === 'remove') hint = `Up to ${tier.removable} — licenses covering a server cannot be removed.`
-  else hint = 'Invoiced now, prorated for the rest of the period.'
+  else hint = 'Charged now for the rest of this period, then monthly with your other licenses.'
 
   return (
     <ModalSheet
