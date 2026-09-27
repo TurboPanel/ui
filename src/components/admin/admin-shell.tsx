@@ -1,3 +1,4 @@
+import { UpdateAvailableBanner } from '@/components/admin/updates/update-available-banner'
 import { Slot } from 'expo-router'
 import { useState } from 'react'
 import {
@@ -43,6 +44,7 @@ export function AdminShell() {
           <AdminHeader
             onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
           />
+          <UpdateAvailableBanner />
           <ScrollView
             style={styles.contentScroll}
             contentContainerStyle={[

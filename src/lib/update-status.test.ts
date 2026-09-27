@@ -1,0 +1,307 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { InstanceUpdates, UpgradeRunRecord, UpgradeStepRow } from '@/lib/instance-api'
+import {
+  DAEMON_LOGS_COMMAND,
+  DAEMON_REINSTALL_COMMAND,
+  explainUpgradeFailure,
+  readDismissedUpdateBanner,
+  runFailure,
+  runToShow,
+  stallHint,
+  UPGRADE_DOCS_URL,
+  UpgradeStartTimeoutError,
+  updateBanner,
+  withStartTimeout,
+  writeDismissedUpdateBanner,
+} from '@/lib/update-status'
+
+type RunWithSteps = UpgradeRunRecord & { steps: UpgradeStepRow[] }
+
+function step(overrides: Partial<UpgradeStepRow> = {}): UpgradeStepRow {
+  return {
+    id: 'step-1',
+    serverId: 'server-1',
+    unit: 'daemon',
+    phase: 'colocated_daemon',
+    batchIndex: 0,
+    status: 'dispatched',
+    ...overrides,
+  }
+}
+
+function run(overrides: Partial<RunWithSteps> = {}): RunWithSteps {
+  return {
+    id: 'run-1',
+    status: 'running',
+    phase: 'colocated_daemon',
+    channel: 'canary',
+    source: 'manual',
+    steps: [step()],
+    ...overrides,
+  }
+}
+
+const SIGNATURE_MESSAGE =
+  'preflight_manifest: channel manifest signature is invalid (keyId c72c6744)'
+
+describe('explainUpgradeFailure', () => {
+  it('tells an old daemon to reinstall once for a bad signature', () => {
+    const explained = explainUpgradeFailure({
+      errorCode: 'preflight_manifest',
+      errorMessage: SIGNATURE_MESSAGE,
+    })
+    expect(explained.title).toBe("Can't verify the new release")
+    expect(explained.body).toContain("can't verify the new release's signature")
+    expect(explained.body).toContain('Reinstall the daemon once')
+    expect(explained.command).toBe(DAEMON_REINSTALL_COMMAND)
+    expect(explained.docsUrl).toBe(UPGRADE_DOCS_URL)
+  })
+
+  it('reads other manifest failures without the reinstall advice', () => {
+    const explained = explainUpgradeFailure({
+      errorCode: 'preflight_manifest',
+      errorMessage: 'manifest fetch returned 404',
+    })
+    expect(explained.title).toBe("Couldn't read the release manifest")
+    expect(explained.body).toContain('manifest fetch returned 404')
+    expect(explained.command).toBeNull()
+  })
+
+  it.each([
+    ['preflight_disk', 'Not enough disk space', null],
+    ['preflight_in_progress', 'Another update is already running', null],
+    ['step_timeout', 'The server stopped reporting progress', DAEMON_LOGS_COMMAND],
+    ['server_offline', 'The server went offline', null],
+    ['rolled_back', 'Rolled back to the previous build', DAEMON_LOGS_COMMAND],
+    ['update_rollback', 'Rolled back to the previous build', DAEMON_LOGS_COMMAND],
+  ])('explains %s', (code, title, command) => {
+    const explained = explainUpgradeFailure({ errorCode: code })
+    expect(explained.title).toBe(title)
+    expect(explained.command).toBe(command)
+  })
+
+  it('includes a rollback reason when the daemon sent one', () => {
+    expect(
+      explainUpgradeFailure({ errorCode: 'rolled_back', errorMessage: 'health check timed out' }).body,
+    ).toContain('Reason: health check timed out')
+  })
+
+  it('falls back to the message, then the code, then a generic line', () => {
+    expect(explainUpgradeFailure({ errorCode: 'odd', errorMessage: ' disk exploded ' }).body).toBe(
+      'disk exploded',
+    )
+    expect(explainUpgradeFailure({ errorCode: 'odd' }).body).toBe('Reason code: odd')
+    expect(explainUpgradeFailure({}).body).toBe('No reason was reported.')
+    expect(explainUpgradeFailure({}).title).toBe('The update failed')
+  })
+})
+
+describe('runToShow', () => {
+  it('prefers the active run', () => {
+    const active = run()
+    expect(runToShow({ run: active, lastRun: run({ id: 'old', status: 'failed' }) })).toEqual({
+      run: active,
+      finished: false,
+    })
+  })
+
+  it('keeps a failed last run on screen', () => {
+    const failed = run({ status: 'failed' })
+    expect(runToShow({ run: null, lastRun: failed })).toEqual({ run: failed, finished: true })
+    const partial = run({ status: 'partially_failed' })
+    expect(runToShow({ run: null, lastRun: partial }).run).toBe(partial)
+  })
+
+  it('does not redraw a successful last run, or nothing at all', () => {
+    expect(runToShow({ run: null, lastRun: run({ status: 'succeeded' }) }).run).toBeNull()
+    expect(runToShow({ run: null }).run).toBeNull()
+    expect(runToShow(undefined).run).toBeNull()
+  })
+})
+
+describe('runFailure', () => {
+  it('explains the first failed step with its phase', () => {
+    const failure = runFailure(
+      run({
+        status: 'failed',
+        steps: [
+          step({ status: 'failed', errorCode: 'preflight_manifest', errorMessage: SIGNATURE_MESSAGE }),
+          step({ id: 'cp', phase: 'control_plane', unit: 'instance', status: 'pending' }),
+        ],
+      }),
+    )
+    expect(failure?.stepTitle).toBe('Co-located daemon')
+    expect(failure?.command).toBe(DAEMON_REINSTALL_COMMAND)
+  })
+
+  it('names control-plane and fleet steps', () => {
+    expect(
+      runFailure(run({ steps: [step({ phase: 'control_plane', status: 'rolled_back' })] }))?.stepTitle,
+    ).toBe('Control plane')
+    expect(
+      runFailure(run({ steps: [step({ phase: 'fleet', status: 'needs_attention', serverName: 'kore' })] }))
+        ?.stepTitle,
+    ).toBe('kore')
+    expect(
+      runFailure(run({ steps: [step({ phase: 'fleet', status: 'failed', hostname: 'kore.lan' })] }))
+        ?.stepTitle,
+    ).toBe('kore.lan')
+    expect(runFailure(run({ steps: [step({ phase: 'fleet', status: 'failed' })] }))?.stepTitle).toBe(
+      'Fleet server',
+    )
+  })
+
+  it('reads a failed run with no failed step from the run error', () => {
+    const failure = runFailure(run({ status: 'failed', error: 'step_timeout', steps: [] }))
+    expect(failure?.title).toBe('The server stopped reporting progress')
+    expect(failure?.stepTitle).toBe('Upgrade')
+  })
+
+  it('says a cancelled run was cancelled', () => {
+    expect(runFailure(run({ status: 'cancelled', steps: [] }))?.title).toBe('The update was cancelled')
+  })
+
+  it('has nothing to say for a healthy or missing run', () => {
+    expect(runFailure(run())).toBeNull()
+    expect(runFailure(null)).toBeNull()
+  })
+})
+
+describe('stallHint', () => {
+  const at = '2026-09-27T18:00:00.000Z'
+  const base = Date.parse(at)
+
+  it('stays quiet while the step is moving', () => {
+    expect(stallHint({ status: 'downloading', lastStageAt: at }, base + 4 * 60_000)).toBeNull()
+  })
+
+  it('says how long it has been quiet after five minutes', () => {
+    const hint = stallHint({ status: 'dispatched', lastStageAt: at }, base + 7 * 60_000)
+    expect(hint).toContain('no progress reported for 7 minutes')
+    expect(hint).toContain(DAEMON_LOGS_COMMAND)
+  })
+
+  it('ignores finished steps and steps without a timestamp', () => {
+    expect(stallHint({ status: 'failed', lastStageAt: at }, base + 60 * 60_000)).toBeNull()
+    expect(stallHint({ status: 'dispatched', lastStageAt: null }, base)).toBeNull()
+    expect(stallHint({ status: 'dispatched', lastStageAt: 'not a date' }, base)).toBeNull()
+    expect(stallHint(null, base)).toBeNull()
+  })
+})
+
+describe('withStartTimeout', () => {
+  it('passes a prompt answer through', async () => {
+    await expect(withStartTimeout(Promise.resolve('ok'), 1000)).resolves.toBe('ok')
+  })
+
+  it('gives up on a request that never answers', async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = withStartTimeout(new Promise<never>(() => {}), 30_000)
+      const assertion = expect(pending).rejects.toBeInstanceOf(UpgradeStartTimeoutError)
+      await vi.advanceTimersByTimeAsync(30_000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+function updates(overrides: Partial<InstanceUpdates> = {}): InstanceUpdates {
+  const target = {
+    commit: 'abc1234def',
+    buildId: '20260927-180000-abc1234',
+    builtAt: '',
+    channel: 'canary',
+    manifestUrl: 'https://example.test/manifest.json',
+    version: '0.1.2',
+  }
+  return {
+    ok: true,
+    channel: 'canary',
+    runtime: 'deno',
+    units: {
+      instance: {
+        installed: { version: '0.1.1', commit: 'old' },
+        target,
+        uiTarget: null,
+        updateAvailable: true,
+      },
+      daemon: {
+        installed: { version: '0.1.1', commit: 'old' },
+        target,
+        serverId: 'server-1',
+        connected: true,
+        updateAvailable: false,
+      },
+    },
+    ...overrides,
+  }
+}
+
+describe('updateBanner', () => {
+  it('offers an available self-hosted update', () => {
+    const banner = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
+    expect(banner?.title).toBe('TurboPanel Canary · v0.1.2 is available')
+    expect(banner?.key).toBe('canary|0.1.2|abc1234def|20260927-180000-abc1234')
+  })
+
+  it('stays hidden when dismissed for this build, during a run, on Workers, or with nothing new', () => {
+    const offered = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
+    expect(updateBanner({ updates: updates(), activeRun: false, dismissedKey: offered?.key ?? '' })).toBeNull()
+    expect(updateBanner({ updates: updates(), activeRun: true, dismissedKey: null })).toBeNull()
+    expect(
+      updateBanner({ updates: updates({ runtime: 'workers' }), activeRun: false, dismissedKey: null }),
+    ).toBeNull()
+    expect(
+      updateBanner({ updates: updates({ updatesManaged: true }), activeRun: false, dismissedKey: null }),
+    ).toBeNull()
+    const current = updates()
+    current.units.instance.updateAvailable = false
+    expect(updateBanner({ updates: current, activeRun: false, dismissedKey: null })).toBeNull()
+    expect(updateBanner({ updates: null, activeRun: false, dismissedKey: null })).toBeNull()
+  })
+
+  it('comes back for a newer build after an older one was dismissed', () => {
+    expect(
+      updateBanner({ updates: updates(), activeRun: false, dismissedKey: 'canary|0.1.1|old|x' }),
+    ).not.toBeNull()
+  })
+
+  it('needs a target to name', () => {
+    const noTarget = updates()
+    noTarget.units.instance.target = null
+    noTarget.units.daemon.target = null
+    noTarget.units.daemon.updateAvailable = true
+    expect(updateBanner({ updates: noTarget, activeRun: false, dismissedKey: null })).toBeNull()
+  })
+})
+
+describe('dismissed banner storage', () => {
+  it('round-trips through storage', () => {
+    const data = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        data.set(key, value)
+      },
+    }
+    expect(readDismissedUpdateBanner(storage)).toBeNull()
+    writeDismissedUpdateBanner(storage, 'k1')
+    expect(readDismissedUpdateBanner(storage)).toBe('k1')
+  })
+
+  it('survives missing or throwing storage', () => {
+    expect(readDismissedUpdateBanner(undefined)).toBeNull()
+    const throwing = {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      setItem: () => {
+        throw new Error('blocked')
+      },
+    }
+    expect(readDismissedUpdateBanner(throwing)).toBeNull()
+    expect(() => writeDismissedUpdateBanner(throwing, 'k')).not.toThrow()
+  })
+})

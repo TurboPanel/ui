@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-block'
+import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
 import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
 import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
@@ -32,6 +34,13 @@ import {
   useUpgradeServersPage,
   useUpgradeSettings,
 } from '@/lib/queries/admin'
+import {
+  runFailure,
+  runToShow,
+  stallHint,
+  UpgradeStartTimeoutError,
+  withStartTimeout,
+} from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
 
 function installedLabel(version: string | null | undefined, commit: string | null | undefined): string {
@@ -58,7 +67,14 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const [preflight, setPreflight] = useState<UpgradePreflightResult | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const run = activeRun.data?.run
+  const shown = runToShow(activeRun.data)
+  const run = shown.run
+  const failure = runFailure(run)
+  const [starting, setStarting] = useState(false)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const router = useRouter()
+  const params = useLocalSearchParams<{ update?: string }>()
+  const autoOpened = useRef(false)
   const fleetSteps = useMemo(
     () => (run?.steps ?? []).filter((step) => step.phase === 'fleet'),
     [run?.steps],
@@ -67,13 +83,25 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const needsAttention = fleetSummary.needsAttention + (run?.counts?.needsAttention ?? 0)
 
   const headline = resolvePlatformUpgradeHeadline({
-    activeRunStatus: run?.status ?? null,
+    activeRunStatus: shown.finished ? null : (run?.status ?? null),
     updateAvailable: platformUpdateAvailable(data.units),
     needsAttentionCount: needsAttention,
   })
 
   const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
+  const waitingStep = shown.finished
+    ? null
+    : (run?.steps.find((step) => stallHint(step, nowMs) !== null) ?? null)
+  const stalled = waitingStep ? stallHint(waitingStep, nowMs) : null
+
+  // Re-read the clock while a run is active so the "still waiting" hint appears
+  // without a new poll result.
+  useEffect(() => {
+    if (!run || shown.finished) return undefined
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [run, shown.finished])
 
   const fleetServers = serversPage.data?.servers.length
     ? serversPage.data.servers
@@ -83,7 +111,8 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
     (data.units.instance.target !== null || data.units.daemon.target !== null) &&
-    headline !== 'updating'
+    headline !== 'updating' &&
+    !starting
 
   const openPreflight = async () => {
     setNotice(null)
@@ -97,14 +126,35 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   }
 
   const confirmUpgrade = async () => {
+    setStarting(true)
     try {
-      const outcome = await startUpgrade.mutateAsync(preflight?.runId)
+      const outcome = await withStartTimeout(startUpgrade.mutateAsync(preflight?.runId))
       setPreflightOpen(false)
       setNotice(`Upgrade started (run ${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Upgrade failed to start')
+      if (err instanceof UpgradeStartTimeoutError) {
+        // Never spin forever: close the sheet and let the status below say
+        // whether a run started.
+        setPreflightOpen(false)
+        setNotice(
+          'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.',
+        )
+        void activeRun.refetch()
+      } else {
+        setNotice(err instanceof Error ? err.message : 'Upgrade failed to start')
+      }
+    } finally {
+      setStarting(false)
     }
   }
+
+  // The update banner links here with ?update=1: open the confirmation once.
+  useEffect(() => {
+    if (params.update !== '1' || autoOpened.current || !canStart) return
+    autoOpened.current = true
+    router.setParams({ update: undefined })
+    void openPreflight()
+  })
 
   return (
     <View style={styles.root}>
@@ -117,7 +167,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
           <Button
             label="Update TurboPanel"
             variant="primary"
-            busy={startUpgrade.isPending || preflightMutation.isPending}
+            busy={starting || preflightMutation.isPending}
             disabled={!canStart}
             onPress={() => {
               void openPreflight()
@@ -148,6 +198,14 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
           }
         />
       </SectionPanel>
+
+      {failure ? (
+        <UpgradeFailureNotice
+          failure={failure}
+          lead={shown.finished ? 'Last update failed' : 'Update needs attention'}
+        />
+      ) : null}
+      {stalled ? <InlineNotice title={stalled} /> : null}
 
       {run || platformUpdateAvailable(data.units) ? (
         <SectionPanel title="Progress">
@@ -204,7 +262,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
       <UpgradePreflightSheet
         visible={preflightOpen}
         preflight={preflight}
-        busy={startUpgrade.isPending}
+        busy={starting}
         onClose={() => {
           setPreflightOpen(false)
         }}

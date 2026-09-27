@@ -1,8 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
+import { useUpdateAvailable } from '@/components/admin/updates/update-available-banner'
 import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
+import { Badge } from '@/components/ui'
 import { AdminAreaIcon } from '@/components/icons/nav-icons'
 import { ADMIN_AREAS, adminAreaFromPathname, adminAreaHref, adminRouteHref } from '@/lib/admin-navigation'
 import { useAuth } from '@/lib/auth-context'
@@ -15,6 +17,7 @@ export function AdminSidebar({
   const pathname = usePathname()
   const router = useRouter()
   const { billingEnabled } = useAuth()
+  const { available: updateAvailable } = useUpdateAvailable()
   const resolved = adminAreaFromPathname(pathname)
   const activeSubRouteId = resolved?.subRoute?.id ?? null
   // The tier catalogue is a hosted (Workers) surface; self-hosted has no
@@ -68,6 +71,9 @@ export function AdminSidebar({
                 >
                   {area.label}
                 </Text>
+                {area.id === 'updates' && updateAvailable ? (
+                  <Badge tone="info" label="New" />
+                ) : null}
               </Pressable>
 
               {areaActive && area.subRoutes.length > 0 ? (
