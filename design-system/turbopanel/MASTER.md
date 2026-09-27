@@ -105,7 +105,7 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 
 - Geometry lives in **`assets/brand/`** (`turbopanel-logo*`) and the inline SVG component **`src/components/brand/turbopanel-logo.tsx`** — landscape mark is ink-tight `628×370` (no embedded clear-space pad)
 - Color mark uses `colors.green` + `colors.blue`; `white` / `mono` variants for special surfaces
-- Org sidebar, admin sidebar, auth shell, and `AppShell` use `TurboPanelLogo` / `TurboPanelLogoMark` — **T mark only** in product chrome (full “urboPanel” lockup is **website-only**). Mark sizing via `consoleMarkRenderSize` in `src/lib/wordmark-lockup.ts`. The mark **is** the T — never render “TurboPanel” beside it in the console.
+- Org sidebar, admin sidebar, auth shell, and `AppShell` use `TurboPanelLogo` / `TurboPanelLogoMark` — **T mark only** in product chrome (full “urboPanel” lockup is **website-only**). Mark sizing via `consoleMarkRenderSize` in `src/lib/wordmark-lockup.ts`. The mark **is** the T — never render “TurboPanel” beside it in the console. On the hosted (Workers) control plane a slim **HIGH AVAILABILITY** pill sits beside the T (`src/components/brand/high-availability-wordmark.tsx`: one line of tiny letter-spaced caps, 1px HA-blue gradient border, blue-tinted fill; `compact` = the same pill reading “HA” on narrow headers); nothing renders on self-hosted or before the runtime is known.
 - Public downloads + usage copy: marketing site **`/about/logo`**
 
 ## Component Specs
