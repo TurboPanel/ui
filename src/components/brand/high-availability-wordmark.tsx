@@ -1,18 +1,27 @@
+import { LinearGradient } from 'expo-linear-gradient'
 import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '@/lib/auth-context'
 import {
   HA_PRODUCT_NAME,
-  HA_WORDMARK_LINES,
+  HA_WORDMARK_SHORT,
+  HA_WORDMARK_TEXT,
   showsHighAvailabilityWordmark,
 } from '@/lib/platform-copy'
 import { colors } from '@/lib/theme'
 
+/** HA blue fading to its light tint: the pill's 1px border. */
+const BORDER_GRADIENT = [colors.blue, colors.command] as const
+
 /**
- * "HIGH / AVAILABILITY" beside the T mark on the hosted (Workers) control
- * plane — heavy italic caps behind a thin HA-blue rule. `compact` is the
- * narrow-header form: an italic "HA" chip. Renders nothing until the runtime
- * is known (`controlPlaneRuntime` is hydrated from storage before `/status`
- * answers), and nothing at all on self-hosted.
+ * "HIGH AVAILABILITY" beside the T mark on the hosted (Workers) control
+ * plane — one line of tiny letter-spaced caps in a slim pill with a 1px
+ * HA-blue gradient border. `compact` is the narrow-header form: the same
+ * pill reading "HA". Renders nothing until the runtime is known
+ * (`controlPlaneRuntime` is hydrated from storage before `/status` answers),
+ * and nothing at all on self-hosted.
+ *
+ * The border is an outer gradient with 1px padding around an inner
+ * blue-tinted fill, so it reads the same on every surface it sits on.
  */
 export function HighAvailabilityWordmark({
   compact = false,
@@ -20,85 +29,55 @@ export function HighAvailabilityWordmark({
   const { controlPlaneRuntime } = useAuth()
   if (!showsHighAvailabilityWordmark(controlPlaneRuntime)) return null
 
-  if (compact) {
-    return (
-      <View
-        style={styles.chip}
-        accessible
-        accessibilityRole="text"
-        accessibilityLabel={HA_PRODUCT_NAME}
-      >
-        <Text style={styles.chipText} importantForAccessibility="no">
-          HA
-        </Text>
-      </View>
-    )
-  }
-
-  const [top, bottom] = HA_WORDMARK_LINES
   return (
-    <View
-      style={styles.lockup}
+    <LinearGradient
+      colors={BORDER_GRADIENT}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.border}
       accessible
       accessibilityRole="text"
       accessibilityLabel={HA_PRODUCT_NAME}
     >
-      <View style={styles.rule} />
-      <View>
-        <Text style={styles.top} numberOfLines={1} importantForAccessibility="no">
-          {top}
-        </Text>
-        <Text style={styles.bottom} numberOfLines={1} importantForAccessibility="no">
-          {bottom}
+      <View style={[styles.fill, compact && styles.fillCompact]}>
+        <Text
+          style={[styles.text, compact && styles.textCompact]}
+          numberOfLines={1}
+          importantForAccessibility="no"
+        >
+          {compact ? HA_WORDMARK_SHORT : HA_WORDMARK_TEXT}
         </Text>
       </View>
-    </View>
+    </LinearGradient>
   )
 }
 
 const styles = StyleSheet.create({
-  lockup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  border: {
+    padding: 1,
+    borderRadius: 999,
     flexShrink: 1,
+    minWidth: 0,
+    alignSelf: 'center',
   },
-  rule: {
-    width: 2,
-    height: 26,
-    borderRadius: 1,
-    backgroundColor: colors.blue,
-  },
-  top: {
-    color: colors.text,
-    fontSize: 11,
-    lineHeight: 13,
-    fontStyle: 'italic',
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-  bottom: {
-    color: colors.textChip,
-    fontSize: 9,
-    lineHeight: 12,
-    fontStyle: 'italic',
-    fontWeight: '800',
-    letterSpacing: 1.6,
-  },
-  chip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.blue,
+  fill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     backgroundColor: colors.bgActiveBlue,
   },
-  chipText: {
-    color: colors.text,
-    fontSize: 10,
-    lineHeight: 12,
-    fontStyle: 'italic',
-    fontWeight: '800',
+  fillCompact: {
+    paddingHorizontal: 6,
+  },
+  text: {
+    color: colors.textTitle,
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '700',
     letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  textCompact: {
+    letterSpacing: 1,
   },
 })

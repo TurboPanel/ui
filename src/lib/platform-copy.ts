@@ -2,8 +2,11 @@
 
 export const HA_PRODUCT_NAME = 'TurboPanel High Availability' as const
 
-/** The wordmark beside the T in the console chrome, top line then bottom line. */
-export const HA_WORDMARK_LINES = ['HIGH', 'AVAILABILITY'] as const
+/** The pill beside the T in the console chrome. */
+export const HA_WORDMARK_TEXT = 'HIGH AVAILABILITY'
+
+/** The same pill on narrow headers. */
+export const HA_WORDMARK_SHORT = 'HA'
 
 /** The console shows the High Availability wordmark only on the hosted (Workers) control plane. */
 export function showsHighAvailabilityWordmark(
