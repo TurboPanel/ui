@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Linking, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '@/lib/auth-context'
 import { controlPlaneVersionLine } from '@/lib/control-plane-version'
+import type { HealthResponse } from '@/lib/instance-api'
 import {
   HA_PRODUCT_NAME,
   HA_WORDMARK_SHORT,
@@ -26,16 +27,30 @@ const BORDER_GRADIENT = [colors.blue, colors.command] as const
  * blue-tinted fill, so it reads the same on every surface it sits on.
  *
  * Under the full pill, right-aligned to its edge: the control plane's version
- * (and short commit, linked to the source) from `/api/health`. Its line is
- * reserved from the first render so the pill never moves when it arrives;
- * the compact pill has no version line.
+ * (and short commit, linked to the source) from `/api/health`, followed on a
+ * testing or staging deployment by the environment in its colour ("Testing"
+ * amber, "Staging" blue; nothing on live). Its line is reserved from the first
+ * render so the pill never moves when it arrives; the compact pill has no
+ * version line.
+ *
+ * Self-hosted has no pill: the full form is just the version line beside the
+ * T, carrying the exact installed build label (`v0.1.1-canary.…`,
+ * `v0.1.1-rc.1`) when the control plane reports one.
  */
 export function HighAvailabilityWordmark({
   compact = false,
 }: Readonly<{ compact?: boolean }>) {
   const { controlPlaneRuntime } = useAuth()
   const shown = showsHighAvailabilityWordmark(controlPlaneRuntime)
-  const health = useControlPlaneHealth({ enabled: shown && !compact })
+  const selfHosted = controlPlaneRuntime === 'deno'
+  const health = useControlPlaneHealth({ enabled: (shown || selfHosted) && !compact })
+  if (selfHosted && !compact) {
+    return (
+      <View style={[styles.stack, styles.stackSelfHosted]}>
+        <VersionLine health={health.data} runtime="deno" />
+      </View>
+    )
+  }
   if (!shown) return null
 
   const pill = (
@@ -61,11 +76,28 @@ export function HighAvailabilityWordmark({
   )
   if (compact) return pill
 
-  const versionLine = controlPlaneVersionLine(health.data)
-  const commitUrl = versionLine?.commitUrl ?? null
   return (
     <View style={styles.stack}>
       {pill}
+      <VersionLine health={health.data} runtime="workers" />
+    </View>
+  )
+}
+
+const ENVIRONMENT_COLOR = {
+  testing: colors.pending,
+  staging: colors.command,
+} as const
+
+function VersionLine({
+  health,
+  runtime,
+}: Readonly<{ health: HealthResponse | undefined; runtime: 'deno' | 'workers' }>) {
+  const versionLine = controlPlaneVersionLine(health, runtime)
+  const commitUrl = versionLine?.commitUrl ?? null
+  const environment = versionLine?.environment ?? null
+  return (
+    <View style={styles.versionRow}>
       <Text
         style={styles.version}
         numberOfLines={1}
@@ -81,6 +113,15 @@ export function HighAvailabilityWordmark({
       >
         {versionLine?.label ?? ''}
       </Text>
+      {environment ? (
+        <Text
+          style={[styles.version, styles.environment, { color: ENVIRONMENT_COLOR[environment.tone] }]}
+          numberOfLines={1}
+          accessibilityLabel={`${environment.text} environment`}
+        >
+          {environment.text}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -102,8 +143,20 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'flex-end',
   },
-  version: {
+  stackSelfHosted: {
+    alignItems: 'flex-start',
+  },
+  versionRow: {
     marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  environment: {
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  version: {
     height: 11,
     color: colors.textMuted,
     fontSize: 9,

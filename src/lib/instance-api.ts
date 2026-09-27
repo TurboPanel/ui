@@ -1724,6 +1724,12 @@ export type HealthResponse = {
   /** The instance's semver (instances from 0.1.0 on). */
   version?: string
   revision?: { commit: string; sourceUrl: string }
+  /** The update channel the instance follows (`canary`, `rc`, `release`, `trunk`); newer control planes only. */
+  channel?: string
+  /** Self-hosted: the installed pre-release label (`0.1.1-canary.…`, `0.1.1-rc.1`), else null. */
+  build?: string | null
+  /** Hosted: `testing`, `staging` or `live`; null on self-hosted and local dev. */
+  environment?: string | null
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
