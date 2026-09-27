@@ -4094,6 +4094,8 @@ export type UpgradeStepRow = {
   toCommit?: string | null
   errorCode?: string | null
   errorMessage?: string | null
+  /** When the step last reported a stage (drives the "still waiting" hint). */
+  lastStageAt?: string | null
 }
 
 export type UpgradeRunRecord = {
@@ -4117,6 +4119,11 @@ export type UpgradeRunRecord = {
 export type UpgradeActiveRunResponse = {
   ok: boolean
   run: (UpgradeRunRecord & { steps: UpgradeStepRow[] }) | null
+  /**
+   * With no active run: the most recent finished run if it ended in the last
+   * day, so a failure stays on screen. Absent on older control planes.
+   */
+  lastRun?: (UpgradeRunRecord & { steps: UpgradeStepRow[] }) | null
 }
 
 export type UpgradeHistoryEntry = UpgradeRunRecord & {

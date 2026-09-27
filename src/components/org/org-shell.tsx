@@ -1,3 +1,4 @@
+import { UpdateAvailableBanner } from '@/components/admin/updates/update-available-banner'
 import { useState, type ReactNode } from 'react'
 import {
   Pressable,
@@ -60,6 +61,7 @@ export function OrgShell({
                 orgId={orgId}
                 onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
               />
+              <UpdateAvailableBanner />
               <OrgShellContent orgId={orgId} maxWidth={contentMaxWidth}>
                 {children}
               </OrgShellContent>
