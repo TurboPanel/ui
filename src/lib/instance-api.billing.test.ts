@@ -9,6 +9,7 @@ import {
   fetchBillingCatalog,
   fetchBillingSubscription,
   previewBillingChange,
+  restoreBillingLicenses,
   upgradeBillingTier,
 } from './instance-api'
 
@@ -64,7 +65,7 @@ describe('instance-api billing wrappers', () => {
       payer: null,
       subscription: null,
       tiers: [],
-      licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+      licenses: { purchased: 0, ending: 0, endsAt: null, inUse: 0, bound: 0, available: 0 },
       servers: [],
       pendingChanges: [],
     }
@@ -133,6 +134,12 @@ describe('instance-api billing wrappers', () => {
       path: '/billing/downgrade',
       body: { fromTierId: 't2', toTierId: 't1' },
     },
+    {
+      name: 'restoreBillingLicenses',
+      call: () => restoreBillingLicenses({ tierId: 't1', count: 2 }),
+      path: '/billing/restore',
+      body: { tierId: 't1', count: 2 },
+    },
   ])('$name posts to $path and returns the mutation outcome', async ({ call, path, body }) => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, pending: true, intentId: 'i-1' }))
     await expect(call()).resolves.toEqual({ ok: true, pending: true, intentId: 'i-1' })
@@ -141,6 +148,20 @@ describe('instance-api billing wrappers', () => {
     expect(req.method).toBe('POST')
     expect(req.body).toEqual(body)
     expect(req.headers[ORG_ID_HEADER]).toBe('org-1')
+  })
+
+  it('exposes licenses_ending so the screen can offer Restore for that tier', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { error: 'licenses_ending', tierId: 't1', ending: 3, endsAt: '2026-10-26T00:00:00.000Z' },
+        409
+      )
+    )
+    const err = await refusalOf(changeBillingSeats({ tierId: 't1', delta: 2 }))
+    expect(err.code).toBe('licenses_ending')
+    expect(err.text('tierId')).toBe('t1')
+    expect(err.count('ending')).toBe(3)
+    expect(err.text('endsAt')).toBe('2026-10-26T00:00:00.000Z')
   })
 
   it('keeps the conflict code in the thrown message', async () => {

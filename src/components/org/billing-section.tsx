@@ -29,8 +29,8 @@ import {
   describeBillingRefusal,
   describePendingChange,
   describeUncoveredServer,
+  endingLabel,
   formatMachineExamples,
-  formatMinorUnits,
   formatTierFits,
   formatTierPrice,
   formatTierSlots,
@@ -38,18 +38,21 @@ import {
   landsAtLabel,
   licenseSummaryLine,
   machineExamplesForTier,
+  parseLicenseCount,
+  removableAt,
   serverTitle,
   subscriptionStatusView,
   tierChangeDirection,
+  tierLicensesLine,
   uncoveredServers,
   type RefusalContext,
 } from '@/lib/billing-display'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   BILLING_NOT_CONFIGURED_ERROR,
+  formatShortDate,
   hasLiveBillingSubscription,
   type BillingPreview,
-  type BillingPreviewLine,
   type BillingServerCoverage,
   type BillingSubscriptionSummary,
   type BillingTier,
@@ -63,18 +66,27 @@ import {
   CHECKOUT_CONFIRM_POLL_MS,
   useBillingCatalog,
   useBillingSubscription,
-  useChangeBillingSeats,
   useCreateBillingCheckout,
   useCreateBillingPortalSession,
   useDowngradeBillingTier,
   usePreviewBillingChange,
   useUpgradeBillingTier,
 } from '@/lib/queries/billing'
+import { BillingPreviewNotice } from '@/components/org/billing-preview-notice'
+import {
+  LicenseDialog,
+  type LicenseDialogMode,
+  type LicenseDialogRequest,
+  type LicenseDialogTier,
+} from '@/components/org/billing-license-dialog'
 import { useOrgServers } from '@/lib/queries/servers'
 import { spacing } from '@/lib/theme'
 
-/** One line an operator can paste on the host to size it against the tier ceilings. */
-const SIZING_COMMAND = 'nproc && free -g'
+/**
+ * Fallback sizing line for a control plane that does not send `sizeCommand`
+ * yet: cores, then RAM in GiB, compared by hand against the tier table.
+ */
+const FALLBACK_SIZING_COMMAND = 'nproc && free -g'
 
 /**
  * Stripe hands control back to `/<orgId>/billing?checkout=…` and the Portal
@@ -134,13 +146,17 @@ function tierOption(tier: BillingTier, disabled = false): SelectOption {
   }
 }
 
-/** Names the server a refusal points at, from the org servers list. */
-function refusalContextFor(servers: readonly OrgServerRecord[]): RefusalContext {
+/** Names the server and the tier a refusal points at, from the org servers list and the catalogue. */
+function refusalContextFor(
+  servers: readonly OrgServerRecord[],
+  tiers: readonly BillingTier[] = []
+): RefusalContext {
   return {
     serverName: (serverId) => {
       const server = servers.find((entry) => entry.id === serverId)
       return server ? serverTitle(server) : null
     },
+    tierLabel: (tierId) => tiers.find((tier) => tier.id === tierId)?.label ?? null,
   }
 }
 
@@ -161,6 +177,7 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
   const serversQuery = useOrgServers(orgId, { enabled: billingEnabled })
 
   const tiers = useMemo(() => catalogQuery.data?.tiers ?? [], [catalogQuery.data])
+  const sizeCommand = catalogQuery.data?.sizeCommand?.trim() || FALLBACK_SIZING_COMMAND
   const servers = useMemo(() => serversQuery.data?.servers ?? [], [serversQuery.data])
   const preselectedTier = findTier(tiers, params[BILLING_TIER_QUERY_PARAM])
   const live = hasLiveBillingSubscription(subscriptionQuery.data)
@@ -229,6 +246,7 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
         coverage={subscriptionQuery.data?.servers ?? []}
         servers={servers}
         initialTierId={preselectedTier?.id ?? null}
+        sizeCommand={sizeCommand}
       />
     )
   } else {
@@ -354,23 +372,20 @@ function TierTable({
   )
 }
 
-function parseLicenseCount(raw: string): number | null {
-  const value = Number(raw.trim())
-  return Number.isInteger(value) && value >= 1 ? value : null
-}
-
 function CheckoutPanel({
   orgId,
   tiers,
   coverage,
   servers,
   initialTierId,
+  sizeCommand,
 }: Readonly<{
   orgId: string
   tiers: readonly BillingTier[]
   coverage: readonly BillingServerCoverage[]
   servers: readonly OrgServerRecord[]
   initialTierId: string | null
+  sizeCommand: string
 }>) {
   const checkout = useCreateBillingCheckout(orgId)
   const purchasable = useMemo(() => purchasableTiers(tiers), [tiers])
@@ -387,7 +402,7 @@ function CheckoutPanel({
     if (outcome.ok) {
       openHostedPage(outcome.value.url)
     } else {
-      setError(failureOf(outcome, refusalContextFor(servers)))
+      setError(failureOf(outcome, refusalContextFor(servers, tiers)))
     }
   }
 
@@ -399,11 +414,17 @@ function CheckoutPanel({
         accent
       >
         <InlineNotice
-          title="Not sure which tier a host needs?"
-          body="Run this on the host: the first number is its cores, the second line its RAM in GiB. Choose the lowest tier whose Fits up to column covers both."
-          actions={<CopyButton value={SIZING_COMMAND} label="Copy command" />}
+          title="Not sure which tier a server needs?"
+          body={
+            sizeCommand === FALLBACK_SIZING_COMMAND
+              ? 'Run this on the server: the first number is its cores, the second line its RAM in GiB. Choose the lowest tier whose Fits up to column covers both.'
+              : 'Run this on the server — it prints its cores and RAM and the tier it needs.'
+          }
+          actions={<CopyButton value={sizeCommand} label="Copy command" />}
         />
-        <MonoText style={styles.sizingCommand}>{SIZING_COMMAND}</MonoText>
+        <MonoText style={styles.sizingCommand} selectable>
+          {sizeCommand}
+        </MonoText>
         <UncoveredServersNotice coverage={coverage} servers={servers} />
         <TierTable
           tiers={tiers}
@@ -434,7 +455,7 @@ function CheckoutPanel({
           keyboardType="number-pad"
           editable={!checkout.isPending}
           accessibilityLabel="Number of licenses"
-          hint="Whole number, at least 1. You can add or release licenses later."
+          hint="Whole number, at least 1. You can add or remove licenses later."
         />
         {count == null ? (
           <Text style={panelStyles.error}>Licenses must be a whole number of at least 1.</Text>
@@ -475,7 +496,7 @@ function SubscriptionView({
   preselectedTierId: string | null
 }>) {
   const pastDue = isDelinquentSubscription(summary.subscription)
-  const context = useMemo(() => refusalContextFor(servers), [servers])
+  const context = useMemo(() => refusalContextFor(servers, tiers), [servers, tiers])
 
   return (
     <>
@@ -554,6 +575,9 @@ function LicensesPanel({
   const status = subscriptionStatusView(summary.subscription?.status)
   const licenses = summary.licenses
   const periodEnd = summary.subscription?.currentPeriodEnd
+  const inUse = licenses.inUse ?? licenses.held ?? 0
+  const ending = licenses.ending ?? 0
+  const endsShort = formatShortDate(licenses.endsAt)
   return (
     <SectionPanel
       title="Licenses"
@@ -576,11 +600,11 @@ function LicensesPanel({
             accessibilityLabel: `${licenses.purchased} purchased`,
           },
           {
-            key: 'held',
+            key: 'inUse',
             icon: AccessNavIcon,
-            value: licenses.held,
+            value: inUse,
             label: 'IN USE',
-            accessibilityLabel: `${licenses.held} in use`,
+            accessibilityLabel: `${inUse} in use`,
           },
           {
             key: 'available',
@@ -589,13 +613,17 @@ function LicensesPanel({
             label: 'AVAILABLE',
             accessibilityLabel: `${licenses.available} available for new servers`,
           },
-          {
-            key: 'releasing',
-            icon: BillingNavIcon,
-            value: licenses.releasing,
-            label: 'LEAVING',
-            accessibilityLabel: `${licenses.releasing} leaving at period end`,
-          },
+          ...(ending > 0
+            ? [
+                {
+                  key: 'ending',
+                  icon: BillingNavIcon,
+                  value: ending,
+                  label: endsShort ? `ENDS ${endsShort.toUpperCase()}` : 'ENDING',
+                  accessibilityLabel: endingLabel(ending, licenses.endsAt),
+                },
+              ]
+            : []),
         ]}
       />
       <Text style={panelStyles.detailLine}>{licenseSummaryLine(licenses)}</Text>
@@ -626,94 +654,48 @@ function LicensesPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Quantity per tier: +1 (quoted, invoiced now) and −1 (released at period end).
+// Licenses per tier: Add / Remove / Restore, each through the license dialog.
 // ---------------------------------------------------------------------------
-
-type QuantityIntent = Readonly<{ tierId: string; delta: 1 | -1; preview: BillingPreview | null }>
-
-/**
- * The +1 / −1 state machine shared by every tier row and the buy-at-tier
- * picker: idle → intent (a quote for +1, nothing to quote for −1) → confirm.
- * Owns the two provider calls and the last error so the panel only wires
- * buttons to it.
- */
-function useLicenseQuantity(orgId: string, context: RefusalContext) {
-  const preview = usePreviewBillingChange()
-  const change = useChangeBillingSeats(orgId)
-  const [intent, setIntent] = useState<QuantityIntent | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const begin = async (tierId: string, delta: 1 | -1) => {
-    setError(null)
-    if (delta < 0) {
-      // A release defers to the period boundary and is never invoiced, so
-      // there is no quote to show — just the consequence.
-      setIntent({ tierId, delta, preview: null })
-      return
-    }
-    const outcome = await preview.run({ tierId, delta })
-    if (outcome.ok) setIntent({ tierId, delta, preview: outcome.value })
-    else setError(failureOf(outcome, context))
-  }
-
-  const confirm = async () => {
-    if (!intent) return
-    setError(null)
-    const outcome = await change.run({
-      tierId: intent.tierId,
-      delta: intent.delta,
-      ...(intent.preview ? { prorationDate: intent.preview.prorationDate } : {}),
-    })
-    if (outcome.ok) setIntent(null)
-    else setError(failureOf(outcome, context))
-  }
-
-  const cancel = () => {
-    setIntent(null)
-    setError(null)
-  }
-
-  return {
-    intent,
-    error,
-    begin,
-    confirm,
-    cancel,
-    busy: preview.isPending || change.isPending,
-    submitting: change.isPending,
-  }
-}
 
 const LICENSE_COLUMNS = [
   { key: 'tier', header: 'Tier', flex: 0.6, minWidth: 56 },
   { key: 'price', header: 'Per license', flex: 1.2, minWidth: 140 },
   { key: 'purchased', header: 'Purchased', flex: 0.8, minWidth: 90, align: 'end' },
-  { key: 'inUse', header: 'In use', flex: 0.8, minWidth: 80, align: 'end' },
-  { key: 'releasing', header: 'Leaving', flex: 0.8, minWidth: 80, align: 'end' },
-  { key: 'actions', header: '', flex: 1.4, minWidth: 150 },
+  { key: 'inUse', header: 'In use', flex: 0.7, minWidth: 70, align: 'end' },
+  { key: 'ends', header: 'Ends', flex: 1, minWidth: 110 },
+  { key: 'available', header: 'Available', flex: 0.8, minWidth: 90, align: 'end' },
+  { key: 'actions', header: '', flex: 2, minWidth: 240 },
 ] as const satisfies readonly DataTableColumn[]
 
-const [LC_TIER, LC_PRICE, LC_PURCHASED, LC_IN_USE, LC_RELEASING, LC_ACTIONS] = LICENSE_COLUMNS
+const [LC_TIER, LC_PRICE, LC_PURCHASED, LC_IN_USE, LC_ENDS, LC_AVAILABLE, LC_ACTIONS] =
+  LICENSE_COLUMNS
+
+function dialogTier(tier: BillingTierSummary): LicenseDialogTier {
+  return {
+    tierId: tier.tierId,
+    label: tier.label,
+    ending: tier.ending,
+    endsAt: tier.endsAt,
+    removable: removableAt(tier),
+  }
+}
 
 function TierLicensesRow({
   tier,
   index,
   last,
-  disabled,
-  addDisabled,
-  onAdd,
-  onRelease,
+  pastDue,
+  onOpen,
 }: Readonly<{
   tier: BillingTierSummary
   index: number
   last: boolean
-  disabled: boolean
-  addDisabled: boolean
-  onAdd: () => void
-  onRelease: () => void
+  pastDue: boolean
+  onOpen: (mode: LicenseDialogMode) => void
 }>) {
+  const ends = endingLabel(tier.ending, tier.endsAt)
   return (
-    <DataTableRow alt={index % 2 === 1} last={last} accessibilityLabel={`Licenses at ${tier.label}`}>
+    <DataTableRow alt={index % 2 === 1} last={last} accessibilityLabel={tierLicensesLine(tier)}>
       <DataTableCell column={LC_TIER}>
         <MonoText>{tier.label}</MonoText>
       </DataTableCell>
@@ -726,25 +708,37 @@ function TierLicensesRow({
       <DataTableCell column={LC_IN_USE}>
         <Text style={panelStyles.detailLine}>{tier.inUse}</Text>
       </DataTableCell>
-      <DataTableCell column={LC_RELEASING}>
-        <Text style={panelStyles.detailLine}>{tier.releasing}</Text>
+      <DataTableCell column={LC_ENDS}>
+        {ends ? <Badge label={ends} tone="pending" /> : <Text style={panelStyles.muted}>—</Text>}
+      </DataTableCell>
+      <DataTableCell column={LC_AVAILABLE}>
+        <Text style={panelStyles.detailLine}>{tier.available}</Text>
       </DataTableCell>
       <DataTableCell column={LC_ACTIONS}>
         <ButtonRow>
+          {tier.ending > 0 ? (
+            <Button
+              label="Restore"
+              size="sm"
+              variant="primary"
+              accessibilityLabel={`Restore ${tier.label} licenses that are ending`}
+              onPress={() => onOpen('restore')}
+            />
+          ) : null}
           <Button
-            label="+1"
+            label="Add"
             size="sm"
-            disabled={disabled || addDisabled}
-            accessibilityLabel={`Buy one more license at ${tier.label}`}
-            onPress={onAdd}
+            disabled={pastDue}
+            accessibilityLabel={`Add ${tier.label} licenses`}
+            onPress={() => onOpen('add')}
           />
           <Button
-            label="−1"
+            label="Remove"
             size="sm"
             variant="ghost"
-            disabled={disabled || !canReleaseAt(tier)}
-            accessibilityLabel={`Release one license at ${tier.label}`}
-            onPress={onRelease}
+            disabled={removableAt(tier) === 0}
+            accessibilityLabel={`Remove ${tier.label} licenses`}
+            onPress={() => onOpen('remove')}
           />
         </ButtonRow>
       </DataTableCell>
@@ -752,61 +746,10 @@ function TierLicensesRow({
   )
 }
 
-/** The quote, the release terms, the error, and Confirm / Cancel for the intent in flight. */
-function QuantityFeedback({
-  intent,
-  error,
-  summary,
-  tiers,
-  busy,
-  submitting,
-  onConfirm,
-  onCancel,
-}: Readonly<{
-  intent: QuantityIntent | null
-  error: string | null
-  summary: BillingSubscriptionSummary
-  tiers: readonly BillingTier[]
-  busy: boolean
-  submitting: boolean
-  onConfirm: () => void
-  onCancel: () => void
-}>) {
-  const label = intent ? (tiers.find((tier) => tier.id === intent.tierId)?.label ?? intent.tierId) : ''
-  return (
-    <>
-      {intent?.delta === 1 && intent.preview ? (
-        <PreviewNotice preview={intent.preview} title={`Buying one more license at ${label}`} />
-      ) : null}
-      {intent?.delta === -1 ? (
-        <InlineNotice
-          tone="warning"
-          title={`Releasing one license at ${label}`}
-          body={`The license leaves ${landsAtLabel(summary.subscription?.currentPeriodEnd)} with no credit for the remaining time. Every server stays covered until then; the release is refused if a server would be left on nothing.`}
-        />
-      ) : null}
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {intent ? (
-        <ButtonRow>
-          <Button
-            label={intent.delta === 1 ? 'Confirm and pay' : 'Confirm release'}
-            variant="primary"
-            size="sm"
-            busy={submitting}
-            disabled={busy}
-            onPress={onConfirm}
-          />
-          <Button label="Cancel" variant="ghost" size="sm" disabled={busy} onPress={onCancel} />
-        </ButtonRow>
-      ) : null}
-    </>
-  )
-}
-
 /**
  * Tiers the org has not bought at yet — the picker below the table. The
  * `?tier=` deep link lands here when it names one of them; otherwise the
- * row's own +1 covers it.
+ * row's own Add covers it.
  */
 function unownedTierOptions(
   tiers: readonly BillingTier[],
@@ -833,18 +776,29 @@ function TierLicensesPanel({
   context: RefusalContext
   preselectedTierId: string | null
 }>) {
-  const quantity = useLicenseQuantity(orgId, context)
+  const [request, setRequest] = useState<LicenseDialogRequest | null>(null)
   const otherOptions = useMemo(() => unownedTierOptions(tiers, summary.tiers), [tiers, summary.tiers])
   const [otherTierId, setOtherTierId] = useState<string | null>(preselectedTierId)
-  const otherSelectable = otherOptions.some((option) => option.value === otherTierId)
-  const busy = quantity.busy || quantity.intent != null
+  const otherTier = purchasableTiers(tiers).find(
+    (tier) => tier.id === otherTierId && otherOptions.some((option) => option.value === tier.id)
+  )
+  const endingTiers = summary.tiers.filter((tier) => tier.ending > 0)
 
   return (
     <SectionPanel
       title="Licenses by tier"
-      hint="+1 buys one more at that tier and is invoiced now; −1 releases one at the end of the period"
+      hint="Add is invoiced now; Remove ends licenses at the end of the period; Restore takes ending licenses back for free"
     >
-      <DataTable columns={LICENSE_COLUMNS} minWidth={600} bordered>
+      {endingTiers.length > 0 ? (
+        <InlineNotice
+          tone="warning"
+          title="Some licenses are ending"
+          body={`${endingTiers
+            .map((tier) => `${tier.label}: ${endingLabel(tier.ending, tier.endsAt)}`)
+            .join(' · ')}. Ending licenses cannot take a new server. Restore them (free) before buying more at that tier.`}
+        />
+      ) : null}
+      <DataTable columns={LICENSE_COLUMNS} minWidth={760} bordered>
         {summary.tiers.length === 0 ? (
           <DataTableEmpty>No licenses bought yet.</DataTableEmpty>
         ) : null}
@@ -854,147 +808,58 @@ function TierLicensesPanel({
             tier={tier}
             index={index}
             last={index === summary.tiers.length - 1}
-            disabled={busy}
-            addDisabled={pastDue}
-            onAdd={() => {
-              void quantity.begin(tier.tierId, 1)
-            }}
-            onRelease={() => {
-              void quantity.begin(tier.tierId, -1)
-            }}
+            pastDue={pastDue}
+            onOpen={(mode) => setRequest({ mode, tier: dialogTier(tier) })}
           />
         ))}
       </DataTable>
       {otherOptions.length > 0 ? (
         <View style={styles.buyOther}>
-          <Text style={panelStyles.detailLabel}>Buy a license at another tier</Text>
+          <Text style={panelStyles.detailLabel}>Add licenses at another tier</Text>
           <Select
-            value={otherSelectable ? otherTierId : null}
+            value={otherTier ? otherTier.id : null}
             options={otherOptions}
             placeholder="Choose a tier"
-            disabled={busy || pastDue}
-            accessibilityLabel="Tier to buy a license at"
+            disabled={pastDue}
+            accessibilityLabel="Tier to add licenses at"
             onChange={setOtherTierId}
           />
           <ButtonRow>
             <Button
-              label="Buy one"
+              label="Add"
               size="sm"
-              disabled={busy || pastDue || !otherSelectable}
+              disabled={pastDue || !otherTier}
               onPress={() => {
-                if (otherTierId) void quantity.begin(otherTierId, 1)
+                if (!otherTier) return
+                setRequest({
+                  mode: 'add',
+                  tier: {
+                    tierId: otherTier.id,
+                    label: otherTier.label,
+                    ending: 0,
+                    endsAt: null,
+                    removable: 0,
+                  },
+                })
               }}
             />
           </ButtonRow>
         </View>
       ) : null}
-      <QuantityFeedback
-        intent={quantity.intent}
-        error={quantity.error}
-        summary={summary}
-        tiers={tiers}
-        busy={quantity.busy}
-        submitting={quantity.submitting}
-        onConfirm={() => {
-          void quantity.confirm()
-        }}
-        onCancel={quantity.cancel}
-      />
       {pastDue ? (
-        <Text style={panelStyles.muted}>New licenses resume once the past-due balance clears.</Text>
+        <Text style={panelStyles.muted}>
+          New licenses resume once the past-due balance clears. Restoring ending licenses still
+          works.
+        </Text>
       ) : null}
-    </SectionPanel>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Provider quotes.
-// ---------------------------------------------------------------------------
-
-/** A negative provider amount is a credit back to the customer; anything else is charged. */
-function previewLineKind(line: BillingPreviewLine): 'credit' | 'charge' {
-  return line.amount < 0 ? 'credit' : 'charge'
-}
-
-/**
- * Stripe lines carry no stable id, so each is keyed by its own content —
- * description, signed amount, proration flag — with an occurrence suffix
- * for the rare quote that repeats an identical line. The list is rebuilt
- * per quote, so the key only has to be stable within one preview.
- */
-function keyedPreviewLines(
-  lines: readonly BillingPreviewLine[]
-): readonly Readonly<{ key: string; line: BillingPreviewLine }>[] {
-  const seen = new Map<string, number>()
-  return lines.map((line) => {
-    const identity = `${line.description ?? ''}|${line.amount}|${line.proration ? 'prorated' : 'flat'}`
-    const occurrence = seen.get(identity) ?? 0
-    seen.set(identity, occurrence + 1)
-    return { key: `${identity}#${occurrence}`, line }
-  })
-}
-
-function PreviewLineRow({
-  line,
-  currency,
-}: Readonly<{ line: BillingPreviewLine; currency: BillingPreview['currency'] }>) {
-  const kind = previewLineKind(line)
-  const description = line.description ?? 'Line item'
-  const amount = formatMinorUnits(line.amount, currency)
-  const proration = line.proration ? ', prorated' : ''
-  return (
-    <View
-      style={styles.previewLine}
-      accessibilityLabel={`${description}: ${kind}, ${amount}${proration}`}
-    >
-      <Text style={[panelStyles.detailLine, styles.previewLineDescription]} numberOfLines={2}>
-        {description}
-      </Text>
-      <Badge
-        label={kind === 'credit' ? 'Credit' : 'Debit'}
-        tone={kind === 'credit' ? 'ok' : 'info'}
+      <LicenseDialog
+        orgId={orgId}
+        request={request}
+        periodEnd={summary.subscription?.currentPeriodEnd ?? null}
+        context={context}
+        onClose={() => setRequest(null)}
       />
-      {line.proration ? <Badge label="Prorated" tone="muted" /> : null}
-      <MonoText style={styles.previewLineAmount}>{amount}</MonoText>
-    </View>
-  )
-}
-
-/**
- * Stripe's numbers, verbatim — never a client-side sum. The totals ride the
- * notice; every invoice line the provider returned is listed under it with
- * its own signed amount, so the operator can check the exact credit for the
- * unused remainder of the old tier against the debit for the new one before
- * paying, rather than trusting a collapsed total.
- */
-function PreviewNotice({ preview, title }: Readonly<{ preview: BillingPreview; title: string }>) {
-  const currency = preview.currency
-  const parts = [
-    `Due now ${formatMinorUnits(preview.amountDue, currency)}`,
-    `subtotal ${formatMinorUnits(preview.subtotal, currency)}`,
-    `tax ${formatMinorUnits(preview.tax, currency)}`,
-    `total ${formatMinorUnits(preview.total, currency)}`,
-  ]
-  const prorated = preview.lines.some((line) => line.proration)
-  const body = prorated
-    ? `${parts.join(' · ')}. Prorated for the rest of the current period — the lines below are the provider's own credit and debit entries.`
-    : `${parts.join(' · ')}.`
-  return (
-    <>
-      <InlineNotice title={title} body={body} />
-      {preview.lines.length > 0 ? (
-        <View
-          style={styles.previewLines}
-          accessibilityRole="list"
-          accessibilityLabel="Invoice lines from the payment provider"
-        >
-          <Text style={panelStyles.detailLabel}>Invoice lines</Text>
-          {keyedPreviewLines(preview.lines).map(({ key, line }) => (
-            <PreviewLineRow key={key} line={line} currency={currency} />
-          ))}
-        </View>
-      ) : null}
-    </>
+    </SectionPanel>
   )
 }
 
@@ -1077,7 +942,7 @@ function useTierMove(orgId: string, context: RefusalContext) {
   }
 }
 
-/** Tiers a license can move *from*: bought, and not already leaving in full. */
+/** Tiers a license can move *from*: bought, and not already ending in full. */
 function fromTierOptions(
   owned: readonly BillingTierSummary[],
   tiers: readonly BillingTier[]
@@ -1112,7 +977,7 @@ function MoveFeedback({
     <>
       {move.kind === 'previewing' ? <LoadingState label="Fetching the quote…" /> : null}
       {move.kind === 'upgrade' && pair ? (
-        <PreviewNotice
+        <BillingPreviewNotice
           preview={move.preview}
           title={`Moving one license from ${pair.from.label} to ${pair.to.label}`}
         />
@@ -1296,22 +1161,5 @@ const styles = StyleSheet.create({
   portal: {
     gap: spacing.xs,
     alignItems: 'flex-start',
-  },
-  previewLines: {
-    gap: spacing.xs,
-  },
-  previewLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  previewLineDescription: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 160,
-  },
-  previewLineAmount: {
-    marginLeft: 'auto',
   },
 })

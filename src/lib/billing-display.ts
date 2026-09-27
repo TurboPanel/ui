@@ -2,7 +2,10 @@ import {
   BillingRefusalError,
   BILLING_MUTATION_IN_PROGRESS_ERROR,
   DELINQUENT_SUBSCRIPTION_STATUSES,
+  formatShortDate,
+  LICENSES_ENDING_ERROR,
   LICENSES_IN_USE_ERROR,
+  NO_LICENSES_ENDING_ERROR,
   NO_SUBSCRIPTION_ERROR,
   NOT_A_DOWNGRADE_ERROR,
   NOT_AN_UPGRADE_ERROR,
@@ -17,6 +20,7 @@ import {
   type BillingTier,
   type BillingTierEntitlements,
   type BillingTierSummary,
+  type LicenseAvailability,
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
@@ -164,7 +168,7 @@ export function describePendingChange(change: BillingPendingChange, tiers: TierL
     case 'downgrade':
       return `One license moves from ${from} to ${tierLabelOf(tiers, change.toTierId)} ${when}.`
     case 'release-seat':
-      return `One ${from} license is released ${when}.`
+      return `One ${from} license ends ${when}.`
   }
 }
 
@@ -173,33 +177,108 @@ function plural(count: number, singular: string, pluralForm: string): string {
 }
 
 /**
- * `3 of 5 licenses in use · 2 more servers can be added · 1 leaving at
- * period end` — the org-wide line under the Licenses tiles. The releasing
- * part only appears when something is leaving.
+ * `3 end Oct 26` / `1 ends Oct 26` — the "Ends" column and every sentence
+ * about licenses scheduled to end. Empty when nothing is ending.
+ */
+export function endingLabel(ending: number, endsAt: string | null | undefined): string {
+  if (!(ending > 0)) return ''
+  const when = formatShortDate(endsAt) ?? 'at the end of the period'
+  return `${ending} ${ending === 1 ? 'ends' : 'end'} ${when}`
+}
+
+/** Licenses an org holds: `inUse` from a current control plane, `held` from an older one. */
+function licensesInUse(licenses: BillingLicenseSummary): number {
+  return licenses.inUse ?? licenses.held ?? 0
+}
+
+/**
+ * `3 of 6 licenses in use · 3 end Oct 26 · no room for another server` —
+ * the org-wide line under the Licenses tiles. An ending license is never
+ * counted as in use; it is named with its date instead.
  */
 export function licenseSummaryLine(licenses: BillingLicenseSummary): string {
   const parts = [
-    `${licenses.held} of ${plural(licenses.purchased, 'license', 'licenses')} in use`,
+    `${licensesInUse(licenses)} of ${plural(licenses.purchased, 'license', 'licenses')} in use`,
   ]
+  const ending = endingLabel(licenses.ending ?? 0, licenses.endsAt)
+  if (ending) parts.push(ending)
   if (licenses.available === 0) {
-    parts.push('no room for another server')
+    parts.push(ending ? 'restore one to add another server' : 'no room for another server')
   } else {
     parts.push(`${plural(licenses.available, 'more server', 'more servers')} can be added`)
   }
-  if (licenses.releasing > 0) parts.push(`${licenses.releasing} leaving at period end`)
   return parts.join(' · ')
 }
 
-/** `Licenses at S3: 2 purchased, 1 in use` (plus `, 1 leaving at period end` when set). */
+/** `Licenses at S3: 2 purchased, 1 in use` (plus `, 1 ends Oct 26` when set). */
 export function tierLicensesLine(tier: BillingTierSummary): string {
   const parts = [`${tier.purchased} purchased`, `${tier.inUse} in use`]
-  if (tier.releasing > 0) parts.push(`${tier.releasing} leaving at period end`)
+  const ending = endingLabel(tier.ending, tier.endsAt)
+  if (ending) parts.push(ending)
   return `Licenses at ${tier.label}: ${parts.join(', ')}`
 }
 
-/** True when one license at this tier can be released without stranding a server, as far as the projection shows. */
+/** Seats already on their way out at this tier: ending licenses, plus pending downgrades when the server still reports them. */
+function outgoingAt(tier: BillingTierSummary): number {
+  return Math.max(tier.ending, tier.releasing ?? 0)
+}
+
+/** True when one license at this tier can still move away, as far as the projection shows. */
 export function canReleaseAt(tier: BillingTierSummary): boolean {
-  return tier.purchased - tier.releasing > 0
+  return tier.purchased - outgoingAt(tier) > 0
+}
+
+/**
+ * How many licenses at this tier Remove may offer: bought, not already
+ * ending, and not covering a server. Advisory — the control plane refuses
+ * a removal that would strand a server or a waiting key.
+ */
+export function removableAt(tier: BillingTierSummary): number {
+  return Math.max(0, tier.purchased - outgoingAt(tier) - tier.inUse)
+}
+
+/** A whole number of licenses, at least 1; `null` for anything else. */
+export function parseLicenseCount(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (!/^\d+$/.test(trimmed)) return null
+  const value = Number(trimmed)
+  return Number.isSafeInteger(value) && value >= 1 ? value : null
+}
+
+/** What the Add Server screen can do for the tier a server needs. */
+export type AddServerTierState =
+  | Readonly<{ kind: 'available'; available: number; message: string }>
+  | Readonly<{ kind: 'restore'; ending: number; endsAt: string | null; message: string }>
+  | Readonly<{ kind: 'buy'; message: string }>
+
+/**
+ * The chosen tier's situation, restore before buy: a free license there is
+ * used as-is; otherwise an ending one must be restored before anything new
+ * is bought at that tier (the control plane refuses the purchase anyway).
+ * Ending licenses at *other* tiers never matter here.
+ */
+export function addServerTierState(
+  label: string,
+  tier: Pick<BillingTierSummary, 'available' | 'ending' | 'endsAt'> | null | undefined
+): AddServerTierState {
+  const available = tier?.available ?? 0
+  if (available > 0) {
+    return {
+      kind: 'available',
+      available,
+      message: `${plural(available, `${label} license is`, `${label} licenses are`)} free for this server.`,
+    }
+  }
+  const ending = tier?.ending ?? 0
+  if (ending > 0) {
+    return {
+      kind: 'restore',
+      ending,
+      endsAt: tier?.endsAt ?? null,
+      message: `No ${label} license is free. ${endingLabel(ending, tier?.endsAt)} — restore one to use it for this server.`,
+    }
+  }
+  return { kind: 'buy', message: `No ${label} license is free. Buy one to add this server.` }
 }
 
 export function serverTitle(server: Pick<OrgServerRecord, 'id' | 'name' | 'hostname'>): string {
@@ -242,9 +321,23 @@ export function describeUncoveredServer(entry: UncoveredServer): string {
     : `${entry.name} has not reported hardware yet`
 }
 
+/**
+ * The tier a refused Add Server should act on: the one the operator picked,
+ * else the first tier the refusal says has licenses ending (restore before buy).
+ */
+export function refusalTierId(
+  chosenTierId: string | null,
+  refusal: Pick<LicenseAvailability, 'tiers'> | null
+): string | null {
+  if (chosenTierId) return chosenTierId
+  return refusal?.tiers.find((tier) => tier.ending > 0)?.tierId ?? null
+}
+
 export type RefusalContext = Readonly<{
   /** Server name for the id a `servers_uncovered` refusal names; `null` falls back to the id. */
   serverName?: (serverId: string) => string | null
+  /** Tier label for the id a `licenses_ending` refusal names; `null` falls back to "that tier". */
+  tierLabel?: (tierId: string) => string | null
 }>
 
 /**
@@ -284,6 +377,16 @@ export function describeBillingRefusal(err: unknown, context: RefusalContext = {
       return 'That move goes up the ladder — it is invoiced now, not at the end of the period.'
     case TIER_NOT_PURCHASABLE_ERROR:
       return 'That tier cannot be bought right now. Ask the instance owner to check its product.'
+    case LICENSES_ENDING_ERROR: {
+      const tierId = err.text('tierId')
+      const label = (tierId && context.tierLabel?.(tierId)) || null
+      const ending = err.count('ending') ?? 0
+      const when = formatShortDate(err.text('endsAt'))
+      const what = `${ending > 0 ? ending : 'Some'} ${label ?? ''}${label ? ' ' : ''}${ending === 1 ? 'license' : 'licenses'}`
+      return `You have ${what} ending${when ? ` ${when}` : ' at the end of the period'} — restore those first.`
+    }
+    case NO_LICENSES_ENDING_ERROR:
+      return 'Nothing is ending at that tier any more. Refresh the page.'
     default:
       return null
   }

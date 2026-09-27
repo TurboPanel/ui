@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -11,11 +11,14 @@ import {
   TextField,
   WizardSteps,
 } from '@/components/ui'
+import { AddServerTierSection } from '@/components/org/add-server-tier-section'
+import { useAuth } from '@/lib/auth-context'
 import { validateDisplayName } from '@/lib/display-name'
 import {
   isForbiddenError,
   NoLicenseAvailableError,
   type CreatedLicense,
+  type LicenseAvailability,
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
@@ -157,8 +160,10 @@ type CreateStepProps = Readonly<{
   managedUrls: string[]
   creating: boolean
   createError: string | null
-  /** Set when the refusal was "no license available": the fix lives on the billing page. */
+  /** Set when the refusal was "no license available" and there is no tier section to fix it in place. */
   billingHref: string | null
+  /** Hosted: which tier the server needs, the size one-liner, and Restore / Buy for that tier. */
+  tierSection?: ReactNode
   onDisplayNameChange: (text: string) => void
   onInstallBaseUrlChange: (url: string) => void
   onContinue: () => void
@@ -172,6 +177,7 @@ function CreateStep({
   creating,
   createError,
   billingHref,
+  tierSection,
   onDisplayNameChange,
   onInstallBaseUrlChange,
   onContinue,
@@ -187,6 +193,7 @@ function CreateStep({
         placeholder="Production web server"
         editable={!creating}
       />
+      {tierSection}
       {createError ? (
         <Text style={panelStyles.error}>{createError}</Text>
       ) : null}
@@ -397,7 +404,10 @@ export function AddServerWizard({
     __DEV__ ? defaultDevInstallBaseUrl() : '',
   )
   const [createError, setCreateError] = useState<string | null>(null)
-  const [noLicenseAvailable, setNoLicenseAvailable] = useState(false)
+  const { billingEnabled } = useAuth()
+  const [chosenTierId, setChosenTierId] = useState<string | null>(null)
+  /** The last `no_license_available` refusal — its message is shown verbatim, its counts drive Restore / Buy. */
+  const [licenseRefusal, setLicenseRefusal] = useState<LicenseAvailability | null>(null)
   const [revealed, setRevealed] = useState<CreatedLicense | null>(null)
   const [connectedServer, setConnectedServer] = useState<OrgServerRecord | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -425,7 +435,8 @@ export function AddServerWizard({
     setDisplayName('')
     setInstallBaseUrl(__DEV__ ? defaultDevInstallBaseUrl(managedUrls) : '')
     setCreateError(null)
-    setNoLicenseAvailable(false)
+    setLicenseRefusal(null)
+    setChosenTierId(null)
     setRevealed(null)
     setConnectedServer(null)
     setElapsedSeconds(0)
@@ -436,7 +447,7 @@ export function AddServerWizard({
 
   const onStartAddServer = async () => {
     setCreateError(null)
-    setNoLicenseAvailable(false)
+    setLicenseRefusal(null)
     if (displayName.trim()) {
       const validationError = validateDisplayName(displayName)
       if (validationError) {
@@ -450,9 +461,12 @@ export function AddServerWizard({
     })
     if (!result.ok) {
       if (result.error) setCreateError(result.error)
-      // Every purchased license is held: the message already says to buy
-      // another, and the button below takes the operator there.
-      setNoLicenseAvailable(result.cause instanceof NoLicenseAvailableError)
+      // No license is free. The control plane's message says why without
+      // calling an ending license "in use"; the tier section offers the fix
+      // (restore one that is ending, or buy one) for the tier this server needs.
+      setLicenseRefusal(
+        result.cause instanceof NoLicenseAvailableError ? result.cause.availability : null,
+      )
       return
     }
     setRevealed(result.value)
@@ -572,7 +586,21 @@ export function AddServerWizard({
           managedUrls={managedUrls}
           creating={creating}
           createError={createError}
-          billingHref={noLicenseAvailable ? orgBillingHref(orgId) : null}
+          billingHref={licenseRefusal && !billingEnabled ? orgBillingHref(orgId) : null}
+          tierSection={
+            billingEnabled ? (
+              <AddServerTierSection
+                orgId={orgId}
+                chosenTierId={chosenTierId}
+                onChooseTier={setChosenTierId}
+                refusal={licenseRefusal}
+                onRestored={() => {
+                  setLicenseRefusal(null)
+                  setCreateError(null)
+                }}
+              />
+            ) : null
+          }
           onDisplayNameChange={clearCreateErrorOnChange(setDisplayName)}
           onInstallBaseUrlChange={clearCreateErrorOnChange(setInstallBaseUrl)}
           onContinue={() => void onStartAddServer()}

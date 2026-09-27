@@ -37,6 +37,8 @@ import {
   ServerCapacityExceededError,
   NoLicenseAvailableError,
   describeNoLicenseAvailable,
+  formatShortDate,
+  licenseAvailabilityFromBody,
   ServerDeleteBlockedError,
   signIn,
   startServerMetricsLive,
@@ -728,13 +730,31 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
   })
 
-  it('createLicense throws NoLicenseAvailableError on a hosted 409 with the buy-another copy', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'no_license_available', purchased: 3, releasing: 1, held: 2, available: 0 },
-        409
-      )
-    )
+  it('createLicense throws NoLicenseAvailableError carrying the control plane message verbatim', async () => {
+    const body = {
+      error: 'no_license_available',
+      message: '3 in use, 3 end Oct 26 — restore one to add this server.',
+      purchased: 6,
+      inUse: 3,
+      ending: 3,
+      endsAt: '2026-10-26T00:00:00.000Z',
+      available: 0,
+      tiers: [
+        {
+          tierId: 't1',
+          label: 'S1',
+          purchased: 6,
+          inUse: 3,
+          ending: 3,
+          endsAt: '2026-10-26T00:00:00.000Z',
+          available: 0,
+        },
+        { label: 'no id — dropped' },
+      ],
+      releasing: 3,
+      held: 3,
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(body, 409))
     try {
       await createLicense('Huey')
       throw new TypeError('expected createLicense to throw')
@@ -743,23 +763,80 @@ describe('fetch wrappers (mocked fetch)', () => {
       if (!(err instanceof NoLicenseAvailableError)) {
         throw new TypeError('expected NoLicenseAvailableError')
       }
-      expect(err.availability).toEqual({ purchased: 3, releasing: 1, held: 2, available: 0 })
-      expect(err.message).toBe('All 3 purchased licenses are in use. Buy another on the billing page.')
+      expect(err.message).toBe('3 in use, 3 end Oct 26 — restore one to add this server.')
+      expect(err.availability).toEqual({
+        purchased: 6,
+        inUse: 3,
+        ending: 3,
+        endsAt: '2026-10-26T00:00:00.000Z',
+        available: 0,
+        message: '3 in use, 3 end Oct 26 — restore one to add this server.',
+        tiers: [
+          {
+            tierId: 't1',
+            label: 'S1',
+            purchased: 6,
+            inUse: 3,
+            ending: 3,
+            endsAt: '2026-10-26T00:00:00.000Z',
+            available: 0,
+          },
+        ],
+      })
     }
   })
 
-  it('sizes the no-license copy to how many were bought', () => {
-    expect(describeNoLicenseAvailable(0)).toBe(
+  it('reads an older control plane that only sends held / releasing', () => {
+    expect(
+      licenseAvailabilityFromBody({ purchased: 3, releasing: 1, held: 2, available: 0 })
+    ).toEqual({
+      purchased: 3,
+      inUse: 2,
+      ending: 0,
+      endsAt: null,
+      available: 0,
+      tiers: [],
+      message: null,
+    })
+  })
+
+  it('falls back to a truthful sentence sized to what was bought', () => {
+    const counts = (purchased: number, inUse: number, ending = 0, endsAt: string | null = null) => ({
+      purchased,
+      inUse,
+      ending,
+      endsAt,
+    })
+    expect(describeNoLicenseAvailable(counts(0, 0))).toBe(
       'No licenses have been bought yet. Buy one on the billing page.'
     )
-    expect(describeNoLicenseAvailable(1)).toBe(
+    expect(describeNoLicenseAvailable(counts(1, 1))).toBe(
       'The one purchased license is in use. Buy another on the billing page.'
     )
-    expect(describeNoLicenseAvailable(4)).toBe(
+    expect(describeNoLicenseAvailable(counts(4, 4))).toBe(
       'All 4 purchased licenses are in use. Buy another on the billing page.'
     )
-    expect(new NoLicenseAvailableError({ purchased: 0, releasing: 0, held: 0, available: 0 }).code).toBe(
-      'no_license_available'
+    const when = formatShortDate('2026-10-26T00:00:00.000Z')
+    expect(describeNoLicenseAvailable(counts(6, 3, 3, '2026-10-26T00:00:00.000Z'))).toBe(
+      `3 in use, 3 end ${when} — restore one to add this server.`
+    )
+    expect(describeNoLicenseAvailable(counts(2, 1, 1))).toBe(
+      '1 in use, 1 ends at the end of the period — restore one to add this server.'
+    )
+    const empty = licenseAvailabilityFromBody({})
+    expect(new NoLicenseAvailableError(empty).code).toBe('no_license_available')
+    expect(new NoLicenseAvailableError(empty).message).toBe(
+      'No licenses have been bought yet. Buy one on the billing page.'
+    )
+  })
+
+  it('formats the short "ends" date and refuses junk', () => {
+    expect(formatShortDate(null)).toBeNull()
+    expect(formatShortDate('not a date')).toBeNull()
+    expect(formatShortDate('2026-10-26T12:00:00.000Z')).toBe(
+      new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+        new Date('2026-10-26T12:00:00.000Z')
+      )
     )
   })
 
@@ -1425,7 +1502,7 @@ describe('hasLiveBillingSubscription', () => {
       ? { status, currentPeriodEnd: null, pastDueSince: null, graceExpiresAt: null, scheduleAttached: false }
       : null,
     tiers: [],
-    licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+    licenses: { purchased: 0, ending: 0, endsAt: null, inUse: 0, bound: 0, available: 0 },
     servers: [],
     pendingChanges: [],
   })
