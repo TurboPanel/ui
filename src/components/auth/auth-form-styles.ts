@@ -93,6 +93,13 @@ export const authFormStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  /** Logo mark plus, on the hosted control plane, the HIGH AVAILABILITY pill. */
+  brandGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 0,
+  },
   brandMark: {
     flexShrink: 0,
   },

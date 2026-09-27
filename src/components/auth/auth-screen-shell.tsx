@@ -11,6 +11,7 @@ import {
   authFormStyles,
   authScrollWebStyle,
 } from '@/components/auth/auth-form-styles'
+import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { colors } from '@/lib/theme'
@@ -54,7 +55,10 @@ export function AuthScreenShell({
           <View style={authFormStyles.column}>
             <View style={authFormStyles.pageHeader} accessibilityRole="header">
               <View style={authFormStyles.pageTitleRow}>
-                <TurboPanelLogo size={44} style={authFormStyles.brandMark} />
+                <View style={authFormStyles.brandGroup}>
+                  <TurboPanelLogo size={44} style={authFormStyles.brandMark} />
+                  <HighAvailabilityWordmark showVersion={false} />
+                </View>
                 <Text style={authFormStyles.pageTitle}>{title}</Text>
               </View>
               {description ? (
