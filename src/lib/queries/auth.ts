@@ -22,6 +22,8 @@ import {
   signUp,
   unlinkProvider,
   updateOrganization,
+  requestPasswordReset,
+  resetPassword,
   verifyEmail,
   verifyTotp,
   type InstallCompleteResult,
@@ -280,6 +282,14 @@ export function useCompleteInstall() {
       ])
     },
   })
+}
+
+export function useRequestPasswordReset() {
+  return useApiMutation({ mutationFn: requestPasswordReset })
+}
+
+export function useResetPassword() {
+  return useApiMutation({ mutationFn: resetPassword })
 }
 
 export function useVerifyEmail() {

@@ -231,6 +231,18 @@ export function SignInScreenContent() {
         />
       </View>
 
+      <Link href="/forgot-password" asChild>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Forgot password"
+          style={[webPointer, authFormStyles.forgotPasswordLink]}
+        >
+          <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
+            Forgot password?
+          </Text>
+        </Pressable>
+      </Link>
+
       {error || bootstrapError ? (
         <Text style={authFormStyles.error} accessibilityRole="alert">
           {error || bootstrapError}

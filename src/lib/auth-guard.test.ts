@@ -305,6 +305,20 @@ describe('resolveAuthGuardHref', () => {
     ).toBeNull()
   })
 
+  it.each(['forgot-password', 'reset-password'])(
+    'allows %s as a public auth route without a session',
+    (topSegment) => {
+      expect(
+        resolveAuthGuardHref({
+          session: null,
+          needsInstall: false,
+          topSegment,
+          developerDevBypass: false,
+        }),
+      ).toBeNull()
+    },
+  )
+
   it('keeps unsigned guests on sign-up when install is complete', () => {
     expect(
       resolveAuthGuardHref({
