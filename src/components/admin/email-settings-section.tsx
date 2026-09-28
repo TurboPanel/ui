@@ -2,18 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import Svg, { Path, Rect } from 'react-native-svg'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Badge,
-  Button,
-  LoadingState,
-  SectionPanel,
-  SegmentedControl,
-} from '@/components/ui'
-import type {
-  EmailSettingSource,
-  EmailSettingsResponse,
-} from '@/lib/instance-api'
+import { Badge, Button, LoadingState, SectionPanel, SegmentedControl } from '@/components/ui'
+import type { EmailSettingSource, EmailSettingsResponse } from '@/lib/instance-api'
 import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
+import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { colors, spacing } from '@/lib/theme'
 
 function LockIcon() {
@@ -102,16 +94,11 @@ const MAILGUN_KEYS: FullKey[] = [
   'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN',
 ]
 
-const BASE_KEYS: FullKey[] = [
-  'TURBOPANEL_SYSTEM_EMAIL__PROVIDER',
-  'TURBOPANEL_SYSTEM_EMAIL__FROM',
-]
+const BASE_KEYS: FullKey[] = ['TURBOPANEL_SYSTEM_EMAIL__PROVIDER', 'TURBOPANEL_SYSTEM_EMAIL__FROM']
 
 function visibleKeysForProvider(provider: string): FullKey[] {
   const resolved = provider === 'mailgun' ? 'mailgun' : 'smtp'
-  return resolved === 'mailgun'
-    ? [...BASE_KEYS, ...MAILGUN_KEYS]
-    : [...BASE_KEYS, ...SMTP_KEYS]
+  return resolved === 'mailgun' ? [...BASE_KEYS, ...MAILGUN_KEYS] : [...BASE_KEYS, ...SMTP_KEYS]
 }
 
 function isSecretKey(key: FullKey): boolean {
@@ -125,6 +112,16 @@ function envVarName(full: FullKey): string {
 export function EmailSettingsSection() {
   const emailQuery = useEmailSettings()
   const saveMutation = useSaveEmailSettings()
+  const statusQuery = useInstallStatusQuery()
+  // Workers can only send through Mailgun's API — nodemailer's SMTP transport
+  // needs a raw TCP socket, which the Workers runtime does not provide.
+  // `smtp` there silently resolves to a noop queue (turbopanel
+  // src/features/email/AGENTS.md), so offering it — or the host/port/user/
+  // password fields it needs — would just be a dead end.
+  const isWorkers = statusQuery.data?.runtime === 'workers'
+  const providerSegmentOptions = isWorkers
+    ? PROVIDER_SEGMENT_OPTIONS.filter((opt) => opt.value === 'mailgun')
+    : PROVIDER_SEGMENT_OPTIONS
 
   const [saveError, setSaveError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -150,7 +147,9 @@ export function EmailSettingsSection() {
   })
 
   // Snapshot of the last loaded server shape (for computing payload and badges).
-  const [loaded, setLoaded] = useState<Record<FullKey, { value: string | null; source: EmailSettingSource }>>(() => {
+  const [loaded, setLoaded] = useState<
+    Record<FullKey, { value: string | null; source: EmailSettingSource }>
+  >(() => {
     const init = {} as Record<FullKey, { value: string | null; source: EmailSettingSource }>
     for (const k of FULL_KEYS) init[k] = { value: null, source: 'default' }
     return init
@@ -272,9 +271,9 @@ export function EmailSettingsSection() {
     if (isProvider) {
       fieldControl = (
         <SegmentedControl
-          options={PROVIDER_SEGMENT_OPTIONS}
-          value={value === 'mailgun' ? 'mailgun' : 'smtp'}
-          disabled={isEnv || saveMutation.isPending}
+          options={providerSegmentOptions}
+          value={isWorkers ? 'mailgun' : value === 'mailgun' ? 'mailgun' : 'smtp'}
+          disabled={isWorkers || isEnv || saveMutation.isPending}
           onChange={(opt) => {
             if (isEnv || saveMutation.isPending) return
             onProviderChange(opt)
@@ -287,7 +286,7 @@ export function EmailSettingsSection() {
         <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
           <LockIcon />
           <Text style={styles.lockValue} numberOfLines={1}>
-            {isSecret ? '••••••••' : (value || '')}
+            {isSecret ? '••••••••' : value || ''}
           </Text>
         </View>
       )
@@ -319,13 +318,12 @@ export function EmailSettingsSection() {
 
         {isEnv ? (
           <Text style={styles.help}>
-            This setting is controlled by the {envName} environment variable and cannot be changed here.
+            This setting is controlled by the {envName} environment variable and cannot be changed
+            here.
           </Text>
         ) : null}
 
-        {isDefault ? (
-          <Text style={styles.helpMuted}>Using default value.</Text>
-        ) : null}
+        {isDefault ? <Text style={styles.helpMuted}>Using default value.</Text> : null}
       </View>
     )
   }
@@ -334,8 +332,8 @@ export function EmailSettingsSection() {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Email</Text>
       <Text style={panelStyles.pageCopy}>
-        Configure the email provider used for system notifications. Settings stored in the
-        database can be edited here. Environment variables take precedence and appear read-only.
+        Configure the email provider used for system notifications. Settings stored in the database
+        can be edited here. Environment variables take precedence and appear read-only.
       </Text>
 
       <SectionPanel
@@ -357,9 +355,11 @@ export function EmailSettingsSection() {
         ) : (
           <>
             {visibleKeysForProvider(
-              draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER ||
-                loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ||
-                'smtp',
+              isWorkers
+                ? 'mailgun'
+                : draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER ||
+                    loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ||
+                    'smtp'
             ).map((k) => renderField(k))}
 
             <Button
@@ -371,8 +371,8 @@ export function EmailSettingsSection() {
             />
 
             <Text style={panelStyles.muted}>
-              Only fields not overridden by environment variables are sent on save.
-              Clear a field to remove its stored value and fall back to defaults.
+              Only fields not overridden by environment variables are sent on save. Clear a field to
+              remove its stored value and fall back to defaults.
             </Text>
           </>
         )}
