@@ -70,7 +70,7 @@ const PLACEHOLDERS: Record<FullKey, string> = {
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS: '',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY: '',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN: 'mg.example.com',
-  TURBOPANEL_SYSTEM_EMAIL__MAILPIT_API_URL: 'http://mailpit:8025',
+  TURBOPANEL_SYSTEM_EMAIL__MAILPIT_API_URL: 'https://mailpit:8025',
 }
 
 const PROVIDER_OPTIONS: ('smtp' | 'mailgun')[] = ['smtp', 'mailgun']
