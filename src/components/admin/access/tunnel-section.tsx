@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, InlineNotice, SectionPanel, TextField } from '@/components/ui'
+import { useAuth } from '@/lib/auth-context'
 import { useSetInstanceTunnelToken } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 
 export function TunnelSection() {
+  const { controlPlaneRuntime } = useAuth()
   const mutation = useSetInstanceTunnelToken()
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +29,18 @@ export function TunnelSection() {
       next === ''
         ? 'Tunnel torn down. The co-located daemon was told to drop it.'
         : 'Tunnel token sent. It is not stored in this page and will not be shown again.',
+    )
+  }
+
+  if (controlPlaneRuntime === 'workers') {
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.pageTitle}>Tunnel</Text>
+        <InlineNotice
+          title="Not applicable on this runtime"
+          body="A tunnel token is for a co-located daemon's own outbound connection. TurboPanel High Availability is a distributed control plane for many remote daemons — none of them co-located with it — so there is no co-located daemon here to tunnel for."
+        />
+      </View>
     )
   }
 
