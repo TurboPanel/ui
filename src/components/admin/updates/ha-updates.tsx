@@ -3,12 +3,13 @@ import { StyleSheet, Text, View } from 'react-native'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
 import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
-import { Badge, InlineNotice, SectionPanel, SegmentedControl } from '@/components/ui'
+import { Badge, ConfirmButton, InlineNotice, SectionPanel, SegmentedControl } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import { summarizeFleetSteps } from '@/lib/upgrade-display'
 import {
+  useCancelUpgradeRun,
   useRetryUpgradeStep,
   useSaveUpgradeSettings,
   useUpgradeActiveRun,
@@ -28,7 +29,9 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
   const settingsQuery = useUpgradeSettings()
   const saveSettings = useSaveUpgradeSettings()
   const retryStep = useRetryUpgradeStep()
+  const cancelRun = useCancelUpgradeRun()
   const [retryingStepId, setRetryingStepId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const run = activeRun.data?.run
   const fleetSummary = summarizeFleetSteps(run?.steps ?? [])
@@ -40,6 +43,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
         title={`${HA_PRODUCT_NAME} manages the control plane`}
         body="Connected daemons follow the rollout below. Per-server Update actions stay off while updates are platform-managed."
       />
+      {notice ? <InlineNotice tone="info" title={notice} /> : null}
 
       <SectionPanel title="Control plane">
         <Text style={panelStyles.pageCopy}>Managed by TurboPanel</Text>
@@ -47,7 +51,30 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
       </SectionPanel>
 
       {run ? (
-        <SectionPanel title="Rollout">
+        <SectionPanel
+          title="Rollout"
+          headerRight={
+            // A run keeps the target it was created with. Cancelling a stale one
+            // lets the next maintenance tick start fresh against the current build.
+            <ConfirmButton
+              label="Cancel rollout"
+              confirmLabel="Cancel rollout"
+              prompt="Stop this rollout? Daemons already updated stay updated; anything still pending is skipped. The next rollout starts against the current build."
+              busy={cancelRun.isPending}
+              onConfirm={() => {
+                setNotice(null)
+                cancelRun.mutate(run.id, {
+                  onSuccess: () => {
+                    setNotice('Rollout cancelled. A fresh one starts on the next maintenance tick.')
+                  },
+                  onError: (err) => {
+                    setNotice(err instanceof Error ? err.message : 'Failed to cancel the rollout')
+                  },
+                })
+              }}
+            />
+          }
+        >
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
               ? `${fleetSummary.upToDate} of ${fleetSummary.total} connected daemons up to date`
