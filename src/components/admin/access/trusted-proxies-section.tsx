@@ -23,6 +23,17 @@ const REPLACEMENT_WARNING =
 
 export function TrustedProxiesSection() {
   const query = useTrustedProxies()
+  if (query.data?.applicable === false) {
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.pageTitle}>Trusted proxies</Text>
+        <InlineNotice
+          title="Not applicable on this runtime"
+          body="TurboPanel High Availability reads the client's real address from Cloudflare's own CF-Connecting-IP header — there is no local proxy in front of it, so this setting has no effect here."
+        />
+      </View>
+    )
+  }
   const cidrs = query.data?.cidrs ?? []
   const isDefault = query.data?.isDefault === true
   let loadError: string | null = null

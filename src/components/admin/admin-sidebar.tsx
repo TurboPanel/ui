@@ -16,14 +16,22 @@ export function AdminSidebar({
 }: Readonly<{ onNavigate?: () => void }>) {
   const pathname = usePathname()
   const router = useRouter()
-  const { billingEnabled } = useAuth()
+  const { billingEnabled, controlPlaneRuntime } = useAuth()
   const { available: updateAvailable } = useUpdateAvailable()
   const resolved = adminAreaFromPathname(pathname)
   const activeSubRouteId = resolved?.subRoute?.id ?? null
+  const isWorkers = controlPlaneRuntime === 'workers'
   // The tier catalogue is a hosted (Workers) surface; self-hosted has no
   // billing and no `/tiers` routes, so the entry is omitted rather than 404ing.
+  // Access (hostnames/certificates/ACME/trusted proxies/tunnel/Platform CA)
+  // is the reverse: every one of its sections is self-hosted-only — Cloudflare
+  // owns TLS, the client address, and the co-located-daemon concept it all
+  // assumes — so the whole area is omitted on Workers rather than linking to
+  // a page of "not applicable here" notices.
   const areas = ADMIN_AREAS.filter(
-    (area) => area.id !== 'tiers' || billingEnabled,
+    (area) =>
+      (area.id !== 'tiers' || billingEnabled) &&
+      (area.id !== 'access' || !isWorkers),
   )
 
   return (

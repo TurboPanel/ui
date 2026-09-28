@@ -80,6 +80,10 @@ const COLUMNS: readonly DataTableColumn[] = [
   { key: 'actions', header: 'Actions', width: 168, align: 'end' },
 ]
 
+const ADDRESS_ONLY_COLUMNS: readonly DataTableColumn[] = [
+  { key: 'address', header: 'Address', flex: 1 },
+]
+
 const APPLY_NOTE =
   'Every hostname is served at https://<host>:8443. The certificate follows the name. The Platform CA leaf stays bound on :8443 as the recovery address.'
 
@@ -104,6 +108,37 @@ function hostnameOf(entry: string): string {
 function invalidFrom(cause: unknown): string[] {
   if (cause instanceof InstanceHostnameValidationError) return cause.invalid
   return []
+}
+
+function PlatformManagedHostnames({ origin }: Readonly<{ origin: string | null }>) {
+  return (
+    <View style={styles.root}>
+      <Text style={panelStyles.pageTitle}>Hostnames</Text>
+      <Text style={panelStyles.pageCopy}>
+        Every address this control plane answers on. They become the Platform CA
+        leaf SANs used for daemon → control-plane trust (explicitly not the
+        per-organization Organization CA), the webhook endpoint a Git provider
+        delivers to, and the origin baked into generated install commands.
+      </Text>
+      <InlineNotice
+        title="Platform-managed"
+        body="TurboPanel High Availability answers on one fixed address per environment. Cloudflare terminates TLS for it at the edge, so there is nothing to add or configure here."
+      />
+      <SectionPanel title="Address" hint="Fixed by this deployment's environment">
+        <DataTable columns={ADDRESS_ONLY_COLUMNS} minWidth={280}>
+          {origin
+            ? (
+              <DataTableRow last>
+                <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>
+                  {origin}
+                </DataTableCell>
+              </DataTableRow>
+            )
+            : <DataTableEmpty>No fixed address configured</DataTableEmpty>}
+        </DataTable>
+      </SectionPanel>
+    </View>
+  )
 }
 
 export function HostnamesSection() {
@@ -245,6 +280,14 @@ export function HostnamesSection() {
       return
     }
     void runApply()
+  }
+
+  if (hostnamesQuery.data && 'platformManagedOrigin' in hostnamesQuery.data) {
+    return (
+      <PlatformManagedHostnames
+        origin={hostnamesQuery.data.platformManagedOrigin ?? null}
+      />
+    )
   }
 
   return (

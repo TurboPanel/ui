@@ -68,6 +68,18 @@ export function CertificatesSection() {
     daemonQuery.data?.capabilities?.[CAPABILITY_KEY] === true
   const capabilitiesKnown = daemonQuery.isSuccess || daemonQuery.isError
 
+  if (certificatesQuery.data && 'applicable' in certificatesQuery.data) {
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.pageTitle}>Certificates</Text>
+        <InlineNotice
+          title="Not applicable on this runtime"
+          body="TurboPanel High Availability never installs or manages certificates — TLS for every hostname it serves is terminated at the Cloudflare edge, so there is nothing to upload or request here."
+        />
+      </View>
+    )
+  }
+
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Certificates</Text>

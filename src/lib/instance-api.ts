@@ -3928,6 +3928,8 @@ export type PlatformCaInfo =
 export type TrustedProxySettings = {
   cidrs: string[]
   isDefault: boolean
+  /** `false` on Workers: the edge stamps CF-Connecting-IP, so this setting has no effect there. */
+  applicable?: boolean
 }
 
 /**
@@ -3949,6 +3951,12 @@ export async function fetchInstanceHostnames(): Promise<{
   hostnames: InstanceHostnameRecord[]
   /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
   tosAccepted?: boolean
+  /**
+   * Set only on Workers: the one fixed origin Cloudflare terminates TLS for
+   * (from `TURBOPANEL_BASE_URL`). `hostnames` stays `[]` there — there is
+   * nothing to configure, only this to display.
+   */
+  platformManagedOrigin?: string | null
 }> {
   return await apiFetch(`${ADMIN_API}/instance/hostnames`)
 }
@@ -3965,6 +3973,8 @@ export async function saveInstanceHostnames(
 export async function fetchInstanceCertificates(): Promise<{
   ok: boolean
   certificates: UploadedCertificateRecord[]
+  /** `false` on Workers: Cloudflare terminates TLS at the edge, nothing to upload. */
+  applicable?: boolean
 }> {
   return await apiFetch(`${ADMIN_API}/instance/certificates`)
 }
@@ -4005,6 +4015,8 @@ export async function fetchInstanceAcmeSettings(): Promise<{
   settings: InstanceAcmeSettings
   /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
   tosAccepted?: boolean
+  /** `false` on Workers: no per-organization ACME to run, Cloudflare owns every hostname's TLS. */
+  applicable?: boolean
 }> {
   return await apiFetch(`${ADMIN_API}/instance/acme`)
 }
