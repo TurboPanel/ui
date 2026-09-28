@@ -39,6 +39,7 @@ const FULL_KEYS = [
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS',
   'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY',
   'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN',
+  'TURBOPANEL_SYSTEM_EMAIL__MAILPIT_API_URL',
 ] as const
 
 type FullKey = (typeof FULL_KEYS)[number]
@@ -57,6 +58,7 @@ const LABELS: Record<FullKey, string> = {
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS: 'SMTP password',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY: 'Mailgun API key',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN: 'Mailgun domain',
+  TURBOPANEL_SYSTEM_EMAIL__MAILPIT_API_URL: 'Mailpit API URL',
 }
 
 const PLACEHOLDERS: Record<FullKey, string> = {
@@ -68,6 +70,7 @@ const PLACEHOLDERS: Record<FullKey, string> = {
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS: '',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY: '',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN: 'mg.example.com',
+  TURBOPANEL_SYSTEM_EMAIL__MAILPIT_API_URL: 'http://mailpit:8025',
 }
 
 const PROVIDER_OPTIONS: ('smtp' | 'mailgun')[] = ['smtp', 'mailgun']
@@ -75,6 +78,17 @@ const PROVIDER_OPTIONS: ('smtp' | 'mailgun')[] = ['smtp', 'mailgun']
 const PROVIDER_LABELS: Record<(typeof PROVIDER_OPTIONS)[number], string> = {
   smtp: 'SMTP',
   mailgun: 'Mailgun API',
+}
+
+// Every provider value the backend can resolve from env, including ones
+// never offered as a choosable option below (Mailpit is an env-only
+// integration-test wire, never something an operator picks by hand) — used
+// only to give the locked "Set by environment" display a friendly label
+// instead of the raw env value.
+const PROVIDER_DISPLAY_LABELS: Record<string, string> = {
+  ...PROVIDER_LABELS,
+  'mailpit-api': 'Mailpit (HTTP API)',
+  'mailpit-smtp': 'Mailpit (SMTP)',
 }
 
 const PROVIDER_SEGMENT_OPTIONS = PROVIDER_OPTIONS.map((value) => ({
@@ -94,11 +108,14 @@ const MAILGUN_KEYS: FullKey[] = [
   'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_DOMAIN',
 ]
 
+const MAILPIT_KEYS: FullKey[] = ['TURBOPANEL_SYSTEM_EMAIL__MAILPIT_API_URL']
+
 const BASE_KEYS: FullKey[] = ['TURBOPANEL_SYSTEM_EMAIL__PROVIDER', 'TURBOPANEL_SYSTEM_EMAIL__FROM']
 
 function visibleKeysForProvider(provider: string): FullKey[] {
-  const resolved = provider === 'mailgun' ? 'mailgun' : 'smtp'
-  return resolved === 'mailgun' ? [...BASE_KEYS, ...MAILGUN_KEYS] : [...BASE_KEYS, ...SMTP_KEYS]
+  if (provider === 'mailgun') return [...BASE_KEYS, ...MAILGUN_KEYS]
+  if (provider === 'mailpit-api') return [...BASE_KEYS, ...MAILPIT_KEYS]
+  return [...BASE_KEYS, ...SMTP_KEYS]
 }
 
 function isSecretKey(key: FullKey): boolean {
@@ -113,11 +130,14 @@ export function EmailSettingsSection() {
   const emailQuery = useEmailSettings()
   const saveMutation = useSaveEmailSettings()
   const statusQuery = useInstallStatusQuery()
-  // Workers can only send through Mailgun's API — nodemailer's SMTP transport
-  // needs a raw TCP socket, which the Workers runtime does not provide.
-  // `smtp` there silently resolves to a noop queue (turbopanel
-  // src/features/email/AGENTS.md), so offering it — or the host/port/user/
-  // password fields it needs — would just be a dead end.
+  // Of the choosable providers, Workers can only send through Mailgun's API
+  // — nodemailer's SMTP transport needs a raw TCP socket, which the Workers
+  // runtime does not provide, and `smtp` there silently resolves to a noop
+  // queue (turbopanel src/features/email/AGENTS.md). `mailpit-api` (an
+  // HTTP-based, Workers-capable path) also exists but is env-only, wired for
+  // integration testing, and never offered as something an operator picks
+  // here — offering `smtp`, or the host/port/user/password fields it needs,
+  // would just be a dead end.
   const isWorkers = statusQuery.data?.runtime === 'workers'
   const providerSegmentOptions = isWorkers
     ? PROVIDER_SEGMENT_OPTIONS.filter((opt) => opt.value === 'mailgun')
@@ -268,25 +288,29 @@ export function EmailSettingsSection() {
     }
 
     let fieldControl: ReactNode
-    if (isProvider) {
+    if (isProvider && !isEnv) {
+      // Only reached when the operator can actually pick a provider —
+      // an env-set value (including a Mailpit provider, never offered as a
+      // choosable option) falls through to the generic locked-text display
+      // below instead, same as every other env-controlled field.
       fieldControl = (
         <SegmentedControl
           options={providerSegmentOptions}
           value={isWorkers ? 'mailgun' : value === 'mailgun' ? 'mailgun' : 'smtp'}
-          disabled={isWorkers || isEnv || saveMutation.isPending}
+          disabled={isWorkers || saveMutation.isPending}
           onChange={(opt) => {
-            if (isEnv || saveMutation.isPending) return
             onProviderChange(opt)
           }}
           accessibilityLabel="Email provider"
         />
       )
     } else if (isEnv) {
+      const displayValue = isProvider ? (PROVIDER_DISPLAY_LABELS[value] ?? value) : value
       fieldControl = (
         <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
           <LockIcon />
           <Text style={styles.lockValue} numberOfLines={1}>
-            {isSecret ? '••••••••' : value || ''}
+            {isSecret ? '••••••••' : displayValue || ''}
           </Text>
         </View>
       )
@@ -355,9 +379,11 @@ export function EmailSettingsSection() {
         ) : (
           <>
             {visibleKeysForProvider(
-              isWorkers
-                ? 'mailgun'
-                : draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER ||
+              sources.TURBOPANEL_SYSTEM_EMAIL__PROVIDER === 'env'
+                ? (loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ?? 'smtp')
+                : isWorkers
+                  ? 'mailgun'
+                  : draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER ||
                     loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ||
                     'smtp'
             ).map((k) => renderField(k))}
