@@ -8,12 +8,7 @@ import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-
 import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
-import {
-  Badge,
-  Button,
-  InlineNotice,
-  SectionPanel,
-} from '@/components/ui'
+import { Badge, Button, InlineNotice, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
 import { platformUpdateAvailable } from '@/lib/instance-updates'
@@ -43,13 +38,15 @@ import {
 } from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
 
-function installedLabel(version: string | null | undefined, commit: string | null | undefined): string {
+function installedLabel(
+  version: string | null | undefined,
+  commit: string | null | undefined
+): string {
   if (version && commit) return `${version} · ${commit.slice(0, 7)}`
   if (version) return version
   if (commit) return commit.slice(0, 7)
   return 'Unknown'
 }
-
 
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [offset, setOffset] = useState(0)
@@ -77,7 +74,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const autoOpened = useRef(false)
   const fleetSteps = useMemo(
     () => (run?.steps ?? []).filter((step) => step.phase === 'fleet'),
-    [run?.steps],
+    [run?.steps]
   )
   const fleetSummary = summarizeFleetSteps(run?.steps ?? [])
   const needsAttention = fleetSummary.needsAttention + (run?.counts?.needsAttention ?? 0)
@@ -103,14 +100,12 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     return () => clearInterval(timer)
   }, [run, shown.finished])
 
-  const fleetServers = serversPage.data?.servers.length
-    ? serversPage.data.servers
-    : fleetSteps
+  const fleetServers = serversPage.data?.servers.length ? serversPage.data.servers : fleetSteps
 
   const canStart =
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
-    (data.units.instance.target !== null || data.units.daemon.target !== null) &&
+    platformUpdateAvailable(data.units) &&
     headline !== 'updating' &&
     !starting
 
@@ -130,14 +125,16 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     try {
       const outcome = await withStartTimeout(startUpgrade.mutateAsync(preflight?.runId))
       setPreflightOpen(false)
-      setNotice(`Upgrade started (run ${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`)
+      setNotice(
+        `Upgrade started (run ${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`
+      )
     } catch (err) {
       if (err instanceof UpgradeStartTimeoutError) {
         // Never spin forever: close the sheet and let the status below say
         // whether a run started.
         setPreflightOpen(false)
         setNotice(
-          'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.',
+          'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.'
         )
         void activeRun.refetch()
       } else {
@@ -182,7 +179,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
           target={data.units.instance.target}
           installedLabel={installedLabel(
             data.units.instance.installed.version,
-            data.units.instance.installed.commit,
+            data.units.instance.installed.commit
           )}
         />
         <UpgradeBuildBlock
@@ -192,7 +189,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
             data.units.daemon.installed
               ? installedLabel(
                   data.units.daemon.installed.version,
-                  data.units.daemon.installed.commit,
+                  data.units.daemon.installed.commit
                 )
               : 'Not connected'
           }
