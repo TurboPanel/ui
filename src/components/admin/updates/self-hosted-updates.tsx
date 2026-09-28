@@ -8,7 +8,7 @@ import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-
 import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
-import { Badge, Button, InlineNotice, SectionPanel } from '@/components/ui'
+import { Badge, Button, ConfirmButton, InlineNotice, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
 import { platformUpdateAvailable } from '@/lib/instance-updates'
@@ -20,6 +20,7 @@ import {
   upgradeRunErrorLabel,
 } from '@/lib/upgrade-display'
 import {
+  useCancelUpgradeRun,
   useRetryUpgradeStep,
   useRunUpgradePreflight,
   useSaveUpgradeSettings,
@@ -58,6 +59,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const preflightMutation = useRunUpgradePreflight()
   const startUpgrade = useStartPlatformUpgrade()
   const retryStep = useRetryUpgradeStep()
+  const cancelRun = useCancelUpgradeRun()
   const [retryingStepId, setRetryingStepId] = useState<string | null>(null)
 
   const [preflightOpen, setPreflightOpen] = useState(false)
@@ -205,7 +207,30 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
       {stalled ? <InlineNotice title={stalled} /> : null}
 
       {run || platformUpdateAvailable(data.units) ? (
-        <SectionPanel title="Progress">
+        <SectionPanel
+          title="Progress"
+          headerRight={
+            run && !shown.finished ? (
+              <ConfirmButton
+                label="Cancel run"
+                confirmLabel="Cancel run"
+                prompt="Stop this run? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
+                busy={cancelRun.isPending}
+                onConfirm={() => {
+                  setNotice(null)
+                  cancelRun.mutate(run.id, {
+                    onSuccess: () => {
+                      setNotice('Run cancelled. Start a fresh update to try again.')
+                    },
+                    onError: (err) => {
+                      setNotice(err instanceof Error ? err.message : 'Failed to cancel the run')
+                    },
+                  })
+                }}
+              />
+            ) : null
+          }
+        >
           <UpgradeStepTracker
             phase="colocated_daemon"
             status={daemonStep?.status ?? null}
