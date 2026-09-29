@@ -912,19 +912,22 @@ export function packagesFromOrchestrationPins(
   }))
 }
 
-export async function fillMissingLicenses(
+/**
+ * Lookups hit the package registries, so they run one at a time (a burst
+ * gets throttled and leaves packages "Unknown" from one run to the next);
+ * rows keep their input order.
+ */
+export function fillMissingLicenses(
   packages: readonly NoticePackage[],
   lookup: (pkg: NoticePackage) => Promise<string>,
 ): Promise<NoticePackage[]> {
-  // Lookups are independent, and Promise.all keeps the input order.
-  return Promise.all(
-    packages.map(async (pkg) => {
-      if (!needsLicenseLookup(pkg.license)) return pkg
-      const lookedUp = (await lookup(pkg)).trim()
-      const license = lookedUp || defaultLicenseForPackageName(pkg.name) || ''
-      return license ? { ...pkg, license } : pkg
-    }),
-  )
+  return packages.reduce<Promise<NoticePackage[]>>(async (chain, pkg) => {
+    const filled = await chain
+    if (!needsLicenseLookup(pkg.license)) return [...filled, pkg]
+    const lookedUp = (await lookup(pkg)).trim()
+    const license = lookedUp || defaultLicenseForPackageName(pkg.name) || ''
+    return [...filled, license ? { ...pkg, license } : pkg]
+  }, Promise.resolve([]))
 }
 
 export function needsLicenseLookup(license: string): boolean {
