@@ -46,7 +46,7 @@ export function UpgradeRunDetail({ runId }: Readonly<{ runId: string }>) {
   if (query.isLoading) return <LoadingState />
   const run = query.data?.run
   if (query.isError || !run) {
-    return <Text style={panelStyles.muted}>This run's details are not available.</Text>
+    return <Text style={panelStyles.muted}>The details of this run are not available.</Text>
   }
   const platform = run.steps.filter((step) => step.phase !== 'fleet')
   const fleet = run.steps.filter((step) => step.phase === 'fleet')
