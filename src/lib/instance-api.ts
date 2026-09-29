@@ -4027,7 +4027,8 @@ export type InstanceUpdates = {
   }
   units: {
     instance: {
-      installed: { version: string; commit: string }
+      /** `label` is the installed build's exact label (`0.1.3-canary.417`), when the control plane reports it. */
+      installed: { version: string; commit: string; label?: string | null }
       target: InstanceUpdateTarget | null
       /** UI package installed by the same control-plane upgrade. */
       uiTarget: InstanceUpdateTarget | null
@@ -4035,7 +4036,12 @@ export type InstanceUpdates = {
       updateAvailable?: boolean
     }
     daemon: {
-      installed: { version: string | null; commit: string | null } | null
+      installed: {
+        version: string | null
+        commit: string | null
+        label?: string | null
+        builtAt?: string | null
+      } | null
       target: InstanceUpdateTarget | null
       serverId: string | null
       connected: boolean

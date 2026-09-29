@@ -1,3 +1,4 @@
+import Constants from 'expo-constants'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
@@ -12,8 +13,10 @@ import { Badge, Button, ConfirmButton, InlineNotice, SectionPanel } from '@/comp
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
 import { platformUpdateAvailable } from '@/lib/instance-updates'
+import { readAppSourceRelease } from '@/lib/source-release'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
+  installedBuildLabel,
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
   summarizeFleetSteps,
@@ -39,18 +42,19 @@ import {
 } from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
 
-function installedLabel(
-  version: string | null | undefined,
-  commit: string | null | undefined
-): string {
-  if (version && commit) return `${version} · ${commit.slice(0, 7)}`
-  if (version) return version
-  if (commit) return commit.slice(0, 7)
-  return 'Unknown'
+/** This console's own build (the bundle the control plane serves), from the app config. */
+function readConsoleBuild(): { version: string; commit: string } | null {
+  try {
+    const release = readAppSourceRelease(Constants.expoConfig)
+    return { version: release.version, commit: release.gitCommit }
+  } catch {
+    return null
+  }
 }
 
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [offset, setOffset] = useState(0)
+  const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const activeRun = useUpgradeActiveRun()
   const history = useUpgradeHistory({ offset: 0, limit: 8 })
   const serversPage = useUpgradeServersPage(fleetServersQuery(offset, ''))
@@ -179,20 +183,22 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         <UpgradeBuildBlock
           title="Control plane"
           target={data.units.instance.target}
-          installedLabel={installedLabel(
-            data.units.instance.installed.version,
-            data.units.instance.installed.commit
+          installedLabel={installedBuildLabel(
+            data.units.instance.installed,
+            data.units.instance.target
           )}
+        />
+        <UpgradeBuildBlock
+          title="UI"
+          target={data.units.instance.uiTarget}
+          installedLabel={installedBuildLabel(consoleBuild, data.units.instance.uiTarget)}
         />
         <UpgradeBuildBlock
           title="Co-located daemon"
           target={data.units.daemon.target}
           installedLabel={
             data.units.daemon.installed
-              ? installedLabel(
-                  data.units.daemon.installed.version,
-                  data.units.daemon.installed.commit
-                )
+              ? installedBuildLabel(data.units.daemon.installed, data.units.daemon.target)
               : 'Not connected'
           }
         />
