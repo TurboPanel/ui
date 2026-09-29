@@ -4,16 +4,16 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, InlineNotice, ModalSheet, TextField } from '@/components/ui'
 import {
   describeBillingRefusal,
-  endingLabel,
   parseLicenseCount,
   type RefusalContext,
 } from '@/lib/billing-display'
+import { BillingRefusalError, LICENSES_ENDING_ERROR, type BillingPreview } from '@/lib/instance-api'
 import {
-  BillingRefusalError,
-  formatShortDate,
-  LICENSES_ENDING_ERROR,
-  type BillingPreview,
-} from '@/lib/instance-api'
+  countHint,
+  primaryButtonCopy,
+  removeNoticeTitle,
+  restoreNoticeCopy,
+} from '@/lib/license-dialog-copy'
 import type { ApiMutationResult } from '@/lib/query-client'
 import {
   useChangeBillingSeats,
@@ -42,16 +42,6 @@ export type LicenseDialogTier = Readonly<{
 }>
 
 export type LicenseDialogRequest = Readonly<{ mode: LicenseDialogMode; tier: LicenseDialogTier }>
-
-function plural(count: number, singular: string, many: string): string {
-  return `${count} ${count === 1 ? singular : many}`
-}
-
-/** `on Oct 26` / `at the end of the period`. */
-function whenLabel(iso: string | null): string {
-  const short = formatShortDate(iso)
-  return short ? `on ${short}` : 'at the end of the period'
-}
 
 function titleFor(mode: LicenseDialogMode, label: string): string {
   switch (mode) {
@@ -183,22 +173,22 @@ function LicenseDialogBody({
     if (isLicensesEnding(outcome)) switchToRestore()
   }
 
+  // Restore takes ending licenses back, Remove ends them, Add buys against the reviewed quote.
+  const submit = (count: number): Promise<ApiMutationResult<unknown>> => {
+    if (mode === 'restore') return restore.run({ tierId: tier.tierId, count })
+    if (mode === 'remove') return change.run({ tierId: tier.tierId, delta: -count })
+    return change.run({
+      tierId: tier.tierId,
+      delta: count,
+      prorationDate: quote?.prorationDate,
+    })
+  }
+
   const confirm = async () => {
     if (!validCount || count == null) return
     setError(null)
-    let outcome: ApiMutationResult<unknown>
-    if (mode === 'restore') {
-      outcome = await restore.run({ tierId: tier.tierId, count })
-    } else if (mode === 'remove') {
-      outcome = await change.run({ tierId: tier.tierId, delta: -count })
-    } else {
-      if (!quote) return
-      outcome = await change.run({
-        tierId: tier.tierId,
-        delta: count,
-        prorationDate: quote.prorationDate,
-      })
-    }
+    if (mode === 'add' && !quote) return
+    const outcome = await submit(count)
     if (outcome.ok) {
       onSucceeded?.(mode)
       onClose()
@@ -208,67 +198,8 @@ function LicenseDialogBody({
     if (mode === 'add' && isLicensesEnding(outcome)) switchToRestore()
   }
 
-  let consequence: React.ReactNode = null
-  if (mode === 'restore') {
-    consequence = (
-      <InlineNotice
-        title={
-          restoreFirst
-            ? `You have ${plural(tier.ending, `${tier.label} license`, `${tier.label} licenses`)} ending ${whenLabel(tier.endsAt)}`
-            : 'Free — nothing is charged'
-        }
-        body={
-          restoreFirst
-            ? 'Restore those first — it is free and they stay yours past that date. Buy new licenses at this tier only once none are ending.'
-            : `Restored licenses stay yours past ${formatShortDate(tier.endsAt) ?? 'the end of the period'} and can take a new server right away.`
-        }
-      />
-    )
-  } else if (mode === 'remove') {
-    consequence = (
-      <InlineNotice
-        tone="warning"
-        title={`${count != null ? plural(count, 'license ends', 'licenses end') : 'Licenses end'} ${whenLabel(periodEnd)}`}
-        body="No refund for the rest of the period. Until then they still count as yours and can be restored; they cannot take a new server. Refused if a server would be left without a license."
-      />
-    )
-  } else if (quote && count != null) {
-    consequence = (
-      <BillingPreviewNotice
-        preview={quote}
-        summary={summarizePurchasePreview({
-          preview: quote,
-          count,
-          label: tier.label,
-          periodEnd,
-          unitCents: tier.priceCents,
-          currency: tier.currency,
-          purchasedBefore: tier.purchased,
-        })}
-      />
-    )
-  }
-
-  let primaryLabel: string
-  let primaryAction: () => void
-  if (mode === 'restore') {
-    primaryLabel = `Restore ${count ?? ''}`.trim()
-    primaryAction = () => void confirm()
-  } else if (mode === 'remove') {
-    primaryLabel = `Remove ${count ?? ''}`.trim()
-    primaryAction = () => void confirm()
-  } else if (quote) {
-    primaryLabel = 'Confirm and pay'
-    primaryAction = () => void confirm()
-  } else {
-    primaryLabel = 'Review price'
-    primaryAction = () => void review()
-  }
-
-  let hint: string
-  if (mode === 'restore') hint = `Up to ${tier.ending} (${endingLabel(tier.ending, tier.endsAt)}).`
-  else if (mode === 'remove') hint = `Up to ${tier.removable} — licenses covering a server cannot be removed.`
-  else hint = 'Charged now for the rest of this period, then monthly with your other licenses.'
+  const primary = primaryButtonCopy(mode, count, quote != null)
+  const primaryAction = () => void (primary.action === 'review' ? review() : confirm())
 
   return (
     <ModalSheet
@@ -279,7 +210,7 @@ function LicenseDialogBody({
         <ButtonRow align="end">
           <Button label="Cancel" variant="ghost" disabled={busy} onPress={onClose} />
           <Button
-            label={primaryLabel}
+            label={primary.label}
             variant={mode === 'remove' ? 'danger' : 'primary'}
             busy={busy}
             disabled={busy || !validCount}
@@ -289,7 +220,14 @@ function LicenseDialogBody({
       }
     >
       <View style={styles.body}>
-        {consequence}
+        <LicenseConsequence
+          mode={mode}
+          tier={tier}
+          count={count}
+          quote={quote}
+          periodEnd={periodEnd}
+          restoreFirst={restoreFirst}
+        />
         <TextField
           label="Licenses"
           value={countText}
@@ -297,17 +235,74 @@ function LicenseDialogBody({
           keyboardType="number-pad"
           editable={!busy}
           accessibilityLabel={`Number of ${tier.label} licenses to ${mode}`}
-          hint={hint}
+          hint={countHint(mode, tier)}
         />
-        {count == null ? (
-          <Text style={panelStyles.error}>Enter a whole number of at least 1.</Text>
-        ) : null}
-        {overMax ? (
-          <Text style={panelStyles.error}>{`At most ${max} here.`}</Text>
-        ) : null}
-        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+        <CountProblems count={count} max={overMax ? max : null} error={error} />
       </View>
     </ModalSheet>
+  )
+}
+
+/** The notice above the count: what a Restore, Remove or reviewed Add will do. */
+function LicenseConsequence({
+  mode,
+  tier,
+  count,
+  quote,
+  periodEnd,
+  restoreFirst,
+}: Readonly<{
+  mode: LicenseDialogMode
+  tier: LicenseDialogTier
+  count: number | null
+  quote: BillingPreview | null
+  periodEnd: string | null
+  restoreFirst: boolean
+}>) {
+  if (mode === 'restore') {
+    const { title, body } = restoreNoticeCopy(tier, restoreFirst)
+    return <InlineNotice title={title} body={body} />
+  }
+  if (mode === 'remove') {
+    return (
+      <InlineNotice
+        tone="warning"
+        title={removeNoticeTitle(count, periodEnd)}
+        body="No refund for the rest of the period. Until then they still count as yours and can be restored; they cannot take a new server. Refused if a server would be left without a license."
+      />
+    )
+  }
+  if (!quote || count == null) return null
+  return (
+    <BillingPreviewNotice
+      preview={quote}
+      summary={summarizePurchasePreview({
+        preview: quote,
+        count,
+        label: tier.label,
+        periodEnd,
+        unitCents: tier.priceCents,
+        currency: tier.currency,
+        purchasedBefore: tier.purchased,
+      })}
+    />
+  )
+}
+
+/** Inline problems under the count field; `max` is set only when the count is over it. */
+function CountProblems({
+  count,
+  max,
+  error,
+}: Readonly<{ count: number | null; max: number | null; error: string | null }>) {
+  return (
+    <>
+      {count == null ? (
+        <Text style={panelStyles.error}>Enter a whole number of at least 1.</Text>
+      ) : null}
+      {max == null ? null : <Text style={panelStyles.error}>{`At most ${max} here.`}</Text>}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+    </>
   )
 }
 
