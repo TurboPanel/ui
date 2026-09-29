@@ -33,12 +33,11 @@ describe('wrangler environments', () => {
     expect(config.name).toBe('dev-ui')
   })
 
-  it('has no default deploy target: only deploy:testing, deploy:staging and deploy:live deploy', () => {
+  it('has no default deploy target: only deploy:testing and deploy:live deploy', () => {
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>
     }
     expect(pkg.scripts['deploy:testing']).toBe('wrangler deploy --env testing')
-    expect(pkg.scripts['deploy:staging']).toBe('wrangler deploy --env staging')
     expect(pkg.scripts['deploy:live']).toBe('wrangler deploy --env live')
     expect(pkg.scripts.deploy).not.toMatch(/wrangler deploy/)
   })
