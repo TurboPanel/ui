@@ -8,11 +8,7 @@
 
 export const NOTICES_FILE_NAME = 'THIRD_PARTY_NOTICES.md'
 
-export type NoticeRole =
-  | 'production'
-  | 'development'
-  | 'orchestration'
-  | 'native'
+export type NoticeRole = 'production' | 'development' | 'orchestration' | 'native'
 
 export type NoticePackage = Readonly<{
   name: string
@@ -133,7 +129,7 @@ export function authorToCopyright(author: PnpmLicenseEntry['author']): string | 
  */
 export function packagesFromPnpmLicenses(
   grouped: Readonly<Record<string, readonly PnpmLicenseEntry[]>>,
-  prodKeys: ReadonlySet<string>,
+  prodKeys: ReadonlySet<string>
 ): NoticePackage[] {
   const byKey = new Map<string, NoticePackage>()
   for (const [groupLicense, entries] of Object.entries(grouped)) {
@@ -150,7 +146,7 @@ export function packagesFromPnpmLicenses(
 function entryToNoticePackages(
   entry: PnpmLicenseEntry,
   groupLicense: string,
-  prodKeys: ReadonlySet<string>,
+  prodKeys: ReadonlySet<string>
 ): NoticePackage[] {
   const name = entry.name?.trim()
   if (!name) return []
@@ -174,7 +170,7 @@ function entryToNoticePackages(
 }
 
 export function pnpmLicenseKeys(
-  grouped: Readonly<Record<string, readonly PnpmLicenseEntry[]>>,
+  grouped: Readonly<Record<string, readonly PnpmLicenseEntry[]>>
 ): Set<string> {
   const keys = new Set<string>()
   for (const pkg of packagesFromPnpmLicenses(grouped, keys)) {
@@ -231,7 +227,7 @@ export type DenoLockfile = Readonly<{
 /** Resolved Deno lock (`deno.lock`) — licenses filled by the caller. */
 export function packagesFromDenoLock(
   lock: DenoLockfile,
-  licenses: Readonly<Record<string, string>>,
+  licenses: Readonly<Record<string, string>>
 ): NoticePackage[] {
   const out: NoticePackage[] = []
   for (const id of Object.keys(lock.jsr ?? {})) {
@@ -289,9 +285,7 @@ export function packagesFromGradleDependencyReport(text: string): NoticePackage[
   return out
 }
 
-function parseGradleDependencyLine(
-  line: string,
-): { name: string; version: string } | undefined {
+function parseGradleDependencyLine(line: string): { name: string; version: string } | undefined {
   const trimmed = line.trim()
   if (!trimmed || trimmed.includes('project ')) return undefined
   const coord = gradleCoordinateFromTreeLine(trimmed)
@@ -301,9 +295,7 @@ function parseGradleDependencyLine(
   if (parts.length < 2) return undefined
   const group = parts[0]?.trim()
   const artifact = parts[1]?.trim()
-  const version = stripGradleStrictlyVersion(
-    resolved.version ?? parts.slice(2).join(':').trim(),
-  )
+  const version = stripGradleStrictlyVersion(resolved.version ?? parts.slice(2).join(':').trim())
   if (!group || !artifact || !version || version === '*') return undefined
   return { name: `${group}:${artifact}`, version }
 }
@@ -325,9 +317,7 @@ function stripGradleParenSuffix(coord: string): string {
   return end.slice(0, open).trimEnd()
 }
 
-function splitGradleResolvedCoord(
-  coord: string,
-): { declared: string; version?: string } {
+function splitGradleResolvedCoord(coord: string): { declared: string; version?: string } {
   const arrow = ' -> '
   const at = coord.indexOf(arrow)
   if (at < 0) return { declared: coord }
@@ -367,11 +357,11 @@ export function licenseFromPomXml(xml: string): string {
 export function packagesFromMavenPom(xml: string): NoticePackage | undefined {
   const project = xmlElementBlock(xml, 'project') ?? xml
   const withoutParent = withoutFirstXmlElement(project, 'parent')
-  const group = firstXmlElementValue(withoutParent, 'groupId') ??
-    firstXmlElementValue(project, 'groupId')
+  const group =
+    firstXmlElementValue(withoutParent, 'groupId') ?? firstXmlElementValue(project, 'groupId')
   const artifact = firstXmlElementValue(withoutParent, 'artifactId')
-  const version = firstXmlElementValue(withoutParent, 'version') ??
-    firstXmlElementValue(project, 'version')
+  const version =
+    firstXmlElementValue(withoutParent, 'version') ?? firstXmlElementValue(project, 'version')
   if (!group || !artifact || !version) return undefined
   return {
     name: `${group}:${artifact}`,
@@ -502,7 +492,7 @@ export function packagesFromPodfileLock(text: string): NoticePackage[] {
 
 export function attachLicensesFromMap(
   packages: readonly NoticePackage[],
-  licenses: Readonly<Record<string, string>>,
+  licenses: Readonly<Record<string, string>>
 ): NoticePackage[] {
   return packages.map((pkg) => {
     const found = licenses[noticePackageKey(pkg)] ?? licenses[pkg.name]
@@ -512,7 +502,7 @@ export function attachLicensesFromMap(
 }
 
 export function mergeNoticePackages(
-  groups: readonly (readonly NoticePackage[])[],
+  groups: readonly (readonly NoticePackage[])[]
 ): NoticePackage[] {
   const byKey = new Map<string, NoticePackage>()
   const roleRank: Record<NoticeRole, number> = {
@@ -544,7 +534,7 @@ export function mergeNoticePackages(
 
 export function evaluateLicensePolicy(
   packages: readonly NoticePackage[],
-  context: LicensePolicyContext = {},
+  context: LicensePolicyContext = {}
 ): LicensePolicyFailure[] {
   const failures: LicensePolicyFailure[] = []
   for (const pkg of packages) {
@@ -566,7 +556,7 @@ export function classifyLicense(
   rawLicense: string,
   role: NoticeRole,
   packageName = '',
-  context: LicensePolicyContext = {},
+  context: LicensePolicyContext = {}
 ): LicensePolicyReason | null {
   const license = rawLicense.trim()
   if (license.length === 0 || isMissingLicense(license)) {
@@ -591,12 +581,12 @@ function classifySpdxExpression(
   expr: string,
   role: NoticeRole,
   packageName = '',
-  context: LicensePolicyContext = {},
+  context: LicensePolicyContext = {}
 ): LicensePolicyReason | null {
   const orParts = splitTopLevel(expr, ' OR ')
   if (orParts && orParts.length > 1) {
     const partResults = orParts.map((part) =>
-      classifySpdxExpression(part, role, packageName, context),
+      classifySpdxExpression(part, role, packageName, context)
     )
     if (partResults.includes(null)) {
       return null
@@ -618,7 +608,7 @@ function classifySpdxToken(
   token: string,
   role: NoticeRole,
   packageName = '',
-  context: LicensePolicyContext = {},
+  context: LicensePolicyContext = {}
 ): LicensePolicyReason | null {
   const repoLicense = context.repoLicense ?? NOTICE_POLICY_REPO_LICENSE
   if (token === PROJECT_AGPL && repoLicense === PROJECT_AGPL) return null
@@ -669,9 +659,7 @@ function isSeeLicenseIn(license: string): boolean {
 
 function isNoncommercial(license: string): boolean {
   return (
-    /non-?commercial/i.test(license) ||
-    /CC-BY-NC/i.test(license) ||
-    /commons-clause/i.test(license)
+    /non-?commercial/i.test(license) || /CC-BY-NC/i.test(license) || /commons-clause/i.test(license)
   )
 }
 
@@ -748,7 +736,7 @@ function pushTrimmed(parts: string[], slice: string): void {
 
 export function renderThirdPartyNotices(
   packages: readonly NoticePackage[],
-  options: NoticesRenderOptions,
+  options: NoticesRenderOptions
 ): string {
   const sorted = sortNoticePackages(packages)
   const lines: string[] = [
@@ -761,7 +749,7 @@ export function renderThirdPartyNotices(
   if (options.complementNoticePath) {
     lines.push(
       '',
-      `This file complements \`${options.complementNoticePath}\` (the Apache-2.0 NOTICE for first-party material). It does not replace that file.`,
+      `This file complements \`${options.complementNoticePath}\` (the Apache-2.0 NOTICE for first-party material). It does not replace that file.`
     )
   }
   if (options.extraPreamble) {
@@ -769,31 +757,35 @@ export function renderThirdPartyNotices(
   }
   lines.push('', '<!-- lockfiles')
   const fingerprintKeys = Object.keys(options.lockfileFingerprints).sort((a, b) =>
-    a.localeCompare(b),
+    a.localeCompare(b)
   )
   for (const file of fingerprintKeys) {
     lines.push(`${file} ${options.lockfileFingerprints[file]}`)
   }
   lines.push('-->', '')
 
-  appendSection(lines, 'Production dependencies', sorted.filter((pkg) => pkg.role === 'production'))
+  appendSection(
+    lines,
+    'Production dependencies',
+    sorted.filter((pkg) => pkg.role === 'production')
+  )
   appendSection(
     lines,
     'Development-only dependencies',
     sorted.filter((pkg) => pkg.role === 'development'),
-    'These packages are used for development, test, or build tooling and are not bundled into shipped artifacts.',
+    'These packages are used for development, test, or build tooling and are not bundled into shipped artifacts.'
   )
   appendSection(
     lines,
     'Orchestration tooling',
     sorted.filter((pkg) => pkg.role === 'orchestration'),
-    'Python / Ansible Galaxy pins installed into the host orchestration environment. GPL-3.0-or-later here is an intentional, reviewed exception — not a general production-JS allow.',
+    'Python / Ansible Galaxy pins installed into the host orchestration environment. GPL-3.0-or-later here is an intentional, reviewed exception — not a general production-JS allow.'
   )
   appendSection(
     lines,
     'Native dependencies',
     sorted.filter((pkg) => pkg.role === 'native'),
-    'Resolved after Expo prebuild (CocoaPods / Gradle / bundled resources). Absent from checkouts that do not contain generated `ios/` or `android/` trees.',
+    'Resolved after Expo prebuild (CocoaPods / Gradle / bundled resources). Absent from checkouts that do not contain generated `ios/` or `android/` trees.'
   )
 
   const notices = sorted.filter((pkg) => pkg.noticeText?.trim())
@@ -802,7 +794,7 @@ export function renderThirdPartyNotices(
       '## Upstream NOTICE files',
       '',
       'The following Apache-2.0 (or similarly NOTICE-bearing) works require preservation of this attribution.',
-      '',
+      ''
     )
     for (const pkg of notices) {
       lines.push(`### ${noticePackageKey(pkg)}`, '', '```', pkg.noticeText?.trim() ?? '', '```', '')
@@ -816,7 +808,7 @@ function appendSection(
   lines: string[],
   title: string,
   packages: readonly NoticePackage[],
-  intro?: string,
+  intro?: string
 ): void {
   lines.push(`## ${title}`, '')
   if (packages.length === 0) {
@@ -855,7 +847,7 @@ export function formatPolicyFailures(failures: readonly LicensePolicyFailure[]):
   return failures
     .map(
       (failure) =>
-        `${failure.name}@${failure.version} license=${JSON.stringify(failure.license)} role=${failure.role} (${failure.reason})`,
+        `${failure.name}@${failure.version} license=${JSON.stringify(failure.license)} role=${failure.role} (${failure.reason})`
     )
     .join('\n')
 }
@@ -866,7 +858,7 @@ export function fingerprintCommentValue(hex: string): string {
 
 /** First install path per name@version from `pnpm licenses list --json --long`. */
 export function pnpmPackagePaths(
-  grouped: Readonly<Record<string, readonly PnpmLicenseEntry[]>>,
+  grouped: Readonly<Record<string, readonly PnpmLicenseEntry[]>>
 ): Map<string, string> {
   const map = new Map<string, string>()
   for (const entries of Object.values(grouped)) {
@@ -886,7 +878,7 @@ export function pnpmPackagePaths(
 
 export function attachNoticeText(
   pkg: NoticePackage,
-  noticeText: string | undefined,
+  noticeText: string | undefined
 ): NoticePackage {
   const trimmed = noticeText?.trim()
   if (!trimmed) return pkg
@@ -900,9 +892,7 @@ export type OrchestrationPin = Readonly<{
 }>
 
 /** Declared orchestration pins (requirements.txt / Galaxy YAML), not JS lockfiles. */
-export function packagesFromOrchestrationPins(
-  pins: readonly OrchestrationPin[],
-): NoticePackage[] {
+export function packagesFromOrchestrationPins(pins: readonly OrchestrationPin[]): NoticePackage[] {
   return pins.map((pin) => ({
     name: pin.name,
     version: pin.version,
@@ -914,19 +904,17 @@ export function packagesFromOrchestrationPins(
 
 export async function fillMissingLicenses(
   packages: readonly NoticePackage[],
-  lookup: (pkg: NoticePackage) => Promise<string>,
+  lookup: (pkg: NoticePackage) => Promise<string>
 ): Promise<NoticePackage[]> {
-  const out: NoticePackage[] = []
-  for (const pkg of packages) {
-    if (!needsLicenseLookup(pkg.license)) {
-      out.push(pkg)
-      continue
-    }
-    const lookedUp = (await lookup(pkg)).trim()
-    const license = lookedUp || defaultLicenseForPackageName(pkg.name) || ''
-    out.push(license ? { ...pkg, license } : pkg)
-  }
-  return out
+  // Lookups are independent, and Promise.all keeps the input order.
+  return Promise.all(
+    packages.map(async (pkg) => {
+      if (!needsLicenseLookup(pkg.license)) return pkg
+      const lookedUp = (await lookup(pkg)).trim()
+      const license = lookedUp || defaultLicenseForPackageName(pkg.name) || ''
+      return license ? { ...pkg, license } : pkg
+    })
+  )
 }
 
 export function needsLicenseLookup(license: string): boolean {
@@ -937,7 +925,7 @@ export function needsLicenseLookup(license: string): boolean {
 /** Fill Unknown / empty licenses from install-tree metadata before policy checks. */
 export function enrichMissingPackageLicenses(
   packages: readonly NoticePackage[],
-  resolve: (pkg: NoticePackage) => string | undefined,
+  resolve: (pkg: NoticePackage) => string | undefined
 ): NoticePackage[] {
   return packages.map((pkg) => {
     if (!needsLicenseLookup(pkg.license)) return pkg

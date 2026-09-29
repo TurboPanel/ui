@@ -38,7 +38,7 @@ const renderOpts = {
 } as const
 
 function pkg(
-  overrides: Partial<NoticePackage> & Pick<NoticePackage, 'name' | 'license'>,
+  overrides: Partial<NoticePackage> & Pick<NoticePackage, 'name' | 'license'>
 ): NoticePackage {
   return {
     version: '1.0.0',
@@ -117,7 +117,7 @@ describe('packagesFromDenoLock', () => {
       {
         '@std/assert@1.0.19': 'MIT',
         'yaml@2.9.0': 'ISC',
-      },
+      }
     )
     expect(packages).toEqual([
       {
@@ -177,8 +177,8 @@ describe('packagesFromMavenPom', () => {
     expect(licenseFromPomXml(xml)).toBe('Apache-2.0')
     expect(
       licenseFromPomXml(
-        `<licenses><license><NAME>  The Apache Software License, Version 2.0  </NAME></license></licenses>`,
-      ),
+        `<licenses><license><NAME>  The Apache Software License, Version 2.0  </NAME></license></licenses>`
+      )
     ).toBe('Apache-2.0')
     expect(packagesFromMavenPom(xml)).toEqual({
       name: 'androidx.core:core',
@@ -231,7 +231,7 @@ describe('packagesFromMavenPom', () => {
 describe('packagesFromPodspecJson', () => {
   it('reads CocoaPods license metadata', () => {
     const spec = packagesFromPodspecJson(
-      JSON.stringify({ name: 'Expo', version: '57.0.14', license: { type: 'MIT' } }),
+      JSON.stringify({ name: 'Expo', version: '57.0.14', license: { type: 'MIT' } })
     )
     expect(spec).toEqual({
       name: 'Expo',
@@ -245,8 +245,8 @@ describe('packagesFromPodspecJson', () => {
   it('accepts a string license and rejects incomplete or invalid JSON', () => {
     expect(
       packagesFromPodspecJson(
-        JSON.stringify({ name: 'Expo', version: '57.0.14', license: 'MIT License' }),
-      ),
+        JSON.stringify({ name: 'Expo', version: '57.0.14', license: 'MIT License' })
+      )
     ).toMatchObject({ license: 'MIT' })
     expect(packagesFromPodspecJson(JSON.stringify({ name: 'Expo' }))).toBeUndefined()
     expect(packagesFromPodspecJson('not-json')).toBeUndefined()
@@ -303,9 +303,7 @@ describe('classifyLicense', () => {
 
   it('allows copyleft only for development-only or orchestration roles', () => {
     expect(classifyLicense('LGPL-3.0-or-later', 'development')).toBeNull()
-    expect(classifyLicense('LGPL-3.0-or-later', 'production')).toBe(
-      'copyleft-production',
-    )
+    expect(classifyLicense('LGPL-3.0-or-later', 'production')).toBe('copyleft-production')
   })
 
   it('defaults @std and @tamagui package names to MIT', () => {
@@ -316,47 +314,35 @@ describe('classifyLicense', () => {
 
   it('allows GPL-3.0-or-later only for orchestration tooling', () => {
     expect(classifyLicense('GPL-3.0-or-later', 'orchestration')).toBeNull()
-    expect(classifyLicense('GPL-3.0-or-later', 'production')).toBe(
-      'copyleft-production',
-    )
+    expect(classifyLicense('GPL-3.0-or-later', 'production')).toBe('copyleft-production')
   })
 
   it('rejects AGPL production dependencies when the repository is not AGPL', () => {
     expect(
       classifyLicense('AGPL-3.0-only', 'production', 'third-party', {
         repoLicense: 'Apache-2.0',
-      }),
+      })
     ).toBe('copyleft-production')
   })
 
   it('rejects unreviewed classes', () => {
     expect(classifyLicense('', 'production')).toBe('missing')
     expect(classifyLicense('UNKNOWN', 'production')).toBe('missing')
-    expect(classifyLicense('SEE LICENSE IN LICENSE.md', 'production')).toBe(
-      'see-license-in',
-    )
+    expect(classifyLicense('SEE LICENSE IN LICENSE.md', 'production')).toBe('see-license-in')
     expect(classifyLicense('LicenseRef-Proprietary', 'production')).toBe('custom')
     expect(classifyLicense('CC-BY-NC-4.0', 'production')).toBe('noncommercial')
     expect(classifyLicense('BUSL-1.1', 'production')).toBe('source-available')
-    expect(classifyLicense('LGPL-3.0-or-later', 'production')).toBe(
-      'copyleft-production',
-    )
-    expect(classifyLicense('AGPL-3.0-or-later', 'production')).toBe(
-      'copyleft-production',
-    )
+    expect(classifyLicense('LGPL-3.0-or-later', 'production')).toBe('copyleft-production')
+    expect(classifyLicense('AGPL-3.0-or-later', 'production')).toBe('copyleft-production')
   })
 
   it('requires every AND operand to be allowed', () => {
     expect(classifyLicense('MIT AND ISC', 'production')).toBeNull()
-    expect(classifyLicense('MIT AND GPL-3.0-only', 'production')).toBe(
-      'copyleft-production',
-    )
+    expect(classifyLicense('MIT AND GPL-3.0-only', 'production')).toBe('copyleft-production')
   })
 
   it('returns the first custom class when every OR operand is unreviewed', () => {
-    expect(classifyLicense('LicenseRef-A OR LicenseRef-B', 'production')).toBe(
-      'custom',
-    )
+    expect(classifyLicense('LicenseRef-A OR LicenseRef-B', 'production')).toBe('custom')
   })
 
   it('splits nested OR/AND expressions without treating inner operators as top-level', () => {
@@ -369,7 +355,7 @@ describe('classifyLicense', () => {
     (license) => {
       expect(classifyLicense(license, 'production')).toBe('copyleft-production')
       expect(classifyLicense(license, 'development')).toBeNull()
-    },
+    }
   )
 })
 
@@ -414,7 +400,7 @@ describe('renderThirdPartyNotices', () => {
           role: 'development',
         }),
       ],
-      renderOpts,
+      renderOpts
     )
     expect(markdown).toContain('are not relicensed by TurboPanel UI')
     expect(markdown).toContain('AGPL-3.0-only')
@@ -445,7 +431,7 @@ describe('renderThirdPartyNotices', () => {
           noticeText: 'Copyright 2020 Example\nThis product includes...',
         }),
       ],
-      renderOpts,
+      renderOpts
     )
     expect(markdown).toContain('## Upstream NOTICE files')
     expect(markdown).toContain('Copyright 2020 Example')
@@ -455,9 +441,7 @@ describe('renderThirdPartyNotices', () => {
 describe('noticesAreCurrent', () => {
   it('ignores trailing whitespace and CRLF', () => {
     const generated = renderThirdPartyNotices([], renderOpts)
-    expect(noticesAreCurrent(`${generated.replaceAll('\n', '\r\n')}\n\n`, generated)).toBe(
-      true,
-    )
+    expect(noticesAreCurrent(`${generated.replaceAll('\n', '\r\n')}\n\n`, generated)).toBe(true)
     expect(noticesAreCurrent(`${generated}stale`, generated)).toBe(false)
   })
 })
@@ -469,11 +453,7 @@ describe('helpers', () => {
       pkg({ name: 'a', version: '2.0.0', license: 'MIT' }),
       pkg({ name: 'a', version: '1.0.0', license: 'MIT' }),
     ])
-    expect(sorted.map((row) => noticeKey(row))).toEqual([
-      'a@1.0.0',
-      'a@2.0.0',
-      'b@2.0.0',
-    ])
+    expect(sorted.map((row) => noticeKey(row))).toEqual(['a@1.0.0', 'a@2.0.0', 'b@2.0.0'])
   })
 
   it('prefers production when merging the same coordinate', () => {
@@ -488,7 +468,7 @@ describe('helpers', () => {
   it('attaches licenses from a lookup map', () => {
     const attached = attachLicensesFromMap(
       [pkg({ name: 'Expo', version: '57.0.14', license: '', role: 'native' })],
-      { 'Expo@57.0.14': 'MIT' },
+      { 'Expo@57.0.14': 'MIT' }
     )
     expect(attached[0]?.license).toBe('MIT')
   })
@@ -512,7 +492,7 @@ describe('helpers', () => {
     expect(paths.get('next@16.2.9')).toBe('node_modules/next')
     const withNotice = attachNoticeText(
       pkg({ name: 'next', version: '16.2.9', license: 'Apache-2.0' }),
-      '  Apache Next NOTICE  ',
+      '  Apache Next NOTICE  '
     )
     expect(withNotice.noticeText).toBe('Apache Next NOTICE')
   })
@@ -546,7 +526,7 @@ describe('enrichMissingPackageLicenses', () => {
         pkg({ name: '@std/assert', license: 'UNKNOWN' }),
         pkg({ name: 'mystery', license: '' }),
       ],
-      (row) => (row.name === 'yaml' ? '  ISC  ' : undefined),
+      (row) => (row.name === 'yaml' ? '  ISC  ' : undefined)
     )
     expect(enriched.map((row) => `${row.name}:${row.license}`)).toEqual([
       'react:MIT',
@@ -560,11 +540,8 @@ describe('enrichMissingPackageLicenses', () => {
 describe('fillMissingLicenses', () => {
   it('looks up only empty license strings', async () => {
     const filled = await fillMissingLicenses(
-      [
-        pkg({ name: 'yaml', license: 'ISC' }),
-        pkg({ name: '@std/assert', license: '' }),
-      ],
-      async (row) => (row.name === '@std/assert' ? 'MIT' : 'SHOULD_NOT_RUN'),
+      [pkg({ name: 'yaml', license: 'ISC' }), pkg({ name: '@std/assert', license: '' })],
+      async (row) => (row.name === '@std/assert' ? 'MIT' : 'SHOULD_NOT_RUN')
     )
     expect(filled[0]?.license).toBe('ISC')
     expect(filled[1]?.license).toBe('MIT')
@@ -572,20 +549,34 @@ describe('fillMissingLicenses', () => {
 
   it('falls back to the package-name default when lookup is blank', async () => {
     const filled = await fillMissingLicenses(
-      [
-        pkg({ name: '@std/assert', license: '' }),
-        pkg({ name: 'mystery', license: '' }),
-      ],
-      async () => '   ',
+      [pkg({ name: '@std/assert', license: '' }), pkg({ name: 'mystery', license: '' })],
+      async () => '   '
     )
     expect(filled[0]?.license).toBe('MIT')
     expect(filled[1]?.license).toBe('')
   })
 
+  it('keeps input order when lookups settle out of order', async () => {
+    const delays: Record<string, number> = { first: 20, second: 0 }
+    const filled = await fillMissingLicenses(
+      [
+        pkg({ name: 'first', license: '' }),
+        pkg({ name: 'kept', license: 'ISC' }),
+        pkg({ name: 'second', license: '' }),
+      ],
+      async (row) => {
+        await new Promise((resolve) => setTimeout(resolve, delays[row.name] ?? 0))
+        return `lic-${row.name}`
+      }
+    )
+    expect(filled.map((row) => row.name)).toEqual(['first', 'kept', 'second'])
+    expect(filled.map((row) => row.license)).toEqual(['lic-first', 'ISC', 'lic-second'])
+  })
+
   it('looks up UNKNOWN sentinels and keeps a blank result when no default exists', async () => {
     const filled = await fillMissingLicenses(
       [pkg({ name: 'mystery', license: 'UNKNOWN' })],
-      async () => '',
+      async () => ''
     )
     expect(filled[0]?.license).toBe('UNKNOWN')
   })
@@ -598,21 +589,15 @@ describe('reviewed package-name defaults and remaining policy classes', () => {
   })
 
   it('allows reviewed sharp LGPL production bindings', () => {
-    expect(
-      classifyLicense('LGPL-3.0-or-later', 'production', '@img/sharp-linux-x64'),
-    ).toBeNull()
-    expect(classifyLicense('LGPL-3.0-or-later', 'production', 'sharp')).toBe(
-      'copyleft-production',
-    )
+    expect(classifyLicense('LGPL-3.0-or-later', 'production', '@img/sharp-linux-x64')).toBeNull()
+    expect(classifyLicense('LGPL-3.0-or-later', 'production', 'sharp')).toBe('copyleft-production')
   })
 
   it('rejects remaining source-available and missing-license sentinels', () => {
     expect(classifyLicense('UNLICENSED', 'production')).toBe('missing')
     expect(classifyLicense('SSPL-1.0', 'production')).toBe('source-available')
     expect(classifyLicense('FSL-1.1-MIT', 'production')).toBe('source-available')
-    expect(classifyLicense('Fair Source License', 'production')).toBe(
-      'source-available',
-    )
+    expect(classifyLicense('Fair Source License', 'production')).toBe('source-available')
     expect(classifyLicense('Elastic-2.0', 'production')).toBe('source-available')
     expect(classifyLicense('commons-clause', 'production')).toBe('noncommercial')
     expect(classifyLicense('SEE TEXT', 'production')).toBe('custom')
@@ -630,7 +615,7 @@ describe('notice parser edge cases', () => {
           { name: 'yaml', versions: ['', '  ', '2.0.0'], license: 'ISC' },
         ],
       },
-      new Set(),
+      new Set()
     )
     expect(packages).toEqual([
       {
@@ -659,19 +644,17 @@ describe('notice parser edge cases', () => {
     expect(
       packages
         .map((row) => `${row.name}@${row.version}:${row.role}`)
-        .sort((a, b) => a.localeCompare(b)),
+        .sort((a, b) => a.localeCompare(b))
     ).toEqual(
       ['@scope/pkg@1.2.3:production', 'explicit-name@9.0.0:production'].sort((a, b) =>
-        a.localeCompare(b),
-      ),
+        a.localeCompare(b)
+      )
     )
     expect(packages.every((row) => row.role === 'production')).toBe(true)
   })
 
   it('skips Deno lock ids that are not name@version', () => {
-    expect(
-      packagesFromDenoLock({ jsr: { '@': {}, '@std/assert@': {} }, npm: {} }, {}),
-    ).toEqual([])
+    expect(packagesFromDenoLock({ jsr: { '@': {}, '@std/assert@': {} }, npm: {} }, {})).toEqual([])
   })
 
   it('skips gradle project lines, duplicates, and unparseable coordinates', () => {
@@ -728,11 +711,11 @@ describe('merge, attach, and render remaining sections', () => {
   it('attaches licenses by package name and ignores blank NOTICE text', () => {
     const attached = attachLicensesFromMap(
       [pkg({ name: 'Expo', version: '57.0.14', license: '', role: 'native' })],
-      { Expo: 'MIT' },
+      { Expo: 'MIT' }
     )
     expect(attached[0]?.license).toBe('MIT')
     expect(attachNoticeText(pkg({ name: 'next', license: 'Apache-2.0' }), '  ')).toEqual(
-      pkg({ name: 'next', license: 'Apache-2.0' }),
+      pkg({ name: 'next', license: 'Apache-2.0' })
     )
   })
 
@@ -756,7 +739,7 @@ describe('merge, attach, and render remaining sections', () => {
       {
         ...renderOpts,
         extraPreamble: 'Bundled fonts keep their own licenses.',
-      },
+      }
     )
     expect(markdown).toContain('Bundled fonts keep their own licenses.')
     expect(markdown).toContain('## Production dependencies')
