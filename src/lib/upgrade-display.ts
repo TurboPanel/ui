@@ -217,6 +217,12 @@ export function upgradeStepOutcome(
       return { tone: 'danger', label: 'Rolled back', detail }
     case 'needs_attention':
       return { tone: 'pending', label: 'Needs attention', detail }
+    // Not started yet: it is waiting its turn (batch) or for the server to come
+    // back online, not preparing anything.
+    case 'pending':
+      return { tone: 'pending', label: 'Queued', detail: null }
+    case 'waiting':
+      return { tone: 'pending', label: 'Waiting for server', detail: null }
     default: {
       const stage = mapStepStatusToPipeline(step.status)
       return {

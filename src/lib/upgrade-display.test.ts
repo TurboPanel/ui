@@ -169,6 +169,16 @@ describe('upgradeStepOutcome', () => {
     )
   })
 
+  it('calls a step that has not started queued, not preparing', () => {
+    expect(upgradeStepOutcome({ status: 'pending' })).toEqual({
+      tone: 'pending',
+      label: 'Queued',
+      detail: null,
+    })
+    expect(upgradeStepOutcome({ status: 'waiting' }).label).toBe('Waiting for server')
+    expect(upgradeStepOutcome({ status: 'preparing' }).label).toBe('Preparing')
+  })
+
   it('keeps showing the stage for a step still in progress', () => {
     expect(upgradeStepOutcome({ status: 'downloading' })).toEqual({
       tone: 'active',
