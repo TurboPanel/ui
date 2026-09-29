@@ -42,6 +42,51 @@ export function buildCounterLabel(version: string | null | undefined): string | 
   return counter.channel === 'canary' ? `Canary #${counter.number}` : `RC ${counter.number}`
 }
 
+function buildHeadline(
+  target: Pick<InstanceUpdateTarget, 'channel' | 'version'>,
+  counter: BuildCounter | null
+): string {
+  if (counter) {
+    return counter.channel === 'rc'
+      ? `RC ${counter.number} (${counter.base})`
+      : `Canary #${counter.number}`
+  }
+  const release = PLAIN_RELEASE.exec(target.version?.trim() ?? '')
+  if (release && target.channel?.trim().toLowerCase() === 'release') return `Release ${release[1]}`
+  return upgradeChannelTitle(target.channel)
+}
+
+/** The localized build time, or null when `builtAt` is missing or not a date. */
+function formatBuiltAt(
+  builtAt: string | null | undefined,
+  options: Readonly<{ locale?: string; timeZone?: string }> | undefined
+): string | null {
+  const trimmed = builtAt?.trim()
+  if (!trimmed) return null
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(options?.locale ?? undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: options?.timeZone,
+  }).format(date)
+}
+
+/** Version, else short commit, else short build id, for a build with no `builtAt`. */
+function buildIdentityFallback(
+  target: Pick<InstanceUpdateTarget, 'version' | 'commit' | 'buildId'>
+): string | null {
+  const version = target.version?.trim()
+  if (version) return `v${version}`
+  const commit = target.commit?.trim()
+  if (commit && commit !== 'unknown') return commit.slice(0, 12)
+  const buildId = target.buildId?.trim()
+  if (buildId) return buildId.slice(0, 12)
+  return null
+}
+
 /**
  * Readable build line from manifest metadata: `Canary #417 · Sep 19, 14:30`,
  * `RC 2 (0.1.3) · Sep 19, 14:30`, `Release 0.1.3 · Sep 19, 14:30`. The build number
@@ -58,39 +103,12 @@ export function formatUpgradeBuildDisplayName(
 ): string {
   if (!target) return 'No package on this channel'
   const counter = parseBuildCounter(target.version)
-  let head = upgradeChannelTitle(target.channel)
-  if (counter) {
-    head =
-      counter.channel === 'rc'
-        ? `RC ${counter.number} (${counter.base})`
-        : `Canary #${counter.number}`
-  } else {
-    const release = PLAIN_RELEASE.exec(target.version?.trim() ?? '')
-    if (release && target.channel?.trim().toLowerCase() === 'release')
-      head = `Release ${release[1]}`
-  }
-  const builtAt = target.builtAt?.trim()
-  if (builtAt) {
-    const date = new Date(builtAt)
-    if (!Number.isNaN(date.getTime())) {
-      const formatted = new Intl.DateTimeFormat(options?.locale ?? undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: options?.timeZone,
-      }).format(date)
-      return `${head} · ${formatted}`
-    }
-  }
+  const head = buildHeadline(target, counter)
+  const formatted = formatBuiltAt(target.builtAt, options)
+  if (formatted !== null) return `${head} · ${formatted}`
   if (counter || head !== upgradeChannelTitle(target.channel)) return head
-  const version = target.version?.trim()
-  if (version) return `${head} · v${version}`
-  const commit = target.commit?.trim()
-  if (commit && commit !== 'unknown') return `${head} · ${commit.slice(0, 12)}`
-  const buildId = target.buildId?.trim()
-  if (buildId) return `${head} · ${buildId.slice(0, 12)}`
-  return head
+  const fallback = buildIdentityFallback(target)
+  return fallback ? `${head} · ${fallback}` : head
 }
 
 function sameCommit(a: string, b: string): boolean {

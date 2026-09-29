@@ -131,7 +131,7 @@ const FAILED_STEP_STATUSES = new Set(['failed', 'rolled_back', 'needs_attention'
  * is not drawn — the screen already says "up to date".
  */
 export function runToShow(
-  response: Pick<UpgradeActiveRunResponse, 'run'> & { lastRun?: RunWithSteps | null } | undefined,
+  response: (Pick<UpgradeActiveRunResponse, 'run'> & { lastRun?: RunWithSteps | null }) | undefined
 ): { run: RunWithSteps | null; finished: boolean } {
   const active = response?.run ?? null
   if (active) return { run: active, finished: false }
@@ -140,9 +140,16 @@ export function runToShow(
   return { run: null, finished: false }
 }
 
+/** What a failed step is called: its phase, or for a fleet step the server it ran on. */
+function failedStepTitle(step: UpgradeStepRow): string {
+  if (step.phase === 'colocated_daemon') return 'Co-located daemon'
+  if (step.phase === 'control_plane') return 'Control plane'
+  return step.serverName ?? step.hostname ?? 'Fleet server'
+}
+
 /** The first step that ended badly, with its explanation. */
 export function runFailure(
-  run: RunWithSteps | null,
+  run: RunWithSteps | null
 ): (UpdateFailureExplanation & { stepTitle: string }) | null {
   if (!run) return null
   const step = run.steps.find((item) => FAILED_STEP_STATUSES.has(item.status))
@@ -159,13 +166,7 @@ export function runFailure(
     }
     return { ...explainUpgradeFailure({ errorCode: run.error }), stepTitle: 'Upgrade' }
   }
-  const stepTitle =
-    step.phase === 'colocated_daemon'
-      ? 'Co-located daemon'
-      : step.phase === 'control_plane'
-        ? 'Control plane'
-        : (step.serverName ?? step.hostname ?? 'Fleet server')
-  return { ...explainUpgradeFailure(step), stepTitle }
+  return { ...explainUpgradeFailure(step), stepTitle: failedStepTitle(step) }
 }
 
 const WAITING_STATUSES = new Set([
@@ -184,8 +185,8 @@ const WAITING_STATUSES = new Set([
  * for {@link UPGRADE_STALL_HINT_MS}; null while it is moving (or finished).
  */
 export function stallHint(
-  step: Pick<UpgradeStepRow, 'status'> & { lastStageAt?: string | null } | null | undefined,
-  nowMs: number,
+  step: (Pick<UpgradeStepRow, 'status'> & { lastStageAt?: string | null }) | null | undefined,
+  nowMs: number
 ): string | null {
   if (!step || !WAITING_STATUSES.has(step.status)) return null
   const at = step.lastStageAt ? Date.parse(step.lastStageAt) : Number.NaN
@@ -206,7 +207,7 @@ export class UpgradeStartTimeoutError extends Error {
 
 export async function withStartTimeout<T>(
   work: Promise<T>,
-  ms: number = UPGRADE_START_TIMEOUT_MS,
+  ms: number = UPGRADE_START_TIMEOUT_MS
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
@@ -234,7 +235,7 @@ export function updateBanner(
     updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
     activeRun: boolean
     dismissedKey: string | null
-  }>,
+  }>
 ): UpdateBanner | null {
   const updates = input.updates
   if (!updates || input.activeRun) return null
@@ -252,7 +253,9 @@ export function updateBanner(
 const DISMISS_KEY = 'turbopanel.update-banner.dismissed'
 
 /** The dismissed build key, or null when storage is unavailable. */
-export function readDismissedUpdateBanner(storage: Pick<Storage, 'getItem'> | undefined): string | null {
+export function readDismissedUpdateBanner(
+  storage: Pick<Storage, 'getItem'> | undefined
+): string | null {
   try {
     return storage?.getItem(DISMISS_KEY) ?? null
   } catch {
@@ -262,7 +265,7 @@ export function readDismissedUpdateBanner(storage: Pick<Storage, 'getItem'> | un
 
 export function writeDismissedUpdateBanner(
   storage: Pick<Storage, 'setItem'> | undefined,
-  key: string,
+  key: string
 ): void {
   try {
     storage?.setItem(DISMISS_KEY, key)
