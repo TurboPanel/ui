@@ -25,6 +25,16 @@
         "custom_domain": true
       }
     },
+    // Staging: the release-candidate environment (deployed from the `staging`
+    // branch). The ui Worker holds the apex as a custom domain; the instance
+    // Worker's routes (turbopanel `env.staging`) take /api/*, /ws/* and /webhook/*.
+    "staging": {
+      "name": "staging-ui",
+      "route": {
+        "pattern": "staging.turbopanel.dev",
+        "custom_domain": true
+      }
+    },
     "live": {
       "name": "ui",
       "route": {
