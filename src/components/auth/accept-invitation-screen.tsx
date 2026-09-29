@@ -93,7 +93,11 @@ export function AcceptInvitationScreenContent() {
     token: normalizeParam(params.token),
     id: normalizeParam(params.id),
   })
-  const linkKey = link ? `${link.kind}:${link.kind === 'token' ? link.token : link.id}` : ''
+  let linkKey = ''
+  if (link) {
+    const linkValue = link.kind === 'token' ? link.token : link.id
+    linkKey = `${link.kind}:${linkValue}`
+  }
   const landingPath = link ? invitationLandingPath(link) : '/sign-in'
   const { session, isLoading: sessionLoading, signOut, refreshSession } = useAuth()
   const { data: instanceInfo } = useAuthStatus()
@@ -369,7 +373,7 @@ function WrongAccount({
       <AuthPrimaryButton
         onPress={() => {
           setBusy(true)
-          onSwitch().finally(() => setBusy(false))
+          void onSwitch().finally(() => setBusy(false))
         }}
         accessibilityLabel="Switch account"
         label="Switch account"

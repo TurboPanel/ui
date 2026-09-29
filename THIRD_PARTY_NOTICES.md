@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:d70520c6b80d760c2c5f971bf147c6a35b3b2e1a3b6b2ac7db31a91bf31ebdec
+pnpm-lock.yaml sha256:0eed14e660be05d5a45fc2433b8c31abb68904234a52974d128c3a7ac8c0f9ca
 -->
 
 ## Production dependencies
@@ -6137,7 +6137,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/unbox-primitive#readme
 
-### undici@7.29.0
+### undici@7.29.1
 
 - License: MIT
 - Homepage: https://undici.nodejs.org

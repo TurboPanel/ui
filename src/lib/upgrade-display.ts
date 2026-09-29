@@ -9,63 +9,162 @@ import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
 
 const PIPELINE_SET = new Set<string>(UPGRADE_STEP_PIPELINE)
 
-/** Human channel label for build names (`canary` → `Canary`). */
+/** Human channel label for build names (`canary` → `Canary`, `rc` → `RC`). */
 export function upgradeChannelTitle(channel: string | null | undefined): string {
   const trimmed = channel?.trim()
   if (!trimmed) return 'Build'
+  if (trimmed.toLowerCase() === 'rc') return 'RC'
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 }
 
 /**
- * Readable build line: `Canary · Sep 19, 14:30` from manifest metadata.
- * Falls back to version or short commit when `builtAt` is missing.
+ * A counter build's version: `0.1.3-canary.417` (canary build 417) or
+ * `0.1.3-rc.2` (release candidate 2 of 0.1.3). The older timestamp canaries
+ * (`0.1.1-canary.20260919-143000-abc1234`) and plain releases have no counter.
+ */
+const COUNTER_BUILD = /^v?(\d+\.\d+\.\d+)-(canary|rc)\.(\d{1,9})$/
+
+/** A plain release version: `0.1.3`. */
+const PLAIN_RELEASE = /^v?(\d+\.\d+\.\d+)$/
+
+export type BuildCounter = Readonly<{ base: string; channel: 'canary' | 'rc'; number: number }>
+
+export function parseBuildCounter(version: string | null | undefined): BuildCounter | null {
+  const match = COUNTER_BUILD.exec(version?.trim() ?? '')
+  if (!match) return null
+  return { base: match[1], channel: match[2] as 'canary' | 'rc', number: Number(match[3]) }
+}
+
+/** `Canary #417`, `RC 2`, or null when the version carries no build counter. */
+export function buildCounterLabel(version: string | null | undefined): string | null {
+  const counter = parseBuildCounter(version)
+  if (!counter) return null
+  return counter.channel === 'canary' ? `Canary #${counter.number}` : `RC ${counter.number}`
+}
+
+function buildHeadline(
+  target: Pick<InstanceUpdateTarget, 'channel' | 'version'>,
+  counter: BuildCounter | null
+): string {
+  if (counter) {
+    return counter.channel === 'rc'
+      ? `RC ${counter.number} (${counter.base})`
+      : `Canary #${counter.number}`
+  }
+  const release = PLAIN_RELEASE.exec(target.version?.trim() ?? '')
+  if (release && target.channel?.trim().toLowerCase() === 'release') return `Release ${release[1]}`
+  return upgradeChannelTitle(target.channel)
+}
+
+/** The localized build time, or null when `builtAt` is missing or not a date. */
+function formatBuiltAt(
+  builtAt: string | null | undefined,
+  options: Readonly<{ locale?: string; timeZone?: string }> | undefined
+): string | null {
+  const trimmed = builtAt?.trim()
+  if (!trimmed) return null
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(options?.locale ?? undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: options?.timeZone,
+  }).format(date)
+}
+
+/** Version, else short commit, else short build id, for a build with no `builtAt`. */
+function buildIdentityFallback(
+  target: Pick<InstanceUpdateTarget, 'version' | 'commit' | 'buildId'>
+): string | null {
+  const version = target.version?.trim()
+  if (version) return `v${version}`
+  const commit = target.commit?.trim()
+  if (commit && commit !== 'unknown') return commit.slice(0, 12)
+  const buildId = target.buildId?.trim()
+  if (buildId) return buildId.slice(0, 12)
+  return null
+}
+
+/**
+ * Readable build line from manifest metadata: `Canary #417 · Sep 19, 14:30`,
+ * `RC 2 (0.1.3) · Sep 19, 14:30`, `Release 0.1.3 · Sep 19, 14:30`. The build number
+ * comes from the version; without a counter (older timestamp canaries, plain
+ * releases) it is the channel alone. Falls back to version or short commit
+ * when `builtAt` is missing.
  */
 export function formatUpgradeBuildDisplayName(
-  target: Pick<InstanceUpdateTarget, 'channel' | 'builtAt' | 'version' | 'commit' | 'buildId'> | null,
-  options?: Readonly<{ locale?: string; timeZone?: string }>,
+  target: Pick<
+    InstanceUpdateTarget,
+    'channel' | 'builtAt' | 'version' | 'commit' | 'buildId'
+  > | null,
+  options?: Readonly<{ locale?: string; timeZone?: string }>
 ): string {
   if (!target) return 'No package on this channel'
-  const channel = upgradeChannelTitle(target.channel)
-  const builtAt = target.builtAt?.trim()
-  if (builtAt) {
-    const date = new Date(builtAt)
-    if (!Number.isNaN(date.getTime())) {
-      const formatted = new Intl.DateTimeFormat(options?.locale ?? undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: options?.timeZone,
-      }).format(date)
-      return `${channel} · ${formatted}`
-    }
+  const counter = parseBuildCounter(target.version)
+  const head = buildHeadline(target, counter)
+  const formatted = formatBuiltAt(target.builtAt, options)
+  if (formatted !== null) return `${head} · ${formatted}`
+  if (counter || head !== upgradeChannelTitle(target.channel)) return head
+  const fallback = buildIdentityFallback(target)
+  return fallback ? `${head} · ${fallback}` : head
+}
+
+function sameCommit(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase()
+  const y = b.trim().toLowerCase()
+  if (x.length < 7 || y.length < 7) return false
+  return x.startsWith(y) || y.startsWith(x)
+}
+
+/**
+ * What a unit reports as installed: `0.1.3-canary.417 · a96b655`. The exact
+ * build label comes from the unit when it knows it (the control plane's build
+ * label); otherwise, when the installed commit is the channel target's commit,
+ * it is that target's version (a promoted rc runs the canary's bytes, so only
+ * the manifest knows which build it is). Otherwise the plain version plus commit.
+ */
+export function installedBuildLabel(
+  installed:
+    | Readonly<{
+        version?: string | null
+        commit?: string | null
+        label?: string | null
+      }>
+    | null
+    | undefined,
+  target?: Pick<InstanceUpdateTarget, 'commit' | 'version'> | null
+): string {
+  if (!installed) return 'Unknown'
+  const commit = installed.commit?.trim() || null
+  let version = installed.label?.trim().replace(/^v/, '') || null
+  if (!version && commit && target?.commit && target.version && sameCommit(commit, target.commit)) {
+    version = target.version.trim().replace(/^v/, '')
   }
-  const version = target.version?.trim()
-  if (version) return `${channel} · v${version}`
-  const commit = target.commit?.trim()
-  if (commit && commit !== 'unknown') return `${channel} · ${commit.slice(0, 12)}`
-  const buildId = target.buildId?.trim()
-  if (buildId) return `${channel} · ${buildId.slice(0, 12)}`
-  return channel
+  version = version ?? (installed.version?.trim() || null)
+  if (version && commit) return `${version} · ${commit.slice(0, 7)}`
+  if (version) return version
+  if (commit) return commit.slice(0, 7)
+  return 'Unknown'
 }
 
 export function upgradeBuildDetailLines(
-  target: Pick<InstanceUpdateTarget, 'version' | 'commit' | 'buildId' | 'manifestUrl'> | null,
+  target: Pick<InstanceUpdateTarget, 'version' | 'commit' | 'buildId' | 'manifestUrl'> | null
 ): { version: string | null; commit: string | null; manifestUrl: string | null } {
   if (!target) {
     return { version: null, commit: null, manifestUrl: null }
   }
   const version = target.version?.trim() || null
   const commitRaw = target.commit?.trim()
-  const commit =
-    commitRaw && commitRaw !== 'unknown' ? commitRaw : target.buildId?.trim() || null
+  const commit = commitRaw && commitRaw !== 'unknown' ? commitRaw : target.buildId?.trim() || null
   const manifestUrl = target.manifestUrl?.trim() || null
   return { version, commit, manifestUrl }
 }
 
 /** Map a step status to the pipeline id used by `WizardSteps`. */
 export function mapStepStatusToPipeline(
-  status: UpgradeStepStatus | null | undefined,
+  status: UpgradeStepStatus | null | undefined
 ): UpgradeStepPipelineId {
   if (!status) return 'preparing'
   if (status === 'done' || status === 'skipped') return 'done'
@@ -118,10 +217,12 @@ export type UpgradeStepOutcome = Readonly<{
  * What a step's row says. A failed, rolled-back, or stuck step reads as that —
  * never as the pipeline stage it stopped on.
  */
-export function upgradeStepOutcome(step: Readonly<{
-  status: UpgradeStepStatus | null | undefined
-  errorCode?: string | null
-}>): UpgradeStepOutcome {
+export function upgradeStepOutcome(
+  step: Readonly<{
+    status: UpgradeStepStatus | null | undefined
+    errorCode?: string | null
+  }>
+): UpgradeStepOutcome {
   const detail = upgradeStepErrorLabel(step.errorCode)
   switch (step.status) {
     case 'done':
@@ -134,6 +235,12 @@ export function upgradeStepOutcome(step: Readonly<{
       return { tone: 'danger', label: 'Rolled back', detail }
     case 'needs_attention':
       return { tone: 'pending', label: 'Needs attention', detail }
+    // Not started yet: it is waiting its turn (batch) or for the server to come
+    // back online, not preparing anything.
+    case 'pending':
+      return { tone: 'pending', label: 'Queued', detail: null }
+    case 'waiting':
+      return { tone: 'pending', label: 'Waiting for server', detail: null }
     default: {
       const stage = mapStepStatusToPipeline(step.status)
       return {
@@ -169,7 +276,7 @@ const TERMINAL_OK = new Set<UpgradeStepStatus>(['done', 'skipped'])
 const TERMINAL_BAD = new Set<UpgradeStepStatus>(['failed', 'rolled_back', 'needs_attention'])
 
 export function summarizeFleetSteps(
-  steps: readonly { status: UpgradeStepStatus; phase: UpgradePhase }[],
+  steps: readonly { status: UpgradeStepStatus; phase: UpgradePhase }[]
 ): FleetProgressSummary {
   const fleet = steps.filter((step) => step.phase === 'fleet')
   let upToDate = 0
@@ -189,21 +296,17 @@ export function summarizeFleetSteps(
 }
 
 export type PlatformUpgradeHeadline =
-  | 'up_to_date'
-  | 'update_available'
-  | 'updating'
-  | 'needs_attention'
+  'up_to_date' | 'update_available' | 'updating' | 'needs_attention'
 
-export function resolvePlatformUpgradeHeadline(input: Readonly<{
-  activeRunStatus: UpgradeRunStatus | null
-  updateAvailable: boolean
-  needsAttentionCount: number
-}>): PlatformUpgradeHeadline {
+export function resolvePlatformUpgradeHeadline(
+  input: Readonly<{
+    activeRunStatus: UpgradeRunStatus | null
+    updateAvailable: boolean
+    needsAttentionCount: number
+  }>
+): PlatformUpgradeHeadline {
   if (input.needsAttentionCount > 0) return 'needs_attention'
-  if (
-    input.activeRunStatus === 'pending' ||
-    input.activeRunStatus === 'running'
-  ) {
+  if (input.activeRunStatus === 'pending' || input.activeRunStatus === 'running') {
     return 'updating'
   }
   if (input.updateAvailable) return 'update_available'

@@ -3,32 +3,19 @@
  * `environment_id` for engine projects created from the catalog.
  */
 
-import {
-  defaultManagedImage,
-  managedAllowedImagesForEngine,
-} from '@/lib/managed-releases'
+import { defaultManagedImage, managedAllowedImagesForEngine } from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
 
-export type ManagedServiceEngine =
-  | 'postgres'
-  | 'mysql'
-  | 'mariadb'
-  | 'redis'
-  | 'clickhouse'
+export type ManagedServiceEngine = 'postgres' | 'mysql' | 'mariadb' | 'redis' | 'clickhouse'
 
 /** Catalog card availability (not runtime status). */
 export type ManagedEngineAvailability = 'available' | 'coming-soon'
 
 /** Runtime status for a managed row (mirrors instance `ManagedStatus`). */
-export type ManagedStatus =
-  | 'provisioning'
-  | 'applying'
-  | 'ready'
-  | 'stopped'
-  | 'failed'
+export type ManagedStatus = 'provisioning' | 'applying' | 'ready' | 'stopped' | 'failed'
 
 export type { ManagedSqlAccessScope }
 
@@ -57,10 +44,7 @@ export type ManagedReplicaClass = 'failover' | 'read'
 /** Failover replica uses recorded switchover; read replica uses the DR route. */
 export type ManagedReplicaPromoteAction = 'switchover' | 'disaster-recovery'
 
-export type ManagedRecoveryKind =
-  | 'automatic-failover'
-  | 'switchover'
-  | 'disaster-recovery'
+export type ManagedRecoveryKind = 'automatic-failover' | 'switchover' | 'disaster-recovery'
 
 export type ManagedRecoveryState =
   | 'detecting'
@@ -93,11 +77,7 @@ export const AUTOMATIC_FAILOVER_BLOCKED_MESSAGE =
   'Automatic failover blocked: unable to verify previous primary is fenced'
 
 /** Private path used for replication (mirrors `PrivateEndpointTransport`). */
-export type ManagedMemberTransport =
-  | 'local'
-  | 'datacenter'
-  | 'fabric'
-  | 'public'
+export type ManagedMemberTransport = 'local' | 'datacenter' | 'fabric' | 'public'
 
 export type ManagedReplicationHealth = {
   state: string
@@ -403,12 +383,10 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_member_exists: 'That server already hosts a member of this cluster.',
   managed_replica_not_promotable:
     'Only failover replicas can be promoted on this path. Convert this replica to failover for a recorded switchover, or use Promote for disaster recovery.',
-  managed_automatic_failover_blocked:
-    AUTOMATIC_FAILOVER_BLOCKED_MESSAGE,
+  managed_automatic_failover_blocked: AUTOMATIC_FAILOVER_BLOCKED_MESSAGE,
   failover_replica_requires_datacenter_transport:
     'Failover replicas must share a datacenter LAN with the primary — TurboFabric and public paths are not allowed.',
-  managed_member_is_primary:
-    'Promote another member first — the primary cannot be removed.',
+  managed_member_is_primary: 'Promote another member first — the primary cannot be removed.',
   managed_no_read_targets:
     'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
   datacenter_required: 'That server is not assigned to a datacenter.',
@@ -418,8 +396,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
   failover_requires_trusted_datacenter: FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
-  peer_tunnel_address_required:
-    `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
+  peer_tunnel_address_required: `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',
   managed_listener_bind_conflict:
     'This cluster mixes members that need different network paths to the same host, so one private listener cannot serve them all. Put the failover replicas and read replicas on a single path (datacenter, ' +
@@ -429,9 +406,8 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_replica_lagging:
     'That replica is still lagging behind the primary. Wait for lag to clear, or promote anyway and accept possible data loss.',
   managed_replica_health_stale:
-    'Replica health has not been observed recently. Refresh status, or promote anyway if the primary is dead.',
-  managed_primary_fence_failed:
-    'Could not stop the current primary — promotion was aborted.',
+    "Replica health has not been observed recently and could not be refreshed just now. Check that the replica's server is online, or promote anyway if the primary is dead.",
+  managed_primary_fence_failed: 'Could not stop the current primary — promotion was aborted.',
   managed_user_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
   managed_database_has_bindings:
@@ -442,12 +418,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Another connection on this service already owns the engine default keys — turn engine defaults off.',
   binding_key_conflict:
     'A variable key from this connection already exists on that service — rename or remove it first.',
-  binding_endpoint_unavailable:
-    "No network path from that service's server to this cluster.",
-  binding_password_unavailable:
-    'Could not decrypt the database password for this connection.',
-  binding_engine_unsupported:
-    'This managed engine does not support service connections yet.',
+  binding_endpoint_unavailable: "No network path from that service's server to this cluster.",
+  binding_password_unavailable: 'Could not decrypt the database password for this connection.',
+  binding_engine_unsupported: 'This managed engine does not support service connections yet.',
   binding_owned_variable:
     'That variable is provided by a connected database and cannot be edited here.',
   database_not_found: 'That database was not found on this cluster.',
@@ -488,7 +461,7 @@ export function memberRoleLabel(role: ManagedMemberRole): string {
 }
 
 export function memberReplicaClassLabel(
-  replicaClass: ManagedReplicaClass | null | undefined,
+  replicaClass: ManagedReplicaClass | null | undefined
 ): string | null {
   if (replicaClass === 'failover') return 'Failover'
   if (replicaClass === 'read') return 'Remote read replica'
@@ -496,16 +469,11 @@ export function memberReplicaClassLabel(
 }
 
 /** Add-replica class picker — longer labels than the row badge. */
-export function memberReplicaClassPickerLabel(
-  replicaClass: ManagedReplicaClass,
-): string {
+export function memberReplicaClassPickerLabel(replicaClass: ManagedReplicaClass): string {
   return replicaClass === 'failover' ? 'Failover replica' : 'Remote/read replica'
 }
 
-export function memberReadTrafficLabel(
-  role: ManagedMemberRole,
-  readEligible: boolean,
-): string {
+export function memberReadTrafficLabel(role: ManagedMemberRole, readEligible: boolean): string {
   if (role === 'primary') return 'Read/write'
   return readEligible ? 'Serves reads' : 'Standby only'
 }
@@ -513,7 +481,7 @@ export function memberReadTrafficLabel(
 export const MEMBER_MANUAL_DR_CANDIDATE_LABEL = 'Manual DR candidate'
 
 export function managedReplicaPromoteAction(
-  replicaClass: ManagedReplicaClass | null | undefined,
+  replicaClass: ManagedReplicaClass | null | undefined
 ): ManagedReplicaPromoteAction | null {
   if (replicaClass === 'failover') return 'switchover'
   if (replicaClass === 'read') return 'disaster-recovery'
@@ -555,7 +523,7 @@ export function managedRecoveryStateLabel(state: ManagedRecoveryState): string {
 }
 
 export function managedRecoveryBanner(
-  recovery: ManagedRecoveryRecord | null | undefined,
+  recovery: ManagedRecoveryRecord | null | undefined
 ): { kind: 'blocked' | 'failed' | 'in-flight'; text: string } | null {
   if (!recovery || recovery.state === 'completed') return null
   if (recovery.state === 'blocked') {
@@ -576,9 +544,7 @@ export function managedRecoveryBanner(
   }
 }
 
-export function memberTransportLabel(
-  transport: ManagedMemberTransport | null | undefined,
-): string {
+export function memberTransportLabel(transport: ManagedMemberTransport | null | undefined): string {
   switch (transport) {
     case 'local':
       return 'Local'
@@ -649,17 +615,14 @@ function formatCompactBytes(bytes: number): string {
  * Pair with {@link replicationStateLabel}; never convey lag by color alone.
  */
 export function formatReplicationLag(
-  health: ManagedReplicationHealth | null | undefined,
+  health: ManagedReplicationHealth | null | undefined
 ): string | null {
   if (!health) return null
   const parts: string[] = []
   if (typeof health.lagBytes === 'number' && Number.isFinite(health.lagBytes)) {
     parts.push(`${formatCompactBytes(health.lagBytes)} behind`)
   }
-  if (
-    typeof health.lagSeconds === 'number' &&
-    Number.isFinite(health.lagSeconds)
-  ) {
+  if (typeof health.lagSeconds === 'number' && Number.isFinite(health.lagSeconds)) {
     const seconds =
       health.lagSeconds >= 10
         ? `${Math.round(health.lagSeconds)}s`
@@ -673,15 +636,28 @@ export function formatReplicationLag(
   return parts.length > 0 ? parts.join('') : null
 }
 
-export function managedCatalogEntryForCode(
-  code: string,
-): ManagedServiceCatalogEntry | undefined {
+/**
+ * What the Refresh action tells the operator. `null` when every replica
+ * answered (the refreshed values speak for themselves). Structural type so the
+ * helper stays free of the API module.
+ */
+export function managedHealthRefreshNotice(
+  result: Readonly<{ observed: number; unavailable: number }> | null | undefined
+): string | null {
+  if (!result || result.unavailable <= 0) return null
+  const noun = result.unavailable === 1 ? 'replica' : 'replicas'
+  const lead =
+    result.observed > 0
+      ? `Refreshed ${result.observed} of ${result.observed + result.unavailable} replicas.`
+      : 'No replica answered.'
+  return `${lead} Showing the last known health for ${result.unavailable} ${noun} (offline, not yet updated, or not responding).`
+}
+
+export function managedCatalogEntryForCode(code: string): ManagedServiceCatalogEntry | undefined {
   return MANAGED_SERVICE_CATALOG.find((entry) => entry.engine === code)
 }
 
-export function sortManagedCatalogEntries<T extends { code: string }>(
-  entries: readonly T[],
-): T[] {
+export function sortManagedCatalogEntries<T extends { code: string }>(entries: readonly T[]): T[] {
   return [...entries].sort((a, b) => {
     const aEntry = managedCatalogEntryForCode(a.code)
     const bEntry = managedCatalogEntryForCode(b.code)
@@ -697,7 +673,7 @@ export function sortManagedCatalogEntries<T extends { code: string }>(
 
 /** Topology column label for the org managed overview table. */
 export function formatClusterTopologyLabel(
-  members: readonly ManagedMemberRecord[] | null | undefined,
+  members: readonly ManagedMemberRecord[] | null | undefined
 ): string {
   const list = members ?? []
   const replicaCount = list.filter((m) => m.role === 'replica').length
@@ -707,7 +683,7 @@ export function formatClusterTopologyLabel(
 }
 
 export function clusterHasUnhealthyMember(
-  members: readonly ManagedMemberRecord[] | null | undefined,
+  members: readonly ManagedMemberRecord[] | null | undefined
 ): boolean {
   return (members ?? []).some((m) => {
     if (!m.status) return false

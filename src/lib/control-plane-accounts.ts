@@ -189,9 +189,10 @@ async function resolveStorage(): Promise<ControlPlaneStorage> {
 const memoryBag: { value: string | null } = { value: null }
 
 const memoryStorage: ControlPlaneStorage = {
-  read: async () => memoryBag.value,
-  write: async (value) => {
+  read: () => Promise.resolve(memoryBag.value),
+  write: (value) => {
     memoryBag.value = value
+    return Promise.resolve()
   },
 }
 

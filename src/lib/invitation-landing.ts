@@ -66,7 +66,7 @@ export function isInvitationNotFound(err: unknown): boolean {
 function idLinkView(
   link: { kind: 'id'; id: string },
   input: InvitationLandingInput,
-  preview: InvitationPreview | undefined,
+  preview: InvitationPreview | undefined
 ): InvitationLandingView {
   const organizationName = preview?.organizationName ?? 'this organization'
   if (input.sessionEmail !== null) {
@@ -80,30 +80,32 @@ function idLinkView(
   return { kind: 'sign-in-to-accept', organizationName, invitationId: link.id }
 }
 
-export function invitationLandingView(input: InvitationLandingInput): InvitationLandingView {
-  const link = input.link
-  if (!link) return { kind: 'missing-link' }
-  if (input.sessionLoading || input.previewLoading) return { kind: 'loading' }
+/** The preview route failed: a gone invitation, or a retry (an id link can still sign in). */
+function previewFailureView(
+  link: InvitationLink,
+  input: InvitationLandingInput
+): InvitationLandingView {
+  if (isInvitationNotFound(input.previewError)) return { kind: 'not-found' }
+  // An old id link can still be accepted after sign-in; the server checks the email.
+  return link.kind === 'id' ? idLinkView(link, input, undefined) : { kind: 'error' }
+}
 
-  if (input.previewError !== undefined && input.previewError !== null) {
-    if (isInvitationNotFound(input.previewError)) return { kind: 'not-found' }
-    // An old id link can still be accepted after sign-in; the server checks the email.
-    return link.kind === 'id' ? idLinkView(link, input, undefined) : { kind: 'error' }
-  }
-  const preview = input.preview
-  if (!preview) return { kind: 'loading' }
+/** A pending invitation reached by its secret token. */
+function tokenLinkView(
+  input: InvitationLandingInput,
+  preview: InvitationPreview
+): InvitationLandingView {
   const organizationName = preview.organizationName
-
-  if (preview.status !== 'pending') {
-    return { kind: 'unavailable', status: preview.status, organizationName }
-  }
-  if (link.kind === 'id') return idLinkView(link, input, preview)
-
   const invitedEmail = preview.email ?? ''
   const invitationId = preview.invitationId ?? ''
   if (input.sessionEmail !== null) {
     if (invitedEmail && !sameEmail(input.sessionEmail, invitedEmail)) {
-      return { kind: 'wrong-account', organizationName, signedInAs: input.sessionEmail, invitedEmail }
+      return {
+        kind: 'wrong-account',
+        organizationName,
+        signedInAs: input.sessionEmail,
+        invitedEmail,
+      }
     }
     return { kind: 'accept', organizationName, inviterName: preview.inviterName, invitationId }
   }
@@ -112,10 +114,31 @@ export function invitationLandingView(input: InvitationLandingInput): Invitation
     : { kind: 'create-password', organizationName, email: invitedEmail }
 }
 
+export function invitationLandingView(input: InvitationLandingInput): InvitationLandingView {
+  const link = input.link
+  if (!link) return { kind: 'missing-link' }
+  if (input.sessionLoading || input.previewLoading) return { kind: 'loading' }
+
+  if (input.previewError !== undefined && input.previewError !== null) {
+    return previewFailureView(link, input)
+  }
+  const preview = input.preview
+  if (!preview) return { kind: 'loading' }
+
+  if (preview.status !== 'pending') {
+    return {
+      kind: 'unavailable',
+      status: preview.status,
+      organizationName: preview.organizationName,
+    }
+  }
+  return link.kind === 'id' ? idLinkView(link, input, preview) : tokenLinkView(input, preview)
+}
+
 /** One line for the expired / revoked / already-used states. */
 export function unavailableInvitationCopy(
   status: 'expired' | 'accepted' | 'revoked',
-  organizationName: string,
+  organizationName: string
 ): string {
   if (status === 'accepted') {
     return `This invitation to ${organizationName} has already been accepted. Sign in to open it.`
@@ -141,5 +164,7 @@ export function invitationActionErrorCopy(err: unknown): string {
 
 /** The create-password submit found an existing account after all (raced sign-up). */
 export function isAccountExistsError(err: unknown): boolean {
-  return err instanceof Error && /HTTP 409\b/.test(err.message) && err.message.includes('account_exists')
+  return (
+    err instanceof Error && /HTTP 409\b/.test(err.message) && err.message.includes('account_exists')
+  )
 }

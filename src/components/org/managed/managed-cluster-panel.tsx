@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { RefreshHealthRow } from '@/components/org/managed/refresh-health-row'
 import {
   Button,
   ButtonRow,
@@ -39,15 +40,9 @@ import {
   type ReplicaServerEligibility,
 } from '@/lib/managed-replica-eligibility'
 import { formatServerDatacenterNames } from '@/lib/datacenter-list'
-import {
-  buildDatacenterPolicyMap,
-  describeDatacenterTransport,
-} from '@/lib/datacenter-routing'
+import { buildDatacenterPolicyMap, describeDatacenterTransport } from '@/lib/datacenter-routing'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import {
-  datacenterHref,
-  serversDatacentersHref,
-} from '@/lib/org-navigation'
+import { datacenterHref, serversDatacentersHref } from '@/lib/org-navigation'
 import {
   MANAGED_PRIMARY_FENCE_FAILED_ERROR,
   MANAGED_REPLICA_HEALTH_STALE_ERROR,
@@ -100,9 +95,8 @@ function resolveHealthLine(member: ManagedMemberRecord): string {
   }
   const lag = formatReplicationLag(member.replication)
   return (
-    [replicationStateLabel(member.replication?.state ?? null), lag]
-      .filter(Boolean)
-      .join(' · ') || '—'
+    [replicationStateLabel(member.replication?.state ?? null), lag].filter(Boolean).join(' · ') ||
+    '—'
   )
 }
 
@@ -125,11 +119,7 @@ export function ManagedClusterPanel({
   canManage: boolean
   busy: boolean
   lastError?: string | null
-  onRegisterCommand: (
-    commandId: string,
-    label: string,
-    serverId?: string,
-  ) => void
+  onRegisterCommand: (commandId: string, label: string, serverId?: string) => void
 }>) {
   const router = useRouter()
   const serversQuery = useOrgServers(orgId)
@@ -137,10 +127,7 @@ export function ManagedClusterPanel({
   const fabricQuery = useOrgFabric(orgId)
   const addReplica = useAddManagedReplica(orgId, environmentId)
   const updateRead = useUpdateManagedMemberReadEligible(orgId, environmentId)
-  const updateReplicaClass = useUpdateManagedMemberReplicaClass(
-    orgId,
-    environmentId,
-  )
+  const updateReplicaClass = useUpdateManagedMemberReplicaClass(orgId, environmentId)
   const removeMember = useRemoveManagedMember(orgId, environmentId)
   const promoteMember = usePromoteManagedMember(orgId, environmentId)
   const resyncMember = useResyncManagedMember(orgId, environmentId)
@@ -165,7 +152,7 @@ export function ManagedClusterPanel({
       (fabricQuery.data?.relays ?? []).map((relay) => ({
         serverId: relay.serverId,
       })),
-    [fabricQuery.data?.relays],
+    [fabricQuery.data?.relays]
   )
 
   const serverById = useMemo(() => {
@@ -196,7 +183,7 @@ export function ManagedClusterPanel({
         fabricRelays,
         replicaClass,
       }),
-    [servers, datacenters, members, primary?.serverId, fabricRelays, replicaClass],
+    [servers, datacenters, members, primary?.serverId, fabricRelays, replicaClass]
   )
 
   const eligibilityById = useMemo(() => {
@@ -206,12 +193,11 @@ export function ManagedClusterPanel({
 
   const recoveryBanner = managedRecoveryBanner(recovery)
   const disasterMember = disasterMemberId
-    ? members.find((member) => member.id === disasterMemberId) ?? null
+    ? (members.find((member) => member.id === disasterMemberId) ?? null)
     : null
   const confirmName = managedDisplayName.trim()
   const promoteTypedOk =
-    promoteConfirmName.trim().length > 0 &&
-    promoteConfirmName.trim() === confirmName
+    promoteConfirmName.trim().length > 0 && promoteConfirmName.trim() === confirmName
 
   const siteLabel = (serverId: string): string => {
     const server = serverById.get(serverId)
@@ -225,15 +211,13 @@ export function ManagedClusterPanel({
   const policies = useMemo(() => buildDatacenterPolicyMap(datacenters), [datacenters])
   const datacenterNameById = useMemo(
     () => new Map(datacenters.map((dc) => [dc.id, dc.name?.trim() || dc.id])),
-    [datacenters],
+    [datacenters]
   )
   const datacenterIdsOf = (serverId: string | null): string[] =>
-    serverId
-      ? (serverById.get(serverId)?.datacenters ?? []).map((row) => row.id)
-      : []
+    serverId ? (serverById.get(serverId)?.datacenters ?? []).map((row) => row.id) : []
   const transportLabel = (
     serverId: string,
-    transport: ManagedMemberTransport | null | undefined,
+    transport: ManagedMemberTransport | null | undefined
   ): string => {
     const base = memberTransportLabel(transport)
     if (transport !== 'datacenter' || !primary || serverId === primary.serverId) {
@@ -281,10 +265,7 @@ export function ManagedClusterPanel({
     }
   }
 
-  const handleToggleReads = async (
-    member: ManagedMemberRecord,
-    next: boolean,
-  ) => {
+  const handleToggleReads = async (member: ManagedMemberRecord, next: boolean) => {
     setWorking(true)
     setError(null)
     try {
@@ -394,10 +375,7 @@ export function ManagedClusterPanel({
 
   const disabled = busy || working || !canManage
 
-  const openNetworkReason = (
-    reason: ReplicaIneligibleReason,
-    serverId: string,
-  ) => {
+  const openNetworkReason = (reason: ReplicaIneligibleReason, serverId: string) => {
     const eligibilityRow = eligibilityById.get(serverId)
     if (reason === 'no-datacenter') {
       router.push(serversDatacentersHref(orgId) as Href)
@@ -407,9 +385,7 @@ export function ManagedClusterPanel({
       (reason === 'no-private-cidr' || reason === 'untrusted-datacenter') &&
       eligibilityRow?.candidateDatacenterId
     ) {
-      router.push(
-        datacenterHref(orgId, eligibilityRow.candidateDatacenterId) as Href,
-      )
+      router.push(datacenterHref(orgId, eligibilityRow.candidateDatacenterId) as Href)
       return
     }
     if (reason === 'no-private-path') {
@@ -435,11 +411,17 @@ export function ManagedClusterPanel({
           accessibilityRole="alert"
           accessibilityLabel={recoveryBanner.text}
         >
-          <Text style={panelStyles.calloutWarningText}>
-            {recoveryBanner.text}
-          </Text>
+          <Text style={panelStyles.calloutWarningText}>{recoveryBanner.text}</Text>
         </View>
       ) : null}
+
+      <RefreshHealthRow
+        orgId={orgId}
+        environmentId={environmentId}
+        hasReplicas={members.some((member) => member.role === 'replica')}
+        disabled={!canManage || busy || working}
+        onError={setError}
+      />
 
       <View style={styles.list}>
         {members.map((member) => (
@@ -477,9 +459,7 @@ export function ManagedClusterPanel({
             }}
           />
         ))}
-        {members.length === 0 ? (
-          <EmptyState title="No cluster members yet." />
-        ) : null}
+        {members.length === 0 ? <EmptyState title="No cluster members yet." /> : null}
       </View>
 
       {promoteMemberId ? (
@@ -617,17 +597,13 @@ function ClusterMemberRow({
           </Text>
           <View style={styles.chipRow}>
             <View style={liveReads ? styles.readsChip : styles.standbyChip}>
-              <Text
-                style={liveReads ? styles.readsChipText : styles.standbyChipText}
-              >
+              <Text style={liveReads ? styles.readsChipText : styles.standbyChipText}>
                 {memberReadTrafficLabel(member.role, member.readEligible)}
               </Text>
             </View>
             {isReadReplica ? (
               <View style={styles.standbyChip}>
-                <Text style={styles.standbyChipText}>
-                  {MEMBER_MANUAL_DR_CANDIDATE_LABEL}
-                </Text>
+                <Text style={styles.standbyChipText}>{MEMBER_MANUAL_DR_CANDIDATE_LABEL}</Text>
               </View>
             ) : null}
             <Text style={styles.healthText}>{healthLine}</Text>
@@ -638,9 +614,7 @@ function ClusterMemberRow({
       {canManage && member.role === 'replica' ? (
         <ButtonRow>
           <Button
-            label={
-              member.readEligible ? 'Stop serving reads' : 'Serve read traffic'
-            }
+            label={member.readEligible ? 'Stop serving reads' : 'Serve read traffic'}
             size="sm"
             disabled={disabled}
             onPress={onToggleReads}
@@ -676,12 +650,7 @@ function ClusterMemberRow({
               />
             </>
           ) : (
-            <Button
-              label="Promote"
-              size="sm"
-              disabled={disabled}
-              onPress={onStartPromote}
-            />
+            <Button label="Promote" size="sm" disabled={disabled} onPress={onStartPromote} />
           )}
         </ButtonRow>
       ) : null}
@@ -737,8 +706,7 @@ function PromoteDialog({
             {forceGateMessage ?? 'Replica health gate blocked promotion.'}
           </Text>
           <Text style={panelStyles.detailLine}>
-            Promote anyway accepts possible data loss if the primary still has
-            unreplicated commits.
+            Promote anyway accepts possible data loss if the primary still has unreplicated commits.
           </Text>
           <Button
             label="Promote anyway"
@@ -789,20 +757,16 @@ function DisasterRecoveryDialog({
 
   return (
     <View style={[panelStyles.detailCard, styles.promoteCard]}>
-      <Text style={panelStyles.detailTitle}>
-        Promote for disaster recovery
-      </Text>
-      <Text style={panelStyles.detailLine}>
-        Current primary: {primaryLabel ?? '—'}
-      </Text>
+      <Text style={panelStyles.detailTitle}>Promote for disaster recovery</Text>
+      <Text style={panelStyles.detailLine}>Current primary: {primaryLabel ?? '—'}</Text>
       <Text style={panelStyles.detailLine}>
         Target: {targetLabel} · {targetSite} · {lagLabel}
       </Text>
       <View style={panelStyles.calloutWarning}>
         <Text style={panelStyles.calloutWarningText}>
-          This accepts possible data loss. Unreplicated commits on the old
-          primary will not be recovered. Remaining failover replicas outside
-          the new primary datacenter become remote read replicas.
+          This accepts possible data loss. Unreplicated commits on the old primary will not be
+          recovered. Remaining failover replicas outside the new primary datacenter become remote
+          read replicas.
         </Text>
       </View>
       <Text style={panelStyles.muted}>Type {confirmName} to confirm.</Text>
@@ -840,7 +804,7 @@ function ServerOptionRow({
   eligibilityRow: ReplicaServerEligibility | undefined
   predictedTransportLabel: (
     serverId: string,
-    transport: ManagedMemberTransport | null | undefined,
+    transport: ManagedMemberTransport | null | undefined
   ) => string
   selected: boolean
   disabled: boolean
@@ -859,11 +823,7 @@ function ServerOptionRow({
 
   return (
     <Pressable
-      style={[
-        styles.pickerRow,
-        selected && styles.pickerRowSelected,
-        webPointer,
-      ]}
+      style={[styles.pickerRow, selected && styles.pickerRowSelected, webPointer]}
       disabled={disabled || !eligible}
       onPress={() => {
         if (eligible) onSelect()
@@ -872,27 +832,16 @@ function ServerOptionRow({
       accessibilityState={{ selected, disabled: disabled || !eligible }}
       accessibilityLabel={label}
     >
-      <Text style={[styles.pickerLabel, !eligible && styles.pickerDisabled]}>
-        {label}
-      </Text>
+      <Text style={[styles.pickerLabel, !eligible && styles.pickerDisabled]}>{label}</Text>
       {eligible && predicted ? (
-        <Text style={styles.reasonText}>
-          {predictedTransportLabel(server.id, predicted)}
-        </Text>
+        <Text style={styles.reasonText}>{predictedTransportLabel(server.id, predicted)}</Text>
       ) : null}
       {!eligible && reason ? (
         <View style={styles.reasonRow}>
-          <Text style={styles.reasonText}>
-            {replicaIneligibleReasonLabel(reason)}
-          </Text>
+          <Text style={styles.reasonText}>{replicaIneligibleReasonLabel(reason)}</Text>
           {showNetworkLink && (
-            <Pressable
-              onPress={() => onOpenNetworkReason(reason)}
-              style={webPointer}
-            >
-              <Text style={styles.linkText}>
-                Set up private network
-              </Text>
+            <Pressable onPress={() => onOpenNetworkReason(reason)} style={webPointer}>
+              <Text style={styles.linkText}>Set up private network</Text>
             </Pressable>
           )}
         </View>
@@ -922,7 +871,7 @@ function AddReplicaForm({
   eligibilityById: ReadonlyMap<string, ReplicaServerEligibility>
   predictedTransportLabel: (
     serverId: string,
-    transport: ManagedMemberTransport | null | undefined,
+    transport: ManagedMemberTransport | null | undefined
   ) => string
   selectedServerId: string | null
   disabled: boolean
@@ -960,9 +909,7 @@ function AddReplicaForm({
             selected={selectedServerId === server.id}
             disabled={disabled}
             onSelect={() => onSelectServer(server.id)}
-            onOpenNetworkReason={(reason) =>
-              onOpenNetworkReason(reason, server.id)
-            }
+            onOpenNetworkReason={(reason) => onOpenNetworkReason(reason, server.id)}
           />
         ))}
       <Checkbox
@@ -1009,7 +956,7 @@ function AddReplicaBlock({
   eligibilityById: ReadonlyMap<string, ReplicaServerEligibility>
   predictedTransportLabel: (
     serverId: string,
-    transport: ManagedMemberTransport | null | undefined,
+    transport: ManagedMemberTransport | null | undefined
   ) => string
   selectedServerId: string | null
   onSelectServer: (serverId: string) => void

@@ -110,6 +110,17 @@ describe('applyAndroidNetworkSecurityConfig', () => {
   })
 })
 
+describe('applyAndroidNetworkSecurityConfig without existing attributes', () => {
+  it('adds the config to an application that has no attributes yet', () => {
+    const applied = applyAndroidNetworkSecurityConfig({
+      manifest: { application: [{}] },
+    }) as { manifest: { application: { $: Record<string, string> }[] } }
+    expect(applied.manifest.application[0]?.$).toEqual({
+      'android:networkSecurityConfig': '@xml/network_security_config',
+    })
+  })
+})
+
 describe('withAndroidUserCaTrust', () => {
   it('registers user-CA trust on shipped builds and keeps Metro cleartext in development', () => {
     const expoBase = {

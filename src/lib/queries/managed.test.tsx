@@ -25,6 +25,7 @@ import {
   useOrganizationManaged,
   usePromoteManagedDisasterRecovery,
   usePromoteManagedMember,
+  useRefreshManagedStatus,
   useRemoveManagedMember,
   useRestoreManagedBackup,
   useResyncManagedMember,
@@ -158,7 +159,7 @@ function statusSnapshot(status: string) {
 function resolveStatusPollInterval(
   client: ReturnType<typeof createAppQueryClient>,
   orgId: string,
-  environmentId: string,
+  environmentId: string
 ): number | false {
   const query = client.getQueryCache().find({
     queryKey: queryKeys.org(orgId).managed.status(environmentId),
@@ -166,9 +167,7 @@ function resolveStatusPollInterval(
   if (!query) {
     throw new TypeError('expected managed status query in cache')
   }
-  const interval = (
-    query.options as { refetchInterval?: unknown }
-  ).refetchInterval
+  const interval = (query.options as { refetchInterval?: unknown }).refetchInterval
   if (typeof interval !== 'function') {
     throw new TypeError('expected refetchInterval function')
   }
@@ -199,10 +198,9 @@ describe('managed query hooks', () => {
   })
 
   it('useOrganizationManaged stays idle when disabled or orgId is empty', () => {
-    const disabled = renderHook(
-      () => useOrganizationManaged(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useOrganizationManaged(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
     const empty = renderHook(() => useOrganizationManaged(''), {
@@ -225,10 +223,9 @@ describe('managed query hooks', () => {
       recovery: null,
     })
 
-    const { result } = renderHook(
-      () => useEnvironmentManaged(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useEnvironmentManaged(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -239,7 +236,7 @@ describe('managed query hooks', () => {
   it('useEnvironmentManaged stays idle when disabled or ids are empty', () => {
     const disabled = renderHook(
       () => useEnvironmentManaged(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
@@ -253,10 +250,9 @@ describe('managed query hooks', () => {
   it('useManagedStatus loads status snapshot', async () => {
     fetchManagedStatus.mockResolvedValueOnce(statusSnapshot('running'))
 
-    const { result } = renderHook(
-      () => useManagedStatus(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useManagedStatus(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -269,10 +265,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const statusKey = queryKeys.org(orgId).managed.status(environmentId)
 
-    const { result } = renderHook(
-      () => useManagedStatus(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useManagedStatus(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
@@ -285,11 +280,60 @@ describe('managed query hooks', () => {
     expect(resolveStatusPollInterval(client, orgId, environmentId)).toBe(false)
   })
 
+  it('useManagedStatus reads without the refresh option', async () => {
+    fetchManagedStatus.mockResolvedValueOnce(statusSnapshot('ready'))
+    const { result } = renderHook(() => useManagedStatus(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    // The background read never carries the probe option: it must not wake daemons.
+    expect(fetchManagedStatus).toHaveBeenCalledWith(environmentId)
+  })
+
+  it('useRefreshManagedStatus asks for a refresh, seeds the status cache and refetches the detail', async () => {
+    const client = createAppQueryClient()
+    const statusKey = queryKeys.org(orgId).managed.status(environmentId)
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const refreshed = {
+      ...statusSnapshot('ready'),
+      healthRefresh: { observed: 1, unavailable: 0 },
+    }
+    fetchManagedStatus.mockResolvedValueOnce(refreshed)
+
+    const { result } = renderHook(() => useRefreshManagedStatus(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run()).resolves.toMatchObject({
+      ok: true,
+      value: { healthRefresh: { observed: 1, unavailable: 0 } },
+    })
+    expect(fetchManagedStatus).toHaveBeenCalledWith(environmentId, { refresh: true })
+    expect(client.getQueryData(statusKey)).toEqual(refreshed)
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.environment(environmentId),
+      })
+    })
+  })
+
+  it('useRefreshManagedStatus reports a failed refresh without touching the cache', async () => {
+    const client = createAppQueryClient()
+    const statusKey = queryKeys.org(orgId).managed.status(environmentId)
+    fetchManagedStatus.mockRejectedValueOnce(new Error('HTTP 503: unavailable'))
+
+    const { result } = renderHook(() => useRefreshManagedStatus(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run()).resolves.toMatchObject({ ok: false })
+    expect(client.getQueryData(statusKey)).toBeUndefined()
+  })
+
   it('useManagedStatus stays idle when disabled or ids are empty', () => {
-    const disabled = renderHook(
-      () => useManagedStatus(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useManagedStatus(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
     const emptyOrg = renderHook(() => useManagedStatus('', environmentId), {
@@ -313,10 +357,9 @@ describe('managed query hooks', () => {
       ],
     })
 
-    const { result } = renderHook(
-      () => useManagedUsers(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useManagedUsers(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -326,10 +369,9 @@ describe('managed query hooks', () => {
   })
 
   it('useManagedUsers stays idle when disabled or ids are empty', () => {
-    const disabled = renderHook(
-      () => useManagedUsers(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useManagedUsers(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
     const empty = renderHook(() => useManagedUsers(orgId, ''), {
@@ -342,10 +384,9 @@ describe('managed query hooks', () => {
   it('useManagedDatabases loads databases', async () => {
     fetchManagedDatabases.mockResolvedValueOnce({ databases: ['app', 'analytics'] })
 
-    const { result } = renderHook(
-      () => useManagedDatabases(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useManagedDatabases(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -357,7 +398,7 @@ describe('managed query hooks', () => {
   it('useManagedDatabases stays idle when disabled or ids are empty', () => {
     const disabled = renderHook(
       () => useManagedDatabases(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
@@ -381,10 +422,9 @@ describe('managed query hooks', () => {
       ],
     })
 
-    const { result } = renderHook(
-      () => useManagedBackups(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useManagedBackups(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -393,10 +433,9 @@ describe('managed query hooks', () => {
   })
 
   it('useManagedBackups stays idle when disabled or ids are empty', () => {
-    const disabled = renderHook(
-      () => useManagedBackups(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useManagedBackups(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
     const empty = renderHook(() => useManagedBackups(orgId, ''), {
@@ -407,10 +446,9 @@ describe('managed query hooks', () => {
   })
 
   it('useManagedLogs stays disabled unless explicitly enabled', () => {
-    const { result } = renderHook(
-      () => useManagedLogs(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useManagedLogs(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchManagedLogs).not.toHaveBeenCalled()
   })
@@ -420,7 +458,7 @@ describe('managed query hooks', () => {
 
     const { result } = renderHook(
       () => useManagedLogs(orgId, environmentId, { enabled: true, tail: 50 }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
 
     await waitFor(() => {
@@ -430,10 +468,9 @@ describe('managed query hooks', () => {
   })
 
   it('useManagedLogs stays idle with empty ids even when enabled', () => {
-    const { result } = renderHook(
-      () => useManagedLogs('', environmentId, { enabled: true }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useManagedLogs('', environmentId, { enabled: true }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchManagedLogs).not.toHaveBeenCalled()
   })
@@ -461,10 +498,9 @@ describe('managed query hooks', () => {
   })
 
   it('useOrganizationCa stays idle when disabled or orgId is empty', () => {
-    const disabled = renderHook(
-      () => useOrganizationCa(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useOrganizationCa(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(disabled.result.current.fetchStatus).toBe('idle')
 
     const empty = renderHook(() => useOrganizationCa(''), {
@@ -483,10 +519,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateEnvironmentManaged(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateEnvironmentManaged(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run(undefined)).resolves.toMatchObject({
       ok: true,
@@ -505,10 +540,9 @@ describe('managed query hooks', () => {
 
   it('useCreateEnvironmentManaged run maps errors and forbidden', async () => {
     createEnvironmentManaged.mockRejectedValueOnce(new Error('create failed'))
-    const { result } = renderHook(
-      () => useCreateEnvironmentManaged(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useCreateEnvironmentManaged(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.run({ engineSeries: '18' })).resolves.toEqual({
       ok: false,
@@ -531,15 +565,14 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateEnvironmentManaged(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateEnvironmentManaged(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(
       result.current.run({
         settings: { ssl: { mode: 'require' }, exposure: { enabled: true } },
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(updateEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
       settings: { ssl: { mode: 'require' }, exposure: { enabled: true } },
@@ -556,10 +589,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useApplyEnvironmentManaged(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useApplyEnvironmentManaged(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
     expect(applyEnvironmentManaged).toHaveBeenCalledWith(environmentId)
@@ -575,10 +607,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useRunManagedLifecycle(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useRunManagedLifecycle(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('restart')).resolves.toMatchObject({ ok: true })
     expect(runManagedLifecycle).toHaveBeenCalledWith(environmentId, 'restart')
@@ -599,10 +630,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteEnvironmentManaged(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteEnvironmentManaged(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
     expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId)
@@ -621,10 +651,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteEnvironmentManagedMutation(orgId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteEnvironmentManagedMutation(orgId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run(environmentId)).resolves.toMatchObject({
       ok: true,
@@ -643,19 +672,16 @@ describe('managed query hooks', () => {
       deleted: true,
     })
 
-    const { result } = renderHook(
-      () => useDeleteEnvironmentManagedMutation(orgId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDeleteEnvironmentManagedMutation(orgId), {
+      wrapper: createWrapper(),
+    })
 
-    await expect(
-      result.current.run({ environmentId }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ environmentId })).resolves.toMatchObject({ ok: true })
     expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {})
 
-    await expect(
-      result.current.run({ environmentId, force: true }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ environmentId, force: true })).resolves.toMatchObject({
+      ok: true,
+    })
     expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
       force: true,
     })
@@ -671,10 +697,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useRotateManagedRootPassword(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useRotateManagedRootPassword(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run()).resolves.toMatchObject({
       ok: true,
@@ -691,10 +716,9 @@ describe('managed query hooks', () => {
   it('useRotateManagedRootPassword uses the fallback when the rejection is not an Error', async () => {
     rotateManagedRootPassword.mockRejectedValueOnce('offline')
 
-    const { result } = renderHook(
-      () => useRotateManagedRootPassword(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useRotateManagedRootPassword(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
@@ -710,10 +734,9 @@ describe('managed query hooks', () => {
       .mockRejectedValueOnce(new Error('disk full'))
       .mockRejectedValueOnce(new Error('HTTP 403: forbidden'))
 
-    const { result } = renderHook(
-      () => useRotateManagedRootPassword(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useRotateManagedRootPassword(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
@@ -742,18 +765,14 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useRotateManagedUserPassword(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useRotateManagedUserPassword(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     const viaMutateAsync = await result.current.mutateAsync('principal-1')
     expect(viaMutateAsync).toMatchObject({ password: 'user-secret' })
     expect(result.current.data).toBeUndefined()
-    expect(rotateManagedUserPassword).toHaveBeenCalledWith(
-      environmentId,
-      'principal-1',
-    )
+    expect(rotateManagedUserPassword).toHaveBeenCalledWith(environmentId, 'principal-1')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).bindings.all,
@@ -782,13 +801,12 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateManagedUser(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateManagedUser(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(
-      result.current.run({ username: 'app', databases: ['app'] }),
+      result.current.run({ username: 'app', databases: ['app'] })
     ).resolves.toMatchObject({
       ok: true,
       value: expect.objectContaining({ password: 'user-show-once' }),
@@ -806,10 +824,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteManagedUser(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteManagedUser(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('principal-1')).resolves.toMatchObject({
       ok: true,
@@ -832,10 +849,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateManagedDatabase(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateManagedDatabase(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run({ name: 'app' })).resolves.toMatchObject({
       ok: true,
@@ -860,10 +876,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteManagedDatabase(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteManagedDatabase(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('app')).resolves.toMatchObject({ ok: true })
     expect(deleteManagedDatabase).toHaveBeenCalledWith(environmentId, 'app')
@@ -884,14 +899,11 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateManagedBackup(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateManagedBackup(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ database: 'app' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ database: 'app' })).resolves.toMatchObject({ ok: true })
     expect(createManagedBackup).toHaveBeenCalledWith(environmentId, {
       database: 'app',
     })
@@ -907,10 +919,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteManagedBackup(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteManagedBackup(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('bak-1')).resolves.toMatchObject({ ok: true })
     expect(deleteManagedBackup).toHaveBeenCalledWith(environmentId, 'bak-1')
@@ -926,10 +937,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useRestoreManagedBackup(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useRestoreManagedBackup(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('bak-1')).resolves.toMatchObject({ ok: true })
     expect(restoreManagedBackup).toHaveBeenCalledWith(environmentId, 'bak-1')
@@ -948,17 +958,16 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useAddManagedReplica(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useAddManagedReplica(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(
       result.current.run({
         serverId: 'srv-2',
         replicaClass: 'failover',
         readEligible: false,
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(addManagedReplica).toHaveBeenCalledWith(environmentId, {
       serverId: 'srv-2',
@@ -977,13 +986,12 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateManagedMemberReadEligible(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateManagedMemberReadEligible(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(
-      result.current.run({ memberId: 'mem-1', readEligible: true }),
+      result.current.run({ memberId: 'mem-1', readEligible: true })
     ).resolves.toMatchObject({ ok: true })
     expect(updateManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1', {
       readEligible: true,
@@ -998,13 +1006,12 @@ describe('managed query hooks', () => {
   it('useUpdateManagedMemberReplicaClass patches replicaClass', async () => {
     updateManagedMember.mockResolvedValueOnce(commandResponse)
 
-    const { result } = renderHook(
-      () => useUpdateManagedMemberReplicaClass(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useUpdateManagedMemberReplicaClass(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await expect(
-      result.current.run({ memberId: 'mem-1', replicaClass: 'read' }),
+      result.current.run({ memberId: 'mem-1', replicaClass: 'read' })
     ).resolves.toMatchObject({ ok: true })
     expect(updateManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1', {
       replicaClass: 'read',
@@ -1016,10 +1023,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useRemoveManagedMember(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useRemoveManagedMember(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('mem-1')).resolves.toMatchObject({ ok: true })
     expect(removeManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1')
@@ -1035,10 +1041,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useResyncManagedMember(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useResyncManagedMember(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('mem-1')).resolves.toMatchObject({ ok: true })
     expect(resyncManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1')
@@ -1052,19 +1057,16 @@ describe('managed query hooks', () => {
   it('usePromoteManagedMember omits force unless set', async () => {
     promoteManagedMember.mockResolvedValue(commandResponse)
 
-    const { result } = renderHook(
-      () => usePromoteManagedMember(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => usePromoteManagedMember(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
-    await expect(
-      result.current.run({ memberId: 'mem-1' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ memberId: 'mem-1' })).resolves.toMatchObject({ ok: true })
     expect(promoteManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1', {})
 
-    await expect(
-      result.current.run({ memberId: 'mem-1', force: true }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ memberId: 'mem-1', force: true })).resolves.toMatchObject({
+      ok: true,
+    })
     expect(promoteManagedMember).toHaveBeenCalledWith(environmentId, 'mem-1', {
       force: true,
     })
@@ -1082,10 +1084,9 @@ describe('managed query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => usePromoteManagedDisasterRecovery(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => usePromoteManagedDisasterRecovery(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('mem-2')).resolves.toMatchObject({ ok: true })
     expect(promoteManagedDisasterRecovery).toHaveBeenCalledWith(environmentId, {
