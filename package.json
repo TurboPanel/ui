@@ -89,6 +89,7 @@
     "export": "expo export --platform web",
     "deploy": "node scripts/deploy-refuse.mjs",
     "deploy:testing": "wrangler deploy --env testing",
+    "deploy:staging": "wrangler deploy --env staging",
     "deploy:live": "wrangler deploy --env live",
     "cf-typegen": "wrangler types"
   },

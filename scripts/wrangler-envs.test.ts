@@ -17,9 +17,11 @@ describe('wrangler environments', () => {
   const config = readJsonc('wrangler.jsonc') as Wrangler
 
   it('pins the deployable environments and their Worker names', () => {
-    expect(Object.keys(config.env).sort()).toEqual(['live', 'testing'])
+    expect(Object.keys(config.env).sort()).toEqual(['live', 'staging', 'testing'])
     expect(config.env.testing.name).toBe('testing-ui')
     expect(config.env.testing.route?.pattern).toBe('testing.turbopanel.dev')
+    expect(config.env.staging.name).toBe('staging-ui')
+    expect(config.env.staging.route?.pattern).toBe('staging.turbopanel.dev')
     expect(config.env.live.name).toBe('ui')
     expect(config.env.live.route?.pattern).toBe('turbopanel.app')
   })
@@ -31,11 +33,12 @@ describe('wrangler environments', () => {
     expect(config.name).toBe('dev-ui')
   })
 
-  it('has no default deploy target: only deploy:testing and deploy:live deploy', () => {
+  it('has no default deploy target: only deploy:testing, deploy:staging and deploy:live deploy', () => {
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>
     }
     expect(pkg.scripts['deploy:testing']).toBe('wrangler deploy --env testing')
+    expect(pkg.scripts['deploy:staging']).toBe('wrangler deploy --env staging')
     expect(pkg.scripts['deploy:live']).toBe('wrangler deploy --env live')
     expect(pkg.scripts.deploy).not.toMatch(/wrangler deploy/)
   })
