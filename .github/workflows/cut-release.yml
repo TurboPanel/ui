@@ -69,7 +69,8 @@ jobs:
               echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            version="$(gh api "repos/$REPO/contents/deno.json?ref=$PUSHED" --jq .content | base64 -d | jq -r .version)"
+            version="$(gh api "repos/$REPO/contents/package.json?ref=$PUSHED" --jq .content | base64 -d | jq -r .version)"
+            case "$version" in ""|null) echo "::error::could not read the version from package.json at $PUSHED"; exit 1;; *) ;; esac
             rc_tag="$(gh api --paginate "repos/$REPO/git/matching-refs/tags/v$version-rc." --jq '.[].ref' | sed 's#^refs/tags/##' | sort -V | tail -n 1)"
             [ -n "$rc_tag" ] || { echo "::error::no v$version-rc.N tag exists — cut an rc first (merge the trunk → staging PR)"; exit 1; }
             echo "PR #$pr merged; releasing $version from $rc_tag"
