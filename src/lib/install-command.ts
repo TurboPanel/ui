@@ -1,7 +1,4 @@
-import {
-  formatInstanceDlBase,
-  installOriginNeedsInsecureTls,
-} from '@/lib/install-tls'
+import { formatInstanceDlBase, installOriginNeedsInsecureTls } from '@/lib/install-tls'
 
 const DEV_HTTPS_PORT = 8443
 
@@ -101,43 +98,17 @@ function trimTrailingSlash(url: string): string {
 }
 
 function hasNonOriginUrlParts(url: URL): boolean {
-  return (
-    (url.pathname !== '/' && url.pathname !== '') ||
-    Boolean(url.search) ||
-    Boolean(url.hash)
-  )
+  return (url.pathname !== '/' && url.pathname !== '') || Boolean(url.search) || Boolean(url.hash)
 }
 
-function isBareTurbopanelShOrigin(trimmed: string): boolean {
-  if (trimmed === 'turbopanel.sh') return true
-  try {
-    const url = new URL(trimmed)
-    return (
-      url.hostname === 'turbopanel.sh' &&
-      (url.protocol === 'https:' || url.protocol === 'http:') &&
-      !hasNonOriginUrlParts(url) &&
-      (url.port === '' || url.port === '443' || url.port === '80')
-    )
-  } catch {
-    return false
-  }
-}
-
-/** Curl target for the installer script: bare `turbopanel.sh` on the CDN, otherwise origin + `/run.sh`. */
+/** Curl target for the installer script: the origin plus `/run.sh` (a LAN or dev-overlay host that serves it). */
 function formatInstallScriptCurlUrl(origin: string): string {
-  const trimmed = trimTrailingSlash(origin.trim())
-  if (isBareTurbopanelShOrigin(trimmed)) {
-    return 'turbopanel.sh'
-  }
-  return `${trimmed}/run.sh`
+  return `${trimTrailingSlash(origin.trim())}/run.sh`
 }
 
 function encodeLicenseArg(licenseId: string, licenseToken: string): string {
   const combined = `${licenseId}:${licenseToken}`
-  return btoa(combined)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '')
+  return btoa(combined).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
 }
 
 /**
@@ -174,10 +145,7 @@ function buildInstallPipeline(opts: {
   dlBase?: string
 }): string {
   const curl = opts.curlInsecure ? 'curl -fsSLk' : 'curl -fsSL'
-  const envParts = [
-    `TURBOPANEL_LICENSE=${opts.licenseArg}`,
-    `TURBOPANEL_HOST=${opts.host}`,
-  ]
+  const envParts = [`TURBOPANEL_LICENSE=${opts.licenseArg}`, `TURBOPANEL_HOST=${opts.host}`]
   if (opts.insecureTls) envParts.push('TURBOPANEL_INSECURE_TLS=1')
   if (opts.dlBase) envParts.push(`TURBOPANEL_DL_BASE=${opts.dlBase}`)
   return `${curl} ${opts.curlUrl} | ${envParts.join(' ')} sh`
@@ -217,7 +185,7 @@ export function buildInstallCommandWithBaseUrl(opts: {
  */
 export function resolveDisplayedInstallCommand(
   revealed: { licenseId: string; licenseToken: string; installCommand: string },
-  _installBaseUrl: string,
+  _installBaseUrl: string
 ): string {
   return revealed.installCommand
 }
