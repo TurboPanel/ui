@@ -111,6 +111,96 @@ describe('waitForControlPlaneRecovery', () => {
     expect(probe).toHaveBeenCalledTimes(1)
   })
 
+  it('sleeps the interval between probes and never after the last one', async () => {
+    const { sleep, now } = harness()
+    const probe = vi.fn().mockRejectedValue(apiError('HTTP 502'))
+
+    await expect(
+      waitForControlPlaneRecovery({
+        probe,
+        sleep,
+        now,
+        intervalMs: 1_000,
+        timeoutMs: 3_000,
+      }),
+    ).resolves.toEqual({ kind: 'unreachable' })
+    // The leading sleep plus one per failed probe that still had time left.
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([1_000, 1_000, 1_000])
+    expect(probe).toHaveBeenCalledTimes(3)
+  })
+
+  it('probes once even when the window closed during the leading sleep', async () => {
+    const { sleep, now } = harness()
+    const probe = vi.fn().mockRejectedValue(apiError('HTTP 502'))
+
+    await expect(
+      waitForControlPlaneRecovery({
+        probe,
+        sleep,
+        now,
+        intervalMs: 1_000,
+        timeoutMs: 500,
+      }),
+    ).resolves.toEqual({ kind: 'unreachable' })
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(sleep).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns a probe answer that arrives after the deadline', async () => {
+    const { sleep, now } = harness()
+    const probe = vi.fn().mockResolvedValue('late')
+
+    await expect(
+      waitForControlPlaneRecovery({ probe, sleep, now, intervalMs: 1_000, timeoutMs: 0 }),
+    ).resolves.toEqual({ kind: 'recovered', value: 'late' })
+  })
+
+  it('rethrows an answered failure on a later probe without sleeping again', async () => {
+    const { sleep, now } = harness()
+    const probe = vi
+      .fn()
+      .mockRejectedValueOnce(apiError('HTTP 502'))
+      .mockRejectedValue(apiError('HTTP 403: forbidden'))
+
+    await expect(
+      waitForControlPlaneRecovery({ probe, sleep, now, intervalMs: 1_000 }),
+    ).rejects.toThrow('HTTP 403')
+    expect(probe).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates a failing sleep', async () => {
+    const probe = vi.fn().mockRejectedValue(apiError('HTTP 502'))
+    let sleeps = 0
+    await expect(
+      waitForControlPlaneRecovery({
+        probe,
+        now: () => 0,
+        sleep: () => {
+          sleeps += 1
+          return sleeps < 2 ? Promise.resolve() : Promise.reject(new Error('sleep broke'))
+        },
+      }),
+    ).rejects.toThrow('sleep broke')
+    expect(probe).toHaveBeenCalledTimes(1)
+  })
+
+  it('survives a long outage without growing the stack', async () => {
+    let probes = 0
+    await expect(
+      waitForControlPlaneRecovery({
+        probe: () => {
+          probes += 1
+          return probes < 5_000 ? Promise.reject(apiError('HTTP 502')) : Promise.resolve('back')
+        },
+        timeoutMs: 1_000_000,
+        sleep: () => Promise.resolve(),
+        now: () => 0,
+      }),
+    ).resolves.toEqual({ kind: 'recovered', value: 'back' })
+    expect(probes).toBe(5_000)
+  })
+
   it('defaults to a real timer and a 90 second window', async () => {
     const probe = vi.fn().mockResolvedValue('back')
     vi.useFakeTimers()

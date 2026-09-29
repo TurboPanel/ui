@@ -140,7 +140,7 @@ export async function waitForUnitUpdate({
 }>): Promise<UnitUpdateWait> {
   const deadline = now() + timeoutMs
   let answered = false
-  for (;;) {
+  const poll = async (): Promise<UnitUpdateWait> => {
     if (now() >= deadline) return finishAtDeadline(answered)
     const step = await readInstalledOrRecover({
       read,
@@ -155,7 +155,9 @@ export async function waitForUnitUpdate({
     const pause = pollDelay(now, deadline, intervalMs)
     if (pause === null) return finishAtDeadline(answered)
     await sleep(pause)
+    return poll()
   }
+  return poll()
 }
 
 async function readInstalledOrRecover({

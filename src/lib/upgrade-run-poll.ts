@@ -39,7 +39,7 @@ export async function waitForUpgradeRunSettlement({
   now?: () => number
 }>): Promise<UpgradeRunPollOutcome> {
   const deadline = now() + timeoutMs
-  for (;;) {
+  const poll = async (): Promise<UpgradeRunPollOutcome> => {
     if (now() >= deadline) return { kind: 'unreachable' }
     try {
       const run = await readRun()
@@ -53,5 +53,7 @@ export async function waitForUpgradeRunSettlement({
     const remaining = deadline - now()
     if (remaining <= 0) return { kind: 'unreachable' }
     await sleep(Math.min(intervalMs, remaining))
+    return poll()
   }
+  return poll()
 }
