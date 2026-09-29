@@ -211,6 +211,160 @@ describe('waitForUnitUpdate edges', () => {
   })
 })
 
+describe('waitForUnitUpdate polling', () => {
+  const clockHarness = () => {
+    let elapsed = 0
+    const sleeps: number[] = []
+    const sleep = vi.fn((ms: number) => {
+      sleeps.push(ms)
+      elapsed += ms
+      return Promise.resolve()
+    })
+    return { sleep, sleeps, now: () => elapsed }
+  }
+
+  it('reads first, sleeps the interval between reads, and never after the landing read', async () => {
+    const { sleep, sleeps, now } = clockHarness()
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ version: '0.1.0', commit: 'abc' })
+      .mockResolvedValueOnce({ version: '0.1.0', commit: 'abc' })
+      .mockResolvedValue({ version: '0.1.1', commit: 'abc' })
+    const result = await waitForUnitUpdate({
+      read,
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:abc',
+      timeoutMs: 10_000,
+      intervalMs: 100,
+      sleep,
+      now,
+    })
+    expect(result).toEqual({ kind: 'applied' })
+    expect(read).toHaveBeenCalledTimes(3)
+    expect(sleeps).toEqual([100, 100])
+  })
+
+  it('clamps the last sleep to the time left and reports reconnected', async () => {
+    const { sleep, sleeps, now } = clockHarness()
+    const read = vi.fn().mockResolvedValue({ version: '0.1.0', commit: 'abc' })
+    const result = await waitForUnitUpdate({
+      read,
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:abc',
+      timeoutMs: 250,
+      intervalMs: 100,
+      sleep,
+      now,
+    })
+    expect(result).toEqual({ kind: 'reconnected' })
+    expect(sleeps).toEqual([100, 100, 50])
+    expect(read).toHaveBeenCalledTimes(3)
+  })
+
+  it('hands a restart-shaped read to recovery and keeps polling if the old build answers', async () => {
+    const { sleep, sleeps, now } = clockHarness()
+    const read = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('updates failed: HTTP 502'))
+      .mockResolvedValueOnce({ version: '0.1.0', commit: 'abc' })
+      .mockResolvedValue({ version: '0.1.1', commit: 'abc' })
+    const result = await waitForUnitUpdate({
+      read,
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:abc',
+      timeoutMs: 10_000,
+      intervalMs: 100,
+      sleep,
+      now,
+    })
+    expect(result).toEqual({ kind: 'applied' })
+    // Recovery's leading sleep, then the poll pause before the next read.
+    expect(sleeps).toEqual([100, 100])
+    expect(read).toHaveBeenCalledTimes(3)
+  })
+
+  it('is unreachable when recovery gives up', async () => {
+    const { sleep, now } = clockHarness()
+    const read = vi.fn().mockRejectedValue(new Error('updates failed: HTTP 502'))
+    const result = await waitForUnitUpdate({
+      read,
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:abc',
+      timeoutMs: 300,
+      intervalMs: 100,
+      sleep,
+      now,
+    })
+    expect(result).toEqual({ kind: 'unreachable' })
+  })
+
+  it('is unreachable, not reconnected, when the control plane drops after answering', async () => {
+    const { sleep, now } = clockHarness()
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ version: '0.1.0', commit: 'abc' })
+      .mockRejectedValue(new TypeError('Failed to fetch'))
+    const result = await waitForUnitUpdate({
+      read,
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:abc',
+      timeoutMs: 300,
+      intervalMs: 100,
+      sleep,
+      now,
+    })
+    expect(result).toEqual({ kind: 'unreachable' })
+  })
+
+  it('rethrows an answered failure on a later read', async () => {
+    const { sleep, now } = clockHarness()
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ version: '0.1.0', commit: 'abc' })
+      .mockRejectedValue(new Error('updates failed: HTTP 403: forbidden'))
+    await expect(
+      waitForUnitUpdate({
+        read,
+        target: { version: '0.1.1', commit: null },
+        before: '0.1.0:abc',
+        intervalMs: 100,
+        sleep,
+        now,
+      }),
+    ).rejects.toThrow('HTTP 403')
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates a failing sleep', async () => {
+    await expect(
+      waitForUnitUpdate({
+        read: () => Promise.resolve({ version: '0.1.0', commit: 'abc' }),
+        target: { version: '0.1.1', commit: null },
+        before: '0.1.0:abc',
+        sleep: () => Promise.reject(new Error('sleep broke')),
+        now: () => 0,
+      }),
+    ).rejects.toThrow('sleep broke')
+  })
+
+  it('survives a long wait without growing the stack', async () => {
+    let reads = 0
+    const result = await waitForUnitUpdate({
+      read: () => {
+        reads += 1
+        return Promise.resolve({ version: reads < 5_000 ? '0.1.0' : '0.1.1', commit: 'abc' })
+      },
+      target: { version: '0.1.1', commit: null },
+      before: '0.1.0:abc',
+      timeoutMs: 1_000_000,
+      sleep: () => Promise.resolve(),
+      now: () => 0,
+    })
+    expect(result).toEqual({ kind: 'applied' })
+    expect(reads).toBe(5_000)
+  })
+})
+
 describe('unitUpdateAvailable', () => {
   const installed = { version: '0.1.1', commit: 'aaa' }
 
