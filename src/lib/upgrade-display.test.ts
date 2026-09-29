@@ -260,6 +260,54 @@ describe('build numbers', () => {
   })
 })
 
+describe('build identity fallback', () => {
+  const noDate = { builtAt: '', commit: '', buildId: '' }
+
+  it('names a build with no date by version, then commit, then build id', () => {
+    expect(
+      formatUpgradeBuildDisplayName({ ...noDate, channel: 'canary', version: ' 0.1.1 ' })
+    ).toBe('Canary · v0.1.1')
+    expect(
+      formatUpgradeBuildDisplayName({
+        ...noDate,
+        channel: 'canary',
+        commit: 'a96b655123456789abcdef',
+        buildId: 'b1',
+      })
+    ).toBe('Canary · a96b65512345')
+    expect(
+      formatUpgradeBuildDisplayName({
+        ...noDate,
+        channel: 'canary',
+        commit: 'unknown',
+        buildId: 'build-abcdef123456',
+      })
+    ).toBe('Canary · build-abcdef')
+    expect(formatUpgradeBuildDisplayName({ ...noDate, channel: 'canary', commit: 'unknown' })).toBe(
+      'Canary'
+    )
+    expect(formatUpgradeBuildDisplayName({ ...noDate, channel: '' })).toBe('Build')
+  })
+
+  it('only calls a plain version a release on the release channel', () => {
+    expect(
+      formatUpgradeBuildDisplayName({ ...noDate, channel: ' Release ', version: 'v0.1.3' })
+    ).toBe('Release 0.1.3')
+    expect(formatUpgradeBuildDisplayName({ ...noDate, channel: 'rc', version: '0.1.3' })).toBe(
+      'RC · v0.1.3'
+    )
+  })
+
+  it('shows the date for a plain release without a counter', () => {
+    expect(
+      formatUpgradeBuildDisplayName(
+        { ...noDate, channel: 'release', version: '0.1.3', builtAt: ' 2026-09-29T09:10:00.000Z ' },
+        { locale: 'en-US', timeZone: 'UTC' }
+      )
+    ).toBe('Release 0.1.3 · Sep 29, 09:10 AM')
+  })
+})
+
 describe('installedBuildLabel', () => {
   const target = { commit: 'a96b6551234567890abcdef1234567890abcdef', version: '0.1.3-canary.417' }
 

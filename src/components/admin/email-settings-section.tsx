@@ -4,6 +4,7 @@ import Svg, { Path, Rect } from 'react-native-svg'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, Button, LoadingState, SectionPanel, SegmentedControl } from '@/components/ui'
 import type { EmailSettingSource, EmailSettingsResponse } from '@/lib/instance-api'
+import { effectiveEmailProvider, emailProviderSegmentValue } from '@/lib/email-settings-view'
 import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { colors, spacing } from '@/lib/theme'
@@ -124,6 +125,20 @@ function isSecretKey(key: FullKey): boolean {
 
 function envVarName(full: FullKey): string {
   return full
+}
+
+function SourceBadge({ source }: Readonly<{ source: EmailSettingSource }>) {
+  if (source === 'env') return <Badge label="Set by environment" tone="pending" />
+  if (source === 'db') return <Badge label="Saved" tone="ok" />
+  return null
+}
+
+/** What a locked (environment-controlled) field shows: secrets masked, the provider by its friendly name. */
+function lockedDisplayText(key: FullKey, value: string): string {
+  if (isSecretKey(key)) return '••••••••'
+  const displayValue =
+    key === 'TURBOPANEL_SYSTEM_EMAIL__PROVIDER' ? (PROVIDER_DISPLAY_LABELS[value] ?? value) : value
+  return displayValue || ''
 }
 
 export function EmailSettingsSection() {
@@ -271,7 +286,6 @@ export function EmailSettingsSection() {
   const renderField = (key: FullKey) => {
     const source = sources[key]
     const isEnv = source === 'env'
-    const isDb = source === 'db'
     const isDefault = source === 'default'
     const value = draft[key] ?? ''
     const isSecret = isSecretKey(key)
@@ -279,13 +293,6 @@ export function EmailSettingsSection() {
     const placeholder = PLACEHOLDERS[key]
     const envName = envVarName(key)
     const isProvider = key === 'TURBOPANEL_SYSTEM_EMAIL__PROVIDER'
-
-    let sourceBadge: ReactNode = null
-    if (isEnv) {
-      sourceBadge = <Badge label="Set by environment" tone="pending" />
-    } else if (isDb) {
-      sourceBadge = <Badge label="Saved" tone="ok" />
-    }
 
     let fieldControl: ReactNode
     if (isProvider && !isEnv) {
@@ -296,7 +303,7 @@ export function EmailSettingsSection() {
       fieldControl = (
         <SegmentedControl
           options={providerSegmentOptions}
-          value={isWorkers ? 'mailgun' : value === 'mailgun' ? 'mailgun' : 'smtp'}
+          value={emailProviderSegmentValue(isWorkers, value)}
           disabled={isWorkers || saveMutation.isPending}
           onChange={(opt) => {
             onProviderChange(opt)
@@ -305,12 +312,11 @@ export function EmailSettingsSection() {
         />
       )
     } else if (isEnv) {
-      const displayValue = isProvider ? (PROVIDER_DISPLAY_LABELS[value] ?? value) : value
       fieldControl = (
         <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
           <LockIcon />
           <Text style={styles.lockValue} numberOfLines={1}>
-            {isSecret ? '••••••••' : displayValue || ''}
+            {lockedDisplayText(key, value)}
           </Text>
         </View>
       )
@@ -335,7 +341,7 @@ export function EmailSettingsSection() {
       <View key={key} style={styles.field}>
         <View style={styles.labelRow}>
           <Text style={styles.label}>{label}</Text>
-          {sourceBadge}
+          <SourceBadge source={source} />
         </View>
 
         {fieldControl}
@@ -351,6 +357,13 @@ export function EmailSettingsSection() {
       </View>
     )
   }
+
+  const provider = effectiveEmailProvider({
+    providerSource: sources.TURBOPANEL_SYSTEM_EMAIL__PROVIDER,
+    isWorkers,
+    loadedValue: loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value,
+    draftValue: draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER,
+  })
 
   return (
     <View style={styles.root}>
@@ -378,15 +391,7 @@ export function EmailSettingsSection() {
           <LoadingState />
         ) : (
           <>
-            {visibleKeysForProvider(
-              sources.TURBOPANEL_SYSTEM_EMAIL__PROVIDER === 'env'
-                ? (loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ?? 'smtp')
-                : isWorkers
-                  ? 'mailgun'
-                  : draft.TURBOPANEL_SYSTEM_EMAIL__PROVIDER ||
-                    loaded.TURBOPANEL_SYSTEM_EMAIL__PROVIDER.value ||
-                    'smtp'
-            ).map((k) => renderField(k))}
+            {visibleKeysForProvider(provider).map((k) => renderField(k))}
 
             <Button
               label="Save"
