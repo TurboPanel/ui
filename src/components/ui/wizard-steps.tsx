@@ -23,7 +23,8 @@ export function WizardSteps<TId extends string>({
   current,
 }: Readonly<{
   steps: readonly WizardStepItem<TId>[]
-  current: TId
+  /** `null` while nothing has started: no step reads as active or done. */
+  current: TId | null
 }>) {
   const activeIndex = steps.findIndex((entry) => entry.id === current)
 

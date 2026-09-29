@@ -1,48 +1,77 @@
-import { Text } from 'react-native'
-import {
-  DataTable,
-  DataTableCell,
-  DataTableEmpty,
-  DataTableRow,
-  SectionPanel,
-  type DataTableColumn,
-} from '@/components/ui'
+import { useState } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Badge, SectionPanel } from '@/components/ui'
+import { UpgradeRunDetail } from '@/components/admin/updates/upgrade-run-detail'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeHistoryEntry } from '@/lib/instance-api'
-import { colors } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
-const COLUMNS: readonly DataTableColumn[] = [
-  { key: 'when', header: 'Started', flex: 1, minWidth: 140 },
-  { key: 'who', header: 'Started by', flex: 1, minWidth: 120 },
-  { key: 'result', header: 'Result', width: 140 },
-]
+function resultTone(status: string): 'ok' | 'danger' | 'pending' | 'muted' {
+  if (status === 'succeeded') return 'ok'
+  if (status === 'failed') return 'danger'
+  if (status === 'partially_failed') return 'pending'
+  if (status === 'cancelled') return 'muted'
+  return 'pending'
+}
 
-export function UpgradeHistoryPanel({
-  runs,
-}: Readonly<{ runs: readonly UpgradeHistoryEntry[] }>) {
+function RunRow({ run, last }: Readonly<{ run: UpgradeHistoryEntry; last: boolean }>) {
+  const [open, setOpen] = useState(false)
+  const started = run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'
+  return (
+    <View style={[styles.row, !last && styles.rowDivider]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${open ? 'Hide' : 'Show'} what happened in the update started ${started}`}
+        onPress={() => {
+          setOpen((value) => !value)
+        }}
+        style={styles.summary}
+      >
+        <View style={styles.summaryText}>
+          <Text style={{ color: colors.text }}>{started}</Text>
+          <Text style={panelStyles.muted}>{run.startedByEmail ?? 'Automatic'}</Text>
+        </View>
+        <Badge tone={resultTone(run.status)} label={run.resultLabel ?? run.status} />
+        <Text style={panelStyles.muted}>{open ? '▾' : '▸'}</Text>
+      </Pressable>
+      {open ? <UpgradeRunDetail runId={run.id} /> : null}
+    </View>
+  )
+}
+
+export function UpgradeHistoryPanel({ runs }: Readonly<{ runs: readonly UpgradeHistoryEntry[] }>) {
   return (
     <SectionPanel title="Update history">
-      <DataTable columns={COLUMNS} minWidth={480}>
-        {runs.length === 0 ? (
-          <DataTableEmpty>No upgrade runs recorded yet.</DataTableEmpty>
-        ) : (
-          runs.map((run, index) => (
-            <DataTableRow key={run.id} last={index === runs.length - 1}>
-              <DataTableCell column={COLUMNS[0]}>
-                <Text style={{ color: colors.text }}>
-                  {run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'}
-                </Text>
-              </DataTableCell>
-              <DataTableCell column={COLUMNS[1]}>
-                <Text style={panelStyles.muted}>{run.startedByEmail ?? 'Automatic'}</Text>
-              </DataTableCell>
-              <DataTableCell column={COLUMNS[2]}>
-                <Text style={panelStyles.muted}>{run.resultLabel ?? run.status}</Text>
-              </DataTableCell>
-            </DataTableRow>
-          ))
-        )}
-      </DataTable>
+      {runs.length === 0 ? (
+        <Text style={panelStyles.muted}>No upgrade runs recorded yet.</Text>
+      ) : (
+        <>
+          <Text style={panelStyles.muted}>Open a run to see how each piece and server ended.</Text>
+          {runs.map((run, index) => (
+            <RunRow key={run.id} run={run} last={index === runs.length - 1} />
+          ))}
+        </>
+      )}
     </SectionPanel>
   )
 }
+
+const styles = StyleSheet.create({
+  row: {
+    paddingVertical: spacing.xs,
+  },
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderMuted,
+  },
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  summaryText: {
+    flex: 1,
+    gap: 2,
+  },
+})
