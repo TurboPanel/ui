@@ -55,7 +55,6 @@ export function shouldPromptControlPlaneReload(input: {
   /** UI repository commit. Ignored. It is not `x-turbopanel-revision`. */
   uiCommit?: string | null
 }): boolean {
-  void input.uiCommit
   const loaded = presentBuild(input.loadedRevision)
   const observed = presentBuild(input.observedRevision)
   if (loaded && observed) return loaded !== observed

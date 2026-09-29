@@ -44,7 +44,7 @@ export function useSaveOrgFabric(orgId: string) {
         allowRelay: input.allowRelay,
       })
     },
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.org(orgId).settings.fabric, data)
     },
     fallbackError: `Failed to update ${TURBOFABRIC_PRODUCT_NAME}`,
