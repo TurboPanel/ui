@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { InstanceUpdates, UpgradeRunRecord, UpgradeStepRow } from '@/lib/instance-api'
 import {
   DAEMON_LOGS_COMMAND,
-  DAEMON_REINSTALL_COMMAND,
+  daemonReinstallCommand,
+  installerHostForChannel,
   explainUpgradeFailure,
   readDismissedUpdateBanner,
   runFailure,
@@ -53,7 +54,7 @@ describe('explainUpgradeFailure', () => {
     expect(explained.title).toBe("Can't verify the new release")
     expect(explained.body).toContain("can't verify the new release's signature")
     expect(explained.body).toContain('Reinstall the daemon once')
-    expect(explained.command).toBe(DAEMON_REINSTALL_COMMAND)
+    expect(explained.command).toBe(daemonReinstallCommand())
     expect(explained.docsUrl).toBe(UPGRADE_DOCS_URL)
   })
 
@@ -131,7 +132,7 @@ describe('runFailure', () => {
       }),
     )
     expect(failure?.stepTitle).toBe('Co-located daemon')
-    expect(failure?.command).toBe(DAEMON_REINSTALL_COMMAND)
+    expect(failure?.command).toBe(daemonReinstallCommand('canary'))
   })
 
   it('names control-plane and fleet steps', () => {
@@ -303,5 +304,19 @@ describe('dismissed banner storage', () => {
     }
     expect(readDismissedUpdateBanner(throwing)).toBeNull()
     expect(() => writeDismissedUpdateBanner(throwing, 'k')).not.toThrow()
+  })
+})
+
+describe('installer host per channel', () => {
+  it('sends rc to staging, the canary rail to testing and a release to the bare host', () => {
+    expect(installerHostForChannel('rc')).toBe('staging.turbopanel.sh')
+    for (const channel of ['trunk', 'edge', 'canary']) {
+      expect(installerHostForChannel(channel)).toBe('testing.turbopanel.sh')
+    }
+    expect(installerHostForChannel('release')).toBe('turbopanel.sh')
+    expect(installerHostForChannel(null)).toBe('turbopanel.sh')
+    expect(daemonReinstallCommand('rc')).toBe(
+      'curl -fsSL staging.turbopanel.sh | TURBOPANEL_DAEMON_ONLY=1 sh'
+    )
   })
 })
