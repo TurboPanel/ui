@@ -10,6 +10,7 @@ import {
   managedCatalogEntryForCode,
   managedEngineSupportsBackup,
   managedErrorMessage,
+  managedHealthRefreshNotice,
   managedIngressPortForEngine,
   managedRecoveryBanner,
   managedRecoveryKindLabel,
@@ -33,8 +34,7 @@ import {
 } from './managed-services'
 
 function member(
-  partial: Partial<ManagedMemberRecord> &
-    Pick<ManagedMemberRecord, 'id' | 'serverId' | 'role'>,
+  partial: Partial<ManagedMemberRecord> & Pick<ManagedMemberRecord, 'id' | 'serverId' | 'role'>
 ): ManagedMemberRecord {
   return {
     serverName: partial.serverName ?? null,
@@ -51,16 +51,14 @@ function member(
 describe('MANAGED_SERVICE_CATALOG image allowlists', () => {
   it('advertises the approved LTS default for every available engine', () => {
     expect(managedCatalogEntryForCode('postgres')?.defaultImage).toBe(
-      'docker.io/library/postgres:18-alpine',
+      'docker.io/library/postgres:18-alpine'
     )
     // MySQL/MariaDB defaults must stay on the approved LTS majors — never an
     // old major like `mysql:8` / `mariadb:11` (mirrors the instance
     // allowlists in `turbopanel/src/features/managed/settings.ts`).
-    expect(managedCatalogEntryForCode('mysql')?.defaultImage).toBe(
-      'docker.io/library/mysql:9.7',
-    )
+    expect(managedCatalogEntryForCode('mysql')?.defaultImage).toBe('docker.io/library/mysql:9.7')
     expect(managedCatalogEntryForCode('mariadb')?.defaultImage).toBe(
-      'docker.io/library/mariadb:12.3',
+      'docker.io/library/mariadb:12.3'
     )
   })
 
@@ -101,9 +99,7 @@ describe('managedEngineSupportsBackup', () => {
 describe('shortBackupChecksum', () => {
   it('returns the first 10 hex characters', () => {
     expect(
-      shortBackupChecksum(
-        'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
-      ),
+      shortBackupChecksum('abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789')
     ).toBe('abcdef0123')
   })
 
@@ -114,111 +110,77 @@ describe('shortBackupChecksum', () => {
 
 describe('managedErrorMessage', () => {
   it('maps known HTTP error codes to operator copy', () => {
+    expect(managedErrorMessage(new Error('HTTP 422: server_placement_required'), 'fallback')).toBe(
+      'Select a server before creating this managed service.'
+    )
+    expect(managedErrorMessage(new Error('HTTP 409: managed_busy'), 'fallback')).toBe(
+      'Another managed operation is still in progress. Wait and try again.'
+    )
     expect(
-      managedErrorMessage(
-        new Error('HTTP 422: server_placement_required'),
-        'fallback',
-      ),
-    ).toBe('Select a server before creating this managed service.')
-    expect(
-      managedErrorMessage(new Error('HTTP 409: managed_busy'), 'fallback'),
-    ).toBe('Another managed operation is still in progress. Wait and try again.')
-    expect(
-      managedErrorMessage(
-        new Error('HTTP 422: peer_tunnel_address_required'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 422: peer_tunnel_address_required'), 'fallback')
     ).toContain(TURBOFABRIC_PRODUCT_NAME)
     expect(
-      managedErrorMessage(
-        new Error('HTTP 422: managed_replica_not_promotable'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 422: managed_replica_not_promotable'), 'fallback')
     ).toContain('Promote for disaster recovery')
     expect(
-      managedErrorMessage(
-        new Error('HTTP 409: managed_automatic_failover_blocked'),
-        'fallback',
-      ),
-    ).toBe(
-      'Automatic failover blocked: unable to verify previous primary is fenced',
-    )
+      managedErrorMessage(new Error('HTTP 409: managed_automatic_failover_blocked'), 'fallback')
+    ).toBe('Automatic failover blocked: unable to verify previous primary is fenced')
   })
 
   it('returns the raw message or fallback when the code is unknown', () => {
-    expect(
-      managedErrorMessage(new Error('HTTP 500: totally_unknown_code'), 'fallback'),
-    ).toBe('HTTP 500: totally_unknown_code')
-    expect(managedErrorMessage(new Error('plain failure'), 'fallback')).toBe(
-      'plain failure',
+    expect(managedErrorMessage(new Error('HTTP 500: totally_unknown_code'), 'fallback')).toBe(
+      'HTTP 500: totally_unknown_code'
     )
+    expect(managedErrorMessage(new Error('plain failure'), 'fallback')).toBe('plain failure')
     expect(managedErrorMessage('not-an-error', 'use this')).toBe('use this')
     expect(managedErrorMessage(new Error(''), 'use this')).toBe('use this')
   })
 
   it('maps binding, placement, and recovery error codes', () => {
+    expect(managedErrorMessage(new Error('HTTP 409: managed_user_has_bindings'), 'fallback')).toBe(
+      'Still connected to one or more services. Remove those connections first.'
+    )
     expect(
-      managedErrorMessage(new Error('HTTP 409: managed_user_has_bindings'), 'fallback'),
+      managedErrorMessage(new Error('HTTP 409: managed_database_has_bindings'), 'fallback')
     ).toBe('Still connected to one or more services. Remove those connections first.')
+    expect(managedErrorMessage(new Error('HTTP 409: binding_key_prefix_in_use'), 'fallback')).toBe(
+      'This service already has a connection using that prefix — pick another.'
+    )
     expect(
-      managedErrorMessage(
-        new Error('HTTP 409: managed_database_has_bindings'),
-        'fallback',
-      ),
-    ).toBe('Still connected to one or more services. Remove those connections first.')
-    expect(
-      managedErrorMessage(new Error('HTTP 409: binding_key_prefix_in_use'), 'fallback'),
-    ).toBe('This service already has a connection using that prefix — pick another.')
-    expect(
-      managedErrorMessage(
-        new Error('HTTP 409: binding_engine_defaults_in_use'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 409: binding_engine_defaults_in_use'), 'fallback')
     ).toContain('engine default keys')
+    expect(managedErrorMessage(new Error('HTTP 409: binding_key_conflict'), 'fallback')).toContain(
+      'variable key'
+    )
     expect(
-      managedErrorMessage(new Error('HTTP 409: binding_key_conflict'), 'fallback'),
-    ).toContain('variable key')
-    expect(
-      managedErrorMessage(
-        new Error('HTTP 422: binding_endpoint_unavailable'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 422: binding_endpoint_unavailable'), 'fallback')
     ).toContain('No network path')
     expect(
-      managedErrorMessage(
-        new Error('HTTP 500: binding_password_unavailable'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 500: binding_password_unavailable'), 'fallback')
     ).toContain('decrypt the database password')
     expect(
-      managedErrorMessage(
-        new Error('HTTP 422: binding_engine_unsupported'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 422: binding_engine_unsupported'), 'fallback')
     ).toContain('does not support service connections')
     expect(
-      managedErrorMessage(new Error('HTTP 403: binding_owned_variable'), 'fallback'),
+      managedErrorMessage(new Error('HTTP 403: binding_owned_variable'), 'fallback')
     ).toContain('connected database')
-    expect(
-      managedErrorMessage(new Error('HTTP 404: database_not_found'), 'fallback'),
-    ).toBe('That database was not found on this cluster.')
+    expect(managedErrorMessage(new Error('HTTP 404: database_not_found'), 'fallback')).toBe(
+      'That database was not found on this cluster.'
+    )
     expect(
       managedErrorMessage(
         new Error('HTTP 422: failover_replica_requires_datacenter_transport'),
-        'fallback',
-      ),
+        'fallback'
+      )
     ).toContain('share a datacenter LAN')
+    expect(managedErrorMessage(new Error('HTTP 422: datacenter_required'), 'fallback')).toBe(
+      'That server is not assigned to a datacenter.'
+    )
     expect(
-      managedErrorMessage(new Error('HTTP 422: datacenter_required'), 'fallback'),
-    ).toBe('That server is not assigned to a datacenter.')
-    expect(
-      managedErrorMessage(new Error('HTTP 422: private_family_mismatch'), 'fallback'),
+      managedErrorMessage(new Error('HTTP 422: private_family_mismatch'), 'fallback')
     ).toContain('address family')
     expect(
-      managedErrorMessage(
-        new Error('HTTP 422: managed_primary_fence_failed'),
-        'fallback',
-      ),
+      managedErrorMessage(new Error('HTTP 422: managed_primary_fence_failed'), 'fallback')
     ).toContain('promotion was aborted')
   })
 
@@ -252,9 +214,7 @@ describe('managedErrorMessage', () => {
       ['managed_replica_health_stale', 'health has not been observed'],
     ]
     for (const [code, fragment] of cases) {
-      expect(
-        managedErrorMessage(new Error(`HTTP 422: ${code}`), 'fallback'),
-      ).toContain(fragment)
+      expect(managedErrorMessage(new Error(`HTTP 422: ${code}`), 'fallback')).toContain(fragment)
     }
   })
 })
@@ -284,9 +244,7 @@ describe('member labels', () => {
     expect(memberReplicaClassLabel(undefined)).toBeNull()
     expect(memberTransportLabel('local')).toBe('Local')
     expect(memberTransportLabel('datacenter')).toBe('Datacenter LAN')
-    expect(memberTransportLabel('fabric')).toBe(
-      `${TURBOFABRIC_PRODUCT_NAME} direct`,
-    )
+    expect(memberTransportLabel('fabric')).toBe(`${TURBOFABRIC_PRODUCT_NAME} direct`)
     expect(memberTransportLabel('public')).toBe('Public Internet + TLS')
     expect(memberTransportLabel(null)).toBe('—')
     expect(memberTransportLabel(undefined)).toBe('—')
@@ -330,49 +288,49 @@ describe('replicationStateLabel / formatReplicationLag', () => {
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
-      }),
+      })
     ).toBeNull()
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: 512,
-      }),
+      })
     ).toBe('512 B behind')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: 1536,
-      }),
+      })
     ).toBe('1.5 KB behind')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: 10 * 1024 * 1024,
-      }),
+      })
     ).toBe('10 MB behind')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: Number.NaN,
-      }),
+      })
     ).toBeNull()
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagSeconds: 2.34,
-      }),
+      })
     ).toBe('2.3s behind')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagSeconds: 12.6,
-      }),
+      })
     ).toBe('13s behind')
     expect(
       formatReplicationLag({
@@ -380,35 +338,35 @@ describe('replicationStateLabel / formatReplicationLag', () => {
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: 2048,
         lagSeconds: 1.2,
-      }),
+      })
     ).toBe('2 KB behind · 1.2s')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: Number.NaN,
-      }),
+      })
     ).toBeNull()
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: -1,
-      }),
+      })
     ).toBe('— behind')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagBytes: 1024 * 1024 * 1024 * 1024,
-      }),
+      })
     ).toBe('1 TB behind')
     expect(
       formatReplicationLag({
         state: 'streaming',
         observedAt: '2026-01-01T00:00:00.000Z',
         lagSeconds: Number.NaN,
-      }),
+      })
     ).toBeNull()
   })
 })
@@ -439,22 +397,20 @@ describe('formatClusterTopologyLabel / clusterHasUnhealthyMember', () => {
     expect(formatClusterTopologyLabel(null)).toBe('Primary')
     expect(formatClusterTopologyLabel(undefined)).toBe('Primary')
     expect(
-      formatClusterTopologyLabel([
-        member({ id: 'm1', serverId: 's1', role: 'primary' }),
-      ]),
+      formatClusterTopologyLabel([member({ id: 'm1', serverId: 's1', role: 'primary' })])
     ).toBe('Primary')
     expect(
       formatClusterTopologyLabel([
         member({ id: 'm1', serverId: 's1', role: 'primary' }),
         member({ id: 'm2', serverId: 's2', role: 'replica' }),
-      ]),
+      ])
     ).toBe('Primary + 1 replica')
     expect(
       formatClusterTopologyLabel([
         member({ id: 'm1', serverId: 's1', role: 'primary' }),
         member({ id: 'm2', serverId: 's2', role: 'replica' }),
         member({ id: 'm3', serverId: 's3', role: 'replica' }),
-      ]),
+      ])
     ).toBe('Primary + 2 replicas')
   })
 
@@ -466,13 +422,13 @@ describe('formatClusterTopologyLabel / clusterHasUnhealthyMember', () => {
         member({ id: 'm1', serverId: 's1', role: 'primary', status: 'ready' }),
         member({ id: 'm2', serverId: 's2', role: 'replica', status: 'running' }),
         member({ id: 'm3', serverId: 's3', role: 'replica', status: null }),
-      ]),
+      ])
     ).toBe(false)
     expect(
       clusterHasUnhealthyMember([
         member({ id: 'm1', serverId: 's1', role: 'primary', status: 'ready' }),
         member({ id: 'm2', serverId: 's2', role: 'replica', status: 'failed' }),
-      ]),
+      ])
     ).toBe(true)
     expect(
       clusterHasUnhealthyMember([
@@ -482,7 +438,7 @@ describe('formatClusterTopologyLabel / clusterHasUnhealthyMember', () => {
           role: 'replica',
           status: 'provisioning',
         }),
-      ]),
+      ])
     ).toBe(true)
   })
 })
@@ -492,15 +448,9 @@ describe('managedIngressPortForEngine', () => {
   // managed-ingress-ports.test.ts; this only pins the re-export other modules
   // still import from here.
   it('maps each engine family to its shared platform listener', () => {
-    expect(managedIngressPortForEngine('postgres')).toBe(
-      MANAGED_INGRESS_PGSQL_PORT,
-    )
-    expect(managedIngressPortForEngine('mysql')).toBe(
-      MANAGED_INGRESS_MYSQL_PORT,
-    )
-    expect(managedIngressPortForEngine('mariadb')).toBe(
-      MANAGED_INGRESS_MYSQL_PORT,
-    )
+    expect(managedIngressPortForEngine('postgres')).toBe(MANAGED_INGRESS_PGSQL_PORT)
+    expect(managedIngressPortForEngine('mysql')).toBe(MANAGED_INGRESS_MYSQL_PORT)
+    expect(managedIngressPortForEngine('mariadb')).toBe(MANAGED_INGRESS_MYSQL_PORT)
   })
 
   it('does not use catalog engine-native ports as the client listener', () => {
@@ -524,7 +474,7 @@ function recoveryRecord(
     Pick<
       NonNullable<Parameters<typeof managedRecoveryBanner>[0]>,
       'id' | 'kind' | 'state' | 'sourcePrimaryMemberId'
-    >,
+    >
 ) {
   return {
     targetMemberId: null,
@@ -542,11 +492,7 @@ function recoveryRecord(
 
 describe('managedRecoveryKindLabel / managedRecoveryStateLabel', () => {
   it('labels every recovery kind', () => {
-    const kinds: ManagedRecoveryKind[] = [
-      'automatic-failover',
-      'switchover',
-      'disaster-recovery',
-    ]
+    const kinds: ManagedRecoveryKind[] = ['automatic-failover', 'switchover', 'disaster-recovery']
     expect(kinds.map(managedRecoveryKindLabel)).toEqual([
       'Automatic failover',
       'Switchover',
@@ -591,8 +537,8 @@ describe('managedRecoveryBanner', () => {
           sourcePrimaryMemberId: 'p1',
           targetMemberId: 't1',
           completedAt: '2026-08-19T00:01:00.000Z',
-        }),
-      ),
+        })
+      )
     ).toBeNull()
     expect(
       managedRecoveryBanner(
@@ -601,11 +547,9 @@ describe('managedRecoveryBanner', () => {
           kind: 'automatic-failover',
           state: 'blocked',
           sourcePrimaryMemberId: 'p1',
-        }),
-      )?.text,
-    ).toBe(
-      'Automatic failover blocked: unable to verify previous primary is fenced',
-    )
+        })
+      )?.text
+    ).toBe('Automatic failover blocked: unable to verify previous primary is fenced')
     expect(
       managedRecoveryBanner(
         recoveryRecord({
@@ -614,8 +558,8 @@ describe('managedRecoveryBanner', () => {
           state: 'blocked',
           sourcePrimaryMemberId: 'p1',
           blockedReason: '  Primary still accepting writes  ',
-        }),
-      ),
+        })
+      )
     ).toEqual({
       kind: 'blocked',
       text: 'Primary still accepting writes',
@@ -630,8 +574,8 @@ describe('managedRecoveryBanner', () => {
           kind: 'disaster-recovery',
           state: 'failed',
           sourcePrimaryMemberId: 'p1',
-        }),
-      ),
+        })
+      )
     ).toEqual({
       kind: 'failed',
       text: 'Disaster recovery failed',
@@ -644,13 +588,31 @@ describe('managedRecoveryBanner', () => {
           state: 'promoting',
           sourcePrimaryMemberId: 'p1',
           targetMemberId: 't1',
-        }),
-      ),
+        })
+      )
     ).toEqual({
       kind: 'in-flight',
       text: 'Switchover · Promoting',
     })
     expect(managedRecoveryBanner(null)).toBeNull()
     expect(managedRecoveryBanner(undefined)).toBeNull()
+  })
+})
+
+describe('managedHealthRefreshNotice', () => {
+  it('is silent when every replica answered or nothing was asked', () => {
+    expect(managedHealthRefreshNotice(null)).toBeNull()
+    expect(managedHealthRefreshNotice(undefined)).toBeNull()
+    expect(managedHealthRefreshNotice({ observed: 2, unavailable: 0 })).toBeNull()
+    expect(managedHealthRefreshNotice({ observed: 0, unavailable: 0 })).toBeNull()
+  })
+
+  it('says how many replicas kept their last known health', () => {
+    expect(managedHealthRefreshNotice({ observed: 0, unavailable: 1 })).toBe(
+      'No replica answered. Showing the last known health for 1 replica (offline, not yet updated, or not responding).'
+    )
+    expect(managedHealthRefreshNotice({ observed: 1, unavailable: 2 })).toBe(
+      'Refreshed 1 of 3 replicas. Showing the last known health for 2 replicas (offline, not yet updated, or not responding).'
+    )
   })
 })

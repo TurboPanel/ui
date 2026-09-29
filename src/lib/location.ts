@@ -147,7 +147,9 @@ export function clearFieldPatch(field: LocationField): LocationPatch {
  * show the error beside that input; null for any other error.
  */
 export function locationErrorField(error: unknown): LocationField | null {
-  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  let message = ''
+  if (error instanceof Error) message = error.message
+  else if (typeof error === 'string') message = error
   const match = /Invalid location\.([A-Za-z]+)/.exec(message)
   const field = match?.[1] as LocationField | undefined
   return field && LOCATION_FIELDS.includes(field) ? field : null

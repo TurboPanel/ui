@@ -181,13 +181,26 @@ function plural(count: number, singular: string, pluralForm: string): string {
  * about licenses scheduled to end. Empty when nothing is ending.
  */
 export function endingLabel(ending: number, endsAt: string | null | undefined): string {
-  if (!(ending > 0)) return ''
+  // NaN is "nothing ending" too, exactly as `!(ending > 0)` treated it.
+  if (Number.isNaN(ending) || ending <= 0) return ''
   const when = formatShortDate(endsAt) ?? 'at the end of the period'
   return `${ending} ${ending === 1 ? 'ends' : 'end'} ${when}`
 }
 
-/** Licenses an org holds: `inUse` from a current control plane, `held` from an older one. */
-function licensesInUse(licenses: BillingLicenseSummary): number {
+/**
+ * The wire aliases an older control plane still sends instead of `inUse` /
+ * `ending`. Typed here, apart from `BillingLicenseSummary` and
+ * `BillingTierSummary` where they are marked deprecated, so the one place that
+ * still has to read them is this pair of helpers.
+ */
+type LegacyLicenseCounts = Readonly<{ inUse?: number; held?: number }>
+type LegacyTierCounts = Readonly<{ ending: number; releasing?: number }>
+
+/**
+ * Licenses an org holds: `inUse` from a current control plane, `held` from an
+ * older one. This is the only read of the deprecated `held` alias.
+ */
+export function licensesInUse(licenses: LegacyLicenseCounts): number {
   return licenses.inUse ?? licenses.held ?? 0
 }
 
@@ -228,7 +241,8 @@ export function tierLicensesLine(tier: BillingTierSummary): string {
 }
 
 /** Seats already on their way out at this tier: ending licenses, plus pending downgrades when the server still reports them. */
-function outgoingAt(tier: BillingTierSummary): number {
+function outgoingAt(tier: LegacyTierCounts): number {
+  // The only read of the deprecated `releasing` alias (an older control plane's ending + pending downgrades).
   return Math.max(tier.ending, tier.releasing ?? 0)
 }
 
@@ -294,11 +308,8 @@ export function addServerTierState(
 ): AddServerTierState {
   const available = effectiveTierAvailable(tier, org)
   if (available > 0) {
-    return {
-      kind: 'available',
-      available,
-      message: `${plural(available, `${label} license is`, `${label} licenses are`)} free for this server.`,
-    }
+    const licenseCount = plural(available, `${label} license is`, `${label} licenses are`)
+    return { kind: 'available', available, message: `${licenseCount} free for this server.` }
   }
   const ending = tier?.ending ?? 0
   if (ending > 0) {
@@ -386,21 +397,10 @@ export type RefusalContext = Readonly<{
 export function describeBillingRefusal(err: unknown, context: RefusalContext = {}): string | null {
   if (!(err instanceof BillingRefusalError)) return null
   switch (err.code) {
-    case SERVERS_UNCOVERED_ERROR: {
-      const serverId = err.text('serverId')
-      const name = (serverId && context.serverName?.(serverId)) || serverId || 'A server'
-      const tier = err.text('requiredTier')
-      return tier
-        ? `${name} needs ${tier} and would be left uncovered. Move a license up to ${tier} or buy one there first.`
-        : `${name} would be left uncovered. Buy or move a license that covers it first.`
-    }
-    case LICENSES_IN_USE_ERROR: {
-      const held = err.count('licensesHeld')
-      const after = err.count('purchasedAfter')
-      return held != null && after != null
-        ? `${plural(held, 'license is', 'licenses are')} in use but only ${after} would remain. Remove a server or a waiting key first.`
-        : 'More licenses are in use than would remain. Remove a server or a waiting key first.'
-    }
+    case SERVERS_UNCOVERED_ERROR:
+      return describeServersUncovered(err, context)
+    case LICENSES_IN_USE_ERROR:
+      return describeLicensesInUse(err)
     case SUBSCRIPTION_PAST_DUE_ERROR:
       return 'Payment is past due. Update the payment method, then try again.'
     case NO_SUBSCRIPTION_ERROR:
@@ -415,19 +415,42 @@ export function describeBillingRefusal(err: unknown, context: RefusalContext = {
       return 'That move goes up the ladder — it is invoiced now, not at the end of the period.'
     case TIER_NOT_PURCHASABLE_ERROR:
       return 'That tier cannot be bought right now. Ask the instance owner to check its product.'
-    case LICENSES_ENDING_ERROR: {
-      const tierId = err.text('tierId')
-      const label = (tierId && context.tierLabel?.(tierId)) || null
-      const ending = err.count('ending') ?? 0
-      const when = formatShortDate(err.text('endsAt'))
-      const what = `${ending > 0 ? ending : 'Some'} ${label ?? ''}${label ? ' ' : ''}${ending === 1 ? 'license' : 'licenses'}`
-      return `You have ${what} ending${when ? ` ${when}` : ' at the end of the period'} — restore those first.`
-    }
+    case LICENSES_ENDING_ERROR:
+      return describeLicensesEnding(err, context)
     case NO_LICENSES_ENDING_ERROR:
       return 'Nothing is ending at that tier any more. Refresh the page.'
     default:
       return null
   }
+}
+
+function describeServersUncovered(err: BillingRefusalError, context: RefusalContext): string {
+  const serverId = err.text('serverId')
+  const name = (serverId && context.serverName?.(serverId)) || serverId || 'A server'
+  const tier = err.text('requiredTier')
+  return tier
+    ? `${name} needs ${tier} and would be left uncovered. Move a license up to ${tier} or buy one there first.`
+    : `${name} would be left uncovered. Buy or move a license that covers it first.`
+}
+
+function describeLicensesInUse(err: BillingRefusalError): string {
+  const held = err.count('licensesHeld')
+  const after = err.count('purchasedAfter')
+  return held != null && after != null
+    ? `${plural(held, 'license is', 'licenses are')} in use but only ${after} would remain. Remove a server or a waiting key first.`
+    : 'More licenses are in use than would remain. Remove a server or a waiting key first.'
+}
+
+function describeLicensesEnding(err: BillingRefusalError, context: RefusalContext): string {
+  const tierId = err.text('tierId')
+  const label = (tierId && context.tierLabel?.(tierId)) || null
+  const ending = err.count('ending') ?? 0
+  const count = ending > 0 ? ending : 'Some'
+  const tierPart = label ? `${label} ` : ''
+  const noun = ending === 1 ? 'license' : 'licenses'
+  const short = formatShortDate(err.text('endsAt'))
+  const when = short ? ` ${short}` : ' at the end of the period'
+  return `You have ${count} ${tierPart}${noun} ending${when} — restore those first.`
 }
 
 // ---------------------------------------------------------------------------

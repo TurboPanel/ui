@@ -582,6 +582,23 @@ describe('fillMissingLicenses', () => {
     expect(filled[1]?.license).toBe('')
   })
 
+  it('keeps input order when lookups settle out of order', async () => {
+    const delays: Record<string, number> = { first: 20, second: 0 }
+    const filled = await fillMissingLicenses(
+      [
+        pkg({ name: 'first', license: '' }),
+        pkg({ name: 'kept', license: 'ISC' }),
+        pkg({ name: 'second', license: '' }),
+      ],
+      async (row) => {
+        await new Promise((resolve) => setTimeout(resolve, delays[row.name] ?? 0))
+        return `lic-${row.name}`
+      },
+    )
+    expect(filled.map((row) => row.name)).toEqual(['first', 'kept', 'second'])
+    expect(filled.map((row) => row.license)).toEqual(['lic-first', 'ISC', 'lic-second'])
+  })
+
   it('looks up UNKNOWN sentinels and keeps a blank result when no default exists', async () => {
     const filled = await fillMissingLicenses(
       [pkg({ name: 'mystery', license: 'UNKNOWN' })],

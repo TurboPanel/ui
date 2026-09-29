@@ -21,11 +21,14 @@ export function UpgradeStepTracker({
   status,
   errorCode,
   title,
+  note,
 }: Readonly<{
   phase: UpgradePhase | null
   status: UpgradeStepStatus | null
   errorCode?: string | null
   title?: string
+  /** A line under the steps, e.g. why this row moves with another. */
+  note?: string
 }>) {
   const current = mapStepStatusToPipeline(status)
   const heading = title ?? upgradePhaseLabel(phase)
@@ -36,6 +39,7 @@ export function UpgradeStepTracker({
     <View style={{ gap: spacing.xs }}>
       <Text style={panelStyles.detailLabel}>{heading}</Text>
       <WizardSteps steps={PIPELINE_STEPS} current={current} />
+      {note ? <Text style={panelStyles.muted}>{note}</Text> : null}
       {ended ? (
         <Text style={outcome.tone === 'danger' ? panelStyles.error : panelStyles.muted}>
           {outcome.detail ? `${outcome.label}: ${outcome.detail}` : outcome.label}

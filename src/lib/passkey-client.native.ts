@@ -12,14 +12,14 @@ export function isPasskeySupported(): boolean {
   return false
 }
 
-export async function registerPasskey(
+export function registerPasskey(
   _options: unknown,
 ): Promise<PasskeyClientResult> {
-  return { supported: false }
+  return Promise.resolve({ supported: false })
 }
 
-export async function loginWithPasskey(
+export function loginWithPasskey(
   _options: unknown,
 ): Promise<PasskeyClientResult> {
-  return { supported: false }
+  return Promise.resolve({ supported: false })
 }

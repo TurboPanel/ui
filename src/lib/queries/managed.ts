@@ -1,41 +1,41 @@
 import {
-    addManagedReplica,
-    applyEnvironmentManaged,
-    createEnvironmentManaged,
-    createManagedBackup,
-    createManagedDatabase,
-    createManagedUser,
-    deleteEnvironmentManaged,
-    deleteManagedBackup,
-    deleteManagedDatabase,
-    deleteManagedUser,
-    fetchEnvironmentManaged,
-    fetchManagedBackups,
-    fetchManagedDatabases,
-    fetchManagedLogs,
-    fetchManagedStatus,
-    fetchManagedUsers,
-    fetchOrganizationCa,
-    fetchOrganizationManaged,
-    isForbiddenError,
-    promoteManagedDisasterRecovery,
-    promoteManagedMember,
-    removeManagedMember,
-    restoreManagedBackup,
-    resyncManagedMember,
-    rotateManagedRootPassword,
-    rotateManagedUserPassword,
-    runManagedLifecycle,
-    updateEnvironmentManaged,
-    updateManagedMember,
+  addManagedReplica,
+  applyEnvironmentManaged,
+  createEnvironmentManaged,
+  createManagedBackup,
+  createManagedDatabase,
+  createManagedUser,
+  deleteEnvironmentManaged,
+  deleteManagedBackup,
+  deleteManagedDatabase,
+  deleteManagedUser,
+  fetchEnvironmentManaged,
+  fetchManagedBackups,
+  fetchManagedDatabases,
+  fetchManagedLogs,
+  fetchManagedStatus,
+  fetchManagedUsers,
+  fetchOrganizationCa,
+  fetchOrganizationManaged,
+  isForbiddenError,
+  promoteManagedDisasterRecovery,
+  promoteManagedMember,
+  removeManagedMember,
+  restoreManagedBackup,
+  resyncManagedMember,
+  rotateManagedRootPassword,
+  rotateManagedUserPassword,
+  runManagedLifecycle,
+  updateEnvironmentManaged,
+  updateManagedMember,
 } from '@/lib/instance-api'
 import type { ManagedMemberRecord } from '@/lib/managed-services'
 import { queryKeys, useApiMutation, type ApiMutationResult } from '@/lib/query-client'
 import {
-    useMutation,
-    useQuery,
-    useQueryClient,
-    type UseMutationResult,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
 } from '@tanstack/react-query'
 
 const MANAGED_STATUS_POLL_MS = 5000
@@ -101,6 +101,27 @@ export function useManagedStatus(
       const status = query.state.data?.status
       if (!isManagedStatusInFlight(status)) return false
       return MANAGED_STATUS_POLL_MS
+    },
+  })
+}
+
+/**
+ * Explicit "Refresh health": asks the instance to probe each replica's daemon
+ * (`?refresh=1`), then seeds the status cache with the answer and refetches the
+ * detail (which carries the stored member observations). Deliberately a
+ * mutation, not part of `useManagedStatus`: the background poll must stay
+ * database-only so it never wakes a daemon.
+ */
+export function useRefreshManagedStatus(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => fetchManagedStatus(environmentId, { refresh: true }),
+    fallbackError: 'Could not refresh replica health',
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(queryKeys.org(orgId).managed.status(environmentId), snapshot)
+      return queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).managed.environment(environmentId),
+      })
     },
   })
 }
@@ -283,8 +304,8 @@ export function useDeleteEnvironmentManagedMutation(orgId: string) {
       typeof input === 'string'
         ? deleteEnvironmentManaged(input)
         : deleteEnvironmentManaged(input.environmentId, {
-          ...(input.force ? { force: true } : {}),
-        }),
+            ...(input.force ? { force: true } : {}),
+          }),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({

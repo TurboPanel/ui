@@ -24,7 +24,7 @@ describe('controlPlaneVersionLine', () => {
         ok: true,
         version: '0.1.1',
         revision: { commit: 'unknown', sourceUrl: 'https://github.com/TurboPanel/turbopanel' },
-      }),
+      })
     ).toEqual({ label: 'v0.1.1', commitUrl: null, environment: null })
   })
 
@@ -34,7 +34,7 @@ describe('controlPlaneVersionLine', () => {
         ok: true,
         version: '0.1.1',
         revision: { commit: SHA, sourceUrl: 'https://github.com/TurboPanel/turbopanel/' },
-      }),
+      })
     ).toEqual({
       label: 'v0.1.1 · 18ad2b0',
       commitUrl: `https://github.com/TurboPanel/turbopanel/commit/${SHA}`,
@@ -48,7 +48,7 @@ describe('controlPlaneVersionLine', () => {
         ok: true,
         version: 'v0.2.0',
         revision: { commit: SHA, sourceUrl: 'javascript:alert(1)' },
-      }),
+      })
     ).toEqual({ label: 'v0.2.0 · 18ad2b0', commitUrl: null, environment: null })
   })
 
@@ -57,23 +57,34 @@ describe('controlPlaneVersionLine', () => {
       controlPlaneVersionLine({
         ok: true,
         version: '0.1.1',
-        revision: { commit: SHA, sourceUrl: `https://github.com/TurboPanel/turbopanel/tree/${SHA}` },
-      })?.commitUrl,
+        revision: {
+          commit: SHA,
+          sourceUrl: `https://github.com/TurboPanel/turbopanel/tree/${SHA}`,
+        },
+      })?.commitUrl
     ).toBe(`https://github.com/TurboPanel/turbopanel/commit/${SHA}`)
   })
 
   it('names the hosted environment beside the version: Testing and Staging, nothing on live', () => {
     const base = { ok: true, version: '0.1.1', channel: 'canary' }
-    expect(controlPlaneVersionLine({ ...base, environment: 'testing' }, 'workers')?.environment).toEqual({
+    expect(
+      controlPlaneVersionLine({ ...base, environment: 'testing' }, 'workers')?.environment
+    ).toEqual({
       text: 'Testing',
       tone: 'testing',
     })
-    expect(controlPlaneVersionLine({ ...base, environment: 'Staging' }, 'workers')?.environment).toEqual({
+    expect(
+      controlPlaneVersionLine({ ...base, environment: 'Staging' }, 'workers')?.environment
+    ).toEqual({
       text: 'Staging',
       tone: 'staging',
     })
-    expect(controlPlaneVersionLine({ ...base, environment: 'live' }, 'workers')?.environment).toBeNull()
-    expect(controlPlaneVersionLine({ ...base, environment: null }, 'workers')?.environment).toBeNull()
+    expect(
+      controlPlaneVersionLine({ ...base, environment: 'live' }, 'workers')?.environment
+    ).toBeNull()
+    expect(
+      controlPlaneVersionLine({ ...base, environment: null }, 'workers')?.environment
+    ).toBeNull()
     expect(controlPlaneVersionLine(base, 'workers')?.environment).toBeNull()
   })
 
@@ -86,8 +97,8 @@ describe('controlPlaneVersionLine', () => {
           environment: 'testing',
           revision: { commit: SHA, sourceUrl: 'https://github.com/TurboPanel/turbopanel' },
         },
-        'workers',
-      ),
+        'workers'
+      )
     ).toEqual({
       label: 'v0.1.1 · 18ad2b0',
       commitUrl: `https://github.com/TurboPanel/turbopanel/commit/${SHA}`,
@@ -98,26 +109,49 @@ describe('controlPlaneVersionLine', () => {
   it('shows the exact installed build label on self-hosted, and no environment tag', () => {
     expect(
       controlPlaneVersionLine(
-        { ok: true, version: '0.1.1', build: '0.1.1-canary.20260926-192741-3754712', environment: 'testing' },
-        'deno',
-      ),
-    ).toEqual({ label: 'v0.1.1-canary.20260926-192741-3754712', commitUrl: null, environment: null })
-    expect(controlPlaneVersionLine({ ok: true, version: '0.1.1', build: '0.1.1-rc.1' }, 'deno')?.label).toBe(
-      'v0.1.1-rc.1',
-    )
+        {
+          ok: true,
+          version: '0.1.1',
+          build: '0.1.1-canary.20260926-192741-3754712',
+          environment: 'testing',
+        },
+        'deno'
+      )
+    ).toEqual({
+      label: 'v0.1.1-canary.20260926-192741-3754712',
+      commitUrl: null,
+      environment: null,
+    })
+    expect(
+      controlPlaneVersionLine({ ok: true, version: '0.1.1', build: '0.1.1-rc.1' }, 'deno')?.label
+    ).toBe('v0.1.1-rc.1')
+  })
+
+  it('shows the 2026-09-28 spellings: counter canary and the plain rc', () => {
+    expect(
+      controlPlaneVersionLine({ ok: true, version: '0.1.3', build: '0.1.3-canary.412' }, 'deno')
+        ?.label
+    ).toBe('v0.1.3-canary.412')
+    expect(
+      controlPlaneVersionLine({ ok: true, version: '0.1.3', build: '0.1.3-rc' }, 'deno')?.label
+    ).toBe('v0.1.3-rc')
   })
 
   it('falls back to the plain version when self-hosted reports no usable build label', () => {
-    expect(controlPlaneVersionLine({ ok: true, version: '0.1.1', build: null }, 'deno')?.label).toBe('v0.1.1')
-    expect(controlPlaneVersionLine({ ok: true, version: '0.1.1', build: 'not a label' }, 'deno')?.label).toBe(
-      'v0.1.1',
-    )
+    expect(
+      controlPlaneVersionLine({ ok: true, version: '0.1.1', build: null }, 'deno')?.label
+    ).toBe('v0.1.1')
+    expect(
+      controlPlaneVersionLine({ ok: true, version: '0.1.1', build: 'not a label' }, 'deno')?.label
+    ).toBe('v0.1.1')
   })
 
   it('ignores the build label on the hosted control plane', () => {
     expect(
-      controlPlaneVersionLine({ ok: true, version: '0.1.1', build: '0.1.1-canary.20260926-192741-3754712' }, 'workers')
-        ?.label,
+      controlPlaneVersionLine(
+        { ok: true, version: '0.1.1', build: '0.1.1-canary.20260926-192741-3754712' },
+        'workers'
+      )?.label
     ).toBe('v0.1.1')
   })
 })
@@ -125,11 +159,17 @@ describe('controlPlaneVersionLine', () => {
 describe('commitUrlFor', () => {
   it('builds the commit page from a repository or a tree/commit/blob view', () => {
     expect(commitUrlFor('https://github.com/o/r', SHA)).toBe(`https://github.com/o/r/commit/${SHA}`)
-    expect(commitUrlFor('https://github.com/o/r/', SHA)).toBe(`https://github.com/o/r/commit/${SHA}`)
-    expect(commitUrlFor(`https://github.com/o/r/tree/${SHA}`, SHA)).toBe(`https://github.com/o/r/commit/${SHA}`)
-    expect(commitUrlFor('https://github.com/o/r/commit/abc1234', SHA)).toBe(`https://github.com/o/r/commit/${SHA}`)
+    expect(commitUrlFor('https://github.com/o/r/', SHA)).toBe(
+      `https://github.com/o/r/commit/${SHA}`
+    )
+    expect(commitUrlFor(`https://github.com/o/r/tree/${SHA}`, SHA)).toBe(
+      `https://github.com/o/r/commit/${SHA}`
+    )
+    expect(commitUrlFor('https://github.com/o/r/commit/abc1234', SHA)).toBe(
+      `https://github.com/o/r/commit/${SHA}`
+    )
     expect(commitUrlFor('https://github.com/o/r/blob/trunk/README.md', SHA)).toBe(
-      `https://github.com/o/r/commit/${SHA}`,
+      `https://github.com/o/r/commit/${SHA}`
     )
   })
 

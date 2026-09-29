@@ -72,8 +72,7 @@ export const ADDRESS_NOT_IN_ANY_SUBNET_ERROR = 'address_not_in_any_subnet'
 export const ADDRESS_IN_USE_ERROR = 'address_in_use'
 export const PRIVATE_FAMILY_MISMATCH_ERROR = 'private_family_mismatch'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
-export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR =
-  'failover_requires_trusted_datacenter'
+export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR = 'failover_requires_trusted_datacenter'
 /**
  * CIDR collision codes (**409**) from the instance's single collision
  * authority (`turbopanel/src/features/net/cidr-collisions.ts`). Every CIDR write —
@@ -86,8 +85,7 @@ export const CIDR_OVERLAPS_FABRIC_ERROR = 'cidr_overlaps_fabric'
 export const CIDR_OVERLAPS_FABRIC_POOL_ERROR = 'cidr_overlaps_fabric_pool'
 export const CIDR_OVERLAPS_RESERVED_ERROR = 'cidr_overlaps_reserved'
 export const CIDR_OVERLAPS_DOCKER_NETWORK_ERROR = 'cidr_overlaps_docker_network'
-export const CIDR_OVERLAPS_GATEWAY_ADVERTISED_ERROR =
-  'cidr_overlaps_gateway_advertised'
+export const CIDR_OVERLAPS_GATEWAY_ADVERTISED_ERROR = 'cidr_overlaps_gateway_advertised'
 /** **400** — a `datacenter` / `reserved` row exists because of its CIDR; `cidr: null` is refused. */
 export const NETWORK_CIDR_REQUIRED_ERROR = 'network_cidr_required'
 /** **400** field codes for `kind: 'docker'` addressing (`POST`/`PATCH /networks`). */
@@ -242,9 +240,7 @@ export type TwoFactorChallenge = {
 
 export type SignInResult = SessionInfo | TwoFactorChallenge
 
-export function isTwoFactorChallenge(
-  result: SignInResult,
-): result is TwoFactorChallenge {
+export function isTwoFactorChallenge(result: SignInResult): result is TwoFactorChallenge {
   return 'requires2fa' in result && result.requires2fa === true
 }
 
@@ -276,9 +272,7 @@ export async function signOut(): Promise<{ ok: true }> {
 
 function toOAuthProviders(value: unknown): OAuthProvider[] {
   if (!Array.isArray(value)) return []
-  return value.filter((entry): entry is OAuthProvider =>
-    entry === 'github' || entry === 'google'
-  )
+  return value.filter((entry): entry is OAuthProvider => entry === 'github' || entry === 'google')
 }
 
 export async function fetchInstallStatus(): Promise<InstallStatus> {
@@ -305,7 +299,7 @@ export async function fetchInstallStatus(): Promise<InstallStatus> {
 export async function signUp(
   email: string,
   password: string,
-  invitationId?: string,
+  invitationId?: string
 ): Promise<{ ok: true }> {
   const body: { email: string; password: string; invitationId?: string } = {
     email,
@@ -433,18 +427,15 @@ function toPasskeyRecords(value: unknown): PasskeyRecord[] {
 export async function signInTwoFactor(
   challenge: string,
   code: string,
-  kind: TwoFactorCodeKind = 'totp',
+  kind: TwoFactorCodeKind = 'totp'
 ): Promise<SessionInfo> {
-  const body = await apiFetch<SessionInfo & { ok: true }>(
-    `${CLIENT_API}/auth/sign-in/2fa`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        challenge,
-        ...(kind === 'backup' ? { backupCode: code } : { code }),
-      }),
-    }
-  )
+  const body = await apiFetch<SessionInfo & { ok: true }>(`${CLIENT_API}/auth/sign-in/2fa`, {
+    method: 'POST',
+    body: JSON.stringify({
+      challenge,
+      ...(kind === 'backup' ? { backupCode: code } : { code }),
+    }),
+  })
   return toSessionInfo(body)
 }
 
@@ -487,19 +478,14 @@ export async function verifyTotp(code: string): Promise<{ backupCodes: string[] 
   })
 }
 
-export async function regenerateBackupCodes(
-  password?: string
-): Promise<{ backupCodes: string[] }> {
+export async function regenerateBackupCodes(password?: string): Promise<{ backupCodes: string[] }> {
   return await apiFetch(`${CLIENT_API}/auth/2fa/backup-codes/regenerate`, {
     method: 'POST',
     body: JSON.stringify(password ? { password } : {}),
   })
 }
 
-export async function disableTwoFactor(
-  password?: string,
-  code?: string
-): Promise<{ ok: true }> {
+export async function disableTwoFactor(password?: string, code?: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/2fa/disable`, {
     method: 'POST',
     body: JSON.stringify({
@@ -509,9 +495,7 @@ export async function disableTwoFactor(
   })
 }
 
-export async function passkeyRegisterOptions(
-  password?: string
-): Promise<PasskeyCeremonyOptions> {
+export async function passkeyRegisterOptions(password?: string): Promise<PasskeyCeremonyOptions> {
   return await apiFetch(`${CLIENT_API}/auth/passkeys/register/options`, {
     method: 'POST',
     body: JSON.stringify(password ? { password } : {}),
@@ -529,10 +513,7 @@ export async function passkeyRegisterVerify(
   })
 }
 
-export async function deletePasskey(
-  id: string,
-  password?: string
-): Promise<{ ok: true }> {
+export async function deletePasskey(id: string, password?: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/passkeys/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     body: JSON.stringify(password ? { password } : {}),
@@ -568,7 +549,7 @@ export function oauthStartUrl(
  */
 export function signInOAuthRedirect(
   pathname: string,
-  params: Record<string, string | string[] | undefined> = {},
+  params: Record<string, string | string[] | undefined> = {}
 ): string {
   const path = pathname.startsWith('/') ? pathname : `/${pathname}`
   const search = new URLSearchParams()
@@ -637,13 +618,7 @@ export type ServerGeo = {
 }
 
 /** The location fields an operator may override (control plane `options.location`). */
-export type LocationField =
-  | 'city'
-  | 'region'
-  | 'regionCode'
-  | 'country'
-  | 'asn'
-  | 'asOrganization'
+export type LocationField = 'city' | 'region' | 'regionCode' | 'country' | 'asn' | 'asOrganization'
 
 /** One set of location values; each is null when unknown. */
 export type ResolvedLocationFields = {
@@ -1118,9 +1093,7 @@ export type OrgComposeGatedFields = {
   composeGatedFieldsEnabled: boolean
 }
 
-export async function fetchOrgComposeGatedFields(
-  orgId: string
-): Promise<OrgComposeGatedFields> {
+export async function fetchOrgComposeGatedFields(orgId: string): Promise<OrgComposeGatedFields> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-privileged-fields`)
 }
 
@@ -1870,10 +1843,12 @@ export function describeNoLicenseAvailable(
   if (purchased <= 0) return 'No licenses have been bought yet. Buy one on the billing page.'
   if (ending > 0) {
     const when = formatShortDate(endsAt)
-    const ends = `${ending} ${ending === 1 ? 'ends' : 'end'}${when ? ` ${when}` : ' at the end of the period'}`
+    const endsWhen = when ? ` ${when}` : ' at the end of the period'
+    const ends = `${ending} ${ending === 1 ? 'ends' : 'end'}${endsWhen}`
     return `${inUse} in use, ${ends} — restore one to add this server.`
   }
-  if (purchased === 1) return 'The one purchased license is in use. Buy another on the billing page.'
+  if (purchased === 1)
+    return 'The one purchased license is in use. Buy another on the billing page.'
   return `All ${purchased} purchased licenses are in use. Buy another on the billing page.`
 }
 
@@ -3410,9 +3385,7 @@ export async function fetchDatacenterNameSuggestions(options?: {
 export async function fetchDatacenters(): Promise<{
   datacenters: DatacenterRecord[]
 }> {
-  const body = await apiFetch<{ datacenters?: DatacenterRecord[] }>(
-    `${CLIENT_API}/datacenters`,
-  )
+  const body = await apiFetch<{ datacenters?: DatacenterRecord[] }>(`${CLIENT_API}/datacenters`)
   return { datacenters: (body.datacenters ?? []).map(normalizeDatacenterRecord) }
 }
 
@@ -3803,7 +3776,7 @@ export type CreateInvitationBody = {
 }
 
 export async function createInvitation(
-  body: CreateInvitationBody,
+  body: CreateInvitationBody
 ): Promise<{ ok: true; id: string; expiresAt: string }> {
   return await apiFetch(`${CLIENT_API}/invitations`, {
     method: 'POST',
@@ -3916,13 +3889,13 @@ export type InstanceDaemonCapabilities = {
 
 export type PlatformCaInfo =
   | {
-    ok: true
-    fingerprintSha256: string
-    subject: string
-    notBefore: string
-    notAfter: string
-    pem: string
-  }
+      ok: true
+      fingerprintSha256: string
+      subject: string
+      notBefore: string
+      notAfter: string
+      pem: string
+    }
   | { ok: false; error?: string }
 
 export type TrustedProxySettings = {
@@ -3962,7 +3935,7 @@ export async function fetchInstanceHostnames(): Promise<{
 }
 
 export async function saveInstanceHostnames(
-  hostnames: InstanceHostnameInput[],
+  hostnames: InstanceHostnameInput[]
 ): Promise<{ ok: boolean; hostnames: InstanceHostnameRecord[] }> {
   return await adminJson(`${ADMIN_API}/instance/hostnames`, {
     method: 'PUT',
@@ -4000,15 +3973,12 @@ export async function uploadInstanceCertificate(body: {
 
 export async function attachInstanceCertificate(
   id: string,
-  hosts: string[],
+  hosts: string[]
 ): Promise<{ ok: boolean; hostnames: string[] }> {
-  return await apiFetch(
-    `${ADMIN_API}/instance/certificates/${encodeURIComponent(id)}/hostnames`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ hosts }),
-    },
-  )
+  return await apiFetch(`${ADMIN_API}/instance/certificates/${encodeURIComponent(id)}/hostnames`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hosts }),
+  })
 }
 
 export async function fetchInstanceAcmeSettings(): Promise<{
@@ -4022,7 +3992,7 @@ export async function fetchInstanceAcmeSettings(): Promise<{
 }
 
 export async function saveInstanceAcmeSettings(
-  updates: Record<string, string | boolean | null>,
+  updates: Record<string, string | boolean | null>
 ): Promise<{ settings: InstanceAcmeSettings; tosAccepted?: boolean }> {
   return await apiFetch(`${ADMIN_API}/instance/acme`, {
     method: 'PUT',
@@ -4058,7 +4028,8 @@ export type InstanceUpdates = {
   }
   units: {
     instance: {
-      installed: { version: string; commit: string }
+      /** `label` is the installed build's exact label (`0.1.3-canary.417`), when the control plane reports it. */
+      installed: { version: string; commit: string; label?: string | null }
       target: InstanceUpdateTarget | null
       /** UI package installed by the same control-plane upgrade. */
       uiTarget: InstanceUpdateTarget | null
@@ -4066,7 +4037,12 @@ export type InstanceUpdates = {
       updateAvailable?: boolean
     }
     daemon: {
-      installed: { version: string | null; commit: string | null } | null
+      installed: {
+        version: string | null
+        commit: string | null
+        label?: string | null
+        builtAt?: string | null
+      } | null
       target: InstanceUpdateTarget | null
       serverId: string | null
       connected: boolean
@@ -4105,12 +4081,7 @@ export type UpgradePreflightResult = {
 }
 
 export type UpgradeRunStatus =
-  | 'pending'
-  | 'running'
-  | 'succeeded'
-  | 'partially_failed'
-  | 'failed'
-  | 'cancelled'
+  'pending' | 'running' | 'succeeded' | 'partially_failed' | 'failed' | 'cancelled'
 
 export type UpgradePhase = 'colocated_daemon' | 'control_plane' | 'fleet'
 
@@ -4210,7 +4181,7 @@ export async function fetchUpgradeRun(runId: string): Promise<UpgradeActiveRunRe
 }
 
 export async function fetchUpgradeHistory(
-  params?: Readonly<{ offset?: number; limit?: number }>,
+  params?: Readonly<{ offset?: number; limit?: number }>
 ): Promise<UpgradeHistoryResponse> {
   const query = new URLSearchParams()
   if (params?.offset != null) query.set('offset', String(params.offset))
@@ -4220,7 +4191,7 @@ export async function fetchUpgradeHistory(
 }
 
 export async function fetchUpgradeServersPage(
-  params?: Readonly<{ offset?: number; limit?: number; status?: string }>,
+  params?: Readonly<{ offset?: number; limit?: number; status?: string }>
 ): Promise<UpgradeServersPage> {
   const query = new URLSearchParams()
   if (params?.offset != null) query.set('offset', String(params.offset))
@@ -4235,7 +4206,7 @@ export async function fetchUpgradeSettings(): Promise<{ ok: boolean; settings: U
 }
 
 export async function saveUpgradeSettings(
-  settings: UpgradeSettings,
+  settings: UpgradeSettings
 ): Promise<{ ok: boolean; settings: UpgradeSettings }> {
   return await apiFetch(`${ADMIN_API}/instance/updates/settings`, {
     method: 'PUT',
@@ -4248,7 +4219,7 @@ export async function runUpgradePreflight(): Promise<UpgradePreflightResult> {
 }
 
 export async function startPlatformUpgradeRun(
-  runId?: string,
+  runId?: string
 ): Promise<{ ok: boolean; runId: string }> {
   return await apiFetch(`${ADMIN_API}/instance/updates/runs`, {
     method: 'POST',
@@ -4267,10 +4238,9 @@ export async function retryUpgradeStep(stepId: string): Promise<{ ok: boolean }>
 }
 
 export async function cancelUpgradeRun(runId: string): Promise<{ ok: boolean }> {
-  return await apiFetch(
-    `${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/cancel`,
-    { method: 'POST' },
-  )
+  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: 'POST',
+  })
 }
 
 export async function requestInstanceUpdate(): Promise<{ ok: true; dispatched: true }> {
@@ -4303,9 +4273,7 @@ export async function fetchTrustedProxies(): Promise<TrustedProxySettings> {
 }
 
 /** Write-only. An empty token tears the tunnel down. The API returns no stored value. */
-export async function setInstanceTunnelToken(
-  token: string,
-): Promise<{ ok: boolean }> {
+export async function setInstanceTunnelToken(token: string): Promise<{ ok: boolean }> {
   return await apiFetch(`${ADMIN_API}/instance/tunnel-token`, {
     method: 'POST',
     body: JSON.stringify({ token }),
@@ -4477,7 +4445,10 @@ export type AdminTierWriteResponse = {
   verification: AdminTierVerification | null
 }
 
-export async function fetchAdminTiers(): Promise<{ tiers: AdminTier[]; ladder: AdminLadderEntry[] }> {
+export async function fetchAdminTiers(): Promise<{
+  tiers: AdminTier[]
+  ladder: AdminLadderEntry[]
+}> {
   return await apiFetch(`${ADMIN_API}/tiers`)
 }
 
@@ -7902,15 +7873,36 @@ export async function deleteManagedDatabase(
   )
 }
 
-export async function fetchManagedStatus(environmentId: string): Promise<{
+/** Outcome of the on-demand replica probe, present only on a `?refresh=1` read. */
+export type ManagedHealthRefreshResult = {
+  /** Replicas whose daemon returned a fresh reading. */
+  observed: number
+  /** Replicas that kept their stored observation (offline, old daemon, timeout, error). */
+  unavailable: number
+}
+
+export type ManagedStatusSnapshot = {
   status: ManagedEnvironmentRecord['status']
   host: string | null
   port: number | null
   error: string | null
   containers: ContainerRecord[]
   members: ManagedMemberRecord[]
-}> {
-  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/status`)
+  healthRefresh?: ManagedHealthRefreshResult
+}
+
+/**
+ * Database-only by default. `refresh: true` (the explicit Refresh action, never
+ * a poll) makes the instance ask every replica's daemon for a fresh health
+ * reading first — the promote gate rejects an observation older than two
+ * minutes, and health is otherwise only observed on apply/lifecycle results.
+ */
+export async function fetchManagedStatus(
+  environmentId: string,
+  options?: Readonly<{ refresh?: boolean }>
+): Promise<ManagedStatusSnapshot> {
+  const query = options?.refresh ? '?refresh=1' : ''
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/status${query}`)
 }
 
 export async function fetchManagedLogs(
@@ -8375,12 +8367,8 @@ export async function fetchNotifications(opts: { limit?: number; before?: string
   if (opts.limit) params.set('limit', String(opts.limit))
   if (opts.before) params.set('before', opts.before)
   const query = params.toString()
-  const path = query
-    ? `${CLIENT_API}/notifications?${query}`
-    : `${CLIENT_API}/notifications`
-  const body = await apiFetch<{ notifications?: NotificationRecord[]; unread?: number }>(
-    path,
-  )
+  const path = query ? `${CLIENT_API}/notifications?${query}` : `${CLIENT_API}/notifications`
+  const body = await apiFetch<{ notifications?: NotificationRecord[]; unread?: number }>(path)
   return { notifications: body.notifications ?? [], unread: body.unread ?? 0 }
 }
 
@@ -8390,11 +8378,16 @@ export async function fetchUnreadNotificationCount(): Promise<number> {
 }
 
 /** Mark the given rows read, or every unread row when `ids` is empty. */
-export async function markNotificationsRead(ids: readonly string[] = []): Promise<{ updated: number; unread: number }> {
-  const body = await apiFetch<{ updated?: number; unread?: number }>(`${CLIENT_API}/notifications/read`, {
-    method: 'POST',
-    body: JSON.stringify({ ids }),
-  })
+export async function markNotificationsRead(
+  ids: readonly string[] = []
+): Promise<{ updated: number; unread: number }> {
+  const body = await apiFetch<{ updated?: number; unread?: number }>(
+    `${CLIENT_API}/notifications/read`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }
+  )
   return { updated: body.updated ?? 0, unread: body.unread ?? 0 }
 }
 
@@ -8403,18 +8396,20 @@ export async function dismissNotification(id: string): Promise<void> {
 }
 
 export async function fetchNotificationEvents(): Promise<NotificationEventInfo[]> {
-  const body = await apiFetch<{ events?: NotificationEventInfo[] }>(`${CLIENT_API}/notification-events`)
+  const body = await apiFetch<{ events?: NotificationEventInfo[] }>(
+    `${CLIENT_API}/notification-events`
+  )
   return body.events ?? []
 }
 
 export async function fetchNotificationChannels(
   scope: 'user' | 'organization',
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<NotificationChannel[]> {
   const body = await apiFetch<{ channels?: NotificationChannel[] }>(
     `${CLIENT_API}/notification-channels?scope=${scope}`,
     undefined,
-    organizationId,
+    organizationId
   )
   return body.channels ?? []
 }
@@ -8430,12 +8425,12 @@ export type CreateNotificationChannelBody = {
 
 export async function createNotificationChannel(
   body: CreateNotificationChannelBody,
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<NotificationChannel> {
   const res = await apiFetch<{ channel: NotificationChannel }>(
     `${CLIENT_API}/notification-channels`,
     { method: 'POST', body: JSON.stringify(body) },
-    organizationId,
+    organizationId
   )
   return res.channel
 }
@@ -8443,20 +8438,23 @@ export async function createNotificationChannel(
 export async function updateNotificationChannel(
   id: string,
   patch: { label?: string; disabled?: boolean; rules?: NotificationRule[] },
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<NotificationChannel | null> {
   const res = await apiFetch<{ channel: NotificationChannel | null }>(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'PATCH', body: JSON.stringify(patch) },
-    organizationId,
+    organizationId
   )
   return res.channel
 }
 
-export async function deleteNotificationChannel(id: string, organizationId?: string | null): Promise<void> {
+export async function deleteNotificationChannel(
+  id: string,
+  organizationId?: string | null
+): Promise<void> {
   await apiFetch(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
-    organizationId,
+    organizationId
   )
 }

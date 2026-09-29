@@ -81,6 +81,17 @@ describe('provisioning keys', () => {
         license({ id: 'bare', provisioning: { since: '', hostname: '  ' } }),
       ])
     ).toBe('1 server provisioning')
+    const since = formatLocalDateTime('2026-09-26T23:50:00.000Z', { includeSeconds: false })
+    expect(
+      provisioningServersLabel([
+        license({ id: 'host', provisioning: { since: '', hostname: 'node' } }),
+      ])
+    ).toBe('1 server provisioning (node)')
+    expect(
+      provisioningServersLabel([
+        license({ id: 'time', provisioning: { since: '2026-09-26T23:50:00.000Z', hostname: '' } }),
+      ])
+    ).toBe(`1 server provisioning since ${since}`)
   })
 })
 

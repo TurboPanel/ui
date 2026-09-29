@@ -17,9 +17,11 @@ describe('wrangler environments', () => {
   const config = readJsonc('wrangler.jsonc') as Wrangler
 
   it('pins the deployable environments and their Worker names', () => {
-    expect(Object.keys(config.env).sort()).toEqual(['live', 'testing'])
+    expect(Object.keys(config.env).sort()).toEqual(['live', 'staging', 'testing'])
     expect(config.env.testing.name).toBe('testing-ui')
     expect(config.env.testing.route?.pattern).toBe('testing.turbopanel.dev')
+    expect(config.env.staging.name).toBe('staging-ui')
+    expect(config.env.staging.route?.pattern).toBe('staging.turbopanel.dev')
     expect(config.env.live.name).toBe('ui')
     expect(config.env.live.route?.pattern).toBe('turbopanel.app')
   })

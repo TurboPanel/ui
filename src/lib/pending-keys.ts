@@ -39,5 +39,7 @@ export function provisioningServersLabel(rows: readonly LicenseRecord[]): string
   const only = rows[0].provisioning
   const hostname = only?.hostname?.trim()
   const since = only?.since ? formatLocalDateTime(only.since, { includeSeconds: false }) : null
-  return `1 server provisioning${hostname ? ` (${hostname})` : ''}${since ? ` since ${since}` : ''}`
+  const named = hostname ? ` (${hostname})` : ''
+  const dated = since ? ` since ${since}` : ''
+  return `1 server provisioning${named}${dated}`
 }

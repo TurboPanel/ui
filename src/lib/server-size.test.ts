@@ -97,3 +97,65 @@ describe('describeSizeFit', () => {
     )
   })
 })
+
+describe('parseSizeOutput pins the accepted grammar', () => {
+  const ok = (cores: number, gib: number) => ({ cores, memoryBytes: Math.round(gib * GIB) })
+  const cases: (readonly [string, string, ReturnType<typeof ok> | null])[] = [
+    ['plain', '8 cores, 31.3 GiB RAM', ok(8, 31.3)],
+    ['singular core', '1 core, 2 GiB RAM', ok(1, 2)],
+    ['no spaces', '2cores,4GiB RAM', ok(2, 4)],
+    ['no space before RAM', '2 cores, 4 GiBRAM', ok(2, 4)],
+    ['upper case', '2 CORES, 4 GIB RAM', ok(2, 4)],
+    ['mixed case', '2 Cores, 4 gib ram', ok(2, 4)],
+    ['tabs and newlines', '3\t cores\n,\n 6.5\tGiB\nRAM', ok(3, 6.5)],
+    ['unicode whitespace', '3 cores,  6 GiB RAM', ok(3, 6)],
+    ['prompt and suffix', 'root@h:~# 4 cores ,  7.6 GiB RAM -> S1\n', ok(4, 7.6)],
+    ['noise before', 'abc 12 xyz 4 cores, 8 GiB RAM', ok(4, 8)],
+    ['first digit run before is skipped', '9 4 cores, 8 GiB RAM', ok(4, 8)],
+    ['first full match wins', '2 cores, 4 GiB RAM 8 cores, 16 GiB RAM', ok(2, 4)],
+    ['digits glued to a word', 'x16cores, 8 GiB RAM', ok(16, 8)],
+    ['leading zeros', '08 cores, 04.50 GiB RAM', ok(8, 4.5)],
+    ['trailing dot after digits is refused', '4 cores, 8. GiB RAM', null],
+    ['fraction needs digits', '4 cores, .5 GiB RAM', null],
+    ['zero cores', '0 cores, 4 GiB RAM', null],
+    ['zero memory', '4 cores, 0 GiB RAM', null],
+    ['zero fractional memory', '4 cores, 0.0 GiB RAM', null],
+    ['unsafe core count', '99999999999999999999 cores, 4 GiB RAM', null],
+    ['missing comma', '4 cores 8 GiB RAM', null],
+    ['missing unit', '4 cores, 8 RAM', null],
+    ['MiB instead of GiB', '4 cores, 8 MiB RAM', null],
+    ['missing RAM', '4 cores, 8 GiB', null],
+    ['no count', 'cores, 8 GiB RAM', null],
+    ['negative count reads the digits', '-4 cores, 8 GiB RAM', ok(4, 8)],
+    ['word between count and cores', '4 big cores, 8 GiB RAM', null],
+    ['comma decimal', '4 cores, 8,5 GiB RAM', null],
+    ['empty', '', null],
+    [
+      'first candidate wins even if a later one is valid',
+      '0 cores, 4 GiB RAM 2 cores, 4 GiB RAM',
+      null,
+    ],
+  ]
+  it.each(cases)('%s', (_name, input, expected) => {
+    expect(parseSizeOutput(input)).toEqual(expected)
+  })
+
+  it('rejects long adversarial inputs quickly and without changing the answer', () => {
+    const n = 50_000
+    const started = Date.now()
+    expect(parseSizeOutput('1'.repeat(n))).toBeNull()
+    expect(parseSizeOutput('1 '.repeat(n))).toBeNull()
+    expect(parseSizeOutput(`1${' '.repeat(n)}`)).toBeNull()
+    expect(parseSizeOutput(`1${' '.repeat(n)}cores${' '.repeat(n)}`)).toBeNull()
+    expect(parseSizeOutput(`4 cores,${' '.repeat(n)}1${'1'.repeat(n)}`)).toBeNull()
+    expect(parseSizeOutput(`4 cores, ${'1'.repeat(n)}${' '.repeat(n)}GiB`)).toBeNull()
+    expect(parseSizeOutput('1cores,'.repeat(n))).toBeNull()
+    expect(parseSizeOutput('1cores, 1 GiB '.repeat(n))).toBeNull()
+    expect(parseSizeOutput(`${'9'.repeat(n)} cores, 4 GiB RAM`)).toBeNull()
+    expect(parseSizeOutput(`${'x'.repeat(n)}4 cores, 8 GiB RAM`)).toEqual(ok(4, 8))
+    expect(
+      parseSizeOutput(`4${' '.repeat(n)}cores,${' '.repeat(n)}8${' '.repeat(n)}GiB RAM`)
+    ).toEqual(ok(4, 8))
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
+})

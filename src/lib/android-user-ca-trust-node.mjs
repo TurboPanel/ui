@@ -66,7 +66,7 @@ export function applyAndroidNetworkSecurityConfig(androidManifest) {
   nextApplications[0] = {
     ...application,
     $: {
-      ...(application.$ ?? {}),
+      ...application.$,
       'android:networkSecurityConfig': '@xml/network_security_config',
     },
   }
