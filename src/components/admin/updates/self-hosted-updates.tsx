@@ -249,6 +249,17 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
             errorCode={controlPlaneStep?.errorCode ?? null}
             title="Control plane"
           />
+          {data.units.instance.uiTarget ? (
+            // The UI package is unpacked and swapped in by the same control-plane
+            // step, so its progress is that step's: one step, shown on both rows.
+            <UpgradeStepTracker
+              phase="control_plane"
+              status={controlPlaneStep?.status ?? null}
+              errorCode={controlPlaneStep?.errorCode ?? null}
+              title="UI"
+              note="Installed together with the control plane."
+            />
+          ) : null}
           {upgradeRunErrorLabel(run?.error) ? (
             <Text style={panelStyles.error}>{upgradeRunErrorLabel(run?.error)}</Text>
           ) : null}
