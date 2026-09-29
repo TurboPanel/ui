@@ -150,5 +150,7 @@ describe('locationErrorField', () => {
     expect(locationErrorField(new Error('HTTP 400: Invalid location field: planet'))).toBeNull()
     expect(locationErrorField(new Error('HTTP 500'))).toBeNull()
     expect(locationErrorField(null)).toBeNull()
+    expect(locationErrorField({ message: 'Invalid location.city' })).toBeNull()
+    expect(locationErrorField(42)).toBeNull()
   })
 })

@@ -29,7 +29,7 @@ export function ControlPlaneUpdatingOverlay() {
   const [dismissReload, setDismissReload] = useState(false)
   const [dismissedUpdating, setDismissedUpdating] = useState(false)
   // Re-render when the watch lapses so a stale flag can never hold the scrim.
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
 
   const runActive = isUpgradeRunActive(activeRun.data?.run?.status)
   const watchRemainingMs = controlPlaneUpgradeWatchRemainingMs()
@@ -59,7 +59,7 @@ export function ControlPlaneUpdatingOverlay() {
     if (watchRemainingMs <= 0) return
     const timer = setTimeout(() => setTick((n) => n + 1), watchRemainingMs + 50)
     return () => clearTimeout(timer)
-  }, [watchRemainingMs])
+  }, [watchRemainingMs, tick])
 
   if (!visible && !(needsReload && !dismissReload)) return null
 

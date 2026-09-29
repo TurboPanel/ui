@@ -27,6 +27,8 @@ describe('validateUpgradeBatchInput', () => {
     expect(second.offset).toBe(50)
     expect(second.limit).toBe(50)
     expect(fleetServersQuery(0, 'done').offset).toBe(0)
+    expect(fleetServersQuery(-50, 'done').offset).toBe(0)
+    expect(fleetServersQuery(100, 'done', 25)).toEqual({ offset: 100, limit: 25, status: 'done' })
   })
 
   it('accepts count batches', () => {

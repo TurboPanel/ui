@@ -1843,7 +1843,8 @@ export function describeNoLicenseAvailable(
   if (purchased <= 0) return 'No licenses have been bought yet. Buy one on the billing page.'
   if (ending > 0) {
     const when = formatShortDate(endsAt)
-    const ends = `${ending} ${ending === 1 ? 'ends' : 'end'}${when ? ` ${when}` : ' at the end of the period'}`
+    const endsWhen = when ? ` ${when}` : ' at the end of the period'
+    const ends = `${ending} ${ending === 1 ? 'ends' : 'end'}${endsWhen}`
     return `${inUse} in use, ${ends} — restore one to add this server.`
   }
   if (purchased === 1)

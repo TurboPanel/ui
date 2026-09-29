@@ -49,7 +49,7 @@ export function fleetServersQuery(
   status: string,
   pageSize = UPGRADE_FLEET_PAGE_SIZE,
 ): { offset: number; limit: number; status: string } {
-  const safeOffset = offset < 0 ? 0 : offset
+  const safeOffset = Math.max(offset, 0)
   return { offset: safeOffset, limit: pageSize, status }
 }
 
