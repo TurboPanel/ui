@@ -2,6 +2,7 @@ import { type ReactNode } from 'react'
 import {
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -104,10 +105,18 @@ export function ModalSheet({
           ]}
         >
           <Text style={styles.title}>{title}</Text>
-          {description ? (
-            <Text style={styles.description}>{description}</Text>
-          ) : null}
-          {children}
+          {/* The body scrolls, the footer stays pinned: on a phone a tall body
+              used to push the confirm button off the sheet with no way to reach it. */}
+          <ScrollView
+            style={styles.body}
+            contentContainerStyle={styles.bodyContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {description ? (
+              <Text style={styles.description}>{description}</Text>
+            ) : null}
+            {children}
+          </ScrollView>
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
       </View>
@@ -150,6 +159,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
+  },
+  body: {
+    flexShrink: 1,
+  },
+  bodyContent: {
+    gap: spacing.sm,
   },
   footer: {
     marginTop: spacing.xs,
