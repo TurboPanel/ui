@@ -916,17 +916,15 @@ export async function fillMissingLicenses(
   packages: readonly NoticePackage[],
   lookup: (pkg: NoticePackage) => Promise<string>,
 ): Promise<NoticePackage[]> {
-  const out: NoticePackage[] = []
-  for (const pkg of packages) {
-    if (!needsLicenseLookup(pkg.license)) {
-      out.push(pkg)
-      continue
-    }
-    const lookedUp = (await lookup(pkg)).trim()
-    const license = lookedUp || defaultLicenseForPackageName(pkg.name) || ''
-    out.push(license ? { ...pkg, license } : pkg)
-  }
-  return out
+  // Lookups are independent, and Promise.all keeps the input order.
+  return Promise.all(
+    packages.map(async (pkg) => {
+      if (!needsLicenseLookup(pkg.license)) return pkg
+      const lookedUp = (await lookup(pkg)).trim()
+      const license = lookedUp || defaultLicenseForPackageName(pkg.name) || ''
+      return license ? { ...pkg, license } : pkg
+    }),
+  )
 }
 
 export function needsLicenseLookup(license: string): boolean {
