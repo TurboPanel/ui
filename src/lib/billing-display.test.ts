@@ -280,6 +280,18 @@ describe('removableAt / canReleaseAt', () => {
   })
 })
 
+describe('endingLabel edge cases', () => {
+  it('is empty for zero, negative and NaN counts', () => {
+    expect(endingLabel(0, OCT_26)).toBe('')
+    expect(endingLabel(-1, OCT_26)).toBe('')
+    expect(endingLabel(Number.NaN, OCT_26)).toBe('')
+  })
+  it('falls back to the end of the period without a date', () => {
+    expect(endingLabel(1, null)).toBe('1 ends at the end of the period')
+    expect(endingLabel(2, undefined)).toBe('2 end at the end of the period')
+  })
+})
+
 describe('parseLicenseCount', () => {
   it('accepts whole numbers of at least 1', () => {
     expect(parseLicenseCount('1')).toBe(1)
@@ -442,6 +454,43 @@ describe('describeBillingRefusal', () => {
       describeBillingRefusal(refusal({ error: 'licenses_ending', tierId: 'tx', ending: 1, endsAt: null }))
     ).toBe('You have 1 license ending at the end of the period — restore those first.')
     expect(describeBillingRefusal(refusal({ error: 'no_licenses_ending' }))).toContain('Refresh')
+  })
+
+  it('words every licenses_ending variant: count, tier label and date each optional', () => {
+    const labels = { tierLabel: (id: string) => (id === 't1' ? 'S1' : null) }
+    const ending = (body: Record<string, unknown>, ctx = labels) =>
+      describeBillingRefusal(refusal({ error: 'licenses_ending', ...body }), ctx)
+    expect(ending({ tierId: 't1', ending: 1, endsAt: null })).toBe(
+      'You have 1 S1 license ending at the end of the period — restore those first.'
+    )
+    expect(ending({ tierId: 't1', ending: 0, endsAt: OCT_26 })).toBe(
+      `You have Some S1 licenses ending ${oct26} — restore those first.`
+    )
+    expect(ending({ ending: 2, endsAt: OCT_26 })).toBe(
+      `You have 2 licenses ending ${oct26} — restore those first.`
+    )
+    expect(ending({})).toBe(
+      'You have Some licenses ending at the end of the period — restore those first.'
+    )
+  })
+
+  it('names a stranded server by id when no name resolver knows it, and the tier-less variant', () => {
+    expect(
+      describeBillingRefusal(refusal({ error: 'servers_uncovered', serverId: 'srv-9' }), {
+        serverName: () => null,
+      })
+    ).toBe('srv-9 would be left uncovered. Buy or move a license that covers it first.')
+  })
+
+  it('says how many licenses are in use only when both counts are given', () => {
+    expect(
+      describeBillingRefusal(
+        refusal({ error: 'licenses_in_use', licensesHeld: 1, purchasedAfter: 0 })
+      )
+    ).toBe('1 license is in use but only 0 would remain. Remove a server or a waiting key first.')
+    expect(describeBillingRefusal(refusal({ error: 'licenses_in_use', licensesHeld: 1 }))).toBe(
+      'More licenses are in use than would remain. Remove a server or a waiting key first.'
+    )
   })
 
   it('explains the other refusals with a next step', () => {
