@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { RefreshHealthRow } from '@/components/org/managed/refresh-health-row'
 import {
   Button,
   ButtonRow,
@@ -21,7 +22,6 @@ import type {
 import {
   formatReplicationLag,
   managedErrorMessage,
-  managedHealthRefreshNotice,
   managedRecoveryBanner,
   managedReplicaPromoteAction,
   MEMBER_MANUAL_DR_CANDIDATE_LABEL,
@@ -55,7 +55,6 @@ import {
   usePromoteManagedDisasterRecovery,
   usePromoteManagedMember,
   useResyncManagedMember,
-  useRefreshManagedStatus,
   useRemoveManagedMember,
   useUpdateManagedMemberReadEligible,
   useUpdateManagedMemberReplicaClass,
@@ -132,7 +131,6 @@ export function ManagedClusterPanel({
   const removeMember = useRemoveManagedMember(orgId, environmentId)
   const promoteMember = usePromoteManagedMember(orgId, environmentId)
   const resyncMember = useResyncManagedMember(orgId, environmentId)
-  const refreshStatus = useRefreshManagedStatus(orgId, environmentId)
   const promoteDisaster = usePromoteManagedDisasterRecovery(orgId, environmentId)
 
   const [error, setError] = useState<string | null>(null)
@@ -146,7 +144,6 @@ export function ManagedClusterPanel({
   const [forceEscalate, setForceEscalate] = useState(false)
   const [forceGateMessage, setForceGateMessage] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
-  const [refreshNotice, setRefreshNotice] = useState<string | null>(null)
 
   const servers = orEmptyArray(serversQuery.data?.servers)
   const datacenters = orEmptyArray(datacentersQuery.data?.datacenters)
@@ -242,20 +239,6 @@ export function ManagedClusterPanel({
       serverById.get(member.serverId)?.hostname?.trim() ||
       member.serverId
     )
-  }
-
-  // Explicit action only: asks each replica's daemon for a fresh reading so the
-  // promote gate (which rejects an observation older than two minutes) can pass
-  // on a healthy idle cluster. The background poll never does this.
-  const handleRefreshHealth = async () => {
-    setError(null)
-    setRefreshNotice(null)
-    const outcome = await refreshStatus.run()
-    if (!outcome.ok) {
-      if (outcome.error) setError(outcome.error)
-      return
-    }
-    setRefreshNotice(managedHealthRefreshNotice(outcome.value.healthRefresh))
   }
 
   const handleAddReplica = async () => {
@@ -432,20 +415,13 @@ export function ManagedClusterPanel({
         </View>
       ) : null}
 
-      {members.some((member) => member.role === 'replica') ? (
-        <View style={styles.refreshRow}>
-          <Button
-            label="Refresh health"
-            busyLabel="Refreshing…"
-            busy={refreshStatus.isPending}
-            disabled={!canManage || busy || working}
-            onPress={() => {
-              void handleRefreshHealth()
-            }}
-          />
-          {refreshNotice ? <Text style={panelStyles.detailLine}>{refreshNotice}</Text> : null}
-        </View>
-      ) : null}
+      <RefreshHealthRow
+        orgId={orgId}
+        environmentId={environmentId}
+        hasReplicas={members.some((member) => member.role === 'replica')}
+        disabled={!canManage || busy || working}
+        onError={setError}
+      />
 
       <View style={styles.list}>
         {members.map((member) => (
@@ -1101,11 +1077,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
-  },
-  refreshRow: {
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-    alignItems: 'flex-start',
   },
   healthText: {
     color: colors.textMuted,
