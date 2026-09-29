@@ -110,13 +110,15 @@ export async function waitForControlPlaneRecovery<T>({
   // away, so the first thing this does is wait.
   await sleep(intervalMs)
 
-  for (;;) {
+  const probeAgain = async (): Promise<ControlPlaneRecovery<T>> => {
     try {
       return { kind: 'recovered', value: await probe() }
     } catch (err) {
       if (!isControlPlaneRestartError(err)) throw err
       if (now() >= deadline) return { kind: 'unreachable' }
       await sleep(intervalMs)
+      return probeAgain()
     }
   }
+  return probeAgain()
 }
