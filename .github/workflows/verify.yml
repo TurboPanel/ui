@@ -6,6 +6,10 @@ on:
       - trunk
   pull_request:
     types: [opened, synchronize, reopened]
+  # A manual run of trunk tests the trunk commit itself, like a push: turbopaneld's
+  # "Start Next Version" uses it so a started minor gets its canary at once
+  # (canary.yml accepts it; a run of any other branch never publishes).
+  workflow_dispatch:
 
 # Read-only everywhere: nothing here writes with GITHUB_TOKEN (SonarCloud
 # decorates PRs through its own GitHub App).
@@ -164,19 +168,6 @@ jobs:
         working-directory: turbopaneld
         run: deno task check:metrics-legacy
 
-  # A new minor (x.y.0) needs the daemon released first (TurboPanel/dev
-  # gh-minor-gate.yml, role=dependent). Only ever red on a minor Release PR into
-  # live while turbopaneld has no v<x.y.0> release; a patch or any other PR
-  # passes at once.
-  minor-gate:
-    uses: TurboPanel/dev/.github/workflows/gh-minor-gate.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
-    with:
-      role: dependent
-      version-file: package.json
-    secrets:
-      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
-      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-
   # The one check the trunk ruleset requires. It waits on every PR-time job
   # and fails unless each one succeeded, so a renamed or added job can never
   # slip past the merge gate; `skipped` is still a failure here because no job
@@ -192,7 +183,7 @@ jobs:
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
-    needs: [verify, metrics-legacy, minor-gate]
+    needs: [verify, metrics-legacy]
     if: >-
       ${{ (github.event_name == 'pull_request' && always())
           || (!cancelled() && !contains(needs.*.result, 'cancelled')) }}

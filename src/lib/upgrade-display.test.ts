@@ -343,6 +343,19 @@ describe('installedBuildLabel', () => {
       )
     ).toBe('0.1.2 · abc')
   })
+
+  it('drops the commit with hideCommit, leaving the version alone', () => {
+    expect(
+      installedBuildLabel({ version: '0.1.4', commit: '3f7eb36' }, null, { hideCommit: true })
+    ).toBe('0.1.4')
+    expect(
+      installedBuildLabel({ version: '0.1.4', commit: '3f7eb36' }, null, { hideCommit: false })
+    ).toBe('0.1.4 · 3f7eb36')
+    // No version at all: a hidden commit never falls back to a bare hash.
+    expect(
+      installedBuildLabel({ version: null, commit: '3f7eb36' }, null, { hideCommit: true })
+    ).toBe('Unknown')
+  })
 })
 
 describe('a run that has not started reads as not started', () => {
