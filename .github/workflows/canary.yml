@@ -10,9 +10,11 @@
 # counts: the trunk → staging Release Candidate PR's Verify also reports
 # head_branch trunk, but it tests trunk merged into staging, not the trunk
 # commit, and must never stand in for a failed or cancelled trunk run.
-# cancel-in-progress so a burst of merges only ever publishes the newest one;
-# a run started by any other Verify goes to its own group, so it can never
-# cancel a real canary.
+# One canary at a time, in merge order, and none dropped: a burst of merges
+# queues (`queue: max`, up to 100 pending) instead of cancelling, so every
+# green trunk push gets its canary and the rc PR can always find the one for
+# the commit it merges. A run started by any other Verify goes to its own
+# group, so it never holds up or displaces a real canary.
 
 name: Canary
 
@@ -27,7 +29,8 @@ permissions:
 
 concurrency:
   group: ${{ github.event.workflow_run.event == 'push' && 'canary' || format('canary-ignored-{0}', github.run_id) }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:

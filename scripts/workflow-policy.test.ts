@@ -42,6 +42,10 @@ describe('canary', () => {
     expect(text('canary.yml')).toContain('ref: ${{ github.event.workflow_run.head_sha }}')
   })
 
+  it('queues every green trunk push instead of dropping superseded ones', () => {
+    expect(text('canary.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
+  })
+
   it('never lets an ignored run cancel a real canary', () => {
     expect(text('canary.yml')).toMatch(
       /group: \$\{\{ github\.event\.workflow_run\.event == 'push' && 'canary' \|\| format\('canary-ignored-\{0\}', github\.run_id\) \}\}/
