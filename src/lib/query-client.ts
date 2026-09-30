@@ -44,7 +44,7 @@ export function setForbiddenHandler(handler: ForbiddenHandler | null): void {
 
 async function routeForbiddenError(error: unknown): Promise<void> {
   if (!isForbiddenError(error) || !forbiddenHandler) return
-  if (forbiddenRecoveryInFlight) {
+  if (forbiddenRecoveryInFlight !== null) {
     await forbiddenRecoveryInFlight
     return
   }

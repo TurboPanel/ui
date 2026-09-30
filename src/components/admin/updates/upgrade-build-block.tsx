@@ -3,7 +3,11 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Badge, Button } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdateTarget } from '@/lib/instance-api'
-import { formatUpgradeBuildDisplayName, upgradeBuildDetailLines } from '@/lib/upgrade-display'
+import {
+  formatUpgradeBuildDisplayName,
+  updateAvailabilityBadge,
+  upgradeBuildDetailLines,
+} from '@/lib/upgrade-display'
 import { colors, spacing } from '@/lib/theme'
 
 /**
@@ -30,13 +34,7 @@ export function UpgradeBuildBlock({
     <View style={styles.block}>
       <View style={styles.head}>
         <Text style={panelStyles.detailLabel}>{title}</Text>
-        {updateAvailable === null ? (
-          <Badge tone="muted" label="Not connected" />
-        ) : updateAvailable ? (
-          <Badge tone="pending" label="Update available" />
-        ) : (
-          <Badge tone="ok" label="Up to date" />
-        )}
+        <Badge {...updateAvailabilityBadge(updateAvailable)} />
       </View>
       <Text style={styles.installed}>{installedLabel}</Text>
       {updateAvailable ? (

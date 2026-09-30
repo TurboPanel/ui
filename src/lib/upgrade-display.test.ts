@@ -8,6 +8,7 @@ import {
   resolvePlatformUpgradeHeadline,
   stepHasStarted,
   summarizeFleetSteps,
+  updateAvailabilityBadge,
   updateAvailableSentence,
   upgradeBuildDetailLines,
   upgradeBuildVersionLabel,
@@ -368,6 +369,14 @@ describe('a run that has not started reads as not started', () => {
       label: 'Not started',
       detail: null,
     })
+  })
+})
+
+describe('updateAvailabilityBadge', () => {
+  it('names each state in words', () => {
+    expect(updateAvailabilityBadge(null)).toEqual({ tone: 'muted', label: 'Not connected' })
+    expect(updateAvailabilityBadge(true)).toEqual({ tone: 'pending', label: 'Update available' })
+    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to date' })
   })
 })
 

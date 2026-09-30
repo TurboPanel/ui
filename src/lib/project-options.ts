@@ -22,10 +22,10 @@ export function buildProjectOptionsPatch(
   const containerNaming =
     patch.containerNaming ?? project.options?.containerNaming
 
-  const defaultServerId =
-    patch.defaultServerId !== undefined
-      ? patch.defaultServerId
-      : project.options?.defaultServerId
+  // Not `??`: an explicit `null` in the patch clears the pin and must not fall back.
+  let defaultServerId: ProjectOptionsPatch['defaultServerId'] =
+    project.options?.defaultServerId
+  if (patch.defaultServerId !== undefined) defaultServerId = patch.defaultServerId
 
   const options: ProjectOptionsPatch = {}
   if (compose) options.compose = compose
