@@ -225,6 +225,9 @@ export function upgradeStepOutcome(
 ): UpgradeStepOutcome {
   const detail = upgradeStepErrorLabel(step.errorCode)
   switch (step.status) {
+    case null:
+    case undefined:
+      return { tone: 'muted', label: 'Not started', detail: null }
     case 'done':
       return { tone: 'ok', label: 'Done', detail: null }
     case 'skipped':
@@ -250,6 +253,48 @@ export function upgradeStepOutcome(
       }
     }
   }
+}
+
+/** Not started: nothing to highlight in the step bar yet. */
+export function stepHasStarted(status: UpgradeStepStatus | null | undefined): boolean {
+  return status != null && status !== 'pending' && status !== 'waiting'
+}
+
+/** The fleet table's Status column: what the rollout is doing with this server, in plain words. */
+export function fleetStatusBadge(status: UpgradeStepStatus): {
+  tone: 'ok' | 'muted' | 'danger' | 'pending' | 'info'
+  label: string
+} {
+  switch (status) {
+    case 'done':
+      return { tone: 'ok', label: 'Updated' }
+    case 'skipped':
+      return { tone: 'muted', label: 'Skipped' }
+    case 'failed':
+      return { tone: 'danger', label: 'Failed' }
+    case 'rolled_back':
+      return { tone: 'danger', label: 'Rolled back' }
+    case 'needs_attention':
+      return { tone: 'pending', label: 'Needs attention' }
+    case 'pending':
+      return { tone: 'muted', label: 'Waiting' }
+    case 'waiting':
+      return { tone: 'pending', label: 'Offline' }
+    default:
+      return { tone: 'info', label: 'Updating' }
+  }
+}
+
+/**
+ * "The control plane and the UI can be updated." — which pieces have an update,
+ * in reading order, for the sentence under the Status headline.
+ */
+export function updateAvailableSentence(names: readonly string[]): string | null {
+  if (names.length === 0) return null
+  const head = names.slice(0, -1).join(', ')
+  const sentence =
+    names.length === 1 ? `${names[0]} can be updated.` : `${head} and ${names.at(-1)} can be updated.`
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1)
 }
 
 export function upgradePhaseLabel(phase: UpgradePhase | null | undefined): string {

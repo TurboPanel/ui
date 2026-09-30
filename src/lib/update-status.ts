@@ -15,8 +15,28 @@ import { formatUpgradeBuildDisplayName } from '@/lib/upgrade-display'
 
 export const UPGRADE_DOCS_URL = 'https://turbopanel.io/docs/deployment/upgrade'
 
+/**
+ * The installer host for an update channel: rc is `staging.`, the canary rail is
+ * `testing.`, a release (or an unknown channel) the bare `turbopanel.sh`. Each
+ * serves that environment's `run.sh`.
+ */
+export function installerHostForChannel(channel: string | null | undefined): string {
+  switch (channel) {
+    case 'rc':
+      return 'staging.turbopanel.sh'
+    case 'trunk':
+    case 'edge':
+    case 'canary':
+      return 'testing.turbopanel.sh'
+    default:
+      return 'turbopanel.sh'
+  }
+}
+
 /** Refreshes the co-located daemon in place (instance, UI and database untouched). */
-export const DAEMON_REINSTALL_COMMAND = 'curl -fsSL turbopanel.sh | TURBOPANEL_DAEMON_ONLY=1 sh'
+export function daemonReinstallCommand(channel?: string | null): string {
+  return `curl -fsSL ${installerHostForChannel(channel)} | TURBOPANEL_DAEMON_ONLY=1 sh`
+}
 
 export const DAEMON_LOGS_COMMAND = 'journalctl -u turbopaneld -n 100 --no-pager'
 
@@ -45,7 +65,10 @@ function clean(value: string | null | undefined): string | null {
 }
 
 /** Why a step failed, in words an operator can act on. */
-export function explainUpgradeFailure(input: FailureInput): UpdateFailureExplanation {
+export function explainUpgradeFailure(
+  input: FailureInput,
+  channel?: string | null
+): UpdateFailureExplanation {
   const code = clean(input.errorCode)
   const message = clean(input.errorMessage)
   const mentions = (pattern: RegExp) => message !== null && pattern.test(message)
@@ -56,7 +79,7 @@ export function explainUpgradeFailure(input: FailureInput): UpdateFailureExplana
       body:
         "This server's TurboPanel can't verify the new release's signature. " +
         'Reinstall the daemon once to trust the current signing key: run this as root on the server, then try the update again.',
-      command: DAEMON_REINSTALL_COMMAND,
+      command: daemonReinstallCommand(channel),
       docsUrl: UPGRADE_DOCS_URL,
     }
   }
@@ -164,9 +187,9 @@ export function runFailure(
         stepTitle: 'Upgrade',
       }
     }
-    return { ...explainUpgradeFailure({ errorCode: run.error }), stepTitle: 'Upgrade' }
+    return { ...explainUpgradeFailure({ errorCode: run.error }, run.channel), stepTitle: 'Upgrade' }
   }
-  return { ...explainUpgradeFailure(step), stepTitle: failedStepTitle(step) }
+  return { ...explainUpgradeFailure(step, run.channel), stepTitle: failedStepTitle(step) }
 }
 
 const WAITING_STATUSES = new Set([

@@ -3,31 +3,46 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Badge, Button } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdateTarget } from '@/lib/instance-api'
-import {
-  formatUpgradeBuildDisplayName,
-  upgradeBuildDetailLines,
-} from '@/lib/upgrade-display'
+import { formatUpgradeBuildDisplayName, upgradeBuildDetailLines } from '@/lib/upgrade-display'
 import { colors, spacing } from '@/lib/theme'
 
+/**
+ * One updatable piece (control plane, UI, co-located daemon): what it runs now,
+ * whether the channel has something newer, and — only then — what it would
+ * move to. `updateAvailable` is `null` when that is not known (a daemon that is
+ * not connected).
+ */
 export function UpgradeBuildBlock({
   title,
   target,
   installedLabel,
+  updateAvailable,
 }: Readonly<{
   title: string
   target: InstanceUpdateTarget | null
   installedLabel: string
+  updateAvailable: boolean | null
 }>) {
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const display = formatUpgradeBuildDisplayName(target)
   const detail = upgradeBuildDetailLines(target)
 
   return (
     <View style={styles.block}>
-      <Text style={panelStyles.detailLabel}>{title}</Text>
-      <Text style={styles.displayName}>{display}</Text>
+      <View style={styles.head}>
+        <Text style={panelStyles.detailLabel}>{title}</Text>
+        {updateAvailable === null ? (
+          <Badge tone="muted" label="Not connected" />
+        ) : updateAvailable ? (
+          <Badge tone="pending" label="Update available" />
+        ) : (
+          <Badge tone="ok" label="Up to date" />
+        )}
+      </View>
+      <Text style={styles.installed}>{installedLabel}</Text>
+      {updateAvailable ? (
+        <Text style={panelStyles.muted}>Update to {formatUpgradeBuildDisplayName(target)}</Text>
+      ) : null}
       <View style={styles.row}>
-        <Badge tone="muted" label={`Installed ${installedLabel}`} />
         <Button
           label={detailsOpen ? 'Hide details' : 'Details'}
           size="sm"
@@ -39,16 +54,16 @@ export function UpgradeBuildBlock({
       </View>
       {detailsOpen ? (
         <View style={styles.details}>
-          {detail.version ? (
-            <Text style={panelStyles.muted}>Version {detail.version}</Text>
-          ) : null}
-          {detail.commit ? (
-            <Text style={panelStyles.muted}>Commit {detail.commit}</Text>
-          ) : null}
+          <Text style={panelStyles.detailLabel}>Newest build on this channel</Text>
+          {detail.version ? <Text style={panelStyles.muted}>Version {detail.version}</Text> : null}
+          {detail.commit ? <Text style={panelStyles.muted}>Commit {detail.commit}</Text> : null}
           {detail.manifestUrl ? (
             <Text style={panelStyles.muted} numberOfLines={2}>
               Manifest {detail.manifestUrl}
             </Text>
+          ) : null}
+          {!detail.version && !detail.commit ? (
+            <Text style={panelStyles.muted}>No package on this channel.</Text>
           ) : null}
         </View>
       ) : null}
@@ -60,7 +75,14 @@ const styles = StyleSheet.create({
   block: {
     gap: spacing.xs,
   },
-  displayName: {
+  head: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  installed: {
     color: colors.text,
     fontSize: 16,
     fontWeight: '600',

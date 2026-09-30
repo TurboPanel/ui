@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCounterLabel,
+  fleetStatusBadge,
   formatUpgradeBuildDisplayName,
   installedBuildLabel,
   parseBuildCounter,
   mapStepStatusToPipeline,
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
+  stepHasStarted,
   summarizeFleetSteps,
+  updateAvailableSentence,
   upgradeBuildDetailLines,
   upgradeChannelTitle,
   upgradePhaseLabel,
@@ -339,5 +342,49 @@ describe('installedBuildLabel', () => {
         { commit: 'abc', version: '0.1.3-canary.1' }
       )
     ).toBe('0.1.2 · abc')
+  })
+})
+
+describe('a run that has not started reads as not started', () => {
+  it('has no started step for a missing, pending or waiting status', () => {
+    expect(stepHasStarted(null)).toBe(false)
+    expect(stepHasStarted('pending')).toBe(false)
+    expect(stepHasStarted('waiting')).toBe(false)
+    expect(stepHasStarted('preparing')).toBe(true)
+    expect(stepHasStarted('done')).toBe(true)
+    expect(stepHasStarted('failed')).toBe(true)
+  })
+
+  it('says "Not started" for a step with no status, never "Preparing"', () => {
+    expect(upgradeStepOutcome({ status: null })).toEqual({
+      tone: 'muted',
+      label: 'Not started',
+      detail: null,
+    })
+  })
+})
+
+describe('fleetStatusBadge', () => {
+  it('names what the rollout is doing with a server', () => {
+    expect(fleetStatusBadge('pending')).toEqual({ tone: 'muted', label: 'Waiting' })
+    expect(fleetStatusBadge('waiting')).toEqual({ tone: 'pending', label: 'Offline' })
+    expect(fleetStatusBadge('installing')).toEqual({ tone: 'info', label: 'Updating' })
+    expect(fleetStatusBadge('done')).toEqual({ tone: 'ok', label: 'Updated' })
+    expect(fleetStatusBadge('failed')).toEqual({ tone: 'danger', label: 'Failed' })
+    expect(fleetStatusBadge('rolled_back')).toEqual({ tone: 'danger', label: 'Rolled back' })
+    expect(fleetStatusBadge('needs_attention')).toEqual({ tone: 'pending', label: 'Needs attention' })
+  })
+})
+
+describe('updateAvailableSentence', () => {
+  it('names the pieces in reading order', () => {
+    expect(updateAvailableSentence([])).toBeNull()
+    expect(updateAvailableSentence(['the UI'])).toBe('The UI can be updated.')
+    expect(updateAvailableSentence(['the control plane', 'the UI'])).toBe(
+      'The control plane and the UI can be updated.'
+    )
+    expect(updateAvailableSentence(['the control plane', 'the UI', 'the co-located daemon'])).toBe(
+      'The control plane, the UI and the co-located daemon can be updated.'
+    )
   })
 })

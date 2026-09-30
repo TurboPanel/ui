@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:0eed14e660be05d5a45fc2433b8c31abb68904234a52974d128c3a7ac8c0f9ca
+pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946c5b199
 -->
 
 ## Production dependencies
@@ -2540,7 +2540,7 @@ pnpm-lock.yaml sha256:0eed14e660be05d5a45fc2433b8c31abb68904234a52974d128c3a7ac8
 - Copyright: Denis Malinochkin
 - Homepage: https://github.com/mrmlnc/fast-glob#readme
 
-### fast-uri@3.1.7
+### fast-uri@3.1.8
 
 - License: BSD-3-Clause
 - Copyright: Vincent Le Goff
@@ -4898,7 +4898,7 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://github.com/juliangruber/brace-expansion#readme
 
-### brace-expansion@2.1.4
+### brace-expansion@2.1.7
 
 - License: MIT
 - Homepage: https://github.com/juliangruber/brace-expansion#readme

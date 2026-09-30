@@ -86,19 +86,20 @@ export const authFormStyles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xs,
   },
-  /** Logo mark + title on one row (mark left, title right-aligned). */
+  /** Logo mark left, title right, the HIGH AVAILABILITY pill centered between them. */
   pageTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.md,
   },
-  /** Logo mark plus, on the hosted control plane, the HIGH AVAILABILITY pill. */
-  brandGroup: {
-    flexDirection: 'row',
+  /**
+   * Takes the space between the mark and the title and centers the pill in
+   * it. Empty on self-hosted, where it still pushes the title to the right.
+   */
+  wordmarkSlot: {
+    flex: 1,
     alignItems: 'center',
-    gap: spacing.sm,
-    flexShrink: 0,
+    minWidth: 0,
   },
   brandMark: {
     flexShrink: 0,
@@ -114,7 +115,7 @@ export const authFormStyles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.3,
     lineHeight: 28,
-    flex: 1,
+    flexShrink: 0,
     textAlign: 'right',
     paddingRight: spacing.xs,
   },

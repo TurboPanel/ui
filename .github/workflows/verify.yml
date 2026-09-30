@@ -7,8 +7,21 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# Read-only everywhere: nothing here writes with GITHUB_TOKEN (SonarCloud
+# decorates PRs through its own GitHub App).
 permissions:
   contents: read
+
+# One run per event and ref at a time. A PR keeps only its newest commit (the
+# older run is cancelled). A trunk push never cancels and never drops a run:
+# `queue: max` keeps up to 100 pending, so three quick merges each get their
+# own Verify and so their own canary. With the default single-pending queue
+# the middle merge's run would be replaced, conclude cancelled, and that
+# commit would never get a canary.
+concurrency:
+  group: ui-verify-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
 
 jobs:
   # Lint + typecheck + Vitest LCOV, then Sonar quality gate. If Sonar fails,
@@ -16,6 +29,10 @@ jobs:
   # (Administration → Analysis Method).
   verify:
     runs-on: ubuntu-latest
+    # Kept as a second guard so two Sonar analyses of one ref never overlap.
+    # The workflow-level block above is what queues runs: it admits one run
+    # per event and ref at a time, so on a push this group never holds a
+    # second job and never cancels one.
     concurrency:
       group: ui-sonar-${{ github.event_name }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -121,6 +138,7 @@ jobs:
   # cannot see PRs made here. This job covers ui/src and ui/design-system.
   metrics-legacy:
     runs-on: ubuntu-latest
+    # Kept as it is; see the note on the verify job's group.
     concurrency:
       group: ui-metrics-legacy-${{ github.event_name }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -161,14 +179,23 @@ jobs:
 
   # The one check the trunk ruleset requires. It waits on every PR-time job
   # and fails unless each one succeeded, so a renamed or added job can never
-  # slip past the merge gate, and a cancelled run never counts as green.
-  # `if: always()` keeps it reporting when a need fails; `skipped` is still a
-  # failure here because no job above is conditional.
+  # slip past the merge gate; `skipped` is still a failure here because no job
+  # above is conditional.
+  #
+  # On a PR it always reports (`always()`), so a cancelled PR run is red and
+  # can never count as green for the merge. On a trunk push nothing merges on
+  # it, so a cancelled run (a newer merge superseded it — the run or, through
+  # the job-level concurrency above, just its jobs) leaves ci-ok skipped, grey
+  # rather than red: a red X on trunk then only ever means a real failure. A
+  # failed need with none cancelled still runs it and turns it red (and a
+  # failed job is red on the commit either way).
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
     needs: [verify, metrics-legacy, minor-gate]
-    if: always()
+    if: >-
+      ${{ (github.event_name == 'pull_request' && always())
+          || (!cancelled() && !contains(needs.*.result, 'cancelled')) }}
     permissions: {}
     steps:
       - name: Every required job succeeded

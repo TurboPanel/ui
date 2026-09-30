@@ -3,6 +3,7 @@ import { WizardSteps, type WizardStepItem } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   mapStepStatusToPipeline,
+  stepHasStarted,
   upgradePhaseLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
@@ -30,10 +31,11 @@ export function UpgradeStepTracker({
   /** A line under the steps, e.g. why this row moves with another. */
   note?: string
 }>) {
-  const current = mapStepStatusToPipeline(status)
+  const current = stepHasStarted(status) ? mapStepStatusToPipeline(status) : null
   const heading = title ?? upgradePhaseLabel(phase)
   const outcome = upgradeStepOutcome({ status, errorCode })
-  const ended = outcome.tone === 'danger' || outcome.tone === 'pending'
+  const ended =
+    outcome.tone === 'danger' || outcome.tone === 'pending' || !stepHasStarted(status)
 
   return (
     <View style={{ gap: spacing.xs }}>
