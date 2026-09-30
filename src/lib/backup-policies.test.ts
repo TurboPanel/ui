@@ -267,9 +267,9 @@ describe('backupPolicyErrorMessage', () => {
     expect(backupPolicyErrorMessage(httpError(path, 400, 'backup_policy_invalid'), 'x').message).toBe(
       `Check the name (up to 64 characters) and how many backups to keep (1 to ${BACKUP_POLICY_MAX_KEEP}).`
     )
-    expect(backupPolicyErrorMessage(httpError(path, 400, 'backup_target_unsupported'), 'x').field).toBe(
-      null
-    )
+    expect(
+      backupPolicyErrorMessage(httpError(path, 400, 'backup_target_unsupported'), 'x').field
+    ).toBeNull()
     expect(backupPolicyErrorMessage(httpError(path, 400, 'managed_backup_unsupported'), 'x').message).toBe(
       'This database engine does not support backups yet.'
     )
