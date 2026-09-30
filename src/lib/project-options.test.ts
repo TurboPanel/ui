@@ -41,6 +41,13 @@ describe('buildProjectOptionsPatch', () => {
       buildProjectOptionsPatch(current, { defaultServerId: null }),
     ).toEqual({ defaultServerId: null })
   })
+
+  it('replaces defaultServerId when patch sets a new one', () => {
+    const current = project({ defaultServerId: 'srv-1' })
+    expect(buildProjectOptionsPatch(current, { defaultServerId: 'srv-2' })).toEqual({
+      defaultServerId: 'srv-2',
+    })
+  })
 })
 
 describe('resolveEffectiveServerId', () => {

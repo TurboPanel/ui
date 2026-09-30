@@ -72,8 +72,16 @@ const CHANNEL_ERROR_COPY: Record<string, string> = {
   kind_invalid: 'That kind of channel cannot be added here.',
 }
 
+const CHANNEL_ERROR_FALLBACK = 'The channel could not be saved. Try again.'
+
+function errorText(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string') return err
+  return CHANNEL_ERROR_FALLBACK
+}
+
 export function channelErrorCopy(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
+  const message = errorText(err)
   const match = /HTTP \d+:\s*([a-z_]+)/i.exec(message)
   const code = match?.[1]
   return (code && CHANNEL_ERROR_COPY[code]) ?? message

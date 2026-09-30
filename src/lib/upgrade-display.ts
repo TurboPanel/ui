@@ -251,6 +251,16 @@ export function fleetStatusBadge(status: UpgradeStepStatus): {
   }
 }
 
+/** A piece's update status: `null` means the channel state is not known (daemon not connected). */
+export function updateAvailabilityBadge(updateAvailable: boolean | null): {
+  tone: 'ok' | 'muted' | 'pending'
+  label: string
+} {
+  if (updateAvailable === null) return { tone: 'muted', label: 'Not connected' }
+  if (updateAvailable) return { tone: 'pending', label: 'Update available' }
+  return { tone: 'ok', label: 'Up to date' }
+}
+
 /** `a`, `a and b`, `a, b and c`. */
 export function joinWithAnd(items: readonly string[]): string {
   if (items.length <= 1) return items.join('')

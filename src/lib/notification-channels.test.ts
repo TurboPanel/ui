@@ -34,6 +34,13 @@ describe('notification channel rules matrix', () => {
     expect(channelErrorCopy(new Error('boom'))).toBe('boom')
   })
 
+  it('never shows [object Object] for a non-Error failure', () => {
+    expect(channelErrorCopy('HTTP 422: label_required')).toBe('Give the channel a name.')
+    expect(channelErrorCopy('plain failure')).toBe('plain failure')
+    expect(channelErrorCopy({ status: 500 })).toBe('The channel could not be saved. Try again.')
+    expect(channelErrorCopy(undefined)).toBe('The channel could not be saved. Try again.')
+  })
+
   it('labels the address field by kind', () => {
     expect(addressFieldLabel('email')).toBe('Email address')
     expect(addressFieldLabel('telegram')).toBe('Bot token / chat id')
