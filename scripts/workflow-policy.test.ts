@@ -150,7 +150,8 @@ describe('versions from tags', () => {
       )) {
         pins.add(m[1])
       }
-      for (const m of text(f).matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})$/gm)) pins.add(m[1])
+      for (const m of text(f).matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm))
+        pins.add(m[1])
     }
     expect([...pins]).toHaveLength(1)
   })
