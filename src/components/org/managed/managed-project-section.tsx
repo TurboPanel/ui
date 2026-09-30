@@ -9,6 +9,7 @@ import {
   TextField,
 } from '@/components/ui'
 import { ManagedBackupsPanel } from '@/components/org/managed/managed-backups-panel'
+import { ManagedBackupSchedulesPanel } from '@/components/org/managed/managed-backup-schedules-panel'
 import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-panel'
 import { ManagedClusterPanel } from '@/components/org/managed/managed-cluster-panel'
 import { ManagedConnectionPanel } from '@/components/org/managed/managed-connection-panel'
@@ -606,6 +607,14 @@ function ManagedEnvironmentReadyPanels({
             }
             registerCommand(result.value.commandId, 'Restore backup')
           }}
+        />
+      ) : null}
+      {showBackups ? (
+        <ManagedBackupSchedulesPanel
+          orgId={orgId}
+          environmentId={environmentId}
+          canManage={canManage}
+          supported={supportsBackup}
         />
       ) : null}
       {showLifecycle ? (

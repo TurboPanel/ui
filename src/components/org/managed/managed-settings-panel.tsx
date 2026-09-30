@@ -185,11 +185,13 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
 
 function LabeledNumber({
   label,
+  hint,
   value,
   disabled,
   onChange,
 }: Readonly<{
   label: string
+  hint?: string
   value: string
   disabled: boolean
   onChange: (value: string) => void
@@ -197,6 +199,7 @@ function LabeledNumber({
   return (
     <TextField
       label={label}
+      hint={hint}
       value={value}
       onChangeText={onChange}
       keyboardType="numeric"
@@ -511,7 +514,8 @@ function SettingsFormBody({
       />
 
       <LabeledNumber
-        label="Backup retention (keep N)"
+        label="Manual backups to keep"
+        hint="Applies to backups made with Back up now. Each schedule keeps its own count."
         value={form.backupRetentionKeep}
         disabled={disabled}
         onChange={(backupRetentionKeep) =>

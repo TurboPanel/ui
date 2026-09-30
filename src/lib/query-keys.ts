@@ -309,6 +309,10 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'backups'] as const,
+        backupPolicies: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'backup-policies'] as const,
+        backupRuns: (environmentId: string, policyId: string) =>
+          ['org', orgId, 'managed', environmentId, 'backup-policies', policyId, 'runs'] as const,
         logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
       },
 

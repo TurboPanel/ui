@@ -7968,6 +7968,131 @@ export async function restoreManagedBackup(
   )
 }
 
+/** `sun`…`sat`, the instance's weekday vocabulary for weekly backup presets. */
+export type BackupWeekday = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
+
+/** A preset schedule; the instance stores it as cron and reads it back out for display. */
+export type BackupSchedulePreset =
+  | { preset: 'hourly' }
+  | { preset: 'daily'; time: string }
+  | { preset: 'weekly'; day: BackupWeekday; time: string }
+
+/** A schedule as sent: a preset object, or raw cron text (5 fields or an `@alias`). */
+export type BackupScheduleInput = BackupSchedulePreset | string
+
+/** One finished scheduled run, as its host reported it. */
+export type BackupRunRecord = {
+  runId: string
+  serverId: string
+  startedAt: string
+  finishedAt: string
+  status: 'succeeded' | 'failed'
+  error: string | null
+  /** The artifact's `bk_` id; null when the run failed. */
+  backupId: string | null
+}
+
+/** A scheduled backup of a managed engine (`/environments/:id/managed/backup-policies`). */
+export type BackupPolicyRecord = {
+  id: string
+  name: string
+  targetKind: 'managed'
+  managedId: string
+  /** Cron text as stored — presets are stored in their cron form. */
+  schedule: string
+  /** The preset {@link schedule} matches; null for custom cron. */
+  preset: BackupSchedulePreset | null
+  /** IANA zone; null means the host's local time. */
+  timezone: string | null
+  retentionKeep: number
+  enabled: boolean
+  /** True for the daily policy the instance creates with a new engine. */
+  automatic: boolean
+  /** When the host's timer next fires, as last reported; null until a report arrives. */
+  nextRunAt: string | null
+  lastRun: BackupRunRecord | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Best-effort push of the host's full policy set; a failed server catches up on reconnect. */
+export type BackupsReconcileOutcome = {
+  queuedServerIds: string[]
+  failedServerIds: string[]
+}
+
+export type CreateBackupPolicyBody = {
+  name: string
+  schedule: BackupScheduleInput
+  timezone?: string | null
+  retentionKeep: number
+  enabled?: boolean
+}
+
+export type UpdateBackupPolicyBody = Partial<{
+  name: string
+  schedule: BackupScheduleInput
+  /** null clears it (host local time). */
+  timezone: string | null
+  retentionKeep: number
+  enabled: boolean
+}>
+
+function backupPoliciesPath(environmentId: string): string {
+  return `${CLIENT_API}/environments/${environmentId}/managed/backup-policies`
+}
+
+function backupPolicyPath(environmentId: string, policyId: string): string {
+  return `${backupPoliciesPath(environmentId)}/${encodeURIComponent(policyId)}`
+}
+
+/** Scheduled backup policies for the environment's managed engine, oldest first; each carries its newest run. */
+export async function fetchBackupPolicies(
+  environmentId: string
+): Promise<{ policies: BackupPolicyRecord[] }> {
+  return await apiFetch(backupPoliciesPath(environmentId))
+}
+
+export async function createBackupPolicy(
+  environmentId: string,
+  body: CreateBackupPolicyBody
+): Promise<{ policy: BackupPolicyRecord; reconcile: BackupsReconcileOutcome }> {
+  return await apiFetch(backupPoliciesPath(environmentId), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** `reconcile` is null when the change does not affect what the host runs (a rename). */
+export async function updateBackupPolicy(
+  environmentId: string,
+  policyId: string,
+  body: UpdateBackupPolicyBody
+): Promise<{ policy: BackupPolicyRecord; reconcile: BackupsReconcileOutcome | null }> {
+  return await apiFetch(backupPolicyPath(environmentId, policyId), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Run history goes with the policy; artifacts already on the host stay. */
+export async function deleteBackupPolicy(
+  environmentId: string,
+  policyId: string
+): Promise<{ ok: true; reconcile: BackupsReconcileOutcome }> {
+  return await apiFetch(backupPolicyPath(environmentId, policyId), { method: 'DELETE' })
+}
+
+/** A policy's runs, newest first (instance default 20, max 100). */
+export async function fetchBackupRuns(
+  environmentId: string,
+  policyId: string,
+  limit?: number
+): Promise<{ runs: BackupRunRecord[] }> {
+  const query = typeof limit === 'number' ? `?limit=${encodeURIComponent(String(limit))}` : ''
+  return await apiFetch(`${backupPolicyPath(environmentId, policyId)}/runs${query}`)
+}
+
 export async function fetchManagedMembers(
   environmentId: string
 ): Promise<{ members: ManagedMemberRecord[] }> {

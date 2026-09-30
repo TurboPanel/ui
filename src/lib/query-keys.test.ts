@@ -500,6 +500,22 @@ describe('queryKeys.org(…) remaining factories', () => {
       'env-1',
       'backups',
     ])
+    expect(managed.backupPolicies('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'backup-policies',
+    ])
+    expect(managed.backupRuns('env-1', 'pol-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'backup-policies',
+      'pol-1',
+      'runs',
+    ])
     expect(managed.logs('env-1')).toEqual([
       'org',
       'org-1',
