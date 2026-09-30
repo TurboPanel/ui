@@ -137,12 +137,12 @@ jobs:
     # gh-promote.yml asks for contents: write (the rc tag).
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-promote.yml@a903ecc40b8b27ce08dd3336497597f66c13d171 # dev#44
+    uses: TurboPanel/dev/.github/workflows/gh-promote.yml@dadee433d35a73c7a9946268c30a96e466371140 # dev#44
     with:
       repo-kind: ui
       to: rc
       source: ${{ needs.resolve.outputs.canary }}
-      dev-ref: a903ecc40b8b27ce08dd3336497597f66c13d171 # dev#44
+      dev-ref: dadee433d35a73c7a9946268c30a96e466371140 # dev#44
       # Same signer pin as promote.yml.
       signer-ref: 93c4f94510c9499e6bf04366a9500fe9f8e38aaa
       # The merge of the promotion PR is the approval.
@@ -154,7 +154,7 @@ jobs:
     # gh-release.yml creates the rc release and uploads its assets.
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-release.yml@a903ecc40b8b27ce08dd3336497597f66c13d171 # dev#44
+    uses: TurboPanel/dev/.github/workflows/gh-release.yml@dadee433d35a73c7a9946268c30a96e466371140 # dev#44
     with:
       version: ${{ needs.prepare.outputs.version }}
       channel: rc
@@ -169,7 +169,7 @@ jobs:
     # gh-promote-finalize.yml moves `staging` (GITHUB_TOKEN when the App cannot).
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@a903ecc40b8b27ce08dd3336497597f66c13d171 # dev#44
+    uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@dadee433d35a73c7a9946268c30a96e466371140 # dev#44
     with:
       to: rc
       version: ${{ needs.prepare.outputs.version }}
@@ -193,7 +193,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: TurboPanel/dev
-          ref: a903ecc40b8b27ce08dd3336497597f66c13d171 # dev#44
+          ref: dadee433d35a73c7a9946268c30a96e466371140 # dev#44
           path: .promote
           fetch-depth: 1
           persist-credentials: false
