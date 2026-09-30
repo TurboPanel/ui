@@ -204,30 +204,36 @@ function componentsWithUpdates(
 function ComponentsPanel({
   units,
   consoleBuild,
+  channel,
 }: Readonly<{
   units: InstanceUpdates['units']
   consoleBuild: { version: string; commit: string } | null
+  /** The instance-wide update channel; on `release` the version is the whole story. */
+  channel: string
 }>) {
   const { instance, daemon } = units
+  const hideCommit = { hideCommit: channel.trim().toLowerCase() === 'release' }
   return (
     <SectionPanel title="Versions">
       <UpgradeBuildBlock
         title="Control plane"
         target={instance.target}
-        installedLabel={installedBuildLabel(instance.installed, instance.target)}
+        installedLabel={installedBuildLabel(instance.installed, instance.target, hideCommit)}
         updateAvailable={unitUpdateAvailable(instance)}
       />
       <UpgradeBuildBlock
         title="UI"
         target={instance.uiTarget}
-        installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget)}
+        installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
       />
       <UpgradeBuildBlock
         title="Co-located daemon"
         target={daemon.target}
         installedLabel={
-          daemon.installed ? installedBuildLabel(daemon.installed, daemon.target) : 'Not connected'
+          daemon.installed
+            ? installedBuildLabel(daemon.installed, daemon.target, hideCommit)
+            : 'Not connected'
         }
         updateAvailable={daemon.connected ? unitUpdateAvailable(daemon) : null}
       />
@@ -402,7 +408,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         </View>
       </SectionPanel>
 
-      <ComponentsPanel units={data.units} consoleBuild={consoleBuild} />
+      <ComponentsPanel units={data.units} consoleBuild={consoleBuild} channel={data.channel} />
 
       {failure ? (
         <UpgradeFailureNotice
