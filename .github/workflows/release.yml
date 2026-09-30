@@ -1,4 +1,4 @@
-# Cuts a GitHub Release on a v* tag: the Expo web export, packaged once in
+# Publishes a GitHub Release on a v* tag: the Expo web export, packaged once in
 # CI as turbopanel-ui-<version>.tar.gz (the dist/ contents at the tarball
 # root — exactly what the daemon's ui-build role untars into
 # /opt/turbopanel/share/ui from turbopanel_ui_artifact_url), plus a
@@ -67,7 +67,7 @@ jobs:
     # A tag pushed by a `[bot]` actor is the TurboPanel Release App
     # promoting a tested build (promote.yml → TurboPanel/dev gh-promote.yml);
     # that flow publishes the release itself, so this from-source path must
-    # not race it. A person pushing a tag still gets the classic cut; trunk
+    # not race it. A person pushing a tag still gets the classic from-source release; trunk
     # pushes (canary) are unaffected.
     if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') || !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
@@ -109,7 +109,7 @@ jobs:
           fi
 
       - name: Require the tag to match package.json's version
-        # A tag cut before the bump is a release that lies about itself
+        # A tag pushed before the bump is a release that lies about itself
         # (app.json and sonar.projectVersion are pinned to package.json by
         # scripts/version-literals.test.ts). Dry runs and canary builds skip
         # this.
