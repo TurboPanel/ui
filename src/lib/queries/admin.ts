@@ -12,6 +12,7 @@ import {
   fetchInstanceUpdates,
   fetchUpgradeActiveRun,
   fetchUpgradeHistory,
+  fetchUpgradeRun,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   requestColocatedDaemonUpdate,
@@ -469,6 +470,15 @@ export function useSaveUpgradeSettings() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeSettings })
     },
+  })
+}
+
+/** One finished (or running) run with every step, fetched when a history row is opened. */
+export function useUpgradeRun(runId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeRun(runId ?? ''),
+    queryFn: async () => await fetchUpgradeRun(runId ?? ''),
+    enabled: runId !== null,
   })
 }
 

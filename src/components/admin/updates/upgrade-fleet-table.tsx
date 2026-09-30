@@ -10,7 +10,7 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeServersPage } from '@/lib/instance-api'
-import { installedBuildLabel, upgradeStepOutcome } from '@/lib/upgrade-display'
+import { fleetStatusBadge, installedBuildLabel, upgradeStepOutcome } from '@/lib/upgrade-display'
 import { colors } from '@/lib/theme'
 
 const COLUMNS: readonly DataTableColumn[] = [
@@ -76,7 +76,7 @@ export function UpgradeFleetTable({
               </Text>
             </DataTableCell>
             <DataTableCell column={COLUMNS[1]}>
-              <Badge tone="muted" label={row.status.replaceAll('_', ' ')} />
+              <Badge {...fleetStatusBadge(row.status)} />
             </DataTableCell>
             <DataTableCell column={COLUMNS[2]}>
               <Text style={styles.cell}>{installedText(row)}</Text>
