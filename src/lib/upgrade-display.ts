@@ -124,6 +124,10 @@ function sameCommit(a: string, b: string): boolean {
  * label); otherwise, when the installed commit is the channel target's commit,
  * it is that target's version (a promoted rc runs the canary's bytes, so only
  * the manifest knows which build it is). Otherwise the plain version plus commit.
+ *
+ * On the `release` channel the version is the whole story — a released build
+ * is exactly its version, so `hideCommit` drops the commit and leaves the
+ * version alone (never a bare commit with nothing to pair it with).
  */
 export function installedBuildLabel(
   installed:
@@ -134,10 +138,11 @@ export function installedBuildLabel(
       }>
     | null
     | undefined,
-  target?: Pick<InstanceUpdateTarget, 'commit' | 'version'> | null
+  target?: Pick<InstanceUpdateTarget, 'commit' | 'version'> | null,
+  options?: Readonly<{ hideCommit?: boolean }>
 ): string {
   if (!installed) return 'Unknown'
-  const commit = installed.commit?.trim() || null
+  const commit = options?.hideCommit ? null : installed.commit?.trim() || null
   let version = installed.label?.trim().replace(/^v/, '') || null
   if (!version && commit && target?.commit && target.version && sameCommit(commit, target.commit)) {
     version = target.version.trim().replace(/^v/, '')
