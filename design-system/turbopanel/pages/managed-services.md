@@ -60,7 +60,7 @@ Submit: `POST /projects` (`type: 'managed'`) → Production env → `POST …/ma
 | **Overview** | **Cluster** (topology, add replica, promote) · Lifecycle · Settings · Status |
 | **Connect** | **Connection** (endpoints + CA) · **Connected services** (bindings) |
 | **Data** | Credentials · Users & databases |
-| **Backups** | metadata-only backups (typed restore) |
+| **Backups** | metadata-only backups (typed restore) · **Schedules** (owners and managers only) |
 | **Environments** | environment switcher + lifecycle when focused |
 
 ### Cluster (Overview)
@@ -106,6 +106,17 @@ Four-question inline form: **Environment → Service → User + Database → Key
 - Org-wide username uniqueness: quiet line above the form; on `username_in_use` show rename prompt (suggested suffix), not a raw dump  
 - **Connected to N services** chip from environment bindings; disable delete when count > 0  
 - Rotate user / root password → show-once + redeploy list (`redeployRequired.services`) with per-service **Redeploy** (enqueue deploy; never silent restart)
+
+### Schedules (Backups)
+
+Each schedule is a systemd timer on the engine's server that fires on its own; the panel only edits the schedule and shows what the server last reported (`lastRun`, `nextRunAt`). No timer, no polling — the list refetches after each mutation only.
+
+- Row: name (+ **Automatic** badge for the daily policy created with the engine), plain schedule (`Every hour` / `Daily at 03:12` / `Weekly on Monday at 02:00` / `Custom: <cron>`, plus the timezone when set), **Keeps N**, next run (`Paused` when disabled, `Waiting for the server to report` before the first report), last run time + Succeeded/Failed badge + the host's error text
+- Enabled/Paused **Toggle** on the row; Edit; **Run history** (opt-in fetch, newest first); Delete is two-press and says artifacts already on the server stay
+- Form: name · **Schedule** segmented (Hourly / Daily / Weekly / Advanced: cron) · Day (weekly) · Time 24-hour (daily/weekly) · cron text (advanced) · Timezone (searchable, **Server time** = null) · **Backups to keep** (1–50, this schedule's own count) · Enabled
+- Errors land on their field: client validation first, then the API code via `backupPolicyErrorMessage` (a schedule refusal lands on the time or cron field the mode used)
+- A save the host could not be told about (`reconcile.failedServerIds`) shows a warning notice — the host catches up on reconnect
+- The Settings panel's manual keep-N is labelled **Manual backups to keep** so it is not confused with a schedule's count
 
 ### Restore confirmation copy rule
 

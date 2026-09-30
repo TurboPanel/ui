@@ -95,6 +95,12 @@ Authorization helpers:
 - `createManagedBackup(environmentId, body?)` → `POST …/managed/backups` — `{ ok, backupId, commandId, serverId }`
 - `deleteManagedBackup(environmentId, backupId)` → `DELETE …/managed/backups/:backupId` — `ManagedCommandResponse`; the consumer removes the metadata row on success
 - `restoreManagedBackup(environmentId, backupId)` → `POST …/managed/backups/:backupId/restore` — `ManagedCommandResponse`; mutates the running engine, so it flips `managed.status` to `applying` like `apply`/`lifecycle`
+- `fetchBackupPolicies(environmentId)` → `GET …/managed/backup-policies` — `{ policies: BackupPolicyRecord[] }`, oldest first, each with its newest `lastRun`; owners and managers only (`403` otherwise)
+- `createBackupPolicy(environmentId, body)` → `POST …/managed/backup-policies` — `{ policy, reconcile }`; `schedule` is a preset object (`hourly` / `daily` + `time` / `weekly` + `day` + `time`) or raw cron text, stored as cron and read back as `preset` (null for custom). `409 backup_policy_limit` past 20 per engine
+- `updateBackupPolicy(environmentId, policyId, body)` → `PATCH …/managed/backup-policies/:policyId` — `{ policy, reconcile }`; `reconcile` is null for a rename (nothing pushed), `timezone: null` clears it
+- `deleteBackupPolicy(environmentId, policyId)` → `DELETE …/managed/backup-policies/:policyId` — `{ ok, reconcile }`; run history goes with it, artifacts already on the host stay
+- `fetchBackupRuns(environmentId, policyId, limit?)` → `GET …/managed/backup-policies/:policyId/runs` — `{ runs: BackupRunRecord[] }`, newest first (default 20, max 100)
+- Backup policy refusals: `backup_policy_invalid` (+ `field`, `detail`), `backup_schedule_invalid`, `backup_timezone_invalid`, `backup_target_unsupported`, `managed_backup_unsupported`, `backup_policy_not_found`. `apiFetch` keeps only the code in the thrown message; `backupPolicyErrorMessage` (`src/lib/backup-policies.ts`) maps it to plain copy. `reconcile.failedServerIds` non-empty means the save stuck but the host catches up on reconnect (`backupReconcileNotice`)
 - Types/helpers in `src/lib/managed-services.ts` (`ManagedStatus`, `ManagedSettings`, `ManagedBackupRecord`, `managedErrorMessage`, `shortBackupChecksum`, …)
 - `fetchVariables(parentFilter)` → `GET /api/client/v1/variables?...` — `VariableParentFilter` includes `organizationId` / `workspaceId` / `projectId` / `environmentId` / `serviceId` / `hostingId` / `serverId`
 - `fetchVariable(id)` → `GET /api/client/v1/variables/:id`
