@@ -34,10 +34,13 @@ describe('every workflow', () => {
 describe('canary', () => {
   const canary = workflow('canary.yml')
 
-  it('publishes only after a green Verify from a push to trunk', () => {
-    const gate = canary.jobs.publish.if ?? ''
+  it('publishes only after a green Verify that tested the trunk commit (a push or a manual run)', () => {
+    const gate = (canary.jobs.publish.if ?? '').replace(/\s+/g, ' ')
     expect(gate).toContain("github.event.workflow_run.conclusion == 'success'")
-    expect(gate).toContain("github.event.workflow_run.event == 'push'")
+    expect(gate).toContain(
+      "(github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')"
+    )
+    expect(gate).not.toContain('pull_request')
     expect(gate).toContain("github.event.workflow_run.head_branch == 'trunk'")
     expect(text('canary.yml')).toContain('ref: ${{ github.event.workflow_run.head_sha }}')
   })
@@ -46,22 +49,27 @@ describe('canary', () => {
     expect(text('canary.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
   })
 
-  it('never lets an ignored run cancel a real canary', () => {
-    expect(text('canary.yml')).toMatch(
-      /group: \$\{\{ github\.event\.workflow_run\.event == 'push' && 'canary' \|\| format\('canary-ignored-\{0\}', github\.run_id\) \}\}/
+  it('never lets an ignored run cancel a real canary, and queues manual runs with pushes', () => {
+    // One queue for every canary that publishes: the canary number is one past
+    // the highest build of its version, which is only safe one build at a time.
+    expect(text('canary.yml')).toContain(
+      "group: ${{ (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') && 'canary' || format('canary-ignored-{0}', github.run_id) }}"
     )
   })
 })
 
 describe('green Verify lookups', () => {
-  it('count only push runs', () => {
+  it('count only runs that tested the trunk commit (a push or a manual run), never a PR run', () => {
     const lookups = files.flatMap((f) =>
       text(f)
         .split('\n')
         .filter((line) => /gh run list .*--workflow (Verify|verify\.yml)/.test(line))
     )
     expect(lookups.length).toBeGreaterThan(0)
-    for (const line of lookups) expect(line).toContain('--event push')
+    for (const line of lookups) {
+      expect(line).toContain('select(.event == "push" or .event == "workflow_dispatch")')
+      expect(line).not.toContain('pull_request')
+    }
   })
 })
 
@@ -90,5 +98,60 @@ describe('ci-ok', () => {
     const gate = (ciOk.if ?? '').replace(/\s+/g, ' ')
     expect(gate).toContain("(github.event_name == 'pull_request' && always())")
     expect(gate).toContain("(!cancelled() && !contains(needs.*.result, 'cancelled'))")
+  })
+})
+
+// Versions come from git tags (Road to 0.2.x, versioning Phase 3): no "Start
+// x.y.z" PR, no minor gate, no version read from package.json by a release
+// step; minors and majors are started by turbopaneld's Start Next Version.
+describe('versions from tags', () => {
+  const GONE = [
+    /gh-next-version/,
+    /gh-minor-gate|minor-gate/,
+    /start-minor/,
+    /--label minor/,
+    /--title "Start /,
+  ]
+
+  it.each(files)('%s opens no Start PR, has no minor gate and reads no version file', (f) => {
+    for (const gone of GONE) expect(text(f)).not.toMatch(gone)
+    expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
+  })
+
+  it('works out the canary version from the tags and stamps the base before the export', () => {
+    const release = text('release.yml')
+    expect(release).toMatch(
+      /uses: TurboPanel\/dev\/\.github\/actions\/version@[0-9a-f]{40} # dev#\d+\n {8}with:\n {10}mode: canary\n/
+    )
+    const stamp = release.indexOf('- name: Stamp the version into app.json and package.json')
+    const exported = release.indexOf('- name: Export the web app')
+    expect(stamp).toBeGreaterThan(0)
+    expect(exported).toBeGreaterThan(stamp)
+    expect(release).toContain('BASE_VERSION: ${{ needs.prepare.outputs.base }}')
+    expect(release).toContain('app.expo.version = version;')
+    expect(release).not.toContain('Require the tag to match package.json')
+  })
+
+  it('hands gh-promote the canary found by commit, not a run number', () => {
+    expect(text('publish-rc.yml')).toContain('source: ${{ needs.resolve.outputs.canary }}')
+  })
+
+  it('pins one TurboPanel/dev commit across the promotion workflows', () => {
+    const pins = new Set<string>()
+    for (const f of [
+      'publish-rc.yml',
+      'publish-release.yml',
+      'promote-prs.yml',
+      'promote-ok.yml',
+      'promote-ok-recheck.yml',
+    ]) {
+      for (const m of text(f).matchAll(
+        /TurboPanel\/dev\/\.github\/(?:workflows\/[\w.-]+|actions\/version)@([0-9a-f]{40})/g
+      )) {
+        pins.add(m[1])
+      }
+      for (const m of text(f).matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})$/gm)) pins.add(m[1])
+    }
+    expect([...pins]).toHaveLength(1)
   })
 })

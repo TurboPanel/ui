@@ -2,14 +2,16 @@
 # from that exact commit and publish it to the rolling `canary` pre-release
 # (Road to 0.1.x, `trunk-canary`). The export itself is release.yml's — called
 # here with channel=canary — so a canary package is the same shape as a release
-# package, only versioned <X.Y.Z>-canary.<N> and replaced on the next merge
-# instead of pinned to a tag.
+# package, only versioned <X.Y.Z>-canary.<N> (the version comes from git tags)
+# and replaced on the next merge instead of pinned to a tag.
 #
 # workflow_run (not push) so the export never starts before lint, typecheck
-# and tests have passed on the commit. Only a Verify started by a PUSH to trunk
-# counts: the trunk → staging Release Candidate PR's Verify also reports
-# head_branch trunk, but it tests trunk merged into staging, not the trunk
-# commit, and must never stand in for a failed or cancelled trunk run.
+# and tests have passed on the commit. Only a Verify that tested the trunk
+# commit itself counts: a PUSH to trunk, or a manual run of trunk (turbopaneld's
+# "Start Next Version" re-runs trunk so a started minor gets its canary). The
+# trunk → staging Release Candidate PR's Verify also reports head_branch trunk,
+# but it tests trunk merged into staging, not the trunk commit, and must never
+# stand in for a failed or cancelled trunk run.
 # One canary at a time, in merge order, and none dropped: a burst of merges
 # queues (`queue: max`, up to 100 pending) instead of cancelling, so every
 # green trunk push gets its canary and the rc PR can always find the one for
@@ -28,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event.workflow_run.event == 'push' && 'canary' || format('canary-ignored-{0}', github.run_id) }}
+  group: ${{ (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') && 'canary' || format('canary-ignored-{0}', github.run_id) }}
   cancel-in-progress: false
   queue: max
 
@@ -36,7 +38,8 @@ jobs:
   publish:
     if: >-
       github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.event == 'push'
+      && (github.event.workflow_run.event == 'push'
+          || github.event.workflow_run.event == 'workflow_dispatch')
       && github.event.workflow_run.head_branch == 'trunk'
     # The ceiling for release.yml: it reads Verify runs (actions) and publishes
     # the canary release (contents).
