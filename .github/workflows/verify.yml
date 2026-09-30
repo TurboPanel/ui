@@ -12,12 +12,27 @@ on:
 permissions:
   contents: read
 
+# One run per event and ref at a time. A PR keeps only its newest commit (the
+# older run is cancelled). A trunk push never cancels and never drops a run:
+# `queue: max` keeps up to 100 pending, so three quick merges each get their
+# own Verify and so their own canary. With the default single-pending queue
+# the middle merge's run would be replaced, conclude cancelled, and that
+# commit would never get a canary.
+concurrency:
+  group: ui-verify-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
+
 jobs:
   # Lint + typecheck + Vitest LCOV, then Sonar quality gate. If Sonar fails,
   # the workflow stops. Automatic Analysis must stay off
   # (Administration → Analysis Method).
   verify:
     runs-on: ubuntu-latest
+    # Kept as a second guard so two Sonar analyses of one ref never overlap.
+    # The workflow-level block above is what queues runs: it admits one run
+    # per event and ref at a time, so on a push this group never holds a
+    # second job and never cancels one.
     concurrency:
       group: ui-sonar-${{ github.event_name }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -123,6 +138,7 @@ jobs:
   # cannot see PRs made here. This job covers ui/src and ui/design-system.
   metrics-legacy:
     runs-on: ubuntu-latest
+    # Kept as it is; see the note on the verify job's group.
     concurrency:
       group: ui-metrics-legacy-${{ github.event_name }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}

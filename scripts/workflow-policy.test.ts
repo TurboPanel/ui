@@ -65,6 +65,20 @@ describe('green Verify lookups', () => {
   })
 })
 
+describe('Verify concurrency', () => {
+  it('cancels superseded PR runs but queues every trunk push', () => {
+    expect(text('verify.yml')).toContain(
+      [
+        'concurrency:',
+        '  group: ui-verify-${{ github.event_name }}-${{ github.ref }}',
+        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}",
+        '',
+      ].join('\n')
+    )
+  })
+})
+
 describe('ci-ok', () => {
   const ciOk = workflow('verify.yml').jobs['ci-ok']
 
