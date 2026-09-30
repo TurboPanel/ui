@@ -9,51 +9,12 @@ import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
 
 const PIPELINE_SET = new Set<string>(UPGRADE_STEP_PIPELINE)
 
-/** Human channel label for build names (`canary` → `Canary`, `rc` → `RC`). */
+/** Human channel label (`canary` → `Canary`, `rc` → `RC`), for a build with nothing else to name it. */
 export function upgradeChannelTitle(channel: string | null | undefined): string {
   const trimmed = channel?.trim()
   if (!trimmed) return 'Build'
   if (trimmed.toLowerCase() === 'rc') return 'RC'
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
-}
-
-/**
- * A counter build's version: `0.1.3-canary.417` (canary build 417) or
- * `0.1.3-rc.2` (release candidate 2 of 0.1.3). The older timestamp canaries
- * (`0.1.1-canary.20260919-143000-abc1234`) and plain releases have no counter.
- */
-const COUNTER_BUILD = /^v?(\d+\.\d+\.\d+)-(canary|rc)\.(\d{1,9})$/
-
-/** A plain release version: `0.1.3`. */
-const PLAIN_RELEASE = /^v?(\d+\.\d+\.\d+)$/
-
-export type BuildCounter = Readonly<{ base: string; channel: 'canary' | 'rc'; number: number }>
-
-export function parseBuildCounter(version: string | null | undefined): BuildCounter | null {
-  const match = COUNTER_BUILD.exec(version?.trim() ?? '')
-  if (!match) return null
-  return { base: match[1], channel: match[2] as 'canary' | 'rc', number: Number(match[3]) }
-}
-
-/** `Canary #417`, `RC 2`, or null when the version carries no build counter. */
-export function buildCounterLabel(version: string | null | undefined): string | null {
-  const counter = parseBuildCounter(version)
-  if (!counter) return null
-  return counter.channel === 'canary' ? `Canary #${counter.number}` : `RC ${counter.number}`
-}
-
-function buildHeadline(
-  target: Pick<InstanceUpdateTarget, 'channel' | 'version'>,
-  counter: BuildCounter | null
-): string {
-  if (counter) {
-    return counter.channel === 'rc'
-      ? `RC ${counter.number} (${counter.base})`
-      : `Canary #${counter.number}`
-  }
-  const release = PLAIN_RELEASE.exec(target.version?.trim() ?? '')
-  if (release && target.channel?.trim().toLowerCase() === 'release') return `Release ${release[1]}`
-  return upgradeChannelTitle(target.channel)
 }
 
 /** The localized build time, or null when `builtAt` is missing or not a date. */
@@ -74,11 +35,16 @@ function formatBuiltAt(
   }).format(date)
 }
 
-/** Version, else short commit, else short build id, for a build with no `builtAt`. */
-function buildIdentityFallback(
+/**
+ * A build's name is its version: `v0.1.5-canary.1`, `v0.1.5-rc.2`, `v0.1.5`
+ * (older timestamp canaries too: `v0.1.1-canary.20260919-143000-abc1234`).
+ * Without a version, the short commit, else the short build id; null when
+ * nothing names the build.
+ */
+export function upgradeBuildVersionLabel(
   target: Pick<InstanceUpdateTarget, 'version' | 'commit' | 'buildId'>
 ): string | null {
-  const version = target.version?.trim()
+  const version = target.version?.trim().replace(/^v/i, '')
   if (version) return `v${version}`
   const commit = target.commit?.trim()
   if (commit && commit !== 'unknown') return commit.slice(0, 12)
@@ -88,11 +54,10 @@ function buildIdentityFallback(
 }
 
 /**
- * Readable build line from manifest metadata: `Canary #417 · Sep 19, 14:30`,
- * `RC 2 (0.1.3) · Sep 19, 14:30`, `Release 0.1.3 · Sep 19, 14:30`. The build number
- * comes from the version; without a counter (older timestamp canaries, plain
- * releases) it is the channel alone. Falls back to version or short commit
- * when `builtAt` is missing.
+ * Readable build line from manifest metadata: `v0.1.5-canary.1 · Sep 30, 14:30`,
+ * `v0.1.5-rc.2 · Sep 30, 14:30`, `v0.1.5 · Sep 30, 14:30`. Without a date, the
+ * version alone. A build with no version, commit or build id is named by its
+ * channel.
  */
 export function formatUpgradeBuildDisplayName(
   target: Pick<
@@ -102,13 +67,9 @@ export function formatUpgradeBuildDisplayName(
   options?: Readonly<{ locale?: string; timeZone?: string }>
 ): string {
   if (!target) return 'No package on this channel'
-  const counter = parseBuildCounter(target.version)
-  const head = buildHeadline(target, counter)
+  const head = upgradeBuildVersionLabel(target) ?? upgradeChannelTitle(target.channel)
   const formatted = formatBuiltAt(target.builtAt, options)
-  if (formatted !== null) return `${head} · ${formatted}`
-  if (counter || head !== upgradeChannelTitle(target.channel)) return head
-  const fallback = buildIdentityFallback(target)
-  return fallback ? `${head} · ${fallback}` : head
+  return formatted === null ? head : `${head} · ${formatted}`
 }
 
 function sameCommit(a: string, b: string): boolean {
@@ -290,15 +251,21 @@ export function fleetStatusBadge(status: UpgradeStepStatus): {
   }
 }
 
+/** `a`, `a and b`, `a, b and c`. */
+export function joinWithAnd(items: readonly string[]): string {
+  if (items.length <= 1) return items.join('')
+  const head = items.slice(0, -1).join(', ')
+  return `${head} and ${items.at(-1)}`
+}
+
 /**
- * "The control plane and the UI can be updated." — which pieces have an update,
- * in reading order, for the sentence under the Status headline.
+ * "Control plane v0.1.5-canary.1 and UI v0.1.5-canary.2 can be updated." —
+ * which pieces have an update, each with its version, for the sentence under
+ * the Status headline.
  */
-export function updateAvailableSentence(names: readonly string[]): string | null {
-  if (names.length === 0) return null
-  const head = names.slice(0, -1).join(', ')
-  const sentence =
-    names.length === 1 ? `${names[0]} can be updated.` : `${head} and ${names.at(-1)} can be updated.`
+export function updateAvailableSentence(items: readonly string[]): string | null {
+  if (items.length === 0) return null
+  const sentence = `${joinWithAnd(items)} can be updated.`
   return sentence.charAt(0).toUpperCase() + sentence.slice(1)
 }
 

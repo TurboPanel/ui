@@ -4,8 +4,14 @@ import type {
   UpgradeRunRecord,
   UpgradeStepRow,
 } from '@/lib/instance-api'
-import { platformUpdateAvailable } from '@/lib/instance-updates'
-import { formatUpgradeBuildDisplayName } from '@/lib/upgrade-display'
+import {
+  platformUpdateAvailable,
+  updatePieceLabel,
+  updatePieces,
+  type ConsoleBuild,
+  type UpdatePiece,
+} from '@/lib/instance-updates'
+import { joinWithAnd } from '@/lib/upgrade-display'
 
 /**
  * Plain-language update status for the self-hosted Updates screen and the
@@ -244,33 +250,69 @@ export async function withStartTimeout<T>(
 }
 
 export type UpdateBanner = Readonly<{
-  /** Identifies the offered build, so a dismissal hides only this one. */
+  /** Identifies every offered build, so a new build of any piece shows the banner again. */
   key: string
+  /** `Update available: control plane v0.1.5-canary.1, UI v0.1.5-canary.2` */
   title: string
+  /** What Update does for exactly the pieces in the title. */
+  body: string
+}>
+
+type UpdateOfferInput = Readonly<{
+  updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
+  activeRun: boolean
 }>
 
 /**
+ * Whether a self-hosted control plane has an update on offer, dismissed or
+ * not (the admin sidebar badge): the control plane or its daemon has an
+ * update with a build to name, and no run is active.
+ */
+export function updateOffered(input: UpdateOfferInput): boolean {
+  const updates = input.updates
+  if (!updates || input.activeRun) return false
+  if (updates.updatesManaged === true || updates.runtime === 'workers') return false
+  if (!platformUpdateAvailable(updates.units)) return false
+  return Boolean(updates.units.instance.target ?? updates.units.daemon.target)
+}
+
+/** How the banner body names each piece. */
+const BODY_NAMES: Readonly<Record<UpdatePiece['name'], string>> = {
+  'control plane': 'the control plane',
+  UI: 'the UI',
+  daemon: 'the daemon on every server',
+}
+
+function pieceKey(piece: UpdatePiece): string {
+  const { channel, version, commit, buildId } = piece.target
+  return [piece.name, channel, version, commit, buildId].map((part) => part ?? '').join('|')
+}
+
+/**
  * The update-available banner for a self-hosted control plane: shown when an
- * update is available, no run is active, and this build was not dismissed.
+ * update is on offer and these builds were not dismissed. It names each piece
+ * that has an update with its own version.
  */
 export function updateBanner(
-  input: Readonly<{
-    updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
-    activeRun: boolean
-    dismissedKey: string | null
-  }>
+  input: UpdateOfferInput &
+    Readonly<{
+      dismissedKey: string | null
+      /** This console's build, so the UI is listed when the channel serves a newer one. */
+      consoleBuild?: ConsoleBuild | null
+    }>
 ): UpdateBanner | null {
-  const updates = input.updates
-  if (!updates || input.activeRun) return null
-  if (updates.updatesManaged === true || updates.runtime === 'workers') return null
-  if (!platformUpdateAvailable(updates.units)) return null
-  const target = updates.units.instance.target ?? updates.units.daemon.target
-  if (!target) return null
-  const key = [target.channel, target.version, target.commit, target.buildId]
-    .map((part) => part ?? '')
-    .join('|')
+  if (!input.updates || !updateOffered(input)) return null
+  const pieces = updatePieces(input.updates.units, input.consoleBuild ?? null)
+  if (pieces.length === 0) return null
+  const key = pieces.map(pieceKey).join(';')
   if (key === input.dismissedKey) return null
-  return { key, title: `TurboPanel ${formatUpgradeBuildDisplayName(target)} is available` }
+  const labels = pieces.map(updatePieceLabel).join(', ')
+  const names = joinWithAnd(pieces.map((piece) => BODY_NAMES[piece.name]))
+  return {
+    key,
+    title: `Update available: ${labels}`,
+    body: `Updates ${names} in one managed run.`,
+  }
 }
 
 const DISMISS_KEY = 'turbopanel.update-banner.dismissed'

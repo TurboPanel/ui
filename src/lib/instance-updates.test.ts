@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { InstanceUpdates } from '@/lib/instance-api'
 import {
+  consoleUpdateAvailable,
   installedIdentity,
   platformUpdateAvailable,
   unitUpdateAvailable,
   unitUpdateFeedback,
+  updatePieceLabel,
+  updatePieces,
   waitForUnitUpdate,
 } from '@/lib/instance-updates'
 
@@ -64,15 +68,12 @@ describe('waitForUnitUpdate', () => {
   it('rethrows a JSON-bodied failure', async () => {
     await expect(
       waitForUnitUpdate({
-        read: () =>
-          Promise.reject(
-            new Error('updates failed: HTTP 503: no co-located daemon'),
-          ),
+        read: () => Promise.reject(new Error('updates failed: HTTP 503: no co-located daemon')),
         target: { version: '0.1.1', commit: null },
         before: '0.1.0:abc',
         sleep: () => Promise.resolve(),
         now: () => 0,
-      }),
+      })
     ).rejects.toThrow('HTTP 503: no co-located daemon')
   })
 })
@@ -156,7 +157,7 @@ describe('unitUpdateFeedback', () => {
     expect(unitUpdateFeedback('daemon', 'reconnected')).toContain('Daemon')
     expect(unitUpdateFeedback('instance', 'unreachable')).toContain('Lost contact')
     expect(unitUpdateFeedback('daemon', 'unreachable')).toBe(
-      'Lost contact while the daemon updated.',
+      'Lost contact while the daemon updated.'
     )
   })
 })
@@ -330,7 +331,7 @@ describe('waitForUnitUpdate polling', () => {
         intervalMs: 100,
         sleep,
         now,
-      }),
+      })
     ).rejects.toThrow('HTTP 403')
     expect(read).toHaveBeenCalledTimes(2)
   })
@@ -343,7 +344,7 @@ describe('waitForUnitUpdate polling', () => {
         before: '0.1.0:abc',
         sleep: () => Promise.reject(new Error('sleep broke')),
         now: () => 0,
-      }),
+      })
     ).rejects.toThrow('sleep broke')
   })
 
@@ -370,10 +371,10 @@ describe('unitUpdateAvailable', () => {
 
   it("renders the server's answer, whatever the identities look like", () => {
     expect(
-      unitUpdateAvailable({ installed, target: { commit: 'bbb' }, updateAvailable: false }),
+      unitUpdateAvailable({ installed, target: { commit: 'bbb' }, updateAvailable: false })
     ).toBe(false)
     expect(
-      unitUpdateAvailable({ installed, target: { commit: 'aaa' }, updateAvailable: true }),
+      unitUpdateAvailable({ installed, target: { commit: 'aaa' }, updateAvailable: true })
     ).toBe(true)
   })
 
@@ -390,7 +391,63 @@ describe('unitUpdateAvailable', () => {
     const none = { installed, target: null }
     expect(platformUpdateAvailable({ instance: none, daemon: none })).toBe(false)
     expect(
-      platformUpdateAvailable({ instance: none, daemon: { ...none, updateAvailable: true } }),
+      platformUpdateAvailable({ instance: none, daemon: { ...none, updateAvailable: true } })
     ).toBe(true)
+  })
+})
+
+describe('consoleUpdateAvailable', () => {
+  it('compares commits by prefix and is unknown without both', () => {
+    const consoleBuild = { version: '0.1.4', commit: 'abc1234' }
+    expect(consoleUpdateAvailable(consoleBuild, { commit: 'abc1234def' })).toBe(false)
+    expect(consoleUpdateAvailable(consoleBuild, { commit: 'fff9999' })).toBe(true)
+    expect(consoleUpdateAvailable(consoleBuild, { commit: 'unknown' })).toBeNull()
+    expect(consoleUpdateAvailable(consoleBuild, null)).toBeNull()
+    expect(consoleUpdateAvailable(null, { commit: 'fff9999' })).toBeNull()
+  })
+})
+
+describe('updatePieces', () => {
+  function target(version: string, commit: string) {
+    return { commit, buildId: 'b', builtAt: '', channel: 'canary', manifestUrl: '', version }
+  }
+
+  function units(): InstanceUpdates['units'] {
+    return {
+      instance: {
+        installed: { version: '0.1.4', commit: 'old' },
+        target: target('0.1.5-canary.1', 'cp1'),
+        uiTarget: target('0.1.5-canary.2', 'ui2'),
+        updateAvailable: true,
+      },
+      daemon: {
+        installed: { version: '0.1.5', commit: 'old' },
+        target: target('0.1.6-canary.3', 'dm3'),
+        serverId: 'server-1',
+        connected: true,
+        updateAvailable: true,
+      },
+    }
+  }
+
+  const oldConsole = { version: '0.1.4', commit: 'ui0' }
+
+  it('lists control plane, UI and daemon in that order, each with its own version', () => {
+    expect(updatePieces(units(), oldConsole).map(updatePieceLabel)).toEqual([
+      'control plane v0.1.5-canary.1',
+      'UI v0.1.5-canary.2',
+      'daemon v0.1.6-canary.3',
+    ])
+  })
+
+  it('leaves out pieces that are current, unknown, disconnected or have nothing to name', () => {
+    const data = units()
+    data.instance.updateAvailable = false
+    data.daemon.connected = false
+    expect(updatePieces(data, null)).toEqual([])
+    const noTarget = units()
+    noTarget.instance.target = null
+    noTarget.instance.uiTarget = null
+    expect(updatePieces(noTarget, oldConsole).map((piece) => piece.name)).toEqual(['daemon'])
   })
 })

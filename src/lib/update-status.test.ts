@@ -12,6 +12,7 @@ import {
   UPGRADE_DOCS_URL,
   UpgradeStartTimeoutError,
   updateBanner,
+  updateOffered,
   withStartTimeout,
   writeDismissedUpdateBanner,
 } from '@/lib/update-status'
@@ -83,13 +84,14 @@ describe('explainUpgradeFailure', () => {
 
   it('includes a rollback reason when the daemon sent one', () => {
     expect(
-      explainUpgradeFailure({ errorCode: 'rolled_back', errorMessage: 'health check timed out' }).body,
+      explainUpgradeFailure({ errorCode: 'rolled_back', errorMessage: 'health check timed out' })
+        .body
     ).toContain('Reason: health check timed out')
   })
 
   it('falls back to the message, then the code, then a generic line', () => {
     expect(explainUpgradeFailure({ errorCode: 'odd', errorMessage: ' disk exploded ' }).body).toBe(
-      'disk exploded',
+      'disk exploded'
     )
     expect(explainUpgradeFailure({ errorCode: 'odd' }).body).toBe('Reason code: odd')
     expect(explainUpgradeFailure({}).body).toBe('No reason was reported.')
@@ -126,10 +128,14 @@ describe('runFailure', () => {
       run({
         status: 'failed',
         steps: [
-          step({ status: 'failed', errorCode: 'preflight_manifest', errorMessage: SIGNATURE_MESSAGE }),
+          step({
+            status: 'failed',
+            errorCode: 'preflight_manifest',
+            errorMessage: SIGNATURE_MESSAGE,
+          }),
           step({ id: 'cp', phase: 'control_plane', unit: 'instance', status: 'pending' }),
         ],
-      }),
+      })
     )
     expect(failure?.stepTitle).toBe('Co-located daemon')
     expect(failure?.command).toBe(daemonReinstallCommand('canary'))
@@ -137,19 +143,21 @@ describe('runFailure', () => {
 
   it('names control-plane and fleet steps', () => {
     expect(
-      runFailure(run({ steps: [step({ phase: 'control_plane', status: 'rolled_back' })] }))?.stepTitle,
+      runFailure(run({ steps: [step({ phase: 'control_plane', status: 'rolled_back' })] }))
+        ?.stepTitle
     ).toBe('Control plane')
     expect(
-      runFailure(run({ steps: [step({ phase: 'fleet', status: 'needs_attention', serverName: 'kore' })] }))
-        ?.stepTitle,
+      runFailure(
+        run({ steps: [step({ phase: 'fleet', status: 'needs_attention', serverName: 'kore' })] })
+      )?.stepTitle
     ).toBe('kore')
     expect(
       runFailure(run({ steps: [step({ phase: 'fleet', status: 'failed', hostname: 'kore.lan' })] }))
-        ?.stepTitle,
+        ?.stepTitle
     ).toBe('kore.lan')
-    expect(runFailure(run({ steps: [step({ phase: 'fleet', status: 'failed' })] }))?.stepTitle).toBe(
-      'Fleet server',
-    )
+    expect(
+      runFailure(run({ steps: [step({ phase: 'fleet', status: 'failed' })] }))?.stepTitle
+    ).toBe('Fleet server')
   })
 
   it('reads a failed run with no failed step from the run error', () => {
@@ -159,7 +167,9 @@ describe('runFailure', () => {
   })
 
   it('says a cancelled run was cancelled', () => {
-    expect(runFailure(run({ status: 'cancelled', steps: [] }))?.title).toBe('The update was cancelled')
+    expect(runFailure(run({ status: 'cancelled', steps: [] }))?.title).toBe(
+      'The update was cancelled'
+    )
   })
 
   it('has nothing to say for a healthy or missing run', () => {
@@ -240,22 +250,99 @@ function updates(overrides: Partial<InstanceUpdates> = {}): InstanceUpdates {
   }
 }
 
+function build(version: string, commit: string) {
+  return {
+    commit,
+    buildId: `build-${commit}`,
+    builtAt: '2026-09-30T14:30:00.000Z',
+    channel: 'canary',
+    manifestUrl: 'https://example.test/manifest.json',
+    version,
+  }
+}
+
+/** Control plane on 0.1.5-canary.1, UI on 0.1.5-canary.2, daemon on 0.1.6-canary.3; all three have updates. */
+function allThree(): InstanceUpdates {
+  const data = updates()
+  data.units.instance.target = build('0.1.5-canary.1', 'cp11111')
+  data.units.instance.uiTarget = build('0.1.5-canary.2', 'ui22222')
+  data.units.daemon.target = build('0.1.6-canary.3', 'dm33333')
+  data.units.daemon.updateAvailable = true
+  return data
+}
+
+const OLD_CONSOLE = { version: '0.1.4', commit: 'ui00000' }
+
 describe('updateBanner', () => {
-  it('offers an available self-hosted update', () => {
+  it('offers an available self-hosted update, naming the piece and its version', () => {
     const banner = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
-    expect(banner?.title).toBe('TurboPanel Canary · v0.1.2 is available')
-    expect(banner?.key).toBe('canary|0.1.2|abc1234def|20260927-180000-abc1234')
+    expect(banner?.title).toBe('Update available: control plane v0.1.2')
+    expect(banner?.body).toBe('Updates the control plane in one managed run.')
+    expect(banner?.key).toBe('control plane|canary|0.1.2|abc1234def|20260927-180000-abc1234')
   })
 
-  it('stays hidden when dismissed for this build, during a run, on Workers, or with nothing new', () => {
+  it('names every piece with an update in the order control plane, UI, daemon', () => {
+    const banner = updateBanner({
+      updates: allThree(),
+      activeRun: false,
+      dismissedKey: null,
+      consoleBuild: OLD_CONSOLE,
+    })
+    expect(banner?.title).toBe(
+      'Update available: control plane v0.1.5-canary.1, UI v0.1.5-canary.2, daemon v0.1.6-canary.3'
+    )
+    expect(banner?.body).toBe(
+      'Updates the control plane, the UI and the daemon on every server in one managed run.'
+    )
+  })
+
+  it('names the daemon alone when only it has an update', () => {
+    const data = allThree()
+    data.units.instance.updateAvailable = false
+    const banner = updateBanner({ updates: data, activeRun: false, dismissedKey: null })
+    expect(banner?.title).toBe('Update available: daemon v0.1.6-canary.3')
+    expect(banner?.body).toBe('Updates the daemon on every server in one managed run.')
+  })
+
+  it('lists the UI only when this console differs from the one the channel serves', () => {
+    const data = allThree()
+    const current = { version: '0.1.5', commit: 'ui22222' }
+    expect(
+      updateBanner({ updates: data, activeRun: false, dismissedKey: null, consoleBuild: current })
+        ?.title
+    ).toBe('Update available: control plane v0.1.5-canary.1, daemon v0.1.6-canary.3')
+    expect(updateBanner({ updates: data, activeRun: false, dismissedKey: null })?.title).toBe(
+      'Update available: control plane v0.1.5-canary.1, daemon v0.1.6-canary.3'
+    )
+  })
+
+  it('leaves out a daemon that is not connected', () => {
+    const data = allThree()
+    data.units.daemon.connected = false
+    expect(updateBanner({ updates: data, activeRun: false, dismissedKey: null })?.title).toBe(
+      'Update available: control plane v0.1.5-canary.1'
+    )
+  })
+
+  it('stays hidden when dismissed for these builds, during a run, on Workers, or with nothing new', () => {
     const offered = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
-    expect(updateBanner({ updates: updates(), activeRun: false, dismissedKey: offered?.key ?? '' })).toBeNull()
+    expect(
+      updateBanner({ updates: updates(), activeRun: false, dismissedKey: offered?.key ?? '' })
+    ).toBeNull()
     expect(updateBanner({ updates: updates(), activeRun: true, dismissedKey: null })).toBeNull()
     expect(
-      updateBanner({ updates: updates({ runtime: 'workers' }), activeRun: false, dismissedKey: null }),
+      updateBanner({
+        updates: updates({ runtime: 'workers' }),
+        activeRun: false,
+        dismissedKey: null,
+      })
     ).toBeNull()
     expect(
-      updateBanner({ updates: updates({ updatesManaged: true }), activeRun: false, dismissedKey: null }),
+      updateBanner({
+        updates: updates({ updatesManaged: true }),
+        activeRun: false,
+        dismissedKey: null,
+      })
     ).toBeNull()
     const current = updates()
     current.units.instance.updateAvailable = false
@@ -265,8 +352,22 @@ describe('updateBanner', () => {
 
   it('comes back for a newer build after an older one was dismissed', () => {
     expect(
-      updateBanner({ updates: updates(), activeRun: false, dismissedKey: 'canary|0.1.1|old|x' }),
+      updateBanner({ updates: updates(), activeRun: false, dismissedKey: 'canary|0.1.1|old|x' })
     ).not.toBeNull()
+  })
+
+  it('comes back when a new build of any one listed piece arrives', () => {
+    const input = { activeRun: false, consoleBuild: OLD_CONSOLE }
+    const dismissed = updateBanner({ ...input, updates: allThree(), dismissedKey: null })?.key ?? ''
+    expect(updateBanner({ ...input, updates: allThree(), dismissedKey: dismissed })).toBeNull()
+    const newerDaemon = allThree()
+    newerDaemon.units.daemon.target = build('0.1.6-canary.4', 'dm44444')
+    expect(updateBanner({ ...input, updates: newerDaemon, dismissedKey: dismissed })?.title).toBe(
+      'Update available: control plane v0.1.5-canary.1, UI v0.1.5-canary.2, daemon v0.1.6-canary.4'
+    )
+    const newerUi = allThree()
+    newerUi.units.instance.uiTarget = build('0.1.5-canary.3', 'ui33333')
+    expect(updateBanner({ ...input, updates: newerUi, dismissedKey: dismissed })).not.toBeNull()
   })
 
   it('needs a target to name', () => {
@@ -275,6 +376,35 @@ describe('updateBanner', () => {
     noTarget.units.daemon.target = null
     noTarget.units.daemon.updateAvailable = true
     expect(updateBanner({ updates: noTarget, activeRun: false, dismissedKey: null })).toBeNull()
+  })
+})
+
+describe('updateOffered (the admin sidebar badge)', () => {
+  it('is on whenever the control plane or its daemon has an update to name', () => {
+    expect(updateOffered({ updates: updates(), activeRun: false })).toBe(true)
+    const disconnected = allThree()
+    disconnected.units.instance.updateAvailable = false
+    disconnected.units.daemon.connected = false
+    expect(updateOffered({ updates: disconnected, activeRun: false })).toBe(true)
+  })
+
+  it('is off during a run, on Workers, with nothing new, or with no target', () => {
+    expect(updateOffered({ updates: updates(), activeRun: true })).toBe(false)
+    expect(updateOffered({ updates: updates({ runtime: 'workers' }), activeRun: false })).toBe(
+      false
+    )
+    expect(updateOffered({ updates: null, activeRun: false })).toBe(false)
+    const current = updates()
+    current.units.instance.updateAvailable = false
+    expect(updateOffered({ updates: current, activeRun: false })).toBe(false)
+    const uiOnly = allThree()
+    uiOnly.units.instance.updateAvailable = false
+    uiOnly.units.daemon.updateAvailable = false
+    expect(updateOffered({ updates: uiOnly, activeRun: false })).toBe(false)
+    const noTarget = updates()
+    noTarget.units.instance.target = null
+    noTarget.units.daemon.target = null
+    expect(updateOffered({ updates: noTarget, activeRun: false })).toBe(false)
   })
 })
 
