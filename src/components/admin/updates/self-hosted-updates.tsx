@@ -1,7 +1,7 @@
-import Constants from 'expo-constants'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-block'
 import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
@@ -19,8 +19,14 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
-import { platformUpdateAvailable, unitUpdateAvailable } from '@/lib/instance-updates'
-import { readAppSourceRelease } from '@/lib/source-release'
+import {
+  consoleUpdateAvailable,
+  platformUpdateAvailable,
+  unitUpdateAvailable,
+  updatePieceLabel,
+  updatePieces,
+  type ConsoleBuild,
+} from '@/lib/instance-updates'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
   installedBuildLabel,
@@ -49,16 +55,6 @@ import {
   withStartTimeout,
 } from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
-
-/** This console's own build (the bundle the control plane serves), from the app config. */
-function readConsoleBuild(): { version: string; commit: string } | null {
-  try {
-    const release = readAppSourceRelease(Constants.expoConfig)
-    return { version: release.version, commit: release.gitCommit }
-  } catch {
-    return null
-  }
-}
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
 type FleetServers = ComponentProps<typeof UpgradeFleetTable>['servers']
@@ -178,36 +174,13 @@ function useRetryFleetStep() {
   return { retryingStepId, retry }
 }
 
-/** Whether the console bundle differs from the one the channel serves; `null` when either is unknown. */
-function consoleUpdateAvailable(
-  consoleBuild: { version: string; commit: string } | null,
-  uiTarget: InstanceUpdates['units']['instance']['uiTarget']
-): boolean | null {
-  const want = uiTarget?.commit?.trim()
-  const have = consoleBuild?.commit.trim()
-  if (!want || want === 'unknown' || !have) return null
-  return !(want.startsWith(have) || have.startsWith(want))
-}
-
-/** The pieces that have an update, named the way the panel names them. */
-function componentsWithUpdates(
-  units: InstanceUpdates['units'],
-  consoleBuild: { version: string; commit: string } | null
-): string[] {
-  const names: string[] = []
-  if (unitUpdateAvailable(units.instance)) names.push('the control plane')
-  if (consoleUpdateAvailable(consoleBuild, units.instance.uiTarget)) names.push('the UI')
-  if (units.daemon.connected && unitUpdateAvailable(units.daemon)) names.push('the co-located daemon')
-  return names
-}
-
 function ComponentsPanel({
   units,
   consoleBuild,
   channel,
 }: Readonly<{
   units: InstanceUpdates['units']
-  consoleBuild: { version: string; commit: string } | null
+  consoleBuild: ConsoleBuild | null
   /** The instance-wide update channel; on `release` the version is the whole story. */
   channel: string
 }>) {
@@ -389,7 +362,9 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
             </View>
             {headline === 'update_available' ? (
               <Text style={panelStyles.muted}>
-                {updateAvailableSentence(componentsWithUpdates(data.units, consoleBuild)) ?? ''}
+                {updateAvailableSentence(
+                  updatePieces(data.units, consoleBuild).map(updatePieceLabel)
+                ) ?? ''}
               </Text>
             ) : null}
             <View style={styles.row}>

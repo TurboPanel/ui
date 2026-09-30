@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { Button, InlineNotice } from '@/components/ui'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
@@ -9,6 +10,7 @@ import {
   readDismissedUpdateBanner,
   UPDATE_NOW_HREF,
   updateBanner,
+  updateOffered,
   writeDismissedUpdateBanner,
   type UpdateBanner,
 } from '@/lib/update-status'
@@ -37,17 +39,12 @@ export function useUpdateAvailable(): Readonly<{
   const eligible = isSuperadminSession(session) && status.data?.runtime === 'deno'
   const updates = useInstanceUpdates({ enabled: eligible })
   const active = useUpgradeActiveRun({ enabled: eligible })
+  const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const [dismissedKey, setDismissedKey] = useState(() => readDismissedUpdateBanner(webStorage()))
-  const offered = eligible
-    ? updateBanner({
-        updates: updates.data,
-        activeRun: Boolean(active.data?.run),
-        dismissedKey: null,
-      })
-    : null
+  const offer = { updates: updates.data, activeRun: Boolean(active.data?.run) }
   return {
-    banner: offered && offered.key !== dismissedKey ? offered : null,
-    available: offered !== null,
+    banner: eligible ? updateBanner({ ...offer, dismissedKey, consoleBuild }) : null,
+    available: eligible && updateOffered(offer),
     dismiss: (key) => {
       writeDismissedUpdateBanner(webStorage(), key)
       setDismissedKey(key)
@@ -55,7 +52,7 @@ export function useUpdateAvailable(): Readonly<{
   }
 }
 
-/** "TurboPanel <build> is available — Update" across the top of the app. */
+/** "Update available: control plane v0.1.5-canary.1 — Update" across the top of the app. */
 export function UpdateAvailableBanner() {
   const router = useRouter()
   const { banner, dismiss } = useUpdateAvailable()
@@ -64,7 +61,7 @@ export function UpdateAvailableBanner() {
     <View style={styles.root}>
       <InlineNotice
         title={banner.title}
-        body="Updates the control plane, its daemon, and then your servers, one managed run."
+        body={banner.body}
         actions={
           <>
             <Button
