@@ -15,7 +15,7 @@
 # finalize fast-forward) does nothing. workflow_dispatch re-runs a release cut
 # for a given rc tag.
 
-name: Cut release
+name: Cut Release
 
 on:
   push:
@@ -27,10 +27,10 @@ on:
         required: true
         type: string
 
+# Read-only by default; the jobs that publish raise their own. The "Start
+# <next>" PR (next-version) is opened with the Release App token, not this one.
 permissions:
-  contents: write
-  actions: read
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: cut-release
@@ -39,6 +39,10 @@ concurrency:
 jobs:
   resolve:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # commits/<sha>/pulls: the merged staging → live PR.
+      pull-requests: read
     outputs:
       proceed: ${{ steps.r.outputs.proceed }}
       rc-tag: ${{ steps.r.outputs.rc-tag }}
@@ -89,6 +93,9 @@ jobs:
   prepare:
     needs: resolve
     if: needs.resolve.outputs.proceed == 'true'
+    # gh-promote.yml asks for contents: write (the release tag).
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-promote.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       repo-kind: ui
@@ -102,6 +109,9 @@ jobs:
 
   publish:
     needs: prepare
+    # gh-release.yml creates the release and uploads its assets.
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-release.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -114,6 +124,9 @@ jobs:
 
   finalize:
     needs: [prepare, publish]
+    # gh-promote-finalize.yml moves `live` (GITHUB_TOKEN when the App cannot).
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       to: release
