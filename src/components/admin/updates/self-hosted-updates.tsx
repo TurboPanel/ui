@@ -9,10 +9,17 @@ import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-
 import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
-import { Badge, Button, ConfirmButton, InlineNotice, SectionPanel } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  ConfirmButton,
+  InlineNotice,
+  SectionPanel,
+  StatusDot,
+} from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
-import { platformUpdateAvailable } from '@/lib/instance-updates'
+import { platformUpdateAvailable, unitUpdateAvailable } from '@/lib/instance-updates'
 import { readAppSourceRelease } from '@/lib/source-release'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
@@ -20,6 +27,7 @@ import {
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
   summarizeFleetSteps,
+  updateAvailableSentence,
   upgradeRunErrorLabel,
 } from '@/lib/upgrade-display'
 import {
@@ -170,7 +178,30 @@ function useRetryFleetStep() {
   return { retryingStepId, retry }
 }
 
-function TargetBuildPanel({
+/** Whether the console bundle differs from the one the channel serves; `null` when either is unknown. */
+function consoleUpdateAvailable(
+  consoleBuild: { version: string; commit: string } | null,
+  uiTarget: InstanceUpdates['units']['instance']['uiTarget']
+): boolean | null {
+  const want = uiTarget?.commit?.trim()
+  const have = consoleBuild?.commit.trim()
+  if (!want || want === 'unknown' || !have) return null
+  return !(want.startsWith(have) || have.startsWith(want))
+}
+
+/** The pieces that have an update, named the way the panel names them. */
+function componentsWithUpdates(
+  units: InstanceUpdates['units'],
+  consoleBuild: { version: string; commit: string } | null
+): string[] {
+  const names: string[] = []
+  if (unitUpdateAvailable(units.instance)) names.push('the control plane')
+  if (consoleUpdateAvailable(consoleBuild, units.instance.uiTarget)) names.push('the UI')
+  if (units.daemon.connected && unitUpdateAvailable(units.daemon)) names.push('the co-located daemon')
+  return names
+}
+
+function ComponentsPanel({
   units,
   consoleBuild,
 }: Readonly<{
@@ -179,16 +210,18 @@ function TargetBuildPanel({
 }>) {
   const { instance, daemon } = units
   return (
-    <SectionPanel title="Target build">
+    <SectionPanel title="Versions">
       <UpgradeBuildBlock
         title="Control plane"
         target={instance.target}
         installedLabel={installedBuildLabel(instance.installed, instance.target)}
+        updateAvailable={unitUpdateAvailable(instance)}
       />
       <UpgradeBuildBlock
         title="UI"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget)}
+        updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
       />
       <UpgradeBuildBlock
         title="Co-located daemon"
@@ -196,6 +229,7 @@ function TargetBuildPanel({
         installedLabel={
           daemon.installed ? installedBuildLabel(daemon.installed, daemon.target) : 'Not connected'
         }
+        updateAvailable={daemon.connected ? unitUpdateAvailable(daemon) : null}
       />
     </SectionPanel>
   )
@@ -341,9 +375,21 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
       {flow.notice ? <InlineNotice tone="info" title={flow.notice} /> : null}
 
       <SectionPanel title="Status">
-        <Text style={styles.headline}>{platformUpgradeHeadlineCopy(headline)}</Text>
-        <View style={styles.row}>
-          <Badge tone="muted" label={`Channel ${data.channel}`} />
+        <View style={styles.statusRow}>
+          <View style={styles.statusText}>
+            <View style={styles.headlineRow}>
+              <StatusDot tone={headlineTone(headline)} />
+              <Text style={styles.headline}>{platformUpgradeHeadlineCopy(headline)}</Text>
+            </View>
+            {headline === 'update_available' ? (
+              <Text style={panelStyles.muted}>
+                {updateAvailableSentence(componentsWithUpdates(data.units, consoleBuild)) ?? ''}
+              </Text>
+            ) : null}
+            <View style={styles.row}>
+              <Badge tone="muted" label={`Channel ${data.channel}`} />
+            </View>
+          </View>
           <Button
             label="Update TurboPanel"
             variant="primary"
@@ -356,7 +402,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         </View>
       </SectionPanel>
 
-      <TargetBuildPanel units={data.units} consoleBuild={consoleBuild} />
+      <ComponentsPanel units={data.units} consoleBuild={consoleBuild} />
 
       {failure ? (
         <UpgradeFailureNotice
@@ -366,7 +412,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
       ) : null}
       {stalled ? <InlineNotice title={stalled} /> : null}
 
-      {run || platformUpdateAvailable(data.units) ? (
+      {run && !shown.finished ? (
         <UpgradeProgressPanel
           run={run}
           finished={shown.finished}
@@ -409,6 +455,17 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   )
 }
 
+function headlineTone(headline: ReturnType<typeof resolvePlatformUpgradeHeadline>) {
+  switch (headline) {
+    case 'up_to_date':
+      return 'online' as const
+    case 'needs_attention':
+      return 'failed' as const
+    default:
+      return 'pending' as const
+  }
+}
+
 const styles = StyleSheet.create({
   root: {
     gap: spacing.md,
@@ -417,7 +474,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: spacing.sm,
+  },
+  headlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  statusText: {
+    flexShrink: 1,
+    gap: spacing.xs,
   },
   row: {
     flexDirection: 'row',

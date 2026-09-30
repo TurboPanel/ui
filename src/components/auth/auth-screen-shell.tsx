@@ -55,8 +55,8 @@ export function AuthScreenShell({
           <View style={authFormStyles.column}>
             <View style={authFormStyles.pageHeader} accessibilityRole="header">
               <View style={authFormStyles.pageTitleRow}>
-                <View style={authFormStyles.brandGroup}>
-                  <TurboPanelLogo size={44} style={authFormStyles.brandMark} />
+                <TurboPanelLogo size={44} style={authFormStyles.brandMark} />
+                <View style={authFormStyles.wordmarkSlot}>
                   <HighAvailabilityWordmark showVersion={false} />
                 </View>
                 <Text style={authFormStyles.pageTitle}>{title}</Text>

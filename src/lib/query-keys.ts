@@ -367,6 +367,7 @@ export const queryKeys = {
     upgradeActiveRun: ['admin', 'instance-updates', 'run'] as const,
     upgradeHistory: (offset: number, limit: number) =>
       ['admin', 'instance-updates', 'history', offset, limit] as const,
+    upgradeRun: (runId: string) => ['admin', 'instance-updates', 'runs', runId] as const,
     upgradeServers: (offset: number, limit: number, status: string) =>
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,

@@ -1,4 +1,4 @@
-# Cuts the release when the staging → live PR is merged (Road to 0.2.x,
+# Publishes the release when the staging → live PR is merged (Road to 0.2.x,
 # versioning flow) — the second automatic PR. Runs on the push the merge makes
 # to `live` (a push runs the workflow file from the pushed commit, so the very
 # first merge, which brings this file into live, already works).
@@ -12,10 +12,10 @@
 #   3. next-version  opens the "Start <next>" PR into trunk
 #
 # A push to live that is not a merged staging PR (a break-glass promotion, the
-# finalize fast-forward) does nothing. workflow_dispatch re-runs a release cut
+# finalize fast-forward) does nothing. workflow_dispatch re-runs the release
 # for a given rc tag.
 
-name: Cut release
+name: Publish Release
 
 on:
   push:
@@ -27,18 +27,22 @@ on:
         required: true
         type: string
 
+# Read-only by default; the jobs that publish raise their own. The "Start
+# <next>" PR (next-version) is opened with the Release App token, not this one.
 permissions:
-  contents: write
-  actions: read
-  pull-requests: write
+  contents: read
 
 concurrency:
-  group: cut-release
+  group: publish-release
   cancel-in-progress: false
 
 jobs:
   resolve:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # commits/<sha>/pulls: the merged staging → live PR.
+      pull-requests: read
     outputs:
       proceed: ${{ steps.r.outputs.proceed }}
       rc-tag: ${{ steps.r.outputs.rc-tag }}
@@ -72,7 +76,7 @@ jobs:
             version="$(gh api "repos/$REPO/contents/package.json?ref=$PUSHED" --jq .content | base64 -d | jq -r .version)"
             case "$version" in ""|null) echo "::error::could not read the version from package.json at $PUSHED"; exit 1;; *) ;; esac
             rc_tag="$(gh api --paginate "repos/$REPO/git/matching-refs/tags/v$version-rc." --jq '.[].ref' | sed 's#^refs/tags/##' | sort -V | tail -n 1)"
-            [ -n "$rc_tag" ] || { echo "::error::no v$version-rc.N tag exists — cut an rc first (merge the trunk → staging PR)"; exit 1; }
+            [ -n "$rc_tag" ] || { echo "::error::no v$version-rc.N tag exists — publish an rc first (merge the trunk → staging PR)"; exit 1; }
             echo "PR #$pr merged; releasing $version from $rc_tag"
           fi
           if gh api "repos/$REPO/git/ref/tags/v$version" --silent 2>/dev/null; then
@@ -89,6 +93,9 @@ jobs:
   prepare:
     needs: resolve
     if: needs.resolve.outputs.proceed == 'true'
+    # gh-promote.yml asks for contents: write (the release tag).
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-promote.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       repo-kind: ui
@@ -102,6 +109,9 @@ jobs:
 
   publish:
     needs: prepare
+    # gh-release.yml creates the release and uploads its assets.
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-release.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -114,6 +124,9 @@ jobs:
 
   finalize:
     needs: [prepare, publish]
+    # gh-promote-finalize.yml moves `live` (GITHUB_TOKEN when the App cannot).
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       to: release
