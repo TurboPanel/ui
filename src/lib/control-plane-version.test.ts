@@ -154,6 +154,46 @@ describe('controlPlaneVersionLine', () => {
       )?.label
     ).toBe('v0.1.1')
   })
+
+  it('drops the commit on hosted live, but keeps it on testing and staging', () => {
+    const withCommit = {
+      ok: true,
+      version: '0.1.1',
+      revision: { commit: SHA, sourceUrl: 'https://github.com/TurboPanel/turbopanel' },
+    }
+    expect(
+      controlPlaneVersionLine({ ...withCommit, environment: 'live' }, 'workers')
+    ).toEqual({ label: 'v0.1.1', commitUrl: null, environment: null })
+    expect(
+      controlPlaneVersionLine({ ...withCommit, environment: 'testing' }, 'workers')?.label
+    ).toBe('v0.1.1 · 18ad2b0')
+    expect(
+      controlPlaneVersionLine({ ...withCommit, environment: 'staging' }, 'workers')?.label
+    ).toBe('v0.1.1 · 18ad2b0')
+  })
+
+  it('drops the commit on a self-hosted release build, but keeps it on canary and rc', () => {
+    const withCommit = {
+      ok: true,
+      version: '0.1.1',
+      build: '0.1.1',
+      revision: { commit: SHA, sourceUrl: 'https://github.com/TurboPanel/turbopanel' },
+    }
+    expect(
+      controlPlaneVersionLine({ ...withCommit, channel: 'release' }, 'deno')
+    ).toEqual({ label: 'v0.1.1', commitUrl: null, environment: null })
+    expect(
+      controlPlaneVersionLine(
+        { ...withCommit, channel: 'canary', build: '0.1.1-canary.417' },
+        'deno'
+      )?.label
+    ).toBe('v0.1.1-canary.417 · 18ad2b0')
+    expect(
+      controlPlaneVersionLine({ ...withCommit, channel: 'rc', build: '0.1.1-rc.1' }, 'deno')?.label
+    ).toBe('v0.1.1-rc.1 · 18ad2b0')
+    // No channel reported (older control plane): unchanged, commit shown.
+    expect(controlPlaneVersionLine(withCommit, 'deno')?.label).toBe('v0.1.1 · 18ad2b0')
+  })
 })
 
 describe('commitUrlFor', () => {

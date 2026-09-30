@@ -52,13 +52,24 @@ export function commitUrlFor(sourceUrl: string | null | undefined, sha: string):
 }
 
 /**
+ * Whether this build is a plain production release: hosted `live`, or a
+ * self-hosted `release`-channel install. Its version number is the whole
+ * story there, so the commit that happens to sit behind it is left off.
+ */
+function isProductionRelease(health: HealthResponse | null | undefined, runtime: 'deno' | 'workers'): boolean {
+  if (runtime === 'workers') return (health?.environment?.trim().toLowerCase() ?? '') === 'live'
+  return (health?.channel?.trim().toLowerCase() ?? '') === 'release'
+}
+
+/**
  * The muted line beside the T mark: the control plane's version, its short
- * commit (linked to the source) when the build recorded one, and — on the
- * hosted (Workers) control plane — the environment ("Testing" / "Staging",
- * nothing on live). Self-hosted shows its exact installed build label
- * (`v0.1.1-canary.…`, `v0.1.1-rc.1`) in place of the plain version when the
- * control plane reports one. `null` until `/api/health` has answered with a
- * version; fields an older control plane does not send are simply absent.
+ * commit (linked to the source) when the build recorded one and this is not
+ * a production release, and — on the hosted (Workers) control plane — the
+ * environment ("Testing" / "Staging", nothing on live). Self-hosted shows
+ * its exact installed build label (`v0.1.1-canary.…`, `v0.1.1-rc.1`) in
+ * place of the plain version when the control plane reports one. `null`
+ * until `/api/health` has answered with a version; fields an older control
+ * plane does not send are simply absent.
  */
 export function controlPlaneVersionLine(
   health: HealthResponse | null | undefined,
@@ -66,13 +77,18 @@ export function controlPlaneVersionLine(
 ): ControlPlaneVersionLine | null {
   const version = health?.version?.trim()
   if (!version) return null
+  const effectiveRuntime = runtime === 'deno' ? 'deno' : 'workers'
   const build = health?.build?.trim() ?? ''
-  const shown = runtime === 'deno' && BUILD_LABEL.test(build) ? build : version
+  const shown = effectiveRuntime === 'deno' && BUILD_LABEL.test(build) ? build : version
   const label = withV(shown)
   const environment =
-    runtime === 'workers' ? (ENVIRONMENT_TAGS[health?.environment?.trim().toLowerCase() ?? ''] ?? null) : null
+    effectiveRuntime === 'workers'
+      ? (ENVIRONMENT_TAGS[health?.environment?.trim().toLowerCase() ?? ''] ?? null)
+      : null
   const commit = health?.revision?.commit?.trim() ?? ''
-  if (!COMMIT_SHA.test(commit)) return { label, commitUrl: null, environment }
+  if (isProductionRelease(health, effectiveRuntime) || !COMMIT_SHA.test(commit)) {
+    return { label, commitUrl: null, environment }
+  }
   return {
     label: `${label} · ${commit.slice(0, 7).toLowerCase()}`,
     commitUrl: commitUrlFor(health?.revision?.sourceUrl, commit),
