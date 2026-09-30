@@ -34,11 +34,16 @@ on:
         required: true
         type: string
 
+# Read-only by default; each job raises its own to what the dev workflow it
+# calls asks for.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   prepare:
+    # gh-promote.yml asks for contents: write (the tag).
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-promote.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       repo-kind: ui
@@ -52,6 +57,9 @@ jobs:
 
   publish:
     needs: prepare
+    # gh-release.yml creates the release and uploads its assets.
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-release.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -64,6 +72,9 @@ jobs:
 
   finalize:
     needs: [prepare, publish]
+    # gh-promote-finalize.yml moves the branch (GITHUB_TOKEN when the App cannot).
+    permissions:
+      contents: write
     uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
     with:
       to: ${{ inputs.to }}
