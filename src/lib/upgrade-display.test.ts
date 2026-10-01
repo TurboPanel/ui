@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fleetComponentLabel,
   fleetStatusBadge,
   formatUpgradeBuildDisplayName,
   installedBuildLabel,
   mapStepStatusToPipeline,
+  pieceIdentityLines,
+  stepInFlight,
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
   stepHasStarted,
@@ -15,6 +18,7 @@ import {
   upgradeChannelTitle,
   upgradePhaseLabel,
   upgradeRunErrorLabel,
+  upgradeStepLabel,
   upgradeStepErrorLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
@@ -413,5 +417,93 @@ describe('updateAvailableSentence', () => {
     ).toBe(
       'Control plane v0.1.5-canary.1, UI v0.1.5-canary.2 and daemon v0.1.6-canary.3 can be updated.'
     )
+  })
+})
+
+describe('upgrade step wording', () => {
+  it('says which version runs at each step', () => {
+    expect(upgradeStepLabel('installing')).toBe('Writing new files (still running the old version)')
+    expect(upgradeStepLabel('restarting')).toBe('Restarting onto the new version')
+    expect(upgradeStepLabel('verifying')).toBe('Checking the new version is running')
+    expect(upgradeStepLabel('preparing')).toBe('Preparing')
+  })
+
+  it('is in flight until the step ends', () => {
+    expect(stepInFlight('installing')).toBe(true)
+    expect(stepInFlight('pending')).toBe(true)
+    expect(stepInFlight('done')).toBe(false)
+    expect(stepInFlight('failed')).toBe(false)
+    expect(stepInFlight(null)).toBe(false)
+  })
+
+  it('never says Up to date while a run is working on the piece', () => {
+    expect(updateAvailabilityBadge(false, true)).toEqual({ tone: 'pending', label: 'Updating' })
+    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to date' })
+  })
+})
+
+describe('pieceIdentityLines', () => {
+  const running = { version: '0.1.4', commit: 'aaaaaaa1111' }
+  const to = { toVersion: '0.1.5', toCommit: 'bbbbbbb2222' }
+
+  it('shows only the running line with no run', () => {
+    expect(pieceIdentityLines({ running, runningLabel: '0.1.4 · aaaaaaa', step: null })).toEqual({
+      installedOnDisk: null,
+      runningNow: '0.1.4 · aaaaaaa',
+      updatingTo: null,
+      restartPending: false,
+    })
+  })
+
+  it('names the target as Updating to before the files are written', () => {
+    const lines = pieceIdentityLines({
+      running,
+      runningLabel: '0.1.4 · aaaaaaa',
+      step: { status: 'installing', ...to },
+    })
+    expect(lines.updatingTo).toBe('0.1.5 · bbbbbbb')
+    expect(lines.installedOnDisk).toBeNull()
+    expect(lines.restartPending).toBe(false)
+  })
+
+  it('shows the new files on disk and a pending restart once restarting', () => {
+    const lines = pieceIdentityLines({
+      running,
+      runningLabel: '0.1.4 · aaaaaaa',
+      step: { status: 'restarting', ...to },
+    })
+    expect(lines.installedOnDisk).toBe('0.1.5 · bbbbbbb')
+    expect(lines.updatingTo).toBeNull()
+    expect(lines.restartPending).toBe(true)
+  })
+
+  it('has no pending restart once the running commit is the target', () => {
+    const lines = pieceIdentityLines({
+      running: { version: '0.1.5', commit: 'bbbbbbb2222' },
+      runningLabel: '0.1.5 · bbbbbbb',
+      step: { status: 'verifying', ...to },
+    })
+    expect(lines.installedOnDisk).toBe('0.1.5 · bbbbbbb')
+    expect(lines.restartPending).toBe(false)
+  })
+
+  it('shows nothing about disk when the step has ended', () => {
+    const lines = pieceIdentityLines({
+      running,
+      runningLabel: 'x',
+      step: { status: 'done', ...to },
+    })
+    expect(lines.installedOnDisk).toBeNull()
+    expect(lines.updatingTo).toBeNull()
+  })
+})
+
+describe('fleetComponentLabel', () => {
+  it('names the daemon for server rows', () => {
+    expect(fleetComponentLabel({ unit: 'daemon' })).toBe('Daemon')
+    expect(fleetComponentLabel({})).toBe('Daemon')
+  })
+  it('names the control plane for an instance row', () => {
+    expect(fleetComponentLabel({ unit: 'instance' })).toBe('Control plane')
   })
 })

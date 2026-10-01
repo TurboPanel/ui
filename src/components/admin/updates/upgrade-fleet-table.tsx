@@ -1,4 +1,4 @@
-import { StyleSheet, Text } from 'react-native'
+import { StyleSheet, Text, useWindowDimensions } from 'react-native'
 import {
   Badge,
   Button,
@@ -10,11 +10,17 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeServersPage } from '@/lib/instance-api'
-import { fleetStatusBadge, installedBuildLabel, upgradeStepOutcome } from '@/lib/upgrade-display'
+import {
+  fleetComponentLabel,
+  fleetStatusBadge,
+  installedBuildLabel,
+  upgradeStepOutcome,
+} from '@/lib/upgrade-display'
 import { colors } from '@/lib/theme'
 
-const COLUMNS: readonly DataTableColumn[] = [
+const ALL_COLUMNS: readonly DataTableColumn[] = [
   { key: 'server', header: 'Server', flex: 1.2, minWidth: 140 },
+  { key: 'component', header: 'Component', width: 110 },
   { key: 'status', header: 'Status', width: 120 },
   { key: 'installed', header: 'Installed', flex: 1.2, minWidth: 130 },
   { key: 'target', header: 'Target', flex: 1, minWidth: 110 },
@@ -22,6 +28,9 @@ const COLUMNS: readonly DataTableColumn[] = [
   { key: 'error', header: 'Error', flex: 1.2, minWidth: 160 },
   { key: 'action', header: '', width: 88 },
 ]
+
+/** Below this width the Component column folds into a prefix on the server name. */
+const NARROW_WIDTH = 720
 
 type FleetRow = UpgradeServersPage['servers'][number]
 
@@ -60,39 +69,48 @@ export function UpgradeFleetTable({
   onRetry: (stepId: string) => void
   retryingId: string | null
 }>) {
+  const narrow = useWindowDimensions().width < NARROW_WIDTH
+  const columns = narrow ? ALL_COLUMNS.filter((column) => column.key !== 'component') : ALL_COLUMNS
+  const col = (key: string) => columns.find((column) => column.key === key) ?? columns[0]
   const page = pageSize > 0 ? Math.floor(offset / pageSize) : 0
   const pageCount = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)))
 
   return (
-    <DataTable columns={COLUMNS} minWidth={860}>
+    <DataTable columns={columns} minWidth={narrow ? 760 : 970}>
       {servers.length === 0 ? (
-        <DataTableEmpty>No servers in this upgrade yet.</DataTableEmpty>
+        <DataTableEmpty>No servers in this update yet.</DataTableEmpty>
       ) : (
         servers.map((row, index) => (
           <DataTableRow key={row.id} last={index === servers.length - 1}>
-            <DataTableCell column={COLUMNS[0]}>
+            <DataTableCell column={col('server')}>
               <Text style={styles.cell}>
+                {narrow ? `${fleetComponentLabel(row)}: ` : ''}
                 {row.serverName?.trim() || row.hostname?.trim() || row.serverId.slice(0, 8)}
               </Text>
             </DataTableCell>
-            <DataTableCell column={COLUMNS[1]}>
+            {narrow ? null : (
+              <DataTableCell column={col('component')}>
+                <Text style={styles.cell}>{fleetComponentLabel(row)}</Text>
+              </DataTableCell>
+            )}
+            <DataTableCell column={col('status')}>
               <Badge {...fleetStatusBadge(row.status)} />
             </DataTableCell>
-            <DataTableCell column={COLUMNS[2]}>
+            <DataTableCell column={col('installed')}>
               <Text style={styles.cell}>{installedText(row)}</Text>
             </DataTableCell>
-            <DataTableCell column={COLUMNS[3]}>
+            <DataTableCell column={col('target')}>
               <Text style={styles.cell}>{row.toVersion ?? row.toCommit?.slice(0, 12) ?? '—'}</Text>
             </DataTableCell>
-            <DataTableCell column={COLUMNS[4]}>
+            <DataTableCell column={col('step')}>
               <Text style={styles.cell}>{stepLabel(row)}</Text>
             </DataTableCell>
-            <DataTableCell column={COLUMNS[5]}>
+            <DataTableCell column={col('error')}>
               <Text style={panelStyles.muted} numberOfLines={2}>
                 {row.errorMessage ?? upgradeStepOutcome(row).detail ?? '—'}
               </Text>
             </DataTableCell>
-            <DataTableCell column={COLUMNS[6]}>
+            <DataTableCell column={col('action')}>
               {row.status === 'needs_attention' || row.status === 'failed' ? (
                 <Button
                   label="Retry"
@@ -109,12 +127,12 @@ export function UpgradeFleetTable({
       )}
       {total > pageSize ? (
         <DataTableRow last>
-          <DataTableCell column={COLUMNS[0]}>
+          <DataTableCell column={col('server')}>
             <Text style={panelStyles.muted}>
               Page {page + 1} of {pageCount}
             </Text>
           </DataTableCell>
-          <DataTableCell column={COLUMNS[6]}>
+          <DataTableCell column={col('action')}>
             <Button
               label="Previous"
               size="sm"
