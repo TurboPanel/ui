@@ -228,6 +228,50 @@ function EnvironmentToolbar({
   )
 }
 
+function useEnvironmentDeleteFlow(
+  orgId: string,
+  activeEnvironment: EnvironmentRecord | null,
+  setError: (message: string | null) => void,
+) {
+  const deleteEnvironment = useDeleteEnvironment(orgId)
+  const stopEnvironment = useStopEnvironmentMutation(orgId)
+  const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
+
+  const deleteActive = async () => {
+    if (!activeEnvironment) return
+    setError(null)
+    setFailure(null)
+    const result = await deleteEnvironment.run(activeEnvironment.id)
+    if (!result.ok && deleteEnvironment.actionError) {
+      setFailure(
+        environmentDeleteFailure(
+          deleteEnvironment.actionError,
+          environmentLabel(activeEnvironment),
+        ),
+      )
+    }
+  }
+
+  const stopActive = async () => {
+    if (!activeEnvironment) return
+    const result = await stopEnvironment.run(activeEnvironment.id)
+    if (result.ok) {
+      setFailure({ text: ENVIRONMENT_STOP_QUEUED_COPY, needsStop: false })
+    } else if (stopEnvironment.actionError) {
+      setFailure({ text: stopEnvironment.actionError, needsStop: true })
+    }
+  }
+
+  return {
+    failure,
+    clearFailure: () => setFailure(null),
+    deleting: deleteEnvironment.isPending,
+    stopping: stopEnvironment.isPending,
+    deleteActive,
+    stopActive,
+  }
+}
+
 export function ProjectEnvironmentsSection({
   orgId,
   projectId,
@@ -265,9 +309,7 @@ export function ProjectEnvironmentsSection({
     orgId,
     activeEnvironment?.id ?? '',
   )
-  const deleteEnvironment = useDeleteEnvironment(orgId)
-  const stopEnvironment = useStopEnvironmentMutation(orgId)
-  const [deleteFailure, setDeleteFailure] = useState<EnvironmentDeleteFailure | null>(null)
+  const deleteFlow = useEnvironmentDeleteFlow(orgId, activeEnvironment, setError)
 
   useEffect(() => {
     setSelectedId((previous) => resolveSelectedId(previous, environments))
@@ -309,7 +351,7 @@ export function ProjectEnvironmentsSection({
 
   const selectEnvironment = (id: string) => {
     setSelectedId(id)
-    setDeleteFailure(null)
+    deleteFlow.clearFailure()
     setRenaming(false)
     setShowCreate(false)
   }
@@ -364,31 +406,6 @@ export function ProjectEnvironmentsSection({
     setShowCreate(false)
   }
 
-  const deleteActive = async () => {
-    if (!activeEnvironment) return
-    setError(null)
-    setDeleteFailure(null)
-    const result = await deleteEnvironment.run(activeEnvironment.id)
-    if (!result.ok && deleteEnvironment.actionError) {
-      setDeleteFailure(
-        environmentDeleteFailure(
-          deleteEnvironment.actionError,
-          environmentLabel(activeEnvironment),
-        ),
-      )
-    }
-  }
-
-  const stopActive = async () => {
-    if (!activeEnvironment) return
-    const result = await stopEnvironment.run(activeEnvironment.id)
-    if (result.ok) {
-      setDeleteFailure({ text: ENVIRONMENT_STOP_QUEUED_COPY, needsStop: false })
-    } else if (stopEnvironment.actionError) {
-      setDeleteFailure({ text: stopEnvironment.actionError, needsStop: true })
-    }
-  }
-
   let content
   if (loading && environments.length === 0) {
     content = <LoadingState label="Loading environments…" />
@@ -423,15 +440,15 @@ export function ProjectEnvironmentsSection({
             onAdd={() => {
               setShowCreate(true)
             }}
-            deleting={deleteEnvironment.isPending}
-            onConfirmDelete={() => void deleteActive()}
+            deleting={deleteFlow.deleting}
+            onConfirmDelete={() => void deleteFlow.deleteActive()}
           />
         )}
-        {deleteFailure ? (
+        {deleteFlow.failure ? (
           <EnvironmentDeleteNotice
-            failure={deleteFailure}
-            stopping={stopEnvironment.isPending}
-            onStop={() => void stopActive()}
+            failure={deleteFlow.failure}
+            stopping={deleteFlow.stopping}
+            onStop={() => void deleteFlow.stopActive()}
           />
         ) : null}
         {showCreate && canOwn ? (
