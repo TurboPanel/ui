@@ -1058,7 +1058,7 @@ const styles = StyleSheet.create({
   column: {
     width: '100%',
     maxWidth: FORM_MAX_WIDTH,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     gap: spacing.md,
   },
   pageHeader: {

@@ -36,7 +36,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
-import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 function EnvironmentSelector() {
@@ -506,10 +506,10 @@ const titleInputWebStyle = {
 } as unknown as TextStyle
 
 const styles = StyleSheet.create({
+  // The shell's content column already applies the page-width cap (or none, in
+  // wide mode); a second cap here would hold the project screen narrow.
   root: {
     width: '100%',
-    maxWidth: layout.contentMaxWidth,
-    alignSelf: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
   },
