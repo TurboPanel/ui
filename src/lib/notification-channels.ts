@@ -1,6 +1,8 @@
 import type {
   NotificationChannel,
   NotificationChannelKind,
+  NotificationChannelTiming,
+  NotificationDigestCadence,
   NotificationRule,
   NotificationSeverity,
 } from '@/lib/instance-api'
@@ -60,7 +62,87 @@ export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
   return { everything: false, floor: 'info', events: new Set(rules.map((r) => r.event)) }
 }
 
+/** The delivery-timing controls on an email channel's row, as the person has set them so far. */
+export type TimingDraft = {
+  digest: NotificationDigestCadence | 'off'
+  quietOn: boolean
+  start: string
+  end: string
+  /** The person's own zone, for a personal channel; null = UTC. */
+  timeZone: string | null
+}
+
+export const DEFAULT_QUIET_START = '22:00'
+export const DEFAULT_QUIET_END = '07:00'
+
+/** Every half hour of the day, as `HH:MM` — the choices for a quiet-hours start or end. */
+export const QUIET_TIME_OPTIONS: readonly { value: string; label: string }[] = Array.from(
+  { length: 48 },
+  (_, i) => {
+    const hh = String(Math.floor(i / 2)).padStart(2, '0')
+    const label = `${hh}:${i % 2 === 0 ? '00' : '30'}`
+    return { value: label, label }
+  },
+)
+
+export const DIGEST_OPTIONS: readonly { value: TimingDraft['digest']; label: string }[] = [
+  { value: 'off', label: 'Every event' },
+  { value: 'hourly', label: 'Hourly digest' },
+  { value: 'daily', label: 'Daily digest' },
+]
+
+export function timingDraftFromChannel(
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
+): TimingDraft {
+  return {
+    digest: channel.digestCadence ?? 'off',
+    quietOn: channel.quietHours !== null,
+    start: channel.quietHours?.start ?? DEFAULT_QUIET_START,
+    end: channel.quietHours?.end ?? DEFAULT_QUIET_END,
+    timeZone: channel.timeZone === 'UTC' ? null : channel.timeZone,
+  }
+}
+
+/** True when the quiet window is usable: both ends set and not the same time. */
+export function quietWindowValid(draft: Readonly<Pick<TimingDraft, 'quietOn' | 'start' | 'end'>>): boolean {
+  return !draft.quietOn || draft.start !== draft.end
+}
+
+/**
+ * What to PATCH: only what differs from the saved channel, so saving a digest
+ * never rewrites the time zone. The zone is sent for a personal channel only.
+ */
+export function timingPatch(
+  draft: Readonly<TimingDraft>,
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone' | 'scope'>>,
+): NotificationChannelTiming {
+  const saved = timingDraftFromChannel(channel)
+  const patch: NotificationChannelTiming = {}
+  if (draft.digest !== saved.digest) patch.digestCadence = draft.digest === 'off' ? null : draft.digest
+  if (draft.quietOn !== saved.quietOn || (draft.quietOn && (draft.start !== saved.start || draft.end !== saved.end))) {
+    patch.quietHours = draft.quietOn ? { start: draft.start, end: draft.end } : null
+  }
+  if (channel.scope === 'user' && draft.timeZone !== saved.timeZone) patch.timeZone = draft.timeZone
+  return patch
+}
+
+/** One line under the channel name: "Hourly digest · quiet 22:00–07:00 (America/New_York)". */
+export function timingSummary(
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
+): string | null {
+  const parts: string[] = []
+  if (channel.digestCadence) parts.push(channel.digestCadence === 'hourly' ? 'Hourly digest' : 'Daily digest')
+  if (channel.quietHours) parts.push(`quiet ${channel.quietHours.start}–${channel.quietHours.end}`)
+  if (parts.length === 0) return null
+  return `${parts.join(' · ')} (${channel.timeZone})`
+}
+
 const CHANNEL_ERROR_COPY: Record<string, string> = {
+  timing_email_only: 'Digest and quiet hours are for email channels. Chat and webhook channels get every event as it happens.',
+  digest_cadence_invalid: 'Choose every event, an hourly digest or a daily digest.',
+  quiet_hours_invalid: 'Quiet hours need a start and an end, and they cannot be the same time.',
+  time_zone_invalid: 'That is not a time zone the app knows. Pick one from the list.',
+  time_zone_user_channels_only: 'A time zone is set on your own profile, from one of your personal channels. An organization channel uses the organization time zone.',
   address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted control plane).',
   address_invalid: 'That address does not look right for this kind of channel.',
   email_unavailable: 'This control plane cannot send email right now, so a new address cannot be confirmed. Ask an administrator to set up email.',

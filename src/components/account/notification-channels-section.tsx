@@ -12,6 +12,7 @@ import {
   InlineNotice,
   LoadingState,
   SectionPanel,
+  Select,
   SegmentedControl,
   type SegmentedOption,
   TextField,
@@ -32,11 +33,19 @@ import {
   channelErrorCopy,
   channelVerifiedBanner,
   confirmationSentCopy,
+  DIGEST_OPTIONS,
   draftFromRules,
   KIND_LABEL,
+  QUIET_TIME_OPTIONS,
+  quietWindowValid,
   rulesFromDraft,
   type RulesDraft,
+  timingDraftFromChannel,
+  timingPatch,
+  timingSummary,
+  type TimingDraft,
 } from '@/lib/notification-channels'
+import { useTimezones } from '@/lib/queries/servers'
 import {
   useCreateNotificationChannel,
   useDeleteNotificationChannel,
@@ -109,6 +118,105 @@ function RulesEditor({
   )
 }
 
+/**
+ * Delivery timing for an email channel: a digest instead of one message per
+ * event, and quiet hours. Urgent events (outages, security) are never held.
+ * The zone is the person's own for a personal channel; an organization
+ * channel is read in the organization's zone.
+ */
+function TimingEditor({
+  channel,
+  draft,
+  onChange,
+  disabled,
+}: Readonly<{
+  channel: NotificationChannel
+  draft: TimingDraft
+  onChange: (next: TimingDraft) => void
+  disabled?: boolean
+}>) {
+  const personal = channel.scope === 'user'
+  const zones = useTimezones({ enabled: personal })
+  const zoneOptions = useMemo(
+    () => [...(zones.data?.timezones ?? [])].sort((a, b) => a.localeCompare(b)).map((tz) => ({ value: tz, label: tz })),
+    [zones.data],
+  )
+  return (
+    <View style={styles.rules}>
+      <Text style={panelStyles.muted}>
+        Outages and security changes always arrive at once, whatever you choose here.
+      </Text>
+      <SegmentedControl
+        options={DIGEST_OPTIONS}
+        value={draft.digest}
+        onChange={(digest) => onChange({ ...draft, digest })}
+        disabled={disabled}
+        accessibilityLabel="Digest"
+      />
+      <Toggle
+        value={draft.quietOn}
+        onValueChange={(quietOn) => onChange({ ...draft, quietOn })}
+        onLabel="Quiet hours on"
+        offLabel="No quiet hours"
+        disabled={disabled}
+        accessibilityLabel="Quiet hours"
+      />
+      {draft.quietOn ? (
+        <View style={styles.eventList}>
+          <Select
+            value={draft.start}
+            options={QUIET_TIME_OPTIONS}
+            placeholder="Start"
+            disabled={disabled}
+            mono
+            accessibilityLabel="Quiet hours start"
+            onChange={(start) => onChange({ ...draft, start: start ?? draft.start })}
+          />
+          <Select
+            value={draft.end}
+            options={QUIET_TIME_OPTIONS}
+            placeholder="End"
+            disabled={disabled}
+            mono
+            accessibilityLabel="Quiet hours end"
+            onChange={(end) => onChange({ ...draft, end: end ?? draft.end })}
+          />
+          {quietWindowValid(draft) ? null : (
+            <Text style={panelStyles.error}>The start and the end cannot be the same time.</Text>
+          )}
+          <Text style={panelStyles.muted}>Events that arrive in this window are sent as one summary when it ends.</Text>
+        </View>
+      ) : null}
+      {personal ? (
+        <Select
+          value={draft.timeZone}
+          options={zoneOptions}
+          placeholder="Time zone"
+          noneLabel="UTC"
+          disabled={disabled}
+          mono
+          searchPlaceholder="Filter timezones"
+          accessibilityLabel="Time zone"
+          onChange={(timeZone) => onChange({ ...draft, timeZone })}
+        />
+      ) : (
+        <Text style={panelStyles.muted}>Read in {channel.timeZone}, the organization&apos;s time zone.</Text>
+      )}
+    </View>
+  )
+}
+
+function LastDelivery({ delivery }: Readonly<{ delivery: NotificationChannel['recentDeliveries'][number] | undefined }>) {
+  if (!delivery) return <Text style={panelStyles.muted}>No deliveries in the last week.</Text>
+  const attempts = delivery.attempts > 1 ? ` after ${delivery.attempts} attempts` : ''
+  return (
+    <Text style={panelStyles.muted}>
+      Last delivery: {delivery.status}
+      {attempts} · {delivery.event}
+    </Text>
+  )
+}
+
 function ChannelRow({
   channel,
   events,
@@ -126,10 +234,26 @@ function ChannelRow({
   const awaitingConfirmation = channelAwaitsConfirmation(channel)
   const [draft, setDraft] = useState(() => draftFromRules(channel.rules))
   const [dirty, setDirty] = useState(false)
+  const [timing, setTiming] = useState(() => timingDraftFromChannel(channel))
+  const [timingDirty, setTimingDirty] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
   const lastDelivery = channel.recentDeliveries[0]
+  const summary = channel.kind === 'email' ? timingSummary(channel) : null
+
+  const onTiming = useCallback((next: TimingDraft) => {
+    setTiming(next)
+    setTimingDirty(true)
+  }, [])
+
+  const saveTiming = useCallback(() => {
+    setMessage(null)
+    void update.run({ id: channel.id, ...timingPatch(timing, channel) }).then((result) => {
+      if (result.ok) setTimingDirty(false)
+      else setMessage(channelErrorCopy(result.error))
+    })
+  }, [channel, timing, update])
 
   const onDraft = useCallback((next: RulesDraft) => {
     setDraft(next)
@@ -166,21 +290,18 @@ function ChannelRow({
           {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
         </View>
         <Text style={panelStyles.muted}>{channel.address}</Text>
+        {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
         {awaitingConfirmation ? (
           <Text style={panelStyles.muted}>
             Nothing is sent to this address until the confirmation link in the email is opened.
           </Text>
         ) : null}
-        {lastDelivery ? (
-          <Text style={panelStyles.muted}>
-            Last delivery: {lastDelivery.status}
-            {lastDelivery.attempts > 1 ? ` after ${lastDelivery.attempts} attempts` : ''} · {lastDelivery.event}
-          </Text>
-        ) : (
-          <Text style={panelStyles.muted}>No deliveries in the last week.</Text>
-        )}
+        <LastDelivery delivery={lastDelivery} />
       </View>
       <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
+      {channel.kind === 'email' ? (
+        <TimingEditor channel={channel} draft={timing} onChange={onTiming} disabled={update.isPending} />
+      ) : null}
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
       {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
@@ -194,6 +315,15 @@ function ChannelRow({
           disabled={!dirty}
           onPress={save}
         />
+        {channel.kind === 'email' ? (
+          <Button
+            label="Save timing"
+            variant="primary"
+            busy={update.isPending}
+            disabled={!timingDirty || !quietWindowValid(timing)}
+            onPress={saveTiming}
+          />
+        ) : null}
         <Button
           label={disabled ? 'Resume' : 'Pause'}
           onPress={() => void update.run({ id: channel.id, disabled: !disabled })}
