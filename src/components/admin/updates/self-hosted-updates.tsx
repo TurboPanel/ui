@@ -100,7 +100,7 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: st
       const outcome = await withStartTimeout(startUpgrade.mutateAsync(preflight?.runId))
       setPreflightOpen(false)
       setNotice(
-        `Upgrade started (run ${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`
+        `Update started (${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`
       )
     } catch (err) {
       if (err instanceof UpgradeStartTimeoutError) {
@@ -112,7 +112,7 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: st
         )
         void refetchActiveRun()
       } else {
-        setNotice(err instanceof Error ? err.message : 'Upgrade failed to start')
+        setNotice(err instanceof Error ? err.message : 'Update failed to start')
       }
     } finally {
       setStarting(false)
@@ -151,10 +151,10 @@ function useCancelRun(setNotice: (notice: string | null) => void) {
     setNotice(null)
     cancelRun.mutate(runId, {
       onSuccess: () => {
-        setNotice('Run cancelled. Start a fresh update to try again.')
+        setNotice('Update cancelled. Start a fresh update to try again.')
       },
       onError: (err) => {
-        setNotice(err instanceof Error ? err.message : 'Failed to cancel the run')
+        setNotice(err instanceof Error ? err.message : 'Failed to cancel the update')
       },
     })
   }
@@ -262,9 +262,9 @@ function UpgradeProgressPanel({
       headerRight={
         run && !finished ? (
           <ConfirmButton
-            label="Cancel run"
-            confirmLabel="Cancel run"
-            prompt="Stop this run? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
+            label="Cancel update"
+            confirmLabel="Cancel update"
+            prompt="Stop this update? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
             busy={cancelling}
             onConfirm={() => {
               onCancel(run.id)
@@ -277,13 +277,13 @@ function UpgradeProgressPanel({
         phase="colocated_daemon"
         status={daemonStep?.status ?? null}
         errorCode={daemonStep?.errorCode ?? null}
-        title="Co-located daemon"
+        title="Daemon step"
       />
       <UpgradeStepTracker
         phase="control_plane"
         status={controlPlaneStep?.status ?? null}
         errorCode={controlPlaneStep?.errorCode ?? null}
-        title="Control plane"
+        title="Control plane step"
       />
       {hasUiTarget ? (
         // The UI package is unpacked and swapped in by the same control-plane
@@ -292,7 +292,7 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="Web app"
+          title="Web app step"
           note="Installed together with the control plane."
         />
       ) : null}
@@ -300,7 +300,7 @@ function UpgradeProgressPanel({
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
           ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
-          : 'Servers update after the control plane is on target.'}
+          : 'Server updates start after the control plane step is done.'}
       </Text>
       <UpgradeFleetTable
         servers={fleetServers}
