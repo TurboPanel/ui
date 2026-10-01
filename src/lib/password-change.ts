@@ -44,5 +44,5 @@ export function changePasswordErrorMessage(message: string): string {
   const breached = breachedPasswordCopy(message)
   if (breached !== message) return breached
   const detail = message.replace(STATUS_PREFIX, '').trim()
-  return /^Password /.test(detail) ? `${detail}.` : 'Could not change the password.'
+  return detail.startsWith('Password ') ? `${detail}.` : 'Could not change the password.'
 }
