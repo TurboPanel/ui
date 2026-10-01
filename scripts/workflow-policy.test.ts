@@ -78,12 +78,27 @@ describe('Verify concurrency', () => {
     expect(text('verify.yml')).toContain(
       [
         'concurrency:',
-        '  group: ui-verify-${{ github.event_name }}-${{ github.ref }}',
-        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "  group: ui-verify-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}",
+        "  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}",
         "  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}",
         '',
       ].join('\n')
     )
+  })
+
+  it('never cancels a promotion PR run (head trunk or staging): its group ends in the run id', () => {
+    expect(text('promote-ok.yml')).toContain(
+      "cancel-in-progress: ${{ github.head_ref != 'trunk' && github.head_ref != 'staging' }}"
+    )
+    expect(text('promote-ok.yml')).toContain("format('-{0}', github.run_id)")
+    expect(text('promote-prs.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
+  })
+
+  it('retries the Deno install (three attempts) instead of failing on one transient download error', () => {
+    const verify = text('verify.yml')
+    expect(verify).toContain('id: deno-try-1')
+    expect(verify).toContain('id: deno-try-2')
+    expect(verify).toContain('Install Deno (retry 2 of 2)')
   })
 })
 
