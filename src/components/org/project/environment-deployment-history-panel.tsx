@@ -16,6 +16,7 @@ import {
 } from '@/components/ui'
 import {
   deploymentServerLabel,
+  deploymentStrategyLabel,
   deploymentStatusTone,
   formatDeployActor,
   formatDeployTrigger,
@@ -42,10 +43,8 @@ function statusDotTone(tone: 'success' | 'failed' | 'pending'): StatusTone {
   return 'pending'
 }
 
-function StatusCell({
-  status,
-}: Readonly<{ status: DeploymentGroup['status'] }>) {
-  const tone = deploymentStatusTone(status)
+function StatusCell({ group }: Readonly<{ group: DeploymentGroup }>) {
+  const tone = deploymentStatusTone(group.status, group.strategyOutcome)
   return (
     <View style={styles.statusCell}>
       <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
@@ -95,7 +94,8 @@ function DeploymentDetail({
   const active =
     group.commands.find((row) => row.serverId === serverId) ??
     group.commands[0]
-  const failure = active?.errorMessage ?? null
+  const failure = active?.strategyOutcomeReason ?? active?.errorMessage ?? null
+  const strategy = deploymentStrategyLabel(active?.strategy)
   const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
 
   return (
@@ -117,6 +117,9 @@ function DeploymentDetail({
         </Text>
       ) : null}
       {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
+      {strategy ? (
+        <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
+      ) : null}
       {active ? <DeploymentTranscript orgId={orgId} row={active} /> : null}
     </View>
   )
@@ -176,11 +179,11 @@ function DeploymentRow({
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={`Deploy ${formatDeployTimestamp(group.startedAt)} — ${
-          deploymentStatusTone(group.status).label
+          deploymentStatusTone(group.status, group.strategyOutcome).label
         }`}
       >
         <View style={[styles.cell, styles.colStatus]}>
-          <StatusCell status={group.status} />
+          <StatusCell group={group} />
         </View>
         <View style={[styles.cell, styles.colWhen]}>
           <Text style={styles.cellText}>
