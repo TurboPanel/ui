@@ -81,21 +81,23 @@ function servicesOf(document: ComposeDocument): Mapping {
 }
 
 /** The overlay's own entry for a service, when it exists and is plain (not `!override` / `!reset`). */
-function overlayServiceOf(environmentCompose: unknown, name: string): Mapping | 'tagged' | null {
+type OverlayService = Mapping | 'tagged' | null
+
+function overlayServiceOf(environmentCompose: unknown, name: string): OverlayService {
   const raw = servicesOf(normalizeCompose(environmentCompose))[name]
   if (raw === undefined) return null
   if (isComposeTaggedValue(raw) || !isMapping(raw)) return 'tagged'
   return raw
 }
 
-function overlayDefinesImageOrBuild(overlayService: Mapping | 'tagged' | null): boolean {
+function overlayDefinesImageOrBuild(overlayService: OverlayService): boolean {
   if (!isMapping(overlayService)) return false
   return typeof overlayService.image === 'string' || overlayService.build !== undefined
 }
 
 function blockedReasonFor(
   merged: ServiceView,
-  overlayService: Mapping | 'tagged' | null
+  overlayService: OverlayService
 ): string | null {
   if (overlayService === 'tagged') {
     return 'This environment replaces or resets the service in its own compose. Edit it in the compose editor.'
