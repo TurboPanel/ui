@@ -333,6 +333,17 @@ export async function resetPassword(body: {
   })
 }
 
+/** Signed-in password change: signs out every other session, keeps this one. */
+export async function changePassword(body: {
+  currentPassword: string
+  newPassword: string
+}): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/change-password`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 /** What the invitation landing page needs to choose a path (never accepts). */
 export type InvitationPreview = {
   ok: true

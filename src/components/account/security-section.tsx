@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { ChangePasswordPanel } from '@/components/account/change-password-panel'
 import { BackupCodesSheet } from '@/components/account/backup-codes-sheet'
 import { LinkedAccountsPanel } from '@/components/account/linked-accounts-panel'
 import { PasskeysPanel } from '@/components/account/passkeys-panel'
@@ -73,6 +74,13 @@ export function SecuritySectionContent() {
           body="Reload the page to try again."
         />
       ) : null}
+
+      <SectionPanel
+        title="Password"
+        hint="Change the password you sign in with. Other devices are signed out."
+      >
+        <ChangePasswordPanel />
+      </SectionPanel>
 
       <SectionPanel
         title="Two-factor authentication"
