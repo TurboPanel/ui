@@ -2979,6 +2979,7 @@ export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources e
 
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
+export const ENVIRONMENT_RUNNING_ERROR = 'environment_running'
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'

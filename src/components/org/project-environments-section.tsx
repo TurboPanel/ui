@@ -14,9 +14,16 @@ import {
   useCreateEnvironment,
   useDeleteEnvironment,
   useEnvironments,
+  useStopEnvironmentMutation,
   useUpdateEnvironment,
 } from '@/lib/queries'
 import type { EnvironmentRecord } from '@/lib/instance-api'
+import {
+  ENVIRONMENT_STOP_QUEUED_COPY,
+  environmentDeleteFailure,
+  environmentDeletePrompt,
+  type EnvironmentDeleteFailure,
+} from '@/lib/environment-delete'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
@@ -150,6 +157,32 @@ function EnvironmentCreateForm({
   )
 }
 
+function EnvironmentDeleteNotice({
+  failure,
+  stopping,
+  onStop,
+}: Readonly<{
+  failure: EnvironmentDeleteFailure
+  stopping: boolean
+  onStop: () => void
+}>) {
+  return (
+    <View style={styles.deleteNotice}>
+      <Text style={panelStyles.error}>{failure.text}</Text>
+      {failure.needsStop ? (
+        <Button
+          label="Stop"
+          busyLabel="Stopping…"
+          variant="danger"
+          size="sm"
+          busy={stopping}
+          onPress={onStop}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 function EnvironmentToolbar({
   activeEnvironment,
   canOwn,
@@ -184,7 +217,7 @@ function EnvironmentToolbar({
               key={activeEnvironment.id}
               label={deleting ? 'Deleting…' : 'Delete'}
               confirmLabel="Confirm delete"
-              prompt="Delete this environment?"
+              prompt={environmentDeletePrompt(environmentLabel(activeEnvironment))}
               busy={deleting}
               onConfirm={onConfirmDelete}
             />
@@ -233,6 +266,8 @@ export function ProjectEnvironmentsSection({
     activeEnvironment?.id ?? '',
   )
   const deleteEnvironment = useDeleteEnvironment(orgId)
+  const stopEnvironment = useStopEnvironmentMutation(orgId)
+  const [deleteFailure, setDeleteFailure] = useState<EnvironmentDeleteFailure | null>(null)
 
   useEffect(() => {
     setSelectedId((previous) => resolveSelectedId(previous, environments))
@@ -274,6 +309,7 @@ export function ProjectEnvironmentsSection({
 
   const selectEnvironment = (id: string) => {
     setSelectedId(id)
+    setDeleteFailure(null)
     setRenaming(false)
     setShowCreate(false)
   }
@@ -331,11 +367,25 @@ export function ProjectEnvironmentsSection({
   const deleteActive = async () => {
     if (!activeEnvironment) return
     setError(null)
+    setDeleteFailure(null)
     const result = await deleteEnvironment.run(activeEnvironment.id)
-    if (!result.ok) {
-      if (deleteEnvironment.actionError) {
-        setError(deleteEnvironment.actionError)
-      }
+    if (!result.ok && deleteEnvironment.actionError) {
+      setDeleteFailure(
+        environmentDeleteFailure(
+          deleteEnvironment.actionError,
+          environmentLabel(activeEnvironment),
+        ),
+      )
+    }
+  }
+
+  const stopActive = async () => {
+    if (!activeEnvironment) return
+    const result = await stopEnvironment.run(activeEnvironment.id)
+    if (result.ok) {
+      setDeleteFailure({ text: ENVIRONMENT_STOP_QUEUED_COPY, needsStop: false })
+    } else if (stopEnvironment.actionError) {
+      setDeleteFailure({ text: stopEnvironment.actionError, needsStop: true })
     }
   }
 
@@ -377,6 +427,13 @@ export function ProjectEnvironmentsSection({
             onConfirmDelete={() => void deleteActive()}
           />
         )}
+        {deleteFailure ? (
+          <EnvironmentDeleteNotice
+            failure={deleteFailure}
+            stopping={stopEnvironment.isPending}
+            onStop={() => void stopActive()}
+          />
+        ) : null}
         {showCreate && canOwn ? (
           <EnvironmentCreateForm
             value={createName}
@@ -419,6 +476,10 @@ export function ProjectEnvironmentsSection({
 }
 
 const styles = StyleSheet.create({
+  deleteNotice: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
   root: {
     width: '100%',
     gap: spacing.md,
