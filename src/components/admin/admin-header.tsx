@@ -1,7 +1,10 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { HeaderAdminAccountControls } from '@/components/header-account-controls'
+import { HeaderAccountControls } from '@/components/header-account-controls'
+import { ReturnToInstanceSegment } from '@/components/return-to-instance'
 import { useAuth } from '@/lib/auth-context'
+import { headerLayoutFor } from '@/lib/header-layout'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 export function AdminHeader({
@@ -9,9 +12,15 @@ export function AdminHeader({
 }: Readonly<{ onMenuPress?: () => void }>) {
   const { session, signOut } = useAuth()
   const userLabel = session?.email
+  const { width } = useWindowDimensions()
+  const header = headerLayoutFor(width, false)
 
   return (
-    <GlassSurface style={styles.header} intensity="strong" rim="bottom">
+    <GlassSurface
+      style={[styles.header, header.compact && styles.headerCompact]}
+      intensity="strong"
+      rim="bottom"
+    >
       <View style={styles.headerMain}>
         {onMenuPress ? (
           <Pressable
@@ -30,14 +39,16 @@ export function AdminHeader({
               <View style={styles.menuBarShort} />
             </View>
           </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        ) : null}
+        {header.showLogo ? <TurboPanelLogo size={28} /> : null}
+        <View style={styles.backSlot}>
+          <ReturnToInstanceSegment />
+        </View>
       </View>
 
       <View style={styles.headerActions}>
         {session && userLabel ? (
-          <HeaderAdminAccountControls email={userLabel} onSignOut={signOut} />
+          <HeaderAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
       </View>
     </GlassSurface>
@@ -60,10 +71,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     flexShrink: 1,
+    minWidth: 0,
     flex: 1,
   },
-  headerSpacer: {
-    flex: 1,
+  headerCompact: {
+    paddingHorizontal: spacing.md,
+  },
+  backSlot: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   menuButton: {
     borderColor: colors.borderChip,
@@ -96,7 +112,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flexWrap: 'wrap',
     justifyContent: 'flex-end',
+    flexShrink: 0,
   },
 })

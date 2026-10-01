@@ -2,12 +2,16 @@ import {
   Pressable,
   StyleSheet,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
+import { OrganizationSwitcherSegment } from '@/components/organization-switcher'
 import { useAuth } from '@/lib/auth-context'
+import { headerLayoutFor } from '@/lib/header-layout'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 export function OrgHeader({
@@ -21,10 +25,12 @@ export function OrgHeader({
 }>) {
   const { session, signOut } = useAuth()
   const userLabel = session?.email
+  const { width } = useWindowDimensions()
+  const header = headerLayoutFor(width, false)
 
   return (
     <GlassSurface
-      style={[styles.header, style]}
+      style={[styles.header, header.compact && styles.headerCompact, style]}
       intensity="strong"
       rim="bottom"
     >
@@ -46,18 +52,16 @@ export function OrgHeader({
               <View style={styles.menuBarShort} />
             </View>
           </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        ) : null}
+        {header.showLogo ? <TurboPanelLogo size={28} /> : null}
+        <View style={styles.orgSlot}>
+          <OrganizationSwitcherSegment orgId={orgId} />
+        </View>
       </View>
 
       <View style={styles.headerActions}>
         {session && userLabel ? (
-          <HeaderAccountControls
-            orgId={orgId}
-            email={userLabel}
-            onSignOut={signOut}
-          />
+          <HeaderAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
       </View>
     </GlassSurface>
@@ -75,6 +79,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     zIndex: 5,
   },
+  headerCompact: {
+    paddingHorizontal: spacing.md,
+  },
   headerMain: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -83,8 +90,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flex: 1,
   },
-  headerSpacer: {
-    flex: 1,
+  orgSlot: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   menuButton: {
     borderColor: colors.borderChip,
@@ -114,7 +122,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     flexShrink: 0,
   },

@@ -1,9 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { HeaderAccountControls } from '@/components/header-account-controls'
+import { OrganizationSwitcherSegment } from '@/components/organization-switcher'
 import { useAuth } from '@/lib/auth-context'
+import { headerLayoutFor } from '@/lib/header-layout'
 import { glass } from '@/lib/glass'
 import { colors, spacing } from '@/lib/theme'
 
@@ -24,13 +26,13 @@ export function OrgHeader({
   const insets = useSafeAreaInsets()
   const { session, signOut } = useAuth()
   const userLabel = session?.email
+  const { width } = useWindowDimensions()
+  const header = headerLayoutFor(width, true)
 
   return (
     <View style={[styles.header, { paddingTop: insets.top }]}>
       <View style={styles.row}>
         <View style={styles.headerMain}>
-          <TurboPanelLogo size={28} />
-          <HighAvailabilityWordmark compact />
           {onMenuPress ? (
             <Pressable
               style={({ pressed }) => [
@@ -48,15 +50,16 @@ export function OrgHeader({
               </View>
             </Pressable>
           ) : null}
+          <TurboPanelLogo size={28} />
+          {header.showWordmark ? <HighAvailabilityWordmark compact /> : null}
+          <View style={styles.orgSlot}>
+            <OrganizationSwitcherSegment orgId={orgId} />
+          </View>
         </View>
 
         <View style={styles.headerActions}>
           {session && userLabel ? (
-            <HeaderAccountControls
-              orgId={orgId}
-              email={userLabel}
-              onSignOut={signOut}
-            />
+            <HeaderAccountControls email={userLabel} onSignOut={signOut} />
           ) : null}
         </View>
       </View>
@@ -129,6 +132,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     justifyContent: 'flex-end',
+    flexShrink: 0,
+  },
+  orgSlot: {
     flexShrink: 1,
     minWidth: 0,
   },

@@ -32,6 +32,7 @@ import {
   useControlPlaneStore,
   type ControlPlaneAccount,
 } from '@/lib/control-plane-accounts'
+import { headerLayoutFor } from '@/lib/header-layout'
 import { useUnreadNotificationCount } from '@/lib/notifications'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -44,8 +45,12 @@ type UserAccountMenuSegmentProps = Readonly<{
   onSignOut: () => void | Promise<void>
 }>
 
-function accountMenuA11yLabel(email: string, unreadCount: number): string {
-  if (!isNative) {
+function accountMenuA11yLabel(
+  email: string,
+  unreadCount: number,
+  foldNotifications: boolean,
+): string {
+  if (!foldNotifications) {
     return `Account menu for ${email}`
   }
   if (unreadCount > 0) {
@@ -67,12 +72,14 @@ function UserAccountTriggerContent({
   email,
   open,
   unreadCount,
+  iconOnly,
 }: Readonly<{
   email: string
   open: boolean
   unreadCount: number
+  iconOnly: boolean
 }>) {
-  if (isNative) {
+  if (iconOnly) {
     return <AccountAvatar unreadCount={unreadCount} />
   }
 
@@ -97,6 +104,7 @@ function UserAccountTriggerContent({
 function UserAccountMenuBody({
   email,
   panelStyle,
+  foldNotifications,
   showSwitcher,
   activeOrigin,
   activeKind,
@@ -111,6 +119,8 @@ function UserAccountMenuBody({
 }: Readonly<{
   email: string
   panelStyle?: StyleProp<ViewStyle>
+  /** Notifications live in this menu instead of a separate bell. */
+  foldNotifications: boolean
   showSwitcher: boolean
   activeOrigin: string | null
   activeKind: ControlPlaneAccount['kind'] | undefined
@@ -129,7 +139,7 @@ function UserAccountMenuBody({
       style={[headerMenuGroupStyles.menu, panelStyle]}
       intensity="strong"
     >
-      {isNative ? (
+      {foldNotifications ? (
         <>
           <NotificationsPanelBody onNavigate={onClose} />
           <View style={headerMenuGroupStyles.menuDivider} />
@@ -257,6 +267,7 @@ function UserAccountMenuBody({
 
 export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegmentProps) {
   const { width } = useWindowDimensions()
+  const header = headerLayoutFor(width, isNative)
   const isCompact = width < layout.desktopBreakpoint
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<View>(null)
@@ -326,16 +337,17 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
       <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
         <HeaderMenuTrigger
           open={open}
-          icon={isNative}
+          icon={header.iconOnlyAccount}
           onPress={() => setOpen((current) => !current)}
           accessibilityRole="button"
-          accessibilityLabel={accountMenuA11yLabel(email, unreadCount)}
+          accessibilityLabel={accountMenuA11yLabel(email, unreadCount, header.iconOnlyAccount)}
           accessibilityState={{ expanded: open }}
         >
           <UserAccountTriggerContent
             email={email}
             open={open}
             unreadCount={unreadCount}
+            iconOnly={header.iconOnlyAccount}
           />
         </HeaderMenuTrigger>
       </View>
@@ -350,6 +362,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
         <UserAccountMenuBody
           email={email}
           panelStyle={isCompact ? styles.rightPanel : undefined}
+          foldNotifications={header.iconOnlyAccount}
           showSwitcher={showSwitcher}
           activeOrigin={store.activeOrigin}
           activeKind={activeAccount?.kind}
