@@ -316,6 +316,14 @@ export const queryKeys = {
         logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
       },
 
+      /** The organization firewall: policy, typed rules, and each server's mode + preview. */
+      firewall: {
+        all: ['org', orgId, 'firewall'] as const,
+        policy: ['org', orgId, 'firewall', 'policy'] as const,
+        rules: ['org', orgId, 'firewall', 'rules'] as const,
+        server: (serverId: string) => ['org', orgId, 'firewall', 'server', serverId] as const,
+      },
+
       bindings: {
         all: ['org', orgId, 'bindings'] as const,
         list: (

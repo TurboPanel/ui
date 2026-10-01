@@ -8093,6 +8093,163 @@ export async function fetchBackupRuns(
   return await apiFetch(`${backupPolicyPath(environmentId, policyId)}/runs${query}`)
 }
 
+/** Whether a server's firewall is previewed (`observe`), meant to be enforced (`managed`), or left alone (`off`). */
+export type FirewallMode = 'observe' | 'managed' | 'off'
+
+export type FirewallInputDefault = 'accept' | 'drop'
+export type FirewallIpv6 = 'mirror' | 'skip'
+
+/** The organization's firewall policy (`/organizations/:id/firewall`). */
+export type FirewallPolicy = {
+  inputDefault: FirewallInputDefault
+  ipv6: FirewallIpv6
+  /** `any`, or the CIDRs SSH is open to. */
+  sshSources: string[]
+}
+
+export type FirewallPolicyUpdate = Partial<FirewallPolicy>
+
+export type FirewallRuleScope = 'host' | 'published'
+export type FirewallRuleAction = 'accept' | 'drop' | 'reject'
+export type FirewallRuleProto = 'tcp' | 'udp' | 'any'
+export type FirewallSourceKind = 'any' | 'servers' | 'datacenter' | 'fabric' | 'addresses'
+
+/** One rule an operator typed (`edict`). Rules derived from what is deployed are not listed. */
+export type FirewallRule = {
+  id: string
+  label: string
+  scope: FirewallRuleScope
+  action: FirewallRuleAction
+  proto: FirewallRuleProto
+  /** One port or an ascending range like `5432-5440`; null is every port (a block only). */
+  ports: string | null
+  sourceKind: FirewallSourceKind
+  /** IPs or CIDRs; only for `sourceKind` `addresses`. */
+  sourceAddresses: string[]
+  isEnabled: boolean
+  /** One server of the organization, or null for every server. */
+  serverId: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type FirewallRuleBody = {
+  label: string
+  scope: FirewallRuleScope
+  action: FirewallRuleAction
+  proto: FirewallRuleProto
+  ports?: string | null
+  sourceKind: FirewallSourceKind
+  sourceAddresses?: string[]
+  isEnabled?: boolean
+  serverId?: string | null
+}
+
+export type FirewallRuleUpdate = Partial<FirewallRuleBody>
+
+/** A server's firewall state (`bulwark`). Never configured reads as observe, generation 0, idle. */
+export type FirewallServerState = {
+  serverId: string
+  mode: FirewallMode
+  generation: number
+  lastDigest: string | null
+  /** Opaque on purpose: the preview below is the typed view of it. */
+  lastResult: unknown
+  state: 'idle' | 'pending' | 'confirmed' | 'rolled_back'
+  deadlineAt: string | null
+  lastAppliedAt: string | null
+  confirmedAt: string | null
+}
+
+export type FirewallPreviewStatus = 'queued' | 'previewed' | 'refused' | 'failed'
+
+/**
+ * What the host was last sent as a PREVIEW: rendered and checked by the kernel
+ * (`iptables-restore --test`), never loaded. `host` is the host's own answer.
+ */
+export type FirewallPreview = {
+  kind: 'preview'
+  status: FirewallPreviewStatus
+  desiredDigest: string
+  generation: number
+  sentAt: string
+  ruleCount: number
+  /** What could not be derived, in words. */
+  notes: string[]
+  host: unknown
+}
+
+export type FirewallServerView = {
+  bulwark: FirewallServerState
+  preview: FirewallPreview | null
+}
+
+function firewallPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/firewall`
+}
+
+export async function fetchFirewallPolicy(orgId: string): Promise<{ policy: FirewallPolicy }> {
+  return await apiFetch(firewallPath(orgId))
+}
+
+export async function saveFirewallPolicy(
+  orgId: string,
+  patch: FirewallPolicyUpdate
+): Promise<{ policy: FirewallPolicy }> {
+  return await apiFetch(firewallPath(orgId), { method: 'PUT', body: JSON.stringify(patch) })
+}
+
+/** The rules operators typed, oldest first. */
+export async function fetchFirewallRules(orgId: string): Promise<{ rules: FirewallRule[] }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules`)
+}
+
+export async function createFirewallRule(
+  orgId: string,
+  body: FirewallRuleBody
+): Promise<{ rule: FirewallRule }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateFirewallRule(
+  orgId: string,
+  ruleId: string,
+  patch: FirewallRuleUpdate
+): Promise<{ rule: FirewallRule }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules/${encodeURIComponent(ruleId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+export async function deleteFirewallRule(orgId: string, ruleId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules/${encodeURIComponent(ruleId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchFirewallServer(
+  orgId: string,
+  serverId: string
+): Promise<FirewallServerView> {
+  return await apiFetch(`${firewallPath(orgId)}/servers/${encodeURIComponent(serverId)}`)
+}
+
+export async function saveFirewallServerMode(
+  orgId: string,
+  serverId: string,
+  mode: FirewallMode
+): Promise<{ bulwark: FirewallServerState }> {
+  return await apiFetch(`${firewallPath(orgId)}/servers/${encodeURIComponent(serverId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ mode }),
+  })
+}
+
 export async function fetchManagedMembers(
   environmentId: string
 ): Promise<{ members: ManagedMemberRecord[] }> {
