@@ -251,11 +251,114 @@ export function fleetStatusBadge(status: UpgradeStepStatus): {
   }
 }
 
-/** A piece's update status: `null` means the channel state is not known (daemon not connected). */
-export function updateAvailabilityBadge(updateAvailable: boolean | null): {
+/**
+ * What each step says in the progress bar. The wire ids never change; only the
+ * words do, and they say which version is running: until the restart the OLD
+ * process is still the one answering.
+ */
+const STEP_LABELS: Readonly<Record<UpgradeStepPipelineId, string>> = {
+  preparing: 'Preparing',
+  downloading: 'Downloading',
+  installing: 'Writing new files (still running the old version)',
+  restarting: 'Restarting onto the new version',
+  verifying: 'Checking the new version is running',
+  done: 'Done',
+}
+
+export function upgradeStepLabel(id: UpgradeStepPipelineId): string {
+  return STEP_LABELS[id]
+}
+
+const STEP_TERMINAL = new Set<UpgradeStepStatus>([
+  'done',
+  'skipped',
+  'failed',
+  'rolled_back',
+  'needs_attention',
+])
+
+/** A run is still working on this piece: it has a step that has not ended. */
+export function stepInFlight(status: UpgradeStepStatus | null | undefined): boolean {
+  return status != null && !STEP_TERMINAL.has(status)
+}
+
+/** The step has written the new files to disk (installing is over). */
+const STEP_FILES_WRITTEN = new Set<UpgradeStepStatus>(['restarting', 'verifying'])
+
+export type PieceIdentity = Readonly<{
+  version?: string | null
+  commit?: string | null
+  label?: string | null
+}>
+
+export type PieceStepView = Readonly<{
+  status: UpgradeStepStatus | null | undefined
+  toVersion?: string | null
+  toCommit?: string | null
+}>
+
+export type PieceIdentityLines = Readonly<{
+  /** The new files are on disk (known from the run step), else null. */
+  installedOnDisk: string | null
+  /** What the live process reports about itself. */
+  runningNow: string
+  /** The target of an in-flight run, while the files are not written yet. */
+  updatingTo: string | null
+  /** New files on disk, old process still running. */
+  restartPending: boolean
+}>
+
+function stepTargetLabel(step: PieceStepView): string | null {
+  const version = step.toVersion?.trim() || null
+  const commit = step.toCommit?.trim() || null
+  if (!version && !commit) return null
+  return installedBuildLabel({ version, commit })
+}
+
+/**
+ * The two lines under a piece's Details. `running` is what the piece reports
+ * about itself (heartbeat or hello), so it is always the live process. The
+ * control plane does not report the files on disk, so "Installed on disk" is
+ * only known from the run step: from Restarting on, the step's target is on
+ * disk. While that differs from what runs, a restart is pending.
+ */
+export function pieceIdentityLines(
+  input: Readonly<{
+    running: PieceIdentity | null | undefined
+    runningLabel: string
+    step: PieceStepView | null | undefined
+  }>
+): PieceIdentityLines {
+  const { step } = input
+  const target = step && stepInFlight(step.status) ? stepTargetLabel(step) : null
+  const written = step != null && step.status != null && STEP_FILES_WRITTEN.has(step.status)
+  const sameAsRunning = Boolean(
+    target &&
+    input.running?.commit &&
+    step?.toCommit &&
+    sameCommit(input.running.commit, step.toCommit)
+  )
+  const installedOnDisk = written ? target : null
+  return {
+    installedOnDisk,
+    runningNow: input.runningLabel,
+    updatingTo: written ? null : target,
+    restartPending: installedOnDisk !== null && !sameAsRunning,
+  }
+}
+
+/**
+ * A piece's update status: `null` means the channel state is not known (daemon
+ * not connected). While a run is working on the piece it is never "Up to date".
+ */
+export function updateAvailabilityBadge(
+  updateAvailable: boolean | null,
+  inFlight = false
+): {
   tone: 'ok' | 'muted' | 'pending'
   label: string
 } {
+  if (inFlight) return { tone: 'pending', label: 'Updating' }
   if (updateAvailable === null) return { tone: 'muted', label: 'Not connected' }
   if (updateAvailable) return { tone: 'pending', label: 'Update available' }
   return { tone: 'ok', label: 'Up to date' }

@@ -31,6 +31,7 @@ import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
   installedBuildLabel,
   platformUpgradeHeadlineCopy,
+  type PieceStepView,
   resolvePlatformUpgradeHeadline,
   summarizeFleetSteps,
   updateAvailableSentence,
@@ -178,8 +179,12 @@ function ComponentsPanel({
   units,
   consoleBuild,
   channel,
+  daemonStep,
+  controlPlaneStep,
 }: Readonly<{
   units: InstanceUpdates['units']
+  daemonStep?: PieceStepView | null
+  controlPlaneStep?: PieceStepView | null
   consoleBuild: ConsoleBuild | null
   /** The instance-wide update channel; on `release` the version is the whole story. */
   channel: string
@@ -193,12 +198,16 @@ function ComponentsPanel({
         target={instance.target}
         installedLabel={installedBuildLabel(instance.installed, instance.target, hideCommit)}
         updateAvailable={unitUpdateAvailable(instance)}
+        running={instance.installed}
+        step={controlPlaneStep}
       />
       <UpgradeBuildBlock
         title="Web app"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
+        running={consoleBuild}
+        step={controlPlaneStep}
       />
       <UpgradeBuildBlock
         title="Co-located daemon"
@@ -209,6 +218,8 @@ function ComponentsPanel({
             : 'Not connected'
         }
         updateAvailable={daemon.connected ? unitUpdateAvailable(daemon) : null}
+        running={daemon.installed}
+        step={daemonStep}
       />
     </SectionPanel>
   )
@@ -325,6 +336,8 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     [run?.steps]
   )
   const fleetSummary = summarizeFleetSteps(run?.steps ?? [])
+  const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
+  const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const needsAttention = fleetSummary.needsAttention + (run?.counts?.needsAttention ?? 0)
 
   const headline = resolvePlatformUpgradeHeadline({
@@ -383,7 +396,13 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         </View>
       </SectionPanel>
 
-      <ComponentsPanel units={data.units} consoleBuild={consoleBuild} channel={data.channel} />
+      <ComponentsPanel
+        units={data.units}
+        consoleBuild={consoleBuild}
+        channel={data.channel}
+        daemonStep={shown.finished ? null : daemonStep}
+        controlPlaneStep={shown.finished ? null : controlPlaneStep}
+      />
 
       {failure ? (
         <UpgradeFailureNotice

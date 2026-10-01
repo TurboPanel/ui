@@ -5,6 +5,10 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdateTarget } from '@/lib/instance-api'
 import {
   formatUpgradeBuildDisplayName,
+  pieceIdentityLines,
+  stepInFlight,
+  type PieceIdentity,
+  type PieceStepView,
   updateAvailabilityBadge,
   upgradeBuildDetailLines,
 } from '@/lib/upgrade-display'
@@ -21,23 +25,32 @@ export function UpgradeBuildBlock({
   target,
   installedLabel,
   updateAvailable,
+  running,
+  step,
 }: Readonly<{
   title: string
   target: InstanceUpdateTarget | null
   installedLabel: string
   updateAvailable: boolean | null
+  /** What the piece reports about itself (the live process); null when not reported. */
+  running?: PieceIdentity | null
+  /** This piece's step in the run being shown, when there is one. */
+  step?: PieceStepView | null
 }>) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const detail = upgradeBuildDetailLines(target)
+  const inFlight = stepInFlight(step?.status)
+  const lines = pieceIdentityLines({ running, runningLabel: installedLabel, step })
 
   return (
     <View style={styles.block}>
       <View style={styles.head}>
         <Text style={panelStyles.detailLabel}>{title}</Text>
-        <Badge {...updateAvailabilityBadge(updateAvailable)} />
+        <Badge {...updateAvailabilityBadge(updateAvailable, inFlight)} />
+        {lines.restartPending ? <Badge tone="pending" label="Restart pending" /> : null}
       </View>
       <Text style={styles.installed}>{installedLabel}</Text>
-      {updateAvailable ? (
+      {updateAvailable && !inFlight ? (
         <Text style={panelStyles.muted}>Update to {formatUpgradeBuildDisplayName(target)}</Text>
       ) : null}
       <View style={styles.row}>
@@ -52,6 +65,13 @@ export function UpgradeBuildBlock({
       </View>
       {detailsOpen ? (
         <View style={styles.details}>
+          {lines.installedOnDisk ? (
+            <Text style={panelStyles.muted}>Installed on disk: {lines.installedOnDisk}</Text>
+          ) : null}
+          <Text style={panelStyles.muted}>Running now: {lines.runningNow}</Text>
+          {lines.updatingTo ? (
+            <Text style={panelStyles.muted}>Updating to {lines.updatingTo}</Text>
+          ) : null}
           <Text style={panelStyles.detailLabel}>Newest build on this channel</Text>
           {detail.version ? <Text style={panelStyles.muted}>Version {detail.version}</Text> : null}
           {detail.commit ? <Text style={panelStyles.muted}>Commit {detail.commit}</Text> : null}
