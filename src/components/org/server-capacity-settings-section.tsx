@@ -83,7 +83,7 @@ export function ServerCapacitySettingsSection({
   return (
     <SectionPanel
       title="Server capacity"
-      hint="Owner-gated · enrolled servers + pending keys count as seats"
+      hint="Owner-gated · enrolled servers + pending keys count toward the limit"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
@@ -98,7 +98,7 @@ export function ServerCapacitySettingsSection({
 
       <SettingRow
         label="Unlimited servers"
-        description="Self-hosted default. Turn off to set a hard seat cap for this organization."
+        description="Self-hosted default. Turn off to set a hard server limit for this organization."
       >
         <Toggle
           value={isUnlimited}
@@ -128,7 +128,7 @@ export function ServerCapacitySettingsSection({
 
       {readOnly ? (
         <Text style={panelStyles.muted}>
-          Organization owner permission is required to change the seat cap.
+          Organization owner permission is required to change the server limit.
         </Text>
       ) : (
         <Button
