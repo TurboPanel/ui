@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, type Href } from 'expo-router'
+import { Link, useRouter, type Href } from 'expo-router'
 import { HeaderChevron } from '@/components/header-chevron'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -48,6 +48,7 @@ import {
   useCommandsBatch,
   useContainersByProject,
   useCreateEnvironment,
+  useDeleteEnvironment,
   useDeployEnvironment,
   useOrgServers,
   useProjectPrincipals,
@@ -59,8 +60,20 @@ import {
 import { mergeComposeOverlay } from '@/lib/compose'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
+  environmentDeleteFailure,
+  environmentDeletePrompt,
+  type EnvironmentDeleteFailure,
+} from '@/lib/environment-delete'
+import {
+  DESTROY_ARMED_HINT,
+  DESTROY_EXPLANATION,
+  environmentMenuItems,
+} from '@/lib/environment-menu'
+import {
+  projectComposeSectionHref,
   projectEnvironmentBindingsHref,
   projectEnvironmentHostingHref,
+  projectOverviewHref,
 } from '@/lib/project-navigation'
 import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
@@ -119,12 +132,15 @@ function QuietButton({
   accessibilityLabel,
   onPress,
   disabled,
+  tooltip,
   tone = 'neutral',
 }: Readonly<{
   label: string
   accessibilityLabel?: string
   onPress: () => void
   disabled?: boolean
+  /** Hover text on web (title attribute); ignored on native. */
+  tooltip?: string
   tone?: 'neutral' | 'primary' | 'danger'
 }>) {
   return (
@@ -141,6 +157,7 @@ function QuietButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      {...(tooltip ? ({ title: tooltip } as object) : {})}
     >
       <Text style={quietButtonTextStyle(tone)}>{label}</Text>
     </Pressable>
@@ -404,6 +421,216 @@ function RedeploySplitButton({
   )
 }
 
+/** Pending delete state for one environment: armed, failure text, stop offer. */
+function useOverviewEnvironmentDelete(onStop: () => void) {
+  const router = useRouter()
+  const {
+    orgId,
+    projectId,
+    selectedEnvironment,
+    invalidateEnvironments,
+    setError,
+  } = useProjectContext()
+  const deleteEnvironment = useDeleteEnvironment(orgId)
+  const [armed, setArmed] = useState(false)
+  const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
+  const name = selectedEnvironment?.name?.trim() || 'environment'
+
+  const confirm = async () => {
+    if (!selectedEnvironment || deleteEnvironment.isPending) return
+    setError(null)
+    setFailure(null)
+    const result = await deleteEnvironment.run(selectedEnvironment.id)
+    if (!result.ok) {
+      if (deleteEnvironment.actionError) {
+        setFailure(environmentDeleteFailure(deleteEnvironment.actionError, name))
+      }
+      return
+    }
+    setArmed(false)
+    await invalidateEnvironments()
+    router.replace(projectOverviewHref(orgId, projectId) as Href)
+  }
+
+  const stop = () => {
+    setArmed(false)
+    setFailure(null)
+    onStop()
+  }
+
+  return {
+    armed,
+    failure,
+    name,
+    pending: deleteEnvironment.isPending,
+    arm: () => {
+      setFailure(null)
+      setArmed(true)
+    },
+    cancel: () => {
+      setArmed(false)
+      setFailure(null)
+    },
+    confirm,
+    stop,
+  }
+}
+
+/**
+ * "More" menu beside Destroy (owners only): Environment settings and
+ * Delete environment. Delete reuses the Settings rules — same server refusal
+ * ("Stop it first"), two presses — but is reachable from Overview.
+ */
+function EnvironmentMoreMenu({ onStop }: Readonly<{ onStop: () => void }>) {
+  const router = useRouter()
+  const { orgId, projectId, environments, selectedEnvironment, canOwn } =
+    useProjectContext()
+  const { width } = useWindowDimensions()
+  const isCompact = width < layout.desktopBreakpoint
+  const [menuOpen, setMenuOpen] = useState(false)
+  const buttonRef = useRef<View>(null)
+  const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
+  const remove = useOverviewEnvironmentDelete(onStop)
+  const items = environmentMenuItems({
+    canOwn,
+    environmentCount: environments.length,
+  })
+
+  useEffect(() => {
+    if (!menuOpen || isCompact) return
+    buttonRef.current?.measureInWindow((x, y, w, h) => {
+      setMenuPosition({ top: y + h + 6, left: Math.max(12, x + w - 260) })
+    })
+  }, [menuOpen, isCompact])
+
+  if (items.length === 0 || !selectedEnvironment) return null
+
+  const close = () => setMenuOpen(false)
+  const choose = (id: 'settings' | 'delete') => {
+    close()
+    if (id === 'settings') {
+      router.push(
+        projectComposeSectionHref(
+          orgId,
+          projectId,
+          'settings',
+          selectedEnvironment.id,
+        ) as Href,
+      )
+      return
+    }
+    remove.arm()
+  }
+
+  return (
+    <>
+      <View ref={buttonRef} collapsable={false}>
+        <Pressable
+          style={[styles.quietBtn, webPointer]}
+          hitSlop={{ top: 6, bottom: 6 }}
+          onPress={() => setMenuOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityLabel="More environment actions"
+          accessibilityState={{ expanded: menuOpen }}
+        >
+          <Text style={styles.quietBtnText}>More…</Text>
+        </Pressable>
+      </View>
+
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType={isCompact ? 'slide' : 'fade'}
+        onRequestClose={close}
+      >
+        <View
+          style={[styles.menuBackdrop, isCompact && styles.menuBackdropCompact]}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss menu"
+          />
+          <View
+            style={[
+              styles.menuCard,
+              isCompact
+                ? styles.menuCardCompact
+                : {
+                    position: 'absolute',
+                    top: menuPosition.top,
+                    left: menuPosition.left,
+                    width: 260,
+                  },
+            ]}
+          >
+            {items.map((item) => (
+              <Pressable
+                key={item.id}
+                disabled={item.disabledReason !== null}
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  pressed && styles.menuItemPressed,
+                  item.disabledReason !== null && styles.buttonDisabled,
+                  webPointer,
+                ]}
+                onPress={() => choose(item.id)}
+                accessibilityRole="menuitem"
+                accessibilityLabel={item.label}
+              >
+                <Text
+                  style={
+                    item.id === 'delete'
+                      ? styles.quietBtnTextDanger
+                      : styles.menuItemTitle
+                  }
+                >
+                  {item.label}
+                </Text>
+                {item.disabledReason ? (
+                  <Text style={styles.menuItemSub}>{item.disabledReason}</Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {remove.armed ? (
+        <View style={styles.deleteConfirm}>
+          <Text style={styles.hintInline}>
+            {environmentDeletePrompt(remove.name)}
+          </Text>
+          <View style={styles.inlineActions}>
+            <QuietButton
+              label={remove.pending ? 'Deleting…' : 'Delete environment'}
+              accessibilityLabel="Confirm delete environment"
+              tone="danger"
+              disabled={remove.pending}
+              onPress={() => ignorePromise(remove.confirm())}
+            />
+            <QuietButton label="Cancel" onPress={remove.cancel} />
+          </View>
+        </View>
+      ) : null}
+
+      {remove.failure ? (
+        <View style={styles.deleteConfirm}>
+          <Text style={panelStyles.error}>{remove.failure.text}</Text>
+          {remove.failure.needsStop ? (
+            <QuietButton
+              label="Stop"
+              accessibilityLabel="Stop environment"
+              onPress={remove.stop}
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </>
+  )
+}
+
 function LifecycleToolbar({
   hasServer,
   needsPrincipal,
@@ -513,6 +740,7 @@ function LifecycleToolbar({
       <QuietButton
         label={destroyLabel}
         accessibilityLabel={destroyA11y}
+        tooltip={DESTROY_EXPLANATION}
         tone="danger"
         disabled={busy && !destroyArmed}
         onPress={destroyArmed ? onConfirmDestroy : onToggleDestroy}
@@ -520,6 +748,7 @@ function LifecycleToolbar({
       {destroyArmed ? (
         <QuietButton label="Cancel" onPress={onToggleDestroy} />
       ) : null}
+      <EnvironmentMoreMenu onStop={onStop} />
     </View>
   )
 }
@@ -1733,7 +1962,7 @@ function OverviewEnvironmentsPanelView({
 
       {destroyArmed ? (
         <Text style={styles.hintInline}>
-          Destroys containers and volumes — cannot be undone
+          {DESTROY_ARMED_HINT}
         </Text>
       ) : null}
 
@@ -1950,6 +2179,10 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 12,
     fontWeight: '600',
+  },
+  deleteConfirm: {
+    gap: spacing.xs,
+    maxWidth: 420,
   },
   hintInline: {
     color: colors.textMuted,
