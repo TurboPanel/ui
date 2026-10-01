@@ -331,7 +331,7 @@ export function pieceIdentityLines(
 ): PieceIdentityLines {
   const { step } = input
   const target = step && stepInFlight(step.status) ? stepTargetLabel(step) : null
-  const written = step != null && step.status != null && STEP_FILES_WRITTEN.has(step.status)
+  const written = step?.status != null && STEP_FILES_WRITTEN.has(step.status)
   const sameAsRunning = Boolean(
     target &&
     input.running?.commit &&

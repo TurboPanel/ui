@@ -14,6 +14,37 @@ import {
 } from '@/lib/upgrade-display'
 import { colors, spacing } from '@/lib/theme'
 
+function BuildDetails({
+  lines,
+  detail,
+}: Readonly<{
+  lines: ReturnType<typeof pieceIdentityLines>
+  detail: ReturnType<typeof upgradeBuildDetailLines>
+}>) {
+  return (
+    <View style={styles.details}>
+      {lines.installedOnDisk ? (
+        <Text style={panelStyles.muted}>Installed on disk: {lines.installedOnDisk}</Text>
+      ) : null}
+      <Text style={panelStyles.muted}>Running now: {lines.runningNow}</Text>
+      {lines.updatingTo ? (
+        <Text style={panelStyles.muted}>Updating to {lines.updatingTo}</Text>
+      ) : null}
+      <Text style={panelStyles.detailLabel}>Newest build on this channel</Text>
+      {detail.version ? <Text style={panelStyles.muted}>Version {detail.version}</Text> : null}
+      {detail.commit ? <Text style={panelStyles.muted}>Commit {detail.commit}</Text> : null}
+      {detail.manifestUrl ? (
+        <Text style={panelStyles.muted} numberOfLines={2}>
+          Manifest {detail.manifestUrl}
+        </Text>
+      ) : null}
+      {!detail.version && !detail.commit ? (
+        <Text style={panelStyles.muted}>No package on this channel.</Text>
+      ) : null}
+    </View>
+  )
+}
+
 /**
  * One updatable piece (control plane, UI, co-located daemon): what it runs now,
  * whether the channel has something newer, and — only then — what it would
@@ -63,28 +94,7 @@ export function UpgradeBuildBlock({
           }}
         />
       </View>
-      {detailsOpen ? (
-        <View style={styles.details}>
-          {lines.installedOnDisk ? (
-            <Text style={panelStyles.muted}>Installed on disk: {lines.installedOnDisk}</Text>
-          ) : null}
-          <Text style={panelStyles.muted}>Running now: {lines.runningNow}</Text>
-          {lines.updatingTo ? (
-            <Text style={panelStyles.muted}>Updating to {lines.updatingTo}</Text>
-          ) : null}
-          <Text style={panelStyles.detailLabel}>Newest build on this channel</Text>
-          {detail.version ? <Text style={panelStyles.muted}>Version {detail.version}</Text> : null}
-          {detail.commit ? <Text style={panelStyles.muted}>Commit {detail.commit}</Text> : null}
-          {detail.manifestUrl ? (
-            <Text style={panelStyles.muted} numberOfLines={2}>
-              Manifest {detail.manifestUrl}
-            </Text>
-          ) : null}
-          {!detail.version && !detail.commit ? (
-            <Text style={panelStyles.muted}>No package on this channel.</Text>
-          ) : null}
-        </View>
-      ) : null}
+      {detailsOpen ? <BuildDetails lines={lines} detail={detail} /> : null}
     </View>
   )
 }
