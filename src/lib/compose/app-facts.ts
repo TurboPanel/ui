@@ -18,7 +18,7 @@ export type ServiceAppFacts = Readonly<{
   warning: AppDatabaseWarning | null
 }>
 
-const SQL_ENGINES_FOR_WORDPRESS: readonly string[] = ['mysql', 'mariadb']
+const SQL_ENGINES_FOR_WORDPRESS: ReadonlySet<string> = new Set(['mysql', 'mariadb'])
 
 /** The tag a service carries once the daemon recognises its application. */
 export function appTagLabel(app: ServiceApp | null | undefined): string | null {
@@ -38,7 +38,7 @@ export function wordpressDatabaseProblem(
 ): AppDatabaseProblem | null {
   if (bindings.length === 0) return 'no-database'
   if (bindings.some((b) => b.engine === null)) return null
-  if (bindings.some((b) => SQL_ENGINES_FOR_WORDPRESS.includes(b.engine ?? ''))) return null
+  if (bindings.some((b) => SQL_ENGINES_FOR_WORDPRESS.has(b.engine ?? ''))) return null
   return bindings.some((b) => b.engine === 'postgres') ? 'postgres' : 'no-database'
 }
 
