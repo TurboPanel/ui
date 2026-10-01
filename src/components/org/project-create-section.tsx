@@ -6,6 +6,7 @@ import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceTileGrid } from '@/components/org/project-create/choice-card'
+import { RepositoryLaneStep } from '@/components/org/project-create/repository-lane-step'
 import { StartOverBar } from '@/components/org/project-create/start-over-bar'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
@@ -14,6 +15,10 @@ import {
   seedComposeForLane,
   seedHostingCompose,
 } from '@/lib/project-create/repository-seed'
+import {
+  builderForLane,
+  laneForBuilder,
+} from '@/lib/project-create/lane-builder'
 import {
   detectedComposePath,
   rankRepositoryLanes,
@@ -78,10 +83,11 @@ const FORM_MAX_WIDTH = 440
 /**
  * Wizard position. Nothing is persisted until the final step's Create button,
  * so every step is freely reversible. The repository step owns everything
- * about the picked repository — check, branch, builder, Simple-application
- * settings — so there is no separate lane step anymore.
+ * about the picked repository — pick it, name the branch, read it. The lane
+ * step ("What is this?") then asks what the read found, with the evidence for
+ * each answer, and carries the Simple-application settings.
  */
-type Step = 'details' | 'type' | 'repository' | 'catalog' | 'compose'
+type Step = 'details' | 'type' | 'repository' | 'lane' | 'catalog' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
@@ -151,7 +157,11 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   },
   repository: {
     title: 'Link a repository',
-    hint: 'Pick it, then set up how it builds and runs. Nothing is created yet.',
+    hint: 'Pick it and the branch to deploy. Nothing is created yet.',
+  },
+  lane: {
+    title: 'What is this?',
+    hint: "Here is what TurboPanel found in the repository. Pick the one that's right.",
   },
   catalog: { title: 'Choose a service', hint: '' },
   compose: { title: '', hint: '' },
@@ -202,10 +212,12 @@ function canContinueFromStep(
   selectedOption: SetupTypeOption | null,
   builder: RepositoryBuilder | null,
   selectedSource: RepositoryRecord | null,
+  inspectionPending: boolean,
 ): boolean {
   if (step === 'type') return selectedOption != null
-  // The repository step ends only once a builder is chosen, which itself
-  // waits on the read — everything the seed needs lives on this one screen.
+  // The repository screen ends once the read has landed (or failed); the lane
+  // screen ends once an answer is chosen — everything the seed needs is there.
+  if (step === 'repository') return selectedSource != null && !inspectionPending
   return selectedSource != null && builder != null
 }
 
@@ -217,19 +229,7 @@ function canContinueFromStep(
  * the production branch afterwards re-reads at the new ref.
  */
 function sourceInspectionEnabled(step: Step, sourceId: string): boolean {
-  return step === 'repository' && sourceId.length > 0
-}
-
-/** The compose lane the chosen builder seeds. */
-function laneForBuilder(
-  builder: RepositoryBuilder,
-  kind: SimpleAppConfig['kind'],
-): RepositoryLane {
-  if (builder === 'compose') return 'compose'
-  if (builder === 'site-php') return 'site-php'
-  // Railpack's card is disabled until the wizard can seed it; `simple` is the
-  // only builder left, split by what it produces.
-  return kind === 'static' ? 'static' : 'app'
+  return (step === 'repository' || step === 'lane') && sourceId.length > 0
 }
 
 /**
@@ -281,7 +281,8 @@ function seedForRepositoryLane(
  */
 function resolveBackStep(step: Step, selectedChoice: SetupChoice | null): Step {
   if (step === 'type') return 'details'
-  if (step === 'compose' && selectedChoice === 'repository') return 'repository'
+  if (step === 'compose' && selectedChoice === 'repository') return 'lane'
+  if (step === 'lane') return 'repository'
   return 'type'
 }
 
@@ -605,13 +606,38 @@ function ProjectCreateWizard({
     inspection.data,
   ])
 
+  const laneCandidates = useMemo(
+    () =>
+      rankRepositoryLanes(
+        inspection.data?.files ?? [],
+        inspection.data?.entries ?? [],
+      ),
+    [inspection.data],
+  )
+
   const changeSimpleConfig = (patch: Partial<SimpleAppConfig>) => {
     setSimpleConfigTouched(true)
     setSimpleConfig((current) => ({ ...current, ...patch }))
   }
 
-  /** Everything chosen on the repository screen — seed the draft and move on. */
-  const continueFromRepository = () => {
+  /** "What is this?" answered: set the builder, and Simple's kind if it applies. */
+  const selectLane = (lane: RepositoryLane) => {
+    const next = builderForLane(lane)
+    setBuilder(next.builder)
+    if (next.kind) {
+      const kind = next.kind
+      setSimpleConfig((current) => ({ ...current, kind }))
+    }
+  }
+
+  /** The repository is read — ask what it is. */
+  const continueToLane = () => {
+    setApiError(null)
+    setStep('lane')
+  }
+
+  /** Everything chosen on the lane screen — seed the draft and move on. */
+  const continueFromLane = () => {
     if (!selectedSource || !builder) return
     setApiError(null)
     const lane = laneForBuilder(builder, simpleConfig.kind)
@@ -638,6 +664,13 @@ function ProjectCreateWizard({
     }
     setStep('compose')
   }
+
+  const continueHandlers: Partial<Record<Step, () => void>> = {
+    type: continueFromType,
+    repository: continueToLane,
+    lane: continueFromLane,
+  }
+  const continueHandler = continueHandlers[step] ?? continueFromLane
 
   const goBack = () => {
     setApiError(null)
@@ -821,8 +854,6 @@ function ProjectCreateWizard({
             inspectionLoading={inspection.isPending}
             inspectionError={asError(inspection.error)}
             defaultEnvironmentName={defaultEnvironmentName}
-            builder={builder}
-            simple={simpleConfig}
             disabled={submitting}
             onSelectSourceId={(sourceId, record) => {
               setSelectedSourceId(sourceId)
@@ -840,9 +871,21 @@ function ProjectCreateWizard({
               setSimpleConfigTouched(false)
             }}
             onBranchChange={setRepositoryBranch}
-            onSelectBuilder={setBuilder}
-            onSimpleChange={changeSimpleConfig}
             onCloneUrlLaneChange={setCloneUrlLaneOpen}
+          />
+        ) : null}
+
+        {step === 'lane' ? (
+          <RepositoryLaneStep
+            candidates={laneCandidates}
+            selectedLane={
+              builder ? laneForBuilder(builder, simpleConfig.kind) : null
+            }
+            inspection={inspection.data}
+            simple={simpleConfig}
+            disabled={submitting}
+            onSelectLane={selectLane}
+            onSimpleChange={changeSimpleConfig}
           />
         ) : null}
 
@@ -893,10 +936,11 @@ function ProjectCreateWizard({
               selectedOption,
               builder,
               selectedSource,
+              inspection.isPending,
             )}
             onBack={goBack}
             onNext={goToTypeStep}
-            onContinue={step === 'type' ? continueFromType : continueFromRepository}
+            onContinue={continueHandler}
             onCreate={() => {
               void create()
             }}
@@ -962,7 +1006,7 @@ function StepActions({
     )
   }
 
-  if (step === 'type' || step === 'repository') {
+  if (step === 'type' || step === 'repository' || step === 'lane') {
     const continueLabel = step === 'type' ? 'Next' : 'Continue'
     return (
       <ButtonRow>

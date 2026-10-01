@@ -19,6 +19,8 @@ export type LaneCandidate = {
   lane: RepositoryLane
   /** What in the repository points at this lane — rendered on the card. */
   evidence: string
+  /** True when the repository actually contains what points at this lane. */
+  found: boolean
   /** True for the lane the wizard preselects. */
   recommended: boolean
 }
@@ -79,6 +81,7 @@ export function rankRepositoryLanes(
   ): LaneCandidate => ({
     lane,
     evidence: found ?? `no ${missing} found`,
+    found: found !== undefined,
     recommended: lane === winner,
   })
 
@@ -120,4 +123,15 @@ export function rootFromEntries(
     }
   }
   return undefined
+}
+
+/**
+ * One line of proof under each answer. A found file reads "✓ package.json
+ * found", a missing one "✕ no package.json found", so overriding the guess is
+ * an informed act. The recommended answer says so.
+ */
+export function laneEvidenceLine(candidate: LaneCandidate): string {
+  if (!candidate.found) return `✕ ${candidate.evidence}`
+  const line = `✓ ${candidate.evidence} found`
+  return candidate.recommended ? `${line} · best match` : line
 }
