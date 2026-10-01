@@ -511,8 +511,34 @@ describe('describeBillingRefusal', () => {
     )
   })
 
+  it('names unused registration keys when they are what blocks the removal', () => {
+    const inUse = (extra: Record<string, unknown>) =>
+      describeBillingRefusal(refusal({ error: 'licenses_in_use', ...extra }))
+    expect(inUse({ licensesHeld: 2, purchasedAfter: 0, inUse: 0, unusedKeys: 2 })).toBe(
+      'You have 2 license keys not yet used: use or delete them before removing licenses.'
+    )
+    expect(inUse({ unusedKeys: 1, inUse: 1 })).toBe(
+      'You have 1 license key not yet used: use or delete it before removing licenses.'
+    )
+    expect(inUse({ licensesHeld: 2, purchasedAfter: 1, inUse: 2, unusedKeys: 0 })).toContain(
+      'Remove a server'
+    )
+  })
+
+  it('words checkout, provider and not-configured refusals without showing the code', () => {
+    for (const [code, status] of [
+      ['checkout_pending', 409],
+      ['stripe_error', 502],
+      ['billing_not_configured', 503],
+    ] as const) {
+      const text = describeBillingRefusal(refusal({ error: code }, status))
+      expect(text).toBeTruthy()
+      expect(text).not.toContain('_')
+    }
+  })
+
   it('answers null for anything it does not recognise', () => {
-    expect(describeBillingRefusal(refusal({ error: 'stripe_error' }, 502))).toBeNull()
+    expect(describeBillingRefusal(refusal({ error: 'something_new' }, 409))).toBeNull()
     expect(describeBillingRefusal(new Error('HTTP 500'))).toBeNull()
     expect(describeBillingRefusal(null)).toBeNull()
   })
