@@ -730,7 +730,7 @@ function ServersFleetEmptyState() {
     <EmptyState
       panel
       title="Add your first server"
-      hint="Use + Server to enroll a host and start deploying projects to your fleet."
+      hint="Use + Server to enroll a host and start deploying projects to your servers."
     />
   )
 }
