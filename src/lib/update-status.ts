@@ -131,6 +131,24 @@ export function explainUpgradeFailure(
       docsUrl: null,
     }
   }
+  if (code === 'web_server_failed') {
+    return {
+      title: 'The web server did not start',
+      body: 'The new control plane is running and healthy, but the web server in front of it did not start. Start it on the control-plane host, then reload this page.',
+      command: 'sudo systemctl restart turbopanel-caddy',
+      docsUrl: null,
+    }
+  }
+  if (code === 'recovery_required') {
+    return {
+      title: 'The previous build could not be confirmed',
+      body: `The new control plane did not become healthy and the automatic rollback could not be confirmed. Check whether the control plane is answering before running any recovery command.${
+        message ? ` Details: ${message}` : ''
+      }`,
+      command: DAEMON_LOGS_COMMAND,
+      docsUrl: UPGRADE_DOCS_URL,
+    }
+  }
   if (code === 'rolled_back' || code === 'update_rollback') {
     return {
       title: 'Rolled back to the previous build',
@@ -154,19 +172,47 @@ type RunWithSteps = UpgradeRunRecord & { steps: UpgradeStepRow[] }
 const FAILED_RUN_STATUSES = new Set(['failed', 'partially_failed', 'cancelled'])
 const FAILED_STEP_STATUSES = new Set(['failed', 'rolled_back', 'needs_attention'])
 
+export type RunningBuild = Readonly<{ version?: string | null; commit?: string | null }>
+
+function stepTargetIsRunning(step: UpgradeStepRow, running: RunningBuild): boolean {
+  if (step.toCommit && running.commit) return step.toCommit === running.commit
+  if (step.toVersion && running.version) return step.toVersion === running.version
+  return false
+}
+
+/**
+ * A finished run whose only failures are control-plane steps for the build
+ * that is running now. The update did land (a false failure, for instance a
+ * proxy that came back late), so a stale "failed" banner must not persist.
+ */
+export function failureSupersededByRunningBuild(
+  run: RunWithSteps,
+  running: RunningBuild | undefined
+): boolean {
+  if (!running) return false
+  const failed = run.steps.filter((item) => FAILED_STEP_STATUSES.has(item.status))
+  if (failed.length === 0) return false
+  return failed.every(
+    (item) => item.phase === 'control_plane' && stepTargetIsRunning(item, running)
+  )
+}
+
 /**
  * The run the Updates screen should draw: the active one, else the last run
  * when it ended badly (the server keeps it for a day). A successful last run
- * is not drawn — the screen already says "up to date".
+ * is not drawn — the screen already says "up to date". A failed last run for
+ * the build that is running now is not drawn either.
  */
 export function runToShow(
-  response: (Pick<UpgradeActiveRunResponse, 'run'> & { lastRun?: RunWithSteps | null }) | undefined
+  response: (Pick<UpgradeActiveRunResponse, 'run'> & { lastRun?: RunWithSteps | null }) | undefined,
+  running?: RunningBuild
 ): { run: RunWithSteps | null; finished: boolean } {
   const active = response?.run ?? null
   if (active) return { run: active, finished: false }
   const last = response?.lastRun ?? null
-  if (last && FAILED_RUN_STATUSES.has(last.status)) return { run: last, finished: true }
-  return { run: null, finished: false }
+  if (!last || !FAILED_RUN_STATUSES.has(last.status)) return { run: null, finished: false }
+  if (failureSupersededByRunningBuild(last, running)) return { run: null, finished: false }
+  return { run: last, finished: true }
 }
 
 /** What a failed step is called: its phase, or for a fleet step the server it ran on. */
