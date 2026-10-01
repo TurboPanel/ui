@@ -200,6 +200,31 @@ describe('patchServiceTurbopanelExtension node fields', () => {
   })
 })
 
+describe('x-turbopanel.source.deployOnPush', () => {
+  const sourceId = '11111111-2222-3333-4444-555555555555'
+
+  it('keeps false and true as authored, and nothing when absent', () => {
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: false } })?.source
+        ?.deployOnPush,
+    ).toBe(false)
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: true } })?.source
+        ?.deployOnPush,
+    ).toBe(true)
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId } })?.source?.deployOnPush,
+    ).toBeUndefined()
+  })
+
+  it('drops a value that is not a boolean', () => {
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: 'false' } })?.source
+        ?.deployOnPush,
+    ).toBeUndefined()
+  })
+})
+
 describe('x-turbopanel.source.buildKind', () => {
   it('parses railpack and keeps the rest of the binding', () => {
     const parsed = parseServiceTurbopanelExtension({

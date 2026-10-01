@@ -5,6 +5,7 @@ import {
   deploymentStatusTone,
   formatDeployActor,
   formatDeployDuration,
+  formatDeployTrigger,
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
   worstDeploymentStatus,
@@ -364,5 +365,48 @@ describe('stalledDeploymentHint', () => {
     // Any other failure speaks for itself through errorMessage.
     expect(stalledDeploymentHint('deploy_failed')).toBeNull()
     expect(stalledDeploymentHint(null)).toBeNull()
+  })
+})
+
+describe('push-triggered deploys', () => {
+  it('carries the trigger of the anchor row onto the group', () => {
+    const trigger = {
+      kind: 'push' as const,
+      branch: 'staging',
+      commitSha: 'abc123def456',
+      sourceId: 'repo-1',
+    }
+    const [group] = groupDeploymentsByGeneration([
+      row({ id: 'a', actorEntityType: 'system', trigger }),
+      row({ id: 'b', actorEntityType: 'system', serverId: 'srv-b', trigger }),
+    ])
+    expect(group?.trigger).toEqual(trigger)
+  })
+
+  it('has no trigger for a person\'s deploy or an older API', () => {
+    const [group] = groupDeploymentsByGeneration([row({ id: 'a' })])
+    expect(group?.trigger).toBeNull()
+  })
+
+  it('formats the branch and a short commit', () => {
+    expect(
+      formatDeployTrigger({
+        kind: 'push',
+        branch: 'release/1.4',
+        commitSha: 'abc123def456',
+        sourceId: null,
+      }),
+    ).toEqual({ headline: 'Push to release/1.4', detail: 'abc123d' })
+  })
+
+  it('degrades when only part of the attribution was recorded', () => {
+    expect(
+      formatDeployTrigger({ kind: 'push', branch: null, commitSha: 'abc123def', sourceId: null }),
+    ).toEqual({ headline: 'Git push', detail: 'abc123d' })
+    expect(
+      formatDeployTrigger({ kind: 'push', branch: ' ', commitSha: null, sourceId: null }),
+    ).toEqual({ headline: 'Git push', detail: null })
+    expect(formatDeployTrigger(null)).toBeNull()
+    expect(formatDeployTrigger(undefined)).toBeNull()
   })
 })

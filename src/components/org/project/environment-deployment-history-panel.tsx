@@ -18,6 +18,7 @@ import {
   deploymentServerLabel,
   deploymentStatusTone,
   formatDeployActor,
+  formatDeployTrigger,
   formatDeployDuration,
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
@@ -121,6 +122,26 @@ function DeploymentDetail({
   )
 }
 
+/** Who or what started a deploy: a person, the system, or a git push (branch and commit). */
+function ActorCell({ group }: Readonly<{ group: DeploymentGroup }>) {
+  const trigger = formatDeployTrigger(group.trigger)
+  if (!trigger) {
+    return (
+      <Text style={styles.cellMuted}>
+        {formatDeployActor(group.actorEntityType)}
+      </Text>
+    )
+  }
+  return (
+    <>
+      <Text style={styles.cellMuted}>{trigger.headline}</Text>
+      {trigger.detail ? (
+        <Text style={styles.cellMono}>{trigger.detail}</Text>
+      ) : null}
+    </>
+  )
+}
+
 function DeploymentRow({
   orgId,
   group,
@@ -167,9 +188,7 @@ function DeploymentRow({
           </Text>
         </View>
         <View style={[styles.cell, styles.colActor]}>
-          <Text style={styles.cellMuted}>
-            {formatDeployActor(group.actorEntityType)}
-          </Text>
+          <ActorCell group={group} />
         </View>
         <View style={[styles.cell, styles.colDuration]}>
           <Text style={styles.cellMono}>

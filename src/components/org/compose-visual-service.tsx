@@ -65,7 +65,7 @@ import {
   type RepositoryAutoDeploy,
   type RepositoryRecord,
 } from '@/lib/instance-api'
-import { Button, Select } from '@/components/ui'
+import { Button, Select, Toggle } from '@/components/ui'
 import { useProjectRepositoryId } from '@/components/org/project/project-context'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
@@ -1040,6 +1040,8 @@ function commitSourceExtension(
   // `native` is the default, so writing it out would add a key that says
   // nothing. Dropping it keeps a plain binding free of TurboPanel noise.
   if (next.buildKind === 'native') delete next.buildKind
+  // Push deploys are on unless said otherwise, so only the opt-out is written.
+  if (next.deployOnPush !== false) delete next.deployOnPush
   onChange(next)
 }
 
@@ -1156,6 +1158,19 @@ function BoundSourceFields({
         style={styles.input}
       />
       <Text style={styles.hint}>{sourceBranchHint(row?.defaultBranch)}</Text>
+
+      <Text style={styles.label}>Deploy on push</Text>
+      <Toggle
+        value={binding.deployOnPush !== false}
+        onValueChange={(on) => commit({ deployOnPush: on ? undefined : false })}
+        disabled={disabled}
+        accessibilityLabel="Deploy when this branch is pushed"
+      />
+      <Text style={styles.hint}>
+        Off keeps pushes from deploying this service; you can still deploy it
+        by hand. To give one environment its own branch, use the Git branch
+        panel on that environment.
+      </Text>
 
       <Text style={styles.label}>Subdirectory</Text>
       <TextInput

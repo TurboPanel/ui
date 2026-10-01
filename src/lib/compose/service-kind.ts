@@ -92,6 +92,12 @@ export type ComposeServiceSourceExtension = {
    * instance rejects the combination on save.
    */
   buildKind?: ComposeSourceBuildKind
+  /**
+   * `false` keeps this binding out of push-triggered deploys: a person can
+   * still deploy the branch, but a push to it does not. Omitted means push
+   * deploys are allowed (subject to the repository's auto-deploy switch).
+   */
+  deployOnPush?: boolean
 }
 
 /** Injection point for callers that can resolve source ids. */
@@ -689,6 +695,10 @@ export function parseServiceSourceExtension(value: unknown): ComposeServiceSourc
 
   const buildKind = readSourceBuildKind(value.buildKind)
   if (buildKind) source.buildKind = buildKind
+  // `false` must survive the round-trip — never a truthiness guard here.
+  if (typeof value.deployOnPush === 'boolean') {
+    source.deployOnPush = value.deployOnPush
+  }
 
   return source
 }

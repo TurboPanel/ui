@@ -7,7 +7,11 @@
  * every row (which would be an N+1 read of state the list already carries).
  */
 
-import type { CommandStatus, DeploymentHistoryRecord } from '@/lib/instance-api'
+import type {
+  CommandStatus,
+  DeploymentHistoryRecord,
+  DeploymentTriggerRecord,
+} from '@/lib/instance-api'
 
 /** One deploy — the fan-out across every participating host. */
 export type DeploymentGroup = Readonly<{
@@ -19,6 +23,8 @@ export type DeploymentGroup = Readonly<{
   /** Worst status across the fan-out (failed ≫ running ≫ queued ≫ succeeded). */
   status: CommandStatus
   actorEntityType: string
+  /** The git push behind this deploy, or null when a person started it. */
+  trigger: DeploymentTriggerRecord | null
   /** Earliest queue time across the fan-out. */
   startedAt: string | null
   /** Longest attempt in the fan-out; null while any attempt is still running. */
@@ -118,6 +124,7 @@ export function groupDeploymentsByGeneration(
       commands,
       status: worstDeploymentStatus(commands),
       actorEntityType: anchor?.actorEntityType ?? 'unknown',
+      trigger: anchor?.trigger ?? null,
       startedAt: earliestTimestamp(commands),
       durationMs: fanOutDuration(commands),
     }
@@ -161,6 +168,21 @@ export function formatDeployActor(actorEntityType: string): string {
   if (actorEntityType === 'system') return 'System'
   if (actorEntityType.length === 0) return 'Unknown'
   return actorEntityType.charAt(0).toUpperCase() + actorEntityType.slice(1)
+}
+
+/**
+ * What the Actor column says about a push-triggered deploy, as two short lines:
+ * the branch and the commit. `null` for a deploy a person started, which keeps
+ * the plain actor label.
+ */
+export function formatDeployTrigger(
+  trigger: DeploymentTriggerRecord | null | undefined,
+): Readonly<{ headline: string; detail: string | null }> | null {
+  if (!trigger) return null
+  const branch = trigger.branch?.trim()
+  const headline = branch ? `Push to ${branch}` : 'Git push'
+  const detail = trigger.commitSha ? trigger.commitSha.slice(0, 7) : null
+  return { headline, detail }
 }
 
 export type DeploymentStatusTone = Readonly<{
