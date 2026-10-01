@@ -52,7 +52,7 @@ export function memberAction(input: MemberActionInput): MemberAction {
 
 export function memberDisplayName(member: Pick<OrganizationMember, 'name' | 'email'>): string {
   const name = member.name?.trim()
-  return name ? name : member.email
+  return name || member.email
 }
 
 export function removeConfirmCopy(member: Pick<OrganizationMember, 'name' | 'email'>): {
