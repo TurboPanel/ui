@@ -135,7 +135,7 @@ export const ORG_AREAS = [
     id: 'billing',
     label: 'Billing',
     pathSegment: 'billing',
-    hint: 'Subscription, seats per tier, invoices, and payment method',
+    hint: 'Subscription, licenses per tier, invoices, and payment method',
     subRoutes: [],
   },
 ] as const
