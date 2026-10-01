@@ -1,11 +1,12 @@
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
+import { HeaderMenuButton } from '@/components/header-menu-button'
 import { ReturnToInstanceSegment } from '@/components/return-to-instance'
 import { useAuth } from '@/lib/auth-context'
 import { headerLayoutFor } from '@/lib/header-layout'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 export function AdminHeader({
   onMenuPress,
@@ -22,24 +23,7 @@ export function AdminHeader({
       rim="bottom"
     >
       <View style={styles.headerMain}>
-        {onMenuPress ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.menuButton,
-              pressed && styles.buttonPressed,
-              webPointer,
-            ]}
-            onPress={onMenuPress}
-            accessibilityRole="button"
-            accessibilityLabel="Open navigation menu"
-          >
-            <View style={styles.menuIcon}>
-              <View style={styles.menuBar} />
-              <View style={styles.menuBar} />
-              <View style={styles.menuBarShort} />
-            </View>
-          </Pressable>
-        ) : null}
+        {onMenuPress ? <HeaderMenuButton onPress={onMenuPress} /> : null}
         {header.showLogo ? <TurboPanelLogo size={28} /> : null}
         <View style={styles.backSlot}>
           <ReturnToInstanceSegment />
@@ -80,33 +64,6 @@ const styles = StyleSheet.create({
   backSlot: {
     flexShrink: 1,
     minWidth: 0,
-  },
-  menuButton: {
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: colors.bgSecondary,
-  },
-  menuIcon: {
-    width: 16,
-    gap: 3,
-  },
-  menuBar: {
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.textChip,
-    width: 16,
-  },
-  menuBarShort: {
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.textChip,
-    width: 11,
-  },
-  buttonPressed: {
-    opacity: 0.85,
   },
   headerActions: {
     flexDirection: 'row',
