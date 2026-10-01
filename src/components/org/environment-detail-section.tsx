@@ -106,6 +106,8 @@ import {
   isComposeOwnedHosting,
   readHostingComposeRoute,
 } from '@/lib/hosting-compose-owner'
+import { hostPickerLabel, pickHostKey } from '@/lib/hosting-host-label'
+import { HostingHostPicker } from '@/components/org/project/hosting-host-picker'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 import { deployErrorMessage } from '@/lib/deploy-error-message'
 import { orEmptyArray } from '@/lib/or-empty-array'
@@ -1702,6 +1704,20 @@ function EnvironmentHostingSectionPanel({
 }>) {
   // Per-row expand-in-place; deep-linked (focused) rows open by default.
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
+  const [pickedKey, setPickedKey] = useState<string | null>(null)
+  const rowKeys = hostingRows.map((row) => row.editorKey)
+  const focusedRow = hostingRows.find(
+    (row) => focusHostingId != null && row.hostingId === focusHostingId,
+  )
+  const selectedKey = pickHostKey(rowKeys, pickedKey, focusedRow?.editorKey ?? null)
+  const pickerEntries = hostingRows.map((row) => ({
+    key: row.editorKey,
+    label: hostPickerLabel({
+      hostnames: (hostingEditors[row.editorKey] ?? row.seed).hostnames,
+      composeServiceName: row.composeServiceName,
+      protocol: (hostingEditors[row.editorKey] ?? row.seed).protocol,
+    }),
+  }))
   return (
     <SectionPanel
       title="Hosting"
@@ -1711,11 +1727,20 @@ function EnvironmentHostingSectionPanel({
         <EmptyState title="Add services to Compose before configuring hostnames." />
       ) : (
         <View style={styles.hostingList}>
-          {hostingRows.map((row) => {
+          {hostingRows.length > 1 ? (
+            <HostingHostPicker
+              entries={pickerEntries}
+              selectedKey={selectedKey}
+              onSelect={setPickedKey}
+            />
+          ) : null}
+          {hostingRows.filter((row) => row.editorKey === selectedKey).map((row) => {
             const editor = hostingEditors[row.editorKey] ?? row.seed
             const focused =
               focusHostingId != null && row.hostingId === focusHostingId
-            const expanded = expandedRows[row.editorKey] ?? focused
+            // The picked hostname is always open; the picker replaced the
+            // per-row expand toggle.
+            const expanded = expandedRows[row.editorKey] ?? true
             return (
               <HostingPanelRow
                 key={row.editorKey}
