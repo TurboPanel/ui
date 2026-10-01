@@ -1,13 +1,14 @@
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
-import Svg, { Path } from 'react-native-svg'
+import Svg, { Rect } from 'react-native-svg'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { togglePageWidth, usePageWidth } from '@/lib/page-width'
 import { colors, layout } from '@/lib/theme'
 
 /**
- * Header control for the page-width preference: `|→` widens a contained page,
- * `←|` narrows a wide one. Compact screens have no max-width column, so it
- * is not drawn there.
+ * Header control for the page-width preference. The icon is a page outline
+ * with one column inside: a narrow column when the page is contained, a column
+ * filling the page when it is wide. Compact screens have no max-width column,
+ * so it is not drawn there.
  */
 export function HeaderPageWidthSegment() {
   const { width } = useWindowDimensions()
@@ -34,21 +35,28 @@ export function HeaderPageWidthSegment() {
 }
 
 function WidthIcon({ wide }: Readonly<{ wide: boolean }>) {
-  const bar = wide ? 'M20 5v14' : 'M4 5v14'
-  const shaft = wide ? 'M15 12H4' : 'M9 12h11'
-  const head = wide ? 'm8 8-4 4 4 4' : 'm16 8 4 4-4 4'
   return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      {[bar, shaft, head].map((d) => (
-        <Path
-          key={d}
-          d={d}
-          stroke={colors.textDim}
-          strokeWidth={1.8}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x={3}
+        y={4.5}
+        width={18}
+        height={15}
+        rx={2.5}
+        stroke={colors.textDim}
+        strokeWidth={1.7}
+        strokeLinejoin="round"
+      />
+      <Rect
+        x={6.5}
+        y={8}
+        width={wide ? 11 : 6}
+        height={8}
+        rx={1}
+        stroke={colors.textDim}
+        strokeWidth={1.7}
+        strokeLinejoin="round"
+      />
     </Svg>
   )
 }
