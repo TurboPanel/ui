@@ -2,6 +2,7 @@ import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { ComposeSettingsSection } from '@/components/org/compose-settings-section'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
+import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
 import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useAuth } from '@/lib/auth-context'
@@ -29,7 +30,7 @@ function BillingLinkSection({ orgId }: Readonly<{ orgId: string }>) {
   )
 }
 
-/** Org Manage — organization record (view / rename), billing (hosted), and the owner-only compose opt-ins. */
+/** Org Manage — organization record (view / rename), billing (hosted), the owner-only security setting, and the owner-only compose opt-ins. */
 export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   const orgsQuery = useOrganizationsQuery()
   const { billingEnabled } = useAuth()
@@ -43,6 +44,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
       <Text style={panelStyles.pageTitle}>Manage Organization</Text>
       <OrganizationFormSection orgId={orgId} />
       {billingEnabled ? <BillingLinkSection orgId={orgId} /> : null}
+      <ReauthSettingsSection orgId={orgId} />
       <ComposeSettingsSection orgId={orgId} />
     </View>
   )

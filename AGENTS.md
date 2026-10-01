@@ -380,6 +380,10 @@ The UI is never installed as a standalone service tree — the **instance** repo
 
 Both modes route through the single instance Caddy entrypoint; there is no separate `turbopaneld.service` or FHS tree owned by this repo. Canonical paths/units live in `../turbopanel/AGENTS.md` (Caddy + UI env vars) and `../turbopaneld/AGENTS.md` (Filesystem layout & path model).
 
+## Ask again before permanent actions (step-up)
+
+An organization owner can turn on "ask people to confirm it is them before permanent actions" (Manage Organization → Security, `ReauthSettingsSection`). `fetchWithStepUp` (`src/lib/step-up.ts`) wraps every request in `instance-api.ts`: a `403 reauth_required` opens the single app-wide `ReauthSheet` (mounted in `AppProviders`; password, or the authenticator code for people who use one), then the original request is sent once more. Do not add a new `fetch(controlPlaneUrl(...))` to `instance-api.ts` without going through `fetchWithStepUp`, or that action will show a bare 403 instead of the prompt. Logic, copy and the broker are in `src/lib/step-up.ts` (covered); the sheet is chrome.
+
 ## Organization console (`/<organizationId>/*`)
 
 Moved to `src/app/[orgId]/AGENTS.md` — layout/chrome, area routes, instance
