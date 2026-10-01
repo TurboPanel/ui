@@ -68,7 +68,7 @@ function GitAppRow({
 
       <View style={styles.badges}>
         {app.organizationId === null
-          ? <Badge label="Instance-wide" tone="info" />
+          ? <Badge label="All organizations" tone="info" />
           : <Badge label="This organization" tone="muted" />}
         {app.readOnly ? <Badge label="Read-only" tone="muted" /> : null}
         {installed
@@ -198,8 +198,8 @@ export function GitSourcesSection({
       <Text style={panelStyles.pageTitle}>Git sources</Text>
       <Text style={panelStyles.pageCopy}>
         {scope === 'admin'
-          ? 'Applications the whole instance shares. Every organization can connect accounts through these.'
-          : 'Applications this organization connects repositories through, plus any the instance shares. Repositories themselves are attached when you create or edit a project, and listed under Repositories.'}
+          ? 'Applications shared with every organization on this control plane. Every organization can connect accounts through these.'
+          : 'Applications this organization connects repositories through, plus any this control plane shares. Repositories themselves are attached when you create or edit a project, and listed under Repositories.'}
       </Text>
 
       {returnNotice

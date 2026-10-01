@@ -6,7 +6,7 @@ export type RecoveryReason = 'reset' | 'restart' | 'unauthorized'
 export function recoveryTitle(reason: RecoveryReason | null): string {
   switch (reason) {
     case 'reset':
-      return 'Resetting dev instance'
+      return 'Resetting the dev control plane'
     case 'unauthorized':
       return 'Reconnecting'
     default:
@@ -17,11 +17,11 @@ export function recoveryTitle(reason: RecoveryReason | null): string {
 export function recoveryDetail(reason: RecoveryReason | null): string {
   switch (reason) {
     case 'reset':
-      return 'Postgres was wiped and the instance is restarting. This usually takes a few seconds.'
+      return 'Postgres was wiped and the control plane is restarting. This usually takes a few seconds.'
     case 'unauthorized':
-      return 'Your session is no longer valid. Waiting for the instance to respond…'
+      return 'Your session is no longer valid. Waiting for the control plane to respond…'
     default:
-      return 'Waiting for the instance to come back online…'
+      return 'Waiting for the control plane to come back online…'
   }
 }
 
@@ -32,7 +32,7 @@ export type RecoveryPollResult =
   | { kind: 'welcome' }
   | { kind: 'signIn' }
 
-/** Poll public endpoints only — safe while the instance is restarting or sessions are invalid. */
+/** Poll public endpoints only — safe while the control plane is restarting or sessions are invalid. */
 export async function pollInstanceRecovery(): Promise<RecoveryPollResult> {
   try {
     const health = await fetchHealth()

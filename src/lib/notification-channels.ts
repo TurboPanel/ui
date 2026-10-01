@@ -60,7 +60,7 @@ export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
 }
 
 const CHANNEL_ERROR_COPY: Record<string, string> = {
-  address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted instance).',
+  address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted control plane).',
   address_invalid: 'That address does not look right for this kind of channel.',
   address_not_a_member: 'An email channel can only name an address TurboPanel already knows: your own for a personal channel, a member\'s account email for an organization one.',
   address_required: 'Enter an address.',

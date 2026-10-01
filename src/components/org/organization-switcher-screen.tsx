@@ -167,9 +167,9 @@ export function OrganizationSwitcherScreen() {
             ]}
             onPress={() => router.push(adminAreaHref('access') as Href)}
             accessibilityRole="link"
-            accessibilityLabel="Instance administration"
+            accessibilityLabel="Administration"
           >
-            <Text style={styles.adminLinkText}>Instance administration</Text>
+            <Text style={styles.adminLinkText}>Administration</Text>
           </Pressable>
         ) : null}
       </KeyboardAvoidingView>

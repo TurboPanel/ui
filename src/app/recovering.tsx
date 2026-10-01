@@ -78,9 +78,9 @@ export default function RecoveringScreen() {
     }
   }, [navigated, waiting, result, refreshInstallStatus, router])
 
-  let statusText = 'Waiting for instance…'
+  let statusText = 'Waiting for control plane…'
   if (!waiting) {
-    statusText = 'Instance is back online. Redirecting…'
+    statusText = 'Control plane is back online. Redirecting…'
   }
 
   return (

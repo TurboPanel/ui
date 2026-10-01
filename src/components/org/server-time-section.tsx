@@ -231,7 +231,7 @@ function TimezoneSettingsPanel({
           style={webPointer}
           accessibilityRole="link"
         >
-          <Text style={styles.linkText}>Open fleet timezone settings</Text>
+          <Text style={styles.linkText}>Open server timezone settings</Text>
         </Pressable>
       ) : null}
 

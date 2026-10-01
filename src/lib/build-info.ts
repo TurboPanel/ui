@@ -53,7 +53,7 @@ export function buildInfoSections(
   if (environment) controlPlaneRows.push({ label: 'Environment', value: environment })
 
   return [
-    { title: 'Console', rows: consoleRows },
+    { title: 'Web app', rows: consoleRows },
     { title: 'Control plane', rows: controlPlaneRows },
   ]
 }

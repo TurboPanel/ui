@@ -207,8 +207,8 @@ export function BillingSection({ orgId }: Readonly<{ orgId: string }>) {
     body = isNotConfigured(err) ? (
       <EmptyState
         panel
-        title="Billing is not available on this instance"
-        hint="Self-hosted control planes have no subscription. Licenses are managed by the host operator."
+        title="Billing is not available on this control plane"
+        hint="Self-hosted control planes have no subscription. Licenses are managed by the administrator."
       />
     ) : (
       <EmptyState

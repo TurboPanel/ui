@@ -906,7 +906,7 @@ function ServersOverviewFleet({
       {fleetSurface.showFleetPanel ? (
         <SectionPanel>
           {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-          {loading && serverCount === 0 ? <LoadingState label="Loading fleet…" /> : null}
+          {loading && serverCount === 0 ? <LoadingState label="Loading servers…" /> : null}
           {!loading && serverCount === 0 ? <ServersFleetEmptyState /> : null}
           {fleetSurface.showDetailInPanel ? (
             <ServersFleetDetailView compactList={false} {...fleetViewProps} />
