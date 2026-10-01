@@ -16,6 +16,15 @@ export type PasswordValidation = {
 export const COMPROMISED_PASSWORD_MESSAGE =
   "That password isn't safe to use. Please choose a different one."
 
+/**
+ * The control plane checks every new password against the breach list too and
+ * answers `password_breached` (the browser check below fails open, so the server
+ * is authoritative). Swap that code for the same friendly copy the screens show.
+ */
+export function breachedPasswordCopy(message: string): string {
+  return message.includes('password_breached') ? COMPROMISED_PASSWORD_MESSAGE : message
+}
+
 const PWNED_PASSWORDS_RANGE_URL = 'https://api.pwnedpasswords.com/range/'
 const PWNED_PASSWORDS_TIMEOUT_MS = 5000
 

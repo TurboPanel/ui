@@ -11,6 +11,7 @@ import {
 } from '@/components/auth/auth-form-styles'
 import { authAccentForRuntime, resolveControlPlaneRuntime } from '@/lib/auth-accent'
 import {
+  breachedPasswordCopy,
   checkPwnedPassword,
   COMPROMISED_PASSWORD_MESSAGE,
   passwordHint,
@@ -87,7 +88,7 @@ export function ResetPasswordScreenContent() {
       if (message.includes('INVALID_TOKEN')) {
         setExpired(true)
       } else {
-        setError(message || 'Could not reset the password')
+        setError(breachedPasswordCopy(message) || 'Could not reset the password')
       }
     }
   }, [link, validation.isValid, loading, password, reset])

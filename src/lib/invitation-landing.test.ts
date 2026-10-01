@@ -166,6 +166,9 @@ describe('invitation copy and error helpers', () => {
 
   it('maps action errors to plain copy', () => {
     expect(invitationActionErrorCopy('nope')).toBe('Could not accept this invitation.')
+    expect(invitationActionErrorCopy(new Error('x failed: HTTP 400: password_breached'))).toContain(
+      "isn't safe",
+    )
     expect(invitationActionErrorCopy(new Error('x failed: HTTP 403: Forbidden'))).toContain('different email')
     expect(invitationActionErrorCopy(new Error('x failed: HTTP 404'))).toContain('could not be found')
     expect(invitationActionErrorCopy(new Error('x failed: HTTP 410: gone'))).toContain('re-sent')

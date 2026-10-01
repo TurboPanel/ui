@@ -9,6 +9,7 @@
  * in or signs up as usual, then presses Accept (the server checks the email).
  */
 import type { InvitationPreview } from './instance-api'
+import { breachedPasswordCopy } from './password-policy'
 
 export type InvitationLink = { kind: 'token'; token: string } | { kind: 'id'; id: string }
 
@@ -159,7 +160,7 @@ export function invitationActionErrorCopy(err: unknown): string {
     return 'This invitation link has expired, was re-sent, or has already been used.'
   }
   if (/HTTP 429\b/.test(message)) return 'Too many attempts. Wait a minute and try again.'
-  return message || 'Could not accept this invitation.'
+  return breachedPasswordCopy(message) || 'Could not accept this invitation.'
 }
 
 /** The create-password submit found an existing account after all (raced sign-up). */
