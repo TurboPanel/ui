@@ -376,7 +376,7 @@ export function useInstanceUpdates(
   options?: Readonly<{
     enabled?: boolean
     /** The commit this console bundle was built from; see `fetchInstanceUpdates`. */
-    consoleCommit?: string | undefined
+    consoleCommit?: string
   }>
 ) {
   const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
