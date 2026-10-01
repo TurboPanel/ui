@@ -47,6 +47,7 @@ import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type ProjectServiceOption = {
   id: string
@@ -168,9 +169,9 @@ export function ProjectPrincipalsSection({
 
   let queryError: string | null = null
   if (principalsQuery.error instanceof Error) {
-    queryError = principalsQuery.error.message
+    queryError = userErrorMessage(principalsQuery.error, '')
   } else if (environmentsQuery.error instanceof Error) {
-    queryError = environmentsQuery.error.message
+    queryError = userErrorMessage(environmentsQuery.error, '')
   }
 
   useEffect(() => {
@@ -892,9 +893,9 @@ export function ProjectDetailSection({
   useEffect(() => {
     let queryError: string | null = null
     if (projectQuery.error instanceof Error) {
-      queryError = projectQuery.error.message
+      queryError = userErrorMessage(projectQuery.error, '')
     } else if (workspacesQuery.error instanceof Error) {
-      queryError = workspacesQuery.error.message
+      queryError = userErrorMessage(workspacesQuery.error, '')
     }
     setError(queryError)
   }, [projectQuery.error, workspacesQuery.error])

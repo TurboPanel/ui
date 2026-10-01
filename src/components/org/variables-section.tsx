@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries/variables'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Secret values are write-only end to end — never rendered, even masked with real characters. */
 const HIDDEN_VALUE_LABEL = '***HIDDEN***'
@@ -45,7 +46,7 @@ function resolveVariablesLoadError(
     return null
   }
   if (error instanceof Error) {
-    return error.message
+    return userErrorMessage(error, '')
   }
   return 'Failed to load variables'
 }
@@ -1129,7 +1130,7 @@ export function VariablesSection({
         onError: (err) => {
           const message =
             createMutation.actionError ??
-            (err instanceof Error ? err.message : 'Failed to create variable')
+            (userErrorMessage(err, 'Failed to create variable'))
           if (
             message.includes('binding_key_conflict') ||
             message.includes('binding_owned_variable')

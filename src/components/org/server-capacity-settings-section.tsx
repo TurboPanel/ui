@@ -15,9 +15,10 @@ import {
 } from '@/lib/instance-api'
 import { useOrgServerCapacity } from '@/lib/queries/servers'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function formatCapacitySummary(capacity: OrgServerCapacity): string {

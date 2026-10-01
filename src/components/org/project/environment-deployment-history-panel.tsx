@@ -33,6 +33,7 @@ import {
   useEnvironmentDeployments,
 } from '@/lib/queries/execution-logs'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Cap the history table so a long run of deploys scrolls inside the panel. */
 const HISTORY_LIST_MAX_HEIGHT = 560
@@ -259,9 +260,7 @@ export function EnvironmentDeploymentHistoryPanel({
       ) : null}
       {deploymentsQuery.error ? (
         <Text style={panelStyles.error}>
-          {deploymentsQuery.error instanceof Error
-            ? deploymentsQuery.error.message
-            : 'Failed to load deploy history'}
+          {userErrorMessage(deploymentsQuery.error, 'Failed to load deploy history')}
         </Text>
       ) : null}
       {!deploymentsQuery.isLoading && groups.length === 0 ? (

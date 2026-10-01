@@ -28,6 +28,7 @@ import {
 import type { GithubManifestStartInput } from '@/lib/instance-api'
 import { usePublicUrlsOptional, useStartGithubAppManifest } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const GITHUB_DOT_COM = 'https://github.com'
 
@@ -132,7 +133,7 @@ function handoffError(data: Readonly<{
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return userErrorMessage(error, fallback)
 }
 
 /** Step 1: what the App is, who owns it, and which GitHub it lives on. */

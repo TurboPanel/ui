@@ -77,6 +77,7 @@ import { userWorkspaces } from '@/lib/system-inventory'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
+import { userErrorMessage } from '@/lib/user-error'
 
 const FORM_MAX_WIDTH = 440
 
@@ -106,8 +107,8 @@ function resolveLoadError(
   workspacesError: unknown,
   projectsError: unknown,
 ): string | null {
-  if (workspacesError instanceof Error) return workspacesError.message
-  if (projectsError instanceof Error) return projectsError.message
+  if (workspacesError instanceof Error) return userErrorMessage(workspacesError, '')
+  if (projectsError instanceof Error) return userErrorMessage(projectsError, '')
   return null
 }
 

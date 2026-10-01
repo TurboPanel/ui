@@ -22,6 +22,7 @@ import { resetLinkState } from '@/lib/password-reset'
 import { useResetPassword } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const styles = StyleSheet.create({
   title: {
@@ -84,7 +85,7 @@ export function ResetPasswordScreenContent() {
       await reset.mutateAsync({ newPassword: password, token: link.token })
       setDone(true)
     } catch (err) {
-      const message = err instanceof Error ? err.message : ''
+      const message = userErrorMessage(err, '')
       if (message.includes('INVALID_TOKEN')) {
         setExpired(true)
       } else {

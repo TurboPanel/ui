@@ -16,6 +16,7 @@ import { useConfigureProject, useProjectCatalog } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Cards resumable setup can honour.
@@ -71,9 +72,7 @@ export function ProjectSetupSection() {
   })
 
   const localError =
-    catalogQuery.error instanceof Error
-      ? catalogQuery.error.message
-      : configureProject.actionError
+    catalogQuery.error instanceof Error ? userErrorMessage(catalogQuery.error, '') : configureProject.actionError
 
   // Where setup hands off. Compose lands on the YAML editor, managed on
   // Overview; every other choice lands on the Services cards so the operator

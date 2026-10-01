@@ -8,9 +8,10 @@ import {
   saveOrgPrincipalDefaults,
 } from '@/lib/instance-api'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 /**

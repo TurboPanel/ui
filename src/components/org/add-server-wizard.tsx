@@ -33,6 +33,7 @@ import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const POLL_FAILURE_THRESHOLD = 3
 const WAITING_POLL_MS = 3000
@@ -531,7 +532,7 @@ export function AddServerWizard({
 
     if (isAuthorizationError(err)) {
       setPollError(
-        err instanceof Error ? err.message : 'Session expired or access denied',
+        userErrorMessage(err, 'Session expired or access denied'),
       )
       return
     }
@@ -539,7 +540,7 @@ export function AddServerWizard({
     consecutivePollFailuresRef.current += 1
     if (consecutivePollFailuresRef.current >= POLL_FAILURE_THRESHOLD) {
       setPollError(
-        err instanceof Error ? err.message : 'Failed to check server status',
+        userErrorMessage(err, 'Failed to check server status'),
       )
     }
   }, [

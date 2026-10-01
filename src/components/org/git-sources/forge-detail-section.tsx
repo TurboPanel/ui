@@ -22,6 +22,7 @@ import {
 import { usePublicUrlsOptional, useForges, useSyncForge } from '@/lib/queries/admin'
 import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 export type { ForgeSummary } from '@/lib/instance-api'
 
@@ -215,7 +216,7 @@ function ProviderRecordPanel({
                 onSynced(`Synced. GitHub calls this app "${data.app.name}".`)
               },
               onError: (err) => {
-                onError(err instanceof Error ? err.message : 'Sync failed')
+                onError(userErrorMessage(err, 'Sync failed'))
               },
             })
           }}

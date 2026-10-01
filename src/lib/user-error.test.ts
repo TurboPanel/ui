@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CONTROL_PLANE_UNREACHABLE_COPY,
   ENVIRONMENT_RUNNING_COPY,
+  TOO_MANY_ATTEMPTS_COPY,
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
   isNetworkFetchError,
@@ -30,6 +31,12 @@ describe('apiErrorCopy', () => {
       UPDATE_ALREADY_ACTIVE_COPY
     )
     expect(apiErrorCopy(new Error('HTTP 409: environment_running'))).toBe(ENVIRONMENT_RUNNING_COPY)
+  })
+
+  it('maps a bare or generic 429 to plain copy but keeps specific codes', () => {
+    expect(apiErrorCopy(new Error('HTTP 429'))).toBe(TOO_MANY_ATTEMPTS_COPY)
+    expect(apiErrorCopy(new Error('x failed: HTTP 429: rate_limited'))).toBe(TOO_MANY_ATTEMPTS_COPY)
+    expect(apiErrorCopy(new Error('HTTP 429: too_soon'))).toBeNull()
   })
 
   it('is null for other errors', () => {

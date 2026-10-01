@@ -116,6 +116,7 @@ import {
   resolveEffectiveServerId,
 } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Stable empty list so the facts memo does not thrash on every render. */
 const EMPTY_STORAGE: readonly StorageRecord[] = []
@@ -920,7 +921,7 @@ export function ComposeServicesTab() {
 
   useEffect(() => {
     if (servicesQuery.error instanceof Error) {
-      setError(servicesQuery.error.message)
+      setError(userErrorMessage(servicesQuery.error, ''))
     }
   }, [servicesQuery.error, setError])
 

@@ -20,6 +20,7 @@ import {
 import { useOrganizationMembers, useRemoveOrganizationMember } from '@/lib/queries/members'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type RowProps = Readonly<{
   member: OrganizationMember
@@ -91,7 +92,11 @@ function MembersList({ orgId }: Readonly<{ orgId: string }>) {
   if (membersQuery.isLoading) {
     body = <LoadingState label="Loading people..." />
   } else if (membersQuery.isError) {
-    body = <Text style={panelStyles.error}>{membersQuery.error.message}</Text>
+    body = (
+      <Text style={panelStyles.error}>
+        {userErrorMessage(membersQuery.error, 'Failed to load members')}
+      </Text>
+    )
   } else if (members.length === 0) {
     body = <EmptyState title="Nobody is in this organization yet." />
   } else {

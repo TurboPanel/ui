@@ -30,6 +30,7 @@ import { useServices } from '@/lib/queries/services'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const KIND_LABELS: Record<StorageKind, string> = {
   volume: 'Volume',
@@ -101,9 +102,7 @@ function useStorageSection({
   let queryError: string | null = null
   if (storageQuery.isError) {
     queryError =
-      storageQuery.error instanceof Error
-        ? storageQuery.error.message
-        : 'Failed to load storage'
+      userErrorMessage(storageQuery.error, 'Failed to load storage')
   }
   const displayError =
     error ??

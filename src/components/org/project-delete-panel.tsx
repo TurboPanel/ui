@@ -33,6 +33,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import type { ManagedListRecord } from '@/lib/managed-services'
 import { isManagedProject } from '@/lib/project-navigation'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const STOPPED_CONTAINER_STATUSES = new Set(['exited', 'dead', 'removing'])
 
@@ -578,9 +579,7 @@ export function ProjectDeletePanel({
   })
 
   const loadError =
-    environmentsQuery.error instanceof Error
-      ? environmentsQuery.error.message
-      : null
+    environmentsQuery.error instanceof Error ? userErrorMessage(environmentsQuery.error, '') : null
 
   const hasActiveServices = envRows.length > 0
   const deleting = deleteProjectMutation.isPending

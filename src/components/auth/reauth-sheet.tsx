@@ -14,6 +14,7 @@ import {
   type StepUpChallenge,
 } from '@/lib/step-up'
 import { twoFactorAutoComplete, twoFactorKeyboard } from '@/lib/two-factor-prompt'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Asks the signed-in person to prove who they are again, wherever they are.
@@ -60,7 +61,7 @@ function ReauthForm({
       await submitReauth(stepUpRequestBody(method, value))
       stepUpBroker.settle(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not confirm it is you. Try again.')
+      setError(userErrorMessage(err, 'Could not confirm it is you. Try again.'))
       setBusy(false)
     }
   }, [method, value])

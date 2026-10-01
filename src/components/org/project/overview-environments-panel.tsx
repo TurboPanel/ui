@@ -66,6 +66,7 @@ import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type TrackedCommand = {
   environmentId: string
@@ -1271,7 +1272,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         'Start',
       )
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to start')
+      setActionError(userErrorMessage(err, 'Failed to start'))
     }
   }
 
@@ -1314,7 +1315,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         setActionError(previewMessage)
         return
       }
-      setActionError(err instanceof Error ? err.message : 'Failed to deploy')
+      setActionError(userErrorMessage(err, 'Failed to deploy'))
     } finally {
       setDeployConfirmBusy(false)
     }
@@ -1698,7 +1699,7 @@ function OverviewEnvironmentsPanelView({
               ignorePromise(
                 refetchAllContainers().catch((err) => {
                   setContainerError(
-                    err instanceof Error ? err.message : 'Failed to refresh',
+                    userErrorMessage(err, 'Failed to refresh'),
                   )
                 }),
               )

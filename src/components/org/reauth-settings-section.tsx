@@ -5,9 +5,10 @@ import { SectionPanel, SettingRow, Toggle } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { fetchOrgReauthSettings, saveOrgReauthSettings } from '@/lib/instance-api'
 import { queryKeys, useApiMutation, useCan } from '@/lib/query-client'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 /**
