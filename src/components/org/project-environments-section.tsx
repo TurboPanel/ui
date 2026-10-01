@@ -162,10 +162,11 @@ function EnvironmentDeleteNotice({
   stopping,
   onStop,
 }: Readonly<{
-  failure: EnvironmentDeleteFailure
+  failure: EnvironmentDeleteFailure | null
   stopping: boolean
   onStop: () => void
 }>) {
+  if (!failure) return null
   return (
     <View style={styles.deleteNotice}>
       <Text style={panelStyles.error}>{failure.text}</Text>
@@ -444,13 +445,11 @@ export function ProjectEnvironmentsSection({
             onConfirmDelete={() => void deleteFlow.deleteActive()}
           />
         )}
-        {deleteFlow.failure ? (
-          <EnvironmentDeleteNotice
-            failure={deleteFlow.failure}
-            stopping={deleteFlow.stopping}
-            onStop={() => void deleteFlow.stopActive()}
-          />
-        ) : null}
+        <EnvironmentDeleteNotice
+          failure={deleteFlow.failure}
+          stopping={deleteFlow.stopping}
+          onStop={() => void deleteFlow.stopActive()}
+        />
         {showCreate && canOwn ? (
           <EnvironmentCreateForm
             value={createName}
