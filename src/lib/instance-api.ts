@@ -5223,9 +5223,20 @@ export type DeploymentHistoryRecord = {
   errorMessage: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
+  /** The engine the attempt ran; null (or absent) for attempts queued before it was recorded. */
+  strategy?: DeploymentStrategy | null
+  /** How a sequential deploy that did not finish ended; null otherwise. */
+  strategyOutcome?: DeploymentStrategyOutcome | null
+  /** Why it rolled back or needs attention. */
+  strategyOutcomeReason?: string | null
   /** What set the attempt off when it was a git push; null for a deploy a person started. */
   trigger?: DeploymentTriggerRecord | null
 }
+
+export type DeploymentStrategy = 'inplace' | 'sequential'
+
+/** `rolled_back`: the previous version is running again. `needs_attention`: stopped on purpose. */
+export type DeploymentStrategyOutcome = 'rolled_back' | 'needs_attention'
 
 /** A deploy started by a git push rather than a person. */
 export type DeploymentTriggerRecord = {
