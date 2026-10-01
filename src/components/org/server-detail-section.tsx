@@ -21,6 +21,7 @@ import {
   type ActiveCommand,
   type ServerCommandState,
 } from '@/components/org/server-commands-panel'
+import { ServerFirewallSection } from '@/components/org/firewall/server-firewall-section'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerHardwareProfileEditor } from '@/components/org/server-hardware-profile-editor'
@@ -312,6 +313,8 @@ function DetailTabBody({
       )
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
+    case 'firewall':
+      return <ServerFirewallSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'metrics':
       return <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
   }

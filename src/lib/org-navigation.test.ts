@@ -17,10 +17,12 @@ import {
   networkAddressesHref,
   networkDockerHref,
   networkFabricHref,
+  networkFirewallHref,
   networkReservedHref,
   replaceOrganization,
   serverDetailHref,
   serverDetailTabHref,
+  SERVER_DETAIL_TAB_IDS,
   serverMetricsHref,
   serversDatacentersHref,
   serversPendingKeysHref,
@@ -253,6 +255,7 @@ describe('serversDatacentersHref', () => {
     expect(networkAddressesHref('org-1')).toBe('/org-1/network/addresses')
     expect(networkDockerHref('org-1')).toBe('/org-1/network/docker')
     expect(networkReservedHref('org-1')).toBe('/org-1/network/reserved')
+    expect(networkFirewallHref('org-1')).toBe('/org-1/network/firewall')
     expect(serversPendingKeysHref('org-1')).toBe('/org-1/servers/keys')
   })
 })
@@ -308,5 +311,14 @@ describe('orgBillingHref', () => {
   it('carries only the target tier as a query param', () => {
     expect(orgBillingHref('org-1', { tier: 'S3' })).toBe('/org-1/billing?tier=S3')
     expect(orgBillingHref('org-1', { tier: 'tier-uuid' })).toBe('/org-1/billing?tier=tier-uuid')
+  })
+})
+
+describe('server detail firewall tab', () => {
+  it('lists the firewall tab and builds its link', () => {
+    expect(SERVER_DETAIL_TAB_IDS).toContain('firewall')
+    expect(serverDetailTabHref('org-1', 'srv-9', 'firewall')).toBe(
+      '/org-1/servers/srv-9?tab=firewall',
+    )
   })
 })

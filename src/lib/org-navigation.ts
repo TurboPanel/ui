@@ -86,7 +86,7 @@ export const ORG_AREAS = [
     id: 'network',
     label: 'Network',
     pathSegment: 'network',
-    hint: 'TurboFabric, addresses, and Docker networks',
+    hint: 'TurboFabric, addresses, Docker networks, and the firewall',
     subRoutes: [
       {
         id: 'fabric',
@@ -111,6 +111,12 @@ export const ORG_AREAS = [
         label: 'Reserved ranges',
         pathSegment: 'reserved',
         hint: 'Ranges TurboPanel must never assign because something else routes them',
+      },
+      {
+        id: 'firewall',
+        label: 'Firewall',
+        pathSegment: 'firewall',
+        hint: 'Policy and rules behind each server’s firewall preview',
       },
     ],
   },
@@ -397,6 +403,12 @@ export function networkDockerHref(
   return `/${orgId}/network/docker`
 }
 
+export function networkFirewallHref(
+  orgId: string,
+): `/${string}/network/firewall` {
+  return `/${orgId}/network/firewall`
+}
+
 export function networkReservedHref(
   orgId: string,
 ): `/${string}/network/reserved` {
@@ -408,6 +420,7 @@ export const SERVER_DETAIL_TAB_IDS = [
   'control',
   'time',
   'network',
+  'firewall',
   'metrics',
 ] as const
 
@@ -418,6 +431,7 @@ export const SERVER_DETAIL_TAB_LABELS: Record<ServerDetailTabId, string> = {
   control: 'Control',
   time: 'Time',
   network: 'Network',
+  firewall: 'Firewall',
   metrics: 'Metrics',
 }
 
