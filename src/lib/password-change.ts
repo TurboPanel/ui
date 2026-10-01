@@ -23,7 +23,7 @@ export function changePasswordFormProblem(form: ChangePasswordForm): string | nu
   return null
 }
 
-const KNOWN_ERRORS: ReadonlyArray<readonly [RegExp, string]> = [
+const KNOWN_ERRORS: readonly (readonly [RegExp, string])[] = [
   [/incorrect_current_password/, "Your current password isn't right."],
   [/no_password/, 'This account signs in without a password, so there is nothing to change.'],
   [/password_unchanged/, 'Choose a password different from your current one.'],
