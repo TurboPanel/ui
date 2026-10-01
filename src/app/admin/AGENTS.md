@@ -8,7 +8,7 @@ Instance-wide administration for users with the `admin` or `superadmin` role.
 
 - `src/app/admin/_layout.tsx` — role guard (`superadmin` or `admin` via `isAdminSession`); non-admins redirect to their dashboard
 - `src/lib/admin-navigation.ts` — area registry (`ADMIN_AREAS`); add entries + routes together
-- `src/components/admin/admin-shell.tsx`, `admin-sidebar.tsx`, `admin-header.tsx` — responsive shell (mirrors org console); header has **Return to instance** (org-switcher slot) via `ReturnToInstanceSegment` → preferred org dashboard; sidebar nav uses `AdminAreaIcon` per area
+- `src/components/admin/admin-shell.tsx`, `admin-sidebar.tsx`, `admin-header.tsx` — responsive shell (mirrors org console); header has **Return to app** (left, where the org switcher sits in the org shell) via `ReturnToInstanceSegment` → preferred org dashboard; sidebar nav uses `AdminAreaIcon` per area
 
 ## Areas (routes)
 

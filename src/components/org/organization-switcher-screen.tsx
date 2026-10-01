@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { CreateOrganizationModal } from '@/components/create-organization-modal'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { HeaderUserAccountControl } from '@/components/header-account-controls'
+import { HeaderAccountControls } from '@/components/header-account-controls'
 import { PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -124,7 +124,7 @@ export function OrganizationSwitcherScreen() {
         <TurboPanelLogo size={28} />
         <View style={styles.topBarSpacer} />
         {session && userLabel ? (
-          <HeaderUserAccountControl email={userLabel} onSignOut={signOut} />
+          <HeaderAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
       </GlassSurface>
 

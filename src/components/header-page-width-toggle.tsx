@@ -1,8 +1,9 @@
-import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native'
 import Svg, { Rect } from 'react-native-svg'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
+import { headerLayoutFor } from '@/lib/header-layout'
 import { togglePageWidth, usePageWidth } from '@/lib/page-width'
-import { colors, layout } from '@/lib/theme'
+import { colors } from '@/lib/theme'
 
 /**
  * Header control for the page-width preference. The icon is a page outline
@@ -14,7 +15,7 @@ import { colors, layout } from '@/lib/theme'
 export function HeaderPageWidthSegment() {
   const { width } = useWindowDimensions()
   const mode = usePageWidth()
-  if (width < layout.desktopBreakpoint) return null
+  if (!headerLayoutFor(width, Platform.OS !== 'web').showPageWidthToggle) return null
 
   const wide = mode === 'wide'
   const label = wide ? 'Narrow page' : 'Widen page'
