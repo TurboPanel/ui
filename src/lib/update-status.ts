@@ -118,7 +118,7 @@ export function explainUpgradeFailure(
   if (code === 'step_timeout') {
     return {
       title: 'The server stopped reporting progress',
-      body: 'No progress for 15 minutes, three times over. Check the daemon log on the server, then retry.',
+      body: 'The server did not report progress, and the update stopped waiting. Check the daemon log on the server, then retry.',
       command: DAEMON_LOGS_COMMAND,
       docsUrl: null,
     }
