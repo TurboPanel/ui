@@ -65,7 +65,7 @@ export function UpgradeSettingsCard({
   return (
     <SectionPanel title="Automatic updates">
       {hideAutoUpdate ? null : (
-        <SettingRow label={loading ? 'Loading…' : 'Auto-update fleet'}>
+        <SettingRow label={loading ? 'Loading…' : 'Auto-update servers'}>
           <Toggle
             value={draft.autoUpdate}
             onValueChange={(value) => {

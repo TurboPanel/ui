@@ -93,7 +93,7 @@ export function consoleUpdateAvailable(
 
 /** A piece of TurboPanel that has an update, and the build it would move to. */
 export type UpdatePiece = Readonly<{
-  name: 'control plane' | 'UI' | 'daemon'
+  name: 'control plane' | 'web app' | 'daemon'
   target: InstanceUpdateTarget
 }>
 
@@ -113,7 +113,7 @@ export function updatePieces(
     pieces.push({ name: 'control plane', target: instance.target })
   }
   if (instance.uiTarget && consoleUpdateAvailable(consoleBuild, instance.uiTarget)) {
-    pieces.push({ name: 'UI', target: instance.uiTarget })
+    pieces.push({ name: 'web app', target: instance.uiTarget })
   }
   if (daemon.target && daemon.connected && unitUpdateAvailable(daemon)) {
     pieces.push({ name: 'daemon', target: daemon.target })

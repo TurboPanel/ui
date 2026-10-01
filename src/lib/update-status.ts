@@ -173,7 +173,7 @@ export function runToShow(
 function failedStepTitle(step: UpgradeStepRow): string {
   if (step.phase === 'colocated_daemon') return 'Co-located daemon'
   if (step.phase === 'control_plane') return 'Control plane'
-  return step.serverName ?? step.hostname ?? 'Fleet server'
+  return step.serverName ?? step.hostname ?? 'Server'
 }
 
 /** The first step that ended badly, with its explanation. */
@@ -252,7 +252,7 @@ export async function withStartTimeout<T>(
 export type UpdateBanner = Readonly<{
   /** Identifies every offered build, so a new build of any piece shows the banner again. */
   key: string
-  /** `Update available: control plane v0.1.5-canary.1, UI v0.1.5-canary.2` */
+  /** `Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2` */
   title: string
   /** What Update does for exactly the pieces in the title. */
   body: string
@@ -261,7 +261,7 @@ export type UpdateBanner = Readonly<{
 type UpdateOfferInput = Readonly<{
   updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
   activeRun: boolean
-  /** This console's build, so a UI-only update counts as an offer. */
+  /** This app's build, so a UI-only update counts as an offer. */
   consoleBuild?: ConsoleBuild | null
 }>
 
@@ -283,7 +283,7 @@ export function updateOffered(input: UpdateOfferInput): boolean {
 /** How the banner body names each piece. */
 const BODY_NAMES: Readonly<Record<UpdatePiece['name'], string>> = {
   'control plane': 'the control plane',
-  UI: 'the UI',
+  'web app': 'the web app',
   daemon: 'the daemon on every server',
 }
 
@@ -301,7 +301,7 @@ export function updateBanner(
   input: UpdateOfferInput &
     Readonly<{
       dismissedKey: string | null
-      /** This console's build, so the UI is listed when the channel serves a newer one. */
+      /** This app's build, so the web app is listed when the channel serves a newer one. */
       consoleBuild?: ConsoleBuild | null
     }>
 ): UpdateBanner | null {

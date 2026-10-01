@@ -141,7 +141,7 @@ describe('upgrade display helpers', () => {
   })
 
   it('labels phases and maps pipeline edge cases', () => {
-    expect(upgradePhaseLabel('fleet')).toBe('Fleet')
+    expect(upgradePhaseLabel('fleet')).toBe('Servers')
     expect(upgradePhaseLabel(null)).toBe('Upgrade')
     expect(mapStepStatusToPipeline(null)).toBe('preparing')
     expect(mapStepStatusToPipeline('failed')).toBe('verifying')

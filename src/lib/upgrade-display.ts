@@ -286,7 +286,7 @@ export function upgradePhaseLabel(phase: UpgradePhase | null | undefined): strin
     case 'control_plane':
       return 'Control plane'
     case 'fleet':
-      return 'Fleet'
+      return 'Servers'
     default:
       return 'Upgrade'
   }
