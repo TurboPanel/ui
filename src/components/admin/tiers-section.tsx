@@ -47,6 +47,7 @@ import {
 } from '@/lib/tier-form'
 import { taxDefaultNoticeContent } from '@/lib/tax-default-notice'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const COLUMNS = [
   { key: 'tier', header: 'Tier', flex: 0.7, minWidth: 80 },
@@ -416,7 +417,7 @@ function ProductsUnavailableNotice({
   error,
   onRetry,
 }: Readonly<{ error: unknown; onRetry: () => void }>) {
-  const detail = error instanceof Error ? error.message : 'Unknown error'
+  const detail = userErrorMessage(error, 'Unknown error')
   return (
     <InlineNotice
       tone="warning"
@@ -454,9 +455,8 @@ function FailingNotice({ count }: Readonly<{ count: number }>) {
 
 function errorLineText(error: unknown): string | null {
   if (!error) return null
-  if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
-  return 'Unknown error'
+  return userErrorMessage(error, 'Unknown error')
 }
 
 function ErrorLine({ error }: Readonly<{ error: unknown }>) {

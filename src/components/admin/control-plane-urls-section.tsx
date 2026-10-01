@@ -24,6 +24,7 @@ import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { addPublicUrlEntry, type PublicUrlDraft } from '@/lib/public-url-entry'
 import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
@@ -61,9 +62,7 @@ export function ControlPlaneUrlsSection() {
   let queryError: string | null = null
   if (publicUrlsQuery.isError) {
     queryError =
-      publicUrlsQuery.error instanceof Error
-        ? publicUrlsQuery.error.message
-        : 'Failed to load public URLs'
+      userErrorMessage(publicUrlsQuery.error, 'Failed to load public URLs')
   }
   const displayError =
     error ?? saveMutation.actionError ?? queryError

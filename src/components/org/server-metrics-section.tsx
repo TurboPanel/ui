@@ -93,6 +93,7 @@ import {
 } from '@/lib/queries/servers'
 import { CPU_IOWAIT, CPU_SYSTEM, CPU_USER, usedPercentFromBytes } from '@/lib/server-usage'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const RANGE_OPTIONS: readonly {
   id: MetricsRangeId
@@ -2256,8 +2257,7 @@ function noDataCopy(
 }
 
 function metricsErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return 'Failed to load metrics'
+  return userErrorMessage(error, 'Failed to load metrics')
 }
 
 function RangePicker({

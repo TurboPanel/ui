@@ -8,6 +8,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 export function UpdatesSection() {
   const consoleCommit = useMemo(() => readConsoleBuild()?.commit, [])
@@ -18,7 +19,7 @@ export function UpdatesSection() {
   if (query.isLoading) return <LoadingState label="Loading updates" />
 
   if (query.isError) {
-    const message = query.error instanceof Error ? query.error.message : 'Failed to load updates'
+    const message = userErrorMessage(query.error, 'Failed to load updates')
     return <InlineNotice tone="warning" title={message} />
   }
 
@@ -33,8 +34,8 @@ export function UpdatesSection() {
       <Text style={panelStyles.pageTitle}>Updates</Text>
       <Text style={panelStyles.pageCopy}>
         {managed
-          ? 'Rollout status for your servers on TurboPanel High Availability. TurboPanel updates the control plane itself on its own release cadence.'
-          : 'Upgrade the co-located daemon, control plane, and connected servers from one managed run.'}
+          ? 'Server update status for your servers on TurboPanel High Availability. TurboPanel updates the control plane itself on its own release cadence.'
+          : 'Update the control plane, web app and daemon here, then each connected server’s daemon.'}
       </Text>
       {managed ? <HighAvailabilityUpdates data={data} /> : <SelfHostedUpdates data={data} />}
     </View>

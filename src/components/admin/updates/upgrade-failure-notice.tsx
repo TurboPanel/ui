@@ -23,7 +23,7 @@ export function UpgradeFailureNotice({
         actions={
           docsUrl ? (
             <Button
-              label="Read the upgrade guide"
+              label="Read the update guide"
               variant="ghost"
               onPress={() => {
                 void Linking.openURL(docsUrl)

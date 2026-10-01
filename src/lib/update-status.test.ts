@@ -137,7 +137,7 @@ describe('runFailure', () => {
         ],
       })
     )
-    expect(failure?.stepTitle).toBe('Co-located daemon')
+    expect(failure?.stepTitle).toBe('Daemon step')
     expect(failure?.command).toBe(daemonReinstallCommand('canary'))
   })
 
@@ -145,7 +145,7 @@ describe('runFailure', () => {
     expect(
       runFailure(run({ steps: [step({ phase: 'control_plane', status: 'rolled_back' })] }))
         ?.stepTitle
-    ).toBe('Control plane')
+    ).toBe('Control plane step')
     expect(
       runFailure(
         run({ steps: [step({ phase: 'fleet', status: 'needs_attention', serverName: 'kore' })] })
@@ -163,7 +163,7 @@ describe('runFailure', () => {
   it('reads a failed run with no failed step from the run error', () => {
     const failure = runFailure(run({ status: 'failed', error: 'step_timeout', steps: [] }))
     expect(failure?.title).toBe('The server stopped reporting progress')
-    expect(failure?.stepTitle).toBe('Upgrade')
+    expect(failure?.stepTitle).toBe('Update')
   })
 
   it('says a cancelled run was cancelled', () => {
@@ -277,7 +277,7 @@ describe('updateBanner', () => {
   it('offers an available self-hosted update, naming the piece and its version', () => {
     const banner = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
     expect(banner?.title).toBe('Update available: control plane v0.1.2')
-    expect(banner?.body).toBe('Updates the control plane in one managed run.')
+    expect(banner?.body).toBe('Updates the control plane together.')
     expect(banner?.key).toBe('control plane|canary|0.1.2|abc1234def|20260927-180000-abc1234')
   })
 
@@ -292,7 +292,7 @@ describe('updateBanner', () => {
       'Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2, daemon v0.1.6-canary.3'
     )
     expect(banner?.body).toBe(
-      'Updates the control plane, the web app and the daemon on every server in one managed run.'
+      'Updates the control plane, the web app and the daemon on every server together.'
     )
   })
 
@@ -301,7 +301,7 @@ describe('updateBanner', () => {
     data.units.instance.updateAvailable = false
     const banner = updateBanner({ updates: data, activeRun: false, dismissedKey: null })
     expect(banner?.title).toBe('Update available: daemon v0.1.6-canary.3')
-    expect(banner?.body).toBe('Updates the daemon on every server in one managed run.')
+    expect(banner?.body).toBe('Updates the daemon on every server together.')
   })
 
   it('lists the web app only when this app differs from the one the channel serves', () => {

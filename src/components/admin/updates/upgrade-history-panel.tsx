@@ -44,10 +44,10 @@ export function UpgradeHistoryPanel({ runs }: Readonly<{ runs: readonly UpgradeH
   return (
     <SectionPanel title="Update history">
       {runs.length === 0 ? (
-        <Text style={panelStyles.muted}>No upgrade runs recorded yet.</Text>
+        <Text style={panelStyles.muted}>No updates recorded yet.</Text>
       ) : (
         <>
-          <Text style={panelStyles.muted}>Open a run to see how each piece and server ended.</Text>
+          <Text style={panelStyles.muted}>Open an update to see how each step and server ended.</Text>
           {runs.map((run, index) => (
             <RunRow key={run.id} run={run} last={index === runs.length - 1} />
           ))}

@@ -35,7 +35,7 @@ function StepLine({ step }: Readonly<{ step: UpgradeStepRow }>) {
       </View>
       {change ? <Text style={panelStyles.muted}>{change}</Text> : null}
       {reason ? <Text style={panelStyles.error}>{reason}</Text> : null}
-      {when ? <Text style={panelStyles.muted}>Last update {when}</Text> : null}
+      {when ? <Text style={panelStyles.muted}>Last activity {when}</Text> : null}
     </View>
   )
 }
@@ -46,7 +46,7 @@ export function UpgradeRunDetail({ runId }: Readonly<{ runId: string }>) {
   if (query.isLoading) return <LoadingState />
   const run = query.data?.run
   if (query.isError || !run) {
-    return <Text style={panelStyles.muted}>The details of this run are not available.</Text>
+    return <Text style={panelStyles.muted}>The details of this update are not available.</Text>
   }
   const platform = run.steps.filter((step) => step.phase !== 'fleet')
   const fleet = run.steps.filter((step) => step.phase === 'fleet')
@@ -56,12 +56,12 @@ export function UpgradeRunDetail({ runId }: Readonly<{ runId: string }>) {
       {platform.map((step) => (
         <StepLine key={step.id} step={step} />
       ))}
-      {fleet.length > 0 ? <Text style={panelStyles.detailLabel}>Servers</Text> : null}
+      {fleet.length > 0 ? <Text style={panelStyles.detailLabel}>Server updates</Text> : null}
       {fleet.map((step) => (
         <StepLine key={step.id} step={step} />
       ))}
       {run.steps.length === 0 ? (
-        <Text style={panelStyles.muted}>No steps were recorded for this run.</Text>
+        <Text style={panelStyles.muted}>No steps were recorded for this update.</Text>
       ) : null}
     </View>
   )
