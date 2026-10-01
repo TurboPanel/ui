@@ -22,9 +22,13 @@ permissions:
 # own Verify and so their own canary. With the default single-pending queue
 # the middle merge's run would be replaced, conclude cancelled, and that
 # commit would never get a canary.
+# The trunk -> staging and staging -> live promotion PRs are the exception: a
+# merge moves their head every few minutes, and cancelling the run on the old
+# head left a cancelled (red) mark on that trunk commit. Their groups end in the
+# run id, so every head gets its own run and nothing is cancelled.
 concurrency:
-  group: ui-verify-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ui-verify-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}
   queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
 
 jobs:
@@ -41,8 +45,8 @@ jobs:
     # one run per event and ref at a time, so on a push this group never holds
     # a second job and never cancels one.
     concurrency:
-      group: ui-sonar-${{ github.event_name }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ui-sonar-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -156,8 +160,8 @@ jobs:
     runs-on: ubuntu-latest
     # Kept as it is; see the note on the verify job's group.
     concurrency:
-      group: ui-metrics-legacy-${{ github.event_name }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ui-metrics-legacy-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -170,7 +174,31 @@ jobs:
           repository: TurboPanel/turbopaneld
           path: turbopaneld
 
+      # Three attempts, 15 s then 45 s apart: setup-deno has no retry input and
+      # a transient GitHub 5xx on the download must not turn the run red.
       - name: Install Deno
+        id: deno-try-1
+        continue-on-error: true
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
+          deno-version: "2.9.7"
+      - name: Wait before retrying the Deno download
+        if: steps.deno-try-1.outcome == 'failure'
+        run: sleep 15
+      - name: Install Deno (retry 1 of 2)
+        id: deno-try-2
+        if: steps.deno-try-1.outcome == 'failure'
+        continue-on-error: true
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
+          deno-version: "2.9.7"
+      - name: Wait before retrying the Deno download again
+        if: steps.deno-try-2.outcome == 'failure'
+        run: sleep 45
+      - name: Install Deno (retry 2 of 2)
+        if: steps.deno-try-2.outcome == 'failure'
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
