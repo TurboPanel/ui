@@ -2672,9 +2672,21 @@ export type ServiceRecord = {
   /** Derived from the compose document — read-only; never send this on create/update. */
   composeServiceName: string
   metadata?: Record<string, unknown> | null
+  /**
+   * Application the daemon recognised in a site's document root at the last
+   * deploy. Read-only; absent for plain PHP / static sites and until a deploy
+   * has looked.
+   */
+  app?: ServiceApp | null
   options?: ServiceOptions | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+}
+
+export type ServiceApp = {
+  kind: 'wordpress'
+  /** Release the application reports, when the daemon could read it. */
+  version?: string
 }
 
 export type HostingRecord = {

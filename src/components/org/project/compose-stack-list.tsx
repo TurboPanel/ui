@@ -2,6 +2,7 @@ import { Link, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { StatusDot } from '@/components/ui'
 import { serviceStatusTone } from '@/lib/container-status'
+import { appTagLabel } from '@/lib/compose/app-facts'
 import type { StackRow } from '@/lib/compose/stack-rows'
 import type { ContainerRecord, ServiceRecord } from '@/lib/instance-api'
 import { projectServiceHref } from '@/lib/project-navigation'
@@ -43,7 +44,7 @@ export function ComposeStackList({
               <Text style={styles.name} numberOfLines={1}>
                 {row.name}
               </Text>
-              <Text style={styles.kind}>{row.kind}</Text>
+              <Text style={styles.kind}>{appTagLabel(service?.app) ?? row.kind}</Text>
             </View>
             {row.source ? (
               <Text style={styles.muted} numberOfLines={1}>
