@@ -8733,6 +8733,17 @@ export const NOTIFICATION_CHANNEL_KINDS = [
 ] as const
 export type NotificationChannelKind = (typeof NOTIFICATION_CHANNEL_KINDS)[number]
 
+export type NotificationDigestCadence = 'hourly' | 'daily'
+export type NotificationQuietHours = { start: string; end: string }
+
+/** Delivery timing a channel row can change; `null` clears, a field left out keeps its value. */
+export type NotificationChannelTiming = {
+  digestCadence?: NotificationDigestCadence | null
+  quietHours?: NotificationQuietHours | null
+  /** The signed-in person's own zone; only a personal channel accepts it. */
+  timeZone?: string | null
+}
+
 export type NotificationRule = { event: string; minSeverity: NotificationSeverity }
 
 export type NotificationChannel = {
@@ -8747,11 +8758,17 @@ export type NotificationChannel = {
   verifiedAt: string | null
   disabledAt: string | null
   createdAt: string
+  /** Email only: one summary per window instead of one message per event; null sends each as it happens. */
+  digestCadence: NotificationDigestCadence | null
+  /** Email only: events wait until this local window ends (24-hour `HH:MM`, may cross midnight); null = none. */
+  quietHours: NotificationQuietHours | null
+  /** The zone quiet hours and digest windows are read in: owner profile, organization default, else UTC. */
+  timeZone: string
   rules: NotificationRule[]
   recentDeliveries: {
     id: string
     event: string
-    status: 'pending' | 'sent' | 'failed' | 'abandoned'
+    status: 'pending' | 'sent' | 'failed' | 'abandoned' | 'held'
     attempts: number
     at: string
   }[]
@@ -8858,7 +8875,11 @@ export async function resendNotificationChannelVerification(
 
 export async function updateNotificationChannel(
   id: string,
-  patch: { label?: string; disabled?: boolean; rules?: NotificationRule[] },
+  patch: {
+    label?: string
+    disabled?: boolean
+    rules?: NotificationRule[]
+  } & NotificationChannelTiming,
   organizationId?: string | null
 ): Promise<NotificationChannel | null> {
   const res = await apiFetch<{ channel: NotificationChannel | null }>(
