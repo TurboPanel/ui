@@ -2130,7 +2130,7 @@ export type BillingSubscriptionState = {
   status: string
   currentPeriodEnd: string | null
   pastDueSince: string | null
-  /** Entitlement survives until this moment while past due; the grace clock cancels after it. */
+  /** @deprecated Always null: TurboPanel keeps no grace expiry; the provider's retries end a past-due subscription. Still sent by the API; nothing reads it. */
   graceExpiresAt: string | null
   /** A deferred change (downgrade / release) is parked on a subscription schedule. */
   scheduleAttached: boolean

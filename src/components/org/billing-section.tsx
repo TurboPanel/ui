@@ -540,14 +540,11 @@ function PortalButton({
 }
 
 function PastDueNotice({ summary }: Readonly<{ summary: BillingSubscriptionSummary }>) {
-  const grace = summary.subscription?.graceExpiresAt
-  const next =
-    'Update the payment method to resume; upgrades and new licenses are refused until the balance clears.'
   return (
     <InlineNotice
       tone="warning"
       title="Payment is past due — tier changes are paused"
-      body={grace ? `Monitoring continues until ${formatLocalDateTime(grace)}. ${next}` : next}
+      body="Update the payment method to resume; upgrades and new licenses are refused until the balance clears."
       actions={
         summary.payer ? <PortalButton label="Update payment method" variant="primary" /> : undefined
       }
