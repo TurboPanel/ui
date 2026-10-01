@@ -17,7 +17,7 @@ describe('release manifest signing', () => {
     expect(signed).toBeGreaterThan(written)
     expect(uploaded).toBeGreaterThan(signed)
     expect(release).toContain('.manifest-signer/scripts/sign-manifest.ts release-assets/manifest.json')
-    expect(release).toContain('RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}')
+    expect(release).toContain('RELEASE_SIGNING_KEY: ${{ secrets.TURBOPANEL_RELEASE_SIGNING_KEY }}')
   })
 
   it('pins the signer to an exact turbopaneld commit', () => {
@@ -26,8 +26,9 @@ describe('release manifest signing', () => {
     expect(ref).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  it('hands the signing key to the called workflow on the canary path', () => {
-    expect(release).toContain('RELEASE_SIGNING_KEY:\n        description:')
-    expect(canary).toContain('RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}')
+  it('reads the signing key from the canary, rc or release environment, not a repo secret', () => {
+    expect(release).toContain("environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}")
+    expect(release).not.toContain('secrets.RELEASE_SIGNING_KEY')
+    expect(canary).not.toContain('secrets.RELEASE_SIGNING_KEY')
   })
 })

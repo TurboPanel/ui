@@ -60,10 +60,6 @@ on:
         description: The trunk commit to build (the head of the green Verify run)
         required: true
         type: string
-    secrets:
-      RELEASE_SIGNING_KEY:
-        description: PKCS#8 PEM of the offline release key the manifest is signed with
-        required: true
 
 permissions:
   contents: read
@@ -149,6 +145,9 @@ jobs:
           fi
 
   build:
+    # Signing key = environment secret TURBOPANEL_RELEASE_SIGNING_KEY, one environment per
+    # channel: `canary` (trunk), `rc` (staging), `release` (live, owner approval).
+    environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}
     needs: prepare
     runs-on: ubuntu-latest
     steps:
@@ -287,7 +286,7 @@ jobs:
 
       - name: Sign the manifest
         env:
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY: ${{ secrets.TURBOPANEL_RELEASE_SIGNING_KEY }}
         run: |
           set -eu
           deno run --config .manifest-signer/deno.json \
