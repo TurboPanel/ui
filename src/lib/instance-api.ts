@@ -8790,3 +8790,36 @@ export async function deleteNotificationChannel(
     organizationId
   )
 }
+
+export type OrganizationMemberRole = 'owner' | 'manager' | 'member'
+
+export type OrganizationMember = {
+  id: string
+  name: string | null
+  email: string
+  role: OrganizationMemberRole
+  joinedAt: string
+}
+
+function organizationMembersPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/members`
+}
+
+/** The people in an organization. Owners and managers only; everyone else gets a 403. */
+export async function fetchOrganizationMembers(
+  orgId: string
+): Promise<{ members: OrganizationMember[] }> {
+  return await apiFetch(organizationMembersPath(orgId), undefined, orgId)
+}
+
+/** Remove a person from the organization, or leave it when `memberId` is yourself. */
+export async function removeOrganizationMember(
+  orgId: string,
+  memberId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${organizationMembersPath(orgId)}/${encodeURIComponent(memberId)}`,
+    { method: 'DELETE' },
+    orgId
+  )
+}
