@@ -33,8 +33,8 @@ export function UpdatesSection() {
       <Text style={panelStyles.pageTitle}>Updates</Text>
       <Text style={panelStyles.pageCopy}>
         {managed
-          ? 'Fleet rollout status for TurboPanel High Availability. The hosted control plane updates on its own release cadence.'
-          : 'Upgrade the co-located daemon, control plane, and connected fleet from one managed run.'}
+          ? 'Rollout status for your servers on TurboPanel High Availability. TurboPanel updates the control plane itself on its own release cadence.'
+          : 'Upgrade the co-located daemon, control plane, and connected servers from one managed run.'}
       </Text>
       {managed ? <HighAvailabilityUpdates data={data} /> : <SelfHostedUpdates data={data} />}
     </View>

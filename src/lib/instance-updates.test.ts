@@ -459,10 +459,10 @@ describe('updatePieces', () => {
 
   const oldConsole = { version: '0.1.4', commit: 'ui0' }
 
-  it('lists control plane, UI and daemon in that order, each with its own version', () => {
+  it('lists control plane, web app and daemon in that order, each with its own version', () => {
     expect(updatePieces(units(), oldConsole).map(updatePieceLabel)).toEqual([
       'control plane v0.1.5-canary.1',
-      'UI v0.1.5-canary.2',
+      'web app v0.1.5-canary.2',
       'daemon v0.1.6-canary.3',
     ])
   })

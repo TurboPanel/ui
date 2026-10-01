@@ -66,7 +66,7 @@ export function UpgradeFleetTable({
   return (
     <DataTable columns={COLUMNS} minWidth={860}>
       {servers.length === 0 ? (
-        <DataTableEmpty>No fleet servers in this upgrade yet.</DataTableEmpty>
+        <DataTableEmpty>No servers in this upgrade yet.</DataTableEmpty>
       ) : (
         servers.map((row, index) => (
           <DataTableRow key={row.id} last={index === servers.length - 1}>

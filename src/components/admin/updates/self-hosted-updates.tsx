@@ -195,7 +195,7 @@ function ComponentsPanel({
         updateAvailable={unitUpdateAvailable(instance)}
       />
       <UpgradeBuildBlock
-        title="UI"
+        title="Web app"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
@@ -281,15 +281,15 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="UI"
+          title="Web app"
           note="Installed together with the control plane."
         />
       ) : null}
       {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
-          ? `${fleetSummary.upToDate} of ${fleetSummary.total} fleet servers up to date`
-          : 'Fleet wave starts after the control plane is on target.'}
+          ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
+          : 'Servers update after the control plane is on target.'}
       </Text>
       <UpgradeFleetTable
         servers={fleetServers}

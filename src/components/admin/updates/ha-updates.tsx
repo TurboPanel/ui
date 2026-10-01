@@ -78,7 +78,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
               ? `${fleetSummary.upToDate} of ${fleetSummary.total} connected daemons up to date`
-              : 'Waiting for the fleet wave to start.'}
+              : 'Waiting for servers to start updating.'}
           </Text>
         </SectionPanel>
       ) : null}

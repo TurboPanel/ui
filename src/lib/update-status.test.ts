@@ -141,7 +141,7 @@ describe('runFailure', () => {
     expect(failure?.command).toBe(daemonReinstallCommand('canary'))
   })
 
-  it('names control-plane and fleet steps', () => {
+  it('names control-plane and server steps', () => {
     expect(
       runFailure(run({ steps: [step({ phase: 'control_plane', status: 'rolled_back' })] }))
         ?.stepTitle
@@ -157,7 +157,7 @@ describe('runFailure', () => {
     ).toBe('kore.lan')
     expect(
       runFailure(run({ steps: [step({ phase: 'fleet', status: 'failed' })] }))?.stepTitle
-    ).toBe('Fleet server')
+    ).toBe('Server')
   })
 
   it('reads a failed run with no failed step from the run error', () => {
@@ -289,10 +289,10 @@ describe('updateBanner', () => {
       consoleBuild: OLD_CONSOLE,
     })
     expect(banner?.title).toBe(
-      'Update available: control plane v0.1.5-canary.1, UI v0.1.5-canary.2, daemon v0.1.6-canary.3'
+      'Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2, daemon v0.1.6-canary.3'
     )
     expect(banner?.body).toBe(
-      'Updates the control plane, the UI and the daemon on every server in one managed run.'
+      'Updates the control plane, the web app and the daemon on every server in one managed run.'
     )
   })
 
@@ -304,7 +304,7 @@ describe('updateBanner', () => {
     expect(banner?.body).toBe('Updates the daemon on every server in one managed run.')
   })
 
-  it('lists the UI only when this console differs from the one the channel serves', () => {
+  it('lists the web app only when this app differs from the one the channel serves', () => {
     const data = allThree()
     const current = { version: '0.1.5', commit: 'ui22222' }
     expect(
@@ -363,7 +363,7 @@ describe('updateBanner', () => {
     const newerDaemon = allThree()
     newerDaemon.units.daemon.target = build('0.1.6-canary.4', 'dm44444')
     expect(updateBanner({ ...input, updates: newerDaemon, dismissedKey: dismissed })?.title).toBe(
-      'Update available: control plane v0.1.5-canary.1, UI v0.1.5-canary.2, daemon v0.1.6-canary.4'
+      'Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2, daemon v0.1.6-canary.4'
     )
     const newerUi = allThree()
     newerUi.units.instance.uiTarget = build('0.1.5-canary.3', 'ui33333')
