@@ -540,14 +540,11 @@ function PortalButton({
 }
 
 function PastDueNotice({ summary }: Readonly<{ summary: BillingSubscriptionSummary }>) {
-  const grace = summary.subscription?.graceExpiresAt
-  const next =
-    'Update the payment method to resume; upgrades and new licenses are refused until the balance clears.'
   return (
     <InlineNotice
       tone="warning"
       title="Payment is past due — tier changes are paused"
-      body={grace ? `Monitoring continues until ${formatLocalDateTime(grace)}. ${next}` : next}
+      body="Update the payment method to resume; upgrades and new licenses are refused until the balance clears."
       actions={
         summary.payer ? <PortalButton label="Update payment method" variant="primary" /> : undefined
       }
@@ -768,7 +765,10 @@ function TierLicensesPanel({
   preselectedTierId: string | null
 }>) {
   const [request, setRequest] = useState<LicenseDialogRequest | null>(null)
-  const otherOptions = useMemo(() => unownedTierOptions(tiers, summary.tiers), [tiers, summary.tiers])
+  const otherOptions = useMemo(
+    () => unownedTierOptions(tiers, summary.tiers),
+    [tiers, summary.tiers]
+  )
   const [otherTierId, setOtherTierId] = useState<string | null>(preselectedTierId)
   const otherTier = purchasableTiers(tiers).find(
     (tier) => tier.id === otherTierId && otherOptions.some((option) => option.value === tier.id)
@@ -786,7 +786,9 @@ function TierLicensesPanel({
           title="Some licenses are ending"
           body={`${endingTiers
             .map((tier) => `${tier.label}: ${endingLabel(tier.ending, tier.endsAt)}`)
-            .join(' · ')}. Ending licenses cannot take a new server. Restore them (free) before buying more at that tier.`}
+            .join(
+              ' · '
+            )}. Ending licenses cannot take a new server. Restore them (free) before buying more at that tier.`}
         />
       ) : null}
       <DataTable columns={LICENSE_COLUMNS} minWidth={760} bordered>
@@ -1095,7 +1097,9 @@ function MoveLicensePanel({
 
   const pair = movePair(purchasable, fromTierId, toTierId)
   const direction = tierChangeDirection(pair?.from.rank, pair?.to.rank)
-  const toOptions: SelectOption[] = purchasable.map((tier) => tierOption(tier, tier.id === fromTierId))
+  const toOptions: SelectOption[] = purchasable.map((tier) =>
+    tierOption(tier, tier.id === fromTierId)
+  )
 
   const choose = (nextFromId: string | null, nextToId: string | null) => {
     setFromTierId(nextFromId)
