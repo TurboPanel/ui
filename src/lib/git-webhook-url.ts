@@ -37,7 +37,7 @@ export type GitWebhookHint = {
  * branch.
  */
 export const LAN_WEBHOOK_NOTE =
-  'This instance’s public URL is on a private network, so the Git provider ' +
+  'This control plane’s public URL is on a private network, so the Git provider ' +
   'cannot deliver webhooks to it. Auto-deploy will not fire — publish a ' +
   'reachable https URL under Networking, or deploy the environment manually, ' +
   'which builds each service’s declared branch. Picking a specific commit ' +

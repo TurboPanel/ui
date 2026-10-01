@@ -492,7 +492,7 @@ export function ManagedOverviewSection({
         onServerFilter={setServerFilter}
       />
 
-      <SectionPanel title="Fleet" hint={listHint} accent>
+      <SectionPanel title="Services" hint={listHint} accent>
         {canManage ? (
           <View style={styles.toolbarRow}>
             <Button

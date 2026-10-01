@@ -414,7 +414,7 @@ export function describeBillingRefusal(err: unknown, context: RefusalContext = {
     case NOT_A_DOWNGRADE_ERROR:
       return 'That move goes up the ladder — it is invoiced now, not at the end of the period.'
     case TIER_NOT_PURCHASABLE_ERROR:
-      return 'That tier cannot be bought right now. Ask the instance owner to check its product.'
+      return 'That tier cannot be bought right now. Ask the administrator to check its product.'
     case LICENSES_ENDING_ERROR:
       return describeLicensesEnding(err, context)
     case NO_LICENSES_ENDING_ERROR:

@@ -69,7 +69,7 @@ export function ControlPlaneUpdatingOverlay() {
         <View style={styles.card}>
           <Text style={styles.title}>A newer control plane build is live</Text>
           <Text style={styles.copy}>
-            Reload this page so the console matches the instance version on the wire.
+            Reload this page so the web app matches the control plane version.
           </Text>
           <View style={styles.actions}>
             {Platform.OS === 'web' ? (

@@ -15,7 +15,7 @@ describe('platform-copy', () => {
   it('exports stable HA product naming and notes', () => {
     expect(HA_PRODUCT_NAME).toBe('TurboPanel High Availability')
     expect(HA_PRODUCT_TAGLINE).toContain('distributed network')
-    expect(HA_CERT_APPLY_NOTE).toContain('self-hosted instance')
+    expect(HA_CERT_APPLY_NOTE).toContain('self-hosted control plane')
     expect(HA_SIGNUP_SETTINGS_NOTE).toContain('no redeploy required')
     expect(HA_METRICS_LOCAL_NOTE).toContain('DuckDB')
   })

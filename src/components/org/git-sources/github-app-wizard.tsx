@@ -82,7 +82,7 @@ function identityError(identity: Identity): string | null {
 /** What still stops registration; `null` once GitHub can be handed the manifest. */
 function registerError(identity: Identity, resolvedOrigin: string): string | null {
   if (!resolvedOrigin) {
-    return 'This instance has no public URL yet, so GitHub would have nowhere to deliver to. Set one under Networking first.'
+    return 'This control plane has no public URL yet, so GitHub would have nowhere to deliver to. Set one under Networking first.'
   }
   const port = Number(identity.customGitPort)
   if (identity.selfHosted && (!Number.isInteger(port) || port < 1 || port > 65535)) {
@@ -194,11 +194,11 @@ function IdentityStep({
 
       <InlineNotice
         title={scope === 'admin'
-          ? 'Available to every organization on this instance'
+          ? 'Available to every organization on this control plane'
           : 'Available to this organization only'}
         body={scope === 'admin'
-          ? 'Apps registered here are always instance-wide, so this one is created public on GitHub — a private App can only be installed on the account that owns it.'
-          : "Apps registered here always belong to this organization, so this one is created private on GitHub. Only an instance administrator can register an instance-wide App, on the instance's own Git sources page."}
+          ? 'Apps registered here are always shared with every organization, so this one is created public on GitHub — a private App can only be installed on the account that owns it.'
+          : "Apps registered here always belong to this organization, so this one is created private on GitHub. Only an administrator can register an instance-wide App, on the instance's own Git sources page."}
       />
 
       <FormField
@@ -294,7 +294,7 @@ function WebhookStep({
     <>
       <FormField
         label="Webhook endpoint"
-        hint="GitHub stores one address at creation and never revisits it, so pick the URL this instance will still answer on."
+        hint="GitHub stores one address at creation and never revisits it, so pick the URL this control plane will still answer on."
       >
         {origins.length > 0
           ? (

@@ -44,7 +44,7 @@ const session: SessionInfo = {
 
 describe('instance-recovery copy helpers', () => {
   it('maps recovery titles by reason', () => {
-    expect(recoveryTitle('reset')).toBe('Resetting dev instance')
+    expect(recoveryTitle('reset')).toBe('Resetting the dev control plane')
     expect(recoveryTitle('unauthorized')).toBe('Reconnecting')
     expect(recoveryTitle('restart')).toBe('Restarting')
     expect(recoveryTitle(null)).toBe('Restarting')

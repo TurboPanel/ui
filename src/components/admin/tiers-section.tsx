@@ -556,7 +556,7 @@ export function TiersSection() {
       <SectionPanel title="Tiers">
         <InlineNotice
           title="Superadmin only"
-          body="The billing tier catalogue is managed by the instance owner."
+          body="The billing tier catalogue is managed by the administrator."
         />
       </SectionPanel>
     )

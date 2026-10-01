@@ -804,9 +804,9 @@ export function ServerDetailSection({
         <Pressable
           style={({ pressed }) => [styles.backLink, pressed && styles.pressed, webPointer]}
           accessibilityRole="link"
-          accessibilityLabel="Back to fleet"
+          accessibilityLabel="Back to servers"
         >
-          <Text style={styles.backText}>← Fleet</Text>
+          <Text style={styles.backText}>← Servers</Text>
         </Pressable>
       </Link>
 
