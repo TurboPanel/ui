@@ -4,6 +4,7 @@ import {
   clearControlPlaneUpgradeWatch,
   CONTROL_PLANE_UPGRADE_WATCH_TTL_MS,
   controlPlaneOverlayState,
+  controlPlaneStepStale,
   controlPlaneUpgradeWatchRemainingMs,
   isControlPlaneUpgradeWatchActive,
   markControlPlaneUpgradeWatch,
@@ -79,5 +80,32 @@ describe('controlPlaneOverlayState', () => {
       visible: false,
       clearWatch: false,
     })
+  })
+})
+
+describe('controlPlaneStepStale', () => {
+  const now = Date.parse('2026-10-01T12:00:00.000Z')
+  const ago = (minutes: number) => new Date(now - minutes * 60_000).toISOString()
+
+  it('is stale when the daemon never answered the command for 5 minutes', () => {
+    const step = (minutes: number) => [
+      { unit: 'instance', status: 'dispatched', lastStageAt: ago(minutes) },
+    ]
+    expect(controlPlaneStepStale(step(4), now)).toBe(false)
+    expect(controlPlaneStepStale(step(6), now)).toBe(true)
+  })
+
+  it('keeps a verifying step on screen through a slow restart', () => {
+    const step = (minutes: number) => [
+      { unit: 'instance', status: 'verifying', lastStageAt: ago(minutes) },
+    ]
+    expect(controlPlaneStepStale(step(12), now)).toBe(false)
+    expect(controlPlaneStepStale(step(25), now)).toBe(true)
+  })
+
+  it('is stale once the step needs attention and ignores daemon steps', () => {
+    expect(controlPlaneStepStale([{ unit: 'instance', status: 'needs_attention' }], now)).toBe(true)
+    expect(controlPlaneStepStale([{ unit: 'daemon', status: 'dispatched', lastStageAt: ago(30) }], now)).toBe(false)
+    expect(controlPlaneStepStale(undefined, now)).toBe(false)
   })
 })

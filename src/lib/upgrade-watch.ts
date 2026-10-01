@@ -70,3 +70,29 @@ export function controlPlaneOverlayState(input: Readonly<{
   }
   return { visible: input.watchActive, clearWatch: false }
 }
+
+/** A control-plane step that never answered the command is stuck after this. */
+export const CONTROL_PLANE_STEP_ACK_STALE_MS = 5 * 60 * 1000
+
+/** Any other open control-plane step silent this long is stale (the daemon's verify budget is 10 min). */
+export const CONTROL_PLANE_STEP_STALE_MS = 20 * 60 * 1000
+
+/**
+ * Whether the control-plane step has stopped making progress: the daemon never
+ * answered the command, or the step has been silent for a long time. A stale
+ * step must not pin the "TurboPanel is updating" overlay; the Updates page
+ * shows what the step needs.
+ */
+export function controlPlaneStepStale(
+  steps: ReadonlyArray<{ unit: string; status: string; lastStageAt?: string | null }> | undefined,
+  nowMs: number = Date.now()
+): boolean {
+  const step = steps?.find((item) => item.unit === 'instance')
+  if (!step) return false
+  if (step.status === 'needs_attention' || step.status === 'failed') return true
+  const at = step.lastStageAt ? Date.parse(step.lastStageAt) : Number.NaN
+  if (!Number.isFinite(at)) return false
+  const limit =
+    step.status === 'dispatched' ? CONTROL_PLANE_STEP_ACK_STALE_MS : CONTROL_PLANE_STEP_STALE_MS
+  return nowMs - at > limit
+}
