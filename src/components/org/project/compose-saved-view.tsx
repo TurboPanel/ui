@@ -16,6 +16,9 @@ import {
   isBlankComposeData,
   normalizeCompose,
 } from '@/lib/compose'
+import { useProjectContext } from '@/components/org/project/project-context'
+import { bindingFactsByService } from '@/lib/compose/binding-facts'
+import { useEnvironmentBindings } from '@/lib/queries/bindings'
 import { useRepositoryLabelsById } from '@/lib/queries/releases'
 import type {
   ContainerRecord,
@@ -104,6 +107,15 @@ export function ComposeSavedView({
     () => annotateComposeGraphSources(topologyGraph, repositoryLabelsById),
     [topologyGraph, repositoryLabelsById],
   )
+  const { selectedEnvironmentId } = useProjectContext()
+  const bindingsQuery = useEnvironmentBindings(
+    orgId,
+    selectedEnvironmentId ?? '',
+  )
+  const bindingFacts = useMemo(
+    () => bindingFactsByService(bindingsQuery.data?.bindings ?? [], services),
+    [bindingsQuery.data?.bindings, services],
+  )
   const hasDiagram = graph.nodes.length > 0
   const showSourceToggle =
     draftSource != null && onDraftSourceChange != null
@@ -119,6 +131,7 @@ export function ComposeSavedView({
         projectId={projectId}
         services={services}
         containersByService={containersByService}
+        bindingFactsByService={bindingFacts}
         showServiceStatus={showServiceStatus}
         placementLabel={documentFacts?.placementLabel ?? null}
       />
