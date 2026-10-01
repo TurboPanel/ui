@@ -4488,7 +4488,7 @@ export async function fetchAdminTiers(): Promise<{
  * Surfaced so the operator can see why such a price verifies.
  */
 export type AdminTierTaxDefaults = {
-  /** `inclusive`, `exclusive`, or null when the account names no default. */
+  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when unreadable or none set. */
   taxBehavior: string | null
   /** `active` once the provider can calculate tax; `pending` while incomplete. */
   status: string | null
